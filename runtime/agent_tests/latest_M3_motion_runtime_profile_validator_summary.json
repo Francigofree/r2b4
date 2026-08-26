@@ -1,0 +1,152 @@
+{
+  "artifact_paths": {
+    "incident": "runtime/agent_tests/latest_M3_motion_runtime_profile_validator_incident.json",
+    "result": "runtime/agent_tests/latest_M3_motion_runtime_profile_validator.json",
+    "samples": "runtime/agent_tests/M3_motion_runtime_profile_validator_samples.jsonl",
+    "summary": "runtime/agent_tests/latest_M3_motion_runtime_profile_validator_summary.json"
+  },
+  "failed_gates": [],
+  "inconclusive_gates": [],
+  "phases": [
+    {
+      "failed_gates": [],
+      "inconclusive_gates": [],
+      "metrics": {
+        "category_combination_deltas": {
+          "processing_overrun+io_event": 2,
+          "scheduler_delay_observed": 2
+        },
+        "coobserved_slow_tick_deltas": {
+          "io_event": 2,
+          "processing_overrun": 2,
+          "scheduler_delay_observed": 2
+        },
+        "counter_semantics": {
+          "coobserved_category_counts": "coobserved_nonexclusive",
+          "dominant_processing_phase_counts": "exclusive_one_per_processing_slow_tick",
+          "encoder_gap_timing_class": "preceding_tick_interval_attribution",
+          "phase_spike_counts": "coobserved_nonexclusive",
+          "primary_timing_class_counts": "exclusive_one_per_slow_tick",
+          "slow_*_count": "coobserved_nonexclusive"
+        },
+        "dominant_processing_phase_deltas": {
+          "lidar_context": 2
+        },
+        "logger_flush_duration_ms": {
+          "max": 3.533166999659443,
+          "min": 0.812040999335295,
+          "n": 50,
+          "p10": 0.812040999335295,
+          "p50": 0.9370230000058655,
+          "p90": 1.0629320004227338,
+          "p95": 1.0629320004227338
+        },
+        "logger_queue_depth": {
+          "max": 8.0,
+          "min": 5.0,
+          "n": 50,
+          "p10": 5.0,
+          "p50": 5.0,
+          "p90": 8.0,
+          "p95": 8.0
+        },
+        "loop_below_45_ratio": 0.04,
+        "loop_budget_total_ema_ms": {
+          "max": 5.4286,
+          "min": 4.0144,
+          "n": 50,
+          "p10": 4.0731,
+          "p50": 4.5005,
+          "p90": 5.3542,
+          "p95": 5.3943
+        },
+        "max_gc_pause_us": 0,
+        "max_scheduler_delay_us": 17035,
+        "max_unattributed_processing_us": 14,
+        "min_phase_coverage_ratio": 0.9984953703703704,
+        "observed_tick_delta": 200,
+        "phase_gc_pause_max_us": {
+          "behavior_commands": 0,
+          "control_logging": 0,
+          "control_loop": 0,
+          "encoder_calibration": 0,
+          "executor_compute": 0,
+          "lidar_context": 0,
+          "localization_shaping": 0,
+          "logger_housekeeping": 0,
+          "motion_policy": 0,
+          "motor_dispatch_semantics": 0,
+          "output_guards": 0,
+          "periodic_logging": 0,
+          "proposal_resolution": 0,
+          "quality_publication": 0,
+          "safety_gate": 0,
+          "safety_supervisor": 0,
+          "status_pose_publish": 0,
+          "structured_logging": 0,
+          "track_reference_sync": 0
+        },
+        "phase_max_us": {
+          "behavior_commands": 1511,
+          "control_logging": 101,
+          "control_loop": 7410,
+          "encoder_calibration": 127,
+          "executor_compute": 248,
+          "lidar_context": 8343,
+          "localization_shaping": 387,
+          "logger_housekeeping": 75,
+          "motion_policy": 12168,
+          "motor_dispatch_semantics": 418,
+          "output_guards": 678,
+          "periodic_logging": 832,
+          "proposal_resolution": 8434,
+          "quality_publication": 1036,
+          "safety_gate": 178,
+          "safety_supervisor": 5285,
+          "status_pose_publish": 6675,
+          "structured_logging": 25,
+          "track_reference_sync": 36
+        },
+        "phase_spike_coobserved_deltas": {
+          "lidar_context": 1,
+          "motion_policy": 1
+        },
+        "primary_timing_class_deltas": {
+          "PROCESSING_PHASE:lidar_context": 2,
+          "SCHEDULER_DELAY_OBSERVED": 2
+        },
+        "sample_count": 50,
+        "slow_gc_delta": 0,
+        "slow_io_event_delta": 2,
+        "slow_lidar_spike_delta": 0,
+        "slow_multi_label_delta": 2,
+        "slow_none_delta": 0,
+        "slow_resolver_spike_delta": 0,
+        "slow_scheduler_delay_coobserved_delta": 2,
+        "slow_scheduler_delay_delta": 2,
+        "slow_tick_delta": 4,
+        "slow_tick_ratio": 0.02,
+        "slow_unattributed_spike_delta": 0,
+        "slow_uninstrumented_processing_coobserved_delta": 0,
+        "watchdog_frequency_hz": {
+          "max": 50.67,
+          "min": 43.72,
+          "n": 50,
+          "p10": 49.25,
+          "p50": 50.0,
+          "p90": 50.46,
+          "p95": 50.46
+        }
+      },
+      "phase": "no_motion",
+      "status": "PASS"
+    }
+  ],
+  "pivot_primitive_validation": {},
+  "plain_summary_hu": "Runtime profil: PASS. Hibák nincsenek.",
+  "reassessment": {},
+  "schema": "M3_MOTION_RUNTIME_PROFILE_VALIDATOR_V2",
+  "status": "PASS",
+  "success": true,
+  "test_name": "hub_M3_motion_runtime_profile_no_motion_live"
+}

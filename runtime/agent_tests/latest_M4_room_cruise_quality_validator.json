@@ -1,0 +1,471 @@
+{
+  "schema": "M4_ROOM_CRUISE_QUALITY_VALIDATOR_V1",
+  "status": "FAIL",
+  "success": false,
+  "quantitative_status": "FAIL",
+  "proof_verdict": "M4_ROOM_CRUISE_QUALITY_NOT_PROVEN",
+  "evidence_id": "m3-foundation:1784933023.512838",
+  "gates": {
+    "unified_safety_foundation": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "M0, base Room Cruise, UNIFIED SSOT, safety, timing, software and peripheral gates all PASS",
+      "observed": {
+        "preflight": "PASS",
+        "runtime_gates": {
+          "base_room_cruise_v2": "FAIL",
+          "ssot_contract": "FAIL",
+          "safety_runtime": "FAIL",
+          "control_loop_timing": "PASS",
+          "software_performance": "FAIL",
+          "peripheral_runtime_health": "FAIL"
+        },
+        "safety": {
+          "min_front_clearance_m": 0.2465,
+          "min_clearance_m": 0.118,
+          "safety_event_samples": 0,
+          "nonfinite_command_samples": 0
+        }
+      },
+      "evidence": []
+    },
+    "duration_motion_coverage": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "58-66 s run with progress and straight/left-arc/right-arc/pivot/avoidance coverage",
+      "observed": {
+        "duration_s": 61.72902250289917,
+        "progress_m": 1.0548264287569373,
+        "coverage": {
+          "total_samples": 503,
+          "run_count": 1,
+          "run_summaries": [
+            {
+              "run_index": 0,
+              "sample_count": 503,
+              "duration_s": 61.72902250289917,
+              "progress_m": 1.0548264287569373,
+              "moving_ratio": 0.3658051689860835,
+              "phase_switch_rate_hz": 0.016199835336012876
+            }
+          ],
+          "moving_samples": 184,
+          "straight_samples": 20,
+          "left_arc_samples": 0,
+          "right_arc_samples": 30,
+          "pivot_samples": 118,
+          "stop_samples": 319,
+          "obstacle_near_samples": 427,
+          "obstacle_avoidance_samples": 181,
+          "recovery_continue_samples": 116
+        }
+      },
+      "evidence": []
+    },
+    "obstacle_dependent_speed_regulation": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "open-space speed >=0.22 m/s and at least 0.04 m/s above obstacle-near median; clearance bands monotonic",
+      "observed": {
+        "open_speed": {
+          "n": 0,
+          "min": null,
+          "p10": null,
+          "p50": null,
+          "p90": null,
+          "p95": null,
+          "max": null
+        },
+        "near_speed": {
+          "n": 21,
+          "min": 0.08400077244987185,
+          "p10": 0.14000064364990972,
+          "p50": 0.2063,
+          "p90": 0.2162,
+          "p95": 0.2184,
+          "max": 0.2184
+        },
+        "open_minus_near_p50_mps": null,
+        "clearance_bands": [
+          {
+            "name": "near_low",
+            "front_min_m": 0.65,
+            "front_max_m": 0.85,
+            "speed": {
+              "n": 15,
+              "min": 0.15,
+              "p10": 0.163194088265,
+              "p50": 0.2086,
+              "p90": 0.21752000000000002,
+              "p95": 0.2184,
+              "max": 0.2184
+            }
+          },
+          {
+            "name": "near_high",
+            "front_min_m": 0.85,
+            "front_max_m": 1.05,
+            "speed": {
+              "n": 6,
+              "min": 0.08400077244987185,
+              "p10": 0.08400077244987185,
+              "p50": 0.17235032182495486,
+              "p90": 0.20565,
+              "p95": 0.206125,
+              "max": 0.2066
+            }
+          },
+          {
+            "name": "open",
+            "front_min_m": 1.25,
+            "front_max_m": null,
+            "speed": {
+              "n": 0,
+              "min": null,
+              "p10": null,
+              "p50": null,
+              "p90": null,
+              "p95": null,
+              "max": null
+            }
+          }
+        ],
+        "monotonic_with_tolerance": true
+      },
+      "evidence": []
+    },
+    "steady_motion_minimum": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "settled non-pivot forward/reverse command is zero or at least 0.145 m/s (0.15 m/s nominal floor)",
+      "observed": {
+        "n": 20,
+        "min": 0.05196546939941983,
+        "p10": 0.140196546939942,
+        "p50": 0.15,
+        "p90": 0.15,
+        "p95": 0.15,
+        "max": 0.15
+      },
+      "evidence": []
+    },
+    "primitive_handoff_continuity": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "primitive-change P95: dv<=0.055 m/s, dω<=0.24 rad/s, dPWM<=0.15",
+      "observed": {
+        "count": 2,
+        "v_step_mps": {
+          "n": 2,
+          "min": 0.03298522066250001,
+          "p10": 0.04088315523613195,
+          "p50": 0.07247489353065972,
+          "p90": 0.10406663182518751,
+          "p95": 0.10801559911200348,
+          "max": 0.11196456639881945
+        },
+        "omega_step_rad_s": {
+          "n": 2,
+          "min": 0.13,
+          "p10": 0.13554665204526287,
+          "p50": 0.1577332602263143,
+          "p90": 0.1799198684073657,
+          "p95": 0.18269319442999715,
+          "max": 0.18546652045262857
+        },
+        "pwm_step": {
+          "n": 2,
+          "min": 0.05206246422676408,
+          "p10": 0.05625335123595023,
+          "p50": 0.07301689927269484,
+          "p90": 0.08978044730943943,
+          "p95": 0.09187589081403251,
+          "max": 0.09397133431862559
+        }
+      },
+      "evidence": [
+        {
+          "from": "straight",
+          "to": "right_arc",
+          "run_elapsed_s": 6.009485721588135,
+          "v_step_mps": 0.11196456639881945,
+          "omega_step_rad_s": 0.13,
+          "pwm_step": 0.09397133431862559
+        },
+        {
+          "from": "right_arc",
+          "to": "straight",
+          "run_elapsed_s": 3.5540339946746826,
+          "v_step_mps": 0.03298522066250001,
+          "omega_step_rad_s": 0.18546652045262857,
+          "pwm_step": 0.05206246422676408
+        }
+      ]
+    },
+    "global_motion_smoothness": {
+      "status": "PASS",
+      "required": true,
+      "requirement": "whole-run P95 command and motor-output steps stay below comfort limits",
+      "observed": {
+        "pwm_step_p95": 0.013350955887761489,
+        "velocity_step_p95_mps": 0.0011028207481249813,
+        "omega_step_p95_rad_s": 0.048001365600794044,
+        "pwm_step_peak": 0.45000765485938254
+      },
+      "evidence": []
+    },
+    "motion_tracking_fidelity": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "linear/angular command tracking and each sufficiently sampled wheel direction meet existing M3 limits",
+      "observed": {
+        "motion_tracking": {
+          "linear_samples": 56,
+          "linear_abs_error_p90_mps": 0.05783566222501289,
+          "linear_rel_error_p90": 0.8297703745049169,
+          "omega_samples": 154,
+          "omega_abs_error_p90_rad_s": 0.15806543497285797,
+          "omega_rel_error_p90": 0.6385508974230233
+        },
+        "wheel_direction": {
+          "left_forward": {
+            "sample_count": 144,
+            "error_abs_p90_mps": 0.06407970000000013,
+            "wrong_sign_ratio": 0.0
+          },
+          "right_forward": {
+            "sample_count": 28,
+            "error_abs_p90_mps": 0.3,
+            "wrong_sign_ratio": 0.0
+          },
+          "left_reverse": {
+            "sample_count": 2,
+            "error_abs_p90_mps": 0.03424096939941983,
+            "wrong_sign_ratio": 1.0
+          },
+          "right_reverse": {
+            "sample_count": 118,
+            "error_abs_p90_mps": 0.036898654477962825,
+            "wrong_sign_ratio": 0.0
+          }
+        }
+      },
+      "evidence": []
+    },
+    "localization_sensor_consistency": {
+      "status": "FAIL",
+      "required": true,
+      "requirement": "same-snapshot yaw rate and endpoint sensor/EKF consistency gate PASS",
+      "observed": {
+        "contradiction_samples": 0,
+        "sensor_rate_disagreement_p90_rad_s": 0.053838984141607704,
+        "sensor_rate_pair": "encoder_vs_imu_same_status_snapshot",
+        "asynchronous_pose_lidar_rate_disagreement_p90_rad_s": 0.7497715573577225,
+        "asynchronous_pose_lidar_rate_is_gate_input": false,
+        "endpoint": {
+          "available": true,
+          "heading_change_deg": {
+            "ekf_pose": -732.1594961273643,
+            "imu_gyro": -762.8556414456147,
+            "encoder": -673.1842502178699,
+            "lidar": -512.4714767040316
+          },
+          "pair_disagreement_deg": {
+            "ekf_pose_vs_encoder": 58.97524590949433,
+            "ekf_pose_vs_imu_gyro": 30.696145318250387,
+            "ekf_pose_vs_lidar": 219.68801942333266,
+            "encoder_vs_imu_gyro": 89.67139122774472,
+            "encoder_vs_lidar": 160.71277351383833,
+            "imu_gyro_vs_lidar": 250.38416474158305
+          },
+          "max_pair_disagreement_deg": 250.38416474158305,
+          "max_observed_heading_change_deg": 762.8556414456147,
+          "frame_contract": "R2B4_BOOT_ROBOT_MAP:+x_forward,+y_left,+yaw_ccw",
+          "imu_source": "gyro_z_integrated",
+          "deduplicated_sample_count": 334,
+          "start_sample_index": 0,
+          "end_sample_index": 454
+        }
+      },
+      "evidence": []
+    },
+    "human_visual_observation": {
+      "status": "INCONCLUSIVE",
+      "required": true,
+      "requirement": "structured observation linked to this evidence_id: observed_full_run=true, primitive_transition_noticeability_max_5<=1, abrupt_motion_events=0",
+      "observed": {
+        "provided": false
+      },
+      "evidence": []
+    }
+  },
+  "failed_gates": [
+    "unified_safety_foundation",
+    "duration_motion_coverage",
+    "obstacle_dependent_speed_regulation",
+    "steady_motion_minimum",
+    "primitive_handoff_continuity",
+    "motion_tracking_fidelity",
+    "localization_sensor_consistency"
+  ],
+  "inconclusive_gates": [
+    "human_visual_observation"
+  ],
+  "metrics": {
+    "duration_s": 61.72902250289917,
+    "progress_m": 1.0548264287569373,
+    "obstacle_speed_regulation": {
+      "open_speed": {
+        "n": 0,
+        "min": null,
+        "p10": null,
+        "p50": null,
+        "p90": null,
+        "p95": null,
+        "max": null
+      },
+      "near_speed": {
+        "n": 21,
+        "min": 0.08400077244987185,
+        "p10": 0.14000064364990972,
+        "p50": 0.2063,
+        "p90": 0.2162,
+        "p95": 0.2184,
+        "max": 0.2184
+      },
+      "open_minus_near_p50_mps": null,
+      "clearance_bands": [
+        {
+          "name": "near_low",
+          "front_min_m": 0.65,
+          "front_max_m": 0.85,
+          "speed": {
+            "n": 15,
+            "min": 0.15,
+            "p10": 0.163194088265,
+            "p50": 0.2086,
+            "p90": 0.21752000000000002,
+            "p95": 0.2184,
+            "max": 0.2184
+          }
+        },
+        {
+          "name": "near_high",
+          "front_min_m": 0.85,
+          "front_max_m": 1.05,
+          "speed": {
+            "n": 6,
+            "min": 0.08400077244987185,
+            "p10": 0.08400077244987185,
+            "p50": 0.17235032182495486,
+            "p90": 0.20565,
+            "p95": 0.206125,
+            "max": 0.2066
+          }
+        },
+        {
+          "name": "open",
+          "front_min_m": 1.25,
+          "front_max_m": null,
+          "speed": {
+            "n": 0,
+            "min": null,
+            "p10": null,
+            "p50": null,
+            "p90": null,
+            "p95": null,
+            "max": null
+          }
+        }
+      ],
+      "monotonic_with_tolerance": true
+    },
+    "primitive_handoffs": {
+      "count": 2,
+      "v_step_mps": {
+        "n": 2,
+        "min": 0.03298522066250001,
+        "p10": 0.04088315523613195,
+        "p50": 0.07247489353065972,
+        "p90": 0.10406663182518751,
+        "p95": 0.10801559911200348,
+        "max": 0.11196456639881945
+      },
+      "omega_step_rad_s": {
+        "n": 2,
+        "min": 0.13,
+        "p10": 0.13554665204526287,
+        "p50": 0.1577332602263143,
+        "p90": 0.1799198684073657,
+        "p95": 0.18269319442999715,
+        "max": 0.18546652045262857
+      },
+      "pwm_step": {
+        "n": 2,
+        "min": 0.05206246422676408,
+        "p10": 0.05625335123595023,
+        "p50": 0.07301689927269484,
+        "p90": 0.08978044730943943,
+        "p95": 0.09187589081403251,
+        "max": 0.09397133431862559
+      }
+    },
+    "smoothness": {
+      "pwm_step_p95": 0.013350955887761489,
+      "velocity_step_p95_mps": 0.0011028207481249813,
+      "omega_step_p95_rad_s": 0.048001365600794044,
+      "pwm_step_peak": 0.45000765485938254
+    },
+    "tracking": {
+      "linear_samples": 56,
+      "linear_abs_error_p90_mps": 0.05783566222501289,
+      "linear_rel_error_p90": 0.8297703745049169,
+      "omega_samples": 154,
+      "omega_abs_error_p90_rad_s": 0.15806543497285797,
+      "omega_rel_error_p90": 0.6385508974230233
+    }
+  },
+  "thresholds": {
+    "duration_min_s": 58.0,
+    "duration_max_s": 66.0,
+    "progress_min_m": 0.45,
+    "moving_samples_min": 160,
+    "straight_samples_min": 18,
+    "left_arc_samples_min": 12,
+    "right_arc_samples_min": 12,
+    "pivot_samples_min": 8,
+    "avoidance_samples_min": 8,
+    "open_front_min_m": 1.25,
+    "near_front_min_m": 0.65,
+    "near_front_max_m": 1.05,
+    "speed_band_samples_min": 20,
+    "open_speed_p50_min_mps": 0.22,
+    "near_open_speed_delta_min_mps": 0.04,
+    "clearance_monotonic_tolerance_mps": 0.03,
+    "steady_speed_min_mps": 0.145,
+    "steady_samples_min": 20,
+    "transition_settle_s": 0.3,
+    "handoff_count_min": 6,
+    "handoff_v_step_p95_max_mps": 0.055,
+    "handoff_omega_step_p95_max_rad_s": 0.24,
+    "handoff_pwm_step_p95_max": 0.15,
+    "global_v_step_p95_max_mps": 0.055,
+    "global_omega_step_p95_max_rad_s": 0.24,
+    "global_pwm_step_p95_max": 0.12,
+    "linear_tracking_p90_max_mps": 0.035,
+    "omega_tracking_p90_max_rad_s": 0.15,
+    "wheel_tracking_p90_max_mps": 0.035
+  },
+  "test_name": "M4_1_foundation",
+  "generated_ts": 1784933024.5865395,
+  "evidence_mode": "live_60s",
+  "m3_foundation_status": "FAIL",
+  "artifact_paths": {
+    "result": "runtime/agent_tests/latest_M4_room_cruise_quality_validator.json",
+    "summary": "runtime/agent_tests/latest_M4_room_cruise_quality_validator_summary.json",
+    "samples": "runtime/agent_tests/M4_room_cruise_quality_validator_samples.jsonl",
+    "incident": "runtime/agent_tests/latest_M4_room_cruise_quality_validator_incident.json",
+    "m3_foundation_result": "runtime/agent_tests/latest_M3_room_cruise_unified_validator.json",
+    "m3_foundation_summary": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_summary.json"
+  }
+}

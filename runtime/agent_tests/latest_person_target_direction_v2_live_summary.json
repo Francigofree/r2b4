@@ -1,0 +1,42 @@
+{
+  "pass": true,
+  "status": "PASS",
+  "errors": [],
+  "duration_s": 61.152,
+  "camera_ok": true,
+  "detector_ok": true,
+  "onnx_observed": true,
+  "hog_observed": false,
+  "avg_fps": 4.301,
+  "avg_detection_latency_ms": 677.206,
+  "p90_detection_latency_ms": 806.856,
+  "avg_cpu_percent": 175.677,
+  "max_cpu_percent": 247.619,
+  "avg_memory_mb": 665.444,
+  "lock_time_ratio": 0.646,
+  "center_time_ratio": 0.403,
+  "lost_count": 12,
+  "relock_count": 12,
+  "saved_lock_images": [
+    "Pic/human_lock_20260712T172806_092_center_onnx_yolov5_person_conf_0p74.jpg",
+    "Pic/human_lock_20260712T172918_914_center_onnx_yolov5_person_conf_0p46.jpg",
+    "Pic/human_lock_20260712T172941_254_center_mediapipe_pose_conf_1p00.jpg",
+    "Pic/human_lock_20260712T172950_357_right_mediapipe_pose_conf_1p00.jpg",
+    "Pic/human_lock_20260712T172956_880_left_onnx_yolov5_person_conf_0p50.jpg"
+  ],
+  "safety_events": [],
+  "movement_rule_violation_count": 0,
+  "movement_rule_violations": [],
+  "translation_rule_violation_count": 0,
+  "translation_rule_violations": [],
+  "turn_mode": "in_place",
+  "turn_side_flip_count": 1,
+  "notes": [
+    "Lock audit images require human review for false-positive validation."
+  ],
+  "artifacts": {
+    "result": "runtime/agent_tests/latest_person_target_direction_v2_live.json",
+    "summary": "runtime/agent_tests/latest_person_target_direction_v2_live_summary.json",
+    "samples": "runtime/agent_tests/person_target_direction_v2_live_samples.jsonl"
+  }
+}

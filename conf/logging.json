@@ -1,0 +1,69 @@
+{
+  "level": "INFO",
+  "enable_debug": false,
+  "sensor_logging": true,
+  "buffer_size": 4096,
+  "flush_interval_ms": 1000,
+  "enable_audit_hash_chain": true,
+  "channels": {
+    "system": true,
+    "control": true,
+    "sensors": true,
+    "safety": true,
+    "telemetry": true,
+    "audit": true,
+    "debug": true
+  },
+  "switches": {
+    "full_log": false,
+    "app_log": true,
+    "audit": true,
+    "telemetry": true,
+    "camera_log": true,
+    "photo_log": true,
+    "video_log": true,
+    "dumalog": false,
+    "stt_text": false,
+    "ekf_full_log": false,
+    "ekf_tuning_log": false
+  },
+  "session": {
+    "base_dir": "logs",
+    "max_sessions": 20,
+    "gzip_on_close": true
+  },
+  "rt": {
+    "enabled": true,
+    "buffer_size": 4096,
+    "flush_interval_sec": 0.2,
+    "channels": {
+      "timing": true,
+      "encoder": true,
+      "ekf": true,
+      "motor": true
+    }
+  },
+  "sensor_diag": {
+    "enabled": true,
+    "throttle_hz": {
+      "tof": 10,
+      "imu": 25,
+      "encoder": 25,
+      "lidar": 5,
+      "dht22": 0.5
+    }
+  },
+  "media_meta": {
+    "enabled": true,
+    "throttle_hz": {
+      "camera": 5,
+      "microphone": 2
+    }
+  },
+  "system_monitor": {
+    "enabled": true,
+    "interval_sec": 1.0
+  },
+  "max_session_mb": 10,
+  "enabled": true
+}

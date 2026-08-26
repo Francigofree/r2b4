@@ -1,0 +1,126 @@
+{
+  "artifact_paths": {
+    "base_room_cruise_result": "runtime/agent_tests/latest_room_cruise_v2_result.json",
+    "base_room_cruise_summary": "runtime/agent_tests/latest_room_cruise_v2_summary.json",
+    "incident": "runtime/agent_tests/latest_M3_room_cruise_minoseg_incident.json",
+    "result": "runtime/agent_tests/latest_M3_room_cruise_minoseg.json",
+    "samples": "runtime/agent_tests/M3_room_cruise_minoseg_samples.jsonl",
+    "summary": "runtime/agent_tests/latest_M3_room_cruise_minoseg_summary.json"
+  },
+  "base_room_cruise_v2": {
+    "failed_run_indices": [
+      0
+    ],
+    "run_count": 1,
+    "statuses": [
+      "FAIL"
+    ]
+  },
+  "behavior": {
+    "moving_ratio": 0.3658051689860835,
+    "phase_switch_rate_max_hz": 0.016199835336012876,
+    "physical_motion_ratio": 0.43339960238568587,
+    "progress_cv": null,
+    "progress_per_run_m": [
+      1.0548264287569373
+    ],
+    "run_count": 1,
+    "start_pose_diversity": {
+      "diverse_enough": false,
+      "max_clearance_delta_m": 0.0,
+      "max_heading_delta_deg": 0.0,
+      "max_position_delta_m": 0.0,
+      "start_count": 1,
+      "starts": [
+        {
+          "clearances": [
+            0.87125,
+            0.6365,
+            1.4072
+          ],
+          "run_index": 0,
+          "theta_deg": 0.11681434177105533,
+          "x": -0.0005273235484855574,
+          "y": -0.00016564789918493213
+        }
+      ]
+    },
+    "total_progress_m": 1.0548264287569373
+  },
+  "closure_verdict": "LOW_MID_LEVELS_NOT_CLOSED",
+  "coverage": {
+    "left_arc_samples": 0,
+    "moving_samples": 184,
+    "obstacle_avoidance_samples": 181,
+    "obstacle_near_samples": 427,
+    "pivot_samples": 118,
+    "recovery_continue_samples": 116,
+    "right_arc_samples": 30,
+    "run_count": 1,
+    "run_summaries": [
+      {
+        "duration_s": 61.72902250289917,
+        "moving_ratio": 0.3658051689860835,
+        "phase_switch_rate_hz": 0.016199835336012876,
+        "progress_m": 1.0548264287569373,
+        "run_index": 0,
+        "sample_count": 503
+      }
+    ],
+    "stop_samples": 319,
+    "straight_samples": 20,
+    "total_samples": 503
+  },
+  "expected_live_motion_hu": "A GUI profil ket egymast koveto, kb. 60 masodperces Room Cruise v2 futast indit. A robotnak elore dominansan kell cirkalnia, kb. 0.30 m/s celmaximum mellett siman gyorsitva/lassitva, akadaly elott lassitva vagy megallva, majd bal es jobb ivvel, szuk helyzetben rovid helyben fordulassal vagy recovery utan tovabbhaladva. Minden futas vegen determinisztikusan meg kell allnia. Kozvetlen PWM, legacy vagy szolgaltatasi mozgasi ut nem megengedett.",
+  "failed_gates": [
+    "safety",
+    "control_chain_integrity",
+    "motion_command_fidelity",
+    "wheel_left_forward",
+    "wheel_right_forward",
+    "wheel_right_reverse",
+    "start_stop_quality",
+    "localization_sensor_consistency",
+    "base_room_cruise_v2_gate"
+  ],
+  "inconclusive_gates": [
+    "measurement_sufficiency",
+    "wheel_left_reverse",
+    "left_arc_quality",
+    "repeatability"
+  ],
+  "plain_summary_hu": "Eredmeny: FAIL. Lezarasi minosites: LOW_MID_LEVELS_NOT_CLOSED. Bizonyitek: 1 futas, 503 minta, 184 mozgasi minta. Osszes mért haladas: 1.05 m. Minimum clearance: 0.12 m. Biztosan hibas kapuk: safety, control_chain_integrity, motion_command_fidelity, wheel_left_forward, wheel_right_forward, wheel_right_reverse, start_stop_quality, localization_sensor_consistency, base_room_cruise_v2_gate. Hianyzo bizonyitek: measurement_sufficiency, wheel_left_reverse, left_arc_quality, repeatability.",
+  "safety": {
+    "min_clearance_m": 0.118,
+    "min_front_clearance_m": 0.2465,
+    "nonfinite_command_samples": 0,
+    "safety_event_samples": 0
+  },
+  "schema": "M3_ROOM_CRUISE_MINOSEG_V1",
+  "status": "FAIL",
+  "success": false,
+  "test_name": "M3_room_cruise_minoseg",
+  "timing": {
+    "dt_max_s": 0.0247,
+    "dt_p50_s": 0.02,
+    "dt_p95_s": 0.021179999999999994,
+    "dt_p99_s": 0.0235,
+    "expected_hz": 50.0,
+    "frequency_below_45_ratio": 0.03180914512922465,
+    "frequency_p10_hz": 49.99000000000001,
+    "frequency_p50_hz": 50.0,
+    "jitter_p95_s": 0.0011799999999999953,
+    "loop_budget_component_ema_max_ms": {
+      "control_loop_tick": 4.4724,
+      "control_snapshot": 0.1236,
+      "lidar_snapshot_and_rolling_map": 2.5945,
+      "motion_physical_telemetry": 0.6876,
+      "motion_proposal_resolution": 5.0105,
+      "motion_qa_monitor": 0.557,
+      "write_current_pose": 0.0739,
+      "write_status": 0.0301
+    },
+    "loop_budget_total_ema_p95_ms": 7.353619999999999,
+    "slow_sample_count": 0
+  }
+}

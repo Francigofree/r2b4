@@ -1,0 +1,87 @@
+{
+  "artifact_paths": {
+    "incident": "runtime/agent_tests/latest_M3_motion_primitive_validator_incident.json",
+    "preflight": "runtime/agent_tests/latest_M3_motion_primitive_validator_preflight.json",
+    "result": "runtime/agent_tests/latest_M3_motion_primitive_validator.json",
+    "samples": "runtime/agent_tests/M3_motion_primitive_validator_samples.jsonl",
+    "summary": "runtime/agent_tests/latest_M3_motion_primitive_validator_summary.json"
+  },
+  "failed_gates": [],
+  "inconclusive_gates": [],
+  "plain_summary_hu": "Eredmeny: PASS. P0 preflight: PASS. Primitive: straight_forward_1=PASS actual=-0.064deg err=Nonedeg; arc_left_1=PASS actual=6.713deg err=Nonedeg; arc_right_1=PASS actual=-7.59deg err=Nonedeg.",
+  "preflight": {
+    "failed_gates": [],
+    "status": "PASS"
+  },
+  "primitive_cases": [
+    {
+      "actual_deg": -0.064,
+      "angle_error_deg": null,
+      "case_id": "straight_forward_1",
+      "case_name": "straight_forward",
+      "expected_deg": null,
+      "failed_gates": [],
+      "metrics": {
+        "actual_wheel_opposite_ratio": null,
+        "directional_progress_max_deg": null,
+        "displacement_max_m": 0.1934,
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "track_exec_ratio": null
+      },
+      "onset_measurements": [],
+      "run_index": 0,
+      "status": "PASS",
+      "terminal_reason": "DURATION_REACHED"
+    },
+    {
+      "actual_deg": 6.713,
+      "angle_error_deg": null,
+      "case_id": "arc_left_1",
+      "case_name": "arc_left",
+      "expected_deg": null,
+      "failed_gates": [],
+      "metrics": {
+        "actual_wheel_opposite_ratio": null,
+        "directional_progress_max_deg": null,
+        "displacement_max_m": 0.1762,
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "track_exec_ratio": null
+      },
+      "onset_measurements": [],
+      "run_index": 1,
+      "status": "PASS",
+      "terminal_reason": "DURATION_REACHED"
+    },
+    {
+      "actual_deg": -7.59,
+      "angle_error_deg": null,
+      "case_id": "arc_right_1",
+      "case_name": "arc_right",
+      "expected_deg": null,
+      "failed_gates": [],
+      "metrics": {
+        "actual_wheel_opposite_ratio": null,
+        "directional_progress_max_deg": null,
+        "displacement_max_m": 0.1738,
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "track_exec_ratio": null
+      },
+      "onset_measurements": [],
+      "run_index": 2,
+      "status": "PASS",
+      "terminal_reason": "DURATION_REACHED"
+    }
+  ],
+  "schema": "M3_MOTION_PRIMITIVE_VALIDATOR_V1",
+  "status": "PASS",
+  "success": true,
+  "system_validation": {
+    "failed_gates": [],
+    "inconclusive_gates": [],
+    "status": "PASS"
+  },
+  "test_name": "hub_M3_motion_primitive_straight_arc_live"
+}

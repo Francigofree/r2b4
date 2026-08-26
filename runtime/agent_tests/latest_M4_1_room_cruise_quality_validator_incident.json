@@ -1,0 +1,27 @@
+{
+  "schema": "M4_1_ROOM_CRUISE_QUALITY_INCIDENT_V1",
+  "needed": true,
+  "status": "FAIL",
+  "proof_verdict": "M4_1_ROOM_CRUISE_MOVEMENT_QUALITY_NOT_PROVEN",
+  "evidence_id": "m3-foundation:1784933023.512838",
+  "failed_gates": [
+    "unified_safety_foundation",
+    "duration_motion_coverage",
+    "obstacle_dependent_speed_regulation",
+    "steady_motion_minimum",
+    "localization_sensor_consistency",
+    "execution_handoff_continuity",
+    "settled_execution_tracking"
+  ],
+  "inconclusive_gates": [
+    "human_visual_observation"
+  ],
+  "artifact_paths": {
+    "result": "runtime/agent_tests/latest_M4_1_room_cruise_quality_validator.json",
+    "summary": "runtime/agent_tests/latest_M4_1_room_cruise_quality_validator_summary.json",
+    "samples": "runtime/agent_tests/M4_1_room_cruise_quality_validator_samples.jsonl",
+    "incident": "runtime/agent_tests/latest_M4_1_room_cruise_quality_validator_incident.json",
+    "m4_result": "runtime/agent_tests/latest_M4_room_cruise_quality_validator.json",
+    "m4_summary": "runtime/agent_tests/latest_M4_room_cruise_quality_validator_summary.json"
+  }
+}

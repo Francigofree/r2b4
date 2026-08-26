@@ -1,0 +1,126 @@
+/**
+ * R2B4 Layout System
+ * Grid structure for the multi-page dashboard.
+ */
+.r2-console-grid {
+    display: grid;
+    grid-template-areas:
+        "header header"
+        "sidebar main"
+        "footer footer";
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: auto 1fr 40px;
+    height: 100vh;
+    width: 100vw;
+}
+
+.r2-header {
+    grid-area: header;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border-dim);
+    display: flex;
+    align-items: center;
+    padding: 6px var(--space-md);
+    z-index: 10;
+}
+
+.r2-sidebar {
+    grid-area: sidebar;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border-dim);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-md) 0;
+    overflow-y: auto;
+}
+
+.r2-main-content {
+    grid-area: main;
+    background: var(--bg-base);
+    overflow-y: auto;
+    padding: var(--space-md);
+    display: grid;
+    gap: var(--space-md);
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    align-content: start;
+}
+
+.r2-footer {
+    grid-area: footer;
+    background: var(--bg-header);
+    border-top: 1px solid var(--border-dim);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-md);
+    font-family: var(--font-data);
+    font-size: 0.85rem;
+}
+
+/* Page management */
+.r2-page {
+    display: none;
+    /* Controlled by state store/UI-controller */
+}
+
+.r2-page.active {
+    display: contents;
+    /* Let panels flow into main grid */
+}
+
+/* Motion Console Specific Grid */
+.motion-sim-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr 320px;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "left center right"
+        "bottom bottom bottom";
+    gap: var(--space-md);
+    width: 100%;
+    height: 100%;
+}
+
+.motion-sim-left {
+    grid-area: left;
+}
+
+.motion-sim-center {
+    grid-area: center;
+}
+
+.motion-sim-right {
+    grid-area: right;
+}
+
+.motion-sim-bottom {
+    grid-area: bottom;
+}
+
+.camera-stream-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border: 1px solid var(--border-focus);
+    overflow: hidden;
+}
+
+.lidar-tactical-container {
+    margin-top: var(--space-md);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-dim);
+    height: 300px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.tactical-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    padding: var(--space-sm);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}

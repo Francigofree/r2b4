@@ -1,0 +1,170 @@
+{
+  "activation_allowed": true,
+  "activation_authority": "explicit_user_directive_2026_07_29",
+  "calibration_evidence": "straight direct-PWM distance shuttle; accepted stable ascending and descending repeats only",
+  "calibration_run_id": "speed_map_4bce384b70dd49eb9fae8ef432c4d183",
+  "calibration_state": "VALIDATED_DISTANCE_SHUTTLE_ACTIVE_V1",
+  "candidate_id": "8ed2dd35312a16c4ec94d5c4375bd5ad5b0cba8b11ac00ed2786100948b2761d",
+  "curves": {
+    "left_forward": {
+      "dead_zone_pwm": 0.1,
+      "direction": "forward",
+      "maintenance_last_unreliable_pwm": 0.08,
+      "maintenance_pwm": 0.1,
+      "points": [
+        {
+          "pwm": 0.19566,
+          "speed_mps": 0.15
+        },
+        {
+          "pwm": 0.23924,
+          "speed_mps": 0.19
+        },
+        {
+          "pwm": 0.31161,
+          "speed_mps": 0.26
+        },
+        {
+          "pwm": 0.40339,
+          "speed_mps": 0.35
+        },
+        {
+          "pwm": 0.52693,
+          "speed_mps": 0.5
+        },
+        {
+          "pwm": 0.64,
+          "speed_mps": 0.582
+        }
+      ],
+      "stable_source_point_count": 8,
+      "startup_last_unreliable_pwm": 0.08,
+      "startup_pwm": 0.1,
+      "wheel": "left"
+    },
+    "left_reverse": {
+      "dead_zone_pwm": 0.12,
+      "direction": "reverse",
+      "maintenance_last_unreliable_pwm": 0.1,
+      "maintenance_pwm": 0.12,
+      "points": [
+        {
+          "pwm": 0.20154,
+          "speed_mps": 0.15
+        },
+        {
+          "pwm": 0.24131,
+          "speed_mps": 0.19
+        },
+        {
+          "pwm": 0.30608,
+          "speed_mps": 0.26
+        },
+        {
+          "pwm": 0.36693,
+          "speed_mps": 0.35
+        },
+        {
+          "pwm": 0.54586,
+          "speed_mps": 0.5
+        },
+        {
+          "pwm": 0.62466,
+          "speed_mps": 0.582
+        }
+      ],
+      "stable_source_point_count": 8,
+      "startup_last_unreliable_pwm": 0.1,
+      "startup_pwm": 0.12,
+      "wheel": "left"
+    },
+    "right_forward": {
+      "dead_zone_pwm": 0.1,
+      "direction": "forward",
+      "maintenance_last_unreliable_pwm": 0.08,
+      "maintenance_pwm": 0.1,
+      "points": [
+        {
+          "pwm": 0.1921,
+          "speed_mps": 0.15
+        },
+        {
+          "pwm": 0.2361,
+          "speed_mps": 0.19
+        },
+        {
+          "pwm": 0.30642,
+          "speed_mps": 0.26
+        },
+        {
+          "pwm": 0.39858,
+          "speed_mps": 0.35
+        },
+        {
+          "pwm": 0.51155,
+          "speed_mps": 0.5
+        },
+        {
+          "pwm": 0.59812,
+          "speed_mps": 0.582
+        }
+      ],
+      "stable_source_point_count": 8,
+      "startup_last_unreliable_pwm": 0.08,
+      "startup_pwm": 0.1,
+      "wheel": "right"
+    },
+    "right_reverse": {
+      "dead_zone_pwm": 0.12,
+      "direction": "reverse",
+      "maintenance_last_unreliable_pwm": 0.1,
+      "maintenance_pwm": 0.12,
+      "points": [
+        {
+          "pwm": 0.21547,
+          "speed_mps": 0.15
+        },
+        {
+          "pwm": 0.25197,
+          "speed_mps": 0.19
+        },
+        {
+          "pwm": 0.3187,
+          "speed_mps": 0.26
+        },
+        {
+          "pwm": 0.37712,
+          "speed_mps": 0.35
+        },
+        {
+          "pwm": 0.56729,
+          "speed_mps": 0.5
+        },
+        {
+          "pwm": 0.63815,
+          "speed_mps": 0.582
+        }
+      ],
+      "stable_source_point_count": 8,
+      "startup_last_unreliable_pwm": 0.1,
+      "startup_pwm": 0.12,
+      "wheel": "right"
+    }
+  },
+  "hardware": "DFRobot KIT0085",
+  "interpolation": "linear",
+  "map_state": "ACTIVE",
+  "measured_common_max_speed_mps": 0.581945779378805,
+  "minimum_common_coverage_mps": 0.58,
+  "operating_range_max_mps": 0.582,
+  "operating_range_min_mps": 0.15,
+  "operating_range_target_max_mps": 0.582,
+  "requires_validation_order": [
+    "speed_map_quick_no_pi_live",
+    "speed_map_quick_pi_live",
+    "speed_map_candidate_M1_live"
+  ],
+  "rollback_backup": "logs/calibration_archive/speed_map_activation_20260729/uploaded_active_before_final_promotion.json",
+  "schema": "R2B4_WHEEL_SPEED_MAP_V2",
+  "source_candidate_sha256": "869fffdbe78b205fb1f390e12e2bc435dd47a72bdc4e5c6b532fb2648fb75550"
+}

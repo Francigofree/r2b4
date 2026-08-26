@@ -1,0 +1,59 @@
+{
+  "schema": "R2B4_WHEEL_SPEED_MAP_V2",
+  "map_state": "ACTIVE",
+  "hardware": "DFRobot KIT0085",
+  "calibration_state": "ACTIVE_M1_LOW_SPEED_REFIT_2026_07_24",
+  "calibration_evidence": "Reverse 0.15 m/s startup/maintenance point raised after hub_M1_motion_baseline_live_20260724T214836Z showed timing-clean backward undertracking: settled MAE 0.023061 m/s, linear ratio 0.878, end left -0.126845 m/s vs -0.15 ref. A trial right-forward 0.20 reduction was rejected after worsening arc_right undertracking. Forward 0.15 m/s startup/maintenance point raised slightly after two M0-mini runs failed only settled wheel tracking near the 0.15 m/s floor. The right-forward 0.15 point was then trimmed to 0.197 after hub_M1_motion_baseline_live_20260724T223504Z showed clean forward right-wheel MAE 0.018690 m/s while left was 0.011791 m/s.",
+  "interpolation": "linear",
+  "operating_range_min_mps": 0.15,
+  "curves": {
+    "left_forward": {
+      "wheel": "left",
+      "direction": "forward",
+      "startup_pwm": 0.198,
+      "dead_zone_pwm": 0.198,
+      "points": [
+        {"speed_mps": 0.15, "pwm": 0.198},
+        {"speed_mps": 0.20, "pwm": 0.225},
+        {"speed_mps": 0.25, "pwm": 0.30},
+        {"speed_mps": 0.30, "pwm": 0.35}
+      ]
+    },
+    "left_reverse": {
+      "wheel": "left",
+      "direction": "reverse",
+      "startup_pwm": 0.205,
+      "dead_zone_pwm": 0.205,
+      "points": [
+        {"speed_mps": 0.15, "pwm": 0.205},
+        {"speed_mps": 0.20, "pwm": 0.24},
+        {"speed_mps": 0.25, "pwm": 0.29},
+        {"speed_mps": 0.30, "pwm": 0.34}
+      ]
+    },
+    "right_forward": {
+      "wheel": "right",
+      "direction": "forward",
+      "startup_pwm": 0.197,
+      "dead_zone_pwm": 0.197,
+      "points": [
+        {"speed_mps": 0.15, "pwm": 0.197},
+        {"speed_mps": 0.20, "pwm": 0.225},
+        {"speed_mps": 0.25, "pwm": 0.30},
+        {"speed_mps": 0.30, "pwm": 0.35}
+      ]
+    },
+    "right_reverse": {
+      "wheel": "right",
+      "direction": "reverse",
+      "startup_pwm": 0.205,
+      "dead_zone_pwm": 0.205,
+      "points": [
+        {"speed_mps": 0.15, "pwm": 0.205},
+        {"speed_mps": 0.20, "pwm": 0.245},
+        {"speed_mps": 0.25, "pwm": 0.295},
+        {"speed_mps": 0.30, "pwm": 0.345}
+      ]
+    }
+  }
+}

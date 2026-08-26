@@ -1,0 +1,347 @@
+{
+  "active_speed_map": {
+    "calibration_evidence": "Behavior-preserving migration of the active four-direction feed-forward values; live full-range candidate calibration is pending.",
+    "calibration_state": "V2_SCHEMA_MIGRATION_2026_07_16",
+    "curves": {
+      "left_forward": {
+        "dead_zone_pwm": 0.09,
+        "direction": "forward",
+        "points": [
+          {
+            "pwm": 0.09,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.14,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.19,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.24,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.29,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.34,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.09,
+        "wheel": "left"
+      },
+      "left_reverse": {
+        "dead_zone_pwm": 0.087,
+        "direction": "reverse",
+        "points": [
+          {
+            "pwm": 0.087,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.14,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.19,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.24,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.29,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.34,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.087,
+        "wheel": "left"
+      },
+      "right_forward": {
+        "dead_zone_pwm": 0.084,
+        "direction": "forward",
+        "points": [
+          {
+            "pwm": 0.084,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.14,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.19,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.24,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.29,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.34,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.084,
+        "wheel": "right"
+      },
+      "right_reverse": {
+        "dead_zone_pwm": 0.089,
+        "direction": "reverse",
+        "points": [
+          {
+            "pwm": 0.089,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.145,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.195,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.245,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.295,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.345,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.089,
+        "wheel": "right"
+      }
+    },
+    "hardware": "DFRobot KIT0085",
+    "interpolation": "linear",
+    "map_state": "ACTIVE",
+    "schema": "R2B4_WHEEL_SPEED_MAP_V2"
+  },
+  "after_score": {
+    "direct_executor_missing_count": 0,
+    "encoder_anomaly_count": 2,
+    "expected_speed_points": 6,
+    "fault_count": 0,
+    "group_median_relative_error": {
+      "left_forward": 0.03985818445579874,
+      "left_reverse": 0.18021716140129757,
+      "right_forward": 0.0671337613760985,
+      "right_reverse": 0.16841284150658165
+    },
+    "max_group_median_relative_error": 0.18021716140129757,
+    "mean_relative_error": 0.13738613885340528,
+    "median_relative_error": 0.12041127942143108,
+    "pid_violation_count": 0,
+    "wrong_direction_count": 0
+  },
+  "artifacts": {
+    "backup": "runtime/agent_tests/speed_map_before_feedforward_calibration.json",
+    "candidate": "runtime/agent_tests/candidate_wheel_speed_map_feedforward.json",
+    "result": "runtime/agent_tests/latest_motor_feedforward_calibration.json",
+    "samples": "runtime/agent_tests/latest_motor_feedforward_calibration_samples.jsonl"
+  },
+  "before_score": {
+    "direct_executor_missing_count": 0,
+    "encoder_anomaly_count": 2,
+    "expected_speed_points": 6,
+    "fault_count": 0,
+    "group_median_relative_error": {
+      "left_forward": 0.04608672636278649,
+      "left_reverse": 0.09226259816838836,
+      "right_forward": 0.046841923421184206,
+      "right_reverse": 0.0653917511776934
+    },
+    "max_group_median_relative_error": 0.09226259816838836,
+    "mean_relative_error": 0.08759039777832849,
+    "median_relative_error": 0.0522610254804122,
+    "pid_violation_count": 0,
+    "wrong_direction_count": 0
+  },
+  "calibration_outcome": "CANDIDATE_REJECTED",
+  "candidate_activation_allowed": false,
+  "candidate_kept": false,
+  "candidate_map": {
+    "calibration_evidence": "latest_motor_feedforward_calibration.json direct PWM acquisition",
+    "calibration_state": "LIVE_DIRECT_PWM_FOUR_DIRECTION_CANDIDATE_2026_07_16",
+    "curves": {
+      "left_forward": {
+        "dead_zone_pwm": 0.0911,
+        "direction": "forward",
+        "points": [
+          {
+            "pwm": 0.0911,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1471,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.1931,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2485,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.2854,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3266,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.0911,
+        "wheel": "left"
+      },
+      "left_reverse": {
+        "dead_zone_pwm": 0.0949,
+        "direction": "reverse",
+        "points": [
+          {
+            "pwm": 0.0949,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1637,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.189,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2616,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.3109,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.335,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.0949,
+        "wheel": "left"
+      },
+      "right_forward": {
+        "dead_zone_pwm": 0.084,
+        "direction": "forward",
+        "points": [
+          {
+            "pwm": 0.084,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1411,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.1916,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2427,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.2841,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3244,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.084,
+        "wheel": "right"
+      },
+      "right_reverse": {
+        "dead_zone_pwm": 0.104,
+        "direction": "reverse",
+        "points": [
+          {
+            "pwm": 0.104,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1486,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.2214,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2444,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.2915,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3208,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.104,
+        "wheel": "right"
+      }
+    },
+    "hardware": "DFRobot KIT0085",
+    "interpolation": "linear",
+    "map_state": "CANDIDATE",
+    "schema": "R2B4_WHEEL_SPEED_MAP_V2"
+  },
+  "candidate_qualified": false,
+  "closed_wheel_loop_used_for_calibration": false,
+  "direct_pwm_measurement": true,
+  "error": "",
+  "invalid_attempt_count": 0,
+  "invalid_attempts": [],
+  "max_abs_pwm": 0.35,
+  "max_phase_distance_m": 1.8,
+  "pause_count": 59,
+  "pause_failures": [],
+  "pause_s": 10.0,
+  "phase_count": 60,
+  "repeats_after": 2,
+  "repeats_before": 3,
+  "reused_before_artifact": false,
+  "speed_points_mps": [
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3
+  ],
+  "status": "PASS",
+  "success": true,
+  "test_name": "motor_feedforward_calibration_live"
+}

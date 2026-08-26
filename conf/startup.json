@@ -1,0 +1,20 @@
+{
+  "timeouts": {
+    "default": 30,
+    "boot": 10,
+    "hardware_discovery": 15,
+    "peripheral_init": 45,
+    "sensor_stabilization": 8,
+    "calibration": 60,
+    "baseline_capture": 5,
+    "safety_validation": 10,
+    "control_armed": 5
+  },
+  "sensor_stabilization": {
+    "imu_warmup_sec": 1.5,
+    "samples": 100,
+    "noise_check_samples": 50
+  },
+  "degraded_allows_run": true,
+  "failsafe_exit_on_complete": false
+}

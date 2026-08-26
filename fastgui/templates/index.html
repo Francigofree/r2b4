@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R2B4 OS v5.0 | Taktikai Vezérlőkonzol</title>
+
+    <!-- Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap"
+        rel="stylesheet">
+
+    <!-- CSS System -->
+    <link rel="stylesheet" href="/static/css/design-system.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/css/layout.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/css/header.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/css/components.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/css/motion_console.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/static/css/log_panel.css?v={{ asset_version }}">
+
+    <style>
+        /* App-specific overrides/tweaks */
+        .r2-value-changed {
+            animation: pulse-update 0.4s ease-out;
+        }
+
+        .r2-button.log-live {
+            color: #231f00;
+            background: linear-gradient(180deg, #ffe278 0%, #e8c94b 100%);
+            border-color: rgba(255, 227, 120, 0.9);
+            box-shadow: 0 0 0 1px rgba(255, 227, 120, 0.18), 0 0 10px rgba(255, 227, 120, 0.14);
+            animation: log-live-pulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes log-live-pulse {
+
+            0%,
+            100% {
+                opacity: 0.92;
+                box-shadow: 0 0 0 1px rgba(255, 227, 120, 0.16), 0 0 8px rgba(255, 227, 120, 0.10);
+            }
+
+            50% {
+                opacity: 1;
+                box-shadow: 0 0 0 1px rgba(255, 227, 120, 0.25), 0 0 14px rgba(255, 227, 120, 0.18);
+            }
+        }
+
+        @keyframes pulse-update {
+            0% {
+                color: var(--accent);
+                text-shadow: 0 0 8px var(--accent);
+            }
+
+            100% {
+                color: var(--fg-base);
+                text-shadow: none;
+            }
+        }
+
+        .r2-data-value-wrap.r2-data-rich {
+            font-size: 0.72rem;
+            line-height: 1.3;
+        }
+
+        .sensor-section {
+            padding: 6px 8px;
+            margin-bottom: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .sensor-section-title {
+            font-size: 0.68rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--fg-muted);
+            margin-bottom: 4px;
+        }
+
+        .sensor-kv-row {
+            display: grid;
+            grid-template-columns: minmax(110px, 40%) 1fr;
+            gap: 8px;
+            align-items: start;
+            padding: 2px 0;
+        }
+
+        .sensor-kv-key {
+            color: var(--fg-muted);
+            font-size: 0.66rem;
+            line-height: 1.25;
+        }
+
+        .sensor-kv-val {
+            color: var(--fg-base);
+            font-family: var(--font-data);
+            font-size: 0.72rem;
+            line-height: 1.25;
+            text-align: left;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .sensor-kv-val.nominal {
+            color: var(--nominal);
+        }
+
+        .sensor-kv-val.warning {
+            color: var(--warning);
+        }
+
+        .sensor-kv-val.critical {
+            color: var(--critical);
+        }
+
+        .sensor-pill {
+            display: inline-block;
+            padding: 1px 6px;
+            margin-right: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            font-size: 0.62rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .sensor-pill.nominal {
+            border-color: rgba(122, 255, 162, 0.5);
+            color: var(--nominal);
+        }
+
+        .sensor-pill.warning {
+            border-color: rgba(255, 200, 107, 0.5);
+            color: var(--warning);
+        }
+
+        .sensor-pill.critical {
+            border-color: rgba(255, 108, 108, 0.55);
+            color: var(--critical);
+        }
+
+        .sensor-details {
+            margin-top: 6px;
+            border: 1px dashed rgba(255, 255, 255, 0.14);
+            border-radius: 6px;
+            padding: 4px 6px;
+            background: rgba(0, 0, 0, 0.14);
+        }
+
+        .sensor-details summary {
+            cursor: pointer;
+            color: var(--fg-muted);
+            font-size: 0.64rem;
+            user-select: none;
+        }
+
+        .sensor-json {
+            margin: 6px 0 0;
+            padding: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #b7f8cf;
+            font-family: var(--font-data);
+            font-size: 0.62rem;
+            line-height: 1.25;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .sensor-empty {
+            color: var(--fg-muted);
+            font-size: 0.68rem;
+            font-style: italic;
+        }
+
+        .diag-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .diag-panel {
+            min-height: 190px;
+        }
+
+        .diag-panel h3 {
+            margin-bottom: 8px;
+        }
+
+        .diag-note {
+            color: var(--fg-muted);
+            font-size: 0.72rem;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .diag-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .diag-action-btn {
+            padding: 6px 8px;
+            font-size: 0.72rem;
+            line-height: 1.2;
+            min-height: 28px;
+        }
+
+        .diag-status {
+            margin-top: 8px;
+            font-size: 0.72rem;
+            color: var(--fg-muted);
+        }
+
+        .diag-status strong {
+            color: var(--fg-base);
+        }
+
+        .diag-catalog {
+            margin-top: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.16);
+        }
+
+        .diag-catalog-empty {
+            color: var(--fg-muted);
+            font-size: 0.72rem;
+            font-style: italic;
+        }
+
+        .diag-result-log {
+            margin-top: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            font-family: var(--font-data);
+            font-size: 0.67rem;
+            line-height: 1.25;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .diag-custom-grid {
+            display: grid;
+            gap: 6px;
+        }
+
+        .diag-custom-grid input,
+        .diag-custom-grid textarea {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 4px;
+            color: var(--fg-base);
+            font-family: var(--font-data);
+            font-size: 0.72rem;
+            padding: 6px;
+        }
+
+        .diag-custom-grid textarea {
+            min-height: 82px;
+            resize: vertical;
+        }
+
+        @media (max-width: 1260px) {
+            .diag-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 780px) {
+            .diag-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="r2-console-grid">
+        <!-- GLOBAL HEADER – struktúra igazítva a lapokhoz -->
+        <header class="r2-header">
+            <div class="motion-header-grid">
+                <div class="motion-header-card">
+                    <span class="motion-header-label">Robot kapcsolat</span>
+                    <strong id="hdr-robot-connection" class="nominal">ONLINE</strong>
+                </div>
+                <div class="motion-header-card">
+                    <span class="motion-header-label">Intent vektor</span>
+                    <strong id="hdr-intent-vector">x=0.00 | y=0.00</strong>
+                </div>
+                <div class="motion-header-card">
+                    <span class="motion-header-label">Motor target</span>
+                    <strong id="hdr-motor-targets">L=0.00 | R=0.00</strong>
+                </div>
+                <div class="motion-header-card">
+                    <span class="motion-header-label">Motor actual</span>
+                    <strong id="hdr-motor-actual">L=0.00 | R=0.00</strong>
+                </div>
+                <div class="motion-header-card">
+                    <span class="motion-header-label">Failsafe</span>
+                    <strong id="hdr-failsafe-status" class="nominal">OK</strong>
+                </div>
+                <div class="motion-header-card motion-header-card--toggle">
+                    <span class="motion-header-label">Encoder</span>
+                    <button type="button" class="r2-button diag-action-btn motion-header-encoder-toggle nominal"
+                        id="hdr-encoder-toggle" aria-pressed="true">
+                        ENCODER <strong id="hdr-encoder-state">BE</strong>
+                    </button>
+                </div>
+                <div class="motion-header-card motion-header-card--pose">
+                    <span class="motion-header-label">Pozíció &amp; sebesség</span>
+                    <div class="pose-readout-row">
+                        <span class="pose-tag">X</span><strong id="hdr-x">0.00</strong>
+                        <span class="pose-tag">Y</span><strong id="hdr-y">0.00</strong>
+                        <span class="pose-tag">Yaw</span><strong id="hdr-yaw">0.0°</strong>
+                        <span class="pose-tag">V</span><strong id="hdr-speed">0.00</strong>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- SIDEBAR NAVIGATION -->
+        <nav class="r2-sidebar">
+            <div class="r2-nav-item active" data-page="motion-console">MOTION CONSOLE</div>
+            <div class="r2-nav-item" data-page="overview">RENDSZER ÁTTEKINTÉS</div>
+            <div class="r2-nav-item" data-page="motion">MOZGÁSVEZÉRLÉS</div>
+            <div class="r2-nav-item" data-page="ekf">EKF MONITOR</div>
+            <div class="r2-nav-item" data-page="safety">BIZTONSÁGI FELÜGYELET</div>
+            <div class="r2-nav-item" data-page="sensors">SZENZOROK</div>
+            <div class="r2-nav-item" data-page="power">ENERGIA ÉS HŐMÉRSÉKLET</div>
+            <div class="r2-nav-item" data-page="ai">AI / ADAPTÍV RÉTEG</div>
+            <div class="r2-nav-item" data-page="log">NAPLÓ ÉS AUDIT</div>
+            <div class="r2-nav-item" data-page="diagnostics">DIAGNOSZTIKA</div>
+        </nav>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="r2-main-content" id="main-view">
+
+            <!-- PAGE: MOTION CONSOLE (Tactical Operator Console) -->
+            <section class="r2-page active" id="page-motion-console">
+                <div class="motion-interface-container">
+                    <div class="motion-panel simulator-status-panel">
+                        <div class="panel-kicker">OPERÁTORI ÖSSZEGZÉS</div>
+                        <div class="sim-top-strip">
+                            <span>[SYS: <strong id="sim-sys-state">OK</strong>]</span>
+                            <span>[JOY: <strong id="sim-joy-state">ACTIVE</strong>]</span>
+                            <span>[SSE: <strong id="sim-stream-state">ONLINE</strong>]</span>
+                            <span>[AGE: <strong id="sim-telemetry-age">0ms</strong>]</span>
+                        </div>
+                        <div class="sim-status-grid">
+                            <div class="sim-status-card sim-status-card--periph">
+                                <span class="sim-card-label">Perifériák</span>
+                                <div class="periph-btn-row">
+                                    <button type="button" class="periph-toggle-btn warning" id="periph-btn-lid"
+                                        aria-pressed="false" title="LIDAR BE/KI">LID</button>
+                                    <button type="button" class="periph-toggle-btn warning" id="periph-btn-enc"
+                                        aria-pressed="false" title="Encoder BE/KI">ENC</button>
+                                    <span class="periph-toggle-btn nominal" title="Atomi BNO055 IMU">BNO</span>
+                                </div>
+                            </div>
+                            <div class="sim-status-card">
+                                <span class="sim-card-label">Mozgásvezerlés</span>
+                                <strong id="ctrl-mode-unified" title="Rögzített UNIFIED mozgásrendszer">UNIFIED</strong>
+                            </div>
+                            <div class="sim-status-card">
+                                <span class="sim-card-label">Failsafe</span>
+                                <strong id="sim-failsafe-state">NORMÁL</strong>
+                                <span id="sim-stale-state">NEM</span>
+                            </div>
+                            <div class="sim-status-card">
+                                <span class="sim-card-label">Input mód</span>
+                                <strong id="sim-input-mode">HYBRID (JOY+KEY)</strong>
+                                <span id="sim-target-right">R cél: 0.00</span>
+                            </div>
+                        </div>
+                        <div class="track-meters-container">
+                            <div class="track-unit" data-side="left">
+                                <div class="track-meter">
+                                    <div class="track-label">BAL motor</div>
+                                    <div class="track-stats track-stats-top" id="left-track-stats">T: 0.00 | A: 0.00
+                                    </div>
+                                    <div class="meter-bar-outer meter-bar-dual">
+                                        <div class="meter-strip-wrap">
+                                            <div class="meter-strip meter-strip-speed" id="left-track-speed"
+                                                style="height: 0%;" title="Actual"></div>
+                                        </div>
+                                        <div class="meter-strip-wrap">
+                                            <div class="meter-strip meter-strip-pwm" id="left-track-pwm"
+                                                style="height: 0%;" title="Target"></div>
+                                        </div>
+                                    </div>
+                                    <div class="track-stats track-stats-bottom" id="left-track-stats-bottom">TARGET /
+                                        ACTUAL</div>
+                                </div>
+                            </div>
+                            <div class="track-unit" data-side="right">
+                                <div class="track-meter">
+                                    <div class="track-label">JOBB motor</div>
+                                    <div class="track-stats track-stats-top" id="right-track-stats">T: 0.00 | A: 0.00
+                                    </div>
+                                    <div class="meter-bar-outer meter-bar-dual">
+                                        <div class="meter-strip-wrap">
+                                            <div class="meter-strip meter-strip-speed" id="right-track-speed"
+                                                style="height: 0%;" title="Actual"></div>
+                                        </div>
+                                        <div class="meter-strip-wrap">
+                                            <div class="meter-strip meter-strip-pwm" id="right-track-pwm"
+                                                style="height: 0%;" title="Target"></div>
+                                        </div>
+                                    </div>
+                                    <div class="track-stats track-stats-bottom" id="right-track-stats-bottom">TARGET /
+                                        ACTUAL</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sim-vector-readout">
+                            <div class="vector-pill">
+                                <span>Bal target</span>
+                                <strong id="sim-left-target-readout">0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>Jobb target</span>
+                                <strong id="sim-right-target-readout">0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>Bal actual</span>
+                                <strong id="sim-left-actual-readout">0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>Jobb actual</span>
+                                <strong id="sim-right-actual-readout">0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="motion-panel center-panel simulator-vision-panel">
+                        <div class="feed-header">
+                            <span>ÉLŐ KÉP ÉS HELYZETKÉP</span>
+                            <span class="target-info">LIDAR + CAMERA FUSED</span>
+                        </div>
+                        <div class="vision-metrics">
+                            <div class="vision-metric">
+                                <span>X / Y</span>
+                                <strong id="sim-pose-inline">0.00 / 0.00 m</strong>
+                            </div>
+                            <div class="vision-metric">
+                                <span>Yaw</span>
+                                <strong id="sim-yaw-inline">0.0°</strong>
+                            </div>
+                            <div class="vision-metric">
+                                <span>Mért V</span>
+                                <strong id="sim-speed-inline">0.00 m/s</strong>
+                            </div>
+                        </div>
+                        <div class="feed-container" id="camera-feed-container" title="Stream be/ki">
+                            <img id="ts-camera-feed-tac" src="/api/camera-stream" class="main-video">
+                            <div class="feed-overlay"></div>
+                            <button type="button" class="camera-toggle-chip" id="camera-toggle-badge">STREAM KI</button>
+                            <div class="camera-lidar-overlay" id="camera-lidar-overlay" title="LIDAR map">
+                                <canvas id="camera-lidar-map" width="84" height="84"></canvas>
+                            </div>
+                            <div class="feed-live-chip">
+                                <div class="rec-dot"></div>
+                                <span>LIVE</span>
+                            </div>
+                            <div class="battery-icon"></div>
+                            <div class="osd-label">OSD</div>
+                            <div class="feed-scan-bars">
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="motion-panel joystick-panel simulator-control-panel">
+                        <div class="panel-kicker">MOZGÁSVEZÉRLÉS</div>
+                        <div class="joy-mode-status" id="joy-mode-status"
+                            title="Rögzített mozgásvezérlés">
+                            RENDSZER: <strong id="joy-mode-status-label">UNIFIED</strong>
+                        </div>
+                        <button class="joy-quick-turn-btn" id="joy-turn-left-90-btn" type="button"
+                            title="Induló headingből balra 90° fordulat">
+                            BALRA 90° (HEADING)
+                        </button>
+                        <div class="joystick-outer r2b4-joystick" id="joystick-drive-pad">
+                            <div class="joy-grid-ring"></div>
+                            <div class="joy-gate-ring"></div>
+                            <div class="joy-deadzone-ring"></div>
+                            <div class="joy-axis joy-axis-x"></div>
+                            <div class="joy-axis joy-axis-y"></div>
+                            <div class="joy-center-dot"></div>
+                            <div class="joy-center">
+                                <div class="joy-knob-new" id="joystick-knob"></div>
+                            </div>
+                        </div>
+                        <div class="joy-label">R2B4 ANALÓG JOYSTICK</div>
+                        <div class="sim-control-readout">
+                            <div class="vector-pill">
+                                <span>STEER (X)</span>
+                                <strong id="joy-x-readout">+0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>THRUST (Y)</span>
+                                <strong id="joy-y-readout">+0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>Turn slider (X)</span>
+                                <input type="range" id="intent-slider-x" min="-100" max="100" value="0">
+                                <strong id="intent-slider-x-value">0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>Forward slider (Y)</span>
+                                <input type="range" id="intent-slider-y" min="-100" max="100" value="0">
+                                <strong id="intent-slider-y-value">0.00</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>Pálya parancsok</span>
+                                <button class="r2-button route-btn" id="btn-route-square">NÉGYZET</button>
+                            </div>
+                            <div class="vector-pill">
+                                <span>&nbsp;</span>
+                                <button class="r2-button route-btn" id="btn-route-circle">KÖR</button>
+                            </div>
+                            <div class="vector-pill">
+                                <span>L90 QA</span>
+                                <strong id="sim-auto-turn-qa">IDLE</strong>
+                            </div>
+                            <div class="vector-pill">
+                                <span>L90 METRIKA</span>
+                                <strong id="sim-auto-turn-metrics">n/a</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="motion-panel simulator-tuning-panel">
+                        <div class="panel-kicker">VALÓS MOZGÁS FINOMHANGOLÁS</div>
+                        <div class="tuning-field">
+                            <label for="sim-accel-slider">Gyorsulás limit</label>
+                            <input type="range" id="sim-accel-slider" min="0.2" max="1.8" step="0.05" value="0.50">
+                            <div class="tuning-readout"><span>Lágyabb</span><strong id="sim-accel-value">0.50
+                                    m/s²</strong><span>Gyorsabb</span></div>
+                        </div>
+                        <div class="tuning-field">
+                            <label for="sim-jerk-slider">Jerk limit</label>
+                            <input type="range" id="sim-jerk-slider" min="0.5" max="4.0" step="0.1" value="1.00">
+                            <div class="tuning-readout"><span>Analóg</span><strong
+                                    id="sim-jerk-value">1.00</strong><span>Dinamikus</span></div>
+                        </div>
+                        <div class="tuning-field">
+                            <label for="sim-gear-slider">PWM plafon</label>
+                            <input type="range" id="sim-gear-slider" min="0.30" max="1.00" step="0.05" value="0.90">
+                            <div class="tuning-readout"><span>Puha</span><strong
+                                    id="sim-gear-value">90%</strong><span>Erős</span></div>
+                        </div>
+                        <button class="mode-btn tuning-apply-btn" id="sim-apply-tuning">SIMÍTÁSI PROFIL
+                            ALKALMAZÁSA</button>
+
+                    </div>
+
+                    <div class="motion-bottom-bar">
+                        <input class="sim-command-input" id="sim-command-input" type="text"
+                            placeholder="parancs: move_to(target_b_gps)">
+                        <button class="mode-btn" id="sim-command-exec">EXECUTE</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PAGE: OVERVIEW -->
+            <section class="r2-page" id="page-overview">
+                <article class="r2-panel">
+                    <h3>Rendszerállapot</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">Mód Prioritás</span><span
+                            class="r2-data-value" id="ov-mode">ADAPTÍV</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Hatáskör</span><span class="r2-data-value"
+                            id="ov-auth">ALBA-CORE</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Watchdog</span><span class="r2-data-value"
+                            id="ov-wd">OK</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Biztonsági Kapu</span><span
+                            class="r2-data-value nominal" id="ov-gate">NYITVA</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Késleltetés</span><span class="r2-data-value"
+                            id="ov-latency">12ms</span></div>
+                </article>
+                <article class="r2-panel">
+                    <h3>Elsődleges Telemetria</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">Pozíció X,Y</span><span class="r2-data-value"
+                            id="ov-pos">0.00, 0.00</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Irány (Yaw)</span><span class="r2-data-value"
+                            id="ov-yaw">0.0°</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Sebesség</span><span class="r2-data-value"
+                            id="ov-v">0.00 m/s</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Ciklusidő</span><span class="r2-data-value"
+                            id="ov-hz">50.1 Hz</span></div>
+                </article>
+            </section>
+
+            <!-- PAGE: MOTION -->
+            <section class="r2-page" id="page-motion">
+                <article class="r2-panel">
+                    <h3>Sebesség Parancsok</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">Célérték V</span><span class="r2-data-value"
+                            id="mt-v-target">0.00</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Mért érték V</span><span
+                            class="r2-data-value" id="mt-v-meas">0.00</span></div>
+                </article>
+                <article class="r2-panel">
+                    <h3>PID Szabályzó</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">P-Tag</span><span
+                            class="r2-data-value">2.45</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">I-Tag</span><span
+                            class="r2-data-value">0.12</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">D-Tag</span><span
+                            class="r2-data-value">0.05</span></div>
+                </article>
+                <article class="r2-panel" style="grid-column: 1 / -1;">
+                    <h3>UNIFIED ROBOT ÉLŐ TESZTEK</h3>
+                    <p>Az indítás a canonical Test Hub profilokon, a kötelező preflight és safety kapukkal történik.</p>
+                    <div class="r2-button-group">
+                        <button type="button" id="motion-btn-run-m0-live" class="r2-button diag-action-btn" disabled>
+                            M0 MÉRÉSI KAPU INDÍTÁSA
+                        </button>
+                        <button type="button" id="motion-btn-run-m3-unified-live" class="r2-button diag-action-btn" disabled>
+                            M3 UNIFIED ÉLŐ TESZT INDÍTÁSA
+                        </button>
+                    </div>
+                    <div class="r2-data-field">
+                        <span class="r2-data-label">Tesztindítás</span>
+                        <span class="r2-data-value" id="motion-live-test-status">KÉSZENLÉT</span>
+                    </div>
+                </article>
+            </section>
+
+            <!-- PAGE: SAFETY -->
+            <section class="r2-page" id="page-safety">
+                <article class="r2-panel">
+                    <h3>Biztonsági Felügyelet</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">LIDAR Vészhelyzet</span><span
+                            class="r2-data-value" id="sf-lidar">NORMÁL</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Mikrokapcsoló</span><span
+                            class="r2-data-value" id="sf-micro">IDLE</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Failsafe Kiváltó</span><span
+                            class="r2-data-value" id="sf-failsafe">NINCS</span></div>
+                </article>
+            </section>
+
+            <!-- PAGE: EKF MONITOR -->
+            <section class="r2-page" id="page-ekf">
+                <article class="r2-panel">
+                    <h3>EKF Monitor</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">Mód</span><span class="r2-data-value"
+                            id="ek-mode">OFFLINE</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Kovariancia</span><span class="r2-data-value"
+                            id="ek-cov">0.000</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Innováció V</span><span class="r2-data-value"
+                            id="ek-inno-v">0.00</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Drift</span><span class="r2-data-value"
+                            id="ek-drift">0.00</span></div>
+                </article>
+            </section>
+
+            <!-- PAGE: SENSORS -->
+            <section class="r2-page" id="page-sensors">
+                <article class="r2-panel">
+                    <h3>IMU (Nyers/Szűrt)</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">IMU Állapot</span><span class="r2-data-value"
+                            id="sn-imu-health">N/A</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">ACC X,Y,Z</span><span class="r2-data-value"
+                            id="sn-acc">0, 0, 0</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">GYR X,Y,Z</span><span class="r2-data-value"
+                            id="sn-gyr">0, 0, 0</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">MAG</span><span class="r2-data-value"
+                            id="sn-mag">N/A</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">LiDAR Állapot</span><span
+                            class="r2-data-value" id="sn-lidar-health">N/A</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">LiDAR Engedély</span><span
+                            class="r2-data-value" id="sn-lidar-enabled">N/A</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Encoder Engedély</span><span
+                            class="r2-data-value" id="sn-encoder-enabled">N/A</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">LiDAR min / back</span><span
+                            class="r2-data-value" id="sn-lidar-min">0.000 / 0.000 m</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">LiDAR avg L/R</span><span
+                            class="r2-data-value" id="sn-lidar-avg">0.000 / 0.000 m</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">LiDAR pose</span><span class="r2-data-value"
+                            id="sn-lidar-pose">x=0.00 y=0.00 th=0.00 conf=0.00</span></div>
+                    <div class="r2-data-field r2-data-field-wrap"><span class="r2-data-label">ENC SERVICE</span>
+                        <div class="r2-data-value r2-data-value-wrap r2-data-rich" id="sn-enc-service"><span
+                                class="sensor-empty">Várakozás encoder adatra...</span></div>
+                    </div>
+                    <div class="r2-data-field r2-data-field-wrap"><span class="r2-data-label">ENC DIST/PULSE</span>
+                        <div class="r2-data-value r2-data-value-wrap r2-data-rich" id="sn-enc-dist"><span
+                                class="sensor-empty">Várakozás encoder adatra...</span></div>
+                    </div>
+                    <div class="r2-data-field r2-data-field-wrap"><span class="r2-data-label">ENC DIAG</span>
+                        <div class="r2-data-value r2-data-value-wrap r2-data-rich" id="sn-enc-diag"><span
+                                class="sensor-empty">Várakozás encoder adatra...</span></div>
+                    </div>
+                    <div class="r2-data-field r2-data-field-wrap"><span class="r2-data-label">ENC BAL</span>
+                        <div class="r2-data-value r2-data-value-wrap r2-data-rich" id="sn-enc-left"><span
+                                class="sensor-empty">Várakozás encoder adatra...</span></div>
+                    </div>
+                    <div class="r2-data-field r2-data-field-wrap"><span class="r2-data-label">ENC JOBB</span>
+                        <div class="r2-data-value r2-data-value-wrap r2-data-rich" id="sn-enc-right"><span
+                                class="sensor-empty">Várakozás encoder adatra...</span></div>
+                    </div>
+                </article>
+            </section>
+
+            <!-- PAGE: POWER -->
+            <section class="r2-page" id="page-power">
+                <article class="r2-panel">
+                    <h3>Energia és Hőmérséklet</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">Akku Feszültség</span><span
+                            class="r2-data-value" id="pw-volt">12.1V</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Pi Hőmérséklet</span><span
+                            class="r2-data-value" id="pw-temp">45°C</span></div>
+                </article>
+            </section>
+
+            <!-- PAGE: AI -->
+            <section class="r2-page" id="page-ai">
+                <article class="r2-panel">
+                    <h3>AI / Adaptív Réteg</h3>
+                    <div class="r2-data-field"><span class="r2-data-label">Aktív Réteg</span><span class="r2-data-value"
+                            id="ai-layer">CORE</span></div>
+                    <div class="r2-data-field"><span class="r2-data-label">Erősítés Ütemezés</span><span
+                            class="r2-data-value" id="ai-gain">NORMÁL</span></div>
+                </article>
+            </section>
+
+            <!-- PAGE: LOGS -->
+            <section class="r2-page" id="page-log">
+                <article class="r2-panel hub-page-panel" style="grid-column: 1 / -1;">
+                    <div class="hub-page-header">
+                        <h2>Tesztkozpont es Audit</h2>
+                        <div class="hub-chip-row">
+                            <span id="hub-live-status-chip" class="hub-chip">Allapot: KESZENLET</span>
+                            <span id="hub-last-update-chip" class="hub-chip">Frissites: -</span>
+                        </div>
+                    </div>
+
+                    <div class="hub-toolbar">
+                        <button id="hub-btn-run-m0" class="log-btn log-btn-export">M0 meresi kapu</button>
+                        <button id="hub-btn-run-m1" class="log-btn log-btn-export">M1 mozgasminoseg</button>
+                        <span class="hub-list-sub">Az M1 csak friss M0 PASS utan indul.</span>
+
+                        <label class="hub-field">
+                            <span>Profil</span>
+                            <select id="hub-profile-select" class="log-session-select">
+                                <option value="">Betoltes...</option>
+                            </select>
+                        </label>
+                        <button id="hub-btn-run-profile" class="log-btn">Profil futtatasa</button>
+
+                        <label class="hub-field">
+                            <span>Szekvencia</span>
+                            <select id="hub-sequence-select" class="log-session-select">
+                                <option value="motion_levels_M0_M4_1">motion_levels_M0_M4_1</option>
+                            </select>
+                        </label>
+                        <button id="hub-btn-run-sequence" class="log-btn">Szekvencia futtatasa</button>
+                        <button id="hub-btn-refresh" class="log-btn">Frissites</button>
+                        <button id="hub-btn-report" class="log-btn">Jelentes</button>
+                        <button id="hub-btn-archive" class="log-btn log-btn-export">Naplo karbantartas</button>
+                    </div>
+
+                    <div class="hub-toolbar hub-toolbar-options">
+                        <label class="hub-check"><input type="checkbox" id="hub-opt-stop-runtime" /> runtime stop futas utan</label>
+                        <label class="hub-check"><input type="checkbox" id="hub-opt-auto-refresh" checked /> automatikus frissites</label>
+                        <label class="hub-inline-field">Session limit <input id="hub-session-limit" value="8" /></label>
+                        <label class="hub-inline-field">Run limit <input id="hub-run-limit" value="10" /></label>
+                    </div>
+
+                    <div class="hub-toolbar">
+                        <label class="hub-field">
+                            <span>Emberkovetes /tools live teszt (mozgasvezerles kompatibilis)</span>
+                            <select id="hub-tools-live-select" class="log-session-select">
+                                <option value="">Betoltes...</option>
+                            </select>
+                        </label>
+                        <button id="hub-btn-run-human-follow-live" class="log-btn log-btn-export">Emberkovetes inditasa</button>
+                        <button id="hub-btn-run-human-follow-quality-live" class="log-btn log-btn-export">M3 mozgasminoseg merese</button>
+                        <button id="hub-btn-run-room-cruise-quality-live" class="log-btn log-btn-export">M4.1 Room Cruise minoseg</button>
+                        <button id="hub-btn-run-tool-live" class="log-btn">Tools live teszt futtatasa</button>
+                    </div>
+
+                    <div class="hub-grid">
+                        <article class="hub-card">
+                            <h3>Legutobbi teszt verdict</h3>
+                            <p id="hub-latest-summary" class="hub-summary-line">Nincs elerheto hub eredmeny.</p>
+                            <div id="hub-latest-meta" class="hub-meta-grid"></div>
+                        </article>
+
+                        <article class="hub-card">
+                            <h3>Futo muvelet</h3>
+                            <p id="hub-job-summary" class="hub-summary-line">Nincs aktiv futas.</p>
+                            <pre id="hub-job-detail" class="hub-json-view">[]</pre>
+                        </article>
+
+                        <article class="hub-card">
+                            <h3>Legutobbi szekvencia</h3>
+                            <p id="hub-sequence-summary" class="hub-summary-line">Nincs elerheto szekvencia eredmeny.</p>
+                            <div id="hub-sequence-meta" class="hub-meta-grid"></div>
+                        </article>
+
+                        <article class="hub-card hub-card-wide">
+                            <h3>Legutobbi futasok</h3>
+                            <div id="hub-runs-list" class="hub-list"></div>
+                        </article>
+
+                        <article class="hub-card hub-card-wide">
+                            <h3>/tools live tesztek (kompatibilis)</h3>
+                            <div id="hub-tools-live-list" class="hub-list"></div>
+                        </article>
+
+                        <article class="hub-card hub-card-wide">
+                            <h3>Session osszegzes (online)</h3>
+                            <div id="hub-sessions-list" class="hub-list"></div>
+                        </article>
+
+                        <article class="hub-card hub-card-wide">
+                            <h3>Incident roviden</h3>
+                            <pre id="hub-incident-view" class="hub-json-view">{}</pre>
+                        </article>
+                    </div>
+
+                    <div class="hub-status-bar">
+                        <span id="hub-status-text">Keszenlet</span>
+                    </div>
+                </article>
+            </section>
+
+            <!-- PAGE: DIAGNOSTICS -->
+            <section class="r2-page" id="page-diagnostics">
+                <div class="diag-grid">
+                    <article class="r2-panel diag-panel">
+                        <h3>1. Mozgás UI Proxy</h3>
+                        <div class="diag-note">A vezérlő oldali meglévő gombokat futtatja diagnosztikai nézetből.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" data-proxy-id="joy-turn-left-90-btn">Balra
+                                90°</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="sim-apply-tuning">Simítás
+                                alkalmazás</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="sim-command-exec">EXECUTE</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>2. Pálya / kanonikus mozgás</h3>
+                        <div class="diag-note">Mozgásfunkciók az egységes twist útvonalon.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" data-proxy-id="btn-route-square">Négyzet
+                                útvonal</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="btn-route-circle">Kör
+                                útvonal</button>
+                            <button class="r2-button diag-action-btn" data-cmd-type="set_vector"
+                                data-cmd-body='{"x":0,"y":0,"motion_source":"GUI_JOYSTICK"}'>Vector STOP</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>3. Safety / Reset</h3>
+                        <div class="diag-note">Vész- és reset típusú parancsok diagnosztikához.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn critical" data-cmd-type="stop">Soft
+                                STOP</button>
+                            <button class="r2-button diag-action-btn warning" data-cmd-type="strong_reset">Strong
+                                reset</button>
+                            <button class="r2-button diag-action-btn warning" data-cmd-type="full_reset">Full
+                                reset</button>
+                            <button class="r2-button diag-action-btn" data-cmd-type="reset_pos">Pozíció reset</button>
+                            <button class="r2-button diag-action-btn" data-cmd-type="reload_conf">Konfig
+                                újratöltés</button>
+                            <button class="r2-button diag-action-btn" data-cmd-type="calibrate">Kalibrálás</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>4. Kamera / LiDAR</h3>
+                        <div class="diag-note">Szenzor stream és engedély funkciók.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" data-proxy-id="camera-toggle-badge">Kamera toggle
+                                chip</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="hdr-encoder-toggle">Encoder header
+                                toggle</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/camera-toggle"
+                                data-api-method="POST">/api/camera-toggle</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/lidar-toggle"
+                                data-api-method="POST">/api/lidar-toggle</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/encoder-toggle"
+                                data-api-method="POST">/api/encoder-toggle</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/camera-status"
+                                data-api-method="GET">Kamera státusz</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/camera-status-toggle"
+                                data-api-method="GET">Kamera státusz toggle nézet</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/lidar-scan"
+                                data-api-method="GET">LiDAR scan snapshot</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>5. Adaptív / AI</h3>
+                        <div class="diag-note">Követés, keresés, hallgatás és AI állapotfunkciók.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn"
+                                data-cmd-type="toggle_follow">toggle_follow</button>
+                            <button class="r2-button diag-action-btn"
+                                data-cmd-type="search_person">search_person</button>
+                            <button class="r2-button diag-action-btn"
+                                data-cmd-type="toggle_listen">toggle_listen</button>
+                            <button class="r2-button diag-action-btn"
+                                data-cmd-type="reload_scripts">reload_scripts</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/ai-flow"
+                                data-api-method="GET">/api/ai-flow</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/mini-os/apps"
+                                data-api-method="GET">/api/mini-os/apps</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>6. Control / Runtime</h3>
+                        <div class="diag-note">Control mode és runtime preset parancsok.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" data-api-url="/api/control-mode"
+                                data-api-method="GET">Control mód (GET)</button>
+                            <button class="r2-button diag-action-btn" data-cmd-type="set_runtime_preset"
+                                data-cmd-body='{"preset":"normal"}'>Preset normal</button>
+                            <button class="r2-button diag-action-btn" data-cmd-type="set_runtime_preset"
+                                data-cmd-body='{"preset":"safe_remote"}'>Preset safe_remote</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>7. EKF / PID / Konfig</h3>
+                        <div class="diag-note">Diagnosztikai lekérdezések a tuning és konfig állapothoz.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" data-api-url="/api/ekf-log"
+                                data-api-method="GET">EKF log</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/ekf-tuning/aggregate"
+                                data-api-method="GET">EKF aggregate</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/ekf-tuning/config"
+                                data-api-method="GET">EKF config</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/conf/vezerles"
+                                data-api-method="GET">vezerles.json</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>8. Napló / Audit Gombok</h3>
+                        <div class="diag-note">A teszt hub oldali fo vezerlok proxizva.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" data-proxy-id="hub-btn-refresh">Frissites</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="hub-btn-report">Jelentes</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="hub-btn-run-profile">Profil futtatasa</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="hub-btn-run-tool-live">Tools live futtatasa</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="hub-btn-run-sequence">Szekvencia futtatasa</button>
+                            <button class="r2-button diag-action-btn" data-proxy-id="hub-btn-archive">Naplo karbantartas</button>
+                        </div>
+                    </article>
+
+                    <article class="r2-panel diag-panel">
+                        <h3>9. Felfedezett Gombok + Custom Töredék</h3>
+                        <div class="diag-note">Automatikusan listázza az összes jelenlegi GUI gombot, és futtat egyedi
+                            parancs-töredéket.</div>
+                        <div class="diag-actions">
+                            <button class="r2-button diag-action-btn" id="diag-refresh-catalog">Katalógus
+                                frissítés</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/health"
+                                data-api-method="GET">/api/health</button>
+                            <button class="r2-button diag-action-btn" data-api-url="/api/metrics"
+                                data-api-method="GET">/api/metrics</button>
+                        </div>
+                        <div id="diag-catalog-list" class="diag-catalog"><span
+                                class="diag-catalog-empty">Betöltés...</span></div>
+                        <div class="diag-custom-grid" style="margin-top:8px;">
+                            <input id="diag-custom-type" type="text" value="reset_pos"
+                                placeholder="command type (pl. set_twist)" />
+                            <textarea id="diag-custom-json"
+                                placeholder='JSON payload (type nélkül), pl. {"left":0.2,"right":0.2,"motion_source":"GUI_JOYSTICK"}'>{}</textarea>
+                            <button class="r2-button diag-action-btn" id="diag-run-custom-command">Custom /api/command
+                                futtatás</button>
+                        </div>
+                    </article>
+                </div>
+                <article class="r2-panel" style="margin-top:12px;">
+                    <h3>Diagnosztikai Végrehajtás Napló</h3>
+                    <div class="diag-status">Utolsó akció: <strong id="diag-last-action">N/A</strong></div>
+                    <pre class="diag-result-log" id="diag-result-log">[diag] Készen áll.</pre>
+                </article>
+            </section>
+        </main>
+
+        <!-- GLOBAL FOOTER -->
+        <footer class="r2-footer">
+            <div style="flex: 1; display:flex; gap: var(--space-md);">
+                <span>[RENDSZER: <strong id="ftr-status">STABIL</strong>]</span>
+                <span>[HÁLÓZAT: <strong id="ftr-net">AKTÍV</strong>]</span>
+            </div>
+            <div>
+                <span id="ftr-ts">2026-03-04 11:34:00</span>
+                <span id="ftr-ui-build" title="UI build" style="margin-left:10px; opacity:0.75;">UI build: {{
+                    asset_version }}</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="/static/js/state-store.js?v={{ asset_version }}"></script>
+    <script src="/static/js/websocket-manager.js?v={{ asset_version }}"></script>
+    <script src="/static/js/api.js?v={{ asset_version }}"></script>
+    <script src="/static/js/pages/motion-console.js?v={{ asset_version }}"></script>
+    <script src="/static/js/motion-controller.js?v={{ asset_version }}"></script>
+
+    <!-- Motion Console Control -->
+    <script src="/static/js/pages/first-page-control.js?v={{ asset_version }}"></script>
+    <script src="/static/js/pages/log-audit-page.js?v={{ asset_version }}"></script>
+    <script>
+        // PAGE NAVIGATION
+        document.querySelectorAll('.r2-nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.r2-nav-item').forEach(i => i.classList.remove('active'));
+                document.querySelectorAll('.r2-page').forEach(p => p.classList.remove('active'));
+
+                item.classList.add('active');
+                const pageId = `page-${item.dataset.page}`;
+                const page = document.getElementById(pageId);
+
+                // Orchestration for Motion Console
+                if (window.MotionConsole) {
+                    if (item.dataset.page === 'motion-console') {
+                        window.MotionConsole.activate();
+                    } else {
+                        window.MotionConsole.deactivate();
+                    }
+                }
+
+                if (page) page.classList.add('active');
+            });
+        });
+
+        // UI HYDRATION HELPER
+        function updateValue(id, value, isNumeric = true, precision = 2) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const text = isNumeric ? value.toFixed(precision) : value;
+            if (el.textContent !== text) {
+                el.textContent = text;
+            }
+        }
+
+        function safeJson(value, pretty = false) {
+            try {
+                return JSON.stringify(value || {}, null, pretty ? 2 : 0);
+            } catch (_) {
+                return '{}';
+            }
+        }
+
+        function updateHtml(id, html) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const next = String(html || '');
+            if (el.innerHTML !== next) {
+                el.innerHTML = next;
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        const DIAG_LOG_MAX_LINES = 80;
+
+        function setDiagLastAction(label) {
+            const node = document.getElementById('diag-last-action');
+            if (!node) return;
+            node.textContent = String(label || 'N/A');
+        }
+
+        function appendDiagLog(title, payload) {
+            const node = document.getElementById('diag-result-log');
+            if (!node) return;
+            const now = new Date().toISOString().replace('T', ' ').split('.')[0];
+            const header = `[${now}] ${title}`;
+            const body = (payload === undefined || payload === null)
+                ? ''
+                : (typeof payload === 'string' ? payload : safeJson(payload, true));
+            const chunk = body ? `${header}\n${body}` : header;
+            const prev = String(node.textContent || '').trim();
+            const lines = (prev ? `${prev}\n\n${chunk}` : chunk).split('\n');
+            const sliced = lines.slice(Math.max(0, lines.length - DIAG_LOG_MAX_LINES));
+            node.textContent = sliced.join('\n');
+            node.scrollTop = node.scrollHeight;
+        }
+
+        function parseJsonSafe(raw, fallback) {
+            if (raw === undefined || raw === null || raw === '') return fallback;
+            try {
+                return JSON.parse(raw);
+            } catch (_) {
+                return fallback;
+            }
+        }
+
+        async function responsePayload(response) {
+            const text = await response.text().catch(function () { return ''; });
+            if (!text) return {};
+            try {
+                return JSON.parse(text);
+            } catch (_) {
+                return { text: text };
+            }
+        }
+
+        async function runDiagnosticsButton(button) {
+            if (!button) return;
+            const title = String(button.textContent || '').trim() || 'diag-action';
+            setDiagLastAction(title);
+
+            if (button.dataset.proxyId) {
+                const target = document.getElementById(button.dataset.proxyId);
+                if (!target) {
+                    appendDiagLog(`Proxy hiba: ${title}`, { ok: false, reason: 'target_not_found', proxy_id: button.dataset.proxyId });
+                    return;
+                }
+                target.click();
+                appendDiagLog(`Proxy OK: ${title}`, { ok: true, proxy_id: button.dataset.proxyId });
+                return;
+            }
+
+            if (button.dataset.proxySelector) {
+                const target = document.querySelector(button.dataset.proxySelector);
+                if (!target) {
+                    appendDiagLog(`Proxy hiba: ${title}`, { ok: false, reason: 'selector_not_found', selector: button.dataset.proxySelector });
+                    return;
+                }
+                target.click();
+                appendDiagLog(`Proxy OK: ${title}`, { ok: true, selector: button.dataset.proxySelector });
+                return;
+            }
+
+            if (button.dataset.cmdType) {
+                const extra = parseJsonSafe(button.dataset.cmdBody, {});
+                const body = Object.assign({ type: button.dataset.cmdType }, (extra && typeof extra === 'object') ? extra : {});
+                const res = await fetch('/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const payload = await responsePayload(res);
+                appendDiagLog(`COMMAND ${button.dataset.cmdType} (${res.status})`, payload);
+                return;
+            }
+
+            if (button.dataset.apiUrl) {
+                const method = String(button.dataset.apiMethod || 'GET').toUpperCase();
+                const hasBody = method !== 'GET' && method !== 'HEAD';
+                const parsedBody = parseJsonSafe(button.dataset.apiBody, {});
+                const req = {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' }
+                };
+                if (hasBody) {
+                    req.body = JSON.stringify((parsedBody && typeof parsedBody === 'object') ? parsedBody : {});
+                }
+                const res = await fetch(button.dataset.apiUrl, req);
+                const payload = await responsePayload(res);
+                appendDiagLog(`API ${method} ${button.dataset.apiUrl} (${res.status})`, payload);
+            }
+        }
+
+        function buildDiagnosticsCatalog() {
+            const host = document.getElementById('diag-catalog-list');
+            if (!host) return;
+            const allButtons = Array.from(document.querySelectorAll('button')).filter(function (btn) {
+                return !btn.closest('#page-diagnostics');
+            });
+            host.innerHTML = '';
+            const seen = new Set();
+
+            allButtons.forEach(function (btn) {
+                const id = String(btn.id || '').trim();
+                const logTab = String(btn.getAttribute('data-log-tab') || '').trim();
+                const label = String(btn.textContent || '').trim().replace(/\s+/g, ' ');
+                let key = '';
+                let proxyId = '';
+                let proxySelector = '';
+                let title = '';
+
+                if (id) {
+                    key = 'id:' + id;
+                    proxyId = id;
+                    title = `#${id}`;
+                } else if (logTab) {
+                    key = 'logtab:' + logTab;
+                    proxySelector = `[data-log-tab="${logTab}"]`;
+                    title = `log-tab:${logTab}`;
+                } else {
+                    return;
+                }
+
+                if (seen.has(key)) return;
+                seen.add(key);
+
+                const actionBtn = document.createElement('button');
+                actionBtn.className = 'r2-button diag-action-btn';
+                actionBtn.textContent = title + (label ? ` | ${label}` : '');
+                if (proxyId) actionBtn.dataset.proxyId = proxyId;
+                if (proxySelector) actionBtn.dataset.proxySelector = proxySelector;
+                host.appendChild(actionBtn);
+            });
+
+            if (!host.children.length) {
+                const empty = document.createElement('span');
+                empty.className = 'diag-catalog-empty';
+                empty.textContent = 'Nem található proxizható gomb.';
+                host.appendChild(empty);
+            }
+        }
+
+        function bindDiagnosticsWorkbench() {
+            const page = document.getElementById('page-diagnostics');
+            if (!page || page.dataset.diagBound === '1') return;
+            page.dataset.diagBound = '1';
+
+            page.addEventListener('click', async function (e) {
+                const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+                if (!btn) return;
+
+                if (btn.id === 'diag-refresh-catalog') {
+                    buildDiagnosticsCatalog();
+                    appendDiagLog('Katalógus frissítve', { ok: true });
+                    return;
+                }
+
+                if (btn.id === 'diag-run-custom-command') {
+                    const typeInput = document.getElementById('diag-custom-type');
+                    const jsonInput = document.getElementById('diag-custom-json');
+                    const ctype = String(typeInput && typeInput.value || '').trim();
+                    if (!ctype) {
+                        appendDiagLog('Custom command hiba', { ok: false, reason: 'missing_type' });
+                        return;
+                    }
+                    const extra = parseJsonSafe(jsonInput && jsonInput.value, {});
+                    const body = Object.assign({ type: ctype }, (extra && typeof extra === 'object') ? extra : {});
+                    setDiagLastAction(`custom:${ctype}`);
+                    try {
+                        const res = await fetch('/api/command', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        const payload = await responsePayload(res);
+                        appendDiagLog(`CUSTOM COMMAND ${ctype} (${res.status})`, payload);
+                    } catch (err) {
+                        appendDiagLog(`CUSTOM COMMAND ${ctype} (network error)`, { ok: false, error: String(err) });
+                    }
+                    return;
+                }
+
+                if (
+                    btn.dataset.proxyId ||
+                    btn.dataset.proxySelector ||
+                    btn.dataset.cmdType ||
+                    btn.dataset.apiUrl
+                ) {
+                    try {
+                        await runDiagnosticsButton(btn);
+                    } catch (err) {
+                        appendDiagLog('Diag action exception', { ok: false, error: String(err) });
+                    }
+                }
+            });
+
+            buildDiagnosticsCatalog();
+        }
+
+        function formatVec3(value, precision = 4) {
+            const arr = Array.isArray(value) ? value : [0, 0, 0];
+            return arr.slice(0, 3).map(v => Number(v || 0).toFixed(precision)).join(', ');
+        }
+
+        function formatFixed(value, precision = 3, fallback = 0) {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return Number(fallback).toFixed(precision);
+            return n.toFixed(precision);
+        }
+
+        function formatMaybe(value, precision = 3, suffix = '') {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return 'N/A';
+            return `${n.toFixed(precision)}${suffix}`;
+        }
+
+        function formatMaybeInt(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n)) return 'N/A';
+            return String(Math.trunc(n));
+        }
+
+        function boolLabel(value) {
+            if (value === true) return 'IGEN';
+            if (value === false) return 'NEM';
+            return 'N/A';
+        }
+
+        function healthClass(value) {
+            const txt = String(value || '').toUpperCase();
+            if (txt === 'OK' || txt === 'STABLE' || txt === 'RUNNING') return 'nominal';
+            if (txt.includes('WARN') || txt.includes('DEGRADED') || txt === 'N/A') return 'warning';
+            if (txt.includes('FAIL') || txt.includes('ERROR') || txt.includes('STOP')) return 'critical';
+            return '';
+        }
+
+        function pill(text, cls = '') {
+            const klass = cls ? ` sensor-pill ${cls}` : ' sensor-pill';
+            return `<span class="${klass.trim()}">${escapeHtml(text)}</span>`;
+        }
+
+        function kvRow(label, valueHtml, valueClass = '') {
+            const cls = valueClass ? `sensor-kv-val ${valueClass}` : 'sensor-kv-val';
+            return `<div class="sensor-kv-row"><span class="sensor-kv-key">${escapeHtml(label)}</span><span class="${cls}">${valueHtml}</span></div>`;
+        }
+
+        function section(title, rows) {
+            return `<div class="sensor-section"><div class="sensor-section-title">${escapeHtml(title)}</div>${rows.join('')}</div>`;
+        }
+
+        function detailsJson(title, value, detailsKey, open = false) {
+            const openAttr = open ? ' open' : '';
+            const keyAttr = detailsKey ? ` data-key="${escapeHtml(detailsKey)}"` : '';
+            return `<details class="sensor-details"${openAttr}${keyAttr}><summary>${escapeHtml(title)}</summary><pre class="sensor-json">${escapeHtml(safeJson(value, true))}</pre></details>`;
+        }
+
+        function renderEncoderServiceBlock(encoderState, startupState) {
+            const service = encoderState?.service || {};
+            const startupService = startupState?.sensor_health_encoder_service || encoderState?.startup?.sensor_health_encoder_service || {};
+            const running = service.running === true;
+            const snapshotHealth = String(service.snapshot_health || 'N/A');
+            const rows = [
+                kvRow('Service', `${pill(running ? 'RUNNING' : 'STOP', running ? 'nominal' : 'critical')} ${pill(snapshotHealth, healthClass(snapshotHealth))}`),
+                kvRow('Frissítés', escapeHtml(formatMaybe(service.update_rate_hz, 1, ' Hz'))),
+                kvRow('Snapshot kor', escapeHtml(formatMaybe(service.snapshot_age_ms, 2, ' ms'))),
+                kvRow('PWM L / R', `${escapeHtml(formatMaybe(service.last_pwm_l, 3))} / ${escapeHtml(formatMaybe(service.last_pwm_r, 3))}`),
+                kvRow('Startup check', startupService?.ok === true ? pill('OK', 'nominal') : (startupService?.ok === false ? pill('FAIL', 'critical') : pill('N/A', 'warning')))
+            ];
+            return section('Encoder Service Gyorsnézet', rows) +
+                detailsJson('RAW: service + startup', { service, startup: startupService }, 'enc_service_raw');
+        }
+
+        function renderEncoderDistBlock(encoderState, state) {
+            const computed = encoderState?.computed || {};
+            const rows = [
+                kvRow('Távolság L / R', `${escapeHtml(formatMaybe(computed.distance_left_m ?? state.sensors?.encoder_dist_left, 4, ' m'))} / ${escapeHtml(formatMaybe(computed.distance_right_m ?? state.sensors?.encoder_dist_right, 4, ' m'))}`),
+                kvRow('Delta távolság', escapeHtml(formatMaybe(computed.distance_delta_m, 4, ' m'))),
+                kvRow('Pulse driver L / R', `${escapeHtml(formatMaybeInt(computed.pulse_left_driver))} / ${escapeHtml(formatMaybeInt(computed.pulse_right_driver))}`),
+                kvRow('Pulse delta', escapeHtml(formatMaybeInt(computed.pulse_delta_driver))),
+                kvRow('Sebesség L / R / átlag', `${escapeHtml(formatMaybe(computed.v_l_raw_mps, 4, ' m/s'))} / ${escapeHtml(formatMaybe(computed.v_r_raw_mps, 4, ' m/s'))} / ${escapeHtml(formatMaybe(computed.v_mean_mps, 4, ' m/s'))}`)
+            ];
+            return section('Encoder Dist / Pulse', rows) +
+                detailsJson('RAW: computed', computed, 'enc_dist_raw');
+        }
+
+        function renderEncoderDiagBlock(encoderState) {
+            const diag = encoderState?.diagnostics || {};
+            const issues = [];
+            if (diag.idle_encoder_motion_suspect === true) issues.push('IDLE alatt encoder mozgás gyanú');
+            if (Number(diag.left_threshold_margin_s) < 0) issues.push('BAL threshold margin negatív');
+            if (Number(diag.right_threshold_margin_s) < 0) issues.push('JOBB threshold margin negatív');
+            const healthText = String(diag.snapshot_health || 'N/A');
+            const rows = [
+                kvRow('Snapshot health', pill(healthText, healthClass(healthText))),
+                kvRow('Service running', pill(boolLabel(diag.service_running), diag.service_running === true ? 'nominal' : 'critical')),
+                kvRow('Idle motion suspect', pill(boolLabel(diag.idle_encoder_motion_suspect), diag.idle_encoder_motion_suspect ? 'warning' : 'nominal')),
+                kvRow('Threshold ratio L/R', escapeHtml(formatMaybe(diag.threshold_ratio_lr, 6))),
+                kvRow('Margin L / R', `${escapeHtml(formatMaybe(diag.left_threshold_margin_s, 8, ' s'))} / ${escapeHtml(formatMaybe(diag.right_threshold_margin_s, 8, ' s'))}`),
+                kvRow('Pulse ratio R/L', escapeHtml(formatMaybe(diag.driver_pulse_ratio_r_over_l, 6))),
+                kvRow('Speed asymmetry', escapeHtml(formatMaybe(diag.speed_asymmetry_ratio, 6))),
+                kvRow('Aktív anomália', issues.length > 0 ? pill(`${issues.length} figyelmeztetés`, 'warning') : pill('NINCS', 'nominal'))
+            ];
+            const issueBlock = issues.length > 0
+                ? `<div class="sensor-section"><div class="sensor-section-title">Hibakereső jelzések</div>${issues.map((item) => kvRow('Anomália', escapeHtml(item), 'warning')).join('')}</div>`
+                : '';
+            return section('Encoder Diagnosztika', rows) +
+                issueBlock +
+                detailsJson('RAW: diagnostics', diag, 'enc_diag_raw');
+        }
+
+        function formatEncoderLine(sideKey, encoderState) {
+            const sidePayload = (encoderState && encoderState[sideKey]) ? encoderState[sideKey] : {};
+            const sideName = sideKey === 'left' ? 'BAL' : 'JOBB';
+            const sideSnapshot = sidePayload?.snapshot || {};
+            const sideEstimator = sidePayload?.estimator || {};
+            const service = encoderState?.service || {};
+            const diagnostics = encoderState?.diagnostics || {};
+            const poseEncoder = encoderState?.pose_encoder || {};
+            const ekfEncoder = encoderState?.ekf_encoder || {};
+            const startup = encoderState?.startup || {};
+            const estimator = encoderState?.estimator || {};
+            const config = encoderState?.config || {};
+
+            const thresholdMargin = sideKey === 'left'
+                ? Number(diagnostics?.left_threshold_margin_s)
+                : Number(diagnostics?.right_threshold_margin_s);
+            const thresholdClass = Number.isFinite(thresholdMargin)
+                ? (thresholdMargin < 0 ? 'critical' : 'nominal')
+                : 'warning';
+
+            const summaryRows = [
+                kvRow('Oldal', pill(sideName, 'nominal')),
+                kvRow('Pin / állapot', `${escapeHtml(formatMaybeInt(sidePayload.pin))} / ${escapeHtml(formatMaybeInt(sidePayload.state))}`),
+                kvRow('Threshold / hysteresis', `${escapeHtml(formatMaybe(sidePayload.threshold, 9))} / ${escapeHtml(formatMaybe(sidePayload.hysteresis, 6))}`),
+                kvRow('Raw RC idő', escapeHtml(formatMaybe(sidePayload.raw_rc_time, 9, ' s'))),
+                kvRow('Pulse driver', escapeHtml(formatMaybeInt(sidePayload.pulse_count_driver))),
+                kvRow('Sample rate', `${escapeHtml(formatMaybe(sidePayload.sample_rate_hz, 1, ' Hz'))} (${escapeHtml(formatMaybe(sidePayload.sample_interval_s, 4, ' s'))})`),
+                kvRow('Snapshot v / d / p', `${escapeHtml(formatMaybe(sideSnapshot.velocity_mps, 4, ' m/s'))} / ${escapeHtml(formatMaybe(sideSnapshot.distance_m, 4, ' m'))} / ${escapeHtml(formatMaybeInt(sideSnapshot.pulses))}`),
+                kvRow('Estimator dp / dt', `${escapeHtml(formatMaybeInt(sideEstimator.dp))} / ${escapeHtml(formatMaybe(sideEstimator.dt, 6, ' s'))}`),
+                kvRow('Last pulse age', escapeHtml(formatMaybe(sideEstimator.last_pulse_age_s, 6, ' s'))),
+                kvRow('Threshold margin', escapeHtml(formatMaybe(thresholdMargin, 8, ' s')), thresholdClass)
+            ];
+
+            const ekfRows = [
+                kvRow('EKF mode', pill(String(poseEncoder?.EKF_mode || 'N/A'), healthClass(String(ekfEncoder?.validation_status || poseEncoder?.EKF_mode || 'N/A')))),
+                kvRow('Theta enc', `${escapeHtml(formatMaybe(estimator?.theta_enc_deg, 4, ' deg'))} / ${escapeHtml(formatMaybe(estimator?.theta_enc_rad, 6, ' rad'))}`),
+                kvRow('Pose theta / v', `${escapeHtml(formatMaybe(poseEncoder?.theta_enc, 6))} / ${escapeHtml(formatMaybe(poseEncoder?.v_enc, 6, ' m/s'))}`),
+                kvRow('Innováció v / theta', `${escapeHtml(formatMaybe(poseEncoder?.innovation_v, 8))} / ${escapeHtml(formatMaybe(poseEncoder?.innovation_theta, 8))}`),
+                kvRow('NIS / gate reject', `${escapeHtml(formatMaybe(poseEncoder?.enc_nis, 8))} / ${pill(boolLabel(poseEncoder?.enc_gate_reject), poseEncoder?.enc_gate_reject ? 'critical' : 'nominal')}`),
+                kvRow('Slip this cycle / EMA', `${pill(boolLabel(poseEncoder?.slip_this_cycle), poseEncoder?.slip_this_cycle ? 'warning' : 'nominal')} ${escapeHtml(formatMaybe(poseEncoder?.slip_ema, 6))}`),
+                kvRow('EKF validation', pill(String(ekfEncoder?.validation_status || 'N/A'), healthClass(String(ekfEncoder?.validation_status || 'N/A')))),
+                kvRow('Cov theta / vel', `${escapeHtml(formatMaybe(ekfEncoder?.covariance_theta, 9))} / ${escapeHtml(formatMaybe(ekfEncoder?.covariance_velocity, 9))}`)
+            ];
+
+            const startupRows = [
+                kvRow('Service running', pill(boolLabel(service?.running), service?.running ? 'nominal' : 'critical')),
+                kvRow('Snapshot health', pill(String(service?.snapshot_health || 'N/A'), healthClass(String(service?.snapshot_health || 'N/A')))),
+                kvRow('Startup sensor health', startup?.sensor_health_encoder?.ok === true ? pill('OK', 'nominal') : (startup?.sensor_health_encoder?.ok === false ? pill('FAIL', 'critical') : pill('N/A', 'warning'))),
+                kvRow('Startup service health', startup?.sensor_health_encoder_service?.ok === true ? pill('OK', 'nominal') : (startup?.sensor_health_encoder_service?.ok === false ? pill('FAIL', 'critical') : pill('N/A', 'warning'))),
+                kvRow('Startup calibration', startup?.calibration_encoder?.ok === true ? pill('OK', 'nominal') : (startup?.calibration_encoder?.ok === false ? pill('FAIL', 'critical') : pill('N/A', 'warning'))),
+                kvRow('Invert motor L/R', `${pill(boolLabel(estimator?.invert_motor_left), estimator?.invert_motor_left ? 'warning' : 'nominal')} ${pill(boolLabel(estimator?.invert_motor_right), estimator?.invert_motor_right ? 'warning' : 'nominal')}`),
+                kvRow('Invert encoder L/R', `${pill(boolLabel(estimator?.invert_encoder_left), estimator?.invert_encoder_left ? 'warning' : 'nominal')} ${pill(boolLabel(estimator?.invert_encoder_right), estimator?.invert_encoder_right ? 'warning' : 'nominal')}`),
+                kvRow('Config minta Hz', escapeHtml(formatMaybe(config?.hardver_encoderek?.mintavetel_hz, 1, ' Hz'))),
+                kvRow('Ablak / zaj / alpha', `${escapeHtml(formatMaybe(config?.becslo_szuro?.ablak_meret, 0))} / ${escapeHtml(formatMaybe(config?.becslo_szuro?.zajszures_kuszob, 4))} / ${escapeHtml(formatMaybe(config?.becslo_szuro?.sebesseg_simitas_alfa, 4))}`)
+            ];
+
+            const rawPayload = {
+                side: sideKey,
+                side_block: sidePayload,
+                service,
+                estimator,
+                computed: encoderState?.computed || {},
+                diagnostics,
+                pose_encoder: poseEncoder,
+                ekf_encoder: ekfEncoder,
+                startup,
+                config,
+                wall_time: encoderState?.wall_time || null,
+                all_encoder_data: encoderState || {}
+            };
+
+            return section(`${sideName} oldal gyorsdiagnosztika`, summaryRows) +
+                section(`${sideName} EKF / pose`, ekfRows) +
+                section(`${sideName} startup / config`, startupRows) +
+                detailsJson(`RAW: ENC ${sideName} (oldal + közös blokkok)`, rawPayload, `enc_${sideKey}_raw`) +
+                detailsJson(`RAW: ENC ${sideName} teljes encoder payload`, encoderState || {}, `enc_${sideKey}_all`);
+        }
+
+        function encoderRenderKey(encoderState) {
+            if (!encoderState || typeof encoderState !== 'object') return 'none';
+            const wall = encoderState.wall_time ?? '';
+            const svcTs = encoderState?.service?.snapshot_ts_perf ?? '';
+            const pl = encoderState?.computed?.pulse_left_driver ?? '';
+            const pr = encoderState?.computed?.pulse_right_driver ?? '';
+            const vL = encoderState?.computed?.v_l_raw_mps ?? '';
+            const vR = encoderState?.computed?.v_r_raw_mps ?? '';
+            return `${wall}|${svcTs}|${pl}|${pr}|${vL}|${vR}`;
+        }
+
+        let lastEncoderRenderStamp = null;
+        let lastEncoderServiceHtml = '<span class="sensor-empty">N/A</span>';
+        let lastEncoderDistHtml = '<span class="sensor-empty">N/A</span>';
+        let lastEncoderDiagHtml = '<span class="sensor-empty">N/A</span>';
+        let lastEncoderLeftText = '<span class="sensor-empty">N/A</span>';
+        let lastEncoderRightText = '<span class="sensor-empty">N/A</span>';
+
+        bindDiagnosticsWorkbench();
+
+        // UI HYDRATION FROM STATE STORE
+        window.R2B4_Store.subscribe((state) => {
+            // Fordítási térképek
+            const authMap = {
+                'ADAPTIVE': 'ADAPTÍV',
+                'MANUAL': 'KÉZI',
+                'AUTO': 'AUTO',
+                'EMERGENCY': 'VÉSZHELYZET'
+            };
+            const lidMap = {
+                'NOMINAL': 'NORMÁL',
+                'WARNING': 'FIGYELMEZTETÉS',
+                'CRITICAL': 'KRITIKUS'
+            };
+
+            // Header
+            updateValue('hdr-hz', state.safety.watchdog_hz, true, 1);
+            updateValue('hdr-authority', authMap[state.authority] || state.authority, false);
+
+            // Header: pozíció & sebesség
+            updateValue('hdr-x', state.pose.x, true, 2);
+            updateValue('hdr-y', state.pose.y, true, 2);
+            updateValue('hdr-yaw', `${(Number(state.pose.theta) || 0).toFixed(1)}°`, false);
+            updateValue('hdr-speed', `${(Number(state.pose.v) || 0).toFixed(2)} m/s`, false);
+
+            // Overview Page
+            updateValue('ov-pos', `${state.pose.x.toFixed(2)}, ${state.pose.y.toFixed(2)}`, false);
+            updateValue('ov-yaw', state.pose.theta, true, 1);
+            updateValue('ov-v', state.pose.v, true, 2);
+            updateValue('ov-hz', state.safety.watchdog_hz, true, 1);
+            updateValue('ov-mode', authMap[state.authority] || state.authority, false);
+            updateValue('ov-auth', 'R2B4-CORE', false);
+
+            // Motion Page
+            updateValue('mt-v-target', state.motion.v_target);
+            updateValue('mt-v-meas', state.pose.v);
+
+            // Safety Page
+            updateValue('sf-lidar', lidMap[state.safety.lidar_state] || state.safety.lidar_state, false);
+            const gate = document.getElementById('ov-gate');
+            if (gate) {
+                gate.textContent = state.safety.allow ? 'NYITVA' : 'BLOKKOLVA';
+                gate.className = state.safety.allow ? 'r2-data-value nominal' : 'r2-data-value critical';
+            }
+
+            // Power Page
+            updateValue('pw-volt', state.stats.volt, true, 1);
+            updateValue('pw-temp', state.stats.temp, true, 0);
+
+            // Diagnostics
+            updateValue('diag-ws-count', state.stats.ws_clients, true, 0);
+
+            // Sensors
+            const imuState = state.sensors?.imu || {};
+            const startupState = state.sensors?.startup || {};
+            updateValue('sn-imu-health', imuState.health || 'N/A', false);
+            updateValue('sn-acc', formatVec3(imuState.acc, 4), false);
+            updateValue('sn-gyr', formatVec3(imuState.gyr, 4), false);
+            const magValue = imuState.mag;
+            updateValue('sn-mag', (magValue === null || magValue === undefined) ? 'N/A' : formatFixed(magValue, 3), false);
+
+            const lidarState = state.sensors?.lidar || {};
+            const peripheralState = state.sensors?.peripherals || {};
+            updateValue('sn-lidar-health', lidarState.health || 'N/A', false);
+            updateValue('sn-lidar-enabled', lidarState.enabled === true ? 'BE' : (lidarState.enabled === false ? 'KI' : 'N/A'), false);
+            const encoderEnabled = (typeof state.sensors?.encoder_enabled === 'boolean')
+                ? state.sensors.encoder_enabled
+                : (typeof peripheralState.encoder === 'boolean' ? peripheralState.encoder : null);
+            updateValue('sn-encoder-enabled', encoderEnabled === true ? 'BE' : (encoderEnabled === false ? 'KI' : 'N/A'), false);
+            updateValue('sn-lidar-min', `${formatFixed(lidarState.min_dist, 3)} / ${formatFixed(lidarState.min_back, 3)} m`, false);
+            updateValue('sn-lidar-avg', `${formatFixed(lidarState.avg_left, 3)} / ${formatFixed(lidarState.avg_right, 3)} m`, false);
+            updateValue(
+                'sn-lidar-pose',
+                `x=${formatFixed(lidarState.lidar_pose_x, 2)} y=${formatFixed(lidarState.lidar_pose_y, 2)} th=${formatFixed(lidarState.lidar_pose_theta, 2)} conf=${formatFixed(lidarState.lidar_pose_confidence, 2)}`,
+                false
+            );
+
+            const encoderState = state.sensors?.encoder || {};
+            const encoderStamp = encoderRenderKey(encoderState);
+            if (encoderStamp !== lastEncoderRenderStamp) {
+                lastEncoderServiceHtml = renderEncoderServiceBlock(encoderState, startupState);
+                lastEncoderDistHtml = renderEncoderDistBlock(encoderState, state);
+                lastEncoderDiagHtml = renderEncoderDiagBlock(encoderState);
+                lastEncoderLeftText = formatEncoderLine('left', encoderState);
+                lastEncoderRightText = formatEncoderLine('right', encoderState);
+                lastEncoderRenderStamp = encoderStamp;
+            }
+            updateHtml('sn-enc-service', lastEncoderServiceHtml);
+            updateHtml('sn-enc-dist', lastEncoderDistHtml);
+            updateHtml('sn-enc-diag', lastEncoderDiagHtml);
+            updateHtml('sn-enc-left', lastEncoderLeftText);
+            updateHtml('sn-enc-right', lastEncoderRightText);
+
+            // Footer
+            document.getElementById('ftr-ts').textContent = new Date().toISOString().replace('T', ' ').split('.')[0];
+            document.getElementById('ftr-status').textContent = state.safety.allow ? 'STABIL' : 'VÉSZHELYZET';
+            document.getElementById('ftr-status').className = state.safety.allow ? 'nominal' : 'critical';
+            const conn = state.connection || {};
+            const netNode = document.getElementById('ftr-net');
+            if (netNode) {
+                const status = String(conn.status || 'OFFLINE').toUpperCase();
+                const transport = String(conn.transport || '').toUpperCase();
+                if (status === 'ONLINE') {
+                    netNode.textContent = transport === 'WS' ? 'AKTÍV (WS)' : 'AKTÍV';
+                    netNode.className = 'nominal';
+                } else if (status === 'DEGRADED') {
+                    netNode.textContent = transport === 'POLL' ? 'DEGRADÁLT (POLL)' : 'DEGRADÁLT';
+                    netNode.className = 'warning';
+                } else if (status === 'CONNECTING') {
+                    netNode.textContent = 'CSATLAKOZÁS...';
+                    netNode.className = 'warning';
+                } else {
+                    netNode.textContent = 'OFFLINE';
+                    netNode.className = 'critical';
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

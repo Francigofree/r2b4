@@ -1,0 +1,347 @@
+{
+  "active_speed_map": {
+    "calibration_evidence": "Behavior-preserving migration of the active four-direction feed-forward values; live full-range candidate calibration is pending.",
+    "calibration_state": "V2_SCHEMA_MIGRATION_2026_07_16",
+    "curves": {
+      "left_forward": {
+        "dead_zone_pwm": 0.09,
+        "direction": "forward",
+        "points": [
+          {
+            "pwm": 0.09,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.14,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.19,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.24,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.29,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.34,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.09,
+        "wheel": "left"
+      },
+      "left_reverse": {
+        "dead_zone_pwm": 0.087,
+        "direction": "reverse",
+        "points": [
+          {
+            "pwm": 0.087,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.14,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.19,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.24,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.29,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.34,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.087,
+        "wheel": "left"
+      },
+      "right_forward": {
+        "dead_zone_pwm": 0.084,
+        "direction": "forward",
+        "points": [
+          {
+            "pwm": 0.084,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.14,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.19,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.24,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.29,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.34,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.084,
+        "wheel": "right"
+      },
+      "right_reverse": {
+        "dead_zone_pwm": 0.089,
+        "direction": "reverse",
+        "points": [
+          {
+            "pwm": 0.089,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.145,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.195,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.245,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.295,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.345,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.089,
+        "wheel": "right"
+      }
+    },
+    "hardware": "DFRobot KIT0085",
+    "interpolation": "linear",
+    "map_state": "ACTIVE",
+    "schema": "R2B4_WHEEL_SPEED_MAP_V2"
+  },
+  "after_score": {
+    "fault_count": 0,
+    "group_median_relative_error": {
+      "left_forward": 0.2115508897434987,
+      "left_reverse": 0.12107030935174473,
+      "right_forward": 0.1368946139082987,
+      "right_reverse": 0.09140040200787833
+    },
+    "max_group_median_relative_error": 0.2115508897434987,
+    "mean_relative_error": 0.1639876871206822,
+    "median_relative_error": 0.1288765322029467,
+    "unstable_side_count": 2,
+    "wrong_direction_count": 0
+  },
+  "artifacts": {
+    "backup": "runtime/agent_tests/speed_map_before_deadzone_calibration.json",
+    "candidate": "runtime/agent_tests/candidate_wheel_speed_map.json",
+    "result": "runtime/agent_tests/latest_motor_deadzone_calibration.json",
+    "samples": "runtime/agent_tests/latest_motor_deadzone_calibration_samples.jsonl"
+  },
+  "before_score": {
+    "group_median_relative_error": {
+      "left_forward": 0.07256175628356049,
+      "left_reverse": 0.06936741333037175,
+      "right_forward": 0.04269605802743924,
+      "right_reverse": 0.13481306278208977
+    },
+    "max_group_median_relative_error": 0.13481306278208977,
+    "mean_relative_error": 0.08311583998196787,
+    "median_relative_error": 0.08300480343244526
+  },
+  "bracket_from_two_live_candidates": true,
+  "calibration_outcome": "CANDIDATE_REJECTED",
+  "candidate_activation_allowed": false,
+  "candidate_kept": false,
+  "candidate_map": {
+    "calibration_evidence": "initial and aggressive differential-PWM validation measurements",
+    "calibration_state": "LIVE_DIRECT_PWM_TWO_SIDED_BRACKET_CANDIDATE_2026_07_16",
+    "curves": {
+      "left_forward": {
+        "dead_zone_pwm": 0.0727,
+        "direction": "forward",
+        "maintenance_source": "two_sided_live_bracket_or_stable_sweep_fallback",
+        "points": [
+          {
+            "pwm": 0.0727,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1337,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.2031,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2587,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.298,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3373,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.0869,
+        "startup_source": "latest_low_speed_startup_phase",
+        "wheel": "left"
+      },
+      "left_reverse": {
+        "dead_zone_pwm": 0.095,
+        "direction": "reverse",
+        "maintenance_source": "two_sided_live_bracket_or_stable_sweep_fallback",
+        "points": [
+          {
+            "pwm": 0.095,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1612,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.2143,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2674,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.3145,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3495,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.1535,
+        "startup_source": "latest_low_speed_startup_phase",
+        "wheel": "left"
+      },
+      "right_forward": {
+        "dead_zone_pwm": 0.0747,
+        "direction": "forward",
+        "maintenance_source": "two_sided_live_bracket_or_stable_sweep_fallback",
+        "points": [
+          {
+            "pwm": 0.0747,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1561,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.2157,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2519,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.3152,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3424,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.0809,
+        "startup_source": "latest_low_speed_startup_phase",
+        "wheel": "right"
+      },
+      "right_reverse": {
+        "dead_zone_pwm": 0.095,
+        "direction": "reverse",
+        "maintenance_source": "two_sided_live_bracket_or_stable_sweep_fallback",
+        "points": [
+          {
+            "pwm": 0.095,
+            "speed_mps": 0.05
+          },
+          {
+            "pwm": 0.1503,
+            "speed_mps": 0.1
+          },
+          {
+            "pwm": 0.2196,
+            "speed_mps": 0.15
+          },
+          {
+            "pwm": 0.2738,
+            "speed_mps": 0.2
+          },
+          {
+            "pwm": 0.3233,
+            "speed_mps": 0.25
+          },
+          {
+            "pwm": 0.3462,
+            "speed_mps": 0.3
+          }
+        ],
+        "startup_pwm": 0.1643,
+        "startup_source": "latest_low_speed_startup_phase",
+        "wheel": "right"
+      }
+    },
+    "hardware": "DFRobot KIT0085",
+    "interpolation": "linear",
+    "map_state": "CANDIDATE",
+    "schema": "R2B4_WHEEL_SPEED_MAP_V2"
+  },
+  "candidate_qualified": false,
+  "error": "",
+  "pause_failures": [],
+  "prior_after_score": {
+    "fault_count": 0,
+    "group_median_relative_error": {
+      "left_forward": 0.1233323694490395,
+      "left_reverse": 0.2387073914482341,
+      "right_forward": 0.1972244248700268,
+      "right_reverse": 0.2236085738299383
+    },
+    "max_group_median_relative_error": 0.2387073914482341,
+    "mean_relative_error": 0.26593651747024694,
+    "median_relative_error": 0.19859396549453295,
+    "unstable_side_count": 8,
+    "wrong_direction_count": 0
+  },
+  "refit_from_latest_validation": false,
+  "reused_aggressive_validation_phase_count": 24,
+  "reused_prior_validation_phase_count": 24,
+  "reused_sweep_phase_count": 54,
+  "startup_duration_s": 0.35,
+  "status": "PASS",
+  "success": true,
+  "test_name": "motor_deadzone_calibration_live",
+  "validation_phase_count": 24
+}

@@ -1,0 +1,166 @@
+{
+  "schema": "R2B4_AGENT_INFRASTRUCTURE_V1",
+  "contract_id": "R2B4_AGENT_INFRA_HARDENED_V2",
+  "default_agent_mode": "single_agent",
+  "max_auxiliary_agents": 1,
+  "recursive_delegation_allowed": false,
+  "parallel_writers_allowed": false,
+  "context_budgets_bytes": {
+    "cold_capsule": 4096,
+    "unchanged_delta": 1024,
+    "auxiliary_input": 6144,
+    "auxiliary_output": 3072
+  },
+  "normative_authorities": {
+    "structural_motion_architecture": {
+      "authority": "NORMATIVE_SSOT",
+      "path": "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
+      "document_role": "structural_motion_architecture",
+      "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V2_1",
+      "domains": ["motion_control"]
+    }
+  },
+  "universal_invariants": [
+    "SOURCE_AND_ACTIVE_CONFIG_FIRST",
+    "UNIFIED_CONTROL_ONLY",
+    "ONE_TICK_ONE_INTENT_ONE_EKF_POSE_ONE_MOTOR_OUTPUT",
+    "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER",
+    "NO_SAFETY_PASS_OR_QUALITY_GATE_RELAXATION",
+    "NO_GIT_RECOVERY_ASSUMPTION",
+    "LIVE_MOTION_EXPLICIT_SCOPE_PREFLIGHT_TEST_HUB_ONLY"
+  ],
+  "leases": {
+    "workspace_write": {"exclusive": true, "default_ttl_s": 7200},
+    "canonical_promotion": {"exclusive": true, "default_ttl_s": 1800},
+    "runtime_control": {"exclusive": true, "default_ttl_s": 900},
+    "live_motion": {"exclusive": true, "default_ttl_s": 3600},
+    "latest_artifact_publish": {"exclusive": true, "default_ttl_s": 900},
+    "full_pytest": {"exclusive": true, "default_ttl_s": 3600}
+  },
+  "task_workspace": {
+    "enabled": true,
+    "root": "runtime/agent_workspaces",
+    "protected_store": "/var/lib/r2b4-agent",
+    "privileged_operations": true,
+    "exclude_top_level": [
+      ".agents",
+      ".cursor",
+      ".git",
+      ".pytest_cache",
+      ".vscode",
+      "Pic",
+      "__pycache__",
+      "log_ARCHIVE",
+      "logs",
+      "project_r2b4.ol2",
+      "replayer_data",
+      "runtime",
+      "save"
+    ],
+    "exclude_names": ["__pycache__", ".pytest_cache", ".lgd-nfy0"],
+    "exclude_paths": [
+      ".env.local",
+      ".lgd-nfy0",
+      ".r2b4_candidate.json",
+      "controller.log",
+      "log/run/",
+      "os.log",
+      "project_rules/current_change.json"
+    ],
+    "protected_infrastructure_paths": [
+      "AGENTS.md",
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
+      "config_manager.py",
+      "docs/AGENT_RUNTIME.md",
+      "log/log_paths.py",
+      "project_rules/agent_infrastructure.json",
+      "project_rules/agent_system_prompt.txt",
+      "project_rules/bootstrap_guard.py",
+      "project_rules/protected_baseline.json",
+      "scripts/bootstrap_guard.sh",
+      "tests/test_agent_change_tracker.py",
+      "tests/test_agent_workspace.py",
+      "tests/test_agentctl.py",
+      "tests/test_bootstrap_guard.py",
+      "tests/test_config_manager_paths.py",
+      "tests/test_r2b4_test_hub.py",
+      "tools/agent_change_tracker.py",
+      "tools/agent_workspace.py",
+      "tools/agentctl.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "agent_infrastructure_allowed_paths": [
+      "AGENTS.md",
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
+      "config_manager.py",
+      "docs/AGENT_RUNTIME.md",
+      "log/log_paths.py",
+      "project_rules/agent_infrastructure.json",
+      "project_rules/agent_system_prompt.txt",
+      "project_rules/bootstrap_guard.py",
+      "project_rules/protected_baseline.json",
+      "scripts/bootstrap_guard.sh",
+      "tests/test_agent_change_tracker.py",
+      "tests/test_agent_workspace.py",
+      "tests/test_agentctl.py",
+      "tests/test_bootstrap_guard.py",
+      "tests/test_config_manager_paths.py",
+      "tests/test_r2b4_test_hub.py",
+      "tools/agent_change_tracker.py",
+      "tools/agent_workspace.py",
+      "tools/agentctl.py",
+      "tools/r2b4_test_hub.py"
+    ]
+  },
+  "auxiliary_agent_policy": {
+    "default": "NONE",
+    "allowed_roles": [
+      "independent_reviewer",
+      "root_cause_analyst"
+    ],
+    "activation": {
+      "independent_reviewer": {
+        "requires_any_path": [
+          "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
+          "project_rules/bootstrap_guard.py",
+          "project_rules/protected_baseline.json",
+          "safety/",
+          "motion_executor.py",
+          "cont.py",
+          "middleware/ekf.py",
+          "middleware/scan_matching.py",
+          "sensors/lidar_service.py"
+        ],
+        "evidence": "protected_contract_or_shared_guard_change"
+      },
+      "root_cause_analyst": {
+        "requires_immutable_incident": true,
+        "requires_repeated_failure_count": 2,
+        "requires_machine_failure_signature": true,
+        "evidence": "same_failure_signature_in_distinct_runs"
+      }
+    }
+  },
+  "domains": {
+    "agent_infrastructure": {
+      "paths": ["AGENTS.md", "STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "project_rules/", "tools/agentctl.py", "tools/agent_change_tracker.py"],
+      "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "project_rules/protected_baseline.json", "tests/test_bootstrap_guard.py", "tests/test_agent_change_tracker.py"]
+    },
+    "motion_control": {
+      "paths": ["cont.py", "motion_executor.py", "controller/", "core/", "amr/"],
+      "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "STRUKTURALIS_RETEGEK.md", "conf/control_mode.json", "conf/speed_map.json"]
+    },
+    "localization_sensors": {
+      "paths": ["middleware/", "sensors/", "driver/"],
+      "sources": ["middleware/scan_matcher_contract.py", "conf/vezerles.json"]
+    },
+    "runtime_safety": {
+      "paths": ["safety/", "startup/", "log/", "tools/agent_runtime_manager.py"],
+      "sources": ["runtime/status.json"]
+    },
+    "test_evidence": {
+      "paths": ["tools/r2b4_test_hub.py"],
+      "sources": []
+    }
+  }
+}

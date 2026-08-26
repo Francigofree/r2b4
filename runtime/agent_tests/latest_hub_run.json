@@ -1,0 +1,498 @@
+{
+  "archive": {
+    "enabled": false,
+    "post_check": null,
+    "post_run": null,
+    "pre_check": null,
+    "pre_run": null,
+    "requested": true,
+    "skipped_reason": "disabled_during_live_run_for_watchdog_safety"
+  },
+  "duration_s": 105.29,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ended_at_utc": "2026-07-26T18:21:33Z",
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 16230,
+        "pid": 16230,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "incident": {
+    "artifacts": [
+      "runtime/agent_tests/latest_M0_mini_measurement_trust_live.json",
+      "runtime/agent_tests/latest_M1_motion_baseline_live.json",
+      "runtime/agent_tests/latest_M1_motion_baseline_live_samples.jsonl"
+    ],
+    "command": {
+      "return_code": 1,
+      "stderr_tail": "",
+      "stdout_tail": "LIVE_MEASUREMENT_VALIDATOR test=M1_motion_baseline_live phase=M1 result=FAIL cases=8/8 failures=forward:encoder_timing_gap,arc_left:settled_wheel_speed_tracking_error_high,arc_right:settled_wheel_speed_tracking_error_high artifact=runtime/agent_tests/latest_M1_motion_baseline_live.json",
+      "timed_out": false
+    },
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 16230,
+          "pid": 16230,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-07-26T18:21:33Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 2,
+        "logger_updated_ts": 3568.707445726,
+        "status_version": 762,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-07-26T18:19:48Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 3,
+        "logger_updated_ts": 3463.611334044,
+        "status_version": 130,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": -1,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "runtime/agent_tests/latest_human_observed_1x1m_validation.json",
+      "required": false
+    },
+    "preflight": {
+      "errors": null,
+      "ok": true,
+      "stdout_tail": "PREFLIGHT: READY\n  odom=LIDAR_FIRST  mode=LIDAR_STRICT  determinism=HIGH\n  lidar: fresh=True  age=0.06s  sig_ok=True  conf=0.9314890777276521\n  clearance: median=1.3522500000000002m\n  encoder_distance_available=True  failsafe_reset=False\n  timestamp=2026-07-26T18:19:51Z"
+    },
+    "preflight_pose_reset": {
+      "accepted": {
+        "cmd_id": "hub_preflight_reset_1785089988603",
+        "lifecycle": "accepted",
+        "ok": true,
+        "timeout_sec": 6.0
+      },
+      "command": {
+        "cmd_id": "hub_preflight_reset_1785089988603",
+        "motion_source": "GUI",
+        "token": "GUI_DEFAULT",
+        "type": "reset_pos"
+      },
+      "error": "",
+      "lifecycle": {
+        "cmd_type": "reset_pos",
+        "details": {
+          "cmd_id": "hub_preflight_reset_1785089988603",
+          "details": {
+            "motion_command": false,
+            "physical_success_hint": "not_required_for_non_motion_command",
+            "physical_success_implied": true,
+            "truth_surface": "COMMAND_LIFECYCLE"
+          },
+          "source": "GUI",
+          "state": "effective",
+          "timeout_sec": 4.0,
+          "ts": 1785089988.681827,
+          "type": "reset_pos"
+        },
+        "error_code": "",
+        "lifecycle_ok": true,
+        "ok": true,
+        "pending": false,
+        "physical_equivalence": false,
+        "raw_state": "effective",
+        "reason": "",
+        "runtime_motion_truth": {
+          "available": false,
+          "correlated_to_cmd": false,
+          "execution_state": "",
+          "note": "command lifecycle status is not equal to physical completion",
+          "terminal_reason": ""
+        },
+        "state": "effective",
+        "timed_out": false,
+        "truth_surface": "COMMAND_LIFECYCLE"
+      },
+      "ok": true
+    },
+    "primary_failure": "TEST_FAIL",
+    "profile": "M1_motion_baseline_live",
+    "reason": "scenario return_code=1",
+    "status": "FAIL"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-07-26T18:21:33Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 2,
+      "logger_updated_ts": 3568.707445726,
+      "status_version": 762,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-07-26T18:19:48Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 3,
+      "logger_updated_ts": 3463.611334044,
+      "status_version": 130,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": -1,
+      "write_errors_delta": 0
+    }
+  },
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "runtime/agent_tests/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "preflight": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/alba/project_r2b4/tools/agent_motion_probe.py",
+      "--preflight-only",
+      "--forward-clearance-m",
+      "0.80",
+      "--stop-timeout-s",
+      "4.0",
+      "--compact"
+    ],
+    "ok": true,
+    "payload": {},
+    "run": {
+      "duration_s": 2.192,
+      "ok": true,
+      "return_code": 0,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": null,
+      "stdout_tail": "PREFLIGHT: READY\n  odom=LIDAR_FIRST  mode=LIDAR_STRICT  determinism=HIGH\n  lidar: fresh=True  age=0.06s  sig_ok=True  conf=0.9314890777276521\n  clearance: median=1.3522500000000002m\n  encoder_distance_available=True  failsafe_reset=False\n  timestamp=2026-07-26T18:19:51Z",
+      "timed_out": false
+    }
+  },
+  "preflight_pose_reset": {
+    "accepted": {
+      "cmd_id": "hub_preflight_reset_1785089988603",
+      "lifecycle": "accepted",
+      "ok": true,
+      "timeout_sec": 6.0
+    },
+    "command": {
+      "cmd_id": "hub_preflight_reset_1785089988603",
+      "motion_source": "GUI",
+      "token": "GUI_DEFAULT",
+      "type": "reset_pos"
+    },
+    "error": "",
+    "lifecycle": {
+      "cmd_type": "reset_pos",
+      "details": {
+        "cmd_id": "hub_preflight_reset_1785089988603",
+        "details": {
+          "motion_command": false,
+          "physical_success_hint": "not_required_for_non_motion_command",
+          "physical_success_implied": true,
+          "truth_surface": "COMMAND_LIFECYCLE"
+        },
+        "source": "GUI",
+        "state": "effective",
+        "timeout_sec": 4.0,
+        "ts": 1785089988.681827,
+        "type": "reset_pos"
+      },
+      "error_code": "",
+      "lifecycle_ok": true,
+      "ok": true,
+      "pending": false,
+      "physical_equivalence": false,
+      "raw_state": "effective",
+      "reason": "",
+      "runtime_motion_truth": {
+        "available": false,
+        "correlated_to_cmd": false,
+        "execution_state": "",
+        "note": "command lifecycle status is not equal to physical completion",
+        "terminal_reason": ""
+      },
+      "state": "effective",
+      "timed_out": false,
+      "truth_surface": "COMMAND_LIFECYCLE"
+    },
+    "ok": true
+  },
+  "profile": "M1_motion_baseline_live",
+  "run_dir": "runtime/agent_tests/hub_M1_motion_baseline_live_20260726T181948Z",
+  "runtime": {
+    "before": null,
+    "ready_for_live_tests_after_recovery": true,
+    "recovery": [],
+    "start": null,
+    "started_here": false,
+    "stop": null
+  },
+  "scenario_run": {
+    "command": [
+      "/usr/bin/python3",
+      "tools/live_motion_measurement_validator.py",
+      "--mode",
+      "baseline",
+      "--embedded-m0-mini",
+      "--inter-case-pause-s",
+      "10.0",
+      "--reset-pos-after-pause",
+      "--post-reset-ready-timeout-s",
+      "90.0",
+      "--compact"
+    ],
+    "payload": {},
+    "run": {
+      "duration_s": 102.694,
+      "ok": true,
+      "return_code": 1,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": null,
+      "stdout_tail": "LIVE_MEASUREMENT_VALIDATOR test=M1_motion_baseline_live phase=M1 result=FAIL cases=8/8 failures=forward:encoder_timing_gap,arc_left:settled_wheel_speed_tracking_error_high,arc_right:settled_wheel_speed_tracking_error_high artifact=runtime/agent_tests/latest_M1_motion_baseline_live.json",
+      "timed_out": false
+    }
+  },
+  "started_at_utc": "2026-07-26T18:19:48Z",
+  "status": "FAIL",
+  "summary": {
+    "artifact_paths": [
+      "runtime/agent_tests/latest_M0_mini_measurement_trust_live.json",
+      "runtime/agent_tests/latest_M1_motion_baseline_live.json",
+      "runtime/agent_tests/latest_M1_motion_baseline_live_samples.jsonl"
+    ],
+    "artifact_paths_missing": [],
+    "artifact_paths_stale_rejected": [
+      "runtime/agent_tests/latest_M0_measurement_trust_live.json"
+    ],
+    "description": "M1 closed-loop execution validation with a fail-closed embedded M0-mini first-motion gate.",
+    "duration_s": 105.29,
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "ekf_truth_gate_ok": true,
+    "ended_at_utc": "2026-07-26T18:21:33Z",
+    "family": "measurement_validation",
+    "goals": [
+      "M1 first movement is an embedded fail-closed M0-mini measurement-trust and settled wheel-tracking gate",
+      "M0-mini PASS is equivalent to a full M0 PASS; FAIL stops before every remaining M1 primitive",
+      "separate forward, reverse, left/right arc, left/right in-place rotation, and stop segments after the mini gate",
+      "record command, motor PWM, encoder, IMU yaw, EKF pose, LIDAR displacement, safety stop reasons, and stop-start signs",
+      "10 second manual reposition pause between live primitives",
+      "conditional reset_pos reanchor after manual reposition pause",
+      "deterministic reset_pos reanchor before the first baseline primitive",
+      "crawl-SSOT-bounded 0.15 m/s and 0.20 rad/s set_twist phases plus speed-level-1 pivots"
+    ],
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 16230,
+          "pid": 16230,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "live": true,
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-07-26T18:21:33Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 2,
+        "logger_updated_ts": 3568.707445726,
+        "status_version": 762,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-07-26T18:19:48Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 3,
+        "logger_updated_ts": 3463.611334044,
+        "status_version": 130,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": -1,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "runtime/agent_tests/latest_human_observed_1x1m_validation.json",
+      "payload": {},
+      "required": false
+    },
+    "measurement_truth_gate_ok": true,
+    "preflight_ok": true,
+    "preflight_pose_reset": {
+      "accepted": {
+        "cmd_id": "hub_preflight_reset_1785089988603",
+        "lifecycle": "accepted",
+        "ok": true,
+        "timeout_sec": 6.0
+      },
+      "command": {
+        "cmd_id": "hub_preflight_reset_1785089988603",
+        "motion_source": "GUI",
+        "token": "GUI_DEFAULT",
+        "type": "reset_pos"
+      },
+      "error": "",
+      "lifecycle": {
+        "cmd_type": "reset_pos",
+        "details": {
+          "cmd_id": "hub_preflight_reset_1785089988603",
+          "details": {
+            "motion_command": false,
+            "physical_success_hint": "not_required_for_non_motion_command",
+            "physical_success_implied": true,
+            "truth_surface": "COMMAND_LIFECYCLE"
+          },
+          "source": "GUI",
+          "state": "effective",
+          "timeout_sec": 4.0,
+          "ts": 1785089988.681827,
+          "type": "reset_pos"
+        },
+        "error_code": "",
+        "lifecycle_ok": true,
+        "ok": true,
+        "pending": false,
+        "physical_equivalence": false,
+        "raw_state": "effective",
+        "reason": "",
+        "runtime_motion_truth": {
+          "available": false,
+          "correlated_to_cmd": false,
+          "execution_state": "",
+          "note": "command lifecycle status is not equal to physical completion",
+          "terminal_reason": ""
+        },
+        "state": "effective",
+        "timed_out": false,
+        "truth_surface": "COMMAND_LIFECYCLE"
+      },
+      "ok": true
+    },
+    "profile": "M1_motion_baseline_live",
+    "requires_preflight": true,
+    "run_dir": "runtime/agent_tests/hub_M1_motion_baseline_live_20260726T181948Z",
+    "started_at_utc": "2026-07-26T18:19:48Z",
+    "status": "FAIL",
+    "triage_order": [
+      "summary.json",
+      "incident_bundle.json",
+      "ownership_manifest.json",
+      "stdout_tail.txt",
+      "stderr_tail.txt"
+    ],
+    "verdict": {
+      "primary": "TEST_FAIL",
+      "reason": "scenario return_code=1",
+      "status": "FAIL"
+    }
+  }
+}

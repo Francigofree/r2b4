@@ -1,0 +1,135 @@
+{
+  "roles": {
+    "operator": {
+      "commands": [
+        "set_speed",
+        "step_speed",
+        "turn",
+        "stop",
+        "emergency_stop",
+        "set_vector",
+        "set_twist",
+        "set_motion_target",
+        "set_track_velocity",
+        "go_to_pose",
+        "set_follow_target",
+        "set_follow_speed_scale",
+        "set_follow_distance",
+        "set_follow_search_pivot_omega",
+        "start_room_cruise_v2",
+        "stop_room_cruise_v2",
+        "local_path_segment",
+        "follow_local_path_segments",
+        "follow_waypoints",
+        "follow_arc",        "drive_straight",
+        "set_target_pose",
+        "set_pose_closed_loop",
+        "set_target_heading",
+        "rotate_to_heading",
+        "cancel_motion",
+        "calibration_pwm_pulse",
+        "reload_conf",
+        "reset_pos",
+        "calibrate",
+        "square",
+        "circle",
+        "shutdown",
+        "toggle_full_log",
+        "patrol",
+        "toggle_follow",
+        "search_person",
+        "toggle_listen",
+        "capture_photo",
+        "toggle_video_recording",
+        "toggle_camera",
+        "set_runtime_preset", "full_reset", "strong_reset"
+      ]
+    },
+    "engineer": {
+      "commands": [
+        "set_speed",
+        "step_speed",
+        "turn",
+        "stop",
+        "emergency_stop",
+        "set_vector",
+        "set_twist",
+        "set_motion_target",
+        "set_track_velocity",
+        "go_to_pose",
+        "set_follow_target",
+        "set_follow_speed_scale",
+        "set_follow_distance",
+        "set_follow_search_pivot_omega",
+        "start_room_cruise_v2",
+        "stop_room_cruise_v2",
+        "local_path_segment",
+        "follow_local_path_segments",
+        "follow_waypoints",
+        "follow_arc",
+        "drive_straight",
+        "set_target_pose",
+        "set_pose_closed_loop",
+        "set_target_heading",
+        "rotate_to_heading",
+        "cancel_motion",
+        "calibration_pwm_pulse",
+        "reload_conf",
+        "replay",
+        "reset_pos",
+        "calibrate",
+        "square",
+        "circle",
+        "shutdown",
+        "toggle_full_log",
+        "patrol",
+        "toggle_follow",
+        "search_person",
+        "toggle_listen",
+        "capture_photo",
+        "toggle_video_recording",
+        "toggle_camera",
+        "set_runtime_preset", "full_reset", "strong_reset"
+      ]
+    },
+    "ai": {
+      "commands": [
+        "set_speed",
+        "step_speed",
+        "turn",
+        "stop",
+        "set_twist",
+        "set_motion_target",
+        "go_to_pose",
+        "set_follow_target",
+        "start_room_cruise_v2",
+        "stop_room_cruise_v2",
+        "local_path_segment",
+        "follow_local_path_segments",
+        "follow_waypoints",
+        "set_target_heading",
+        "rotate_to_heading",
+        "cancel_motion"
+      ]
+    }
+  },
+  "tokens": {
+    "GUI_DEFAULT": {
+      "role": "operator",
+      "enabled": true
+    }
+  },
+  "arbiter": {
+    "profile": "local",
+    "profiles": {
+      "local": {
+        "priorities": ["GUI_JOYSTICK", "MANUAL", "STATE", "ADAPTIVE", "AI", "CORE"],
+        "hold_sec": 1.0
+      },
+      "safe_remote": {
+        "priorities": ["GUI_JOYSTICK", "MANUAL", "STATE", "ADAPTIVE", "AI", "CORE"],
+        "hold_sec": 0.35
+      }
+    }
+  }
+}

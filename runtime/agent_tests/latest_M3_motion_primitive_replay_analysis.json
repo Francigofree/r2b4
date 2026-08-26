@@ -1,0 +1,1245 @@
+{
+  "artifact_paths": {
+    "result": "runtime/agent_tests/latest_M3_motion_primitive_replay_analysis.json",
+    "summary": "runtime/agent_tests/latest_M3_motion_primitive_replay_analysis_summary.json"
+  },
+  "classifier_study": {
+    "cases": {
+      "arc_left": {
+        "active_sample_count": 12,
+        "actual_arc_family_ratio": 0.6666666666666666,
+        "actual_counts": {
+          "DIFF_ARC_GENTLE": 8,
+          "UNKNOWN": 4
+        },
+        "actual_in_place_or_arc_family_ratio": 0.6666666666666666,
+        "actual_in_place_ratio": 0.0,
+        "contract_violation_samples": 0,
+        "executed_counts": {
+          "DIFF_ARC_GENTLE": 8,
+          "STRAIGHT": 4
+        },
+        "interpretation_hu": "A parancsolt primitive es a fizikai mozgas szetvalasztva ertekelendo: ha az executed stabil, de az actual valtogat, akkor classifier/szerzodes oldali bizonytalansag valoszinu.",
+        "violation_examples": []
+      },
+      "arc_right": {
+        "active_sample_count": 10,
+        "actual_arc_family_ratio": 1.0,
+        "actual_counts": {
+          "DIFF_ARC_GENTLE": 10
+        },
+        "actual_in_place_or_arc_family_ratio": 1.0,
+        "actual_in_place_ratio": 0.0,
+        "contract_violation_samples": 0,
+        "executed_counts": {
+          "DIFF_ARC_GENTLE": 10
+        },
+        "interpretation_hu": "A parancsolt primitive es a fizikai mozgas szetvalasztva ertekelendo: ha az executed stabil, de az actual valtogat, akkor classifier/szerzodes oldali bizonytalansag valoszinu.",
+        "violation_examples": []
+      },
+      "straight_forward": {
+        "active_sample_count": 13,
+        "actual_arc_family_ratio": 0.23076923076923078,
+        "actual_counts": {
+          "DIFF_ARC_GENTLE": 3,
+          "STRAIGHT": 8,
+          "UNKNOWN": 2
+        },
+        "actual_in_place_or_arc_family_ratio": 0.23076923076923078,
+        "actual_in_place_ratio": 0.0,
+        "contract_violation_samples": 0,
+        "executed_counts": {
+          "STRAIGHT": 13
+        },
+        "interpretation_hu": "A parancsolt primitive es a fizikai mozgas szetvalasztva ertekelendo: ha az executed stabil, de az actual valtogat, akkor classifier/szerzodes oldali bizonytalansag valoszinu.",
+        "violation_examples": []
+      }
+    },
+    "schema": "M3_MOTION_PRIMITIVE_CLASSIFIER_REPLAY_STUDY_V1"
+  },
+  "failed_gates": [],
+  "generated_ts": 1784410371.62337,
+  "inconclusive_gates": [],
+  "plain_summary_hu": "Replay elemzes: PASS. Mintak: 81. Hibak: nincs.",
+  "primitive_cases": [
+    {
+      "actual_deg": 5.395,
+      "angle_error_deg": null,
+      "case_name": "arc_left",
+      "command": {
+        "duration_s": 0.9,
+        "motion_source": "STATE",
+        "omega_rad_s": 0.2,
+        "type": "set_twist",
+        "v_mps": 0.15
+      },
+      "expected_deg": null,
+      "failed_gates": [],
+      "gates": {
+        "actual_primitive_classifier": {
+          "evidence": [],
+          "observed": {
+            "actual_classifier_coverage_ratio": 1.0,
+            "actual_classifier_eligible_sample_count": 4,
+            "actual_classifier_settled_window_sample_count": 4,
+            "actual_classifier_transition_sample_count": 2,
+            "actual_contract_violation_samples": 0,
+            "primitive_actual_expected_ratio": 1.0,
+            "transition_contract_violation_samples": 0,
+            "turn_primitives_seen": {
+              "actual": [
+                "UNKNOWN",
+                "DIFF_ARC_GENTLE"
+              ],
+              "executed": [
+                "STRAIGHT",
+                "DIFF_ARC_GENTLE"
+              ],
+              "limited": [
+                "STRAIGHT",
+                "DIFF_ARC_GENTLE"
+              ],
+              "requested": [
+                "DIFF_ARC_GENTLE"
+              ]
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "enough ready/reliable measurements after the declared transition settle window classify the expected straight/arc family; settled contract violations are forbidden",
+          "status": "PASS"
+        },
+        "motion_evidence": {
+          "evidence": [],
+          "observed": {
+            "active_sample_count": 12,
+            "active_unique_status_frame_count": 6,
+            "terminal_reason": "REPLAY",
+            "timeout": false
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "bounded live twist primitive produces enough active samples without timeout",
+          "status": "PASS"
+        },
+        "physical_twist_quality": {
+          "evidence": [],
+          "observed": {
+            "actual_omega_abs": {
+              "max": 0.10999408775930906,
+              "min": 0.0012340874075001504,
+              "n": 6,
+              "p10": 0.007983485064472462,
+              "p50": 0.09288690275668252,
+              "p90": 0.10940007367503907,
+              "p95": 0.10969708071717406
+            },
+            "actual_v_abs": {
+              "max": 0.177892,
+              "min": 0.004442,
+              "n": 6,
+              "p10": 0.072937,
+              "p50": 0.16466,
+              "p90": 0.1761365,
+              "p95": 0.17701425
+            },
+            "displacement_max_m": 0.1157,
+            "expected_primitive": "DIFF_ARC_GENTLE",
+            "final_heading_deg": 5.395,
+            "signed_progress_max_deg": 5.468
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "straight moves forward with low heading drift; arc moves forward while turning in the requested direction",
+          "status": "PASS"
+        },
+        "primitive_command_chain": {
+          "evidence": [],
+          "observed": {
+            "execution_contract_violation_samples": 0,
+            "primitive_executed_expected_ratio": 1.0,
+            "primitive_limited_expected_ratio": 1.0,
+            "primitive_requested_expected_ratio": 1.0,
+            "settled_frame_count": 4,
+            "turn_primitives_seen": {
+              "actual": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "executed": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "limited": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "requested": [
+                "DIFF_ARC_GENTLE"
+              ]
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "requested, limited and executed primitive match the expected straight/arc family",
+          "status": "PASS"
+        },
+        "safety_runtime": {
+          "evidence": [],
+          "observed": {
+            "front_min_m": 1.4075,
+            "safety_ok": true
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "no failsafe/watchdog stop during twist primitive",
+          "status": "PASS"
+        },
+        "sensor_truth_runtime": {
+          "evidence": [],
+          "observed": {
+            "lidar_ekf_applied_gap_s": {
+              "max": 0.10116867399847251,
+              "min": 0.03914715599967167,
+              "n": 4,
+              "p10": 0.05124071099962749,
+              "p50": 0.07993337049992988,
+              "p90": 0.09494039229903138,
+              "p95": 0.09805453314875193
+            },
+            "lidar_pose_confidence": {
+              "max": 0.9831659829375988,
+              "min": 0.9018150865030713,
+              "n": 4,
+              "p10": 0.9083679396226751,
+              "p50": 0.9495624210005433,
+              "p90": 0.98085626158612,
+              "p95": 0.9820111222618595
+            },
+            "settled_unique_status_frame_count": 4
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "EKF/LIDAR truth surface remains fresh enough for live primitive measurement",
+          "status": "PASS"
+        },
+        "software_loop_runtime": {
+          "evidence": [],
+          "observed": {
+            "loop_below_45_ratio": 0.0,
+            "loop_budget_total_ema_ms": {
+              "max": 7.7574,
+              "min": 5.4219,
+              "n": 6,
+              "p10": 5.5125,
+              "p50": 5.86595,
+              "p90": 7.732049999999999,
+              "p95": 7.744724999999999
+            },
+            "slow_gc_delta": 1,
+            "slow_io_event_delta": 0,
+            "slow_lidar_spike_delta": 0,
+            "slow_none_delta": 0,
+            "slow_observed_tick_delta": 40,
+            "slow_resolver_spike_delta": 0,
+            "slow_tick_delta": 1,
+            "slow_tick_ratio": 0.025,
+            "watchdog_frequency_hz": {
+              "max": 50.4,
+              "min": 49.85,
+              "n": 6,
+              "p10": 49.92,
+              "p50": 50.075,
+              "p90": 50.370000000000005,
+              "p95": 50.385
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "control loop, logger and slow-tick surfaces stay bounded during twist primitive",
+          "status": "PASS"
+        },
+        "twist_exec_ssot_path": {
+          "evidence": [],
+          "observed": {
+            "command_owner_conflict_samples": 0,
+            "execution_modes_seen": [
+              "TWIST_EXEC"
+            ],
+            "motion_actual_ssot_ratio": 1.0,
+            "odometry_modes_seen": [
+              "LIDAR_FIRST"
+            ],
+            "service_motion_active_samples": 0,
+            "twist_exec_ratio": 1.0
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "one routed TWIST_EXEC owner, EKF motion actual SSOT, no service/direct/legacy path evidence",
+          "status": "PASS"
+        },
+        "unified_single_motion_system": {
+          "evidence": [],
+          "observed": {
+            "camera_enabled_samples": 0,
+            "control_modes_seen": [
+              "UNIFIED"
+            ]
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "UNIFIED motion mode only, camera disabled during primitive validation",
+          "status": "PASS"
+        }
+      },
+      "inconclusive_gates": [],
+      "metrics": {
+        "active_sample_count": 12,
+        "active_unique_status_frame_count": 6,
+        "actual_classifier_coverage_ratio": 1.0,
+        "actual_classifier_eligible_sample_count": 4,
+        "actual_classifier_settled_window_sample_count": 4,
+        "actual_classifier_transition_sample_count": 2,
+        "actual_classifier_transition_settle_s": 0.3,
+        "actual_contract_violation_samples": 0,
+        "actual_omega_abs": {
+          "max": 0.10999408775930906,
+          "min": 0.0012340874075001504,
+          "n": 6,
+          "p10": 0.007983485064472462,
+          "p50": 0.09288690275668252,
+          "p90": 0.10940007367503907,
+          "p95": 0.10969708071717406
+        },
+        "actual_omega_expected_sign_ratio": 1.0,
+        "actual_v_abs": {
+          "max": 0.177892,
+          "min": 0.004442,
+          "n": 6,
+          "p10": 0.072937,
+          "p50": 0.16466,
+          "p90": 0.1761365,
+          "p95": 0.17701425
+        },
+        "command_chain_settled_frame_count": 4,
+        "command_owner_conflict_samples": 0,
+        "control_modes_seen": [
+          "UNIFIED"
+        ],
+        "displacement_max_m": 0.1157,
+        "execution_contract_violation_samples": 0,
+        "execution_modes_seen": [
+          "TWIST_EXEC"
+        ],
+        "expected_primitive": "DIFF_ARC_GENTLE",
+        "final_heading_deg": 5.395,
+        "lidar_ekf_applied_gap_s": {
+          "max": 0.10116867399847251,
+          "min": 0.03914715599967167,
+          "n": 4,
+          "p10": 0.05124071099962749,
+          "p50": 0.07993337049992988,
+          "p90": 0.09494039229903138,
+          "p95": 0.09805453314875193
+        },
+        "lidar_pose_confidence": {
+          "max": 0.9831659829375988,
+          "min": 0.9018150865030713,
+          "n": 4,
+          "p10": 0.9083679396226751,
+          "p50": 0.9495624210005433,
+          "p90": 0.98085626158612,
+          "p95": 0.9820111222618595
+        },
+        "logger_dropped_messages_max": 0,
+        "logger_flush_duration_ms": {
+          "max": 5.534260000786162,
+          "min": 2.0604209985322086,
+          "n": 6,
+          "p10": 2.0604209985322086,
+          "p50": 3.7973404996591853,
+          "p90": 5.534260000786162,
+          "p95": 5.534260000786162
+        },
+        "logger_queue_depth": {
+          "max": 10.0,
+          "min": 7.0,
+          "n": 6,
+          "p10": 7.0,
+          "p50": 8.5,
+          "p90": 10.0,
+          "p95": 10.0
+        },
+        "logger_write_errors_max": 0,
+        "loop_below_45_ratio": 0.0,
+        "loop_budget_total_ema_ms": {
+          "max": 7.7574,
+          "min": 5.4219,
+          "n": 6,
+          "p10": 5.5125,
+          "p50": 5.86595,
+          "p90": 7.732049999999999,
+          "p95": 7.744724999999999
+        },
+        "motion_actual_ssot_ratio": 1.0,
+        "motion_actual_ssot_values_seen": [
+          "EKF_POSE_ODOMETRY_SSOT"
+        ],
+        "motion_state_modes_seen": [
+          "UNIFIED"
+        ],
+        "odometry_modes_seen": [
+          "LIDAR_FIRST"
+        ],
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "primitive_limited_expected_ratio": 1.0,
+        "primitive_requested_expected_ratio": 1.0,
+        "sample_count": 20,
+        "service_motion_active_samples": 0,
+        "signed_progress_max_deg": 5.468,
+        "slow_gc_delta": 1,
+        "slow_io_event_delta": 0,
+        "slow_lidar_spike_delta": 0,
+        "slow_none_delta": 0,
+        "slow_observed_tick_delta": 40,
+        "slow_resolver_spike_delta": 0,
+        "slow_tick_delta": 1,
+        "slow_tick_ratio": 0.025,
+        "transition_contract_violation_samples": 0,
+        "turn_primitives_seen": {
+          "actual": [
+            "UNKNOWN",
+            "DIFF_ARC_GENTLE"
+          ],
+          "executed": [
+            "STRAIGHT",
+            "DIFF_ARC_GENTLE"
+          ],
+          "limited": [
+            "STRAIGHT",
+            "DIFF_ARC_GENTLE"
+          ],
+          "requested": [
+            "DIFF_ARC_GENTLE"
+          ]
+        },
+        "turn_primitives_settled_seen": {
+          "actual": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "executed": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "limited": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "requested": [
+            "DIFF_ARC_GENTLE"
+          ]
+        },
+        "twist_exec_ratio": 1.0,
+        "watchdog_frequency_hz": {
+          "max": 50.4,
+          "min": 49.85,
+          "n": 6,
+          "p10": 49.92,
+          "p50": 50.075,
+          "p90": 50.370000000000005,
+          "p95": 50.385
+        }
+      },
+      "no_progress": false,
+      "pass": true,
+      "sample_count": 20,
+      "schema": "M3_MOTION_PRIMITIVE_TWIST_CASE_V1",
+      "status": "PASS",
+      "success": true,
+      "terminal_reason": "REPLAY",
+      "timeout": false
+    },
+    {
+      "actual_deg": -7.937,
+      "angle_error_deg": null,
+      "case_name": "arc_right",
+      "command": {
+        "duration_s": 0.9,
+        "motion_source": "STATE",
+        "omega_rad_s": -0.2,
+        "type": "set_twist",
+        "v_mps": 0.15
+      },
+      "expected_deg": null,
+      "failed_gates": [],
+      "gates": {
+        "actual_primitive_classifier": {
+          "evidence": [],
+          "observed": {
+            "actual_classifier_coverage_ratio": 1.0,
+            "actual_classifier_eligible_sample_count": 4,
+            "actual_classifier_settled_window_sample_count": 4,
+            "actual_classifier_transition_sample_count": 1,
+            "actual_contract_violation_samples": 0,
+            "primitive_actual_expected_ratio": 1.0,
+            "transition_contract_violation_samples": 0,
+            "turn_primitives_seen": {
+              "actual": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "executed": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "limited": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "requested": [
+                "DIFF_ARC_GENTLE"
+              ]
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "enough ready/reliable measurements after the declared transition settle window classify the expected straight/arc family; settled contract violations are forbidden",
+          "status": "PASS"
+        },
+        "motion_evidence": {
+          "evidence": [],
+          "observed": {
+            "active_sample_count": 10,
+            "active_unique_status_frame_count": 5,
+            "terminal_reason": "REPLAY",
+            "timeout": false
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "bounded live twist primitive produces enough active samples without timeout",
+          "status": "PASS"
+        },
+        "physical_twist_quality": {
+          "evidence": [],
+          "observed": {
+            "actual_omega_abs": {
+              "max": 0.14569500704836333,
+              "min": 0.06714955329513456,
+              "n": 5,
+              "p10": 0.08052630820646273,
+              "p50": 0.12826573025892746,
+              "p90": 0.13926884436886036,
+              "p95": 0.14248192570861185
+            },
+            "actual_v_abs": {
+              "max": 0.170472,
+              "min": 0.096799,
+              "n": 5,
+              "p10": 0.12402939999999998,
+              "p50": 0.167186,
+              "p90": 0.1704468,
+              "p95": 0.1704594
+            },
+            "displacement_max_m": 0.1601,
+            "expected_primitive": "DIFF_ARC_GENTLE",
+            "final_heading_deg": -7.937,
+            "signed_progress_max_deg": 7.937
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "straight moves forward with low heading drift; arc moves forward while turning in the requested direction",
+          "status": "PASS"
+        },
+        "primitive_command_chain": {
+          "evidence": [],
+          "observed": {
+            "execution_contract_violation_samples": 0,
+            "primitive_executed_expected_ratio": 1.0,
+            "primitive_limited_expected_ratio": 1.0,
+            "primitive_requested_expected_ratio": 1.0,
+            "settled_frame_count": 4,
+            "turn_primitives_seen": {
+              "actual": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "executed": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "limited": [
+                "DIFF_ARC_GENTLE"
+              ],
+              "requested": [
+                "DIFF_ARC_GENTLE"
+              ]
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "requested, limited and executed primitive match the expected straight/arc family",
+          "status": "PASS"
+        },
+        "safety_runtime": {
+          "evidence": [],
+          "observed": {
+            "front_min_m": 1.2505,
+            "safety_ok": true
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "no failsafe/watchdog stop during twist primitive",
+          "status": "PASS"
+        },
+        "sensor_truth_runtime": {
+          "evidence": [],
+          "observed": {
+            "lidar_ekf_applied_gap_s": {
+              "max": 0.279873838999265,
+              "min": 0.019946635999076534,
+              "n": 4,
+              "p10": 0.02549786299950938,
+              "p50": 0.0590373945005922,
+              "p90": 0.21979890619968506,
+              "p95": 0.24983637259947492
+            },
+            "lidar_pose_confidence": {
+              "max": 0.9780711752653247,
+              "min": 0.179999,
+              "n": 4,
+              "p10": 0.41305526502036244,
+              "p50": 0.9654552188273221,
+              "p90": 0.9768669889617582,
+              "p95": 0.9774690821135414
+            },
+            "settled_unique_status_frame_count": 4
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "EKF/LIDAR truth surface remains fresh enough for live primitive measurement",
+          "status": "PASS"
+        },
+        "software_loop_runtime": {
+          "evidence": [],
+          "observed": {
+            "loop_below_45_ratio": 0.0,
+            "loop_budget_total_ema_ms": {
+              "max": 7.6684,
+              "min": 6.1411,
+              "n": 5,
+              "p10": 6.1929,
+              "p50": 6.3301,
+              "p90": 7.417800000000001,
+              "p95": 7.5431
+            },
+            "slow_gc_delta": 0,
+            "slow_io_event_delta": 0,
+            "slow_lidar_spike_delta": 0,
+            "slow_none_delta": 0,
+            "slow_observed_tick_delta": 30,
+            "slow_resolver_spike_delta": 0,
+            "slow_tick_delta": 0,
+            "slow_tick_ratio": 0.0,
+            "watchdog_frequency_hz": {
+              "max": 51.28,
+              "min": 49.99,
+              "n": 5,
+              "p10": 49.998000000000005,
+              "p50": 50.16,
+              "p90": 50.84,
+              "p95": 51.06
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "control loop, logger and slow-tick surfaces stay bounded during twist primitive",
+          "status": "PASS"
+        },
+        "twist_exec_ssot_path": {
+          "evidence": [],
+          "observed": {
+            "command_owner_conflict_samples": 0,
+            "execution_modes_seen": [
+              "TWIST_EXEC"
+            ],
+            "motion_actual_ssot_ratio": 1.0,
+            "odometry_modes_seen": [
+              "LIDAR_FIRST"
+            ],
+            "service_motion_active_samples": 0,
+            "twist_exec_ratio": 1.0
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "one routed TWIST_EXEC owner, EKF motion actual SSOT, no service/direct/legacy path evidence",
+          "status": "PASS"
+        },
+        "unified_single_motion_system": {
+          "evidence": [],
+          "observed": {
+            "camera_enabled_samples": 0,
+            "control_modes_seen": [
+              "UNIFIED"
+            ]
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "UNIFIED motion mode only, camera disabled during primitive validation",
+          "status": "PASS"
+        }
+      },
+      "inconclusive_gates": [],
+      "metrics": {
+        "active_sample_count": 10,
+        "active_unique_status_frame_count": 5,
+        "actual_classifier_coverage_ratio": 1.0,
+        "actual_classifier_eligible_sample_count": 4,
+        "actual_classifier_settled_window_sample_count": 4,
+        "actual_classifier_transition_sample_count": 1,
+        "actual_classifier_transition_settle_s": 0.3,
+        "actual_contract_violation_samples": 0,
+        "actual_omega_abs": {
+          "max": 0.14569500704836333,
+          "min": 0.06714955329513456,
+          "n": 5,
+          "p10": 0.08052630820646273,
+          "p50": 0.12826573025892746,
+          "p90": 0.13926884436886036,
+          "p95": 0.14248192570861185
+        },
+        "actual_omega_expected_sign_ratio": 1.0,
+        "actual_v_abs": {
+          "max": 0.170472,
+          "min": 0.096799,
+          "n": 5,
+          "p10": 0.12402939999999998,
+          "p50": 0.167186,
+          "p90": 0.1704468,
+          "p95": 0.1704594
+        },
+        "command_chain_settled_frame_count": 4,
+        "command_owner_conflict_samples": 0,
+        "control_modes_seen": [
+          "UNIFIED"
+        ],
+        "displacement_max_m": 0.1601,
+        "execution_contract_violation_samples": 0,
+        "execution_modes_seen": [
+          "TWIST_EXEC"
+        ],
+        "expected_primitive": "DIFF_ARC_GENTLE",
+        "final_heading_deg": -7.937,
+        "lidar_ekf_applied_gap_s": {
+          "max": 0.279873838999265,
+          "min": 0.019946635999076534,
+          "n": 4,
+          "p10": 0.02549786299950938,
+          "p50": 0.0590373945005922,
+          "p90": 0.21979890619968506,
+          "p95": 0.24983637259947492
+        },
+        "lidar_pose_confidence": {
+          "max": 0.9780711752653247,
+          "min": 0.179999,
+          "n": 4,
+          "p10": 0.41305526502036244,
+          "p50": 0.9654552188273221,
+          "p90": 0.9768669889617582,
+          "p95": 0.9774690821135414
+        },
+        "logger_dropped_messages_max": 0,
+        "logger_flush_duration_ms": {
+          "max": 10.712629000408924,
+          "min": 2.040421999481623,
+          "n": 5,
+          "p10": 2.040421999481623,
+          "p50": 2.040421999481623,
+          "p90": 10.712629000408924,
+          "p95": 10.712629000408924
+        },
+        "logger_queue_depth": {
+          "max": 12.0,
+          "min": 7.0,
+          "n": 5,
+          "p10": 7.0,
+          "p50": 12.0,
+          "p90": 12.0,
+          "p95": 12.0
+        },
+        "logger_write_errors_max": 0,
+        "loop_below_45_ratio": 0.0,
+        "loop_budget_total_ema_ms": {
+          "max": 7.6684,
+          "min": 6.1411,
+          "n": 5,
+          "p10": 6.1929,
+          "p50": 6.3301,
+          "p90": 7.417800000000001,
+          "p95": 7.5431
+        },
+        "motion_actual_ssot_ratio": 1.0,
+        "motion_actual_ssot_values_seen": [
+          "EKF_POSE_ODOMETRY_SSOT"
+        ],
+        "motion_state_modes_seen": [
+          "UNIFIED"
+        ],
+        "odometry_modes_seen": [
+          "LIDAR_FIRST"
+        ],
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "primitive_limited_expected_ratio": 1.0,
+        "primitive_requested_expected_ratio": 1.0,
+        "sample_count": 20,
+        "service_motion_active_samples": 0,
+        "signed_progress_max_deg": 7.937,
+        "slow_gc_delta": 0,
+        "slow_io_event_delta": 0,
+        "slow_lidar_spike_delta": 0,
+        "slow_none_delta": 0,
+        "slow_observed_tick_delta": 30,
+        "slow_resolver_spike_delta": 0,
+        "slow_tick_delta": 0,
+        "slow_tick_ratio": 0.0,
+        "transition_contract_violation_samples": 0,
+        "turn_primitives_seen": {
+          "actual": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "executed": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "limited": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "requested": [
+            "DIFF_ARC_GENTLE"
+          ]
+        },
+        "turn_primitives_settled_seen": {
+          "actual": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "executed": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "limited": [
+            "DIFF_ARC_GENTLE"
+          ],
+          "requested": [
+            "DIFF_ARC_GENTLE"
+          ]
+        },
+        "twist_exec_ratio": 1.0,
+        "watchdog_frequency_hz": {
+          "max": 51.28,
+          "min": 49.99,
+          "n": 5,
+          "p10": 49.998000000000005,
+          "p50": 50.16,
+          "p90": 50.84,
+          "p95": 51.06
+        }
+      },
+      "no_progress": false,
+      "pass": true,
+      "sample_count": 20,
+      "schema": "M3_MOTION_PRIMITIVE_TWIST_CASE_V1",
+      "status": "PASS",
+      "success": true,
+      "terminal_reason": "REPLAY",
+      "timeout": false
+    },
+    {
+      "actual_deg": -0.379,
+      "angle_error_deg": null,
+      "case_name": "straight_forward",
+      "command": {
+        "duration_s": 1.0,
+        "motion_source": "STATE",
+        "omega_rad_s": 0.0,
+        "type": "set_twist",
+        "v_mps": 0.15
+      },
+      "expected_deg": null,
+      "failed_gates": [],
+      "gates": {
+        "actual_primitive_classifier": {
+          "evidence": [],
+          "observed": {
+            "actual_classifier_coverage_ratio": 1.0,
+            "actual_classifier_eligible_sample_count": 5,
+            "actual_classifier_settled_window_sample_count": 5,
+            "actual_classifier_transition_sample_count": 2,
+            "actual_contract_violation_samples": 0,
+            "primitive_actual_expected_ratio": 0.6,
+            "transition_contract_violation_samples": 0,
+            "turn_primitives_seen": {
+              "actual": [
+                "UNKNOWN",
+                "STRAIGHT",
+                "DIFF_ARC_GENTLE"
+              ],
+              "executed": [
+                "STRAIGHT"
+              ],
+              "limited": [
+                "STRAIGHT"
+              ],
+              "requested": [
+                "STRAIGHT"
+              ]
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "enough ready/reliable measurements after the declared transition settle window classify the expected straight/arc family; settled contract violations are forbidden",
+          "status": "PASS"
+        },
+        "motion_evidence": {
+          "evidence": [],
+          "observed": {
+            "active_sample_count": 13,
+            "active_unique_status_frame_count": 7,
+            "terminal_reason": "REPLAY",
+            "timeout": false
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "bounded live twist primitive produces enough active samples without timeout",
+          "status": "PASS"
+        },
+        "physical_twist_quality": {
+          "evidence": [],
+          "observed": {
+            "actual_omega_abs": {
+              "max": 0.03125287787717662,
+              "min": 0.002569299191860853,
+              "n": 7,
+              "p10": 0.002754506550765483,
+              "p50": 0.010897748582989995,
+              "p90": 0.02545350831062538,
+              "p95": 0.02835319309390099
+            },
+            "actual_v_abs": {
+              "max": 0.176287,
+              "min": 0.000995,
+              "n": 7,
+              "p10": 0.0843164,
+              "p50": 0.152825,
+              "p90": 0.1724314,
+              "p95": 0.1743592
+            },
+            "displacement_max_m": 0.1789,
+            "expected_primitive": "STRAIGHT",
+            "final_heading_deg": -0.379,
+            "signed_progress_max_deg": 0.539
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "straight moves forward with low heading drift; arc moves forward while turning in the requested direction",
+          "status": "PASS"
+        },
+        "primitive_command_chain": {
+          "evidence": [],
+          "observed": {
+            "execution_contract_violation_samples": 0,
+            "primitive_executed_expected_ratio": 1.0,
+            "primitive_limited_expected_ratio": 1.0,
+            "primitive_requested_expected_ratio": 1.0,
+            "settled_frame_count": 5,
+            "turn_primitives_seen": {
+              "actual": [
+                "STRAIGHT",
+                "DIFF_ARC_GENTLE"
+              ],
+              "executed": [
+                "STRAIGHT"
+              ],
+              "limited": [
+                "STRAIGHT"
+              ],
+              "requested": [
+                "STRAIGHT"
+              ]
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "requested, limited and executed primitive match the expected straight/arc family",
+          "status": "PASS"
+        },
+        "safety_runtime": {
+          "evidence": [],
+          "observed": {
+            "front_min_m": 1.5665,
+            "safety_ok": true
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "no failsafe/watchdog stop during twist primitive",
+          "status": "PASS"
+        },
+        "sensor_truth_runtime": {
+          "evidence": [],
+          "observed": {
+            "lidar_ekf_applied_gap_s": {
+              "max": 0.2997243299996626,
+              "min": 0.019256632000178797,
+              "n": 5,
+              "p10": 0.04392261559987674,
+              "p50": 0.09971151500030828,
+              "p90": 0.23552249039967138,
+              "p95": 0.26762341019966696
+            },
+            "lidar_pose_confidence": {
+              "max": 0.9805824756783618,
+              "min": 0.179999,
+              "n": 5,
+              "p10": 0.48464311991823006,
+              "p50": 0.9489275842861394,
+              "p90": 0.9758493939546837,
+              "p95": 0.9782159348165227
+            },
+            "settled_unique_status_frame_count": 5
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "EKF/LIDAR truth surface remains fresh enough for live primitive measurement",
+          "status": "PASS"
+        },
+        "software_loop_runtime": {
+          "evidence": [],
+          "observed": {
+            "loop_below_45_ratio": 0.14285714285714285,
+            "loop_budget_total_ema_ms": {
+              "max": 8.8115,
+              "min": 4.914,
+              "n": 7,
+              "p10": 5.2836,
+              "p50": 6.3569,
+              "p90": 7.949720000000001,
+              "p95": 8.380609999999999
+            },
+            "slow_gc_delta": 1,
+            "slow_io_event_delta": 2,
+            "slow_lidar_spike_delta": 1,
+            "slow_none_delta": 0,
+            "slow_observed_tick_delta": 48,
+            "slow_resolver_spike_delta": 0,
+            "slow_tick_delta": 4,
+            "slow_tick_ratio": 0.08333333333333333,
+            "watchdog_frequency_hz": {
+              "max": 50.17,
+              "min": 41.9,
+              "n": 7,
+              "p10": 46.298,
+              "p50": 50.0,
+              "p90": 50.092,
+              "p95": 50.131
+            }
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "control loop, logger and slow-tick surfaces stay bounded during twist primitive",
+          "status": "PASS"
+        },
+        "twist_exec_ssot_path": {
+          "evidence": [],
+          "observed": {
+            "command_owner_conflict_samples": 0,
+            "execution_modes_seen": [
+              "TWIST_EXEC"
+            ],
+            "motion_actual_ssot_ratio": 1.0,
+            "odometry_modes_seen": [
+              "LIDAR_FIRST"
+            ],
+            "service_motion_active_samples": 0,
+            "twist_exec_ratio": 1.0
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "one routed TWIST_EXEC owner, EKF motion actual SSOT, no service/direct/legacy path evidence",
+          "status": "PASS"
+        },
+        "unified_single_motion_system": {
+          "evidence": [],
+          "observed": {
+            "camera_enabled_samples": 0,
+            "control_modes_seen": [
+              "UNIFIED"
+            ]
+          },
+          "reason": "",
+          "required": true,
+          "requirement": "UNIFIED motion mode only, camera disabled during primitive validation",
+          "status": "PASS"
+        }
+      },
+      "inconclusive_gates": [],
+      "metrics": {
+        "active_sample_count": 13,
+        "active_unique_status_frame_count": 7,
+        "actual_classifier_coverage_ratio": 1.0,
+        "actual_classifier_eligible_sample_count": 5,
+        "actual_classifier_settled_window_sample_count": 5,
+        "actual_classifier_transition_sample_count": 2,
+        "actual_classifier_transition_settle_s": 0.3,
+        "actual_contract_violation_samples": 0,
+        "actual_omega_abs": {
+          "max": 0.03125287787717662,
+          "min": 0.002569299191860853,
+          "n": 7,
+          "p10": 0.002754506550765483,
+          "p50": 0.010897748582989995,
+          "p90": 0.02545350831062538,
+          "p95": 0.02835319309390099
+        },
+        "actual_omega_expected_sign_ratio": 0.0,
+        "actual_v_abs": {
+          "max": 0.176287,
+          "min": 0.000995,
+          "n": 7,
+          "p10": 0.0843164,
+          "p50": 0.152825,
+          "p90": 0.1724314,
+          "p95": 0.1743592
+        },
+        "command_chain_settled_frame_count": 5,
+        "command_owner_conflict_samples": 0,
+        "control_modes_seen": [
+          "UNIFIED"
+        ],
+        "displacement_max_m": 0.1789,
+        "execution_contract_violation_samples": 0,
+        "execution_modes_seen": [
+          "TWIST_EXEC"
+        ],
+        "expected_primitive": "STRAIGHT",
+        "final_heading_deg": -0.379,
+        "lidar_ekf_applied_gap_s": {
+          "max": 0.2997243299996626,
+          "min": 0.019256632000178797,
+          "n": 5,
+          "p10": 0.04392261559987674,
+          "p50": 0.09971151500030828,
+          "p90": 0.23552249039967138,
+          "p95": 0.26762341019966696
+        },
+        "lidar_pose_confidence": {
+          "max": 0.9805824756783618,
+          "min": 0.179999,
+          "n": 5,
+          "p10": 0.48464311991823006,
+          "p50": 0.9489275842861394,
+          "p90": 0.9758493939546837,
+          "p95": 0.9782159348165227
+        },
+        "logger_dropped_messages_max": 0,
+        "logger_flush_duration_ms": {
+          "max": 2.3638309994566953,
+          "min": 0.8724880008230684,
+          "n": 7,
+          "p10": 0.8724880008230684,
+          "p50": 0.8724880008230684,
+          "p90": 2.3638309994566953,
+          "p95": 2.3638309994566953
+        },
+        "logger_queue_depth": {
+          "max": 17.0,
+          "min": 7.0,
+          "n": 7,
+          "p10": 7.0,
+          "p50": 7.0,
+          "p90": 17.0,
+          "p95": 17.0
+        },
+        "logger_write_errors_max": 0,
+        "loop_below_45_ratio": 0.14285714285714285,
+        "loop_budget_total_ema_ms": {
+          "max": 8.8115,
+          "min": 4.914,
+          "n": 7,
+          "p10": 5.2836,
+          "p50": 6.3569,
+          "p90": 7.949720000000001,
+          "p95": 8.380609999999999
+        },
+        "motion_actual_ssot_ratio": 1.0,
+        "motion_actual_ssot_values_seen": [
+          "EKF_POSE_ODOMETRY_SSOT"
+        ],
+        "motion_state_modes_seen": [
+          "UNIFIED"
+        ],
+        "odometry_modes_seen": [
+          "LIDAR_FIRST"
+        ],
+        "primitive_actual_expected_ratio": 0.6,
+        "primitive_executed_expected_ratio": 1.0,
+        "primitive_limited_expected_ratio": 1.0,
+        "primitive_requested_expected_ratio": 1.0,
+        "sample_count": 21,
+        "service_motion_active_samples": 0,
+        "signed_progress_max_deg": 0.539,
+        "slow_gc_delta": 1,
+        "slow_io_event_delta": 2,
+        "slow_lidar_spike_delta": 1,
+        "slow_none_delta": 0,
+        "slow_observed_tick_delta": 48,
+        "slow_resolver_spike_delta": 0,
+        "slow_tick_delta": 4,
+        "slow_tick_ratio": 0.08333333333333333,
+        "transition_contract_violation_samples": 0,
+        "turn_primitives_seen": {
+          "actual": [
+            "UNKNOWN",
+            "STRAIGHT",
+            "DIFF_ARC_GENTLE"
+          ],
+          "executed": [
+            "STRAIGHT"
+          ],
+          "limited": [
+            "STRAIGHT"
+          ],
+          "requested": [
+            "STRAIGHT"
+          ]
+        },
+        "turn_primitives_settled_seen": {
+          "actual": [
+            "STRAIGHT",
+            "DIFF_ARC_GENTLE"
+          ],
+          "executed": [
+            "STRAIGHT"
+          ],
+          "limited": [
+            "STRAIGHT"
+          ],
+          "requested": [
+            "STRAIGHT"
+          ]
+        },
+        "twist_exec_ratio": 1.0,
+        "watchdog_frequency_hz": {
+          "max": 50.17,
+          "min": 41.9,
+          "n": 7,
+          "p10": 46.298,
+          "p50": 50.0,
+          "p90": 50.092,
+          "p95": 50.131
+        }
+      },
+      "no_progress": false,
+      "pass": true,
+      "sample_count": 21,
+      "schema": "M3_MOTION_PRIMITIVE_TWIST_CASE_V1",
+      "status": "PASS",
+      "success": true,
+      "terminal_reason": "REPLAY",
+      "timeout": false
+    }
+  ],
+  "sample_count": 81,
+  "schema": "M3_MOTION_PRIMITIVE_REPLAY_ANALYSIS_V1",
+  "source_samples": "/home/alba/project_r2b4/runtime/agent_tests/M3_motion_primitive_validator_samples.jsonl",
+  "status": "PASS",
+  "success": true,
+  "test_name": "M3_motion_primitive_validator"
+}

@@ -1,0 +1,22 @@
+{
+  "hang_bemenet": {
+    "mintavetelezes_hz": 16000,
+    "max_felvetel_hossz_sec": 10.0,
+    "min_felvetel_hossz_sec": 0.5
+  },
+  "felolvasas_tts": {
+    "engedelyezve": true,
+    "nyelv_kod": "hu",
+    "sebesseg": 170,
+    "hangero": 1.0
+  },
+  "gemini_agy": {
+    "modell": "models/gemma-3-27b-it",
+    "robot_mod_prefix": "[R]",
+    "rendszer_utasitas_alap": "Te Franci intelligens segítője vagy. Beszélgess, informálódj, légy kedves asszisztens. Ebben a módban ne küldj parancsot.",
+    "rendszer_utasitas_robot": "Te Alba vagy, Hajni és Franci intelligens, kerekes robotja.\n\nFELADAT:\n1. Válaszolj röviden, emberi hangnemben (ezt olvassa fel a TTS).\n2. A válasz legvégére, ÚJ SORBA szúrj be gépi parancsokat szögletes zárójelben.\n\nPARANCS FORMÁTUMOK (Szigorúan tartsd be!):\n- Mozgás: [ELORE 50 CM], [HATRA 1.5 M]\n- Forgás: [JOBBRA 90 FOK], [BALRA 45 FOK]\n- Precíziós megközelítés (3cm-re): [KOZELIT]\n- Járőr: [JAROR 2 PERC] (vagy végtelen: [JAROR])\n- Megállás: [STOP]\n\nHasználhatsz több parancsot is egymás után!\n\nPélda 1: \"Rendben, megyek előre.\n[ELORE 50 CM]\"\n\nPélda 2 (Megközelítés): \"Óvatosan odamegyek a tárgyhoz.\n[KOZELIT]\""
+  },
+  "groq_stt": {
+    "modell": "whisper-large-v3"
+  }
+}

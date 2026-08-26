@@ -1,0 +1,43 @@
+{
+  "artifact_paths": {
+    "base_room_cruise_result": "runtime/agent_tests/latest_room_cruise_v2_result.json",
+    "base_room_cruise_summary": "runtime/agent_tests/latest_room_cruise_v2_summary.json",
+    "incident": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_incident.json",
+    "preflight": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_preflight.json",
+    "result": "runtime/agent_tests/latest_M3_room_cruise_unified_validator.json",
+    "samples": "runtime/agent_tests/M3_room_cruise_unified_validator_samples.jsonl",
+    "summary": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_summary.json"
+  },
+  "failed_gates": [
+    "runtime:base_room_cruise_v2",
+    "runtime:ssot_contract",
+    "runtime:safety_runtime",
+    "runtime:motion_quality_m3",
+    "runtime:software_performance",
+    "runtime:peripheral_runtime_health"
+  ],
+  "inconclusive_gates": [],
+  "m3_failed_gates": [
+    "safety",
+    "control_chain_integrity",
+    "motion_command_fidelity",
+    "wheel_left_forward",
+    "wheel_right_forward",
+    "wheel_right_reverse",
+    "start_stop_quality",
+    "localization_sensor_consistency",
+    "base_room_cruise_v2_gate"
+  ],
+  "needed": true,
+  "preflight_failed_gates": [],
+  "runtime_failed_gates": [
+    "base_room_cruise_v2",
+    "ssot_contract",
+    "safety_runtime",
+    "motion_quality_m3",
+    "software_performance",
+    "peripheral_runtime_health"
+  ],
+  "schema": "M3_ROOM_CRUISE_UNIFIED_VALIDATOR_INCIDENT_V1",
+  "status": "FAIL"
+}

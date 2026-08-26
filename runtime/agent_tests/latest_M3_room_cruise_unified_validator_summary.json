@@ -1,0 +1,125 @@
+{
+  "artifact_paths": {
+    "base_room_cruise_result": "runtime/agent_tests/latest_room_cruise_v2_result.json",
+    "base_room_cruise_summary": "runtime/agent_tests/latest_room_cruise_v2_summary.json",
+    "incident": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_incident.json",
+    "preflight": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_preflight.json",
+    "result": "runtime/agent_tests/latest_M3_room_cruise_unified_validator.json",
+    "samples": "runtime/agent_tests/M3_room_cruise_unified_validator_samples.jsonl",
+    "summary": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_summary.json"
+  },
+  "failed_gates": [
+    "runtime:base_room_cruise_v2",
+    "runtime:ssot_contract",
+    "runtime:safety_runtime",
+    "runtime:motion_quality_m3",
+    "runtime:software_performance",
+    "runtime:peripheral_runtime_health"
+  ],
+  "inconclusive_gates": [],
+  "m3_room_cruise": {
+    "closure_verdict": "LOW_MID_LEVELS_NOT_CLOSED",
+    "failed_gates": [
+      "safety",
+      "control_chain_integrity",
+      "motion_command_fidelity",
+      "wheel_left_forward",
+      "wheel_right_forward",
+      "wheel_right_reverse",
+      "start_stop_quality",
+      "localization_sensor_consistency",
+      "base_room_cruise_v2_gate"
+    ],
+    "inconclusive_gates": [
+      "measurement_sufficiency",
+      "wheel_left_reverse",
+      "left_arc_quality",
+      "repeatability"
+    ],
+    "status": "FAIL"
+  },
+  "plain_summary_hu": "Eredmeny: FAIL. Foundation preflight: PASS. 60s room cruise validalas: FAIL. Runtime hibak: base_room_cruise_v2, ssot_contract, safety_runtime, motion_quality_m3, software_performance, peripheral_runtime_health.",
+  "preflight": {
+    "failed_gates": [],
+    "metrics": {
+      "actual_omega_abs": {
+        "max": 0.002936673546113139,
+        "min": 1.106538745764405e-05,
+        "n": 27,
+        "p50": 0.0012799023003650016,
+        "p90": 0.002440214640383352,
+        "p95": 0.0024632076079491253
+      },
+      "actual_v_abs": {
+        "max": 0.00399,
+        "min": 0.000692,
+        "n": 27,
+        "p50": 0.001474,
+        "p90": 0.0036262,
+        "p95": 0.0037777
+      },
+      "cmd_omega_abs": {
+        "max": 0.0,
+        "min": 0.0,
+        "n": 27,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0
+      },
+      "cmd_v_abs": {
+        "max": 0.0,
+        "min": 0.0,
+        "n": 27,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0
+      },
+      "front_min_m": 0.86975,
+      "lidar_confidence": {
+        "max": 0.9454558300240539,
+        "min": 0.7466967838516576,
+        "n": 27,
+        "p50": 0.9034335252970788,
+        "p90": 0.9290032848549514,
+        "p95": 0.9381835032312649
+      },
+      "pwm_abs": {
+        "max": 0.0,
+        "min": 0.0,
+        "n": 27,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0
+      },
+      "sample_count": 27,
+      "states": [
+        "IDLE"
+      ],
+      "status_age": {
+        "max": 0.23604679107666016,
+        "min": 0.007616996765136719,
+        "n": 27,
+        "p50": 0.08448934555053711,
+        "p90": 0.15405306816101075,
+        "p95": 0.15966897010803222
+      }
+    },
+    "status": "PASS"
+  },
+  "runtime_validation": {
+    "failed_gates": [
+      "base_room_cruise_v2",
+      "ssot_contract",
+      "safety_runtime",
+      "motion_quality_m3",
+      "software_performance",
+      "peripheral_runtime_health"
+    ],
+    "inconclusive_gates": [],
+    "status": "FAIL"
+  },
+  "schema": "M3_ROOM_CRUISE_UNIFIED_VALIDATOR_V1",
+  "status": "FAIL",
+  "success": false,
+  "test_name": "M4_room_cruise_quality_foundation"
+}

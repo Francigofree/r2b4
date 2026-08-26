@@ -1,0 +1,173 @@
+/**
+ * R2B4 Component System
+ * Reusable, stable UI components.
+ */
+
+/* Panels */
+.r2-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-dim);
+    padding: var(--space-md);
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.r2-panel h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin-bottom: var(--space-md);
+    border-left: 2px solid var(--accent);
+    padding-left: var(--space-sm);
+    letter-spacing: 0.05em;
+}
+
+/* Buttons */
+.r2-button {
+    background: var(--bg-active);
+    border: 1px solid var(--border-focus);
+    color: var(--fg-base);
+    font-family: var(--font-ui);
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+}
+
+.r2-button:hover {
+    background: var(--border-focus);
+    border-color: var(--accent);
+}
+
+.r2-button.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.r2-button.nominal {
+    border-color: var(--nominal);
+    color: var(--nominal);
+}
+
+.r2-button.warning {
+    border-color: var(--warning);
+    color: var(--warning);
+}
+
+.r2-button.critical {
+    border-color: var(--critical);
+    color: var(--critical);
+}
+
+.r2-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Numeric Fields - STRICT FIXED WIDTH */
+.r2-data-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.r2-data-label {
+    color: var(--fg-muted);
+    font-size: 0.85rem;
+}
+
+.r2-data-value {
+    font-family: var(--font-data);
+    font-size: 1rem;
+    color: var(--fg-base);
+    min-width: 80px;
+    /* Force fixed width to prevent reflow */
+    text-align: right;
+    font-weight: 500;
+}
+
+.r2-data-field-wrap {
+    align-items: flex-start;
+}
+
+.r2-data-value-wrap {
+    min-width: 0;
+    max-width: 72%;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    font-size: 0.66rem;
+    line-height: 1.25;
+}
+
+.r2-data-value.active {
+    color: var(--accent);
+}
+
+.r2-data-value.nominal {
+    color: var(--nominal);
+}
+
+.r2-data-value.warning {
+    color: var(--warning);
+}
+
+.r2-data-value.critical {
+    color: var(--critical);
+}
+
+/* Status Indicators */
+.r2-status-led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--neutral);
+    display: inline-block;
+}
+
+.status-check.nominal {
+    background: var(--nominal);
+    box-shadow: 0 0 8px var(--nominal);
+}
+
+.status-check.warning {
+    background: var(--warning);
+    box-shadow: 0 0 8px var(--warning);
+}
+
+.status-check.critical {
+    background: var(--critical);
+    box-shadow: 0 0 8px var(--critical);
+}
+
+/* Navigation Links (Sidebar) */
+.r2-nav-item {
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--fg-muted);
+}
+
+.r2-nav-item:hover {
+    background: var(--bg-active);
+    color: var(--fg-base);
+}
+
+.r2-nav-item.active {
+    background: var(--bg-active);
+    color: var(--accent);
+    border-left-color: var(--accent);
+}

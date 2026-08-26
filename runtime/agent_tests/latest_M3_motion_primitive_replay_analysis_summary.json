@@ -1,0 +1,84 @@
+{
+  "artifact_paths": {
+    "result": "runtime/agent_tests/latest_M3_motion_primitive_replay_analysis.json",
+    "summary": "runtime/agent_tests/latest_M3_motion_primitive_replay_analysis_summary.json"
+  },
+  "failed_gates": [],
+  "inconclusive_gates": [],
+  "plain_summary_hu": "Replay elemzes: PASS. Mintak: 81. Hibak: nincs.",
+  "preflight": {
+    "failed_gates": [],
+    "status": null
+  },
+  "primitive_cases": [
+    {
+      "actual_deg": 5.395,
+      "angle_error_deg": null,
+      "case_id": null,
+      "case_name": "arc_left",
+      "expected_deg": null,
+      "failed_gates": [],
+      "metrics": {
+        "actual_wheel_opposite_ratio": null,
+        "directional_progress_max_deg": null,
+        "displacement_max_m": 0.1157,
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "track_exec_ratio": null
+      },
+      "onset_measurements": [],
+      "run_index": null,
+      "status": "PASS",
+      "terminal_reason": "REPLAY"
+    },
+    {
+      "actual_deg": -7.937,
+      "angle_error_deg": null,
+      "case_id": null,
+      "case_name": "arc_right",
+      "expected_deg": null,
+      "failed_gates": [],
+      "metrics": {
+        "actual_wheel_opposite_ratio": null,
+        "directional_progress_max_deg": null,
+        "displacement_max_m": 0.1601,
+        "primitive_actual_expected_ratio": 1.0,
+        "primitive_executed_expected_ratio": 1.0,
+        "track_exec_ratio": null
+      },
+      "onset_measurements": [],
+      "run_index": null,
+      "status": "PASS",
+      "terminal_reason": "REPLAY"
+    },
+    {
+      "actual_deg": -0.379,
+      "angle_error_deg": null,
+      "case_id": null,
+      "case_name": "straight_forward",
+      "expected_deg": null,
+      "failed_gates": [],
+      "metrics": {
+        "actual_wheel_opposite_ratio": null,
+        "directional_progress_max_deg": null,
+        "displacement_max_m": 0.1789,
+        "primitive_actual_expected_ratio": 0.6,
+        "primitive_executed_expected_ratio": 1.0,
+        "track_exec_ratio": null
+      },
+      "onset_measurements": [],
+      "run_index": null,
+      "status": "PASS",
+      "terminal_reason": "REPLAY"
+    }
+  ],
+  "schema": "M3_MOTION_PRIMITIVE_REPLAY_ANALYSIS_V1",
+  "status": "PASS",
+  "success": true,
+  "system_validation": {
+    "failed_gates": [],
+    "inconclusive_gates": [],
+    "status": null
+  },
+  "test_name": "M3_motion_primitive_validator"
+}

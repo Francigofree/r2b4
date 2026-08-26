@@ -1,0 +1,140 @@
+{
+  "artifacts": [
+    "runtime/agent_tests/latest_M0_mini_measurement_trust_live.json",
+    "runtime/agent_tests/latest_M1_motion_baseline_live.json",
+    "runtime/agent_tests/latest_M1_motion_baseline_live_samples.jsonl"
+  ],
+  "command": {
+    "return_code": 1,
+    "stderr_tail": "",
+    "stdout_tail": "LIVE_MEASUREMENT_VALIDATOR test=M1_motion_baseline_live phase=M1 result=FAIL cases=8/8 failures=forward:encoder_timing_gap,arc_left:settled_wheel_speed_tracking_error_high,arc_right:settled_wheel_speed_tracking_error_high artifact=runtime/agent_tests/latest_M1_motion_baseline_live.json",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 16230,
+        "pid": 16230,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-07-26T18:21:33Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 2,
+      "logger_updated_ts": 3568.707445726,
+      "status_version": 762,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-07-26T18:19:48Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 3,
+      "logger_updated_ts": 3463.611334044,
+      "status_version": 130,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": -1,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "runtime/agent_tests/latest_human_observed_1x1m_validation.json",
+    "required": false
+  },
+  "preflight": {
+    "errors": null,
+    "ok": true,
+    "stdout_tail": "PREFLIGHT: READY\n  odom=LIDAR_FIRST  mode=LIDAR_STRICT  determinism=HIGH\n  lidar: fresh=True  age=0.06s  sig_ok=True  conf=0.9314890777276521\n  clearance: median=1.3522500000000002m\n  encoder_distance_available=True  failsafe_reset=False\n  timestamp=2026-07-26T18:19:51Z"
+  },
+  "preflight_pose_reset": {
+    "accepted": {
+      "cmd_id": "hub_preflight_reset_1785089988603",
+      "lifecycle": "accepted",
+      "ok": true,
+      "timeout_sec": 6.0
+    },
+    "command": {
+      "cmd_id": "hub_preflight_reset_1785089988603",
+      "motion_source": "GUI",
+      "token": "GUI_DEFAULT",
+      "type": "reset_pos"
+    },
+    "error": "",
+    "lifecycle": {
+      "cmd_type": "reset_pos",
+      "details": {
+        "cmd_id": "hub_preflight_reset_1785089988603",
+        "details": {
+          "motion_command": false,
+          "physical_success_hint": "not_required_for_non_motion_command",
+          "physical_success_implied": true,
+          "truth_surface": "COMMAND_LIFECYCLE"
+        },
+        "source": "GUI",
+        "state": "effective",
+        "timeout_sec": 4.0,
+        "ts": 1785089988.681827,
+        "type": "reset_pos"
+      },
+      "error_code": "",
+      "lifecycle_ok": true,
+      "ok": true,
+      "pending": false,
+      "physical_equivalence": false,
+      "raw_state": "effective",
+      "reason": "",
+      "runtime_motion_truth": {
+        "available": false,
+        "correlated_to_cmd": false,
+        "execution_state": "",
+        "note": "command lifecycle status is not equal to physical completion",
+        "terminal_reason": ""
+      },
+      "state": "effective",
+      "timed_out": false,
+      "truth_surface": "COMMAND_LIFECYCLE"
+    },
+    "ok": true
+  },
+  "primary_failure": "TEST_FAIL",
+  "profile": "M1_motion_baseline_live",
+  "reason": "scenario return_code=1",
+  "status": "FAIL"
+}

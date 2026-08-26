@@ -1,0 +1,94 @@
+/* Mozgás-telemetria fejléc (stabil, egy szintű layout) */
+.motion-header-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(120px, 1fr)) minmax(220px, 2fr);
+    gap: 8px;
+    width: 100%;
+}
+
+.motion-header-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(16, 20, 25, 0.9), rgba(10, 12, 16, 0.95));
+}
+
+.motion-header-label {
+    color: var(--fg-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.motion-header-card strong {
+    color: var(--fg-base);
+    font-family: var(--font-data);
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.motion-header-encoder-toggle {
+    width: 100%;
+    min-height: 30px;
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+}
+
+.motion-header-encoder-toggle strong {
+    color: inherit;
+    font-family: var(--font-data);
+    font-size: 0.84rem;
+}
+
+.motion-header-encoder-toggle:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+/* Pozíció kártya belső elrendezés */
+.motion-header-card--pose .pose-readout-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.motion-header-card--pose .pose-tag {
+    color: var(--fg-muted);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-right: -2px;
+}
+
+.motion-header-card--pose strong {
+    font-size: 0.85rem;
+    min-width: 2.5em;
+}
+
+.nominal {
+    color: var(--nominal);
+}
+
+.critical {
+    color: var(--critical);
+}
+
+@media (max-width: 1200px) {
+    .motion-header-grid {
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .motion-header-grid {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+}

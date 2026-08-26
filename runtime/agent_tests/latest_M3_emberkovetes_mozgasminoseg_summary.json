@@ -1,0 +1,119 @@
+{
+  "artifact_paths": {
+    "base_follow_result": "runtime/agent_tests/latest_M3_emberkovetes_mozgasminoseg_follow_base.json",
+    "incident": "runtime/agent_tests/latest_M3_emberkovetes_mozgasminoseg_incident.json",
+    "result": "runtime/agent_tests/latest_M3_emberkovetes_mozgasminoseg.json",
+    "samples": "runtime/agent_tests/M3_emberkovetes_mozgasminoseg_samples.jsonl",
+    "summary": "runtime/agent_tests/latest_M3_emberkovetes_mozgasminoseg_summary.json"
+  },
+  "control_loop": {
+    "dt_p50_s": 0.03095,
+    "dt_p95_s": 0.13867999999999991,
+    "expected_hz": 50.0,
+    "frequency_below_45_ratio": 0.7693877551020408,
+    "frequency_p10_hz": 13.847,
+    "frequency_p50_hz": 32.275,
+    "jitter_p95_s": 0.11867999999999992,
+    "residual_omega_abs_normal_p50_rad_s": 0.08846017496569758,
+    "residual_omega_abs_slow_p50_rad_s": 0.07153428302631379,
+    "slow_loop_pwm_association_count": 69,
+    "slow_sample_count": 330
+  },
+  "coverage": {
+    "arc_samples": 9,
+    "duration_s": 59.971000000000004,
+    "follow_samples": 469,
+    "moving_samples": 271,
+    "straight_samples": 0,
+    "total_samples": 490
+  },
+  "failed_gates": [
+    "target_visibility",
+    "target_lock",
+    "following_distance_stability",
+    "relock_after_loss",
+    "linear_speed_tracking",
+    "angular_speed_tracking",
+    "wheel_speed_tracking",
+    "primitive_classification",
+    "pwm_smoothness",
+    "pwm_sign_reversal",
+    "control_loop_cadence",
+    "sensor_rate_consistency",
+    "sensor_endpoint_heading",
+    "safety_and_failsafe",
+    "execution_contract",
+    "base_human_follow_v2"
+  ],
+  "inconclusive_gates": [
+    "straight_oscillation",
+    "arc_motion_quality"
+  ],
+  "integrity": {
+    "execution_contract_violation_samples": 124,
+    "failsafe_events": 0,
+    "forbidden_path_samples": 0,
+    "localization_contradiction_samples": 0,
+    "safety_event_samples": 1,
+    "wrong_route_moving_samples": 0
+  },
+  "motion_tracking": {
+    "linear_relative_error_p50": 1.438541528684804,
+    "linear_relative_error_p90": 1.438541528684804,
+    "linear_samples": 3,
+    "low_speed_track_error_abs_p50_mps": 0.007,
+    "low_speed_track_error_abs_p90_mps": 0.017997,
+    "low_speed_track_overshoot_count": 2,
+    "low_speed_track_overshoot_ratio": 0.02564102564102564,
+    "low_speed_track_samples": 78,
+    "omega_relative_error_p50": 1.3194934278853871,
+    "omega_relative_error_p90": 3.406068225191253,
+    "omega_samples": 245,
+    "primitive_mismatch_ratio": 0.7527675276752768,
+    "wheel_error_abs_p50_mps": 0.022449066218406123,
+    "wheel_error_abs_p90_mps": 0.05991004756196367,
+    "wheel_error_relative_p90": 0.5949626825481892
+  },
+  "oscillation": {
+    "arc": {
+      "amplitude_p90_rad_s": 0.2537517363446541,
+      "amplitude_peak_rad_s": 0.8648567873224614,
+      "approx_frequency_hz": 0.03983111606787222,
+      "bias_rad_s": 0.05423708494574153,
+      "duration_s": 37.659,
+      "sample_count": 9,
+      "sign_change_count": 3
+    },
+    "arc_wrong_direction_ratio": 0.0,
+    "straight": {
+      "amplitude_p90_rad_s": null,
+      "amplitude_peak_rad_s": null,
+      "approx_frequency_hz": null,
+      "bias_rad_s": null,
+      "duration_s": 0.0,
+      "sample_count": 0,
+      "sign_change_count": 0
+    }
+  },
+  "plain_summary_hu": "Eredmény: FAIL. A célpont a mérési idő 54%-ában volt látható. Az íves mozgás maradék irányingadozása 0.254 rad/s volt. A vezérlési ciklus középértéke 32.3 Hz volt az elvárt 50 Hz helyett/mellett. Biztosan hibás területek: target_visibility, target_lock, following_distance_stability, relock_after_loss, linear_speed_tracking, angular_speed_tracking, wheel_speed_tracking, primitive_classification, pwm_smoothness, pwm_sign_reversal, control_loop_cadence, sensor_rate_consistency, sensor_endpoint_heading, safety_and_failsafe, execution_contract, base_human_follow_v2. További mozgásminta kell ezekhez: straight_oscillation, arc_motion_quality.",
+  "schema": "M3_EMBERKOVETES_MOZGASMINOSEG_V1",
+  "status": "FAIL",
+  "success": false,
+  "target": {
+    "bearing_abs_p50_deg": 4.25,
+    "bearing_abs_p90_deg": 16.8,
+    "distance_error_abs_p50_m": 0.1345,
+    "distance_error_abs_p90_m": 0.3305,
+    "distance_std_m": 0.1913449433692254,
+    "distance_target_m": 1.0,
+    "lock_ratio": 0.5756929637526652,
+    "loss_count": 7,
+    "relock_count": 6,
+    "relock_ratio_after_loss": 0.8571428571428571,
+    "required_steering_samples": 38,
+    "steering_alignment_ratio": 1.0,
+    "usable_ratio": 0.5884861407249466,
+    "visible_ratio": 0.5394456289978679
+  },
+  "test_name": "hub_M3_emberkovetes_mozgasminoseg"
+}

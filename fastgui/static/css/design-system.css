@@ -1,0 +1,70 @@
+/**
+ * R2B4 Design System
+ * Base tokens and theme definitions.
+ */
+:root {
+    /* Colors - Tactical Operator Palette */
+    --bg-base: #05070a;
+    --bg-panel: rgba(16, 20, 25, 0.85);
+    --bg-header: #020305;
+    --bg-active: #1a1e24;
+    
+    --fg-base: #cbd5e1;
+    --fg-muted: #94a3b8;
+    --fg-dim: #64748b;
+    
+    /* Semantic Colors */
+    --accent: #facc15;        /* Tactical Yellow/Gold */
+    --nominal: #4ade80;       /* Lidar Green */
+    --warning: #fb923c;       /* Orange */
+    --critical: #f43f5e;      /* Red */
+    --neutral: #64748b;
+    
+    /* Borders & Outlines */
+    --border-dim: rgba(250, 204, 21, 0.15);
+    --border-focus: rgba(250, 204, 21, 0.4);
+    --glow-accent: rgba(250, 204, 21, 0.1);
+    
+    /* Typography */
+    --font-ui: 'Rajdhani', sans-serif;
+    --font-data: 'Share Tech Mono', monospace;
+    
+    /* Spacing */
+    --space-xs: 0.25rem;
+    --space-sm: 0.5rem;
+    --space-md: 1rem;
+    --space-lg: 1.5rem;
+    
+    /* Transitions */
+    --transition-fast: 0.1s ease-out;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-base);
+    color: var(--fg-base);
+    font-family: var(--font-ui);
+    overflow: hidden; /* Control interface is fixed-screen */
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Global Scrollbar */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-base);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-focus);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}

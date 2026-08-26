@@ -1,0 +1,126 @@
+{
+  "schema": "M4_ROOM_CRUISE_QUALITY_VALIDATOR_V1",
+  "status": "FAIL",
+  "success": false,
+  "quantitative_status": "FAIL",
+  "proof_verdict": "M4_ROOM_CRUISE_QUALITY_NOT_PROVEN",
+  "evidence_id": "m3-foundation:1784933023.512838",
+  "failed_gates": [
+    "unified_safety_foundation",
+    "duration_motion_coverage",
+    "obstacle_dependent_speed_regulation",
+    "steady_motion_minimum",
+    "primitive_handoff_continuity",
+    "motion_tracking_fidelity",
+    "localization_sensor_consistency"
+  ],
+  "inconclusive_gates": [
+    "human_visual_observation"
+  ],
+  "duration_s": 61.72902250289917,
+  "progress_m": 1.0548264287569373,
+  "obstacle_speed_regulation": {
+    "open_speed": {
+      "n": 0,
+      "min": null,
+      "p10": null,
+      "p50": null,
+      "p90": null,
+      "p95": null,
+      "max": null
+    },
+    "near_speed": {
+      "n": 21,
+      "min": 0.08400077244987185,
+      "p10": 0.14000064364990972,
+      "p50": 0.2063,
+      "p90": 0.2162,
+      "p95": 0.2184,
+      "max": 0.2184
+    },
+    "open_minus_near_p50_mps": null,
+    "clearance_bands": [
+      {
+        "name": "near_low",
+        "front_min_m": 0.65,
+        "front_max_m": 0.85,
+        "speed": {
+          "n": 15,
+          "min": 0.15,
+          "p10": 0.163194088265,
+          "p50": 0.2086,
+          "p90": 0.21752000000000002,
+          "p95": 0.2184,
+          "max": 0.2184
+        }
+      },
+      {
+        "name": "near_high",
+        "front_min_m": 0.85,
+        "front_max_m": 1.05,
+        "speed": {
+          "n": 6,
+          "min": 0.08400077244987185,
+          "p10": 0.08400077244987185,
+          "p50": 0.17235032182495486,
+          "p90": 0.20565,
+          "p95": 0.206125,
+          "max": 0.2066
+        }
+      },
+      {
+        "name": "open",
+        "front_min_m": 1.25,
+        "front_max_m": null,
+        "speed": {
+          "n": 0,
+          "min": null,
+          "p10": null,
+          "p50": null,
+          "p90": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    ],
+    "monotonic_with_tolerance": true
+  },
+  "primitive_handoffs": {
+    "count": 2,
+    "v_step_mps": {
+      "n": 2,
+      "min": 0.03298522066250001,
+      "p10": 0.04088315523613195,
+      "p50": 0.07247489353065972,
+      "p90": 0.10406663182518751,
+      "p95": 0.10801559911200348,
+      "max": 0.11196456639881945
+    },
+    "omega_step_rad_s": {
+      "n": 2,
+      "min": 0.13,
+      "p10": 0.13554665204526287,
+      "p50": 0.1577332602263143,
+      "p90": 0.1799198684073657,
+      "p95": 0.18269319442999715,
+      "max": 0.18546652045262857
+    },
+    "pwm_step": {
+      "n": 2,
+      "min": 0.05206246422676408,
+      "p10": 0.05625335123595023,
+      "p50": 0.07301689927269484,
+      "p90": 0.08978044730943943,
+      "p95": 0.09187589081403251,
+      "max": 0.09397133431862559
+    }
+  },
+  "artifact_paths": {
+    "result": "runtime/agent_tests/latest_M4_room_cruise_quality_validator.json",
+    "summary": "runtime/agent_tests/latest_M4_room_cruise_quality_validator_summary.json",
+    "samples": "runtime/agent_tests/M4_room_cruise_quality_validator_samples.jsonl",
+    "incident": "runtime/agent_tests/latest_M4_room_cruise_quality_validator_incident.json",
+    "m3_foundation_result": "runtime/agent_tests/latest_M3_room_cruise_unified_validator.json",
+    "m3_foundation_summary": "runtime/agent_tests/latest_M3_room_cruise_unified_validator_summary.json"
+  }
+}
