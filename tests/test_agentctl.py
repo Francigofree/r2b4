@@ -6,16 +6,19 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.agent_change_tracker import ChangeTracker
 from tools.agentctl import (
     AgentCtlError,
     LeaseManager,
+    _authority_project_root,
     append_event,
     build_capsule,
     decide_auxiliary_activation,
     load_infrastructure,
     main,
+    run_replay_diagnosis,
     seal_receipt,
     verify_event_chain,
     verify_receipt_seal,
@@ -44,6 +47,24 @@ class AgentCtlTests(unittest.TestCase):
                     "auxiliary_output": 1024,
                 },
                 "universal_invariants": ["SOURCE_FIRST", "NO_GATE_RELAXATION"],
+                "workflow": {
+                    "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
+                    "diagnostics": {
+                        "primary": "REPLAYER_V2_1",
+                        "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
+                        "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+                    },
+                    "testing": {
+                        "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
+                        "default": "TARGETED",
+                        "legacy_contract_conflict_authority": "NON_AUTHORITY",
+                        "full_regression_reasons": [
+                            "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+                            "DIAGNOSTIC_INVESTIGATION",
+                        ],
+                        "full_regression_required_paths": ["tools/agentctl.py"],
+                    },
+                },
                 "leases": {
                     name: {"exclusive": True, "default_ttl_s": 900}
                     for name in (
@@ -170,6 +191,20 @@ class AgentCtlTests(unittest.TestCase):
             len(json.dumps(delta, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()),
             512,
         )
+
+    def test_candidate_marker_routes_cli_to_canonical_authority(self):
+        tree = self.root / "runtime" / "agent_workspaces" / "candidate" / "tree"
+        tree.mkdir(parents=True)
+        self._write_json(
+            "runtime/agent_workspaces/candidate/tree/.r2b4_candidate.json",
+            {
+                "schema": "R2B4_AGENT_WORKSPACE_V1",
+                "task_id": "candidate",
+                "canonical_root": str(self.root),
+            },
+        )
+
+        self.assertEqual(_authority_project_root(tree), self.root.resolve())
 
     def test_source_change_invalidates_context_fingerprint(self):
         first = build_capsule(self.root)
@@ -416,6 +451,24 @@ class AgentCtlTests(unittest.TestCase):
             ),
             0,
         )
+        self.assertTrue(
+            (
+                self.root
+                / "logs"
+                / "agent_tasks"
+                / "promotable"
+                / "promotion_receipt.json"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                self.root
+                / "protected_store"
+                / "receipts"
+                / "promotable"
+                / "promotion_receipt.json"
+            ).is_file()
+        )
         self.assertEqual((self.root / "new_file.py").read_text(encoding="utf-8"), "VALUE = 1\n")
         self.assertEqual(
             self._main(
@@ -455,6 +508,8 @@ class AgentCtlTests(unittest.TestCase):
                 "tested",
                 "--test",
                 "python3 -m pytest -q :: PASS",
+                "--full-regression-reason",
+                "DIAGNOSTIC_INVESTIGATION",
             ),
             2,
         )
@@ -468,6 +523,8 @@ class AgentCtlTests(unittest.TestCase):
                 "tested",
                 "--test",
                 "python3 -m pytest -q :: PASS",
+                "--full-regression-reason",
+                "DIAGNOSTIC_INVESTIGATION",
             ),
             0,
         )
@@ -487,6 +544,144 @@ class AgentCtlTests(unittest.TestCase):
             0,
         )
 
+    def test_scope_required_full_pytest_needs_no_targeted_pass_precondition(self):
+        current = self.root / "runtime" / "agent_coordination" / "current_change.json"
+        current.unlink()
+        self.assertEqual(
+            self._main(
+                "open",
+                "--task-id",
+                "infra-full",
+                "--goal",
+                "change shared infra",
+                "--files",
+                "tools/agentctl.py",
+                "--mode",
+                "AGENT_INFRA_CHANGE",
+                "--approve",
+                "agent-infra:infra-full",
+            ),
+            0,
+        )
+        manifest = json.loads(current.read_text(encoding="utf-8"))
+        candidate = self.root / manifest["workspace"]["path"] / "tools" / "agentctl.py"
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        candidate.write_text("# candidate infra\n", encoding="utf-8")
+
+        self.assertEqual(
+            self._main("close", "--reason", "insufficient", "--test", "unit :: PASS"),
+            2,
+        )
+        self.assertEqual(self._main("lease", "acquire", "full_pytest"), 0)
+        self.assertEqual(
+            self._main(
+                "close",
+                "--reason",
+                "full diagnostic evidence",
+                "--test",
+                "python3 -m pytest -q :: PASS",
+            ),
+            0,
+        )
+        report = ChangeTracker(self.root).inspect()
+        self.assertEqual(report["status"], "COMPLETE")
+
+    def test_legacy_contract_conflict_is_recorded_but_not_authority(self):
+        current = self.root / "runtime" / "agent_coordination" / "current_change.json"
+        current.unlink()
+        self.assertEqual(
+            self._main(
+                "open",
+                "--task-id",
+                "legacy-conflict",
+                "--goal",
+                "preserve canonical contract authority",
+                "--files",
+                "new_file.py",
+            ),
+            0,
+        )
+        self.assertEqual(
+            self._main(
+                "close",
+                "--reason",
+                "contract-aware evidence",
+                "--test",
+                "targeted current contract :: PASS",
+                "--test",
+                "legacy regression :: FAIL :: LEGACY_CONTRACT_CONFLICT:R2B4_MINIMAL_LLM_AGENT_INFRA_TEST",
+            ),
+            0,
+        )
+        report = ChangeTracker(self.root).inspect()
+        self.assertEqual(report["tests"][1]["authority"], "LEGACY_CONTRACT_CONFLICT:R2B4_MINIMAL_LLM_AGENT_INFRA_TEST")
+        self.assertEqual(report["tests"][1]["status"], "FAIL")
+
+    def test_replay_diagnosis_indexes_verified_v21_diagnosis(self):
+        current = self.root / "runtime" / "agent_coordination" / "current_change.json"
+        current.unlink()
+        self.assertEqual(
+            self._main(
+                "open",
+                "--task-id",
+                "diagnostic",
+                "--goal",
+                "replay first",
+                "--files",
+                "new_file.py",
+            ),
+            0,
+        )
+        manifest = json.loads(current.read_text(encoding="utf-8"))
+        result_path = self.root / "replayer_data" / "results" / "capture" / "result"
+        result_path.mkdir(parents=True)
+        diagnosis = result_path / "diagnosis.json"
+        evidence = result_path / "evidence.json"
+        integrity = result_path / "integrity.json"
+        diagnosis.write_text('{"status":"MATCH"}\n', encoding="utf-8")
+        evidence.write_text('{"status":"MATCH"}\n', encoding="utf-8")
+        integrity.write_text('{"status":"VALID"}\n', encoding="utf-8")
+        responses = [
+            (
+                {
+                    "capture_id": "capture",
+                    "capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+                    "capture_status": "COMPLETE",
+                    "manifest_integrity": "VALID",
+                    "errors": [],
+                },
+                0,
+            ),
+            (
+                {
+                    "capture_id": "capture",
+                    "result_id": "result",
+                    "status": "MATCH",
+                    "diagnosis_path": str(diagnosis),
+                    "evidence_path": str(evidence),
+                    "integrity_path": str(integrity),
+                },
+                0,
+            ),
+            ({"valid": True, "status": "VALID", "replay_status": "MATCH"}, 0),
+        ]
+
+        with patch("tools.agentctl._run_json_command", side_effect=responses):
+            result = run_replay_diagnosis(
+                self.root,
+                manifest,
+                load_infrastructure(self.root),
+                capture_id="capture",
+                result_id="result",
+                start_monotonic_ns=10,
+                end_monotonic_ns=20,
+                layers=["L8"],
+            )
+
+        self.assertEqual(result["status"], "MATCH")
+        self.assertTrue(result["diagnosis_sha256"])
+        self.assertTrue((self.root / result["path"]).is_file())
+
     def test_supersede_requires_the_workspace_writer_lease(self):
         self.assertEqual(self._main("supersede", "--reason", "replaced"), 2)
         self.assertEqual(ChangeTracker(self.root).inspect()["status"], "ACTIVE")
@@ -494,6 +689,50 @@ class AgentCtlTests(unittest.TestCase):
         LeaseManager(self.root).acquire("workspace_write", "task-one")
         self.assertEqual(self._main("supersede", "--reason", "replaced"), 0)
         self.assertEqual(ChangeTracker(self.root).inspect()["status"], "SUPERSEDED")
+
+    def test_superseded_workspace_is_resealed_and_cloneable(self):
+        current = self.root / "runtime" / "agent_coordination" / "current_change.json"
+        current.unlink()
+        self.assertEqual(
+            self._main(
+                "open",
+                "--task-id",
+                "parent",
+                "--goal",
+                "preserve candidate",
+                "--files",
+                "new_file.py",
+            ),
+            0,
+        )
+        parent = json.loads(current.read_text(encoding="utf-8"))
+        parent_tree = self.root / parent["workspace"]["path"]
+        (parent_tree / "new_file.py").write_text("VALUE = 7\n", encoding="utf-8")
+
+        self.assertEqual(self._main("supersede", "--reason", "continue as child"), 0)
+        superseded = json.loads(current.read_text(encoding="utf-8"))
+        self.assertTrue(parent_tree.is_dir())
+        self.assertEqual(superseded["workspace"]["state"], "SUPERSEDED")
+        self.assertEqual(superseded["workspace"]["reseal"]["state"], "SUPERSEDED")
+
+        self.assertEqual(
+            self._main(
+                "open",
+                "--task-id",
+                "child",
+                "--goal",
+                "continue resealed candidate",
+                "--files",
+                "new_file.py",
+                "--clone-from",
+                "parent",
+            ),
+            0,
+        )
+        child = json.loads(current.read_text(encoding="utf-8"))
+        child_tree = self.root / child["workspace"]["path"]
+        self.assertEqual(child["workspace"]["lineage"]["parent_task_id"], "parent")
+        self.assertEqual((child_tree / "new_file.py").read_text(encoding="utf-8"), "VALUE = 7\n")
 
 
 if __name__ == "__main__":

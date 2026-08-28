@@ -23,6 +23,8 @@ SUPPORTED_SCHEMAS = {"R2B4_AGENT_CHANGE_V1", "R2B4_AGENT_CHANGE_V2", SCHEMA}
 VALID_STATUSES = {"ACTIVE", "BLOCKED", "COMPLETE", "SUPERSEDED"}
 TERMINAL_STATUSES = {"COMPLETE", "SUPERSEDED"}
 VALID_TEST_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT_RUN"}
+CURRENT_TEST_AUTHORITY = "CURRENT_CONTRACT"
+LEGACY_CONFLICT_PREFIX = "LEGACY_CONTRACT_CONFLICT:"
 VOLATILE_RUNTIME_PATHS = {"runtime/status.json"}
 VOLATILE_RUNTIME_PREFIXES = ("logs/latest/latest_",)
 
@@ -293,6 +295,9 @@ class ChangeTracker:
             "workspace": payload.get("workspace"),
             "candidate_audit": payload.get("candidate_audit"),
             "promotion_status": payload.get("promotion_status"),
+            "workflow_evidence": payload.get("workflow_evidence"),
+            "replay_evidence": payload.get("replay_evidence"),
+            "test_strategy": payload.get("test_strategy"),
         }
 
     def inspect_compact(self) -> Dict[str, Any]:
@@ -319,6 +324,8 @@ class ChangeTracker:
             "updated_at_utc": report.get("updated_at_utc"),
             "reason": report.get("reason", ""),
             "tests": report.get("tests", []),
+            "replay_evidence_status": (report.get("replay_evidence") or {}).get("status"),
+            "workflow_evidence_path": (report.get("workflow_evidence") or {}).get("path"),
         }
 
     def block(self, *, reason: str) -> Dict[str, Any]:
@@ -351,13 +358,29 @@ class ChangeTracker:
     def parse_tests(values: Iterable[str]) -> List[Dict[str, str]]:
         tests: List[Dict[str, str]] = []
         for raw in values:
-            command, separator, status = str(raw).rpartition("::")
-            command = command.strip()
-            status = status.strip().upper()
-            if not separator or not command or status not in VALID_TEST_STATUSES:
+            parts = [part.strip() for part in str(raw).split("::")]
+            if len(parts) not in {2, 3}:
+                parts = []
+            command = parts[0] if parts else ""
+            status = parts[1].upper() if parts else ""
+            authority = parts[2].strip().upper() if len(parts) == 3 else CURRENT_TEST_AUTHORITY
+            valid_authority = bool(
+                authority == CURRENT_TEST_AUTHORITY
+                or (
+                    authority.startswith(LEGACY_CONFLICT_PREFIX)
+                    and authority[len(LEGACY_CONFLICT_PREFIX) :].strip()
+                )
+            )
+            if not command or status not in VALID_TEST_STATUSES or not valid_authority:
                 allowed = ", ".join(sorted(VALID_TEST_STATUSES))
-                raise ChangeTrackerError(f"Test must use '<command> :: <status>' where status is {allowed}")
-            tests.append({"command": command, "status": status})
+                raise ChangeTrackerError(
+                    "Test must use '<command> :: <status> [:: CURRENT_CONTRACT|"
+                    f"LEGACY_CONTRACT_CONFLICT:<contract_id>]' where status is {allowed}"
+                )
+            row = {"command": command, "status": status, "authority": authority}
+            if authority.startswith(LEGACY_CONFLICT_PREFIX):
+                row["contract_id"] = authority[len(LEGACY_CONFLICT_PREFIX) :].strip()
+            tests.append(row)
         if not tests:
             raise ChangeTrackerError("At least one explicit test result is required")
         return tests

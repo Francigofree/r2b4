@@ -481,28 +481,26 @@ class TestMotionPipelineDeterminism(unittest.TestCase):
         self.assertEqual(ctrl.transport_intent_status["active_motion_layer"], "TRACK_REFERENCE")
         self.assertEqual(ctrl.transport_intent_status["active_motion_type"], "set_track_velocity")
 
-    def test_motion_targets_publish_executed_track_surface_for_track_exec(self):
-        cl = ControlLoop(
-            encoder_service=_DummyControlLoopDeps(),
-            imu_service=_DummyControlLoopDeps(),
-            ekf_manager=_DummyEKFManager(),
-            state_machine=_DummyStateMachine(),
-            core=_DummyCore(),
-            loop_hz=50.0,
+    def test_control_loop_has_no_duplicate_twist_to_wheel_publish_owner(self):
+        """The L8 setpoint is published once by L12 orchestration."""
+        control_loop_source = (PROJECT_ROOT / "control_loop.py").read_text(
+            encoding="utf-8"
         )
-        ctrl = SimpleNamespace(
-            cfg={"fizika": {"nyomtav_szelesseg_m": 0.20}},
-            motion_executor=SimpleNamespace(track_width=0.20),
-            track_target_left_mps=None,
-            track_target_right_mps=None,
+        orchestration_source = (PROJECT_ROOT / "cont.py").read_text(
+            encoding="utf-8"
         )
 
-        with patch("robot_state.update_targets") as update_targets_mock:
-            cl._update_motion_targets(ctrl, 0.04, 0.20)
-
-        self.assertAlmostEqual(ctrl.track_target_left_mps, 0.02, places=6)
-        self.assertAlmostEqual(ctrl.track_target_right_mps, 0.06, places=6)
-        update_targets_mock.assert_called_once()
+        self.assertNotIn("def _update_motion_targets", control_loop_source)
+        self.assertNotIn("twist_to_track_velocity", control_loop_source)
+        self.assertIn(
+            "motion_wheel_setpoint.left_target_mps",
+            orchestration_source,
+        )
+        self.assertIn(
+            "motion_wheel_setpoint.right_target_mps",
+            orchestration_source,
+        )
+        self.assertIn("robot_state.update_targets(", orchestration_source)
 
     def test_arc_exec_preserves_state_machine_targets_even_with_manual_source_drift(self):
         cl = ControlLoop(

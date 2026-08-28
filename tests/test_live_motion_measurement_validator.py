@@ -1391,51 +1391,38 @@ class LiveMotionMeasurementValidatorTests(unittest.TestCase):
         self.assertAlmostEqual(global_policy["forward_clearance_m"], 0.42)
         self.assertAlmostEqual(global_policy["omega_out"], -0.12)
 
-    def test_runtime_diagnostics_exposes_heading_ownership_and_pwm_pipeline(self):
+    def test_runtime_diagnostics_separates_guidance_heading_from_wheel_executor(self):
         diagnostics = _extract_runtime_diagnostics(
             {
-                "control_monitor": {
-                    "heading_correction_owner": "EXECUTOR_STRAIGHT_HOLD",
-                    "executor_straight_hold_owner": True,
-                    "drive_yaw_hold_enabled": False,
-                    "wheel_loop_enabled": True,
-                    "wheel_loop_feedback_source": "encoder_canonical",
-                    "wheel_loop_left_ref_mps": 0.05,
-                    "wheel_loop_right_ref_mps": 0.05,
-                    "wheel_loop_left_meas_mps": 0.048,
-                    "wheel_loop_right_meas_mps": 0.052,
-                    "wheel_loop_left_error_mps": 0.002,
-                    "wheel_loop_right_error_mps": -0.002,
-                    "wheel_loop_left_maintenance_floor_pwm": 0.195,
-                    "wheel_loop_right_maintenance_floor_pwm": 0.195,
-                    "wheel_loop_left_maintenance_floor_applied": True,
-                    "wheel_loop_right_maintenance_floor_applied": False,
+                "motion_semantics": {
+                    "heading_hold_owner": "MOTION_GUIDANCE_L7A",
+                    "heading_hold_applied": True,
+                    "heading_hold_mode": "GUIDANCE_APPLIED_FORWARD",
+                    "heading_error_deg": 1.2,
+                    "omega_target": 0.031,
                 },
                 "pid_diag": {
-                    "omega_cmd_pre_guard": 0.031,
-                    "pwm_raw_l": 0.11,
-                    "pwm_raw_r": 0.17,
                     "pwm_executor_l": 0.24,
                     "pwm_executor_r": 0.29,
-                    "forward_dominant_guard_pre_pwm_l": -0.03,
-                    "forward_dominant_balance_floor_pwm": 0.22,
-                    "straight_hold": {
-                        "omega_correction_rad_s": 0.031,
-                        "omega_correction_target_rad_s": 0.04,
-                        "heading_error_deg": 1.2,
-                        "slew_limited": True,
-                    },
+                    "wheel_pi_enabled": True,
+                    "left_reference_mps": 0.05,
+                    "right_reference_mps": 0.05,
+                    "left_measured_mps": 0.048,
+                    "right_measured_mps": 0.052,
+                    "left_control_error_mps": 0.002,
+                    "right_control_error_mps": -0.002,
+                    "left_startup": {"maintenance_pwm": 0.195, "startup_floor_applied": True},
+                    "right_startup": {"maintenance_pwm": 0.195, "startup_floor_applied": False},
                 },
             }
         )
 
+        guidance = diagnostics["guidance"]
         executor = diagnostics["executor"]
-        self.assertEqual(executor["heading_correction_owner"], "EXECUTOR_STRAIGHT_HOLD")
-        self.assertTrue(executor["executor_straight_hold_owner"])
-        self.assertFalse(executor["drive_yaw_hold_enabled"])
-        self.assertAlmostEqual(executor["straight_hold_correction_rad_s"], 0.031)
-        self.assertAlmostEqual(executor["forward_guard_pre_pwm_left"], -0.03)
-        self.assertTrue(executor["straight_hold_slew_limited"])
+        self.assertEqual(guidance["heading_correction_owner"], "MOTION_GUIDANCE_L7A")
+        self.assertTrue(guidance["straight_hold_active"])
+        self.assertAlmostEqual(guidance["straight_hold_correction_rad_s"], 0.031)
+        self.assertNotIn("heading_correction_owner", executor)
         self.assertTrue(executor["wheel_loop_enabled"])
         self.assertAlmostEqual(executor["wheel_loop_left_error_mps"], 0.002)
         self.assertAlmostEqual(executor["wheel_loop_left_maintenance_floor_pwm"], 0.195)

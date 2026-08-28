@@ -21,7 +21,7 @@ from core.alba_core import AlbaCore
 from sensors.encoder_service import EncoderService
 from sensors.imu_service import IMUService
 from controller.state_provider import StateProvider
-from controller.motion_kinematics import track_velocity_to_twist, twist_to_track_velocity
+from controller.motion_kinematics import track_velocity_to_twist
 from controller.slow_tick_diagnostics import append_inner_timing, inner_timing_start
 from middleware.robot_frame import POSE_FRAME_ID, POSE_FRAME_OWNER, pose_frame_contract
 
@@ -54,10 +54,10 @@ def _recovery_behavior_rotate_to_heading_active(ctrl) -> bool:
         return False
     if str(getattr(ctrl, "active_motion_command_type", "") or "").strip().lower() != "rotate_to_heading":
         return False
-    heading_controller = getattr(ctrl, "heading_controller", None)
-    if heading_controller is not None:
+    motion_guidance = getattr(ctrl, "motion_guidance", None)
+    if motion_guidance is not None:
         try:
-            status = heading_controller.status()
+            status = motion_guidance.heading_status()
             if bool((status or {}).get("active", False)):
                 return True
         except Exception:
@@ -95,25 +95,6 @@ def _preserve_state_machine_motion_targets(ctrl) -> bool:
         "set_target_heading",
         "drive_straight",
     }
-
-
-def _heading_track_reference_from_state(ctrl) -> Optional[dict]:
-    active_layer = str(getattr(ctrl, "active_motion_command_layer", "") or "").strip().upper()
-    active_type = str(getattr(ctrl, "active_motion_command_type", "") or "").strip().lower()
-    execution_mode = str(getattr(ctrl, "motion_execution_mode", "") or "").strip().upper()
-    if active_layer != "BEHAVIOR" or active_type not in {"rotate_to_heading", "set_target_heading"}:
-        return None
-    if execution_mode != "HEADING_EXEC":
-        return None
-    ref = dict(getattr(ctrl, "state_track_reference", {}) or {})
-    try:
-        left = float(ref.get("left_mps"))
-        right = float(ref.get("right_mps"))
-    except Exception:
-        return None
-    if not (np.isfinite(left) and np.isfinite(right)):
-        return None
-    return {"left_mps": float(left), "right_mps": float(right)}
 
 
 def _encoder_observation_targets(ctrl, now_mono=None):
@@ -492,23 +473,7 @@ class ControlLoop:
             float(_wrap_angle_rad(ekf_theta + app_dtheta)),
         ), info
 
-    def _update_motion_targets(self, ctrl, v_target: float, omega_target: float):
-        """Twist → bal/jobb track célértékek írása a robot_state-be (GUI telemetriához)."""
-        target_l, target_r = twist_to_track_velocity(
-            float(v_target),
-            float(omega_target),
-            float(self._track_width_m(ctrl)),
-        )
-        ctrl.track_target_left_mps = float(target_l)
-        ctrl.track_target_right_mps = float(target_r)
-        robot_state.update_targets(target_l, target_r)
-
     def _store_requested_motion(self, ctrl, *, v_target: float, omega_target: float, left_mps=None, right_mps=None) -> None:
-        if left_mps is None or right_mps is None:
-            heading_ref = _heading_track_reference_from_state(ctrl)
-            if heading_ref is not None:
-                left_mps = heading_ref.get("left_mps")
-                right_mps = heading_ref.get("right_mps")
         ctrl.requested_motion_intent = {
             "v": float(v_target),
             "omega": float(omega_target),
@@ -1609,7 +1574,6 @@ class ControlLoop:
                 v_target=ctrl.v_target,
                 omega_target=ctrl.omega_target,
             )
-            self._update_motion_targets(ctrl, ctrl.v_target, ctrl.omega_target)
             append_inner_timing(
                 _inner_segments,
                 "control_loop.motion_target_arbitration",
@@ -1661,7 +1625,6 @@ class ControlLoop:
                 left_mps=left_mps,
                 right_mps=right_mps,
             )
-            self._update_motion_targets(ctrl, ctrl.v_target, ctrl.omega_target)
             append_inner_timing(
                 _inner_segments,
                 "control_loop.motion_target_arbitration",
@@ -1704,7 +1667,6 @@ class ControlLoop:
                     v_target=ctrl.v_target,
                     omega_target=ctrl.omega_target,
                 )
-                self._update_motion_targets(ctrl, ctrl.v_target, ctrl.omega_target)
                 append_inner_timing(
                     _inner_segments,
                     "control_loop.motion_target_arbitration",
@@ -1768,7 +1730,6 @@ class ControlLoop:
                 v_target=ctrl.v_target,
                 omega_target=ctrl.omega_target,
             )
-            self._update_motion_targets(ctrl, ctrl.v_target, ctrl.omega_target)
             append_inner_timing(
                 _inner_segments,
                 "control_loop.motion_target_arbitration",
@@ -1868,7 +1829,6 @@ class ControlLoop:
             v_target=ctrl.v_target,
             omega_target=ctrl.omega_target,
         )
-        self._update_motion_targets(ctrl, ctrl.v_target, ctrl.omega_target)
         append_inner_timing(
             _inner_segments,
             "control_loop.motion_target_arbitration",

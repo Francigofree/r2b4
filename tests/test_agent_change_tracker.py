@@ -57,6 +57,18 @@ class AgentChangeTrackerTests(unittest.TestCase):
         self.assertFalse((self.root / "project_rules" / "current_state.md").exists())
         self.assertEqual(self.tracker.verify_complete()["drift_file_count"], 0)
 
+    def test_legacy_contract_conflict_test_is_explicitly_non_authoritative(self):
+        parsed = self.tracker.parse_tests(
+            [
+                "targeted :: PASS",
+                "old regression :: FAIL :: LEGACY_CONTRACT_CONFLICT:CURRENT_V2",
+            ]
+        )
+
+        self.assertEqual(parsed[0]["authority"], "CURRENT_CONTRACT")
+        self.assertEqual(parsed[1]["authority"], "LEGACY_CONTRACT_CONFLICT:CURRENT_V2")
+        self.assertEqual(parsed[1]["contract_id"], "CURRENT_V2")
+
     def test_terminal_manifest_is_archived_before_next_task(self):
         target = self.root / "module.py"
         target.write_text("before\n", encoding="utf-8")

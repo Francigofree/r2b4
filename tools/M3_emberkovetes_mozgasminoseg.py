@@ -204,7 +204,7 @@ def _evidence(samples: Sequence[Dict[str, Any]], indices: Iterable[int], limit: 
         "pwm_left",
         "pwm_right",
         "watchdog_freq_hz",
-        "straight_hold_correction_rad_s",
+        "guidance_heading_correction_rad_s",
         "localization_gate_mode",
         "stop_reason",
         "active_route",
@@ -331,8 +331,8 @@ def _classify_samples(samples: Sequence[Dict[str, Any]], thresholds: Dict[str, f
             and abs(requested_omega) >= thresholds["arc_command_omega_min_rad_s"]
         )
         heading_correction = bool(
-            sample.get("straight_hold_active", False)
-            and abs(_safe_float(sample.get("straight_hold_correction_rad_s"), 0.0)) > 0.005
+            sample.get("guidance_heading_hold_active", False)
+            and abs(_safe_float(sample.get("guidance_heading_correction_rad_s"), 0.0)) > 0.005
         )
         period = _safe_float(sample.get("watchdog_period_s"), 0.0)
         loop_slow = bool(period > 1.0 / max(1.0, thresholds["loop_frequency_p10_min_hz"]))
@@ -753,8 +753,8 @@ def analyze_samples(
             "endpoint": endpoint,
             "heading_correction_samples": len(heading_correction_indices),
             "heading_error_correction_correlation": _correlation(
-                [_safe_float(samples[i].get("straight_hold_heading_error_deg"), 0.0) for i in heading_correction_indices],
-                [_safe_float(samples[i].get("straight_hold_correction_rad_s"), 0.0) for i in heading_correction_indices],
+                [_safe_float(samples[i].get("guidance_heading_error_deg"), 0.0) for i in heading_correction_indices],
+                [_safe_float(samples[i].get("guidance_heading_correction_rad_s"), 0.0) for i in heading_correction_indices],
             ),
         },
         "cause_separation": {

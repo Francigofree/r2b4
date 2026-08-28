@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import copy
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from replayer.adapters import (
     executor_contract_from_instance,
-    motion_pipeline_contract_from_controller,
+    motion_layer_contract_from_controller,
 )
 from replayer.capture import CaptureRecorder
 
@@ -20,6 +19,20 @@ RUNTIME_CAPTURE_CLOSE_TIMEOUT_S = 120.0
 _recorder: Optional[CaptureRecorder] = None
 _last_matcher_evidence_id: Optional[int] = None
 _initialization_status: Dict[str, Any] = {"enabled": False, "state": "NOT_INITIALIZED"}
+
+
+def _capture_plain_value(value: Any) -> Any:
+    """Detach immutable runtime snapshots into JSON-compatible capture values."""
+    if isinstance(value, dict):
+        return {
+            str(key): _capture_plain_value(nested)
+            for key, nested in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_capture_plain_value(nested) for nested in value]
+    if isinstance(value, (set, frozenset)):
+        return [_capture_plain_value(nested) for nested in value]
+    return value
 
 
 def capture_requested() -> bool:
@@ -41,7 +54,7 @@ def initialize_runtime_capture(controller: Any) -> Dict[str, Any]:
         _recorder = CaptureRecorder(
             project_root=_PROJECT_ROOT,
             executor_contract=executor_contract_from_instance(executor),
-            pipeline_contract=motion_pipeline_contract_from_controller(controller),
+            pipeline_contract=motion_layer_contract_from_controller(controller),
             capture_id=requested_id,
             runtime_session_dir=runtime_session or None,
         )
@@ -85,13 +98,7 @@ def record_runtime_tick(
     if recorder is None:
         return False
     try:
-        call = dict(executor_call or {})
-        kwargs = dict(call.get("kwargs") or {})
-        if isinstance(kwargs.get("sensor_feedback"), dict):
-            kwargs["sensor_feedback"] = dict(kwargs["sensor_feedback"])
-        if isinstance(kwargs.get("track_reference"), dict):
-            kwargs["track_reference"] = dict(kwargs["track_reference"])
-        call["kwargs"] = kwargs
+        call = _capture_plain_value(dict(executor_call or {}))
         captured_matcher_evidence: Dict[str, Any] | None = None
         if isinstance(matcher_evidence, dict) and matcher_evidence:
             evidence_id = int(matcher_evidence.get("matcher_result_id", 0) or 0)
@@ -101,7 +108,7 @@ def record_runtime_tick(
                     "matcher_result_id": int(evidence_id),
                 }
             else:
-                captured_matcher_evidence = copy.deepcopy(matcher_evidence)
+                captured_matcher_evidence = _capture_plain_value(matcher_evidence)
                 if evidence_id > 0:
                     _last_matcher_evidence_id = int(evidence_id)
         return recorder.record(
@@ -125,7 +132,7 @@ def record_runtime_tick(
                     "reason": str(safety_reason or "OK"),
                     "final_pwm_zero_reason": str(final_pwm_zero_reason or "NONE"),
                 },
-                "pipeline": dict(pipeline or {}),
+                "pipeline": _capture_plain_value(dict(pipeline or {})),
                 "matcher_evidence": captured_matcher_evidence,
             }
         )

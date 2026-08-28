@@ -5,10 +5,15 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from motion_executor import track_velocity_to_twist, twist_to_track_velocity
+import motion_executor
+from controller.motion_kinematics import track_velocity_to_twist, twist_to_track_velocity
 
 
 class TestMotionExecutorKinematics(unittest.TestCase):
+    def test_executor_does_not_export_kinematics(self):
+        self.assertFalse(hasattr(motion_executor, "twist_to_track_velocity"))
+        self.assertFalse(hasattr(motion_executor, "track_velocity_to_twist"))
+
     def test_twist_to_track_velocity_reflects_curvature_strength(self):
         track_width = 0.18
         v_cmd = 0.10

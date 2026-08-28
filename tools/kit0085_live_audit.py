@@ -166,14 +166,17 @@ def _lidar_confidence_warning(confidence: float, minimum: float) -> str:
 def _pid_diagnostics(status: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
     pid_diag = dict((status or {}).get("pid_diag") or (status or {}).get("pid") or {})
     monitor = dict((status or {}).get("control_monitor") or pid_diag.get("monitor") or {})
-    if "straight_hold" not in pid_diag and (
-        "straight_hold_active" in monitor or "straight_hold_correction" in monitor
-    ):
-        pid_diag["straight_hold"] = {
-            "active": bool(monitor.get("straight_hold_active", False)),
-            "candidate": bool(monitor.get("straight_hold_active", False)),
-            "reason": "active" if bool(monitor.get("straight_hold_active", False)) else "monitor_only",
-            "omega_correction_rad_s": monitor.get("straight_hold_correction", 0.0),
+    motion_semantics = dict((status or {}).get("motion_semantics") or {})
+    if motion_semantics:
+        active = bool(motion_semantics.get("heading_hold_applied", False))
+        pid_diag["guidance_heading_hold"] = {
+            "active": active,
+            "owner": str(motion_semantics.get("heading_hold_owner", "") or ""),
+            "mode": str(motion_semantics.get("heading_hold_mode", "") or ""),
+            "heading_error_deg": motion_semantics.get("heading_error_deg", 0.0),
+            "omega_correction_rad_s": (
+                motion_semantics.get("omega_target", 0.0) if active else 0.0
+            ),
         }
     if "feedback_velocity_source" not in pid_diag and "feedback_velocity_source" in monitor:
         pid_diag["feedback_velocity_source"] = monitor.get("feedback_velocity_source")
@@ -321,11 +324,10 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
     max_ref_v_l_mps = 0.0
     max_ref_v_r_mps = 0.0
     max_v_cmd_mps = 0.0
-    straight_hold_active_samples = 0
-    straight_hold_candidate_samples = 0
-    straight_hold_reason_counts: Dict[str, int] = {}
-    straight_hold_peak_heading_error_deg = 0.0
-    straight_hold_peak_correction_rad_s = 0.0
+    guidance_heading_hold_active_samples = 0
+    guidance_heading_hold_mode_counts: Dict[str, int] = {}
+    guidance_heading_hold_peak_heading_error_deg = 0.0
+    guidance_heading_hold_peak_correction_rad_s = 0.0
 
     _send_command_checked(
         "set_twist",
@@ -390,20 +392,22 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
             max_ref_v_l_mps = max(max_ref_v_l_mps, abs(_safe_float(pid_diag.get("v_l_ref"), 0.0)))
             max_ref_v_r_mps = max(max_ref_v_r_mps, abs(_safe_float(pid_diag.get("v_r_ref"), 0.0)))
             max_v_cmd_mps = max(max_v_cmd_mps, abs(_safe_float(pid_diag.get("v_cmd"), 0.0)))
-            straight_hold = dict(pid_diag.get("straight_hold") or {})
-            if bool(straight_hold.get("candidate", False)):
-                straight_hold_candidate_samples += 1
-            if bool(straight_hold.get("active", False)):
-                straight_hold_active_samples += 1
-            straight_hold_reason = str(straight_hold.get("reason", "") or "").strip() or "UNKNOWN"
-            straight_hold_reason_counts[straight_hold_reason] = straight_hold_reason_counts.get(straight_hold_reason, 0) + 1
-            straight_hold_peak_heading_error_deg = max(
-                straight_hold_peak_heading_error_deg,
-                abs(_safe_float(straight_hold.get("heading_error_deg"), 0.0)),
+            guidance_heading_hold = dict(pid_diag.get("guidance_heading_hold") or {})
+            if bool(guidance_heading_hold.get("active", False)):
+                guidance_heading_hold_active_samples += 1
+            guidance_mode = (
+                str(guidance_heading_hold.get("mode", "") or "").strip() or "UNKNOWN"
             )
-            straight_hold_peak_correction_rad_s = max(
-                straight_hold_peak_correction_rad_s,
-                abs(_safe_float(straight_hold.get("omega_correction_rad_s"), 0.0)),
+            guidance_heading_hold_mode_counts[guidance_mode] = (
+                guidance_heading_hold_mode_counts.get(guidance_mode, 0) + 1
+            )
+            guidance_heading_hold_peak_heading_error_deg = max(
+                guidance_heading_hold_peak_heading_error_deg,
+                abs(_safe_float(guidance_heading_hold.get("heading_error_deg"), 0.0)),
+            )
+            guidance_heading_hold_peak_correction_rad_s = max(
+                guidance_heading_hold_peak_correction_rad_s,
+                abs(_safe_float(guidance_heading_hold.get("omega_correction_rad_s"), 0.0)),
             )
             reading = _encoder_reading(status)
             left_quadrature_direction_seen |= reading["left_direction_source"] == "QUADRATURE_AB"
@@ -475,14 +479,21 @@ def run(args: argparse.Namespace) -> Dict[str, Any]:
         "max_ref_v_l_mps": max_ref_v_l_mps,
         "max_ref_v_r_mps": max_ref_v_r_mps,
         "max_v_cmd_mps": max_v_cmd_mps,
-        "straight_hold_active_samples": straight_hold_active_samples,
-        "straight_hold_candidate_samples": straight_hold_candidate_samples,
-        "straight_hold_active_fraction": (
-            float(straight_hold_active_samples) / float(sample_count) if sample_count > 0 else 0.0
+        "guidance_heading_hold_active_samples": guidance_heading_hold_active_samples,
+        "guidance_heading_hold_active_fraction": (
+            float(guidance_heading_hold_active_samples) / float(sample_count)
+            if sample_count > 0
+            else 0.0
         ),
-        "straight_hold_reason_counts": dict(sorted(straight_hold_reason_counts.items())),
-        "straight_hold_peak_heading_error_deg": straight_hold_peak_heading_error_deg,
-        "straight_hold_peak_correction_rad_s": straight_hold_peak_correction_rad_s,
+        "guidance_heading_hold_mode_counts": dict(
+            sorted(guidance_heading_hold_mode_counts.items())
+        ),
+        "guidance_heading_hold_peak_heading_error_deg": (
+            guidance_heading_hold_peak_heading_error_deg
+        ),
+        "guidance_heading_hold_peak_correction_rad_s": (
+            guidance_heading_hold_peak_correction_rad_s
+        ),
         "left_quadrature_direction_seen": left_quadrature_direction_seen,
         "right_quadrature_direction_seen": right_quadrature_direction_seen,
         "failsafe_seen": failsafe_seen,

@@ -411,7 +411,7 @@ class TestM3MotionPrimitiveValidator(unittest.TestCase):
                 turn_primitive_limited="STRAIGHT",
                 turn_primitive_executed="STRAIGHT",
                 turn_primitive_actual="DIFF_ARC_GENTLE",
-                control_straight_hold_active=True,
+                guidance_heading_hold_active=True,
             )
             for i in range(12)
         ]
@@ -428,12 +428,12 @@ class TestM3MotionPrimitiveValidator(unittest.TestCase):
         self.assertEqual(gate["status"], "PASS")
         self.assertEqual(gate["observed"]["primitive_actual_exact_ratio"], 0.0)
         self.assertEqual(
-            gate["observed"]["straight_hold_correction_accepted_samples"],
+            gate["observed"]["guidance_heading_correction_accepted_samples"],
             12,
         )
         self.assertEqual(result["gates"]["physical_twist_quality"]["status"], "PASS")
 
-    def test_twist_straight_rejects_gentle_arc_without_executor_hold_owner(self):
+    def test_twist_straight_rejects_gentle_arc_without_guidance_hold_owner(self):
         case = validator.PrimitiveCase(
             "straight_forward",
             kind="twist",
@@ -461,7 +461,7 @@ class TestM3MotionPrimitiveValidator(unittest.TestCase):
                 turn_primitive_limited="STRAIGHT",
                 turn_primitive_executed="STRAIGHT",
                 turn_primitive_actual="DIFF_ARC_GENTLE",
-                control_straight_hold_active=False,
+                guidance_heading_hold_active=False,
             )
             for i in range(12)
         ]
@@ -478,12 +478,12 @@ class TestM3MotionPrimitiveValidator(unittest.TestCase):
         self.assertEqual(result["gates"]["actual_primitive_classifier"]["status"], "FAIL")
         self.assertEqual(
             result["gates"]["actual_primitive_classifier"]["observed"][
-                "straight_hold_correction_accepted_samples"
+                "guidance_heading_correction_accepted_samples"
             ],
             0,
         )
 
-    def test_twist_straight_hold_correction_cannot_hide_bad_segment_heading(self):
+    def test_twist_guidance_heading_correction_cannot_hide_bad_segment_heading(self):
         case = validator.PrimitiveCase(
             "straight_forward",
             kind="twist",
@@ -511,7 +511,7 @@ class TestM3MotionPrimitiveValidator(unittest.TestCase):
                 turn_primitive_limited="STRAIGHT",
                 turn_primitive_executed="STRAIGHT",
                 turn_primitive_actual="DIFF_ARC_GENTLE",
-                control_straight_hold_active=True,
+                guidance_heading_hold_active=True,
             )
             for i in range(12)
         ]
@@ -528,7 +528,7 @@ class TestM3MotionPrimitiveValidator(unittest.TestCase):
         self.assertEqual(result["gates"]["actual_primitive_classifier"]["status"], "FAIL")
         self.assertEqual(
             result["gates"]["actual_primitive_classifier"]["observed"][
-                "straight_hold_correction_accepted_samples"
+                "guidance_heading_correction_accepted_samples"
             ],
             0,
         )

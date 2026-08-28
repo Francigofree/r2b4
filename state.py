@@ -4,7 +4,11 @@
 from enum import Enum
 from dataclasses import dataclass
 import os
-import time
+
+from controller.motion_guidance_contract import (
+    GUIDANCE_TURN_TO_HEADING,
+    GuidanceRequest,
+)
 
 # =========================
 # Állapot enum
@@ -36,6 +40,7 @@ class StateResult:
     omega_target: float | None = None
     track_left_mps: float | None = None
     track_right_mps: float | None = None
+    guidance_request: GuidanceRequest | None = None
     flags: dict | None = None
 
 
@@ -139,6 +144,7 @@ class StateMachine:
             return
 
         if self.current_state:
+            self.robot.state_guidance_request = None
             self.current_state.on_exit()
 
         self.current_enum = state_enum
@@ -166,6 +172,7 @@ class StateMachine:
 
         if result.request_state:
             self.robot.state_track_reference = {"left_mps": None, "right_mps": None}
+            self.robot.state_guidance_request = None
             self.transition_to(result.request_state)
             return
 
@@ -179,6 +186,7 @@ class StateMachine:
             "left_mps": result.track_left_mps,
             "right_mps": result.track_right_mps,
         }
+        self.robot.state_guidance_request = result.guidance_request
 
         if result.flags:
             self.robot.flags.update(result.flags)
@@ -298,8 +306,7 @@ class RotateState(AlbaState):
         self.delta = kwargs.get('delta', 0)
         self.target_heading_deg = kwargs.get("target_heading_deg")
         self.manual_mode = (self.delta == 0 and self.target_heading_deg is None)
-        self.use_heading_controller = False
-        self.heading_controller = getattr(self.machine.robot, "heading_controller", None)
+        self.guidance_request = None
 
         if not self.manual_mode:
             curr = self.machine.robot.ekf.get_state()
@@ -307,31 +314,20 @@ class RotateState(AlbaState):
                 self.target_heading_deg = (curr["theta_deg"] + self.delta + 360.0) % 360.0
             else:
                 self.target_heading_deg = float(self.target_heading_deg) % 360.0
-
-            if self.heading_controller is not None:
-                try:
-                    self.heading_controller.start(
-                        target_heading_deg=self.target_heading_deg,
-                        current_heading_deg=float(curr.get("theta_deg", 0.0)),
-                        pose_x=float(curr.get("x", 0.0)),
-                        pose_y=float(curr.get("y", 0.0)),
-                        source=str(getattr(self.machine.robot, "motion_command_source", "STATE") or "STATE"),
-                        settle_tolerance_deg=kwargs.get("tolerance_deg"),
-                        settle_time_s=kwargs.get("settle_time_s"),
-                        max_duration_s=kwargs.get("max_duration_s"),
-                        speed_level=kwargs.get("speed_level"),
-                    )
-                    self.use_heading_controller = True
-                except Exception:
-                    self.use_heading_controller = False
+            request_sequence = int(getattr(self, "_heading_request_sequence", 0)) + 1
+            self._heading_request_sequence = request_sequence
+            self.guidance_request = GuidanceRequest(
+                guidance_type=GUIDANCE_TURN_TO_HEADING,
+                request_id=f"state-heading-turn:{request_sequence}",
+                target_heading_deg=float(self.target_heading_deg),
+                settle_tolerance_deg=kwargs.get("tolerance_deg"),
+                settle_time_s=kwargs.get("settle_time_s"),
+                max_duration_s=kwargs.get("max_duration_s"),
+                speed_level=kwargs.get("speed_level"),
+            )
 
     def on_exit(self):
-        if self.use_heading_controller and self.heading_controller is not None:
-            try:
-                if self.heading_controller.status().get("active"):
-                    self.heading_controller.cancel(reason="SAFETY_ABORT")
-            except Exception:
-                pass
+        self.guidance_request = None
 
     def update(self, dt, robot):
         if self.manual_mode:
@@ -356,47 +352,13 @@ class RotateState(AlbaState):
                 
             return StateResult(v_target=0.0, omega_target=omega)
 
-        if self.use_heading_controller and self.heading_controller is not None:
-            curr = robot.ekf.get_state()
-            tick_out = self.heading_controller.tick(
-                current_heading_deg=float(curr.get("theta_deg", 0.0)),
-                pose_x=float(curr.get("x", 0.0)),
-                pose_y=float(curr.get("y", 0.0)),
-                v_l_raw=float(getattr(robot, "_last_v_l_raw", 0.0)),
-                v_r_raw=float(getattr(robot, "_last_v_r_raw", 0.0)),
-                gyro_z_rad_s=float(getattr(robot, "_last_gyro_z_rad", 0.0)),
-                lidar_status=dict(getattr(robot, "lidar_odom_runtime_status", {}) or {}),
-                odometry_mode=str(getattr(robot, "odometry_mode", "LIDAR_FIRST") or "LIDAR_FIRST"),
-                dt=float(dt),
-                now=time.monotonic(),
-            )
-            if tick_out is None:
-                return StateResult(request_state=RobotState.IDLE, v_target=0.0, omega_target=0.0)
-            if tick_out.get("done"):
-                return StateResult(request_state=RobotState.IDLE, v_target=0.0, omega_target=0.0)
-            track_ref = dict(tick_out.get("track_reference") or {})
-            return StateResult(
-                v_target=float(tick_out.get("v_target", 0.0)),
-                omega_target=float(tick_out.get("omega_target", 0.0)),
-                track_left_mps=track_ref.get("left_mps"),
-                track_right_mps=track_ref.get("right_mps"),
-            )
-
-        curr = robot.ekf.get_state()
-        err = (self.target_heading_deg - curr["theta_deg"] + 180) % 360 - 180
-
-        if abs(err) < 5.0:
+        if self.guidance_request is None:
             return StateResult(request_state=RobotState.IDLE, v_target=0.0, omega_target=0.0)
-
-        level = max(0, min(9, abs(robot.speed_level)))
-        min_level = max(0, min(9, int(getattr(robot, "turn_min_level", 0) or 0)))
-        if min_level:
-            level = max(level, min_level)
-        if level == 0:
-            return StateResult(request_state=RobotState.IDLE, v_target=0.0, omega_target=0.0)
-        base = robot.turn_omega_levels.get(level, 0.8)
-        omega = base if err > 0 else -base
-        return StateResult(v_target=0.0, omega_target=omega)
+        return StateResult(
+            v_target=0.0,
+            omega_target=0.0,
+            guidance_request=self.guidance_request,
+        )
 
 
 # =========================

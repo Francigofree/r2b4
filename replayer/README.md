@@ -1,6 +1,17 @@
-# R2B4 Replayer V1
+# R2B4 Replayer V2.1
 
-A Replayer V1 a production `MotionExecutor` determinisztikus, offline regressziós
+A V2.1 az új, lezárt fizikai réteghatárokat replayeli:
+
+- `L8_MOTION_CONTROLLER`: physical command/envelope/capabilities -> wheel setpoint;
+- `L9_MOTION_EXECUTOR`: wheel setpoint/feedback -> candidate motor output;
+- `SERVICE_ACTUATION`: a normál L9 úttól elkülönített service ág.
+
+Az `L10B_SAFETY_GATE_LINEAGE` rögzített, de a teljes raw safety snapshot hiánya
+miatt nem replayelhető. PlantAdapter, fizikai szimuláció, teljes planner/matcher
+replay és digitális iker nincs a V2.1 scope-ban. A V1 executor-only és V2
+semantic-stage capture-ek változatlanul támogatottak.
+
+A megőrzött V1 alap a production `MotionExecutor` determinisztikus, offline regressziós
 alaprétege. A production control loopban egy opt-in passzív tap minden ticknél
 rögzíti az executor tényleges bemenetét, közvetlen kimenetét, a végső motor-
 kimenetet és annak safety-lineage-ét. Az offline futás ugyanazt az importált
@@ -51,6 +62,7 @@ replayer_data/
     replay_manifest.json
     comparisons.jsonl
     diff.json
+    diagnosis.json
     evidence.json
     integrity.json
 ```
@@ -76,10 +88,29 @@ az executor kimenetek egyezését jelenti.
 
 ```bash
 python3 -m replayer list
+python3 -m replayer inspect <capture_id>
 python3 -m replayer verify <capture_id>
 python3 -m replayer replay <capture_id>
 python3 -m replayer verify-result <capture_id> <result_id>
 ```
+
+V2.1 capture réteg- és inkluzív monotonic időablak-célzása:
+
+```bash
+python3 -m replayer replay <capture_id> --layer L8 \
+  --start-monotonic-ns 1060000000 --end-monotonic-ns 1080000000
+python3 -m replayer replay <capture_id> --layer L9
+```
+
+A `--layer` ismételhető (`L8`, `L9`, `SERVICE`). Részleges replay előtt a
+kiválasztott rétegek teljes capture-prefixe warm-upként lefut, így a stateful
+controller/executor az ablak kezdetén helyes állapotból indul. Üres ablak vagy
+elérhető boundary nélküli rétegválasztás `ERROR`, soha nem `MATCH`.
+
+Az `inspect` gyors, manifest-only összefoglaló, és szándékosan nem ad acceptance
+verdictet. A V2.1 `diagnosis.json` az első eltérés monotonic idejét, rétegét,
+bemenetét, elvárt/tényleges kimenetét és releváns replay-state-jét tartalmazza;
+az integritásmanifest ezt az artefaktumot is védi.
 
 A replay alapértelmezett abszolút PWM toleranciája `1e-9`. `MATCH` csak akkor
 lehetséges, ha az immutable capture minden integritási, teljességi és időzítési

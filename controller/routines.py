@@ -615,14 +615,6 @@ def reload_config(ctrl):
         k_ff=pid_data.get("elorecsatolasi_tag_ff", 0.45),
         dz_min=pid_data.get("min_pwm_indulas", 0.20),
         wheel_feedback_trust_min=pid_data.get("wheel_feedback_trust_min", 0.55),
-        motor_compensation_enabled=bool(pid_data.get("motor_compensation_enabled", True)),
-        straight_hold_enabled=bool(pid_data.get("straight_hold_enabled", True)),
-        straight_hold_kp=pid_data.get("straight_hold_kp", 1.15),
-        straight_hold_max_w=pid_data.get("straight_hold_max_w", 0.14),
-        straight_hold_slew_rate=pid_data.get("straight_hold_slew_rate", 0.90),
-        straight_hold_heading_deadband_deg=pid_data.get("straight_hold_heading_deadband_deg", 0.35),
-        straight_hold_v_min_mps=pid_data.get("straight_hold_v_min_mps", 0.03),
-        straight_hold_w_request_eps=pid_data.get("straight_hold_w_request_eps", 0.03),
     )
     track_width = float(ctrl.cfg["fizika"]["nyomtav_szelesseg_m"])
     ekf_cfg = vezerles.get("ekf") or {}
@@ -680,9 +672,8 @@ def reload_config(ctrl):
     old_mode = normalize_control_mode(getattr(ctrl, "control_mode", None) or getattr(ctrl.motion_executor, "control_mode", None))
     ctrl.motion_executor = MotionExecutor(
         pid_config=ctrl.drive_pid_cfg,
-        turn_intensity=ctrl.turn_intensity,
         max_pwm=float(getattr(getattr(ctrl, "speed_limits", None), "max_pwm_cap", ctrl.max_pwm)),
-        track_width=track_width,
+        speed_map=ctrl.cfg.get("speed_map") or {},
         control_mode=new_mode,
         direction_switch_hold_s=float(motion_execution_cfg.get("direction_switch_hold_s", 0.08)),
         direction_switch_debounce_cycles=int(motion_execution_cfg.get("direction_switch_debounce_cycles", 3)),
@@ -692,7 +683,7 @@ def reload_config(ctrl):
         if ctrl.sm.get_current_state_name() != "IDLE":
             save_control_mode(control_mode_path, old_mode)
             ctrl.control_mode = old_mode
-            ctrl.motion_executor.set_control_mode(old_mode, reset=True)
+            ctrl.motion_executor.reset()
             if hasattr(ctrl, "logger") and ctrl.logger:
                 ctrl.logger.warn("Control mode váltás tiltva (nem IDLE).")
         else:

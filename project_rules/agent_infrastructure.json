@@ -29,6 +29,40 @@
     "NO_GIT_RECOVERY_ASSUMPTION",
     "LIVE_MOTION_EXPLICIT_SCOPE_PREFLIGHT_TEST_HUB_ONLY"
   ],
+  "workflow": {
+    "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
+    "diagnostics": {
+      "primary": "REPLAYER_V2_1",
+      "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "source_routes": ["replayer/README.md", "replayer/contracts.py"]
+    },
+    "testing": {
+      "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
+      "default": "TARGETED",
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ]
+    }
+  },
   "leases": {
     "workspace_write": {"exclusive": true, "default_ttl_s": 7200},
     "canonical_promotion": {"exclusive": true, "default_ttl_s": 1800},

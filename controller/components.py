@@ -58,13 +58,12 @@ from controller.tables import build_speed_tables
 from controller.maintenance_queue import MaintenanceQueue
 from controller.commands import AsyncCommandJournalReader
 from core.mini_os import MiniOSRuntime
-from controller.motion_readiness import (
-    BehaviorMotionInterface,
-    EncoderReliabilityLayer,
-    HeadingTurnController,
-    MotionQAMonitor,
-    MotionSemanticsEngine,
-)
+from controller.behavior_motion_interface import BehaviorMotionInterface
+from controller.encoder_reliability import EncoderReliabilityLayer
+from controller.heading_turn_controller import HeadingTurnController
+from controller.motion_guidance import MotionGuidance
+from controller.motion_qa_monitor import MotionQAMonitor
+from controller.motion_semantics_engine import MotionSemanticsEngine
 from controller.motion_physical import MotionPhysicalTelemetry
 from controller.motion_contract import build_initial_motion_contract_status
 from controller.motion_controller import create_motion_controller_from_config
@@ -320,6 +319,7 @@ def _init_variables(ctrl):
     ctrl.limited_motion_intent = {"v": 0.0, "omega": 0.0}
     ctrl.requested_track_reference = {"left_mps": None, "right_mps": None}
     ctrl.state_track_reference = {"left_mps": None, "right_mps": None}
+    ctrl.state_guidance_request = None
     ctrl.track_target_left_mps = None
     ctrl.track_target_right_mps = None
     # Joystick nullállapot időbélyeg: 0.5s után garantált 0 PWM clamp.
@@ -678,14 +678,6 @@ def _init_software_systems(ctrl):
         k_ff=pid_data["elorecsatolasi_tag_ff"],
         dz_min=pid_data.get("min_pwm_indulas", 0.20),
         wheel_feedback_trust_min=pid_data.get("wheel_feedback_trust_min", 0.55),
-        motor_compensation_enabled=bool(pid_data.get("motor_compensation_enabled", True)),
-        straight_hold_enabled=bool(pid_data.get("straight_hold_enabled", True)),
-        straight_hold_kp=pid_data.get("straight_hold_kp", 1.15),
-        straight_hold_max_w=pid_data.get("straight_hold_max_w", 0.14),
-        straight_hold_slew_rate=pid_data.get("straight_hold_slew_rate", 0.90),
-        straight_hold_heading_deadband_deg=pid_data.get("straight_hold_heading_deadband_deg", 0.35),
-        straight_hold_v_min_mps=pid_data.get("straight_hold_v_min_mps", 0.03),
-        straight_hold_w_request_eps=pid_data.get("straight_hold_w_request_eps", 0.03),
     )
     
     # EKF Manager: manages live and shadow EKFs
@@ -718,10 +710,8 @@ def _init_software_systems(ctrl):
     )
     ctrl.motion_executor = MotionExecutor(
         pid_config=ctrl.drive_pid_cfg,
-        turn_intensity=ctrl.turn_intensity,
-        inplace_turn_omega_deadband=ctrl.inplace_turn_omega_deadband,
         max_pwm=ctrl.speed_limits.max_pwm_cap,
-        track_width=track_width,
+        speed_map=ctrl.cfg.get("speed_map") or {},
         control_mode=ctrl.control_mode,
         direction_switch_hold_s=float(motion_execution_cfg.get("direction_switch_hold_s", 0.08)),
         direction_switch_debounce_cycles=int(motion_execution_cfg.get("direction_switch_debounce_cycles", 3)),
@@ -880,6 +870,15 @@ def _init_control_loop(ctrl):
     ctrl.motion_controller = create_motion_controller_from_config(vezerles, track_width=track_width)
     ctrl.motion_readiness_cfg = readiness_cfg
     ctrl.motion_semantics = MotionSemanticsEngine(readiness_cfg.get("motion_semantics"))
+    heading_turn_controller = HeadingTurnController(
+        track_width,
+        readiness_cfg.get("heading_turn"),
+    )
+    ctrl.motion_guidance = MotionGuidance(
+        semantics=ctrl.motion_semantics,
+        heading_controller=heading_turn_controller,
+        policy_config=dict(vezerles.get("global_motion_policy") or {}),
+    )
     fizika_cfg = dict(ctrl.cfg.get("fizika", {}) or {})
     enc_rel_cfg = dict(readiness_cfg.get("encoder_reliability") or {})
     enc_rel_cfg.setdefault("wheel_base_m", track_width)
@@ -911,7 +910,6 @@ def _init_control_loop(ctrl):
         fizika_cfg=fizika_cfg,
         track_width=track_width,
     )
-    ctrl.heading_controller = HeadingTurnController(track_width, readiness_cfg.get("heading_turn"))
     ctrl.motion_qa_monitor = MotionQAMonitor(readiness_cfg.get("motion_quality"))
     ctrl.motion_physical_telemetry = MotionPhysicalTelemetry(readiness_cfg.get("motion_physical"))
     ctrl.behavior_motion = BehaviorMotionInterface(

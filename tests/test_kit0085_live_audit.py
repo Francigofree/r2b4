@@ -146,20 +146,24 @@ class Kit0085LiveAuditTests(unittest.TestCase):
         self.assertEqual(pid["feedback_velocity_source"], "KIT0085_ENCODER")
         self.assertEqual(monitor["output_reason"], "NONE")
 
-    def test_pid_diagnostics_synthesizes_straight_hold_from_monitor(self):
+    def test_pid_diagnostics_reads_heading_hold_from_guidance_surface(self):
         pid, _monitor = _pid_diagnostics(
             {
-                "control_monitor": {
-                    "straight_hold_active": True,
-                    "straight_hold_correction": 0.03,
-                    "output_reason": "NONE",
+                "motion_semantics": {
+                    "heading_hold_applied": True,
+                    "heading_hold_owner": "MOTION_GUIDANCE_L7A",
+                    "heading_hold_mode": "GUIDANCE_APPLIED_FORWARD",
+                    "heading_error_deg": 1.5,
+                    "omega_target": 0.03,
                 }
             }
         )
 
-        self.assertTrue(pid["straight_hold"]["active"])
-        self.assertEqual(pid["straight_hold"]["reason"], "active")
-        self.assertAlmostEqual(float(pid["straight_hold"]["omega_correction_rad_s"]), 0.03)
+        guidance = pid["guidance_heading_hold"]
+        self.assertTrue(guidance["active"])
+        self.assertEqual(guidance["owner"], "MOTION_GUIDANCE_L7A")
+        self.assertEqual(guidance["mode"], "GUIDANCE_APPLIED_FORWARD")
+        self.assertAlmostEqual(float(guidance["omega_correction_rad_s"]), 0.03)
 
     def test_pid_diagnostics_uses_control_monitor_command_fields(self):
         pid, monitor = _pid_diagnostics(

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from controller.motion_readiness import EncoderReliabilityLayer
+from controller.encoder_reliability import EncoderReliabilityLayer
 
 
 STEP_M = 0.0006

@@ -8,6 +8,56 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from controller.motion_policy import GlobalMotionPolicy
+from controller.motion_guidance_contract import MotionPolicyInput
+from controller.motion_platform_contract import CycleContext
+
+
+def _policy_input(ctrl, *, lidar_summary, obstacle_status, raw_scan):
+    resolution = dict(getattr(ctrl, "motion_resolution_status", {}) or {})
+    return MotionPolicyInput(
+        cycle_context=CycleContext("policy:test", 1.0, 0.02, 0.02, True),
+        lidar_summary=dict(lidar_summary or {}),
+        obstacle_status=dict(obstacle_status or {}),
+        raw_scan=tuple(raw_scan or ()),
+        effective_v_max_mps=float(
+            getattr(getattr(ctrl, "speed_limits", None), "effective_v_max", 0.0)
+            or 0.0
+        ),
+        v_mps=float(getattr(ctrl, "v_target", 0.0) or 0.0),
+        omega_rad_s=float(getattr(ctrl, "omega_target", 0.0) or 0.0),
+        requested_motion_intent=dict(
+            getattr(ctrl, "requested_motion_intent", {}) or {}
+        ),
+        resolved_motion=dict(resolution.get("resolved") or {}),
+        active_command_layer=str(
+            getattr(ctrl, "active_motion_command_layer", "") or ""
+        ),
+        active_command_type=str(
+            getattr(ctrl, "active_motion_command_type", "") or ""
+        ),
+        motion_source=str(
+            getattr(ctrl, "motion_command_source", "UNKNOWN") or "UNKNOWN"
+        ),
+        execution_mode=str(getattr(ctrl, "motion_execution_mode", "") or ""),
+        turn_primitive_requested=str(
+            (getattr(ctrl, "motion_semantics_status", {}) or {}).get(
+                "turn_primitive_requested", ""
+            )
+            or ""
+        ),
+        robot_state=str(getattr(ctrl, "state", "UNKNOWN") or "UNKNOWN"),
+    )
+
+
+def _build_context(policy, *, ctrl, lidar_summary, obstacle_status, raw_scan):
+    return policy.build_context(
+        _policy_input(
+            ctrl,
+            lidar_summary=lidar_summary,
+            obstacle_status=obstacle_status,
+            raw_scan=raw_scan,
+        )
+    )
 
 
 class GlobalMotionPolicyTests(unittest.TestCase):
@@ -219,7 +269,8 @@ class GlobalMotionPolicyTests(unittest.TestCase):
             },
         )
 
-        ctx = policy.build_context(
+        ctx = _build_context(
+            policy,
             ctrl=ctrl,
             lidar_summary={"min_dist_narrow": 0.82, "blocked_front": False, "lidar_pose_confidence": 0.9},
             obstacle_status={"v_scale": 1.0},
@@ -245,7 +296,8 @@ class GlobalMotionPolicyTests(unittest.TestCase):
             motion_resolution_status={},
         )
 
-        ctx = policy.build_context(
+        ctx = _build_context(
+            policy,
             ctrl=ctrl,
             lidar_summary={
                 "min_dist_narrow": 1.2,
@@ -360,7 +412,8 @@ class GlobalMotionPolicyTests(unittest.TestCase):
             motion_command_source="STATE",
         )
         scan = [self._scan_point(0.0, 0.75)]
-        ctx = policy.build_context(
+        ctx = _build_context(
+            policy,
             ctrl=ctrl,
             lidar_summary={"min_dist_narrow": 0.74, "blocked_front": False, "lidar_pose_confidence": 0.81},
             obstacle_status={"v_scale": 0.6},
@@ -384,7 +437,8 @@ class GlobalMotionPolicyTests(unittest.TestCase):
             self._scan_point(270.0, 0.50),
             self._scan_point(280.0, 0.55),
         ]
-        ctx = policy.build_context(
+        ctx = _build_context(
+            policy,
             ctrl=ctrl,
             lidar_summary={
                 "min_dist_narrow": 0.90,
@@ -761,7 +815,8 @@ class GlobalMotionPolicyTests(unittest.TestCase):
             omega_target=0.0,
             motion_command_source="AI",
         )
-        ctx = policy.build_context(
+        ctx = _build_context(
+            policy,
             ctrl=ctrl,
             lidar_summary={
                 "min_dist_narrow": 0.52,

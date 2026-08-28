@@ -669,6 +669,7 @@ def _extract_runtime_diagnostics(status: Dict[str, Any]) -> Dict[str, Any]:
     status = dict(status or {})
     command = dict(status.get("motion_command") or {})
     motion_controller = dict(status.get("motion_controller") or {})
+    motion_semantics = dict(status.get("motion_semantics") or {})
     control_monitor = dict(status.get("control_monitor") or {})
     pid_diag = dict(status.get("pid_diag") or {})
     global_policy = dict(status.get("global_motion_policy") or {})
@@ -677,7 +678,10 @@ def _extract_runtime_diagnostics(status: Dict[str, Any]) -> Dict[str, Any]:
     localization_gate = dict(status.get("localization_gate") or {})
     localization_apply = dict(localization_gate.get("apply") or {})
     primitive_contract = dict(status.get("primitive_contract") or {})
-    straight_hold = dict(pid_diag.get("straight_hold") or {})
+    left_feedforward = dict(pid_diag.get("left_feedforward") or {})
+    right_feedforward = dict(pid_diag.get("right_feedforward") or {})
+    left_startup = dict(pid_diag.get("left_startup") or {})
+    right_startup = dict(pid_diag.get("right_startup") or {})
     return {
         "motion_controller": {
             "v_in": _finite(motion_controller.get("v_in")),
@@ -700,139 +704,47 @@ def _extract_runtime_diagnostics(status: Dict[str, Any]) -> Dict[str, Any]:
             "explicit_motion_target_arc": bool(motion_controller.get("explicit_motion_target_arc", False)),
             "explicit_arc_omega_scale": _finite(motion_controller.get("explicit_arc_omega_scale")),
         },
+        "guidance": {
+            "heading_correction_owner": str(motion_semantics.get("heading_hold_owner", "") or ""),
+            "straight_hold_active": bool(motion_semantics.get("heading_hold_applied", False)),
+            "straight_hold_correction_rad_s": _finite(
+                motion_semantics.get("omega_target")
+                if motion_semantics.get("heading_hold_applied", False)
+                else 0.0
+            ),
+            "straight_hold_heading_error_deg": _finite(motion_semantics.get("heading_error_deg")),
+            "straight_hold_mode": str(motion_semantics.get("heading_hold_mode", "") or ""),
+        },
         "executor": {
             "mode": str(control_monitor.get("mode", pid_diag.get("control_mode", "")) or ""),
-            "v_cmd": _finite(control_monitor.get("v_cmd", pid_diag.get("v_cmd"))),
-            "omega_cmd": _finite(control_monitor.get("omega_cmd", pid_diag.get("omega_cmd"))),
-            "omega_cmd_request": _finite(control_monitor.get("omega_cmd_request", pid_diag.get("omega_cmd_request"))),
-            "omega_cmd_pre_guard": _finite(pid_diag.get("omega_cmd_pre_guard")),
             "output_reason": str(control_monitor.get("output_reason", pid_diag.get("output_reason", "")) or ""),
-            "feedforward": _finite(control_monitor.get("feedforward", pid_diag.get("feedforward"))),
-            "speed_pi_output": _finite(control_monitor.get("speed_pi_output", pid_diag.get("speed_p"))),
-            "feedforward_left": _finite(pid_diag.get("base_l")),
-            "feedforward_right": _finite(pid_diag.get("base_r")),
-            "yaw_pi_output": _finite(control_monitor.get("yaw_pi_output", pid_diag.get("yaw_corr"))),
-            "dead_zone": _finite(control_monitor.get("dead_zone", pid_diag.get("dead_zone"))),
-            "feedback_velocity_source": str(pid_diag.get("feedback_velocity_source", "") or ""),
-            "heading_correction_owner": str(
-                control_monitor.get(
-                    "heading_correction_owner",
-                    pid_diag.get("heading_correction_owner", ""),
-                )
-                or ""
-            ),
-            "executor_straight_hold_owner": bool(
-                control_monitor.get(
-                    "executor_straight_hold_owner",
-                    pid_diag.get("executor_straight_hold_owner", False),
-                )
-            ),
-            "drive_yaw_hold_enabled": bool(
-                control_monitor.get(
-                    "drive_yaw_hold_enabled",
-                    pid_diag.get("drive_yaw_hold_enabled", False),
-                )
-            ),
-            "straight_hold_correction_rad_s": _finite(
-                straight_hold.get("omega_correction_rad_s", control_monitor.get("straight_hold_correction"))
-            ),
-            "straight_hold_target_rad_s": _finite(
-                straight_hold.get("omega_correction_target_rad_s", control_monitor.get("straight_hold_target_rad_s"))
-            ),
-            "straight_hold_heading_error_deg": _finite(
-                straight_hold.get("heading_error_deg", control_monitor.get("straight_hold_heading_error_deg"))
-            ),
-            "straight_hold_slew_limited": bool(
-                straight_hold.get("slew_limited", control_monitor.get("straight_hold_slew_limited", False))
-            ),
-            "pwm_raw_left": _finite(pid_diag.get("pwm_raw_l", control_monitor.get("pwm_raw_l"))),
-            "pwm_raw_right": _finite(pid_diag.get("pwm_raw_r", control_monitor.get("pwm_raw_r"))),
-            "pwm_before_dead_zone_left": _finite(pid_diag.get("pwm_before_clamp_l")),
-            "pwm_before_dead_zone_right": _finite(pid_diag.get("pwm_before_clamp_r")),
+            "feedforward_left": _finite(left_feedforward.get("feedforward_pwm")),
+            "feedforward_right": _finite(right_feedforward.get("feedforward_pwm")),
             "pwm_executor_left": _finite(pid_diag.get("pwm_executor_l", control_monitor.get("pwm_executor_l"))),
             "pwm_executor_right": _finite(pid_diag.get("pwm_executor_r", control_monitor.get("pwm_executor_r"))),
-            "forward_guard_pre_pwm_left": _finite(pid_diag.get("forward_dominant_guard_pre_pwm_l")),
-            "forward_guard_pre_pwm_right": _finite(pid_diag.get("forward_dominant_guard_pre_pwm_r")),
-            "forward_guard_balance_floor_pwm": _finite(pid_diag.get("forward_dominant_balance_floor_pwm")),
-            "track_direction_balance_floor_pwm": _finite(pid_diag.get("track_direction_balance_floor_pwm")),
-            "wheel_loop_enabled": bool(control_monitor.get("wheel_loop_enabled", pid_diag.get("wheel_loop_enabled", False))),
+            "wheel_loop_enabled": bool(pid_diag.get("wheel_pi_enabled", False)),
             "wheel_loop_effective_kp": _finite(
-                pid_diag.get(
-                    "wheel_loop_effective_kp",
-                    control_monitor.get("wheel_loop_effective_kp"),
-                )
+                pid_diag.get("wheel_pi_effective_kp", control_monitor.get("wheel_loop_effective_kp"))
             ),
-            "wheel_loop_left_p": _finite(
-                pid_diag.get("wheel_loop_left_p", control_monitor.get("wheel_loop_left_p"))
-            ),
-            "wheel_loop_right_p": _finite(
-                pid_diag.get("wheel_loop_right_p", control_monitor.get("wheel_loop_right_p"))
-            ),
-            "wheel_loop_feedback_source": str(
-                control_monitor.get("wheel_loop_feedback_source", pid_diag.get("wheel_loop_feedback_source", "")) or ""
-            ),
+            "wheel_loop_left_p": _finite(pid_diag.get("left_p_pwm", control_monitor.get("wheel_loop_left_p"))),
+            "wheel_loop_right_p": _finite(pid_diag.get("right_p_pwm", control_monitor.get("wheel_loop_right_p"))),
+            "wheel_loop_feedback_source": "encoder_canonical",
             "wheel_loop_left_output_reason": str(
-                pid_diag.get("wheel_loop_left_output_reason", control_monitor.get("wheel_loop_left_output_reason", "")) or ""
+                pid_diag.get("left_output_reason", "") or ""
             ),
             "wheel_loop_right_output_reason": str(
-                pid_diag.get("wheel_loop_right_output_reason", control_monitor.get("wheel_loop_right_output_reason", "")) or ""
+                pid_diag.get("right_output_reason", "") or ""
             ),
-            "wheel_loop_left_maintenance_floor_pwm": _finite(
-                pid_diag.get(
-                    "wheel_loop_left_maintenance_floor_pwm",
-                    control_monitor.get("wheel_loop_left_maintenance_floor_pwm"),
-                )
-            ),
-            "wheel_loop_right_maintenance_floor_pwm": _finite(
-                pid_diag.get(
-                    "wheel_loop_right_maintenance_floor_pwm",
-                    control_monitor.get("wheel_loop_right_maintenance_floor_pwm"),
-                )
-            ),
-            "wheel_loop_left_maintenance_floor_applied": bool(
-                pid_diag.get(
-                    "wheel_loop_left_maintenance_floor_applied",
-                    control_monitor.get("wheel_loop_left_maintenance_floor_applied", False),
-                )
-            ),
-            "wheel_loop_right_maintenance_floor_applied": bool(
-                pid_diag.get(
-                    "wheel_loop_right_maintenance_floor_applied",
-                    control_monitor.get("wheel_loop_right_maintenance_floor_applied", False),
-                )
-            ),
-            "wheel_loop_left_ref_mps": _finite(
-                pid_diag.get("v_l_ref", control_monitor.get("wheel_loop_left_ref_mps"))
-            ),
-            "wheel_loop_right_ref_mps": _finite(
-                pid_diag.get("v_r_ref", control_monitor.get("wheel_loop_right_ref_mps"))
-            ),
-            "wheel_loop_left_meas_mps": _finite(
-                pid_diag.get("wheel_loop_v_l_meas", control_monitor.get("wheel_loop_left_meas_mps"))
-            ),
-            "wheel_loop_right_meas_mps": _finite(
-                pid_diag.get("wheel_loop_v_r_meas", control_monitor.get("wheel_loop_right_meas_mps"))
-            ),
-            "wheel_loop_left_error_mps": _finite(
-                pid_diag.get("wheel_loop_err_l", control_monitor.get("wheel_loop_left_error_mps"))
-            ),
-            "wheel_loop_right_error_mps": _finite(
-                pid_diag.get("wheel_loop_err_r", control_monitor.get("wheel_loop_right_error_mps"))
-            ),
-            "forward_dominant_guard_applied": bool(
-                control_monitor.get("forward_dominant_guard_applied", pid_diag.get("forward_dominant_guard_applied", False))
-            ),
-            "forward_dominant_guard_reason": str(
-                control_monitor.get("forward_dominant_guard_reason", pid_diag.get("forward_dominant_guard_reason", "")) or ""
-            ),
-            "track_direction_guard_applied": bool(
-                control_monitor.get("track_direction_guard_applied", pid_diag.get("track_direction_guard_applied", False))
-            ),
-            "track_direction_guard_reason": str(
-                control_monitor.get("track_direction_guard_reason", pid_diag.get("track_direction_guard_reason", "")) or ""
-            ),
-            "straight_hold_active": bool(control_monitor.get("straight_hold_active", False)),
-            "motor_compensation_active": bool(control_monitor.get("motor_compensation_active", False)),
+            "wheel_loop_left_maintenance_floor_pwm": _finite(left_startup.get("maintenance_pwm")),
+            "wheel_loop_right_maintenance_floor_pwm": _finite(right_startup.get("maintenance_pwm")),
+            "wheel_loop_left_maintenance_floor_applied": bool(left_startup.get("startup_floor_applied", False)),
+            "wheel_loop_right_maintenance_floor_applied": bool(right_startup.get("startup_floor_applied", False)),
+            "wheel_loop_left_ref_mps": _finite(pid_diag.get("left_reference_mps")),
+            "wheel_loop_right_ref_mps": _finite(pid_diag.get("right_reference_mps")),
+            "wheel_loop_left_meas_mps": _finite(pid_diag.get("left_measured_mps")),
+            "wheel_loop_right_meas_mps": _finite(pid_diag.get("right_measured_mps")),
+            "wheel_loop_left_error_mps": _finite(pid_diag.get("left_control_error_mps")),
+            "wheel_loop_right_error_mps": _finite(pid_diag.get("right_control_error_mps")),
         },
         "global_motion_policy": {
             "active": bool(global_policy.get("active", False)),
@@ -1691,7 +1603,7 @@ def _summarize_samples(case: MeasurementCase, samples: List[Dict[str, Any]], sto
         for sample in samples
     )
     heading_owners = Counter(
-        str((((sample.get("diagnostics") or {}).get("executor") or {}).get("heading_correction_owner", "")) or "").strip()
+        str((((sample.get("diagnostics") or {}).get("guidance") or {}).get("heading_correction_owner", "")) or "").strip()
         for idx, sample in enumerate(samples)
         if bool(pwm_active[idx])
     )
@@ -1729,7 +1641,7 @@ def _summarize_samples(case: MeasurementCase, samples: List[Dict[str, Any]], sto
             elapsed_s is not None
             and elapsed_s >= max(0.0, float(case.duration_s) - trailing_grace_s)
             and not safety_limiting_reason
-            and executor_zero_reason == "ZERO_CMD"
+            and executor_zero_reason == "ZERO_TARGET"
         )
         if trailing_zero_grace:
             trailing_zero_grace_samples += 1
@@ -1754,7 +1666,7 @@ def _summarize_samples(case: MeasurementCase, samples: List[Dict[str, Any]], sto
             and steady_after_start
             and not trailing_zero_grace
             and requested_motion_abs > 1e-6
-            and executor_zero_reason == "ZERO_CMD"
+            and executor_zero_reason == "ZERO_TARGET"
         ):
             executor_zero_cmd_samples += 1
     lidar_ages = [
@@ -1897,13 +1809,13 @@ def _summarize_samples(case: MeasurementCase, samples: List[Dict[str, Any]], sto
     normal_stop_confirmed = bool(stop_outcome.get("normal_stop_confirmed", False))
 
     active_indices = [idx for idx, active in enumerate(pwm_active) if bool(active)]
-    executor_omega_active = [
-        _finite((((samples[idx].get("diagnostics") or {}).get("executor") or {}).get("omega_cmd")))
+    guidance_omega_active = [
+        _finite((((samples[idx].get("diagnostics") or {}).get("guidance") or {}).get("straight_hold_correction_rad_s")))
         for idx in active_indices
     ]
     straight_hold_correction_active = [
         _finite(
-            (((samples[idx].get("diagnostics") or {}).get("executor") or {}).get("straight_hold_correction_rad_s"))
+            (((samples[idx].get("diagnostics") or {}).get("guidance") or {}).get("straight_hold_correction_rad_s"))
         )
         for idx in active_indices
     ]
@@ -2458,26 +2370,11 @@ def _summarize_samples(case: MeasurementCase, samples: List[Dict[str, Any]], sto
                 for sample in samples
                 if bool((((sample.get("diagnostics") or {}).get("motion_controller") or {}).get("forward_dominant_policy_applied", False)))
             ),
-            "executor_forward_guard_samples": sum(
-                1
-                for sample in samples
-                if bool((((sample.get("diagnostics") or {}).get("executor") or {}).get("forward_dominant_guard_applied", False)))
-            ),
-            "executor_track_direction_guard_samples": sum(
-                1
-                for sample in samples
-                if bool((((sample.get("diagnostics") or {}).get("executor") or {}).get("track_direction_guard_applied", False)))
-            ),
             "heading_correction_owners": dict(sorted(heading_owners.items())),
-            "executor_straight_hold_owner_samples": sum(
+            "guidance_straight_hold_samples": sum(
                 1
                 for idx in active_indices
-                if bool((((samples[idx].get("diagnostics") or {}).get("executor") or {}).get("executor_straight_hold_owner", False)))
-            ),
-            "drive_yaw_hold_enabled_samples": sum(
-                1
-                for idx in active_indices
-                if bool((((samples[idx].get("diagnostics") or {}).get("executor") or {}).get("drive_yaw_hold_enabled", False)))
+                if bool((((samples[idx].get("diagnostics") or {}).get("guidance") or {}).get("straight_hold_active", False)))
             ),
             "guard_intervention_samples": int(guard_intervention_samples),
             "guard_intervention_ratio": (
@@ -2488,14 +2385,14 @@ def _summarize_samples(case: MeasurementCase, samples: List[Dict[str, Any]], sto
         },
         "correction_dynamics": {
             "active_duration_s": float(active_duration_s),
-            "executor_omega_direction_changes": _direction_changes(executor_omega_active, 0.003),
+            "guidance_omega_direction_changes": _direction_changes(guidance_omega_active, 0.003),
             "straight_hold_direction_changes": _direction_changes(straight_hold_correction_active, 0.003),
             "pwm_difference_direction_changes": _direction_changes(pwm_difference_active, 0.01),
-            "executor_omega_total_variation": _total_variation(executor_omega_active),
+            "guidance_omega_total_variation": _total_variation(guidance_omega_active),
             "straight_hold_total_variation": _total_variation(straight_hold_correction_active),
             "pwm_difference_total_variation": _total_variation(pwm_difference_active),
-            "executor_omega_total_variation_per_s": (
-                _total_variation(executor_omega_active) / float(active_duration_s)
+            "guidance_omega_total_variation_per_s": (
+                _total_variation(guidance_omega_active) / float(active_duration_s)
                 if active_duration_s > 1e-6
                 else 0.0
             ),

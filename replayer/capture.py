@@ -11,19 +11,35 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from replayer.adapters import CONFIG_FILES, build_source_manifest
+from controller.motion_platform_contract import MOTION_PLATFORM_CONTRACT_ID
+from replayer.adapters import (
+    CONFIG_FILES,
+    build_source_manifest,
+    layer_boundaries_from_frame,
+)
 from replayer.contracts import (
     ADAPTER_ID,
     CAPTURE_SCHEMA,
     CAPTURE_SCHEMA_V2,
+    CAPTURE_SCHEMA_V21,
     CAPTURE_STATUS_ACTIVE,
     CAPTURE_STATUS_COMPLETE,
     CAPTURE_STATUS_INVALID,
     FRAME_SCHEMA,
     FRAME_SCHEMA_V2,
+    FRAME_SCHEMA_V21,
+    LAYER_BOUNDARIES_SCHEMA_V21,
+    LAYER_BOUNDARY_ORDER_V21,
+    LAYER_L6_INTENT_RESOLVER,
+    LAYER_L7A_MOTION_GUIDANCE,
+    LAYER_L10B_SAFETY_GATE,
+    LAYER_L8_MOTION_CONTROLLER,
+    LAYER_L9_MOTION_EXECUTOR,
+    LAYER_SERVICE_ACTUATION,
     MATCHER_REPLAY_EVIDENCE_REF_SCHEMA,
     MATCHER_REPLAY_EVIDENCE_SCHEMA,
     PIPELINE_ADAPTER_ID,
+    PIPELINE_ADAPTER_ID_V21,
     PIPELINE_FRAME_SCHEMA_V2,
     PIPELINE_STAGE_ORDER,
     SOURCE_MANIFEST_SCHEMA,
@@ -97,17 +113,45 @@ class CaptureRecorder:
             raise ReplayerError("capture_executor_adapter_mismatch")
         self.pipeline_contract = dict(pipeline_contract or {})
         if self.pipeline_contract:
-            if str(self.pipeline_contract.get("adapter_id", "")) != PIPELINE_ADAPTER_ID:
+            pipeline_adapter = str(self.pipeline_contract.get("adapter_id", ""))
+            if pipeline_adapter not in {PIPELINE_ADAPTER_ID, PIPELINE_ADAPTER_ID_V21}:
                 raise ReplayerError("capture_pipeline_adapter_mismatch")
             if list(self.pipeline_contract.get("stage_order") or []) != list(PIPELINE_STAGE_ORDER):
                 raise ReplayerError("capture_pipeline_stage_order_mismatch")
-        self.capture_schema = CAPTURE_SCHEMA_V2 if self.pipeline_contract else CAPTURE_SCHEMA
-        self.frame_schema = FRAME_SCHEMA_V2 if self.pipeline_contract else FRAME_SCHEMA
-        self.adapter_id = PIPELINE_ADAPTER_ID if self.pipeline_contract else ADAPTER_ID
+            if (
+                pipeline_adapter == PIPELINE_ADAPTER_ID_V21
+                and list(self.pipeline_contract.get("layer_order") or [])
+                != list(LAYER_BOUNDARY_ORDER_V21)
+            ):
+                raise ReplayerError("capture_layer_boundary_order_mismatch")
+        is_v21 = bool(
+            self.pipeline_contract
+            and str(self.pipeline_contract.get("adapter_id", ""))
+            == PIPELINE_ADAPTER_ID_V21
+        )
+        self.capture_schema = (
+            CAPTURE_SCHEMA_V21
+            if is_v21
+            else (CAPTURE_SCHEMA_V2 if self.pipeline_contract else CAPTURE_SCHEMA)
+        )
+        self.frame_schema = (
+            FRAME_SCHEMA_V21
+            if is_v21
+            else (FRAME_SCHEMA_V2 if self.pipeline_contract else FRAME_SCHEMA)
+        )
+        self.adapter_id = (
+            PIPELINE_ADAPTER_ID_V21
+            if is_v21
+            else (PIPELINE_ADAPTER_ID if self.pipeline_contract else ADAPTER_ID)
+        )
         self.production_component = (
-            "production_motion_command_pipeline"
-            if self.pipeline_contract
-            else "motion_executor.MotionExecutor"
+            "sealed_motion_platform_layers"
+            if self.capture_schema == CAPTURE_SCHEMA_V21
+            else (
+                "production_motion_command_pipeline"
+                if self.pipeline_contract
+                else "motion_executor.MotionExecutor"
+            )
         )
         self._seal_read_only = bool(seal_read_only)
         self._queue: queue.Queue[Any] = queue.Queue(maxsize=max(16, int(queue_size)))
@@ -285,6 +329,16 @@ class CaptureRecorder:
                     "physical_plant_model_required": False,
                 }
             )
+        if self.capture_schema == CAPTURE_SCHEMA_V21:
+            payload["acceptance_contract"].update(
+                {
+                    "sealed_layer_boundaries_required": list(
+                        LAYER_BOUNDARY_ORDER_V21
+                    ),
+                    "partial_replay_prefix_warmup_required": True,
+                    "legacy_semantic_pipeline_replay_required": False,
+                }
+            )
         return seal_payload(payload, "manifest_sha256")
 
     def _write_manifest(self, *, status: str, reason: str) -> None:
@@ -303,6 +357,15 @@ class CaptureRecorder:
         item = dict(frame)
         item["schema"] = self.frame_schema
         item["capture_seq"] = int(capture_seq)
+        if self.capture_schema == CAPTURE_SCHEMA_V21:
+            try:
+                item["layer_boundaries"] = layer_boundaries_from_frame(item)
+            except Exception as exc:
+                with self._lock:
+                    self._writer_errors.append(
+                        f"layer_boundary_capture_failed:{type(exc).__name__}:{exc}"
+                    )
+                return False
         try:
             self._queue.put_nowait(item)
             return True
@@ -560,11 +623,250 @@ def _pipeline_frame_errors(record: Dict[str, Any], line_no: int) -> List[str]:
     return errors
 
 
+def _layer_boundary_frame_errors(record: Dict[str, Any], line_no: int) -> List[str]:
+    errors: List[str] = []
+    boundaries = record.get("layer_boundaries")
+    if not isinstance(boundaries, dict):
+        return [f"layer_boundaries_missing:{line_no}"]
+    if str(boundaries.get("schema", "")) != LAYER_BOUNDARIES_SCHEMA_V21:
+        errors.append(f"layer_boundaries_schema_invalid:{line_no}")
+    if list(boundaries.get("layer_order") or []) != list(LAYER_BOUNDARY_ORDER_V21):
+        errors.append(f"layer_boundary_order_invalid:{line_no}")
+    layers = boundaries.get("layers")
+    if not isinstance(layers, dict):
+        return errors + [f"layer_boundaries_layers_missing:{line_no}"]
+    if set(layers) != set(LAYER_BOUNDARY_ORDER_V21):
+        errors.append(f"layer_boundary_set_invalid:{line_no}")
+    for layer_name in LAYER_BOUNDARY_ORDER_V21:
+        boundary = layers.get(layer_name)
+        if not isinstance(boundary, dict):
+            errors.append(f"layer_boundary_missing:{line_no}:{layer_name}")
+            continue
+        if not isinstance(boundary.get("available"), bool):
+            errors.append(f"layer_boundary_availability_invalid:{line_no}:{layer_name}")
+        expected_replayable = layer_name != LAYER_L10B_SAFETY_GATE
+        if boundary.get("replayable") is not expected_replayable:
+            errors.append(f"layer_boundary_replayability_invalid:{line_no}:{layer_name}")
+        if not isinstance(boundary.get("input"), dict):
+            errors.append(f"layer_boundary_input_missing:{line_no}:{layer_name}")
+        if not isinstance(boundary.get("recorded_output"), dict):
+            errors.append(f"layer_boundary_output_missing:{line_no}:{layer_name}")
+
+    l6 = dict(layers.get(LAYER_L6_INTENT_RESOLVER) or {})
+    l7 = dict(layers.get(LAYER_L7A_MOTION_GUIDANCE) or {})
+    l8 = dict(layers.get(LAYER_L8_MOTION_CONTROLLER) or {})
+    l9 = dict(layers.get(LAYER_L9_MOTION_EXECUTOR) or {})
+    service = dict(layers.get(LAYER_SERVICE_ACTUATION) or {})
+    safety = dict(layers.get(LAYER_L10B_SAFETY_GATE) or {})
+    if l8.get("available") is not True:
+        errors.append(f"l8_boundary_unavailable:{line_no}")
+    if l6.get("available") is not True:
+        errors.append(f"l6_boundary_unavailable:{line_no}")
+    if l7.get("available") is not True:
+        errors.append(f"l7a_boundary_unavailable:{line_no}")
+    normal_available = l9.get("available") is True
+    service_available = service.get("available") is True
+    if normal_available == service_available:
+        errors.append(f"actuation_boundary_cardinality_invalid:{line_no}")
+    active_actuation = l9 if normal_available else service
+    if dict(active_actuation.get("input") or {}) != dict(record.get("executor_call") or {}):
+        errors.append(f"actuation_boundary_input_lineage_mismatch:{line_no}")
+    safety_input = dict(safety.get("input") or {})
+    if dict(safety_input.get("candidate_output") or {}) != dict(
+        active_actuation.get("recorded_output") or {}
+    ):
+        errors.append(f"safety_candidate_lineage_mismatch:{line_no}")
+    if dict(safety_input.get("safety_lineage") or {}) != dict(
+        record.get("safety_lineage") or {}
+    ):
+        errors.append(f"safety_decision_lineage_mismatch:{line_no}")
+    if dict(safety.get("recorded_output") or {}) != dict(record.get("final_output") or {}):
+        errors.append(f"safety_output_lineage_mismatch:{line_no}")
+
+    def exact_keys(payload: Any, expected: set[str], label: str) -> None:
+        if not isinstance(payload, dict) or set(payload) != expected:
+            errors.append(f"layer_contract_fields_invalid:{line_no}:{label}")
+
+    l8_input = dict(l8.get("input") or {})
+    l6_input = dict(l6.get("input") or {})
+    l6_output = dict(l6.get("recorded_output") or {})
+    l7_input = dict(l7.get("input") or {})
+    l7_output = dict(l7.get("recorded_output") or {})
+    exact_keys(
+        l6_input,
+        {"requested_motion", "resolver", "cycle_context"},
+        "l6_input",
+    )
+    exact_keys(
+        l6_output,
+        {"resolved_motion", "resolution_status", "resolved_intent"},
+        "l6_output",
+    )
+    exact_keys(
+        l7_input,
+        {
+            "resolved_intent",
+            "pose",
+            "world",
+            "cycle_context",
+            "drive_capabilities",
+            "executed_left_mps",
+            "executed_right_mps",
+            "actual_linear_mps",
+            "actual_angular_dps",
+        },
+        "l7a_input",
+    )
+    exact_keys(
+        l7_output,
+        {"physical_command", "diagnostics"},
+        "l7a_output",
+    )
+    if dict(l6_output.get("resolved_intent") or {}) != dict(
+        l7_input.get("resolved_intent") or {}
+    ):
+        errors.append(f"l6_l7a_intent_lineage_mismatch:{line_no}")
+    if dict(l7_output.get("physical_command") or {}) != dict(
+        l8_input.get("physical_command") or {}
+    ):
+        errors.append(f"l7a_l8_physical_lineage_mismatch:{line_no}")
+    exact_keys(
+        l8_input,
+        {"cycle_context", "physical_command", "motion_envelope", "drive_capabilities"},
+        "l8_input",
+    )
+    exact_keys(
+        l8_input.get("cycle_context"),
+        {
+            "cycle_id",
+            "monotonic_time",
+            "dt_observed_s",
+            "dt_control_s",
+            "timing_valid",
+            "timing_reason",
+        },
+        "l8_cycle_context",
+    )
+    exact_keys(
+        l8_input.get("physical_command"),
+        {
+            "contract_id",
+            "physical_command_id",
+            "resolved_id",
+            "cycle_id",
+            "valid_until_monotonic",
+            "physical_mode",
+            "v_mps",
+            "omega_rad_s",
+            "left_mps",
+            "right_mps",
+            "guidance_reason",
+            "trace_metadata",
+        },
+        "l8_physical_command",
+    )
+    exact_keys(
+        l8_input.get("motion_envelope"),
+        {
+            "cycle_id",
+            "physical_command_id",
+            "stop_required",
+            "stop_reason",
+            "max_abs_v_mps",
+            "max_abs_omega_rad_s",
+            "max_abs_wheel_mps",
+            "max_wheel_accel_mps2",
+            "max_wheel_decel_mps2",
+            "capability_version",
+        },
+        "l8_motion_envelope",
+    )
+    exact_keys(
+        l8_input.get("drive_capabilities"),
+        {
+            "track_width_m",
+            "calibrated_wheel_min_mps",
+            "calibrated_wheel_max_mps",
+            "max_wheel_accel_mps2",
+            "max_wheel_decel_mps2",
+            "capability_version",
+        },
+        "l8_drive_capabilities",
+    )
+    l8_output = dict(l8.get("recorded_output") or {})
+    exact_keys(
+        l8_output,
+        {
+            "contract_id",
+            "wheel_setpoint_id",
+            "physical_command_id",
+            "resolved_id",
+            "cycle_id",
+            "left_target_mps",
+            "right_target_mps",
+            "feasible",
+            "reason",
+            "applied_limits",
+        },
+        "l8_output",
+    )
+    if str(l8_output.get("contract_id", "")) != MOTION_PLATFORM_CONTRACT_ID:
+        errors.append(f"l8_output_contract_id_invalid:{line_no}")
+    if normal_available:
+        l9_input = dict(l9.get("input") or {})
+        exact_keys(
+            l9_input,
+            {"method", "cycle_context", "wheel_setpoint", "wheel_feedback"},
+            "l9_input",
+        )
+        if str(l9_input.get("method", "")) != "compute":
+            errors.append(f"l9_method_invalid:{line_no}")
+        if dict(l9_input.get("wheel_setpoint") or {}) != l8_output:
+            errors.append(f"l8_l9_setpoint_lineage_mismatch:{line_no}")
+        exact_keys(
+            l9.get("recorded_output"),
+            {
+                "schema",
+                "contract_id",
+                "candidate_output_id",
+                "wheel_setpoint_id",
+                "physical_command_id",
+                "resolved_id",
+                "cycle_id",
+                "left_pwm",
+                "right_pwm",
+                "output_reason",
+            },
+            "l9_output",
+        )
+    if service_available:
+        service_input = dict(service.get("input") or {})
+        exact_keys(
+            service_input,
+            {"method", "request", "monotonic_time"},
+            "service_input",
+        )
+        if str(service_input.get("method", "")) != "service_compute":
+            errors.append(f"service_method_invalid:{line_no}")
+        exact_keys(
+            service.get("recorded_output"),
+            {"schema", "left_pwm", "right_pwm", "accepted", "reason"},
+            "service_output",
+        )
+    exact_keys(
+        safety.get("recorded_output"),
+        {"pwm_l", "pwm_r"},
+        "l10b_output",
+    )
+    return errors
+
+
 def _read_and_verify_frames(
     path: Path,
     *,
     expected_frame_schema: str = FRAME_SCHEMA,
     pipeline_required: bool = False,
+    layer_boundaries_required: bool = False,
 ) -> Dict[str, Any]:
     errors: List[str] = []
     previous_hash = ZERO_HASH
@@ -581,7 +883,7 @@ def _read_and_verify_frames(
     first_reset_generation: Optional[int] = None
     previous_reset_generation: Optional[int] = None
     reset_count = 0
-    supported_methods = {"compute_pwm", "compute_calibration_pwm"}
+    supported_methods = {"compute", "service_compute"}
     matcher_evidence_ids = set()
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -609,6 +911,8 @@ def _read_and_verify_frames(
                     errors.append(f"frame_schema_invalid:{line_no}")
                 if pipeline_required:
                     errors.extend(_pipeline_frame_errors(record, line_no))
+                elif layer_boundaries_required:
+                    errors.extend(_layer_boundary_frame_errors(record, line_no))
                 elif "pipeline" in record:
                     errors.append(f"v1_frame_contains_v2_pipeline:{line_no}")
                 matcher_evidence = record.get("matcher_evidence")
@@ -756,15 +1060,11 @@ def _verify_captured_configuration(path: Path, manifest: Dict[str, Any]) -> List
         errors.append("captured_control_mode_not_unified")
     if str(contract.get("control_mode", "")) != "UNIFIED":
         errors.append("executor_contract_control_mode_not_unified")
-    captured_width: float | None = None
     try:
-        captured_width = finite_float(
+        finite_float(
             payloads["fizika.json"].get("nyomtav_szelesseg_m"),
             field="captured_track_width",
         )
-        contract_width = finite_float(constructor.get("track_width"), field="contract_track_width")
-        if abs(captured_width - contract_width) > 1e-12:
-            errors.append("captured_track_width_contract_mismatch")
     except ReplayerError as exc:
         errors.append(str(exc))
     speed_map = payloads["speed_map.json"]
@@ -774,22 +1074,28 @@ def _verify_captured_configuration(path: Path, manifest: Dict[str, Any]) -> List
         errors.append("captured_speed_map_not_active")
     if speed_map != dict(runtime_bound.get("speed_map") or {}):
         errors.append("captured_speed_map_runtime_contract_mismatch")
-    if str(manifest.get("schema", "")) == CAPTURE_SCHEMA_V2:
+    if str(manifest.get("schema", "")) in {CAPTURE_SCHEMA_V2, CAPTURE_SCHEMA_V21}:
         pipeline_contract = dict(manifest.get("pipeline_contract") or {})
-        if str(pipeline_contract.get("adapter_id", "")) != PIPELINE_ADAPTER_ID:
+        expected_pipeline_adapter = (
+            PIPELINE_ADAPTER_ID_V21
+            if str(manifest.get("schema", "")) == CAPTURE_SCHEMA_V21
+            else PIPELINE_ADAPTER_ID
+        )
+        if str(pipeline_contract.get("adapter_id", "")) != expected_pipeline_adapter:
             errors.append("pipeline_contract_adapter_invalid")
         if list(pipeline_contract.get("stage_order") or []) != list(PIPELINE_STAGE_ORDER):
             errors.append("pipeline_contract_stage_order_invalid")
-        motion_constructor = dict(pipeline_contract.get("motion_controller_constructor") or {})
-        try:
-            controller_width = finite_float(
-                motion_constructor.get("track_width"),
-                field="pipeline_motion_controller_track_width",
-            )
-            if captured_width is None or abs(controller_width - captured_width) > 1e-12:
-                errors.append("pipeline_motion_controller_track_width_mismatch")
-        except ReplayerError as exc:
-            errors.append(str(exc))
+        if (
+            str(manifest.get("schema", "")) == CAPTURE_SCHEMA_V21
+            and list(pipeline_contract.get("layer_order") or [])
+            != list(LAYER_BOUNDARY_ORDER_V21)
+        ):
+            errors.append("pipeline_contract_layer_order_invalid")
+        motion_constructor = dict(
+            pipeline_contract.get("motion_controller_constructor") or {}
+        )
+        if set(motion_constructor) != {"enable_slew"}:
+            errors.append("pipeline_motion_controller_constructor_invalid")
     return errors
 
 
@@ -813,7 +1119,12 @@ def verify_capture(capture_id: str, *, data_root: str | Path | None = None) -> D
         if manifest_schema not in SUPPORTED_CAPTURE_SCHEMAS:
             errors.append("capture_schema_invalid")
         is_v2 = manifest_schema == CAPTURE_SCHEMA_V2
-        expected_adapter = PIPELINE_ADAPTER_ID if is_v2 else ADAPTER_ID
+        is_v21 = manifest_schema == CAPTURE_SCHEMA_V21
+        expected_adapter = (
+            PIPELINE_ADAPTER_ID_V21
+            if is_v21
+            else (PIPELINE_ADAPTER_ID if is_v2 else ADAPTER_ID)
+        )
         if str(manifest.get("adapter_id", "")) != expected_adapter:
             errors.append("capture_adapter_id_invalid")
         if str(manifest.get("capture_id", "")) != str(capture_id):
@@ -858,8 +1169,13 @@ def verify_capture(capture_id: str, *, data_root: str | Path | None = None) -> D
 
         frame_report = _read_and_verify_frames(
             path / str(manifest.get("frames_path", "frames.jsonl")),
-            expected_frame_schema=FRAME_SCHEMA_V2 if is_v2 else FRAME_SCHEMA,
+            expected_frame_schema=(
+                FRAME_SCHEMA_V21
+                if is_v21
+                else (FRAME_SCHEMA_V2 if is_v2 else FRAME_SCHEMA)
+            ),
             pipeline_required=is_v2,
+            layer_boundaries_required=is_v21,
         )
         errors.extend(frame_report["errors"])
         if int(manifest.get("frame_count", -1)) != int(frame_report["frame_count"]):
@@ -883,9 +1199,13 @@ def verify_capture(capture_id: str, *, data_root: str | Path | None = None) -> D
     valid = not unique_errors
     return {
         "schema": (
-            "R2B4_REPLAYER_CAPTURE_VERIFICATION_V2"
-            if str(manifest.get("schema", "")) == CAPTURE_SCHEMA_V2
-            else "R2B4_REPLAYER_CAPTURE_VERIFICATION_V1"
+            "R2B4_REPLAYER_CAPTURE_VERIFICATION_V2_1"
+            if str(manifest.get("schema", "")) == CAPTURE_SCHEMA_V21
+            else (
+                "R2B4_REPLAYER_CAPTURE_VERIFICATION_V2"
+                if str(manifest.get("schema", "")) == CAPTURE_SCHEMA_V2
+                else "R2B4_REPLAYER_CAPTURE_VERIFICATION_V1"
+            )
         ),
         "capture_id": str(capture_id),
         "capture_path": str(path),
@@ -902,4 +1222,56 @@ def verify_capture(capture_id: str, *, data_root: str | Path | None = None) -> D
             "completeness": "PASS" if valid else "FAIL",
             "timing": "PASS" if not any("time" in error or "cycle_gap" in error or "dt_" in error for error in unique_errors) else "FAIL",
         },
+    }
+
+
+def inspect_capture(capture_id: str, *, data_root: str | Path | None = None) -> Dict[str, Any]:
+    """Read only the sealed manifest for a fast, explicitly non-accepting summary."""
+    path = capture_dir(data_root, capture_id)
+    errors: List[str] = []
+    manifest: Dict[str, Any] = {}
+    if not path.is_dir() or path.is_symlink():
+        errors.append("capture_directory_missing_or_symlink")
+    else:
+        try:
+            manifest = read_json(path / "capture_manifest.json")
+        except ReplayerError as exc:
+            errors.append(str(exc))
+    schema = str(manifest.get("schema", "") or "")
+    manifest_hash_valid = bool(
+        manifest and verify_sealed_payload(manifest, "manifest_sha256")
+    )
+    if manifest and schema not in SUPPORTED_CAPTURE_SCHEMAS:
+        errors.append("capture_schema_invalid")
+    if manifest and not manifest_hash_valid:
+        errors.append("capture_manifest_hash_invalid")
+    pipeline_contract = dict(manifest.get("pipeline_contract") or {})
+    available_layers = (
+        list(pipeline_contract.get("layer_order") or [])
+        if schema == CAPTURE_SCHEMA_V21
+        else list(pipeline_contract.get("stage_order") or [])
+    )
+    timing = dict(manifest.get("timing") or {})
+    return {
+        "schema": "R2B4_REPLAYER_INSPECT_V2_1",
+        "capture_id": str(capture_id),
+        "capture_path": str(path),
+        "capture_schema": schema,
+        "capture_status": str(manifest.get("status", "MISSING") or "MISSING"),
+        "status_reason": str(manifest.get("status_reason", "") or ""),
+        "frame_count": int(manifest.get("frame_count", 0) or 0),
+        "dropped_frame_count": int(manifest.get("dropped_frame_count", 0) or 0),
+        "writer_error_count": len(list(manifest.get("writer_errors") or [])),
+        "timing": {
+            "first_monotonic_ns": timing.get("first_monotonic_ns"),
+            "last_monotonic_ns": timing.get("last_monotonic_ns"),
+            "duration_s": timing.get("duration_s"),
+            "dt_mean_s": timing.get("dt_mean_s"),
+        },
+        "available_layers": available_layers,
+        "replayable_layers": list(pipeline_contract.get("replayable_layers") or []),
+        "manifest_integrity": "VALID" if manifest_hash_valid and not errors else "INVALID",
+        "errors": list(dict.fromkeys(errors)),
+        "verification_scope": "MANIFEST_ONLY",
+        "replay_acceptance": "NOT_EVALUATED_USE_VERIFY_OR_REPLAY",
     }

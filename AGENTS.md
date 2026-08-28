@@ -25,9 +25,17 @@ karbantartott Markdown state nem authority es nem kotelezo agentkontextus.
 - Uj fajl: `python3 tools/agentctl.py claim --files ...` modositas elott.
 - Tesztkornyezet: `python3 tools/agentctl.py workspace`; a teszt `cwd` es
   `PYTHONPATH` erteke a candidate gyokere.
-- Gepi audit: `python3 tools/agentctl.py audit`.
+- Elozetes gepi audit igeny szerint: `python3 tools/agentctl.py audit`; a kotelezo
+  fail-closed auditot a `close` automatikusan lefuttatja, ezert nem kell duplan futtatni.
 - Lezaras: `python3 tools/agentctl.py close --reason <ok> --test '<cmd> :: PASS'`.
-  Ez verifikalt candidate-et es receiptet zar le, canonical promotiont nem vegez.
+  Ez diffet, fingerprintet, evidence-indexet, auditot es receiptet automatikusan
+  eloallit; canonical promotiont nem vegez.
+- Replay-first hibakereses: `agentctl diagnose <capture_id>`; az `inspect`, a teljes
+  vagy idore/retegre celzott replay, a `verify-result` es a `diagnosis.json` hash
+  egyetlen futasazon evidence-be kerul.
+- `supersede` az audit-valid candidate-et resealeli es clone-lineage szamara
+  megorzi; torolni csak az explicit `discard` torol. Folytatas:
+  `agentctl open ... --clone-from <superseded-task-id>`.
 - Promotion csak kulon, explicit emberi kapun, az `agentctl promote` explicit
   task-azonos jovahagyasaval. Agent ezt nem futtathatja automatikusan.
 - Megszakitott promotion: `agentctl recover <id>`; explicit source rollback:
@@ -46,10 +54,13 @@ karbantartott Markdown state nem authority es nem kotelezo agentkontextus.
 
 ## Bizonyitas
 
-- Forras es aktiv config > futasazonos Hub summary/incident/ownership > stabil
-  baseline > torteneti dokumentum vagy nyers log.
-- Modositas utan celzott teszt kotelezo; kozos contract/bootstrap/test
-  infrastruktura eseten teljes `pytest` is.
+- Forras es aktiv config > canonical contract > Replayer V2.1 `inspect`, celzott
+  replay es `diagnosis.json` > futasazonos Hub evidence > stabil baseline >
+  torteneti dokumentum vagy nyers log. Contracttal ellentetes regi regresszios
+  teszt explicit non-authority evidence, nem irhatja felul a canonical contractot.
+- A celzott teszt az alapertelmezett. A scope/contract/risk alapjan az infra
+  automatikusan kerhet teljes `pytest`-et; az agent teljes regressziot ettol
+  fuggetlenul is futtathat indokolt diagnosztikai cellal, a gepi lease birtokaban.
 - Elo mozgas csak explicit felhasznaloi keret, friss preflight, Test Hub profil
   es vegso IDLE/PWM-null ellenorzes mellett indulhat.
 - Teszt SSOT: `python3 tools/r2b4_test_hub.py list|run|report`; a `latest_*`

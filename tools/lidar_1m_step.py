@@ -1300,10 +1300,10 @@ def _run_trial(
     primitive_chain_req_exe_matches = 0
     primitive_chain_exe_act_matches = 0
     primitive_chain_first_mismatch: Dict[str, Any] = {}
-    straight_hold_active_samples = 0
-    straight_hold_peak_heading_error_deg = 0.0
-    straight_hold_peak_correction_rad_s = 0.0
-    straight_hold_last_diag: Dict[str, Any] = {}
+    guidance_heading_hold_active_samples = 0
+    guidance_heading_hold_peak_heading_error_deg = 0.0
+    guidance_heading_hold_peak_correction_rad_s = 0.0
+    guidance_heading_hold_last_diag: Dict[str, Any] = {}
     runtime_notes: List[str] = []
     move_diag: Dict[str, Any] = {}
     end_status: Dict[str, Any] = {}
@@ -1433,7 +1433,6 @@ def _run_trial(
                     if not primitive_chain_first_mismatch:
                         sem_status = dict(st.get("motion_semantics") or {})
                         motion_cmd = dict(st.get("motion_command") or {})
-                        pid_diag_snapshot = dict(st.get("pid_diag") or {})
                         primitive_chain_first_mismatch = {
                             "requested": str(turn_primitives.get("requested", "")),
                             "limited": str(turn_primitives.get("limited", "")),
@@ -1446,14 +1445,11 @@ def _run_trial(
                                 motion_cmd.get("command_type", st.get("active_motion_type", ""))
                                 or ""
                             ),
-                            "semantics_executor_candidate": bool(
-                                sem_status.get("executor_straight_hold_candidate", False)
+                            "guidance_heading_owner": str(
+                                sem_status.get("heading_hold_owner", "") or ""
                             ),
-                            "semantics_heading_hold_deferred": bool(
-                                sem_status.get("heading_hold_deferred_to_executor", False)
-                            ),
-                            "executor_straight_hold_active": bool(
-                                ((pid_diag_snapshot.get("straight_hold") or {}).get("active", False))
+                            "guidance_heading_hold_active": bool(
+                                sem_status.get("heading_hold_applied", False)
                             ),
                         }
                     if primitive_chain_mismatch_consecutive >= 3:
@@ -1467,21 +1463,35 @@ def _run_trial(
                 else:
                     primitive_chain_mismatch_consecutive = 0
 
-                pid_diag_live = dict(st.get("pid_diag") or {})
-                straight_hold_live = dict(pid_diag_live.get("straight_hold") or {})
-                straight_hold_last_diag = dict(straight_hold_live)
-                if bool(straight_hold_live.get("active", False)):
-                    straight_hold_active_samples += 1
-                heading_error_live = _safe_float(straight_hold_live.get("heading_error_deg"), math.nan)
+                sem_status = dict(st.get("motion_semantics") or {})
+                guidance_heading_hold_live = {
+                    "active": bool(sem_status.get("heading_hold_applied", False)),
+                    "owner": str(sem_status.get("heading_hold_owner", "") or ""),
+                    "mode": str(sem_status.get("heading_hold_mode", "") or ""),
+                    "heading_error_deg": sem_status.get("heading_error_deg"),
+                    "omega_correction_rad_s": (
+                        sem_status.get("omega_target", 0.0)
+                        if bool(sem_status.get("heading_hold_applied", False))
+                        else 0.0
+                    ),
+                }
+                guidance_heading_hold_last_diag = dict(guidance_heading_hold_live)
+                if bool(guidance_heading_hold_live.get("active", False)):
+                    guidance_heading_hold_active_samples += 1
+                heading_error_live = _safe_float(
+                    guidance_heading_hold_live.get("heading_error_deg"), math.nan
+                )
                 if _is_finite(heading_error_live):
-                    straight_hold_peak_heading_error_deg = max(
-                        float(straight_hold_peak_heading_error_deg),
+                    guidance_heading_hold_peak_heading_error_deg = max(
+                        float(guidance_heading_hold_peak_heading_error_deg),
                         abs(float(heading_error_live)),
                     )
-                correction_live = _safe_float(straight_hold_live.get("omega_correction_rad_s"), math.nan)
+                correction_live = _safe_float(
+                    guidance_heading_hold_live.get("omega_correction_rad_s"), math.nan
+                )
                 if _is_finite(correction_live):
-                    straight_hold_peak_correction_rad_s = max(
-                        float(straight_hold_peak_correction_rad_s),
+                    guidance_heading_hold_peak_correction_rad_s = max(
+                        float(guidance_heading_hold_peak_correction_rad_s),
                         abs(float(correction_live)),
                     )
 
@@ -1584,17 +1594,18 @@ def _run_trial(
             "max": float(max(lidar_latest_age_samples)),
             "latest": float(lidar_latest_age_samples[-1]),
         }
-    straight_hold_summary = {
-        "active_samples": int(straight_hold_active_samples),
+    guidance_heading_hold_summary = {
+        "owner": "MOTION_GUIDANCE_L7A",
+        "active_samples": int(guidance_heading_hold_active_samples),
         "status_samples": int(status_samples),
         "active_ratio": (
-            float(straight_hold_active_samples / status_samples)
+            float(guidance_heading_hold_active_samples / status_samples)
             if status_samples > 0
             else 0.0
         ),
-        "peak_heading_error_deg": float(straight_hold_peak_heading_error_deg),
-        "peak_correction_rad_s": float(straight_hold_peak_correction_rad_s),
-        "last": dict(straight_hold_last_diag),
+        "peak_heading_error_deg": float(guidance_heading_hold_peak_heading_error_deg),
+        "peak_correction_rad_s": float(guidance_heading_hold_peak_correction_rad_s),
+        "last": dict(guidance_heading_hold_last_diag),
     }
     primitive_chain_summary = {
         "checked_samples": int(primitive_chain_samples),
@@ -1643,7 +1654,7 @@ def _run_trial(
         )
     }
     move_diag["primitive_chain"] = dict(primitive_chain_summary)
-    move_diag["straight_hold"] = dict(straight_hold_summary)
+    move_diag["guidance_heading_hold"] = dict(guidance_heading_hold_summary)
 
     lidar_updates = {
         "start_total": int(_safe_float(start_lidar_odom.get("total"), 0)),
@@ -1799,7 +1810,7 @@ def _run_trial(
         "lidar_health_summary": dict(lidar_health_counts),
         "lidar_updates": lidar_updates,
         "primitive_chain": primitive_chain_summary,
-        "straight_hold": straight_hold_summary,
+        "guidance_heading_hold": guidance_heading_hold_summary,
         "runtime_notes": runtime_notes,
         "failure_reason": (str(move_error) if move_error is not None else ""),
         "stop_condition": {

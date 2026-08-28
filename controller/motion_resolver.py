@@ -16,13 +16,28 @@ import logging
 import math
 import time
 from collections import Counter, defaultdict
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from controller.motion_schema import (
     EXEC_MODE_TWIST,
     normalize_execution_mode,
 )
 from controller.motion_tick_context import MotionTickContext
+from controller.motion_guidance_contract import (
+    GUIDANCE_HEADING_HOLD,
+    GUIDANCE_NONE,
+    GUIDANCE_TRACK_LOCAL_SEGMENT,
+    GUIDANCE_TURN_TO_HEADING,
+    GuidanceRequest,
+    MOTION_INTENT_CONTRACT_ID,
+    ResolvedMotionIntent,
+)
+from controller.motion_platform_contract import (
+    PHYSICAL_MODE_BODY_TWIST,
+    PHYSICAL_MODE_STOP,
+    PHYSICAL_MODE_WHEEL_VELOCITY,
+    CycleContext,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -85,6 +100,113 @@ PROPOSAL_CATEGORY_CAPS = {
 }
 MAX_RESOLVER_PROPOSALS = 8
 FRONT_HARD_REJECT_M = 0.25
+
+
+def build_resolved_motion_intent(
+    resolved_motion: Dict[str, Any],
+    *,
+    cycle_context: CycleContext,
+) -> ResolvedMotionIntent:
+    """Reduce the selected legacy surface to the normative typed L6 output."""
+
+    resolved = dict(resolved_motion or {})
+    cycle_id = str(cycle_context.cycle_id)
+    command_type = str(resolved.get("command_type", "idle") or "idle").lower()
+    layer = str(resolved.get("layer", "IDLE") or "IDLE").upper()
+    execution_mode = normalize_execution_mode(
+        resolved.get("execution_mode", ""),
+        fallback=EXEC_MODE_TWIST,
+    )
+    track = dict(resolved.get("requested_track_reference") or {})
+    try:
+        left_mps = float(track.get("left_mps"))
+        right_mps = float(track.get("right_mps"))
+        track_valid = math.isfinite(left_mps) and math.isfinite(right_mps)
+    except (TypeError, ValueError):
+        left_mps = right_mps = 0.0
+        track_valid = False
+    v_mps = _safe_float(resolved.get("v_target"), 0.0)
+    omega_rad_s = _safe_float(resolved.get("omega_target"), 0.0)
+    is_heading_turn = command_type in {"rotate_to_heading", "set_target_heading"}
+    if command_type == "idle":
+        nominal_mode = PHYSICAL_MODE_STOP
+        v_mps = omega_rad_s = left_mps = right_mps = 0.0
+    elif is_heading_turn:
+        # The nominal zero twist is intentional: L7A owns the closed-loop
+        # turn and may reduce it to a wheel or body physical command.
+        nominal_mode = PHYSICAL_MODE_BODY_TWIST
+        v_mps = omega_rad_s = left_mps = right_mps = 0.0
+    elif (
+        abs(v_mps) <= 1e-12
+        and abs(omega_rad_s) <= 1e-12
+        and not track_valid
+    ):
+        nominal_mode = PHYSICAL_MODE_STOP
+        v_mps = omega_rad_s = left_mps = right_mps = 0.0
+    elif track_valid and execution_mode in {
+        "TRACK_EXEC",
+        "ARC_EXEC",
+        "HEADING_EXEC",
+    }:
+        nominal_mode = PHYSICAL_MODE_WHEEL_VELOCITY
+        v_mps = omega_rad_s = 0.0
+    else:
+        nominal_mode = PHYSICAL_MODE_BODY_TWIST
+        left_mps = right_mps = 0.0
+    if command_type == "local_planner_segment" or layer in {
+        "LOCAL_PLANNER",
+        "LOCAL_NAVIGATION",
+    }:
+        guidance_type = GUIDANCE_TRACK_LOCAL_SEGMENT
+    elif is_heading_turn:
+        guidance_type = GUIDANCE_TURN_TO_HEADING
+    elif nominal_mode == PHYSICAL_MODE_BODY_TWIST and abs(v_mps) > 1e-12:
+        guidance_type = GUIDANCE_HEADING_HOLD
+    else:
+        guidance_type = GUIDANCE_NONE
+    selected_proposal_id = str(
+        resolved.get("proposal_id")
+        or resolved.get("name")
+        or f"proposal:{cycle_id}:fallback"
+    )
+    resolved_id = str(
+        resolved.get("resolved_id")
+        or f"resolved:{cycle_id}:{selected_proposal_id}"
+    )
+    details = dict(resolved.get("details") or {})
+    raw_guidance_request = details.get("guidance_request")
+    if isinstance(raw_guidance_request, GuidanceRequest):
+        guidance_request = raw_guidance_request
+    elif isinstance(raw_guidance_request, Mapping):
+        guidance_request = GuidanceRequest.from_mapping(
+            raw_guidance_request,
+            fallback_guidance_type=guidance_type,
+        )
+    else:
+        guidance_request = None
+    return ResolvedMotionIntent(
+        contract_id=MOTION_INTENT_CONTRACT_ID,
+        resolved_id=resolved_id,
+        cycle_id=cycle_id,
+        selected_proposal_id=selected_proposal_id,
+        valid_until_monotonic=(
+            float(cycle_context.monotonic_time)
+            + max(0.05, 2.0 * float(cycle_context.dt_control_s))
+        ),
+        nominal_mode=nominal_mode,
+        v_mps=v_mps,
+        omega_rad_s=omega_rad_s,
+        left_mps=left_mps,
+        right_mps=right_mps,
+        guidance_type=guidance_type,
+        guidance_request=guidance_request,
+        trace_metadata={
+            "source": str(resolved.get("source", "") or ""),
+            "layer": layer,
+            "command_type": command_type,
+            "execution_mode": execution_mode,
+        },
+    )
 
 
 def _infer_entry_tier(command_type: str, mode: str, layer: str) -> str:

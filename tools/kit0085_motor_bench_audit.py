@@ -271,6 +271,7 @@ def _append_motion_keepalive(
 
 def _runtime_sample(status: Dict[str, Any]) -> Dict[str, Any]:
     pid, monitor = _pid_diagnostics(status)
+    motion_semantics = dict((status or {}).get("motion_semantics") or {})
     encoder = dict((status or {}).get("encoder") or {})
     canonical = dict(encoder.get("canonical") or {})
     can_vel = dict(canonical.get("canonical_velocity") or {})
@@ -300,9 +301,22 @@ def _runtime_sample(status: Dict[str, Any]) -> Dict[str, Any]:
             "wheel_loop_feedback_source": str(pid.get("wheel_loop_feedback_source", "") or ""),
             "wheel_loop_left_output_reason": str(pid.get("wheel_loop_left_output_reason", "") or ""),
             "wheel_loop_right_output_reason": str(pid.get("wheel_loop_right_output_reason", "") or ""),
-            "straight_hold_active": bool(dict(pid.get("straight_hold") or {}).get("active", False)),
             "motor_compensation_active": bool(dict(pid.get("motor_compensation") or {}).get("active", False)),
             "monitor_mode": str(monitor.get("mode", "") or ""),
+        },
+        "guidance_heading_hold": {
+            "active": bool(motion_semantics.get("heading_hold_applied", False)),
+            "owner": str(motion_semantics.get("heading_hold_owner", "") or ""),
+            "mode": str(motion_semantics.get("heading_hold_mode", "") or ""),
+            "heading_error_deg": _safe_float(
+                motion_semantics.get("heading_error_deg"), 0.0
+            ),
+            "omega_correction_rad_s": _safe_float(
+                motion_semantics.get("omega_target")
+                if motion_semantics.get("heading_hold_applied", False)
+                else 0.0,
+                0.0,
+            ),
         },
         "encoder_canonical": {
             "state": str(canonical.get("canonical_state", "") or ""),

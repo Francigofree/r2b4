@@ -54,9 +54,7 @@ def _map() -> dict:
 
 class TestFfpSpeedMap(unittest.TestCase):
     def _make_controller(self) -> AlbaDriveController:
-        ctrl = AlbaDriveController(PIDConfig(k_ff=0.0))
-        ctrl.speed_map = _map()
-        return ctrl
+        return AlbaDriveController(PIDConfig(k_ff=0.0), speed_map=_map())
 
     def test_exact_decimal_speed_map_point(self):
         left, right = self._make_controller()._get_baseline(0.05)
@@ -105,9 +103,8 @@ class TestFfpSpeedMap(unittest.TestCase):
         self.assertIn("schema_invalid", diag["error"])
 
     def test_project_map_has_four_complete_active_curves(self):
-        ctrl = AlbaDriveController(PIDConfig(k_ff=0.0))
         with (PROJECT_ROOT / "conf" / "speed_map.json").open("r", encoding="utf-8") as handle:
-            ctrl.speed_map = json.load(handle)
+            ctrl = AlbaDriveController(PIDConfig(k_ff=0.0), speed_map=json.load(handle))
 
         self.assertEqual(ctrl.speed_map["schema"], "R2B4_WHEEL_SPEED_MAP_V2")
         self.assertEqual(ctrl.speed_map["map_state"], "ACTIVE")
@@ -129,10 +126,9 @@ class TestFfpSpeedMap(unittest.TestCase):
         self.assertEqual(low_diag["lower_point"]["speed_mps"], 0.15)
 
     def test_project_forward_map_preserves_distance_shuttle_shape(self):
-        ctrl = AlbaDriveController(PIDConfig())
         with (PROJECT_ROOT / "conf" / "speed_map.json").open("r", encoding="utf-8") as handle:
             speed_map = json.load(handle)
-        ctrl.speed_map = speed_map
+        ctrl = AlbaDriveController(PIDConfig(), speed_map=speed_map)
         self.assertEqual(
             [point["pwm"] for point in speed_map["curves"]["left_forward"]["points"]],
             [0.19566, 0.23924, 0.31161, 0.40339, 0.52693, 0.64],
@@ -152,10 +148,9 @@ class TestFfpSpeedMap(unittest.TestCase):
         self.assertAlmostEqual(right_inner_pwm, 0.235473, places=6)
 
     def test_project_reverse_map_preserves_distance_shuttle_thresholds(self):
-        ctrl = AlbaDriveController(PIDConfig())
         with (PROJECT_ROOT / "conf" / "speed_map.json").open("r", encoding="utf-8") as handle:
             speed_map = json.load(handle)
-        ctrl.speed_map = speed_map
+        ctrl = AlbaDriveController(PIDConfig(), speed_map=speed_map)
 
         for key in ("left_reverse", "right_reverse"):
             curve = speed_map["curves"][key]

@@ -7,6 +7,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from controller.motion_guidance_contract import MotionPolicyInput
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -1767,30 +1769,24 @@ class GlobalMotionPolicy:
 
     def build_context(
         self,
-        *,
-        ctrl,
-        lidar_summary: Optional[Dict[str, Any]] = None,
-        obstacle_status: Optional[Dict[str, Any]] = None,
-        raw_scan: Optional[List[Dict[str, Any]]] = None,
+        policy_input: MotionPolicyInput,
     ) -> Dict[str, Any]:
-        lidar = dict(lidar_summary or getattr(ctrl, "lidar_summary", {}) or {})
-        obstacle = dict(obstacle_status or getattr(ctrl, "obstacle_avoidance_status", {}) or {})
-        raw_scan_points = raw_scan if isinstance(raw_scan, list) else list(raw_scan or [])
-        speed_limits = getattr(ctrl, "speed_limits", None)
+        lidar = dict(policy_input.lidar_summary)
+        obstacle = dict(policy_input.obstacle_status)
+        raw_scan_points = [dict(point) for point in policy_input.raw_scan]
         v_max = max(
             0.01,
-            _safe_float(getattr(speed_limits, "effective_v_max", 0.0), 0.0),
-            abs(_safe_float(getattr(ctrl, "v_target", 0.0), 0.0)),
+            _safe_float(policy_input.effective_v_max_mps, 0.0),
+            abs(_safe_float(policy_input.v_mps, 0.0)),
         )
         v_scale = _safe_float(obstacle.get("v_scale"), 1.0)
         obstacle_density = _clamp(1.0 - _clamp(v_scale, 0.0, 1.0), 0.0, 1.0)
-        requested_motion_intent = dict(getattr(ctrl, "requested_motion_intent", {}) or {})
+        requested_motion_intent = dict(policy_input.requested_motion_intent)
         requested_omega = _safe_float(
             requested_motion_intent.get("omega"),
-            _safe_float(getattr(ctrl, "omega_target", 0.0), 0.0),
+            _safe_float(policy_input.omega_rad_s, 0.0),
         )
-        motion_resolution = dict(getattr(ctrl, "motion_resolution_status", {}) or {})
-        resolved = dict(motion_resolution.get("resolved") or {})
+        resolved = dict(policy_input.resolved_motion)
         details = dict(resolved.get("details") or {})
         navigation_intent = dict(details.get("navigation_intent") or {})
         speed_profile = dict(details.get("speed_profile") or {})
@@ -1824,12 +1820,12 @@ class GlobalMotionPolicy:
         summary_rear_clearance = self._resolve_rear_clearance_m(lidar)
         rear_clearance = float(raw_rear_clearance) if math.isfinite(raw_rear_clearance) else float(summary_rear_clearance)
         blocked_back = bool(lidar.get("blocked_back", False))
-        active_command_layer = str(getattr(ctrl, "active_motion_command_layer", "") or "")
-        active_command_type = str(getattr(ctrl, "active_motion_command_type", "") or "")
+        active_command_layer = str(policy_input.active_command_layer or "")
+        active_command_type = str(policy_input.active_command_type or "")
         active_command_type_l = active_command_type.strip().lower()
         requested_v = _safe_float(
             requested_motion_intent.get("v"),
-            _safe_float(getattr(ctrl, "v_target", 0.0), 0.0),
+            _safe_float(policy_input.v_mps, 0.0),
         )
         local_planner_reverse_segment_allowed = bool(
             resolved_layer in {"LOCAL_PLANNER", "LOCAL_NAVIGATION"}
@@ -1895,10 +1891,10 @@ class GlobalMotionPolicy:
             "lidar_confidence": _safe_float(lidar.get("lidar_pose_confidence"), math.nan),
             "obstacle_density": float(obstacle_density),
             "raw_scan": raw_scan_points,
-            "source": str(getattr(ctrl, "motion_command_source", "UNKNOWN") or "UNKNOWN"),
+            "source": str(policy_input.motion_source or "UNKNOWN"),
             "active_command_layer": str(active_command_layer),
             "active_command_type": str(active_command_type),
-            "active_execution_mode": str(getattr(ctrl, "motion_execution_mode", "") or ""),
+            "active_execution_mode": str(policy_input.execution_mode or ""),
             "requested_v_mps": float(requested_v),
             "justified_reverse_allowed": bool(justified_reverse_allowed),
             "justified_reverse_reason": str(justified_reverse_reason),
@@ -1917,17 +1913,9 @@ class GlobalMotionPolicy:
             "v2_follow_global_clear_for_retreat": bool(local_navigation.get("global_clear_for_retreat", False)),
             "requested_omega_rad_s": float(requested_omega),
             "turn_primitive_requested": str(
-                ((getattr(ctrl, "motion_semantics_status", {}) or {}).get("turn_primitive_requested", ""))
-                or ""
+                policy_input.turn_primitive_requested or ""
             ),
-            "robot_state": str(
-                (
-                    ctrl.sm.get_current_state_name()
-                    if hasattr(ctrl, "sm") and getattr(ctrl, "sm", None) is not None
-                    else getattr(ctrl, "state", "UNKNOWN")
-                )
-                or "UNKNOWN"
-            ),
+            "robot_state": str(policy_input.robot_state or "UNKNOWN"),
         }
 
     def apply(

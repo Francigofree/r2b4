@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _contract():
+    speed_map = json.loads((PROJECT_ROOT / "conf" / "speed_map.json").read_text(encoding="utf-8"))
     executor = MotionExecutor(
         pid_config=PIDConfig(
             kp=0.25,
@@ -20,67 +21,55 @@ def _contract():
             k_ff=0.55,
             dz_min=0.2,
             wheel_feedback_trust_min=0.25,
-            motor_compensation_enabled=True,
-            straight_hold_enabled=False,
         ),
-        turn_intensity=0.765,
         max_pwm=0.95,
-        track_width=0.3557,
+        speed_map=speed_map,
         control_mode="UNIFIED",
         direction_switch_hold_s=0.0,
         direction_switch_debounce_cycles=3,
-        inplace_turn_omega_deadband=0.06,
     )
     return executor_contract_from_instance(executor)
 
 
 def _calls():
-    base_feedback = {
-        "v_l": 0.0,
-        "v_r": 0.0,
-        "v_l_encoder": 0.0,
-        "v_r_encoder": 0.0,
-        "v_l_encoder_raw": 0.0,
-        "v_r_encoder_raw": 0.0,
-        "encoder_combined_trust": 1.0,
-        "encoder_forward_reliability": 1.0,
-        "encoder_snapshot_stale": False,
-        "encoder_timing_valid": True,
-        "encoder_timing_error": "",
-        "encoder_timing_gap_s": 0.02,
-        "feedback_velocity_source": "KIT0085_ENCODER",
-        "current_yaw": 0.0,
-        "ekf_theta_deg": 0.0,
-        "active_command_type": "set_twist",
-        "active_command_layer": "MANUAL",
-        "active_execution_mode": "TWIST_EXEC",
-        "turn_primitive_requested": "ARC",
-        "straight_hold_executor_candidate": False,
-        "requested_v": 0.0,
-        "requested_omega": 0.0,
-    }
     rows = []
-    for v_cmd, measured in ((0.0, 0.0), (0.18, 0.03), (0.18, 0.08), (0.0, 0.0)):
-        feedback = dict(base_feedback)
-        feedback.update(
-            {
-                "v_l": measured,
-                "v_r": measured,
-                "v_l_encoder": measured,
-                "v_r_encoder": measured,
-                "requested_v": v_cmd,
-            }
-        )
+    for cycle_id, (target, measured) in enumerate(
+        ((0.0, 0.0), (0.18, 0.03), (0.18, 0.08), (0.0, 0.0)),
+        start=1,
+    ):
         rows.append(
             {
-                "method": "compute_pwm",
-                "kwargs": {
-                    "v_cmd": v_cmd,
-                    "omega_cmd": 0.0,
-                    "sensor_feedback": feedback,
-                    "dt": 0.02,
-                    "execution_mode": "TWIST_EXEC",
-                    "track_reference": {},
+                "method": "compute",
+                "cycle_context": {
+                    "cycle_id": str(cycle_id),
+                    "monotonic_time": 1.0 + cycle_id * 0.02,
+                    "dt_observed_s": 0.02,
+                    "dt_control_s": 0.02,
+                    "timing_valid": True,
+                    "timing_reason": "",
+                },
+                "wheel_setpoint": {
+                    "contract_id": "R2B4_MOTION_PLATFORM_V2_1",
+                    "wheel_setpoint_id": f"wheel:{cycle_id}",
+                    "physical_command_id": f"physical:{cycle_id}",
+                    "resolved_id": f"resolved:{cycle_id}",
+                    "cycle_id": str(cycle_id),
+                    "left_target_mps": target,
+                    "right_target_mps": target,
+                    "feasible": True,
+                    "reason": "ACCEPTED",
+                    "applied_limits": [],
+                },
+                "wheel_feedback": {
+                    "measurement_id": f"encoder:{cycle_id}",
+                    "source_timestamp": 1.0 + cycle_id * 0.02,
+                    "left_mps": measured,
+                    "right_mps": measured,
+                    "combined_trust": 1.0,
+                    "timing_valid": True,
+                    "stale": False,
+                    "timing_reason": "",
+                    "aggregation_window_s": 0.1,
                 },
             }
         )

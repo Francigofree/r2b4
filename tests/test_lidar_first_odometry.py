@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from middleware.lidar_odometry import LidarOdometry
 from control_loop import ControlLoop
+from controller.motion_platform_adapter import MotionPlatformBoundaryAdapter
 from middleware.ekf import ExtendedKalmanFilter
 from middleware.ekf_manager import EKFManager
 
@@ -357,81 +358,29 @@ class LidarFirstOdometryTest(unittest.TestCase):
         self.assertIsNotNone(odom)
         self.assertAlmostEqual(float(odom.get("x", 0.0)), 0.12, places=6)
         self.assertAlmostEqual(float(odom.get("y", 0.0)), -0.04, places=6)
-    def test_lidar_first_encoder_feedback_selected_when_kit0085_channels_healthy(self):
-        """LIDAR_FIRST keeps EKF pose while healthy KIT0085 encoders drive track feedback."""
-        # Simulate cont.py sensor_feedback assembly logic for LIDAR_FIRST
-        odom_mode_now = "LIDAR_FIRST"
-        _lidar_first_active = (odom_mode_now == "LIDAR_FIRST")
-        recovery_mode = False
-        belso_hurok_ekf_feedback = False  # Even when config says False...
-
-        # LIDAR_FIRST enforcement: must override to True
-        use_ekf_feedback = (not recovery_mode) and bool(belso_hurok_ekf_feedback)
-        if _lidar_first_active:
-            use_ekf_feedback = True
-        self.assertTrue(use_ekf_feedback,
-            "LIDAR_FIRST must force use_ekf_feedback=True even if config says False")
-
-        # Simulate EKF state
-        ekf_state = {"v": 0.15, "omega_rad_s": 0.02, "theta_deg": 5.0}
-        track_width = 0.175
-        half_L = track_width * 0.5
-        v_fused = float(ekf_state["v"])
-        omega_rad_s = float(ekf_state["omega_rad_s"])
-        v_l_fb = v_fused - omega_rad_s * half_L
-        v_r_fb = v_fused + omega_rad_s * half_L
-
-        # KIT0085 encoder values are valid and selected for wheel-speed feedback.
-        v_l_can, v_r_can = 0.14, 0.16
-        v_l_raw, v_r_raw = 0.13, 0.17
-        encoder_reliability = {
-            "ekf_usage_mode": "NORMAL",
-            "combined_trust": 0.9,
-            "forward_reliability": 0.85,
-            "snapshot_stale": False,
-        }
-        encoder_feedback_selected = bool(
-            _lidar_first_active
-            and encoder_reliability["ekf_usage_mode"] != "REJECT"
-            and encoder_reliability["combined_trust"] >= 0.35
-            and not encoder_reliability["snapshot_stale"]
-            and math.isfinite(v_l_can)
-            and math.isfinite(v_r_can)
+    def test_lidar_first_wheel_feedback_contract_is_encoder_only(self):
+        """L9 receives physical wheel measurements, never fused pose or heading."""
+        feedback = MotionPlatformBoundaryAdapter.wheel_feedback(
+            measurement_id="kit0085:42",
+            source_timestamp=123.5,
+            left_mps=0.14,
+            right_mps=0.16,
+            combined_trust=0.9,
+            timing_valid=True,
+            stale=False,
+            timing_reason="",
+            aggregation_window_s=0.05,
         )
-        if encoder_feedback_selected:
-            v_l_fb, v_r_fb = float(v_l_can), float(v_r_can)
 
-        sensor_feedback = {
-            "v_l": v_l_fb,
-            "v_r": v_r_fb,
-            "feedback_velocity_source": "KIT0085_ENCODER" if encoder_feedback_selected else "EKF_TWIST",
-            "v_l_encoder": float(v_l_can),
-            "v_r_encoder": float(v_r_can),
-            "v_l_encoder_raw": float(v_l_raw),
-            "v_r_encoder_raw": float(v_r_raw),
-            "encoder_combined_trust": encoder_reliability["combined_trust"],
-            "encoder_forward_reliability": encoder_reliability["forward_reliability"],
-            "encoder_snapshot_stale": encoder_reliability["snapshot_stale"],
-            "current_yaw": ekf_state.get("theta_deg"),
-        }
-
-        self.assertEqual(sensor_feedback["v_l_encoder"], v_l_can)
-        self.assertEqual(sensor_feedback["v_r_encoder"], v_r_can)
-        self.assertEqual(sensor_feedback["v_l_encoder_raw"], v_l_raw)
-        self.assertEqual(sensor_feedback["v_r_encoder_raw"], v_r_raw)
-        self.assertEqual(sensor_feedback["encoder_combined_trust"], 0.9)
-        self.assertEqual(sensor_feedback["encoder_forward_reliability"], 0.85)
-        self.assertFalse(sensor_feedback["encoder_snapshot_stale"])
-
-        # Track feedback must be encoder-based while EKF heading remains available.
-        self.assertEqual(sensor_feedback["feedback_velocity_source"], "KIT0085_ENCODER")
-        self.assertIsNotNone(sensor_feedback["v_l"])
-        self.assertIsNotNone(sensor_feedback["v_r"])
-        self.assertTrue(math.isfinite(sensor_feedback["v_l"]))
-        self.assertTrue(math.isfinite(sensor_feedback["v_r"]))
-        self.assertAlmostEqual(sensor_feedback["v_l"], v_l_can)
-        self.assertAlmostEqual(sensor_feedback["v_r"], v_r_can)
-        self.assertEqual(sensor_feedback["current_yaw"], ekf_state["theta_deg"])
+        self.assertAlmostEqual(feedback.left_mps, 0.14)
+        self.assertAlmostEqual(feedback.right_mps, 0.16)
+        self.assertAlmostEqual(feedback.combined_trust, 0.9)
+        self.assertTrue(feedback.timing_valid)
+        self.assertFalse(feedback.stale)
+        self.assertEqual(feedback.measurement_id, "kit0085:42")
+        self.assertFalse(hasattr(feedback, "current_yaw"))
+        self.assertFalse(hasattr(feedback, "ekf_theta_deg"))
+        self.assertFalse(hasattr(feedback, "v_fused"))
 
     def test_relocalized_measurement_can_pass_expanded_jump_gate(self):
         lo = LidarOdometry(

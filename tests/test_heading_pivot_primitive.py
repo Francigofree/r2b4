@@ -4,7 +4,7 @@
 import unittest
 import math
 
-from controller.motion_readiness import HeadingTurnController
+from controller.heading_turn_controller import HeadingTurnController
 from controller.motion_schema import TURN_PRIMITIVE_IN_PLACE_ROTATE, TURN_PRIMITIVE_ONE_TRACK_PIVOT
 
 
@@ -35,6 +35,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=1,
         )
 
@@ -79,6 +80,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=0,
         )
         normal.start(
@@ -86,6 +88,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=1,
         )
 
@@ -132,6 +135,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=0,
         )
 
@@ -173,6 +177,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=0,
         )
 
@@ -212,6 +217,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=1,
         )
         ctrl._integrated_heading_progress_rad = math.radians(36.0)
@@ -272,6 +278,7 @@ class TestHeadingPivotPrimitive(unittest.TestCase):
             current_heading_deg=0.0,
             pose_x=0.0,
             pose_y=0.0,
+            now=0.0,
             speed_level=1,
         )
         ctrl._predictive_stop_hold = True

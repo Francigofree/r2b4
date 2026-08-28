@@ -4,6 +4,7 @@
 import sys
 import unittest
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,8 +12,25 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from controller.motion_readiness import MotionSemanticsEngine
-from controller.motion_controller import MotionController
+from controller.motion_semantics_engine import MotionSemanticsEngine
+from controller.motion_guidance_contract import (
+    GUIDANCE_HEADING_HOLD,
+    GUIDANCE_NONE,
+    GUIDANCE_TRACK_LOCAL_SEGMENT,
+    MOTION_INTENT_CONTRACT_ID,
+    MotionSemanticsInput,
+    PoseSnapshot,
+    ResolvedMotionIntent,
+)
+from controller.motion_controller import MotionController, MotionControllerConfig
+from controller.motion_platform_contract import (
+    MOTION_PLATFORM_CONTRACT_ID,
+    PHYSICAL_MODE_BODY_TWIST,
+    CycleContext,
+    DriveCapabilities,
+    MotionEnvelope,
+    PhysicalMotionCommand,
+)
 from controller.commands import (
     _activate_room_cruise_speed_limit,
     apply_runtime_preset,
@@ -55,6 +73,116 @@ def _make_ctrl(*, command_type: str, layer: str, v: float = 0.08, omega: float =
         track_target_left_mps=None,
         track_target_right_mps=None,
     )
+
+
+def _semantics_input(ctrl, *, theta_deg: float, now: float) -> MotionSemanticsInput:
+    resolved = dict((ctrl.motion_resolution_status or {}).get("resolved") or {})
+    public = dict(getattr(ctrl, "motion_public_status", {}) or {})
+    requested = dict(getattr(ctrl, "requested_motion_intent", {}) or {})
+    track = dict(getattr(ctrl, "requested_track_reference", {}) or {})
+    cycle = CycleContext(
+            cycle_id=f"semantics:{now:.6f}",
+            monotonic_time=float(now),
+            dt_observed_s=0.02,
+            dt_control_s=0.02,
+            timing_valid=True,
+        )
+    command_type = str(resolved.get("command_type", "") or "").lower()
+    layer = str(resolved.get("layer", "") or "").upper()
+    if command_type == "local_planner_segment" or layer == "LOCAL_PLANNER":
+        guidance_type = GUIDANCE_TRACK_LOCAL_SEGMENT
+    elif abs(float(ctrl.v_target)) > 1e-9 and abs(float(ctrl.omega_target)) <= 0.04:
+        guidance_type = GUIDANCE_HEADING_HOLD
+    else:
+        guidance_type = GUIDANCE_NONE
+    intent = ResolvedMotionIntent(
+        contract_id=MOTION_INTENT_CONTRACT_ID,
+        resolved_id="resolved:test",
+        cycle_id=cycle.cycle_id,
+        selected_proposal_id="proposal:test",
+        valid_until_monotonic=10.0,
+        nominal_mode=PHYSICAL_MODE_BODY_TWIST,
+        v_mps=float(ctrl.v_target),
+        omega_rad_s=float(ctrl.omega_target),
+        guidance_type=guidance_type,
+    )
+    capabilities = DriveCapabilities(
+        track_width_m=float(ctrl.cfg["fizika"]["nyomtav_szelesseg_m"]),
+        calibrated_wheel_min_mps=0.05,
+        calibrated_wheel_max_mps=0.30,
+        max_wheel_accel_mps2=0.35,
+        max_wheel_decel_mps2=0.8,
+        capability_version="test",
+    )
+    return MotionSemanticsInput(
+        cycle_context=cycle,
+        pose=PoseSnapshot(
+            frame_id="R2B4_BOOT_ROBOT_MAP",
+            pose_id=f"pose:{now:.6f}",
+            source_timestamp=float(now),
+            x_m=0.0,
+            y_m=0.0,
+            yaw_rad=math.radians(float(theta_deg)),
+            v_mps=0.0,
+            omega_rad_s=0.0,
+            validity="VALID",
+        ),
+        resolved_intent=intent,
+        drive_capabilities=capabilities,
+        v_mps=float(ctrl.v_target),
+        omega_rad_s=float(ctrl.omega_target),
+        requested_left_mps=track.get("left_mps"),
+        requested_right_mps=track.get("right_mps"),
+        executed_left_mps=getattr(ctrl, "track_target_left_mps", None),
+        executed_right_mps=getattr(ctrl, "track_target_right_mps", None),
+        actual_linear_mps=public.get("actual_linear_mps"),
+        actual_angular_dps=public.get("actual_angular_dps"),
+    )
+
+
+def _platform_compute(
+    controller,
+    *,
+    cycle_id,
+    v_mps,
+    omega_rad_s,
+    track_width_m,
+    minimum_mps,
+    maximum_mps,
+    accel_mps2=20.0,
+):
+    cycle = CycleContext(str(cycle_id), float(cycle_id) * 0.02, 0.02, 0.02, True)
+    command = PhysicalMotionCommand(
+        contract_id=MOTION_PLATFORM_CONTRACT_ID,
+        physical_command_id=f"physical:{cycle_id}",
+        resolved_id=f"resolved:{cycle_id}",
+        cycle_id=str(cycle_id),
+        valid_until_monotonic=10.0,
+        physical_mode=PHYSICAL_MODE_BODY_TWIST,
+        v_mps=float(v_mps),
+        omega_rad_s=float(omega_rad_s),
+    )
+    envelope = MotionEnvelope(
+        cycle_id=str(cycle_id),
+        physical_command_id=command.physical_command_id,
+        stop_required=False,
+        stop_reason="",
+        max_abs_v_mps=float(maximum_mps),
+        max_abs_omega_rad_s=2.5,
+        max_abs_wheel_mps=float(maximum_mps),
+        max_wheel_accel_mps2=float(accel_mps2),
+        max_wheel_decel_mps2=float(accel_mps2),
+        capability_version="test",
+    )
+    capabilities = DriveCapabilities(
+        track_width_m=float(track_width_m),
+        calibrated_wheel_min_mps=float(minimum_mps),
+        calibrated_wheel_max_mps=float(maximum_mps),
+        max_wheel_accel_mps2=float(accel_mps2),
+        max_wheel_decel_mps2=float(accel_mps2),
+        capability_version="test",
+    )
+    return controller.compute(cycle, command, envelope, capabilities)
 
 
 class TestMotionSemanticsEngine(unittest.TestCase):
@@ -218,37 +346,45 @@ class TestMotionSemanticsEngine(unittest.TestCase):
 
     def test_rotate_state_allows_local_planner_arc(self):
         ctrl = _make_ctrl(command_type="local_planner_segment", layer="LOCAL_PLANNER")
-        status = MotionSemanticsEngine().enforce(ctrl, ekf_state={"theta_deg": 0.0}, now=1.0)
+        result = MotionSemanticsEngine().compute(
+            _semantics_input(ctrl, theta_deg=0.0, now=1.0)
+        )
+        status = dict(result.status)
 
-        self.assertAlmostEqual(ctrl.v_target, 0.08)
+        self.assertAlmostEqual(result.v_mps, 0.08)
         self.assertNotIn("ROTATE_PURE_ENFORCED", status["actions"])
-        self.assertIn("ROTATE_STATE_LOCAL_PLANNER_ARC_ALLOWED", status["actions"])
+        self.assertIn("SELECTED_LOCAL_SEGMENT_PASSTHROUGH", status["actions"])
         self.assertNotIn("ROTATE_TRANSLATION_REQUEST", status["violations"])
 
-    def test_rotate_state_still_pure_enforces_non_planner_motion(self):
+    def test_selected_intent_is_not_rewritten_from_shared_state(self):
         ctrl = _make_ctrl(command_type="set_twist", layer="MOTION_TARGET")
-        status = MotionSemanticsEngine().enforce(ctrl, ekf_state={"theta_deg": 0.0}, now=1.0)
+        result = MotionSemanticsEngine().compute(
+            _semantics_input(ctrl, theta_deg=0.0, now=1.0)
+        )
+        status = dict(result.status)
 
-        self.assertAlmostEqual(ctrl.v_target, 0.0)
-        self.assertIn("ROTATE_PURE_ENFORCED", status["actions"])
-        self.assertIn("ROTATE_TRANSLATION_REQUEST", status["violations"])
+        self.assertAlmostEqual(result.v_mps, 0.08)
+        self.assertNotIn("ROTATE_PURE_ENFORCED", status["actions"])
+        self.assertEqual(status["violations"], [])
 
-    def test_explicit_reverse_defers_heading_hold_to_executor(self):
+    def test_explicit_reverse_heading_hold_is_owned_by_guidance(self):
         ctrl = _make_ctrl(command_type="set_twist", layer="MOTION_TARGET", v=-0.035, omega=0.0)
         ctrl.sm = _DummyStateMachine("BACKWARD")
-
-        status = MotionSemanticsEngine({
+        engine = MotionSemanticsEngine({
             "forward_min_command_enable": True,
             "forward_min_command_mps": 0.10,
             "forward_heading_hold_enable": True,
-        }).enforce(ctrl, ekf_state={"theta_deg": 8.0}, now=1.0)
+        })
+        engine.compute(_semantics_input(ctrl, theta_deg=8.0, now=1.0))
+        result = engine.compute(_semantics_input(ctrl, theta_deg=10.0, now=1.02))
+        status = dict(result.status)
 
-        self.assertAlmostEqual(ctrl.v_target, -0.035, places=6)
-        self.assertAlmostEqual(ctrl.omega_target, 0.0, places=6)
-        self.assertFalse(bool(status.get("heading_hold_applied", False)))
-        self.assertTrue(bool(status.get("heading_hold_deferred_to_executor", False)))
-        self.assertEqual(str(status.get("heading_hold_mode", "")), "EXECUTOR_DEFERRED_REVERSE")
-        self.assertIn("REVERSE_HEADING_HOLD_DEFERRED", list(status.get("actions", []) or []))
+        self.assertAlmostEqual(result.v_mps, -0.035, places=6)
+        self.assertLess(result.omega_rad_s, 0.0)
+        self.assertTrue(bool(status.get("heading_hold_applied", False)))
+        self.assertEqual(str(status.get("heading_hold_mode", "")), "GUIDANCE_APPLIED_REVERSE")
+        self.assertEqual(str(status.get("heading_hold_owner", "")), "MOTION_GUIDANCE_L7A")
+        self.assertIn("REVERSE_HEADING_HOLD_GUIDANCE", list(status.get("actions", []) or []))
         self.assertNotIn("FORWARD_MIN_SPEED_ENFORCED", list(status.get("actions", []) or []))
 
     def test_local_planner_arc_remains_nonzero_after_final_shaping(self):
@@ -263,35 +399,34 @@ class TestMotionSemanticsEngine(unittest.TestCase):
         ctrl.motion_ref_v_r = 0.0
         ctrl.cfg["vezerles"] = {}
 
-        MotionSemanticsEngine().enforce(ctrl, ekf_state={"theta_deg": 0.0}, now=1.0)
-        v_out, w_out = MotionController(
-            track_width=0.175,
-            enable_input_shaping=False,
-            enable_slew=False,
-        ).tick(
-            ctrl=ctrl,
-            v_target=float(ctrl.v_target),
-            omega_target=float(ctrl.omega_target),
-            dt=0.02,
-            ekf_state={"v": 0.0, "omega_rad_s": 0.0},
-            force_zero=False,
+        result = MotionSemanticsEngine().compute(
+            _semantics_input(ctrl, theta_deg=0.0, now=1.0)
+        )
+        wheel = _platform_compute(
+            MotionController(config=MotionControllerConfig(enable_slew=False)),
+            cycle_id=1,
+            v_mps=result.v_mps,
+            omega_rad_s=result.omega_rad_s,
+            track_width_m=0.175,
+            minimum_mps=0.05,
+            maximum_mps=0.08,
         )
 
-        self.assertGreater(v_out, 0.0)
-        self.assertNotAlmostEqual(w_out, 0.0, places=6)
-        self.assertGreater(float(ctrl.motion_ref_v_l), 0.0)
-        self.assertGreater(float(ctrl.motion_ref_v_r), 0.0)
+        self.assertGreater(wheel.left_target_mps, 0.0)
+        self.assertGreater(wheel.right_target_mps, 0.0)
+        self.assertNotAlmostEqual(wheel.left_target_mps, wheel.right_target_mps, places=6)
 
     def test_explicit_v2_arc_keeps_requested_low_linear_speed(self):
         ctrl = _make_ctrl(command_type="set_twist", layer="MOTION_TARGET", v=0.05, omega=0.12)
         ctrl.sm = _DummyStateMachine("FORWARD")
 
-        status = MotionSemanticsEngine({
+        result = MotionSemanticsEngine({
             "forward_min_command_enable": True,
             "forward_min_command_mps": 0.10,
-        }).enforce(ctrl, ekf_state={"theta_deg": 0.0}, now=1.0)
+        }).compute(_semantics_input(ctrl, theta_deg=0.0, now=1.0))
+        status = dict(result.status)
 
-        self.assertAlmostEqual(ctrl.v_target, 0.05, places=6)
+        self.assertAlmostEqual(result.v_mps, 0.05, places=6)
         self.assertNotIn("FORWARD_MIN_SPEED_ENFORCED", list(status.get("actions", []) or []))
 
     def test_live_arc_replay_has_no_duplicate_semantics_clearance_governor(self):
@@ -305,14 +440,13 @@ class TestMotionSemanticsEngine(unittest.TestCase):
         ctrl.cfg = {"vezerles": vezerles, "fizika": {"nyomtav_szelesseg_m": 0.3557}}
 
         semantics_cfg = dict((vezerles.get("motion_readiness") or {}).get("motion_semantics") or {})
-        status = MotionSemanticsEngine(semantics_cfg).enforce(
-            ctrl,
-            ekf_state={"theta_deg": 0.0},
-            now=1.0,
+        result = MotionSemanticsEngine(semantics_cfg).compute(
+            _semantics_input(ctrl, theta_deg=0.0, now=1.0)
         )
+        status = dict(result.status)
 
-        self.assertAlmostEqual(ctrl.v_target, 0.225, places=6)
-        self.assertAlmostEqual(ctrl.omega_target, 0.20, places=6)
+        self.assertAlmostEqual(result.v_mps, 0.225, places=6)
+        self.assertAlmostEqual(result.omega_rad_s, 0.20, places=6)
         self.assertNotIn("clearance_scale", status)
         self.assertNotIn("FORWARD_CLEARANCE_SCALED", list(status.get("actions", []) or []))
 
@@ -330,29 +464,25 @@ class TestMotionSemanticsEngine(unittest.TestCase):
         ctrl.motion_controller_state = {}
         ctrl.motion_ref_v_l = 0.0
         ctrl.motion_ref_v_r = 0.0
-        motion_controller = MotionController(
-            track_width=0.3557,
-            enable_input_shaping=False,
-            enable_slew=True,
-        )
+        motion_controller = MotionController(config=MotionControllerConfig(enable_slew=True))
 
         samples = []
-        for _ in range(40):
-            v_out, w_out = motion_controller.tick(
-                ctrl=ctrl,
-                v_target=float(ctrl.v_target),
-                omega_target=float(ctrl.omega_target),
-                dt=0.02,
-                ekf_state={"v": 0.0, "omega_rad_s": 0.0},
-                force_zero=False,
+        for cycle_id in range(1, 41):
+            wheel = _platform_compute(
+                motion_controller,
+                cycle_id=cycle_id,
+                v_mps=result.v_mps,
+                omega_rad_s=result.omega_rad_s,
+                track_width_m=0.3557,
+                minimum_mps=0.15,
+                maximum_mps=0.582,
+                accel_mps2=0.35,
             )
-            samples.append((v_out, w_out, ctrl.motion_ref_v_l, ctrl.motion_ref_v_r))
+            samples.append((wheel.left_target_mps, wheel.right_target_mps))
 
-        self.assertTrue(any(abs(row[1]) > 0.04 for row in samples[5:]))
-        self.assertAlmostEqual(samples[-1][0], 0.225, places=6)
-        self.assertAlmostEqual(samples[-1][1], 0.20, places=6)
-        self.assertAlmostEqual(samples[-1][2], 0.18943, places=5)
-        self.assertAlmostEqual(samples[-1][3], 0.26057, places=5)
+        self.assertTrue(any(abs(right - left) > 0.04 for left, right in samples[5:]))
+        self.assertAlmostEqual(samples[-1][0], 0.18943, places=5)
+        self.assertAlmostEqual(samples[-1][1], 0.26057, places=5)
 
 
 if __name__ == "__main__":

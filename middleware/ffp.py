@@ -5,8 +5,6 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
-from config_manager import config as global_config
-
 WHEEL_SPEED_MAP_SCHEMA = "R2B4_WHEEL_SPEED_MAP_V2"
 WHEEL_CURVE_KEYS = (
     "left_forward",
@@ -189,27 +187,15 @@ class PIDConfig:
     k_ff: float = 1.0
     dz_min: float = 0.20  # Alapértelmezett, de felülírható
     wheel_feedback_trust_min: float = 0.55
-    # Motor-model compensation (executor-level, non-ARC-specific)
-    motor_compensation_enabled: bool = True
-    straight_hold_enabled: bool = True
-    straight_hold_kp: float = 1.15
-    straight_hold_max_w: float = 0.14
-    straight_hold_slew_rate: float = 0.90
-    straight_hold_heading_deadband_deg: float = 0.35
-    straight_hold_v_min_mps: float = 0.03
-    straight_hold_w_request_eps: float = 0.03
+
+
 class AlbaDriveController:
     """The single wheel-level speed-map to PWM feed-forward lookup."""
 
-    def __init__(self, cfg: PIDConfig, map_path=None):
+    def __init__(self, cfg: PIDConfig, *, speed_map: Dict[str, Any]):
         self.cfg = cfg
         self.dead_zone = cfg.dz_min
-
-        if map_path is None:
-            map_path = global_config.path("speed_map.json")
-        self.map_path = map_path
-
-        self.speed_map = global_config.get("speed_map", default={}) or {}
+        self.speed_map = dict(speed_map or {})
         self._diag = {}
 
     def reset(self):

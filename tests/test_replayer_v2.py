@@ -1,8 +1,10 @@
+import ast
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
 from controller.motion_controller import create_motion_controller_from_config
+from controller.motion_platform_contract import CycleContext
 from controller.motion_resolver import make_motion_proposal
 from core.motion.speed_limits import SpeedLimitsRuntime
 from middleware.ffp import PIDConfig
@@ -10,6 +12,7 @@ from motion_executor import MotionExecutor
 from replayer.adapters import (
     ProductionMotionPipelineAdapter,
     executor_contract_from_instance,
+    motion_layer_contract_from_controller,
     motion_pipeline_contract_from_controller,
 )
 from replayer.capture import CaptureRecorder, verify_capture
@@ -27,6 +30,37 @@ from replayer import runtime_capture
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_runtime_capture_executor_call_is_built_before_recording():
+    tree = ast.parse((PROJECT_ROOT / "cont.py").read_text(encoding="utf-8"))
+    run_method = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "run"
+    )
+    assignments = [
+        node.lineno
+        for node in ast.walk(run_method)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "replayer_executor_call"
+            for target in node.targets
+        )
+    ]
+    capture_calls = [
+        node.lineno
+        for node in ast.walk(run_method)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "record_runtime_tick"
+    ]
+
+    assert len(assignments) == 1
+    assert len(capture_calls) == 1
+    assert assignments[0] < capture_calls[0]
 
 
 def test_runtime_capture_close_uses_coordinated_drain_timeout(tmp_path, monkeypatch):
@@ -68,7 +102,61 @@ def test_runtime_capture_close_uses_coordinated_drain_timeout(tmp_path, monkeypa
     assert runtime_capture._recorder is None
 
 
+def test_runtime_capture_detaches_immutable_snapshot_values(monkeypatch):
+    captured = {}
+
+    class _ImmutableDict(dict):
+        def __deepcopy__(self, _memo):
+            raise TypeError("immutable_lidar_snapshot")
+
+    class _ImmutableList(list):
+        def __deepcopy__(self, _memo):
+            raise TypeError("immutable_lidar_snapshot")
+
+    class _Recorder:
+        def record(self, frame):
+            captured.update(frame)
+            return True
+
+        def mark_invalid(self, reason):
+            raise AssertionError(reason)
+
+    monkeypatch.setattr(runtime_capture, "_recorder", _Recorder())
+    monkeypatch.setattr(runtime_capture, "_last_matcher_evidence_id", None)
+
+    assert runtime_capture.record_runtime_tick(
+        cycle_id=7,
+        monotonic_ns=123456789,
+        dt_s=0.02,
+        executor_reset_generation=1,
+        executor_call={"method": "compute", "input": _ImmutableDict({"v": 0.0})},
+        executor_pwm_l=0.0,
+        executor_pwm_r=0.0,
+        executor_output_reason="STOP",
+        final_pwm_l=0.0,
+        final_pwm_r=0.0,
+        safety_allow=True,
+        safety_reason="OK",
+        final_pwm_zero_reason="STOP",
+        pipeline={"stages": _ImmutableDict({"executor": _ImmutableList([0.0])})},
+        matcher_evidence=_ImmutableDict(
+            {
+                "matcher_result_id": 11,
+                "input": _ImmutableDict({"scan": _ImmutableList([1.0, 2.0])}),
+            }
+        ),
+    )
+
+    assert captured["executor_call"]["input"] == {"v": 0.0}
+    assert type(captured["executor_call"]["input"]) is dict
+    assert captured["pipeline"]["stages"]["executor"] == [0.0]
+    assert type(captured["pipeline"]["stages"]["executor"]) is list
+    assert captured["matcher_evidence"]["input"]["scan"] == [1.0, 2.0]
+    assert type(captured["matcher_evidence"]["input"]["scan"]) is list
+
+
 def _executor_contract():
+    speed_map = json.loads((PROJECT_ROOT / "conf" / "speed_map.json").read_text(encoding="utf-8"))
     executor = MotionExecutor(
         pid_config=PIDConfig(
             kp=0.25,
@@ -77,16 +165,12 @@ def _executor_contract():
             k_ff=0.55,
             dz_min=0.2,
             wheel_feedback_trust_min=0.25,
-            motor_compensation_enabled=True,
-            straight_hold_enabled=False,
         ),
-        turn_intensity=0.765,
         max_pwm=0.95,
-        track_width=0.3557,
+        speed_map=speed_map,
         control_mode="UNIFIED",
         direction_switch_hold_s=0.0,
         direction_switch_debounce_cycles=3,
-        inplace_turn_omega_deadband=0.06,
     )
     return executor_contract_from_instance(executor)
 
@@ -113,30 +197,17 @@ def _production_inputs():
     return vezerles, fizika, speed_map, ctrl
 
 
-def _feedback(v_cmd, omega_cmd, measured):
+def _feedback(*, cycle_id, mono_s, measured):
     return {
-        "v_l": measured,
-        "v_r": measured,
-        "v_l_encoder": measured,
-        "v_r_encoder": measured,
-        "v_l_encoder_raw": measured,
-        "v_r_encoder_raw": measured,
-        "encoder_combined_trust": 1.0,
-        "encoder_forward_reliability": 1.0,
-        "encoder_snapshot_stale": False,
-        "encoder_timing_valid": True,
-        "encoder_timing_error": "",
-        "encoder_timing_gap_s": 0.02,
-        "feedback_velocity_source": "KIT0085_ENCODER",
-        "current_yaw": 0.0,
-        "ekf_theta_deg": 0.0,
-        "active_command_type": "set_twist",
-        "active_command_layer": "MOTION_TARGET",
-        "active_execution_mode": "TWIST_EXEC",
-        "turn_primitive_requested": "STRAIGHT" if abs(omega_cmd) < 1e-9 else "DIFF_ARC_GENTLE",
-        "straight_hold_executor_candidate": abs(omega_cmd) < 1e-9,
-        "requested_v": v_cmd,
-        "requested_omega": omega_cmd,
+        "measurement_id": f"encoder:{cycle_id}",
+        "source_timestamp": mono_s,
+        "left_mps": measured,
+        "right_mps": measured,
+        "combined_trust": 1.0,
+        "timing_valid": True,
+        "stale": False,
+        "timing_reason": "",
+        "aggregation_window_s": 0.1,
     }
 
 
@@ -149,11 +220,16 @@ def _make_v2_capture(
     external_gate_transition_at=None,
     return_close_status=False,
     close_invalid_reason="",
+    v21=False,
 ):
     data_root = tmp_path / "replayer_data"
     vezerles, fizika, speed_map, ctrl = _production_inputs()
     executor_contract = _executor_contract()
-    pipeline_contract = motion_pipeline_contract_from_controller(ctrl)
+    pipeline_contract = (
+        motion_layer_contract_from_controller(ctrl)
+        if v21
+        else motion_pipeline_contract_from_controller(ctrl)
+    )
     producer = ProductionMotionPipelineAdapter(
         pipeline_contract=pipeline_contract,
         executor_contract=executor_contract,
@@ -179,6 +255,7 @@ def _make_v2_capture(
     ]
     for index, (v_target, omega_target, measured) in enumerate(commands, start=1):
         mono_s = 1.0 + index * 0.02
+        platform_cycle_id = str(100 + index)
         if index == external_gate_transition_at:
             gate_runtime = {**gate_runtime, "last_mode": "RESETTING"}
         proposal = make_motion_proposal(
@@ -227,46 +304,123 @@ def _make_v2_capture(
             "requested_track_reference": {"left_mps": None, "right_mps": None},
             "track_width_m": float(fizika["nyomtav_szelesseg_m"]),
         }
+        cycle_context = {
+            "cycle_id": platform_cycle_id,
+            "monotonic_time": mono_s,
+            "dt_observed_s": 0.02,
+            "dt_control_s": 0.02,
+            "timing_valid": True,
+            "timing_reason": "",
+        }
+        drive_capabilities = {
+            "track_width_m": float(fizika["nyomtav_szelesseg_m"]),
+            "calibrated_wheel_min_mps": float(speed_map["operating_range_min_mps"]),
+            "calibrated_wheel_max_mps": float(speed_map["operating_range_max_mps"]),
+            "max_wheel_accel_mps2": 0.35,
+            "max_wheel_decel_mps2": 0.35,
+            "capability_version": "replay-v21",
+        }
+        requested_stage_input = {
+            "proposals": [proposal],
+            "active_source": "STATE",
+            "category_caps": {},
+            "max_total": 8,
+        }
+        resolver_stage_input = {
+            "motion_tick_context": context,
+            "now_monotonic_s": mono_s,
+            "now_wall_s": 1_700_000_000.0 + mono_s,
+        }
+        _, resolver_stage_output = producer.replay_resolver(
+            requested_input=requested_stage_input,
+            resolver_input=resolver_stage_input,
+            cycle_context=CycleContext(**cycle_context),
+        )
+        resolved_intent = dict(resolver_stage_output["resolved_intent"])
+        guidance_input = {
+            "resolved_intent": resolved_intent,
+            "pose": {
+                "frame_id": "R2B4_BOOT_ROBOT_MAP",
+                "pose_id": f"pose:{platform_cycle_id}",
+                "source_timestamp": mono_s,
+                "x_m": 0.0,
+                "y_m": 0.0,
+                "yaw_rad": 0.0,
+                "v_mps": measured,
+                "omega_rad_s": 0.0,
+                "validity": "VALID",
+            },
+            "world": {
+                "world_id": f"world:{platform_cycle_id}",
+                "source_timestamp": mono_s,
+                "validity": "VALID",
+                "lidar_summary": {
+                    "front_clearance_m": 2.0,
+                    "blocked_front": False,
+                },
+                "obstacle_status": {},
+                "raw_scan": [],
+            },
+            "cycle_context": cycle_context,
+            "drive_capabilities": drive_capabilities,
+            "executed_left_mps": measured,
+            "executed_right_mps": measured,
+            "actual_linear_mps": measured,
+            "actual_angular_dps": 0.0,
+        }
+        gate_stop = bool(index == external_gate_transition_at)
+        physical_command = {
+            "contract_id": "R2B4_MOTION_PLATFORM_V2_1",
+            "physical_command_id": f"physical:{platform_cycle_id}",
+            "resolved_id": resolved_intent["resolved_id"],
+            "cycle_id": platform_cycle_id,
+            "valid_until_monotonic": resolved_intent["valid_until_monotonic"],
+            "physical_mode": "BODY_TWIST",
+            "v_mps": resolved_intent["v_mps"],
+            "omega_rad_s": resolved_intent["omega_rad_s"],
+            "left_mps": 0.0,
+            "right_mps": 0.0,
+            "guidance_reason": "GUIDANCE_APPLIED",
+            "trace_metadata": {
+                "selected_proposal_id": resolved_intent["selected_proposal_id"],
+                "guidance_type": resolved_intent["guidance_type"],
+                "pose_id": f"pose:{platform_cycle_id}",
+                "world_id": f"world:{platform_cycle_id}",
+            },
+        }
+        motion_envelope = {
+            "cycle_id": platform_cycle_id,
+            "physical_command_id": physical_command["physical_command_id"],
+            "stop_required": gate_stop,
+            "stop_reason": "LOCALIZATION_GATE" if gate_stop else "",
+            "max_abs_v_mps": 0.30,
+            "max_abs_omega_rad_s": 1.68,
+            "max_abs_wheel_mps": float(speed_map["operating_range_max_mps"]),
+            "max_wheel_accel_mps2": 0.35,
+            "max_wheel_decel_mps2": 0.35,
+            "capability_version": "replay-v21",
+        }
         stages = {
             "requested_motion": {
                 "input": {
-                    "proposals": [proposal],
-                    "active_source": "STATE",
-                    "category_caps": {},
-                    "max_total": 8,
+                    **requested_stage_input,
                 },
                 "recorded_output": {},
             },
             "resolver": {
                 "input": {
-                    "motion_tick_context": context,
-                    "now_monotonic_s": mono_s,
-                    "now_wall_s": 1_700_000_000.0 + mono_s,
+                    **resolver_stage_input,
                 },
                 "recorded_output": {},
             },
+            "guidance": {"input": guidance_input, "recorded_output": {}},
             "localization_gate": {"input": gate_input, "recorded_output": {}},
             "reference": {
                 "input": {
-                    "mode": "TWIST",
-                    "dt_s": 0.02,
-                    "force_zero": False,
-                    "clear_motion_controller_state": False,
-                    "v_target": v_target,
-                    "omega_target": omega_target,
-                    "execution_mode": "TWIST_EXEC",
-                    "requested_track_reference": {"left_mps": None, "right_mps": None},
-                    "ekf_state": {"v": measured, "omega_rad_s": 0.0},
-                    "motion_controller_state_before": {
-                        "v_prev": float(producer.motion_controller._v_prev),
-                        "omega_prev": float(producer.motion_controller._omega_prev),
-                    },
-                    "speed_limits_state": ctrl.speed_limits.as_runtime_state(),
-                    "controller_state": {
-                        "motion_command_source": "STATE",
-                        "active_motion_command_type": "set_twist",
-                        "active_motion_command_layer": "MOTION_TARGET",
-                    },
+                    "cycle_context": cycle_context,
+                    "physical_command": physical_command,
+                    "motion_envelope": motion_envelope,
+                    "drive_capabilities": drive_capabilities,
                 },
                 "recorded_output": {},
             },
@@ -274,15 +428,25 @@ def _make_v2_capture(
             "pwm": {"input": {}, "recorded_output": {}},
         }
         call = {
-            "method": "compute_pwm",
-            "kwargs": {
-                "v_cmd": v_target,
-                "omega_cmd": omega_target,
-                "sensor_feedback": _feedback(v_target, omega_target, measured),
-                "dt": 0.02,
-                "execution_mode": "TWIST_EXEC",
-                "track_reference": {"left_mps": None, "right_mps": None},
+            "method": "compute",
+            "cycle_context": cycle_context,
+            "wheel_setpoint": {
+                "contract_id": "R2B4_MOTION_PLATFORM_V2_1",
+                "wheel_setpoint_id": f"wheel:{platform_cycle_id}",
+                "physical_command_id": physical_command["physical_command_id"],
+                "resolved_id": physical_command["resolved_id"],
+                "cycle_id": platform_cycle_id,
+                "left_target_mps": 0.0,
+                "right_target_mps": 0.0,
+                "feasible": True,
+                "reason": "PLACEHOLDER",
+                "applied_limits": [],
             },
+            "wheel_feedback": _feedback(
+                cycle_id=platform_cycle_id,
+                mono_s=mono_s,
+                measured=measured,
+            ),
         }
         frame = {
             "cycle_id": 100 + index,
@@ -303,9 +467,7 @@ def _make_v2_capture(
         }
         produced = producer.replay_frame(frame)
         reference = produced["stage_outputs"]["reference"]
-        call["kwargs"]["v_cmd"] = reference["v_cmd"]
-        call["kwargs"]["omega_cmd"] = reference["omega_cmd"]
-        call["kwargs"]["track_reference"] = reference["track_reference"]
+        call["wheel_setpoint"] = reference
         for stage_name in PIPELINE_STAGE_ORDER:
             stages[stage_name]["recorded_output"] = produced["stage_outputs"][stage_name]
         stages["motion_executor"]["input"] = call
@@ -317,12 +479,15 @@ def _make_v2_capture(
         )
         if wrong_stage == "resolver" and index == 3:
             stages["resolver"]["recorded_output"]["resolved_motion"]["omega_target"] = -0.17
+        if wrong_stage == "guidance" and index == 3:
+            stages["guidance"]["recorded_output"]["physical_command"]["v_mps"] = -0.17
+            stages["reference"]["input"]["physical_command"]["v_mps"] = -0.17
         if wrong_stage == "reference" and index == 3:
-            stages["reference"]["recorded_output"]["omega_cmd"] = -0.17
+            stages["reference"]["recorded_output"]["right_target_mps"] = -0.17
         if omit_stage and index == 2:
             stages.pop(omit_stage)
         executor_output = produced["executor_output"]
-        assert recorder.record(
+        accepted = recorder.record(
             {
                 "cycle_id": 100 + index,
                 "monotonic_ns": int(mono_s * 1_000_000_000),
@@ -342,6 +507,10 @@ def _make_v2_capture(
                 "pipeline": frame["pipeline"],
             }
         )
+        if v21 and omit_stage and index == 2:
+            assert accepted is False
+        else:
+            assert accepted is True
     close_status = recorder.close(invalid_reason=close_invalid_reason)
     if return_close_status:
         close_status = {

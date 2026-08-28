@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterator, List
 
 from replayer.adapters import (
     ProductionMotionExecutorAdapter,
+    ProductionMotionLayerAdapter,
     ProductionMotionPipelineAdapter,
     build_source_manifest,
     compare_source_manifests,
@@ -25,15 +26,27 @@ from replayer.matcher_adapter import (
 )
 from replayer.contracts import (
     CAPTURE_SCHEMA_V2,
+    CAPTURE_SCHEMA_V21,
+    DIAGNOSIS_SCHEMA_V21,
+    LAYER_L6_INTENT_RESOLVER,
+    LAYER_L7A_MOTION_GUIDANCE,
     INTEGRITY_SCHEMA,
+    LAYER_L8_MOTION_CONTROLLER,
+    LAYER_L9_MOTION_EXECUTOR,
+    LAYER_SERVICE_ACTUATION,
     PIPELINE_ADAPTER_ID,
+    PIPELINE_ADAPTER_ID_V21,
     PIPELINE_STAGE_ORDER,
+    REPLAYABLE_LAYER_ORDER_V21,
     REPLAY_EVIDENCE_SCHEMA,
     REPLAY_EVIDENCE_SCHEMA_V2,
+    REPLAY_EVIDENCE_SCHEMA_V21,
     REPLAY_RESULT_SCHEMA,
     REPLAY_RESULT_SCHEMA_V2,
+    REPLAY_RESULT_SCHEMA_V21,
     REPLAY_ROW_SCHEMA,
     REPLAY_ROW_SCHEMA_V2,
+    REPLAY_ROW_SCHEMA_V21,
     REPLAY_STATUS_ERROR,
     REPLAY_STATUS_INVALID_CAPTURE,
     REPLAY_STATUS_MATCH,
@@ -60,6 +73,65 @@ from replayer.storage import (
 
 MAX_DEVIATION_SAMPLES = 200
 MAX_STAGE_FIELD_DEVIATIONS = 40
+MAX_DIAGNOSIS_DEVIATIONS = 8
+
+_LAYER_ALIASES_V21 = {
+    "L6": LAYER_L6_INTENT_RESOLVER,
+    "INTENT_RESOLVER": LAYER_L6_INTENT_RESOLVER,
+    LAYER_L6_INTENT_RESOLVER: LAYER_L6_INTENT_RESOLVER,
+    "L7A": LAYER_L7A_MOTION_GUIDANCE,
+    "MOTION_GUIDANCE": LAYER_L7A_MOTION_GUIDANCE,
+    LAYER_L7A_MOTION_GUIDANCE: LAYER_L7A_MOTION_GUIDANCE,
+    "L8": LAYER_L8_MOTION_CONTROLLER,
+    "MOTION_CONTROLLER": LAYER_L8_MOTION_CONTROLLER,
+    LAYER_L8_MOTION_CONTROLLER: LAYER_L8_MOTION_CONTROLLER,
+    "L9": LAYER_L9_MOTION_EXECUTOR,
+    "MOTION_EXECUTOR": LAYER_L9_MOTION_EXECUTOR,
+    LAYER_L9_MOTION_EXECUTOR: LAYER_L9_MOTION_EXECUTOR,
+    "SERVICE": LAYER_SERVICE_ACTUATION,
+    LAYER_SERVICE_ACTUATION: LAYER_SERVICE_ACTUATION,
+}
+
+
+def _validated_window(
+    start_monotonic_ns: int | None,
+    end_monotonic_ns: int | None,
+) -> tuple[int | None, int | None]:
+    def value(raw: int | None, name: str) -> int | None:
+        if raw is None:
+            return None
+        if isinstance(raw, bool):
+            raise ReplayerError(f"{name}_must_be_non_negative_integer")
+        try:
+            parsed = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise ReplayerError(f"{name}_must_be_non_negative_integer") from exc
+        if parsed < 0 or parsed != raw:
+            raise ReplayerError(f"{name}_must_be_non_negative_integer")
+        return parsed
+
+    start = value(start_monotonic_ns, "start_monotonic_ns")
+    end = value(end_monotonic_ns, "end_monotonic_ns")
+    if start is not None and end is not None and start > end:
+        raise ReplayerError("replay_window_start_after_end")
+    return start, end
+
+
+def _normalized_v21_layers(layers: Any) -> tuple[str, ...]:
+    if layers is None:
+        return tuple(REPLAYABLE_LAYER_ORDER_V21)
+    requested = [layers] if isinstance(layers, str) else list(layers)
+    if not requested:
+        raise ReplayerError("replay_layer_selection_empty")
+    normalized: List[str] = []
+    for raw in requested:
+        key = str(raw or "").strip().upper().replace("-", "_")
+        layer = _LAYER_ALIASES_V21.get(key)
+        if layer is None:
+            raise ReplayerError(f"unsupported_replay_layer:{raw}")
+        if layer not in normalized:
+            normalized.append(layer)
+    return tuple(normalized)
 
 
 def _iter_frames(path: Path) -> Iterator[Dict[str, Any]]:
@@ -193,10 +265,33 @@ def _finalize_result(
     acceptance_gates: List[Dict[str, Any]],
     replay_error: str = "",
     is_v2: bool = False,
+    is_v21: bool = False,
+    diagnosis: Dict[str, Any] | None = None,
+    replay_scope: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    result_schema = REPLAY_RESULT_SCHEMA_V2 if is_v2 else REPLAY_RESULT_SCHEMA
-    evidence_schema = REPLAY_EVIDENCE_SCHEMA_V2 if is_v2 else REPLAY_EVIDENCE_SCHEMA
+    result_schema = (
+        REPLAY_RESULT_SCHEMA_V21
+        if is_v21
+        else (REPLAY_RESULT_SCHEMA_V2 if is_v2 else REPLAY_RESULT_SCHEMA)
+    )
+    evidence_schema = (
+        REPLAY_EVIDENCE_SCHEMA_V21
+        if is_v21
+        else (REPLAY_EVIDENCE_SCHEMA_V2 if is_v2 else REPLAY_EVIDENCE_SCHEMA)
+    )
     write_json_atomic(result_path / "diff.json", diff)
+    if is_v21:
+        write_json_atomic(
+            result_path / "diagnosis.json",
+            dict(
+                diagnosis
+                or {
+                    "schema": DIAGNOSIS_SCHEMA_V21,
+                    "status": status,
+                    "first_divergence": None,
+                }
+            ),
+        )
     evidence = seal_payload(
         {
             "schema": evidence_schema,
@@ -215,18 +310,25 @@ def _finalize_result(
             "source_lineage": source_lineage,
             "configuration_lineage": config_lineage,
             "comparison": diff,
+            "replay_scope": dict(replay_scope or {}),
             "replay_error": replay_error,
             "safety_statement": {
                 "offline_only": True,
                 "motor_dispatch_available": False,
                 "component_scope": (
-                    "requested_motion_to_motion_executor_pwm"
-                    if is_v2
-                    else "motion_executor.MotionExecutor"
+                    "sealed_motion_platform_layers"
+                    if is_v21
+                    else (
+                        "requested_motion_to_motion_executor_pwm"
+                        if is_v2
+                        else "motion_executor.MotionExecutor"
+                    )
                 ),
                 "final_safety_output_is_lineage_only": True,
                 "physical_plant_model_available": False,
-                "plant_adapter_boundary": "PWM_TO_PHYSICAL_OBSERVATION" if is_v2 else "",
+                "plant_adapter_boundary": (
+                    "PWM_TO_PHYSICAL_OBSERVATION" if is_v2 or is_v21 else ""
+                ),
             },
         },
         "evidence_sha256",
@@ -245,6 +347,7 @@ def _finalize_result(
                 "diff": "diff.json",
                 "evidence": "evidence.json",
                 "integrity": "integrity.json",
+                **({"diagnosis": "diagnosis.json"} if is_v21 else {}),
             },
         },
         "result_manifest_sha256",
@@ -259,8 +362,266 @@ def _finalize_result(
         "status": status,
         "diff": diff,
         "evidence_path": str(result_path / "evidence.json"),
+        "diagnosis_path": str(result_path / "diagnosis.json") if is_v21 else "",
         "integrity_path": str(result_path / "integrity.json"),
     }
+
+
+def _replay_v21_capture(
+    *,
+    capture_id: str,
+    result_id: str,
+    result_path: Path,
+    capture_path: Path,
+    manifest: Dict[str, Any],
+    verification: Dict[str, Any],
+    tolerance: float,
+    source_lineage: Dict[str, Any],
+    config_lineage: Dict[str, Any],
+    start_monotonic_ns: int | None,
+    end_monotonic_ns: int | None,
+    layers: Any,
+) -> Dict[str, Any]:
+    comparisons_path = result_path / "comparisons.jsonl"
+    selected_layers = _normalized_v21_layers(layers)
+    replay_scope = {
+        "start_monotonic_ns": start_monotonic_ns,
+        "end_monotonic_ns": end_monotonic_ns,
+        "end_inclusive": True,
+        "layers": list(selected_layers),
+        "state_origin": "CAPTURE_START",
+        "prefix_warmup_required": start_monotonic_ns is not None,
+    }
+    warmup_frame_count = 0
+    warmup_layer_counts = {layer: 0 for layer in selected_layers}
+    selected_frame_count = 0
+    replayed_frame_count = 0
+    layer_evaluation_count = 0
+    mismatch_count = 0
+    layer_mismatch_counts = {layer: 0 for layer in selected_layers}
+    first_divergence: Dict[str, Any] | None = None
+    replay_error = ""
+    comparison_sha256 = ""
+    max_abs_error = 0.0
+
+    try:
+        if str(manifest.get("adapter_id", "")) != PIPELINE_ADAPTER_ID_V21:
+            raise ReplayerError("v21_layer_adapter_manifest_mismatch")
+        adapter = ProductionMotionLayerAdapter.from_capture(capture_path, manifest)
+
+        def rows() -> Iterator[Dict[str, Any]]:
+            nonlocal warmup_frame_count, selected_frame_count, replayed_frame_count
+            nonlocal layer_evaluation_count, mismatch_count, first_divergence
+            nonlocal max_abs_error
+            for frame in _iter_frames(capture_path / str(manifest["frames_path"])):
+                monotonic_ns = int(frame["monotonic_ns"])
+                boundaries = dict((frame.get("layer_boundaries") or {}).get("layers") or {})
+                if start_monotonic_ns is not None and monotonic_ns < start_monotonic_ns:
+                    warmed = False
+                    for layer in selected_layers:
+                        boundary = dict(boundaries.get(layer) or {})
+                        if not bool(boundary.get("available", False)):
+                            continue
+                        adapter.replay_layer(frame, layer)
+                        warmup_layer_counts[layer] += 1
+                        warmed = True
+                    if warmed:
+                        warmup_frame_count += 1
+                    continue
+                if end_monotonic_ns is not None and monotonic_ns > end_monotonic_ns:
+                    break
+
+                selected_frame_count += 1
+                layer_comparisons: Dict[str, Any] = {}
+                frame_evaluations = 0
+                frame_matches = True
+                for layer in selected_layers:
+                    boundary = dict(boundaries.get(layer) or {})
+                    if not bool(boundary.get("available", False)):
+                        layer_comparisons[layer] = {
+                            "available": False,
+                            "match": None,
+                            "reason": str(
+                                boundary.get("unavailable_reason", "") or "not_available"
+                            ),
+                        }
+                        continue
+                    replayed = adapter.replay_layer(frame, layer)
+                    expected_output = dict(boundary.get("recorded_output") or {})
+                    actual_output = dict(replayed.get("output") or {})
+                    field_deviations = _payload_deviations(
+                        expected_output,
+                        actual_output,
+                        tolerance=tolerance,
+                    )
+                    for deviation in field_deviations:
+                        absolute_error = deviation.get("absolute_error")
+                        if isinstance(absolute_error, (int, float)):
+                            max_abs_error = max(max_abs_error, float(absolute_error))
+                    layer_match = not field_deviations
+                    layer_comparisons[layer] = {
+                        "available": True,
+                        "match": layer_match,
+                        "deviation_count": len(field_deviations),
+                        "deviations": field_deviations,
+                    }
+                    frame_evaluations += 1
+                    layer_evaluation_count += 1
+                    if not layer_match:
+                        frame_matches = False
+                        layer_mismatch_counts[layer] += 1
+                        if first_divergence is None:
+                            first_divergence = {
+                                "capture_seq": int(frame["capture_seq"]),
+                                "cycle_id": int(frame["cycle_id"]),
+                                "monotonic_ns": monotonic_ns,
+                                "layer": layer,
+                                "input": dict(boundary.get("input") or {}),
+                                "expected_output": expected_output,
+                                "actual_output": actual_output,
+                                "deviations": field_deviations[:MAX_DIAGNOSIS_DEVIATIONS],
+                                "relevant_state": {
+                                    "prefix_warmup_frames_applied": int(
+                                        warmup_frame_count
+                                    ),
+                                    "layer_state_after_replay": adapter.relevant_state(layer),
+                                },
+                            }
+                if frame_evaluations:
+                    replayed_frame_count += 1
+                    if not frame_matches:
+                        mismatch_count += 1
+                yield {
+                    "schema": REPLAY_ROW_SCHEMA_V21,
+                    "capture_seq": int(frame["capture_seq"]),
+                    "cycle_id": int(frame["cycle_id"]),
+                    "monotonic_ns": monotonic_ns,
+                    "layer_comparisons": layer_comparisons,
+                    "match": frame_matches if frame_evaluations else None,
+                }
+
+        comparison_sha256 = _write_jsonl_atomic(comparisons_path, rows())
+        if selected_frame_count == 0:
+            replay_error = "ReplayerError:replay_window_selected_no_frames"
+            status = REPLAY_STATUS_ERROR
+        elif layer_evaluation_count == 0:
+            replay_error = "ReplayerError:selected_layers_unavailable_in_window"
+            status = REPLAY_STATUS_ERROR
+        else:
+            status = REPLAY_STATUS_MISMATCH if mismatch_count else REPLAY_STATUS_MATCH
+    except Exception as exc:
+        replay_error = f"{type(exc).__name__}:{exc}"
+        status = REPLAY_STATUS_ERROR
+        if not comparisons_path.exists():
+            _write_jsonl_atomic(comparisons_path, iter(()))
+
+    warmup_complete = status != REPLAY_STATUS_ERROR
+    selection_valid = selected_frame_count > 0 and layer_evaluation_count > 0
+    replay_scope.update(
+        {
+            "warmup_frame_count": int(warmup_frame_count),
+            "warmup_layer_counts": dict(warmup_layer_counts),
+            "selected_frame_count": int(selected_frame_count),
+            "layer_evaluation_count": int(layer_evaluation_count),
+        }
+    )
+    diff = {
+        "status": status,
+        "absolute_tolerance": tolerance,
+        "verified_capture_frame_count": int(verification["frame_count"]),
+        "expected_frame_count": int(selected_frame_count),
+        "replayed_frame_count": int(replayed_frame_count),
+        "layer_evaluation_count": int(layer_evaluation_count),
+        "mismatch_count": int(mismatch_count),
+        "max_abs_error": max_abs_error if layer_evaluation_count else None,
+        "comparison_sha256": comparison_sha256 if layer_evaluation_count else "",
+        "first_divergence": first_divergence,
+        "layer_mismatch_counts": dict(layer_mismatch_counts),
+        "replay_scope": dict(replay_scope),
+        "excluded_scope": {
+            "legacy_semantic_pipeline": "not_replayed",
+            "scan_matcher": "evidence_lineage_only",
+            "safety_gate": "raw_safety_snapshot_not_captured",
+            "physical_plant": "not_installed",
+        },
+    }
+    diagnosis = {
+        "schema": DIAGNOSIS_SCHEMA_V21,
+        "capture_id": capture_id,
+        "result_id": result_id,
+        "status": status,
+        "first_divergence": first_divergence,
+        "replay_scope": dict(replay_scope),
+        "error": replay_error,
+    }
+    gates = [
+        _gate("capture_integrity_and_completeness", "PASS", "immutable_capture_verified"),
+        _gate(
+            "captured_source_provenance",
+            "PASS",
+            {
+                "captured_manifest_verified": True,
+                "current_source_match": bool(source_lineage.get("match", False)),
+                "current_source_drift_is_informational": True,
+            },
+        ),
+        _gate(
+            "captured_configuration_binding",
+            "PASS",
+            {
+                "replay_uses": "CAPTURED_IMMUTABLE_CONFIG",
+                "current_config_match": bool(config_lineage.get("match", False)),
+                "current_config_drift_is_informational": True,
+            },
+        ),
+        _gate("timing_contract", "PASS", verification["timing"]),
+        _gate(
+            "target_selection",
+            "PASS" if selection_valid else "FAIL",
+            {
+                "selected_frame_count": int(selected_frame_count),
+                "layer_evaluation_count": int(layer_evaluation_count),
+                "layers": list(selected_layers),
+            },
+        ),
+        _gate(
+            "state_correct_prefix_warmup",
+            "PASS" if warmup_complete else "FAIL",
+            {
+                "state_origin": "CAPTURE_START",
+                "warmup_frame_count": int(warmup_frame_count),
+                "warmup_layer_counts": dict(warmup_layer_counts),
+            },
+        ),
+        _gate(
+            "sealed_layer_boundary_equivalence",
+            (
+                "PASS"
+                if status == REPLAY_STATUS_MATCH
+                else ("FAIL" if status == REPLAY_STATUS_MISMATCH else "BLOCKED")
+            ),
+            {
+                "layer_mismatch_counts": dict(layer_mismatch_counts),
+                "first_divergence": first_divergence,
+            },
+        ),
+    ]
+    return _finalize_result(
+        result_path=result_path,
+        capture_id=capture_id,
+        result_id=result_id,
+        status=status,
+        tolerance=tolerance,
+        capture_verification=verification,
+        diff=diff,
+        source_lineage=source_lineage,
+        config_lineage=config_lineage,
+        acceptance_gates=gates,
+        replay_error=replay_error,
+        is_v21=True,
+        diagnosis=diagnosis,
+        replay_scope=replay_scope,
+    )
 
 
 def replay_capture(
@@ -270,10 +631,17 @@ def replay_capture(
     result_id: str | None = None,
     absolute_tolerance: float = 1e-9,
     project_root: Path | None = None,
+    start_monotonic_ns: int | None = None,
+    end_monotonic_ns: int | None = None,
+    layers: Any = None,
 ) -> Dict[str, Any]:
     tolerance = float(absolute_tolerance)
     if not math.isfinite(tolerance) or tolerance < 0.0:
         raise ReplayerError("absolute_tolerance_must_be_finite_and_non_negative")
+    start_monotonic_ns, end_monotonic_ns = _validated_window(
+        start_monotonic_ns,
+        end_monotonic_ns,
+    )
     selected_result_id, result_path = create_result_dir(
         data_root,
         capture_id=capture_id,
@@ -282,7 +650,9 @@ def replay_capture(
     comparisons_path = result_path / "comparisons.jsonl"
     verification = verify_capture(capture_id, data_root=data_root)
     project = Path(project_root or PROJECT_ROOT).resolve()
-    is_v2 = str((verification.get("manifest") or {}).get("schema", "")) == CAPTURE_SCHEMA_V2
+    capture_schema = str((verification.get("manifest") or {}).get("schema", ""))
+    is_v2 = capture_schema == CAPTURE_SCHEMA_V2
+    is_v21 = capture_schema == CAPTURE_SCHEMA_V21
 
     if not verification["valid"]:
         _write_jsonl_atomic(comparisons_path, iter(()))
@@ -297,6 +667,14 @@ def replay_capture(
         ]
         if is_v2:
             blocked.append(_gate("pipeline_stage_equivalence", "BLOCKED", "capture_invalid"))
+        if is_v21:
+            blocked.extend(
+                [
+                    _gate("target_selection", "BLOCKED", "capture_invalid"),
+                    _gate("state_correct_prefix_warmup", "BLOCKED", "capture_invalid"),
+                    _gate("sealed_layer_boundary_equivalence", "BLOCKED", "capture_invalid"),
+                ]
+            )
         diff = {
             "status": REPLAY_STATUS_INVALID_CAPTURE,
             "expected_frame_count": int(verification.get("frame_count", 0)),
@@ -325,6 +703,24 @@ def replay_capture(
             config_lineage={"status": "BLOCKED", "reason": "capture_invalid"},
             acceptance_gates=blocked,
             is_v2=is_v2,
+            is_v21=is_v21,
+            diagnosis=(
+                {
+                    "schema": DIAGNOSIS_SCHEMA_V21,
+                    "capture_id": capture_id,
+                    "result_id": selected_result_id,
+                    "status": REPLAY_STATUS_INVALID_CAPTURE,
+                    "first_divergence": None,
+                    "replay_scope": {
+                        "start_monotonic_ns": start_monotonic_ns,
+                        "end_monotonic_ns": end_monotonic_ns,
+                        "layers": list(_normalized_v21_layers(layers)),
+                    },
+                    "error": "capture_integrity_or_completeness_failed",
+                }
+                if is_v21
+                else None
+            ),
         )
 
     capture_path = capture_dir(data_root, capture_id)
@@ -339,6 +735,24 @@ def replay_capture(
     source_lineage["acceptance_role"] = "INFORMATIONAL_REGRESSION_PROVENANCE"
     config_lineage = current_config_comparison(project, capture_path)
     config_lineage["acceptance_role"] = "INFORMATIONAL_CURRENT_DRIFT"
+
+    if is_v21:
+        return _replay_v21_capture(
+            capture_id=capture_id,
+            result_id=selected_result_id,
+            result_path=result_path,
+            capture_path=capture_path,
+            manifest=manifest,
+            verification=verification,
+            tolerance=tolerance,
+            source_lineage=source_lineage,
+            config_lineage=config_lineage,
+            start_monotonic_ns=start_monotonic_ns,
+            end_monotonic_ns=end_monotonic_ns,
+            layers=layers,
+        )
+    if layers is not None:
+        raise ReplayerError("layer_selection_requires_v21_capture")
 
     deviations: List[Dict[str, Any]] = []
     mismatch_count = 0
@@ -748,6 +1162,9 @@ def verify_replay_result(
             result_schema == REPLAY_RESULT_SCHEMA_V2
             and evidence_schema != REPLAY_EVIDENCE_SCHEMA_V2
         ) or (
+            result_schema == REPLAY_RESULT_SCHEMA_V21
+            and evidence_schema != REPLAY_EVIDENCE_SCHEMA_V21
+        ) or (
             result_schema == REPLAY_RESULT_SCHEMA
             and evidence_schema != REPLAY_EVIDENCE_SCHEMA
         ):
@@ -760,14 +1177,32 @@ def verify_replay_result(
             errors.append("result_id_mismatch")
         if str(evidence.get("status", "")) != str(result_manifest.get("status", "")):
             errors.append("result_status_mismatch")
+        if result_schema == REPLAY_RESULT_SCHEMA_V21:
+            diagnosis = read_json(path / "diagnosis.json")
+            if str(diagnosis.get("schema", "")) != DIAGNOSIS_SCHEMA_V21:
+                errors.append("diagnosis_schema_invalid")
+            if str(diagnosis.get("capture_id", "")) != str(capture_id):
+                errors.append("diagnosis_capture_id_mismatch")
+            if str(diagnosis.get("result_id", "")) != str(result_id):
+                errors.append("diagnosis_result_id_mismatch")
+            if str(diagnosis.get("status", "")) != str(
+                result_manifest.get("status", "")
+            ):
+                errors.append("diagnosis_status_mismatch")
+            if "first_divergence" not in diagnosis:
+                errors.append("diagnosis_first_divergence_missing")
     except ReplayerError as exc:
         errors.append(str(exc))
         result_manifest = {}
     return {
         "schema": (
-            "R2B4_REPLAYER_RESULT_VERIFICATION_V2"
-            if result_manifest.get("schema") == REPLAY_RESULT_SCHEMA_V2
-            else "R2B4_REPLAYER_RESULT_VERIFICATION_V1"
+            "R2B4_REPLAYER_RESULT_VERIFICATION_V2_1"
+            if result_manifest.get("schema") == REPLAY_RESULT_SCHEMA_V21
+            else (
+                "R2B4_REPLAYER_RESULT_VERIFICATION_V2"
+                if result_manifest.get("schema") == REPLAY_RESULT_SCHEMA_V2
+                else "R2B4_REPLAYER_RESULT_VERIFICATION_V1"
+            )
         ),
         "capture_id": capture_id,
         "result_id": result_id,

@@ -4,7 +4,7 @@
 import unittest
 from types import SimpleNamespace
 
-from controller.motion_readiness import EncoderReliabilityLayer
+from controller.encoder_reliability import EncoderReliabilityLayer
 
 
 def _snapshot(*, left_mps: float, right_mps: float) -> SimpleNamespace:

@@ -1745,7 +1745,9 @@ class LidarEstimator:
         matcher_replay_evidence = None
         if bool(raw_meta.get("capture_matcher_evidence", False)):
             evidence_available = bool(
-                matcher_mode == "scan_to_map" and matcher_replay_input is not None
+                matcher_mode == "scan_to_map"
+                and matcher_replay_input is not None
+                and not matcher_timed_out
             )
             matcher_replay_evidence = {
                 "schema": "R2B4_MATCHER_REPLAY_EVIDENCE_V1",
@@ -1753,7 +1755,13 @@ class LidarEstimator:
                 "unavailable_reason": (
                     ""
                     if evidence_available
-                    else f"unsupported_matcher_mode:{matcher_mode}"
+                    else (
+                        "runtime_matcher_timed_out"
+                        if matcher_mode == "scan_to_map"
+                        and matcher_replay_input is not None
+                        and matcher_timed_out
+                        else f"unsupported_matcher_mode:{matcher_mode}"
+                    )
                 ),
                 "matcher_result_id": raw_meta.get("matcher_result_id"),
                 "source_raw_scan_id": raw_meta.get("raw_scan_id"),

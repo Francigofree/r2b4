@@ -647,20 +647,20 @@ def _primitive_matches(case: PrimitiveCase, value: Any) -> bool:
     return primitive == _upper(case.expected_primitive)
 
 
-def _straight_hold_correction_sample(sample: Dict[str, Any]) -> bool:
-    """Identify an executor-owned gentle correction inside a straight segment.
+def _guidance_heading_correction_sample(sample: Dict[str, Any]) -> bool:
+    """Identify an L7A guidance correction inside a straight segment.
 
     This is not a generic classifier tolerance.  The actual instantaneous
     motion remains reported as ``DIFF_ARC_GENTLE``; the validator only treats
     it as belonging to the commanded straight family when all three command
-    surfaces stay STRAIGHT and the single executor straight-hold owner is
+    surfaces stay STRAIGHT and the guidance heading-hold owner is
     explicitly active.  Segment-level physical drift is checked separately.
     """
 
     src = dict(sample or {})
     return bool(
         _upper(src.get("turn_primitive_actual")) == "DIFF_ARC_GENTLE"
-        and bool(src.get("control_straight_hold_active", False))
+        and bool(src.get("guidance_heading_hold_active", False))
         and _upper(src.get("turn_primitive_requested")) == EXPECTED_STRAIGHT_PRIMITIVE
         and _upper(src.get("turn_primitive_limited")) == EXPECTED_STRAIGHT_PRIMITIVE
         and _upper(src.get("turn_primitive_executed")) == EXPECTED_STRAIGHT_PRIMITIVE
@@ -761,10 +761,10 @@ def analyze_twist_case(
         and actual_v_abs_summary.get("p50") is not None
         and float(actual_v_abs_summary.get("p50") or 0.0) >= 0.008
     )
-    straight_hold_correction_samples = [
+    guidance_heading_correction_samples = [
         sample
         for sample in actual_classifier_samples
-        if _straight_hold_correction_sample(sample)
+        if _guidance_heading_correction_sample(sample)
     ]
     primitive_act_ratio = _ratio_matching(
         actual_classifier_samples,
@@ -772,7 +772,7 @@ def analyze_twist_case(
             _primitive_matches(case, s.get("turn_primitive_actual"))
             or (
                 straight_physical_candidate
-                and _straight_hold_correction_sample(s)
+                and _guidance_heading_correction_sample(s)
             )
         ),
     )
@@ -835,13 +835,13 @@ def analyze_twist_case(
         "primitive_executed_expected_ratio": primitive_exe_ratio,
         "primitive_actual_expected_ratio": primitive_act_ratio,
         "primitive_actual_exact_ratio": primitive_act_exact_ratio,
-        "straight_hold_correction_accepted_samples": (
-            len(straight_hold_correction_samples)
+        "guidance_heading_correction_accepted_samples": (
+            len(guidance_heading_correction_samples)
             if straight_physical_candidate
             else 0
         ),
-        "straight_hold_correction_observed_samples": len(straight_hold_correction_samples),
-        "actual_classifier_semantics": "exact_or_executor_straight_hold_gentle_with_physical_straight_pass",
+        "guidance_heading_correction_observed_samples": len(guidance_heading_correction_samples),
+        "actual_classifier_semantics": "exact_or_guidance_heading_hold_gentle_with_physical_straight_pass",
         "actual_classifier_eligible_sample_count": len(actual_classifier_samples),
         "actual_classifier_settled_window_sample_count": len(actual_classifier_window),
         "actual_classifier_transition_sample_count": max(0, len(active) - len(actual_classifier_window)),
@@ -988,11 +988,11 @@ def analyze_twist_case(
                 "turn_primitives_seen": metrics["turn_primitives_seen"],
                 "primitive_actual_expected_ratio": primitive_act_ratio,
                 "primitive_actual_exact_ratio": primitive_act_exact_ratio,
-                "straight_hold_correction_accepted_samples": metrics[
-                    "straight_hold_correction_accepted_samples"
+                "guidance_heading_correction_accepted_samples": metrics[
+                    "guidance_heading_correction_accepted_samples"
                 ],
-                "straight_hold_correction_observed_samples": metrics[
-                    "straight_hold_correction_observed_samples"
+                "guidance_heading_correction_observed_samples": metrics[
+                    "guidance_heading_correction_observed_samples"
                 ],
                 "actual_classifier_semantics": metrics["actual_classifier_semantics"],
                 "actual_classifier_eligible_sample_count": len(actual_classifier_samples),

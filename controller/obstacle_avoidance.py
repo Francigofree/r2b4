@@ -8,8 +8,8 @@ Reads LIDAR summary (min_dist, avg_left, avg_right, blocked_front/back)
 and modulates v_target / omega_target to steer around obstacles while
 continuing toward the goal.
 
-Integration: called from cont.py after the resolver and before MotionController.
-Writes ctrl.v_target, ctrl.omega_target in-place (SSOT compliant).
+Integration: called through the typed MotionGuidance boundary.
+Returns corrected targets without shared-controller mutation.
 Does NOT access motors, PWM, or safety gate — that layer remains untouched.
 
 v2 improvements over v1:
@@ -26,7 +26,6 @@ v2 improvements over v1:
 from __future__ import annotations
 
 import math
-import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
@@ -148,6 +147,8 @@ class AvoidanceState:
     avg_right_m: float = 99.0
     bypassed: bool = False
     decision_ts: float = 0.0
+    v_target: float = 0.0
+    omega_target: float = 0.0
 
 
 @dataclass
@@ -250,11 +251,33 @@ class ObstacleAvoidanceLayer:
         self._recovery_attempts = 0
         self._modulate_recovery_attempts = 0
 
-    def _recently_recovered(self, timeout_s: float = 3.0) -> bool:
+    def update_path_reference(
+        self,
+        *,
+        x_m: float,
+        y_m: float,
+        yaw_rad: float,
+        v_mps: float,
+        now: float,
+    ) -> None:
+        """Maintain the selected-intent path anchor from explicit pose/time."""
+
+        if float(v_mps) > 0.02 and not self._path_ref_captured:
+            self.set_path_reference(float(x_m), float(y_m), float(yaw_rad))
+            return
+        if (
+            float(v_mps) <= 0.005
+            and self._path_ref_captured
+            and not self._recovery_active
+            and not self._recently_recovered(now=float(now), timeout_s=3.0)
+        ):
+            self.clear_path_reference()
+
+    def _recently_recovered(self, *, now: float, timeout_s: float = 3.0) -> bool:
         """True if a recovery cycle completed within the last timeout_s seconds."""
         if self._last_recovery_ts <= 0.0:
             return False
-        return (time.perf_counter() - self._last_recovery_ts) < timeout_s
+        return (float(now) - self._last_recovery_ts) < timeout_s
 
     # ---------------- zone classification ----------------
 
@@ -280,7 +303,7 @@ class ObstacleAvoidanceLayer:
 
     # ---------------- steer direction with hysteresis ----------------
 
-    def _compute_steer_direction(self, lidar_summary: dict) -> int:
+    def _compute_steer_direction(self, lidar_summary: dict, *, now: float) -> int:
         """
         Determine steer direction with hysteresis to prevent oscillation.
         Once committed to a direction, require larger asymmetry to switch.
@@ -295,10 +318,10 @@ class ObstacleAvoidanceLayer:
             switch_threshold = self.cfg.steer_direction_hysteresis_m
             if self._committed_steer_dir == 1 and asymmetry < -switch_threshold:
                 self._committed_steer_dir = -1
-                self._steer_commit_ts = time.perf_counter()
+                self._steer_commit_ts = float(now)
             elif self._committed_steer_dir == -1 and asymmetry > switch_threshold:
                 self._committed_steer_dir = 1
-                self._steer_commit_ts = time.perf_counter()
+                self._steer_commit_ts = float(now)
             return self._committed_steer_dir
 
         # First-time decision: use smaller threshold
@@ -310,7 +333,7 @@ class ObstacleAvoidanceLayer:
             new_dir = 1  # default left
 
         self._committed_steer_dir = new_dir
-        self._steer_commit_ts = time.perf_counter()
+        self._steer_commit_ts = float(now)
         return new_dir
 
     # ---------------- centering ----------------
@@ -493,7 +516,7 @@ class ObstacleAvoidanceLayer:
 
     # ---------------- recovery behavior ----------------
 
-    def _tick_recovery(self, ctrl, lidar_summary: dict, now: float) -> Optional[AvoidanceState]:
+    def _tick_recovery(self, lidar_summary: dict, now: float) -> Optional[AvoidanceState]:
         """
         Manage recovery state machine (REVERSE -> TURN -> done).
         Returns AvoidanceState if recovery is active, None otherwise.
@@ -516,8 +539,8 @@ class ObstacleAvoidanceLayer:
                     self._recovery_phase = "TURN"
                     self._recovery_phase_start = now
                 else:
-                    ctrl.v_target = profile.reverse_speed
-                    ctrl.omega_target = 0.0
+                    state.v_target = float(profile.reverse_speed)
+                    state.omega_target = 0.0
                     state.recovery_phase = "REVERSE"
                     state.zone = "RECOVERY"
                     state.reason = f"{profile.mode.lower()}_reverse"
@@ -531,8 +554,10 @@ class ObstacleAvoidanceLayer:
         if self._recovery_phase == "TURN":
             elapsed = now - self._recovery_phase_start
             if elapsed < profile.turn_duration_s:
-                ctrl.v_target = 0.0
-                ctrl.omega_target = profile.turn_omega * self._recovery_turn_dir
+                state.v_target = 0.0
+                state.omega_target = float(
+                    profile.turn_omega * self._recovery_turn_dir
+                )
                 state.recovery_phase = "TURN"
                 state.zone = "RECOVERY"
                 state.reason = f"{profile.mode.lower()}_turn"
@@ -581,16 +606,25 @@ class ObstacleAvoidanceLayer:
 
     def tick(
         self,
-        ctrl,
+        *,
+        v_target: float,
+        omega_target: float,
         lidar_summary: dict,
         ekf_state: dict,
         dt: float,
+        now: float,
     ) -> AvoidanceState:
         """
-        Main avoidance tick. Modifies ctrl.v_target and ctrl.omega_target in-place.
+        Main avoidance tick with explicit values and deterministic time input.
         """
-        now = time.perf_counter()
-        state = AvoidanceState(decision_ts=now)
+        now = float(now)
+        v_in = float(v_target)
+        omega_in = float(omega_target)
+        state = AvoidanceState(
+            decision_ts=now,
+            v_target=v_in,
+            omega_target=omega_in,
+        )
 
         if not self.cfg.enabled:
             state.zone = "DISABLED"
@@ -600,13 +634,10 @@ class ObstacleAvoidanceLayer:
 
         # -- Recovery in progress -> delegate --
         if self._recovery_active:
-            recovery_state = self._tick_recovery(ctrl, lidar_summary, now)
+            recovery_state = self._tick_recovery(lidar_summary, now)
             if recovery_state is not None:
                 return recovery_state
             # Recovery just finished, fall through to normal logic
-
-        v_in = float(getattr(ctrl, "v_target", 0.0) or 0.0)
-        omega_in = float(getattr(ctrl, "omega_target", 0.0) or 0.0)
 
         # Only intervene when robot is moving
         if abs(v_in) < 0.005:
@@ -616,9 +647,9 @@ class ObstacleAvoidanceLayer:
             recently_active = (self._last_avoidance_tick_ts > 0 and
                                (now - self._last_avoidance_tick_ts) < 0.5)
             if recently_active and self._goal_heading_captured:
-                self._reset_avoidance_state(hard=False)
+                self._reset_avoidance_state(hard=False, now=now)
             else:
-                self._reset_avoidance_state()
+                self._reset_avoidance_state(now=now)
             self._omega_ema = 0.0
             self._state = state
             self._log_decision(state)
@@ -696,7 +727,7 @@ class ObstacleAvoidanceLayer:
                     self._recovery_attempts < self.cfg.max_recovery_attempts and
                     self._recovery_cooldown_ready(zone, now)):
                 self._start_recovery(lidar, now, zone)
-                recovery_state = self._tick_recovery(ctrl, lidar, now)
+                recovery_state = self._tick_recovery(lidar, now)
                 if recovery_state is not None:
                     return recovery_state
 
@@ -721,21 +752,21 @@ class ObstacleAvoidanceLayer:
 
                     if abs(rejoin_omega) > 0.01:
                         smoothed = self._smooth_omega(rejoin_omega)
-                        ctrl.omega_target = omega_in + smoothed
+                        state.omega_target = float(omega_in + smoothed)
                         state.active = True
                         state.omega_smoothed = smoothed
                         state.reason = "trajectory_rejoin"
                     else:
-                        self._reset_avoidance_state(hard=False)
+                        self._reset_avoidance_state(hard=False, now=now)
                         self._omega_ema = 0.0
                         state.reason = "cruise_rejoined"
                 else:
                     if self._consecutive_cruise_ticks > 150:
                         # Sustained CRUISE: obstacle truly gone, hard reset
-                        self._reset_avoidance_state(hard=True)
+                        self._reset_avoidance_state(hard=True, now=now)
                         self._omega_ema = 0.0
                     elif self._consecutive_cruise_ticks > 20:
-                        self._reset_avoidance_state(hard=False)
+                        self._reset_avoidance_state(hard=False, now=now)
                         self._omega_ema = 0.0
                     state.reason = "cruise_no_obstacle"
             else:
@@ -743,7 +774,7 @@ class ObstacleAvoidanceLayer:
 
             # Shadow EKF slowdown even in CRUISE
             if state.shadow_v_scale < 1.0:
-                ctrl.v_target = v_in * state.shadow_v_scale
+                state.v_target = float(v_in * state.shadow_v_scale)
                 state.v_scale = state.shadow_v_scale
                 state.active = True
                 if state.reason == "cruise_no_obstacle":
@@ -773,7 +804,7 @@ class ObstacleAvoidanceLayer:
         self._avoidance_tick_count += 1
 
         # Steer direction (with hysteresis)
-        steer_dir = self._compute_steer_direction(lidar)
+        steer_dir = self._compute_steer_direction(lidar, now=now)
         if is_reverse:
             steer_dir = -steer_dir
         state.steer_direction = steer_dir
@@ -848,8 +879,8 @@ class ObstacleAvoidanceLayer:
         state.omega_smoothed = smoothed
 
         # -- Apply --
-        ctrl.v_target = v_in * state.v_scale
-        ctrl.omega_target = omega_in + smoothed
+        state.v_target = float(v_in * state.v_scale)
+        state.omega_target = float(omega_in + smoothed)
 
         self._state = state
         self._log_decision(state)
@@ -865,7 +896,7 @@ class ObstacleAvoidanceLayer:
             return float(shadow_div.get("pos_diff_m", 0.0) or 0.0)
         return 0.0
 
-    def _reset_avoidance_state(self, *, hard: bool = True) -> None:
+    def _reset_avoidance_state(self, *, hard: bool = True, now: float) -> None:
         if hard:
             self._goal_heading_captured = False
             self._goal_heading_rad = 0.0
@@ -875,7 +906,7 @@ class ObstacleAvoidanceLayer:
             self._hard_reset_count += 1
             self._modulate_recovery_attempts = 0
         if self._avoidance_active_since > 0:
-            self._last_avoidance_end = time.perf_counter()
+            self._last_avoidance_end = float(now)
         self._avoidance_active_since = 0.0
 
     @staticmethod

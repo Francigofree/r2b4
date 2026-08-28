@@ -22,7 +22,15 @@ from controller.follow_types import (
 )
 from controller.local_navigation_layer import LocalNavigationLayer
 from controller.local_planner import FOLLOW_CRUISE_MOTION_STYLE, LocalPlanner, LocalPlannerConfig
-from controller.motion_controller import MotionController
+from controller.motion_controller import MotionController, MotionControllerConfig
+from controller.motion_platform_contract import (
+    MOTION_PLATFORM_CONTRACT_ID,
+    PHYSICAL_MODE_WHEEL_VELOCITY,
+    CycleContext,
+    DriveCapabilities,
+    MotionEnvelope,
+    PhysicalMotionCommand,
+)
 from controller.motion_resolver import ENTRY_TIER_PRIMARY, make_motion_proposal
 from controller.motion_schema import EXEC_MODE_TRACK, execution_mode_for_command
 from controller.navigation_intent import NAV_MODE_FOLLOW, NAV_MODE_GOAL, NAV_MODE_ROOM_CRUISE, NavigationIntent
@@ -713,32 +721,36 @@ class TestLocalPlannerFollowCruiseTransition(unittest.TestCase):
         self.assertEqual(shaping["owner"], "MotionController.TRACK_REFERENCE_SLEW")
 
     def test_reverse_arc_to_qualified_pivot_has_bounded_wheel_zero_crossing(self):
-        ctrl = SimpleNamespace(
-            cfg={"vezerles": {}},
-            speed_limits=None,
-            motion_command_source="STATE",
-            motion_controller_state={},
-            motion_ref_v_l=0.0,
-            motion_ref_v_r=0.0,
-        )
-        controller = MotionController(track_width=0.175)
+        controller = MotionController(config=MotionControllerConfig(enable_slew=True))
+        capabilities = DriveCapabilities(0.175, 0.0, 0.582, 0.8, 0.8, "test")
         tracks = []
-        for _ in range(20):
-            _v, _omega, track = controller.tick_track_reference(
-                ctrl=ctrl,
-                left_target_mps=-0.186,
-                right_target_mps=-0.150,
-                dt=0.02,
+        targets = [(-0.186, -0.150)] * 20 + [(-0.150, 0.150)] * 30
+        for cycle_id, (left, right) in enumerate(targets, start=1):
+            cycle = CycleContext(str(cycle_id), cycle_id * 0.02, 0.02, 0.02, True)
+            command = PhysicalMotionCommand(
+                MOTION_PLATFORM_CONTRACT_ID,
+                f"physical:{cycle_id}",
+                f"resolved:{cycle_id}",
+                str(cycle_id),
+                10.0,
+                PHYSICAL_MODE_WHEEL_VELOCITY,
+                left_mps=left,
+                right_mps=right,
             )
-            tracks.append(track)
-        for _ in range(30):
-            _v, _omega, track = controller.tick_track_reference(
-                ctrl=ctrl,
-                left_target_mps=-0.150,
-                right_target_mps=0.150,
-                dt=0.02,
+            envelope = MotionEnvelope(
+                str(cycle_id),
+                command.physical_command_id,
+                False,
+                "",
+                0.582,
+                2.0,
+                0.582,
+                0.8,
+                0.8,
+                "test",
             )
-            tracks.append(track)
+            output = controller.compute(cycle, command, envelope, capabilities)
+            tracks.append({"left_mps": output.left_target_mps, "right_mps": output.right_target_mps})
 
         right = [float(item["right_mps"]) for item in tracks]
         crossing = next(i for i in range(1, len(right)) if right[i - 1] < 0.0 <= right[i])

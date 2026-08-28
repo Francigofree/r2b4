@@ -168,3 +168,62 @@ def test_estimator_capture_contains_exact_matcher_boundary():
     }
     replayed = replay_matcher_evidence(captured, absolute_tolerance=1e-12)
     assert replayed["match"] is True
+
+
+def test_estimator_timeout_is_not_claimed_as_deterministic_matcher_evidence():
+    evidence = _evidence()
+    estimator = LidarEstimator(
+        pose_provider=lambda: (0.05, 0.0, 0.02),
+        scan_match_cfg={
+            **evidence["input"]["config"],
+            "min_filtered_points": 10,
+            "local_map_min_points": 36,
+            "local_map_points_per_keyframe": 96,
+            "matcher_budget_ms": 500.0,
+            "tracking_reacquire_consecutive_scans": 1,
+            "relocalization_enabled": False,
+            "loop_closure_enabled": False,
+        },
+    )
+
+    def _timed_out_match(
+        _map_points,
+        _scan_data,
+        seed_pose,
+        *,
+        relocalization,
+        deadline_monotonic=None,
+        stats=None,
+    ):
+        assert relocalization is False
+        assert deadline_monotonic is not None
+        stats.update(
+            {
+                "timed_out": True,
+                "evaluated_candidates": 3,
+                "measurement_confidence": 0.0,
+                "localization_integrity_score": 0.0,
+                "integrity_state": "INCOMPLETE",
+            }
+        )
+        return (*seed_pose, 0.0)
+
+    estimator._scan_to_map_match = _timed_out_match
+    summary = estimator.process_scan(
+        evidence["input"]["current_scan"],
+        raw_meta={
+            "raw_scan_id": 32,
+            "raw_scan_timestamp": 11.0,
+            "raw_scan_started_mono": 10.9,
+            "raw_scan_completed_mono": 11.0,
+            "pose_reference_timestamp": 11.0,
+            "capture_matcher_evidence": True,
+        },
+    )
+
+    captured = summary["matcher_replay_evidence"]
+    assert captured["available"] is False
+    assert captured["unavailable_reason"] == "runtime_matcher_timed_out"
+    replayed = replay_matcher_evidence(captured, absolute_tolerance=1e-12)
+    assert replayed["replayed"] is False
+    assert replayed["match"] is True

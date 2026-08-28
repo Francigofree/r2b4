@@ -224,6 +224,7 @@ def _sample(status: Dict[str, Any]) -> Dict[str, Any]:
     lidar = dict((status or {}).get("lidar") or {})
     stop_status = dict((status or {}).get("stop_status") or {})
     motion_command = dict((status or {}).get("motion_command") or {})
+    motion_semantics = dict((status or {}).get("motion_semantics") or {})
     control_monitor = dict((status or {}).get("control_monitor") or {})
     command_arbitration = dict(motion_command.get("command_arbitration") or {})
     primitive_contract = dict(motion_command.get("primitive_contract") or (status or {}).get("primitive_contract") or {})
@@ -423,7 +424,7 @@ def _sample(status: Dict[str, Any]) -> Dict[str, Any]:
             control_monitor.get("wheel_loop_effective_kp"),
             math.nan,
         ),
-        "control_straight_hold_active": bool(control_monitor.get("straight_hold_active", False)),
+        "guidance_heading_hold_active": bool(motion_semantics.get("heading_hold_applied", False)),
         "local_nav_pivot_track_required": bool(
             control_monitor.get("local_navigation_pivot_track_required", False)
             or control_monitor.get("m3_pivot_track_required", False)

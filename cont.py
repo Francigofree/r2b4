@@ -73,6 +73,7 @@ from controller.tasks import (
 from controller.follow_layer import camera_observation_from_controller
 from controller.motion_resolver import (
     ENTRY_TIER_PRIMARY,
+    build_resolved_motion_intent,
     limit_motion_proposals,
     make_motion_proposal,
     resolve_motion_proposals,
@@ -92,6 +93,22 @@ from controller.motion_tick_context import (
     build_motion_tick_context,
     motion_tick_context_status,
     new_motion_tick_cache,
+)
+from controller.motion_platform_adapter import (
+    MotionPlatformBoundaryAdapter,
+    ServiceActuationAdapter,
+    contract_dict,
+)
+from controller.motion_platform_contract import (
+    PHYSICAL_MODE_BODY_TWIST,
+    PHYSICAL_MODE_STOP,
+    PHYSICAL_MODE_WHEEL_VELOCITY,
+    ServiceActuationRequest,
+)
+from controller.motion_guidance_contract import (
+    MotionGuidanceInput,
+    PoseSnapshot,
+    WorldModelSnapshot,
 )
 from controller.slow_tick_diagnostics import (
     AsyncMotionGcWorker,
@@ -115,6 +132,108 @@ ENCODER_CALIBRATION_COLLECT_INTERVAL_S = 0.10
 ROLLING_LOCAL_MAP_UPDATE_INTERVAL_SEC = 0.18
 LOOP_BUDGET_STATUS_PUBLISH_INTERVAL_S = 0.05
 CONTROL_LOOP_DEADLINE_SPIN_SEC = 0.0025
+
+
+def _optional_finite(value):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _pose_snapshot(*, ekf_state, cycle_context):
+    """Reduce EKF state to the immutable public pose contract."""
+
+    ekf = dict(ekf_state or {})
+    yaw_rad = _optional_finite(ekf.get("theta"))
+    if yaw_rad is None:
+        theta_deg = _optional_finite(ekf.get("theta_deg"))
+        yaw_rad = math.radians(theta_deg) if theta_deg is not None else math.nan
+    pose_values = (
+        _optional_finite(ekf.get("x")),
+        _optional_finite(ekf.get("y")),
+        yaw_rad,
+        _optional_finite(ekf.get("v", ekf.get("v_fused"))),
+        _optional_finite(ekf.get("omega_rad_s")),
+    )
+    pose_valid = all(value is not None and math.isfinite(value) for value in pose_values)
+    pose_timestamp = _optional_finite(ekf.get("source_timestamp"))
+    if pose_timestamp is None:
+        pose_timestamp = float(cycle_context.monotonic_time)
+    return PoseSnapshot(
+        frame_id=str(ekf.get("pose_frame_id", "") or ""),
+        pose_id=str(ekf.get("pose_id") or f"ekf:{cycle_context.cycle_id}"),
+        source_timestamp=float(pose_timestamp),
+        x_m=float(pose_values[0] if pose_values[0] is not None else math.nan),
+        y_m=float(pose_values[1] if pose_values[1] is not None else math.nan),
+        yaw_rad=float(yaw_rad),
+        v_mps=float(pose_values[3] if pose_values[3] is not None else math.nan),
+        omega_rad_s=float(
+            pose_values[4] if pose_values[4] is not None else math.nan
+        ),
+        validity="VALID" if pose_valid else "INVALID",
+    )
+
+
+def _world_model_snapshot(
+    *,
+    cycle_context,
+    lidar_summary,
+    obstacle_status,
+    raw_scan,
+    localization_status,
+    odometry_mode,
+):
+    """Reduce sensor/world feedback to the immutable L7A world contract."""
+
+    return WorldModelSnapshot(
+        world_id=f"world:{cycle_context.cycle_id}",
+        source_timestamp=float(cycle_context.monotonic_time),
+        validity="VALID",
+        lidar_summary=dict(lidar_summary or {}),
+        obstacle_status=dict(obstacle_status or {}),
+        raw_scan=tuple(dict(point) for point in (raw_scan or []) if isinstance(point, dict)),
+        localization_status=dict(localization_status or {}),
+        odometry_mode=str(odometry_mode or "UNKNOWN"),
+    )
+
+
+def _record_motion_policy_status(ctrl, status, *, now: float, active: bool) -> None:
+    counters = getattr(ctrl, "motion_policy_counters", None)
+    if not isinstance(counters, dict):
+        return
+    policy = dict(status or {})
+    actions = list(policy.get("actions", []) or [])
+    policy_state = str(policy.get("policy_state", "") or "").upper()
+    direction = str(policy.get("chosen_direction", "") or "").upper()
+    counters["total_ticks"] = int(counters.get("total_ticks", 0) or 0) + 1
+    if active:
+        counters["active_ticks"] = int(counters.get("active_ticks", 0) or 0) + 1
+    action_counts = dict(counters.get("actions", {}) or {})
+    for action in actions:
+        key = str(action or "").strip()
+        if key:
+            action_counts[key] = int(action_counts.get(key, 0) or 0) + 1
+    counters["actions"] = action_counts
+    state_ticks = dict(counters.get("state_ticks", {}) or {})
+    if policy_state in ("CRUISE", "APPROACH", "AVOID", "REALIGN"):
+        state_ticks[policy_state] = int(state_ticks.get(policy_state, 0) or 0) + 1
+    counters["state_ticks"] = state_ticks
+    direction_counts = dict(counters.get("direction_counts", {}) or {})
+    if direction in ("LEFT", "RIGHT"):
+        direction_counts[direction] = int(direction_counts.get(direction, 0) or 0) + 1
+    counters["direction_counts"] = direction_counts
+    for field, status_key in (
+        ("state_transitions", "state_transition"),
+        ("failsafe_events", "failsafe_event"),
+        ("degeneracy_events", "degeneracy_event"),
+    ):
+        if bool(policy.get(status_key, False)):
+            counters[field] = int(counters.get(field, 0) or 0) + 1
+    counters["last_policy_state"] = policy_state
+    counters["last_chosen_direction"] = direction
+    counters["last_update_ts"] = float(now)
 
 
 def _perf_us(start_ts: float, end_ts: float | None = None) -> int:
@@ -501,7 +620,6 @@ def _clear_calibration_pwm_runtime(ctrl, reason="expired") -> None:
         sm = getattr(ctrl, "sm", None)
         if sm is not None and str(sm.get_current_state_name() or "").upper() not in ("IDLE", "FAILSAFE"):
             sm.transition_to(RobotState.IDLE)
-from controller.motion_kinematics import twist_to_track_velocity
 from controller.obstacle_avoidance import ObstacleAvoidanceLayer, create_from_config as create_avoidance_layer
 from controller.local_planner import LocalPlanner, create_from_config as create_local_planner
 from controller.navigation_intent import NAV_MODE_GOAL, NavigationIntent
@@ -748,15 +866,6 @@ class AlbaController:
         return float(getattr(self, "estimator_confidence", 0.0) or 0.0)
 
     def _infer_base_motion_layer(self, *, recovery_mode: bool) -> tuple[str, str]:
-        heading_active = False
-        if str(getattr(self, "active_motion_command_type", "") or "").strip().lower() == "rotate_to_heading":
-            try:
-                heading_status = getattr(self, "heading_controller", None).status()
-                heading_active = bool((heading_status or {}).get("active", False))
-            except Exception:
-                heading_active = False
-        if heading_active:
-            return "HEADING_PRIMITIVE", "rotate_to_heading"
         if recovery_mode:
             return "RECOVERY_DISCRETE", "recovery_discrete"
         active_layer = str(getattr(self, "active_motion_command_layer", "IDLE") or "IDLE")
@@ -772,7 +881,6 @@ class AlbaController:
 
     def _base_motion_proposal(self, *, recovery_mode: bool) -> dict:
         layer, command_type = self._infer_base_motion_layer(recovery_mode=recovery_mode)
-        heading_primitive_active = bool(layer == "HEADING_PRIMITIVE" and command_type == "rotate_to_heading")
         execution_mode = normalize_execution_mode(
             getattr(self, "motion_execution_mode", ""),
             fallback=execution_mode_for_command(
@@ -801,6 +909,14 @@ class AlbaController:
                 )
             except Exception:
                 proposal_omega = float(getattr(self, "omega_target", 0.0) or 0.0)
+        details = {
+            "provider": "control_loop",
+            "active_motion_layer": str(getattr(self, "active_motion_command_layer", "IDLE") or "IDLE"),
+            "active_motion_type": str(getattr(self, "active_motion_command_type", "idle") or "idle"),
+        }
+        state_guidance_request = getattr(self, "state_guidance_request", None)
+        if state_guidance_request is not None:
+            details["guidance_request"] = contract_dict(state_guidance_request)
         return make_motion_proposal(
             name="control_loop_base",
             layer=layer,
@@ -811,12 +927,7 @@ class AlbaController:
             omega_target=float(proposal_omega),
             priority=400,
             requested_track_reference=dict(getattr(self, "requested_track_reference", {}) or {}),
-            details={
-                "provider": "control_loop",
-                "active_motion_layer": str(getattr(self, "active_motion_command_layer", "IDLE") or "IDLE"),
-                "active_motion_type": str(getattr(self, "active_motion_command_type", "idle") or "idle"),
-                "heading_primitive_active": heading_primitive_active,
-            },
+            details=details,
         )
 
     def _apply_resolved_motion(self, resolved_motion: dict, resolution_status: dict) -> None:
@@ -2156,6 +2267,26 @@ class AlbaController:
                             },
                         }
                     self._apply_resolved_motion(resolved_motion, resolution_status)
+                    motion_cycle_context = MotionPlatformBoundaryAdapter.cycle_context(
+                        cycle_id=cycle_id,
+                        monotonic_time=now,
+                        dt_observed_s=dt_loop_observed_raw,
+                        dt_control_s=dt_loop,
+                        timing_valid=bool(dt_loop_observed_raw > 0.0),
+                        timing_reason=(
+                            "CONTROL_DT_CLAMPED" if dt_loop_clamped else "VALID"
+                        ),
+                    )
+                    resolved_motion_intent = build_resolved_motion_intent(
+                        resolved_motion,
+                        cycle_context=motion_cycle_context,
+                    )
+                    if replayer_pipeline_stages is not None:
+                        replayer_pipeline_stages["resolver"][
+                            "recorded_output"
+                        ]["resolved_intent"] = contract_dict(
+                            resolved_motion_intent
+                        )
                     _tick_diag["resolver_us"] = _perf_us(_resolver_start)
                     self._loop_budget_end("motion_proposal_resolution", _slice_motion_proposals)
                     _tick_phase_start = _finish_tick_phase(
@@ -2191,468 +2322,171 @@ class AlbaController:
                     service_pwm_active = _calibration_pwm_command_active(
                         getattr(self, "service_pwm_command", {})
                     )
-                    exec_mode_active = str(getattr(self, "motion_execution_mode", "") or "").strip().upper()
-                    active_command_type_gate = str(getattr(self, "active_motion_command_type", "") or "").strip().lower()
-                    follow_arc_intent_active = active_command_type_gate == "follow_arc"
-                    track_exec_active = (exec_mode_active == EXEC_MODE_TRACK)
-                    non_twist_exec_active = (
-                        exec_mode_active in {EXEC_MODE_TRACK, EXEC_MODE_ARC, EXEC_MODE_HEADING}
-                        or follow_arc_intent_active
-                    )
-                    arc_exec_policy_isolation_active = bool(
-                        exec_mode_active == EXEC_MODE_ARC or follow_arc_intent_active
-                    )
-                    resolution_now = dict(getattr(self, "motion_resolution_status", {}) or {})
-                    resolved_now = dict(resolution_now.get("resolved") or {})
-                    resolved_command_type_now = str(resolved_now.get("command_type", "") or "").strip().lower()
-                    resolved_layer_now = str(resolved_now.get("layer", "") or "").strip().upper()
-                    planner_owned_twist_active = bool(
-                        resolved_command_type_now == "local_planner_segment"
-                        and resolved_layer_now in {"LOCAL_PLANNER", "LOCAL_NAVIGATION"}
-                    )
-                    active_command_type_now = str(getattr(self, "active_motion_command_type", "") or "").strip().lower()
-                    requested_intent_now = dict(getattr(self, "requested_motion_intent", {}) or {})
-                    try:
-                        requested_v_now = float(requested_intent_now.get("v", self.v_target) or 0.0)
-                    except Exception:
-                        requested_v_now = 0.0
-                    try:
-                        requested_omega_now = float(requested_intent_now.get("omega", self.omega_target) or 0.0)
-                    except Exception:
-                        requested_omega_now = 0.0
-                    motion_target_cmd_now = dict(getattr(self, "motion_target_command", {}) or {})
-                    if bool(motion_target_cmd_now.get("active", False)):
-                        try:
-                            requested_v_now = float(motion_target_cmd_now.get("v", requested_v_now) or 0.0)
-                        except Exception:
-                            pass
-                        try:
-                            requested_omega_now = float(
-                                motion_target_cmd_now.get("omega", requested_omega_now) or 0.0
-                            )
-                        except Exception:
-                            pass
-                    straight_bypass_near_wall = False
-                    try:
-                        gp_cfg = getattr(getattr(self, "global_motion_policy", None), "cfg", None)
-                        straight_floor_m = float(getattr(gp_cfg, "straight_bypass_min_clearance_m", 0.0) or 0.0)
-                    except Exception:
-                        straight_floor_m = 0.0
-                    try:
-                        front_for_straight_gate = float(
-                            (l_sum or {}).get("front_clearance_m", (l_sum or {}).get("min_dist_narrow", (l_sum or {}).get("min_dist", math.nan)))
-                        )
-                    except Exception:
-                        front_for_straight_gate = math.nan
-                    if bool((l_sum or {}).get("blocked_front", False)):
-                        straight_bypass_near_wall = True
-                    elif straight_floor_m > 1e-9 and math.isfinite(front_for_straight_gate):
-                        straight_bypass_near_wall = bool(front_for_straight_gate <= straight_floor_m)
-                    source_now = str(getattr(self, "motion_command_source", "") or "").strip().upper()
-                    deterministic_straight_gate_active = bool(
-                        (not recovery_mode)
-                        and (not service_pwm_active)
-                        and (not non_twist_exec_active)
-                        and (not planner_owned_twist_active)
-                        and (not straight_bypass_near_wall)
-                        and exec_mode_active == "TWIST_EXEC"
-                        and source_now == "STATE"
-                        and (
-                            resolved_command_type_now == "set_twist"
-                            or active_command_type_now == "set_twist"
-                        )
-                        and requested_v_now > 0.02
-                        and abs(requested_omega_now) <= 0.04
-                    )
-                    self.deterministic_straight_gate_active = bool(deterministic_straight_gate_active)
-                    try:
-                        gp_enabled_now = bool(getattr(getattr(self, "global_motion_policy", None), "cfg", None).enabled)
-                    except Exception:
-                        gp_enabled_now = False
-                    global_policy_lidar_owner = bool(
-                        gp_enabled_now
-                        and (not recovery_mode)
-                        and (not service_pwm_active)
-                        and (not non_twist_exec_active)
-                        and (not planner_owned_twist_active)
-                        and (not deterministic_straight_gate_active)
-                        and exec_mode_active == "TWIST_EXEC"
-                        and source_now in ("AI", "STATE")
-                        and active_command_type_now in ("set_twist", "set_motion_target")
-                        and requested_v_now > 0.02
-                    )
-                    append_inner_timing(
-                        _tick_diag.get("_inner_timing_segments"),
-                        "motion_policy.gates",
-                        _motion_policy_inner_start,
-                    )
-
-                    # 6c. Obstacle avoidance may modulate the one resolved twist.
-                    _motion_policy_inner_start = inner_timing_start()
-                    if (
-                        not recovery_mode
-                        and not service_pwm_active
-                        and not non_twist_exec_active
-                        and (not planner_owned_twist_active)
-                        and (not deterministic_straight_gate_active)
-                        and (not global_policy_lidar_owner)
-                    ):
-                        avoidance = getattr(self, "obstacle_avoidance", None)
-                        if avoidance is not None:
-                            # Auto-set path reference from EKF on forward motion start
-                            _v_now = float(getattr(self, "v_target", 0.0) or 0.0)
-                            if _v_now > 0.02 and not avoidance._path_ref_captured:
-                                _ex = float(ekf_state.get("x", 0.0) or 0.0)
-                                _ey = float(ekf_state.get("y", 0.0) or 0.0)
-                                _et = float(ekf_state.get("theta", ekf_state.get("theta_rad", 0.0)) or 0.0)
-                                avoidance.set_path_reference(_ex, _ey, _et)
-                            elif (_v_now <= 0.005 and avoidance._path_ref_captured
-                                  and not avoidance._recovery_active
-                                  and not avoidance._recently_recovered(timeout_s=3.0)):
-                                avoidance.clear_path_reference()
-                            avoidance_state = avoidance.tick(self, l_sum, ekf_state, dt_loop)
-                            self.obstacle_avoidance_status = avoidance.get_diagnostics()
-                            if avoidance_state.active:
-                                self.motion_target_owner = "OBSTACLE_AVOIDANCE"
-                    elif deterministic_straight_gate_active:
-                            self.obstacle_avoidance_status = {
-                                "active": False,
-                                "bypassed_for_deterministic_straight": True,
-                                "reason": "STATE_set_twist_straight_ssot",
-                            }
-                    elif global_policy_lidar_owner:
-                        self.obstacle_avoidance_status = {
-                            "active": False,
-                            "bypassed_for_global_motion_policy": True,
-                            "reason": "global_motion_policy_lidar_owner",
-                            "source": str(source_now),
-                            "active_command_type": str(active_command_type_now),
-                            "requested_v": float(requested_v_now),
-                            "requested_omega": float(requested_omega_now),
-                        }
-                    append_inner_timing(
-                        _tick_diag.get("_inner_timing_segments"),
-                        "motion_policy.obstacle_avoidance",
-                        _motion_policy_inner_start,
-                    )
-
-                    # IDLE / FAILSAFE / CALIBRATING: normál mozgás intent mindig 0,0
-                    _motion_policy_inner_start = inner_timing_start()
-                    if (not service_pwm_active) and (not planner_owned_twist_active) and getattr(self.sm, "current_enum", None) in (
-                        RobotState.IDLE,
-                        RobotState.FAILSAFE,
-                        RobotState.CALIBRATING,
-                    ):
-                        self.v_target, self.omega_target = 0.0, 0.0
-                        self.motion_target_owner = "STATE_ZERO_CLAMP"
-
-                    if recovery_mode or service_pwm_active or track_exec_active:
-                        self.heading_controller_status = {}
-                    elif getattr(self, "heading_controller", None) is not None:
-                        self.heading_controller_status = self.heading_controller.status()
-                    else:
-                        self.heading_controller_status = {}
                     _sync_motion_task_runtime(self)
-                    if service_pwm_active or non_twist_exec_active:
-                        self.motion_semantics_status = {}
-                    elif recovery_mode and getattr(self, "motion_semantics", None) is not None:
-                        self.motion_semantics_status = self.motion_semantics.enforce_recovery_heading_hold(
-                            self, ekf_state=ekf_state, now=now
+                    speed_limits = getattr(self, "speed_limits", None)
+                    speed_profile = getattr(speed_limits, "profile", None)
+                    calibrated_min = float(
+                        getattr(speed_limits, "calibrated_wheel_min_mps", 0.0)
+                        or 0.0
+                    )
+                    calibrated_max = float(
+                        getattr(speed_limits, "calibrated_wheel_max_mps", 0.0)
+                        or 0.0
+                    )
+                    accel_limit = float(
+                        getattr(speed_limits, "effective_accel_limit", 0.35)
+                        or 0.35
+                    )
+                    decel_limit = float(
+                        ((self.cfg.get("vezerles", {}) or {}).get(
+                            "motion_controller", {}
+                        ) or {}).get("v_decel_m_s2", max(accel_limit, 0.8))
+                    )
+                    capability_version = str(
+                        (self.cfg.get("speed_map", {}) or {}).get(
+                            "candidate_id", "UNKNOWN"
                         )
-                        if bool(self.motion_semantics_status.get("heading_hold_applied", False)):
-                            self.motion_target_owner = "MOTION_SEMANTICS_RECOVERY_HOLD"
-                    elif getattr(self, "motion_semantics", None) is not None:
-                        self.motion_semantics_status = self.motion_semantics.enforce(self, ekf_state=ekf_state, now=now)
+                    )
+                    motion_drive_capabilities = MotionPlatformBoundaryAdapter.capabilities(
+                        track_width_m=float(
+                            self.cfg.get("fizika", {}).get(
+                                "nyomtav_szelesseg_m", 0.175
+                            )
+                        ),
+                        calibrated_wheel_min_mps=calibrated_min,
+                        calibrated_wheel_max_mps=calibrated_max,
+                        max_wheel_accel_mps2=accel_limit,
+                        max_wheel_decel_mps2=decel_limit,
+                        capability_version=capability_version,
+                    )
+                    motion_pose_snapshot = _pose_snapshot(
+                        ekf_state=ekf_state,
+                        cycle_context=motion_cycle_context,
+                    )
+                    motion_world_snapshot = _world_model_snapshot(
+                        cycle_context=motion_cycle_context,
+                        lidar_summary=dict(l_sum or {}),
+                        obstacle_status=dict(
+                            getattr(self, "obstacle_avoidance_status", {}) or {}
+                        ),
+                        raw_scan=raw_scan_points,
+                        localization_status=dict(
+                            loop_result.get("lidar_odom_status") or {}
+                        ),
+                        odometry_mode=str(
+                            getattr(self, "odometry_mode", "UNKNOWN") or "UNKNOWN"
+                        ),
+                    )
+                    guidance_component = getattr(self, "motion_guidance", None)
+                    if guidance_component is None:
+                        raise RuntimeError("MOTION_GUIDANCE_MISSING")
+                    motion_public = dict(
+                        getattr(self, "motion_public_status", {}) or {}
+                    )
+                    motion_guidance_input = MotionGuidanceInput(
+                        resolved_intent=resolved_motion_intent,
+                        pose=motion_pose_snapshot,
+                        world=motion_world_snapshot,
+                        cycle_context=motion_cycle_context,
+                        drive_capabilities=motion_drive_capabilities,
+                        executed_left_mps=_optional_finite(
+                            getattr(self, "track_target_left_mps", None)
+                        ),
+                        executed_right_mps=_optional_finite(
+                            getattr(self, "track_target_right_mps", None)
+                        ),
+                        actual_linear_mps=_optional_finite(
+                            motion_public.get("actual_linear_mps")
+                        ),
+                        actual_angular_dps=_optional_finite(
+                            motion_public.get("actual_angular_dps")
+                        ),
+                        measured_left_mps=_optional_finite(v_l_raw),
+                        measured_right_mps=_optional_finite(v_r_raw),
+                        gyro_z_rad_s=_optional_finite(
+                            getattr(self, "_last_gyro_z_rad", None)
+                        ),
+                    )
+                    motion_physical_command = guidance_component.compute(
+                        motion_guidance_input
+                    )
+                    guidance_result = guidance_component.diagnostics()
+                    if guidance_result is None:
+                        raise RuntimeError("MOTION_GUIDANCE_DIAGNOSTICS_MISSING")
+                    if replayer_pipeline_stages is not None:
+                        replayer_pipeline_stages["guidance"] = {
+                            "input": contract_dict(motion_guidance_input),
+                            "recorded_output": {
+                                "physical_command": contract_dict(
+                                    motion_physical_command
+                                ),
+                                "diagnostics": contract_dict(guidance_result),
+                            },
+                        }
+                    self.motion_semantics_status = dict(
+                        guidance_result.semantics_status
+                    )
+                    self.obstacle_avoidance_status = dict(
+                        guidance_result.obstacle_status
+                    )
+                    self.motion_policy_status = dict(
+                        guidance_result.policy_status
+                    )
+                    self.heading_controller_status = dict(
+                        guidance_component.heading_status()
+                    )
+                    if motion_physical_command.physical_mode == PHYSICAL_MODE_BODY_TWIST:
+                        self.v_target = float(motion_physical_command.v_mps)
+                        self.omega_target = float(
+                            motion_physical_command.omega_rad_s
+                        )
+                        self.requested_track_reference = {}
+                    elif motion_physical_command.physical_mode == PHYSICAL_MODE_WHEEL_VELOCITY:
+                        self.v_target = 0.0
+                        self.omega_target = 0.0
+                        self.requested_track_reference = {
+                            "left_mps": float(motion_physical_command.left_mps),
+                            "right_mps": float(motion_physical_command.right_mps),
+                        }
                     else:
-                        self.motion_semantics_status = {}
+                        self.v_target = 0.0
+                        self.omega_target = 0.0
+                        self.requested_track_reference = {}
+                    if not guidance_result.valid:
+                        self.motion_target_owner = "MOTION_GUIDANCE_FAIL_CLOSED"
+                    elif bool(self.motion_policy_status.get("active", False)):
+                        self.motion_target_owner = "MOTION_GUIDANCE_POLICY"
+                    elif bool(
+                        self.motion_semantics_status.get(
+                            "heading_hold_applied", False
+                        )
+                    ):
+                        self.motion_target_owner = "MOTION_GUIDANCE_HEADING"
+                    else:
+                        self.motion_target_owner = "MOTION_GUIDANCE"
+                    _record_motion_policy_status(
+                        self,
+                        self.motion_policy_status,
+                        now=now,
+                        active=bool(
+                            self.motion_policy_status.get("active", False)
+                        ),
+                    )
                     append_inner_timing(
                         _tick_diag.get("_inner_timing_segments"),
-                        "motion_policy.motion_semantics",
+                        "motion_guidance.compute",
                         _motion_policy_inner_start,
                     )
-
-                    # 6c¾. Global motion policy: soft pre-controller governor
-                    # (clearance + curvature aware, deterministic, forward-dominant).
-                    _motion_policy_inner_start = inner_timing_start()
-                    if recovery_mode or service_pwm_active or non_twist_exec_active:
-                        blocked_front_policy = bool((l_sum or {}).get("blocked_front", False))
-                        if arc_exec_policy_isolation_active:
-                            policy_actions = ["BYPASS_ARC_EXEC"]
-                            if blocked_front_policy:
-                                self.v_target, self.omega_target = 0.0, 0.0
-                                self.motion_target_owner = "GLOBAL_MOTION_POLICY_SAFETY_STOP"
-                                policy_actions.append("SAFETY_STOP_BLOCKED_FRONT")
-                            self.motion_policy_status = {
-                                "active": bool(blocked_front_policy),
-                                "bypassed_for_arc_exec": True,
-                                "safety_only_role": True,
-                                "policy_state": "BYPASS_ARC_EXEC",
-                                "blocked_front": bool(blocked_front_policy),
-                                "execution_mode": str(exec_mode_active),
-                                "active_command_type": str(active_command_type_gate),
-                                "actions": list(policy_actions),
-                            }
-                        else:
-                            self.motion_policy_status = {}
-                        gp = getattr(self, "global_motion_policy", None)
-                        if gp is not None and hasattr(gp, "reset_runtime"):
-                            try:
-                                gp.reset_runtime()
-                            except Exception:
-                                pass
-                        counters = getattr(self, "motion_policy_counters", None)
-                        if isinstance(counters, dict):
-                            counters["total_ticks"] = 0
-                            counters["active_ticks"] = 0
-                            counters["actions"] = {}
-                            counters["state_ticks"] = {
-                                "CRUISE": 0,
-                                "APPROACH": 0,
-                                "AVOID": 0,
-                                "REALIGN": 0,
-                            }
-                            counters["state_transitions"] = 0
-                            counters["failsafe_events"] = 0
-                            counters["degeneracy_events"] = 0
-                            counters["direction_counts"] = {
-                                "LEFT": 0,
-                                "RIGHT": 0,
-                            }
-                            counters["last_policy_state"] = ""
-                            counters["last_chosen_direction"] = ""
-                            counters["last_update_ts"] = float(now)
-                        append_inner_timing(
-                            _tick_diag.get("_inner_timing_segments"),
-                            "motion_policy.global_bypass_reset",
-                            _motion_policy_inner_start,
-                        )
-                    elif getattr(self, "global_motion_policy", None) is not None:
-                        policy_active = False
-                        policy_actions = []
-                        policy_state = ""
-                        policy_direction = ""
-                        state_transition = False
-                        failsafe_event = False
-                        degeneracy_event = False
-                        requested_intent_policy = dict(getattr(self, "requested_motion_intent", {}) or {})
-                        resolution_policy = dict(getattr(self, "motion_resolution_status", {}) or {})
-                        resolved_policy = dict(resolution_policy.get("resolved") or {})
-                        resolved_command_type = str(resolved_policy.get("command_type", "") or "").strip().lower()
-                        active_command_type_now = str(getattr(self, "active_motion_command_type", "") or "").strip().lower()
-                        source_policy = str(getattr(self, "motion_command_source", "") or "").strip().upper()
-                        turn_primitive_req_policy = str(
-                            ((getattr(self, "motion_semantics_status", {}) or {}).get("turn_primitive_requested", ""))
-                            or ""
-                        ).strip().upper()
-                        try:
-                            requested_v_policy = float(requested_intent_policy.get("v", self.v_target) or 0.0)
-                        except Exception:
-                            requested_v_policy = 0.0
-                        try:
-                            requested_omega_policy = float(requested_intent_policy.get("omega", self.omega_target) or 0.0)
-                        except Exception:
-                            requested_omega_policy = 0.0
-                        motion_target_cmd_policy = dict(getattr(self, "motion_target_command", {}) or {})
-                        if bool(motion_target_cmd_policy.get("active", False)):
-                            try:
-                                requested_v_policy = float(
-                                    motion_target_cmd_policy.get("v", requested_v_policy) or 0.0
-                                )
-                            except Exception:
-                                pass
-                            try:
-                                requested_omega_policy = float(
-                                    motion_target_cmd_policy.get("omega", requested_omega_policy) or 0.0
-                                )
-                            except Exception:
-                                pass
-                        arc_exec_policy_bypass = bool(
-                            exec_mode_active == EXEC_MODE_ARC
-                            or active_command_type_now == "follow_arc"
-                            or turn_primitive_req_policy.startswith("DIFF_ARC")
-                        )
-                        deterministic_straight_policy_bypass = bool(
-                            getattr(self, "deterministic_straight_gate_active", False)
-                            or (
-                                (not straight_bypass_near_wall)
-                                and
-                                source_policy == "STATE"
-                                and turn_primitive_req_policy == "STRAIGHT"
-                                and requested_v_policy > 0.02
-                                and abs(requested_omega_policy) <= 0.04
-                                and (
-                                    resolved_command_type == "set_twist"
-                                    or active_command_type_now == "set_twist"
-                                )
-                            )
-                        )
-                        append_inner_timing(
-                            _tick_diag.get("_inner_timing_segments"),
-                            "motion_policy.global_precheck",
-                            _motion_policy_inner_start,
-                        )
-                        if arc_exec_policy_bypass:
-                            _motion_policy_inner_start = inner_timing_start()
-                            blocked_front_policy = bool((l_sum or {}).get("blocked_front", False))
-                            policy_actions = ["BYPASS_ARC_EXEC"]
-                            if blocked_front_policy:
-                                self.v_target, self.omega_target = 0.0, 0.0
-                                policy_active = True
-                                policy_actions.append("SAFETY_STOP_BLOCKED_FRONT")
-                                self.motion_target_owner = "GLOBAL_MOTION_POLICY_SAFETY_STOP"
-                            policy_state = "BYPASS_ARC_EXEC"
-                            self.motion_policy_status = {
-                                "active": bool(blocked_front_policy),
-                                "bypassed_for_arc_exec": True,
-                                "safety_only_role": True,
-                                "policy_state": "BYPASS_ARC_EXEC",
-                                "blocked_front": bool(blocked_front_policy),
-                                "requested_v": float(requested_v_policy),
-                                "requested_omega": float(requested_omega_policy),
-                                "turn_primitive_requested": str(turn_primitive_req_policy),
-                                "resolved_command_type": str(resolved_command_type or active_command_type_now or ""),
-                                "execution_mode": str(exec_mode_active),
-                                "actions": list(policy_actions),
-                            }
-                            append_inner_timing(
-                                _tick_diag.get("_inner_timing_segments"),
-                                "motion_policy.global_arc_bypass",
-                                _motion_policy_inner_start,
-                            )
-                        elif deterministic_straight_policy_bypass:
-                            _motion_policy_inner_start = inner_timing_start()
-                            policy_actions = ["BYPASS_STRAIGHT"]
-                            policy_state = "BYPASS_STRAIGHT"
-                            self.motion_policy_status = {
-                                "active": False,
-                                "bypassed_for_deterministic_straight": True,
-                                "policy_state": "BYPASS_STRAIGHT",
-                                "requested_v": float(requested_v_policy),
-                                "requested_omega": float(requested_omega_policy),
-                                "turn_primitive_requested": str(turn_primitive_req_policy),
-                                "resolved_command_type": str(resolved_command_type or active_command_type_now or ""),
-                            }
-                            append_inner_timing(
-                                _tick_diag.get("_inner_timing_segments"),
-                                "motion_policy.global_straight_bypass",
-                                _motion_policy_inner_start,
-                            )
-                        else:
-                            try:
-                                _motion_policy_inner_start = inner_timing_start()
-                                policy_ctx = self.global_motion_policy.build_context(
-                                    ctrl=self,
-                                    lidar_summary=dict(l_sum or {}),
-                                    obstacle_status=dict(getattr(self, "obstacle_avoidance_status", {}) or {}),
-                                    raw_scan=raw_scan_points,
-                                )
-                                append_inner_timing(
-                                    _tick_diag.get("_inner_timing_segments"),
-                                    "motion_policy.build_context",
-                                    _motion_policy_inner_start,
-                                )
-                                _motion_policy_inner_start = inner_timing_start()
-                                self.v_target, self.omega_target, self.motion_policy_status = self.global_motion_policy.apply(
-                                    v_target=float(self.v_target),
-                                    omega_target=float(self.omega_target),
-                                    context=policy_ctx,
-                                )
-                                append_inner_timing(
-                                    _tick_diag.get("_inner_timing_segments"),
-                                    "motion_policy.apply",
-                                    _motion_policy_inner_start,
-                                )
-                                _motion_policy_inner_start = inner_timing_start()
-                                policy_active = bool((self.motion_policy_status or {}).get("active", False))
-                                policy_actions = list((self.motion_policy_status or {}).get("actions", []) or [])
-                                policy_state = str((self.motion_policy_status or {}).get("policy_state", "") or "").upper()
-                                policy_direction = str((self.motion_policy_status or {}).get("chosen_direction", "") or "").upper()
-                                state_transition = bool((self.motion_policy_status or {}).get("state_transition", False))
-                                failsafe_event = bool((self.motion_policy_status or {}).get("failsafe_event", False))
-                                degeneracy_event = bool((self.motion_policy_status or {}).get("degeneracy_event", False))
-                                if policy_active:
-                                    self.motion_target_owner = "GLOBAL_MOTION_POLICY"
-                                append_inner_timing(
-                                    _tick_diag.get("_inner_timing_segments"),
-                                    "motion_policy.status_extract",
-                                    _motion_policy_inner_start,
-                                )
-                            except Exception as e:
-                                self.motion_policy_status = {
-                                    "active": False,
-                                    "error": str(e),
-                                }
-                                policy_active = False
-                                policy_actions = []
-                                policy_state = ""
-                                policy_direction = ""
-                                state_transition = False
-                                failsafe_event = False
-                                degeneracy_event = False
-                                append_inner_timing(
-                                    _tick_diag.get("_inner_timing_segments"),
-                                    "motion_policy.error_path",
-                                    _motion_policy_inner_start,
-                                )
-                        _motion_policy_inner_start = inner_timing_start()
-                        counters = getattr(self, "motion_policy_counters", None)
-                        if isinstance(counters, dict):
-                            total_ticks = int(counters.get("total_ticks", 0) or 0) + 1
-                            active_ticks = int(counters.get("active_ticks", 0) or 0)
-                            if policy_active:
-                                active_ticks += 1
-                            action_counts = dict(counters.get("actions", {}) or {})
-                            for action in policy_actions:
-                                key = str(action or "").strip()
-                                if not key:
-                                    continue
-                                action_counts[key] = int(action_counts.get(key, 0) or 0) + 1
-                            state_ticks = dict(counters.get("state_ticks", {}) or {})
-                            if policy_state in ("CRUISE", "APPROACH", "AVOID", "REALIGN"):
-                                state_ticks[policy_state] = int(state_ticks.get(policy_state, 0) or 0) + 1
-                            direction_counts = dict(counters.get("direction_counts", {}) or {})
-                            if policy_direction in ("LEFT", "RIGHT"):
-                                direction_counts[policy_direction] = int(direction_counts.get(policy_direction, 0) or 0) + 1
-                            state_transitions = int(counters.get("state_transitions", 0) or 0)
-                            if state_transition:
-                                state_transitions += 1
-                            failsafe_events = int(counters.get("failsafe_events", 0) or 0)
-                            if failsafe_event:
-                                failsafe_events += 1
-                            degeneracy_events = int(counters.get("degeneracy_events", 0) or 0)
-                            if degeneracy_event:
-                                degeneracy_events += 1
-                            counters["total_ticks"] = int(total_ticks)
-                            counters["active_ticks"] = int(active_ticks)
-                            counters["actions"] = action_counts
-                            counters["state_ticks"] = state_ticks
-                            counters["state_transitions"] = int(state_transitions)
-                            counters["failsafe_events"] = int(failsafe_events)
-                            counters["degeneracy_events"] = int(degeneracy_events)
-                            counters["direction_counts"] = direction_counts
-                            counters["last_policy_state"] = str(policy_state or "")
-                            counters["last_chosen_direction"] = str(policy_direction or "")
-                            counters["last_update_ts"] = float(now)
-                        append_inner_timing(
-                            _tick_diag.get("_inner_timing_segments"),
-                            "motion_policy.counters",
-                            _motion_policy_inner_start,
-                        )
-                    else:
-                        append_inner_timing(
-                            _tick_diag.get("_inner_timing_segments"),
-                            "motion_policy.disabled",
-                            _motion_policy_inner_start,
-                        )
-                        self.motion_policy_status = {}
-                    self._write_loop_phase("after_motion_policy", cycle_id=cycle_id)
+                    self._write_loop_phase(
+                        "after_motion_guidance",
+                        cycle_id=cycle_id,
+                    )
                     _tick_phase_start = _finish_tick_phase(
                         _tick_diag,
-                        "motion_policy",
+                        "motion_guidance",
                         _tick_phase_start,
                         _gc_tracker,
                     )
-
                     # 6d. Localization gate (EKF-applied truth): TRACKING / DEGRADED / LOST.
                     # The gate runs before final shaping/execution so motion reacts in-cycle.
                     localization_gate_status = {}
@@ -2728,17 +2562,6 @@ class AlbaController:
                             gate_status=localization_gate_status,
                             track_width_m=localization_track_width_m,
                         )
-                        if bool(localization_gate_apply.get("applied", False)):
-                            self.v_target = float(localization_gate_apply.get("v_target", 0.0))
-                            self.omega_target = float(localization_gate_apply.get("omega_target", 0.0))
-                            gated_track_ref = localization_gate_apply.get("requested_track_reference")
-                            if isinstance(gated_track_ref, dict):
-                                self.requested_track_reference = {
-                                    "left_mps": gated_track_ref.get("left_mps"),
-                                    "right_mps": gated_track_ref.get("right_mps"),
-                                }
-                            if self.motion_target_owner not in ("STATE_ZERO_CLAMP", "SERVICE_PWM_DIRECT"):
-                                self.motion_target_owner = "LOCALIZATION_GATE"
 
                         gate_counters = dict(getattr(self, "localization_gate_counters", {}) or {})
                         states = dict(gate_counters.get("states", {}) or {})
@@ -2833,162 +2656,102 @@ class AlbaController:
                         details={"mode": str((localization_gate_status or {}).get("mode", "") or "")},
                     )
 
-                    # 6d. Final command shaping: deadband/expo + slew + diff-drive IK refs.
-                    force_zero = (
-                        (not planner_owned_twist_active)
-                        and getattr(self.sm, "current_enum", None) in (
-                            RobotState.IDLE,
-                            RobotState.FAILSAFE,
-                            RobotState.CALIBRATING,
+                    # 6e. L7B constraints consume the finished physical command.
+                    localization_stop = bool(
+                        bool((localization_gate_status or {}).get("hard_stop", False))
+                        or (
+                            bool(localization_gate_status)
+                            and not bool(
+                                (localization_gate_status or {}).get("allow_motion", True)
+                            )
                         )
+                        or str((localization_gate_apply or {}).get("reason", "") or "")
+                        == "localization_gate_stop"
                     )
-                    if force_zero and non_twist_exec_active:
-                        self.v_target = 0.0
-                        self.omega_target = 0.0
-                        self.requested_track_reference = {"left_mps": 0.0, "right_mps": 0.0}
-                        self.motion_target_owner = "STATE_ZERO_CLAMP"
-                    if recovery_mode or service_pwm_active:
-                        replayer_reference_mode = "BYPASS"
-                    elif track_exec_active:
-                        replayer_reference_mode = "TRACK"
-                    elif non_twist_exec_active:
-                        replayer_reference_mode = "BYPASS"
-                    else:
-                        replayer_reference_mode = "TWIST"
-                    if replayer_pipeline_stages is not None:
-                        replayer_motion_controller_state_before = {
-                            "v_prev": float(
-                                getattr(
-                                    getattr(self, "motion_controller", None),
-                                    "_v_prev",
-                                    0.0,
+                    platform_stop_required = bool(
+                        localization_stop or service_pwm_active
+                    )
+                    localization_speed_scale = max(
+                        0.0,
+                        min(
+                            1.0,
+                            float(
+                                (localization_gate_status or {}).get(
+                                    "speed_scale", 1.0
                                 )
                                 or 0.0
                             ),
-                            "omega_prev": float(
-                                getattr(
-                                    getattr(self, "motion_controller", None),
-                                    "_omega_prev",
-                                    0.0,
-                                )
-                                or 0.0
-                            ),
-                        }
-                        replayer_pipeline_stages["reference"] = {
-                            "input": {
-                                "mode": str(replayer_reference_mode),
-                                "dt_s": float(dt_loop),
-                                "force_zero": bool(force_zero),
-                                "clear_motion_controller_state": bool(
-                                    recovery_mode
-                                    or service_pwm_active
-                                    or (non_twist_exec_active and not track_exec_active)
-                                ),
-                                "v_target": float(self.v_target),
-                                "omega_target": float(self.omega_target),
-                                "execution_mode": str(
-                                    getattr(self, "motion_execution_mode", "") or ""
-                                ),
-                                "requested_track_reference": dict(
-                                    getattr(self, "requested_track_reference", {}) or {}
-                                ),
-                                "ekf_state": dict(ekf_state or {}),
-                                "motion_controller_state_before": dict(
-                                    replayer_motion_controller_state_before
-                                ),
-                                "speed_limits_state": (
-                                    dict(self.speed_limits.as_runtime_state())
-                                    if getattr(self, "speed_limits", None) is not None
-                                    else {}
-                                ),
-                                "controller_state": {
-                                    "motion_command_source": str(
-                                        getattr(self, "motion_command_source", "") or ""
-                                    ),
-                                    "active_motion_command_type": str(
-                                        getattr(self, "active_motion_command_type", "") or ""
-                                    ),
-                                    "active_motion_command_layer": str(
-                                        getattr(self, "active_motion_command_layer", "") or ""
-                                    ),
-                                },
-                            },
-                            "recorded_output": {},
-                        }
-                    if recovery_mode or service_pwm_active:
-                        self.motion_controller_state = {}
-                    elif track_exec_active and getattr(self, "motion_controller", None) is not None:
-                        requested_track_pair = _finite_track_pair(
-                            getattr(self, "requested_track_reference", {})
-                        )
-                        if requested_track_pair is None:
-                            self.motion_controller_state = {
-                                "active": False,
-                                "mode": "TRACK_REFERENCE_SLEW",
-                                "error": "track_reference_missing",
-                            }
-                        else:
-                            track_force_zero = bool(
-                                force_zero
-                                or bool((localization_gate_status or {}).get("hard_stop", False))
-                                or (
-                                    bool(localization_gate_status)
-                                    and not bool((localization_gate_status or {}).get("allow_motion", True))
-                                )
-                                or str((localization_gate_apply or {}).get("reason", "") or "")
-                                == "localization_gate_stop"
-                            )
-                            (
-                                self.v_target,
-                                self.omega_target,
-                                shaped_track_reference,
-                            ) = self.motion_controller.tick_track_reference(
-                                ctrl=self,
-                                left_target_mps=float(requested_track_pair["left_mps"]),
-                                right_target_mps=float(requested_track_pair["right_mps"]),
-                                dt=float(dt_loop),
-                                force_zero=bool(track_force_zero),
-                            )
-                            self.requested_track_reference = dict(shaped_track_reference)
-                            self.motion_target_owner = "MOTION_CONTROLLER_TRACK"
-                    elif non_twist_exec_active:
-                        self.motion_controller_state = {}
-                    elif getattr(self, "motion_controller", None) is not None:
-                        try:
-                            self.v_target, self.omega_target = self.motion_controller.tick(
-                                ctrl=self,
-                                v_target=float(self.v_target),
-                                omega_target=float(self.omega_target),
-                                dt=float(dt_loop),
-                                ekf_state=dict(ekf_state or {}),
-                                force_zero=bool(force_zero),
-                            )
-                            self.motion_target_owner = "MOTION_CONTROLLER"
-                        except Exception as e:
-                            self.motion_controller_state = {
-                                "active": False,
-                                "error": str(e),
-                                "force_zero": bool(force_zero),
-                            }
-                            if force_zero:
-                                self.v_target, self.omega_target = 0.0, 0.0
-                                self.motion_target_owner = "MOTION_CONTROLLER_FAILSAFE_ZERO"
+                        ),
+                    )
+                    motion_envelope = MotionPlatformBoundaryAdapter.envelope(
+                        cycle_context=motion_cycle_context,
+                        physical_command=motion_physical_command,
+                        stop_required=platform_stop_required,
+                        stop_reason=(
+                            "SERVICE_PATH_ACTIVE"
+                            if service_pwm_active
+                            else "LOCALIZATION_STOP"
+                            if localization_stop
+                            else ""
+                        ),
+                        max_abs_v_mps=localization_speed_scale * float(
+                            getattr(speed_limits, "effective_v_max", 0.0)
+                            or getattr(speed_profile, "v_max", 0.0)
+                            or calibrated_max
+                        ),
+                        max_abs_omega_rad_s=localization_speed_scale * float(
+                            getattr(speed_limits, "effective_w_max", 0.0)
+                            or getattr(speed_profile, "w_max", 0.0)
+                            or 1.2
+                        ),
+                        max_abs_wheel_mps=(
+                            localization_speed_scale * calibrated_max
+                        ),
+                        max_wheel_accel_mps2=accel_limit,
+                        max_wheel_decel_mps2=decel_limit,
+                        capability_version=capability_version,
+                    )
+                    motion_wheel_setpoint = self.motion_controller.compute(
+                        motion_cycle_context,
+                        motion_physical_command,
+                        motion_envelope,
+                        motion_drive_capabilities,
+                    )
+                    self.requested_track_reference = {
+                        "left_mps": float(motion_wheel_setpoint.left_target_mps),
+                        "right_mps": float(motion_wheel_setpoint.right_target_mps),
+                    }
+                    self.motion_controller_state = {
+                        "active": bool(motion_wheel_setpoint.feasible),
+                        "contract_id": motion_wheel_setpoint.contract_id,
+                        "cycle_id": motion_wheel_setpoint.cycle_id,
+                        "physical_command_id": motion_wheel_setpoint.physical_command_id,
+                        "wheel_setpoint_id": motion_wheel_setpoint.wheel_setpoint_id,
+                        "physical_mode": motion_physical_command.physical_mode,
+                        "v_l_ref": float(motion_wheel_setpoint.left_target_mps),
+                        "v_r_ref": float(motion_wheel_setpoint.right_target_mps),
+                        "feasible": bool(motion_wheel_setpoint.feasible),
+                        "reason": str(motion_wheel_setpoint.reason),
+                        "applied_limits": list(motion_wheel_setpoint.applied_limits),
+                        "clamped": bool(motion_wheel_setpoint.applied_limits),
+                    }
+                    self.motion_target_owner = "MOTION_PLATFORM_L8"
 
                     self.limited_motion_intent = {
                         "v": float(self.v_target),
                         "omega": float(self.omega_target),
                     }
                     if replayer_pipeline_stages is not None:
-                        replayer_pipeline_stages["reference"]["recorded_output"] = {
-                            "state_before": dict(replayer_motion_controller_state_before),
-                            "v_cmd": float(self.v_target),
-                            "omega_cmd": float(self.omega_target),
-                            "track_reference": dict(
-                                getattr(self, "requested_track_reference", {}) or {}
-                            ),
-                            "motion_controller_state": dict(
-                                getattr(self, "motion_controller_state", {}) or {}
-                            ),
+                        replayer_pipeline_stages["reference"] = {
+                            "input": {
+                                "cycle_context": contract_dict(motion_cycle_context),
+                                "physical_command": contract_dict(motion_physical_command),
+                                "motion_envelope": contract_dict(motion_envelope),
+                                "drive_capabilities": contract_dict(
+                                    motion_drive_capabilities
+                                ),
+                            },
+                            "recorded_output": contract_dict(motion_wheel_setpoint),
                         }
                     if isinstance(self.motion_resolution_status, dict):
                         resolved_status = dict(self.motion_resolution_status.get("resolved", {}) or {})
@@ -3061,233 +2824,54 @@ class AlbaController:
                         service_pwm_cmd = dict(getattr(self, "service_pwm_command", {}) or {})
                     final_pwm_zero_reason = "NONE"
                     pid_diag = None
-                    if getattr(self, "speed_limits", None):
-                        self.motion_executor.max_pwm = self.speed_limits.max_pwm_cap
-                    # MotionController is the single v/omega shaping owner.
-                    # The executor must receive that final physical command unchanged.
                     self.v_cmd = float(self.v_target)
-
-                    # Determine odometry mode early for sensor_feedback assembly
-                    odom_mode_now = str(
-                        loop_result.get("odometry_mode", getattr(self, "odometry_mode", "LIDAR_FIRST")) or ""
-                    ).strip().upper()
-                    _lidar_first_active = (odom_mode_now == "LIDAR_FIRST")
-
-                    # Belső hurok: EKF-alapú v_l, v_r (teljesen EKF-alapú), vagy nyers enkóder
-                    use_ekf_feedback = (not recovery_mode) and bool(
-                        self.cfg.get("vezerles", {}).get("belső_hurok_ekf_feedback", True)
+                    encoder_pulse_window = dict(
+                        encoder_reliability.get("pulses_delta") or {}
                     )
-                    active_command_type_l = str(getattr(self, "active_motion_command_type", "") or "").strip().lower()
-                    active_execution_mode_u = str(getattr(self, "motion_execution_mode", "") or "").strip().upper()
-                    behavior_status = dict(getattr(self, "behavior_motion_status", {}) or {})
-                    arc_ctrl = getattr(self, "arc_controller", None)
-                    arc_contract_active = bool(
-                        active_command_type_l == "follow_arc"
-                        or active_execution_mode_u == "ARC_EXEC"
-                        or str(behavior_status.get("mode", "") or "").strip().upper() == "FOLLOW_ARC"
+                    measurement_timestamp = float(
+                        encoder_reliability.get("measurement_timestamp_s", 0.0) or 0.0
                     )
-                    try:
-                        arc_inner_track_min_hint = max(
-                            0.0,
-                            float(getattr(arc_ctrl, "normal_arc_inner_min_mps", 0.0) or 0.0),
-                        )
-                    except Exception:
-                        arc_inner_track_min_hint = 0.0
-                    try:
-                        arc_track_diff_min_hint = max(
-                            0.0,
-                            float(getattr(arc_ctrl, "arc_track_diff_min_mps", 0.0) or 0.0),
-                        )
-                    except Exception:
-                        arc_track_diff_min_hint = 0.0
-                    # LIDAR_FIRST keeps EKF pose as the truth surface. With KIT0085,
-                    # wheel-speed control should still close on the encoder tracks
-                    # when the canonical encoder pipeline is healthy.
-                    if _lidar_first_active:
-                        use_ekf_feedback = True
-                    if use_ekf_feedback:
-                        track_width = float(self.cfg.get("fizika", {}).get("nyomtav_szelesseg_m", 0.175))
-                        v_fused = float(ekf_state.get("v", 0.0))
-                        omega_rad_s = float(ekf_state.get("omega_rad_s", 0.0))
-                        v_l_fb, v_r_fb = twist_to_track_velocity(
-                            float(v_fused),
-                            float(omega_rad_s),
-                            float(track_width),
-                        )
-                        encoder_usage_mode = str(
-                            encoder_reliability.get("ekf_usage_mode", "") or ""
-                        ).strip().upper()
-                        try:
-                            encoder_combined_trust_for_feedback = float(
-                                encoder_reliability.get("combined_trust", 0.0) or 0.0
-                            )
-                        except (TypeError, ValueError):
-                            encoder_combined_trust_for_feedback = 0.0
-                        requested_intent_for_feedback = dict(getattr(self, "requested_motion_intent", {}) or {})
-                        try:
-                            requested_v_for_feedback = float(
-                                requested_intent_for_feedback.get("v", self.v_cmd) or 0.0
-                            )
-                        except (TypeError, ValueError):
-                            requested_v_for_feedback = 0.0
-                        try:
-                            requested_omega_for_feedback = float(
-                                requested_intent_for_feedback.get("omega", 0.0) or 0.0
-                            )
-                        except (TypeError, ValueError):
-                            requested_omega_for_feedback = 0.0
-                        encoder_feedback_selected = bool(
-                            _lidar_first_active
-                            and bool(getattr(self, "encoder_pose_fusion_enabled", False))
-                            and bool(encoder_reliability.get("timing_valid", False))
-                            and not bool(encoder_reliability.get("snapshot_stale", False))
-                            and encoder_usage_mode not in ("", "REJECT")
-                            and encoder_combined_trust_for_feedback >= 0.35
-                            and math.isfinite(float(v_l_can))
-                            and math.isfinite(float(v_r_can))
-                        )
-                        if encoder_feedback_selected:
-                            v_l_fb, v_r_fb = float(v_l_can), float(v_r_can)
-                        balanced_ekf_feedback_selected = bool(
-                            _lidar_first_active
-                            and not encoder_feedback_selected
-                            and active_execution_mode_u == "TWIST_EXEC"
-                            and requested_v_for_feedback > 0.005
-                            and abs(requested_omega_for_feedback) <= 0.03
-                        )
-                        if balanced_ekf_feedback_selected:
-                            balanced_v_fb = max(0.0, float(v_fused))
-                            v_l_fb, v_r_fb = balanced_v_fb, balanced_v_fb
-                        mc_state = dict(getattr(self, "motion_controller_state", {}) or {})
-                        forward_no_reverse = bool(mc_state.get("forward_dominant_no_reverse", False))
-                        forward_v_eps = float(mc_state.get("forward_dominant_v_eps", 0.02) or 0.02)
-                        forward_pwm_eps = float(mc_state.get("forward_dominant_pwm_eps", 0.02) or 0.02)
-                        encoder_distance_window = dict(encoder_reliability.get("canonical_distance") or {})
-                        encoder_pulse_window = dict(encoder_reliability.get("pulses_delta") or {})
-                        sensor_feedback = {
-                            "v_l": v_l_fb,
-                            "v_r": v_r_fb,
-                            "feedback_velocity_source": (
-                                "KIT0085_ENCODER"
-                                if encoder_feedback_selected
-                                else ("EKF_LINEAR_BALANCED" if balanced_ekf_feedback_selected else "EKF_TWIST")
-                            ),
-                            "v_l_encoder": float(v_l_can),
-                            "v_r_encoder": float(v_r_can),
-                            "v_l_encoder_raw": float(v_l_raw),
-                            "v_r_encoder_raw": float(v_r_raw),
-                            "encoder_combined_trust": float(encoder_reliability.get("combined_trust", 0.0) or 0.0),
-                            "encoder_forward_reliability": float(encoder_reliability.get("forward_reliability", 0.0) or 0.0),
-                            "encoder_snapshot_stale": bool(encoder_reliability.get("snapshot_stale", False)),
-                            "encoder_timing_valid": bool(encoder_reliability.get("timing_valid", False)),
-                            "encoder_timing_error": str(encoder_reliability.get("timing_error", "") or ""),
-                            "encoder_timing_gap_s": encoder_reliability.get("timing_gap_s"),
-                            "encoder_left_distance_delta_m": encoder_distance_window.get("left_delta_m"),
-                            "encoder_right_distance_delta_m": encoder_distance_window.get("right_delta_m"),
-                            "encoder_aggregation_window_s": encoder_pulse_window.get("dt_aggregation_window_s"),
-                            "current_yaw": ekf_state.get("theta_deg"),
-                            "ekf_theta_deg": ekf_state.get("theta_deg"),
-                            "ekf_omega_rad_s": ekf_state.get("omega_rad_s"),
-                            "motion_source": str(getattr(self, "motion_command_source", "") or ""),
-                            "active_command_type": str(getattr(self, "active_motion_command_type", "") or ""),
-                            "active_command_layer": str(getattr(self, "active_motion_command_layer", "") or ""),
-                            "active_execution_mode": str(getattr(self, "motion_execution_mode", "") or ""),
-                            "turn_primitive_requested": str(
-                                ((getattr(self, "motion_semantics_status", {}) or {}).get("turn_primitive_requested", "UNKNOWN"))
-                                or "UNKNOWN"
-                            ).strip().upper(),
-                            "straight_hold_executor_candidate": bool(
-                                (getattr(self, "motion_semantics_status", {}) or {}).get(
-                                    "executor_straight_hold_candidate",
-                                    False,
-                                )
-                            ),
-                            "requested_v": (getattr(self, "requested_motion_intent", {}) or {}).get("v"),
-                            "requested_omega": (getattr(self, "requested_motion_intent", {}) or {}).get("omega"),
-                            "lidar_latest_age_s": ((loop_result.get("lidar_odom_status") or {}).get("latest_age_s")),
-                            "lidar_latest_confidence": ((loop_result.get("lidar_odom_status") or {}).get("latest_confidence")),
-                            "forward_dominant_no_reverse": bool(forward_no_reverse),
-                            "forward_dominant_v_eps": float(forward_v_eps),
-                            "forward_dominant_pwm_eps": float(forward_pwm_eps),
-                            "arc_track_contract_active": bool(arc_contract_active),
-                            "arc_inner_track_min_mps": float(arc_inner_track_min_hint),
-                            "arc_track_diff_min_mps": float(arc_track_diff_min_hint),
-                        }
-                    else:
-                        try:
-                            v_l_safe = float(v_l_raw)
-                        except (TypeError, ValueError):
-                            v_l_safe = 0.0
-                        try:
-                            v_r_safe = float(v_r_raw)
-                        except (TypeError, ValueError):
-                            v_r_safe = 0.0
-                        mc_state = dict(getattr(self, "motion_controller_state", {}) or {})
-                        forward_no_reverse = bool(mc_state.get("forward_dominant_no_reverse", False))
-                        forward_v_eps = float(mc_state.get("forward_dominant_v_eps", 0.02) or 0.02)
-                        forward_pwm_eps = float(mc_state.get("forward_dominant_pwm_eps", 0.02) or 0.02)
-                        encoder_distance_window = dict(encoder_reliability.get("canonical_distance") or {})
-                        encoder_pulse_window = dict(encoder_reliability.get("pulses_delta") or {})
-                        sensor_feedback = {
-                            "v_l": v_l_safe,
-                            "v_r": v_r_safe,
-                            "v_l_encoder": float(v_l_can),
-                            "v_r_encoder": float(v_r_can),
-                            "v_l_encoder_raw": float(v_l_raw),
-                            "v_r_encoder_raw": float(v_r_raw),
-                            "encoder_combined_trust": float(encoder_reliability.get("combined_trust", 0.0) or 0.0),
-                            "encoder_forward_reliability": float(encoder_reliability.get("forward_reliability", 0.0) or 0.0),
-                            "encoder_snapshot_stale": bool(encoder_reliability.get("snapshot_stale", False)),
-                            "encoder_timing_valid": bool(encoder_reliability.get("timing_valid", False)),
-                            "encoder_timing_error": str(encoder_reliability.get("timing_error", "") or ""),
-                            "encoder_timing_gap_s": encoder_reliability.get("timing_gap_s"),
-                            "encoder_left_distance_delta_m": encoder_distance_window.get("left_delta_m"),
-                            "encoder_right_distance_delta_m": encoder_distance_window.get("right_delta_m"),
-                            "encoder_aggregation_window_s": encoder_pulse_window.get("dt_aggregation_window_s"),
-                            "current_yaw": (ekf_state.get("theta_deg") if isinstance(ekf_state, dict) else 0.0),
-                            "ekf_theta_deg": (ekf_state.get("theta_deg") if isinstance(ekf_state, dict) else 0.0),
-                            "ekf_omega_rad_s": (ekf_state.get("omega_rad_s") if isinstance(ekf_state, dict) else 0.0),
-                            "motion_source": str(getattr(self, "motion_command_source", "") or ""),
-                            "active_command_type": str(getattr(self, "active_motion_command_type", "") or ""),
-                            "active_command_layer": str(getattr(self, "active_motion_command_layer", "") or ""),
-                            "active_execution_mode": str(getattr(self, "motion_execution_mode", "") or ""),
-                            "turn_primitive_requested": str(
-                                ((getattr(self, "motion_semantics_status", {}) or {}).get("turn_primitive_requested", "UNKNOWN"))
-                                or "UNKNOWN"
-                            ).strip().upper(),
-                            "straight_hold_executor_candidate": bool(
-                                (getattr(self, "motion_semantics_status", {}) or {}).get(
-                                    "executor_straight_hold_candidate",
-                                    False,
-                                )
-                            ),
-                            "requested_v": (getattr(self, "requested_motion_intent", {}) or {}).get("v"),
-                            "requested_omega": (getattr(self, "requested_motion_intent", {}) or {}).get("omega"),
-                            "lidar_latest_age_s": ((loop_result.get("lidar_odom_status") or {}).get("latest_age_s")),
-                            "lidar_latest_confidence": ((loop_result.get("lidar_odom_status") or {}).get("latest_confidence")),
-                            "forward_dominant_no_reverse": bool(forward_no_reverse),
-                            "forward_dominant_v_eps": float(forward_v_eps),
-                            "forward_dominant_pwm_eps": float(forward_pwm_eps),
-                            "arc_track_contract_active": bool(arc_contract_active),
-                            "arc_inner_track_min_mps": float(arc_inner_track_min_hint),
-                            "arc_track_diff_min_mps": float(arc_track_diff_min_hint),
-                        }
-
-                    requested_track_ref = dict(getattr(self, "requested_track_reference", {}) or {})
-                    heading_pivot_track_active = _heading_pivot_track_active(self, requested_track_ref)
-                    sensor_feedback["heading_pivot_track_reference_active"] = bool(heading_pivot_track_active)
-                    replayer_executor_call = {}
+                    motion_wheel_feedback = MotionPlatformBoundaryAdapter.wheel_feedback(
+                        measurement_id=(
+                            f"encoder:{measurement_timestamp:.6f}"
+                            if measurement_timestamp > 0.0
+                            else "MISSING"
+                        ),
+                        source_timestamp=measurement_timestamp,
+                        left_mps=float(v_l_can or 0.0),
+                        right_mps=float(v_r_can or 0.0),
+                        combined_trust=float(
+                            encoder_reliability.get("combined_trust", 0.0) or 0.0
+                        ),
+                        timing_valid=bool(
+                            encoder_reliability.get("timing_valid", False)
+                        ),
+                        stale=bool(
+                            encoder_reliability.get("snapshot_stale", True)
+                        ),
+                        timing_reason=str(
+                            encoder_reliability.get("timing_error", "") or ""
+                        ),
+                        aggregation_window_s=float(
+                            encoder_pulse_window.get("dt_aggregation_window_s", 0.0)
+                            or 0.0
+                        ),
+                    )
+                    heading_pivot_track_active = False
                     replayer_executor_reset_generation = int(
                         getattr(self.motion_executor, "_replayer_reset_generation", 0) or 0
                     )
                     self._write_loop_phase(
-                        "before_executor_compute_pwm",
+                        "before_executor_compute",
                         cycle_id=cycle_id,
-                        details={"execution_mode": str(getattr(self, "motion_execution_mode", "") or "")},
+                        details={
+                            "wheel_setpoint_id": motion_wheel_setpoint.wheel_setpoint_id
+                        },
                     )
+                    motion_candidate_output = None
                     if service_pwm_active:
                         startup_active = bool(
-                            time.monotonic()
+                            now
                             < float(
                                 service_pwm_cmd.get("startup_until_monotonic", 0.0)
                                 or 0.0
@@ -3310,54 +2894,70 @@ class AlbaController:
                         calibration_v_hint = float(service_pwm_cmd.get("v_hint", 0.0) or 0.0)
                         calibration_hard_cap = float(service_pwm_cmd.get("max_abs_pwm", 0.90) or 0.90)
                         calibration_phase = "startup" if startup_active else "maintenance"
-                        pwm_l, pwm_r = self.motion_executor.compute_calibration_pwm(
+                        service_expiry = float(
+                            service_pwm_cmd.get("expires_monotonic", 0.0) or 0.0
+                        )
+                        service_time_bound = max(0.0, service_expiry - float(now))
+                        service_request = ServiceActuationRequest(
+                            armed_token=str(
+                                service_pwm_cmd.get("arm_nonce", "") or ""
+                            ),
+                            expiry_monotonic=service_expiry,
                             left_pwm=calibration_left_pwm,
                             right_pwm=calibration_right_pwm,
-                            v_hint=calibration_v_hint,
-                            hard_cap=calibration_hard_cap,
-                            phase=calibration_phase,
+                            max_abs_pwm=calibration_hard_cap,
+                            distance_bound_m=max(
+                                0.001,
+                                abs(calibration_v_hint) * service_time_bound,
+                            ),
+                            time_bound_s=service_time_bound,
+                            reason=f"CALIBRATION_{calibration_phase.upper()}",
                         )
-                        replayer_executor_call = {
-                            "method": "compute_calibration_pwm",
-                            "kwargs": {
-                                "left_pwm": calibration_left_pwm,
-                                "right_pwm": calibration_right_pwm,
-                                "v_hint": calibration_v_hint,
-                                "hard_cap": calibration_hard_cap,
-                                "phase": calibration_phase,
-                            },
+                        service_output = ServiceActuationAdapter.compute(
+                            service_request,
+                            monotonic_time=now,
+                        )
+                        pwm_l = float(service_output.left_pwm)
+                        pwm_r = float(service_output.right_pwm)
+                        final_pwm_zero_reason = str(service_output.reason)
+                        pid_diag = {
+                            "output_reason": str(service_output.reason),
+                            "service_actuation": True,
+                            "service_phase": calibration_phase,
+                            "pwm_executor_l": pwm_l,
+                            "pwm_executor_r": pwm_r,
                         }
                     else:
-                        pwm_l, pwm_r = self.motion_executor.compute_pwm(
-                            self.v_cmd,
-                            self.omega_target,
-                            sensor_feedback,
-                            dt_loop,
-                            execution_mode=str(getattr(self, "motion_execution_mode", "") or ""),
-                            track_reference=requested_track_ref,
+                        motion_candidate_output = self.motion_executor.compute(
+                            motion_cycle_context,
+                            motion_wheel_setpoint,
+                            motion_wheel_feedback,
                         )
-                        replayer_executor_call = {
-                            "method": "compute_pwm",
-                            "kwargs": {
-                                "v_cmd": float(self.v_cmd),
-                                "omega_cmd": float(self.omega_target),
-                                "sensor_feedback": dict(sensor_feedback),
-                                "dt": float(dt_loop),
-                                "execution_mode": str(getattr(self, "motion_execution_mode", "") or ""),
-                                "track_reference": dict(requested_track_ref),
-                            },
-                        }
-                    try:
+                        pwm_l = float(motion_candidate_output.left_pwm)
+                        pwm_r = float(motion_candidate_output.right_pwm)
                         pid_diag = self.motion_executor.get_last_pid_diagnostics()
-                        if isinstance(pid_diag, dict):
-                            final_pwm_zero_reason = str(pid_diag.get("output_reason", "NONE") or "NONE")
-                    except Exception:
-                        pid_diag = None
+                        final_pwm_zero_reason = str(
+                            motion_candidate_output.output_reason
+                        )
                     replayer_executor_pwm_l = float(pwm_l)
                     replayer_executor_pwm_r = float(pwm_r)
                     replayer_executor_output_reason = str(
                         ((pid_diag or {}).get("output_reason", "NONE") if isinstance(pid_diag, dict) else "NONE")
                         or "NONE"
+                    )
+                    replayer_executor_call = (
+                        {
+                            "method": "service_compute",
+                            "request": contract_dict(service_request),
+                            "monotonic_time": float(now),
+                        }
+                        if service_pwm_active
+                        else {
+                            "method": "compute",
+                            "cycle_context": contract_dict(motion_cycle_context),
+                            "wheel_setpoint": contract_dict(motion_wheel_setpoint),
+                            "wheel_feedback": contract_dict(motion_wheel_feedback),
+                        }
                     )
                     if replayer_pipeline_stages is not None:
                         replayer_recorded_executor_output = {
@@ -3377,7 +2977,7 @@ class AlbaController:
                             },
                         }
                     self._write_loop_phase(
-                        "after_executor_compute_pwm",
+                        "after_executor_compute",
                         cycle_id=cycle_id,
                         details={"pwm_l": float(pwm_l), "pwm_r": float(pwm_r)},
                     )
@@ -3389,48 +2989,18 @@ class AlbaController:
                     )
 
                     self._write_loop_phase("before_track_reference_sync", cycle_id=cycle_id)
-                    if (
-                        str(getattr(self, "motion_execution_mode", "") or "").strip().upper() == EXEC_MODE_TRACK
-                        or bool(heading_pivot_track_active)
-                    ):
-                        requested_track_ref = dict(getattr(self, "requested_track_reference", {}) or {})
-                        self.track_target_left_mps = requested_track_ref.get("left_mps")
-                        self.track_target_right_mps = requested_track_ref.get("right_mps")
-                        # Keep diagnostic motion-reference surfaces aligned with TRACK_REFERENCE SSOT.
-                        try:
-                            self.motion_ref_v_l = (
-                                0.0
-                                if self.track_target_left_mps is None
-                                else float(self.track_target_left_mps)
-                            )
-                        except Exception:
-                            self.motion_ref_v_l = 0.0
-                        try:
-                            self.motion_ref_v_r = (
-                                0.0
-                                if self.track_target_right_mps is None
-                                else float(self.track_target_right_mps)
-                            )
-                        except Exception:
-                            self.motion_ref_v_r = 0.0
-                    else:
-                        self.track_target_left_mps = (
-                            None if not isinstance(pid_diag, dict) else pid_diag.get("v_l_ref")
-                        )
-                        self.track_target_right_mps = (
-                            None if not isinstance(pid_diag, dict) else pid_diag.get("v_r_ref")
-                        )
-                        if isinstance(pid_diag, dict):
-                            try:
-                                if pid_diag.get("v_l_ref") is not None:
-                                    self.motion_ref_v_l = float(pid_diag.get("v_l_ref"))
-                            except Exception:
-                                pass
-                            try:
-                                if pid_diag.get("v_r_ref") is not None:
-                                    self.motion_ref_v_r = float(pid_diag.get("v_r_ref"))
-                            except Exception:
-                                pass
+                    self.track_target_left_mps = float(
+                        motion_wheel_setpoint.left_target_mps
+                    )
+                    self.track_target_right_mps = float(
+                        motion_wheel_setpoint.right_target_mps
+                    )
+                    self.motion_ref_v_l = float(self.track_target_left_mps)
+                    self.motion_ref_v_r = float(self.track_target_right_mps)
+                    robot_state.update_targets(
+                        self.track_target_left_mps,
+                        self.track_target_right_mps,
+                    )
                     self._write_loop_phase("after_track_reference_sync", cycle_id=cycle_id)
                     _tick_phase_start = _finish_tick_phase(
                         _tick_diag,
@@ -3541,6 +3111,37 @@ class AlbaController:
                     )
                     if safety_gate_zeroed_output and final_pwm_zero_reason == "NONE":
                         final_pwm_zero_reason = "SAFETY_GATE_BLOCK"
+                    if motion_candidate_output is not None:
+                        self.motion_platform_status = contract_dict(
+                            MotionPlatformBoundaryAdapter.status(
+                                physical_command=motion_physical_command,
+                                wheel_setpoint=motion_wheel_setpoint,
+                                candidate=motion_candidate_output,
+                                final_left_pwm=pwm_l,
+                                final_right_pwm=pwm_r,
+                                safety_reason=final_pwm_zero_reason,
+                                measurement_validity=(
+                                    "VALID"
+                                    if motion_wheel_feedback.timing_valid
+                                    and not motion_wheel_feedback.stale
+                                    else "INVALID"
+                                ),
+                            )
+                        )
+                    else:
+                        self.motion_platform_status = {
+                            "cycle_id": str(cycle_id),
+                            "service_actuation": True,
+                            "candidate_pwm": {
+                                "left": float(pwm_before_safety_gate_l),
+                                "right": float(pwm_before_safety_gate_r),
+                            },
+                            "final_pwm": {
+                                "left": float(pwm_l),
+                                "right": float(pwm_r),
+                            },
+                            "safety_reason": str(final_pwm_zero_reason),
+                        }
                     self._write_loop_phase(
                         "after_safety_gate",
                         cycle_id=cycle_id,
@@ -3554,8 +3155,7 @@ class AlbaController:
                     )
 
                     # Hard gate: LIDAR_FIRST alatt az encoder pose útvonal aktiválódása tiltott.
-                    # NOTE: odom_mode_now already computed before sensor_feedback assembly;
-                    # reuse if available, else recompute for safety (service_pwm path skips it).
+                    # Recompute the odometry contract independently of actuator feedback.
                     if not isinstance(locals().get("odom_mode_now"), str) or not odom_mode_now:
                         odom_mode_now = str(
                             loop_result.get("odometry_mode", getattr(self, "odometry_mode", "LIDAR_FIRST")) or ""
@@ -3866,7 +3466,7 @@ class AlbaController:
                         except Exception:
                             pass
 
-                    # 11b. PID diagnosztika lekérése már a compute_pwm után történt.
+                    # 11b. Wheel PI diagnostics were captured immediately after L9 compute.
                     _tick_phase_start = _finish_tick_phase(
                         _tick_diag,
                         "motor_dispatch_semantics",

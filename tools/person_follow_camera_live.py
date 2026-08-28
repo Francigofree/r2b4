@@ -916,6 +916,7 @@ def _sample_status(start_mono: float) -> Dict[str, Any]:
     follow_tuning = dict(tuning.get("follow") or {})
     pwm = dict(status.get("pwm") or {})
     control_monitor = dict(status.get("control_monitor") or {})
+    motion_semantics = dict(status.get("motion_semantics") or {})
     watchdog = dict(status.get("watchdog") or {})
     loop_slices = dict(loop_budget.get("slices") or {})
     control_loop_slice = dict(loop_slices.get("control_loop_tick") or {})
@@ -998,14 +999,24 @@ def _sample_status(start_mono: float) -> Dict[str, Any]:
         "control_v_cmd_mps": _safe_float(control_monitor.get("v_cmd"), 0.0),
         "control_omega_request_rad_s": _safe_float(control_monitor.get("omega_cmd_request"), 0.0),
         "control_omega_cmd_rad_s": _safe_float(control_monitor.get("omega_cmd"), 0.0),
-        "control_heading_correction_owner": str(control_monitor.get("heading_correction_owner") or ""),
-        "straight_hold_active": bool(control_monitor.get("straight_hold_active", False)),
-        "straight_hold_correction_rad_s": _safe_float(control_monitor.get("straight_hold_correction"), 0.0),
-        "straight_hold_heading_error_deg": _safe_float(
-            control_monitor.get("straight_hold_heading_error_deg"),
+        "guidance_heading_correction_owner": str(
+            motion_semantics.get("heading_hold_owner") or ""
+        ),
+        "guidance_heading_hold_active": bool(
+            motion_semantics.get("heading_hold_applied", False)
+        ),
+        "guidance_heading_correction_rad_s": _safe_float(
+            motion_semantics.get("omega_target")
+            if motion_semantics.get("heading_hold_applied", False)
+            else 0.0,
             0.0,
         ),
-        "straight_hold_slew_limited": bool(control_monitor.get("straight_hold_slew_limited", False)),
+        "guidance_heading_error_deg": _safe_float(
+            motion_semantics.get("heading_error_deg"), 0.0
+        ),
+        "guidance_heading_hold_mode": str(
+            motion_semantics.get("heading_hold_mode") or ""
+        ),
         "wheel_loop_enabled": bool(control_monitor.get("wheel_loop_enabled", False)),
         "wheel_loop_left_ref_mps": _safe_float(control_monitor.get("wheel_loop_left_ref_mps"), 0.0),
         "wheel_loop_right_ref_mps": _safe_float(control_monitor.get("wheel_loop_right_ref_mps"), 0.0),

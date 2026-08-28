@@ -10,6 +10,7 @@ from core.control_strategies import (
     load_control_mode,
     normalize_control_mode,
     save_control_mode,
+    wheel_feedback_timing_error,
 )
 from middleware.ffp import PIDConfig, lookup_wheel_feedforward
 
@@ -102,49 +103,37 @@ def test_wheel_pi_still_resets_integral_on_material_overspeed_crossing():
     assert (p_term + i_term) < 0.0
 
 
-def _canonical_wheel_state(left_mps: float, right_mps: float) -> dict:
-    return {
-        "v_l_encoder": left_mps,
-        "v_r_encoder": right_mps,
-        "encoder_combined_trust": 1.0,
-        "encoder_snapshot_stale": False,
-        "encoder_timing_valid": True,
-    }
-
-
 def test_wheel_loop_reports_pi_feedback_without_rewriting_raw_tracking_error():
     loop = WheelSpeedPILoop(
         PIDConfig(kp=0.25, ki=0.0, integrator_limit=0.18),
         max_pwm=1.0,
         dead_zone=0.0,
     )
-    ok, _, _, first_diag = loop.compute(
-        state=_canonical_wheel_state(0.26057, 0.18943),
-        v_cmd=0.225,
-        omega_cmd=-0.2,
-        omega_cmd_request=-0.2,
-        v_l_ref=0.26057,
-        v_r_ref=0.18943,
-        dt=0.1,
+    _, _, first_diag = loop.compute(
+        left_reference_mps=0.26057,
+        right_reference_mps=0.18943,
+        left_measured_mps=0.26057,
+        right_measured_mps=0.18943,
+        dt_s=0.1,
         feedforward_pwm_l=0.0,
         feedforward_pwm_r=0.0,
+        maintenance_floor_pwm_l=0.0,
+        maintenance_floor_pwm_r=0.0,
     )
-    assert ok is True
-    assert first_diag["wheel_loop_v_l_control_meas"] == pytest.approx(0.26057)
+    assert first_diag["left_control_error_mps"] == pytest.approx(0.0)
 
-    ok, pwm_l, pwm_r, diag = loop.compute(
-        state=_canonical_wheel_state(0.14798, 0.10938),
-        v_cmd=0.225,
-        omega_cmd=-0.2,
-        omega_cmd_request=-0.2,
-        v_l_ref=0.26057,
-        v_r_ref=0.18943,
-        dt=0.1,
+    pwm_l, pwm_r, diag = loop.compute(
+        left_reference_mps=0.26057,
+        right_reference_mps=0.18943,
+        left_measured_mps=0.14798,
+        right_measured_mps=0.10938,
+        dt_s=0.1,
         feedforward_pwm_l=0.0,
         feedforward_pwm_r=0.0,
+        maintenance_floor_pwm_l=0.0,
+        maintenance_floor_pwm_r=0.0,
     )
 
-    assert ok is True
     expected_l_meas = (
         WHEEL_PI_FEEDBACK_FILTER_ALPHA * 0.14798
         + (1.0 - WHEEL_PI_FEEDBACK_FILTER_ALPHA) * 0.26057
@@ -153,24 +142,51 @@ def test_wheel_loop_reports_pi_feedback_without_rewriting_raw_tracking_error():
         WHEEL_PI_FEEDBACK_FILTER_ALPHA * 0.10938
         + (1.0 - WHEEL_PI_FEEDBACK_FILTER_ALPHA) * 0.18943
     )
-    assert diag["wheel_loop_v_l_meas"] == pytest.approx(0.14798)
-    assert diag["wheel_loop_v_l_control_meas"] == pytest.approx(expected_l_meas)
-    assert diag["wheel_loop_err_l"] == pytest.approx(0.11259)
-    assert diag["wheel_loop_control_err_l"] == pytest.approx(0.26057 - expected_l_meas)
-    assert (diag["monitor"])["wheel_loop_left_error_mps"] == pytest.approx(0.11259)
-    assert (diag["monitor"])["wheel_loop_left_control_error_mps"] == pytest.approx(
-        0.26057 - expected_l_meas
-    )
-    assert diag["monitor"]["wheel_pi_enabled"] is True
-    assert diag["monitor"]["pi_correction_left_pwm"] == pytest.approx(
-        diag["wheel_loop_left_pi_residual_pwm"]
-    )
-    assert diag["monitor"]["pi_correction_right_pwm"] == pytest.approx(
-        diag["wheel_loop_right_pi_residual_pwm"]
-    )
+    assert diag["left_measured_mps"] == pytest.approx(0.14798)
+    assert diag["left_control_error_mps"] == pytest.approx(0.26057 - expected_l_meas)
+    assert diag["wheel_pi_enabled"] is True
+    assert diag["left_p_pwm"] == pytest.approx(0.25 * (0.26057 - expected_l_meas))
+    assert diag["right_p_pwm"] == pytest.approx(0.25 * (0.18943 - expected_r_meas))
     assert pwm_l == pytest.approx(0.25 * (0.26057 - expected_l_meas))
     assert pwm_r == pytest.approx(0.25 * (0.18943 - expected_r_meas))
     assert pwm_l == pytest.approx(0.25 * 0.11259)
+
+
+def test_wheel_loop_reports_physical_maintenance_floor_application():
+    loop = WheelSpeedPILoop(
+        PIDConfig(kp=0.0, ki=0.0, integrator_limit=0.18),
+        max_pwm=1.0,
+        dead_zone=0.0,
+    )
+    _left, _right, diagnostics = loop.compute(
+        left_reference_mps=0.15,
+        right_reference_mps=0.15,
+        left_measured_mps=0.0,
+        right_measured_mps=0.0,
+        dt_s=0.02,
+        feedforward_pwm_l=0.01,
+        feedforward_pwm_r=0.01,
+        maintenance_floor_pwm_l=0.12,
+        maintenance_floor_pwm_r=0.13,
+    )
+
+    assert diagnostics["maintenance_floor_pwm_l"] == pytest.approx(0.12)
+    assert diagnostics["maintenance_floor_pwm_r"] == pytest.approx(0.13)
+    assert diagnostics["wheel_loop_left_maintenance_floor_applied"] is True
+    assert diagnostics["wheel_loop_right_maintenance_floor_applied"] is True
+
+
+def test_wheel_feedback_timing_gap_has_explicit_l9_reason():
+    assert wheel_feedback_timing_error(
+        timing_valid=False,
+        stale=False,
+        timing_reason="encoder_timing_gap",
+    ) == "ENCODER_TIMING_GAP"
+    assert wheel_feedback_timing_error(
+        timing_valid=False,
+        stale=False,
+        timing_reason="deadline",
+    ) == "WHEEL_FEEDBACK_TIMING_INVALID"
 
 
 def test_wheel_loop_feedback_filter_resets_on_reference_direction_change():
@@ -180,32 +196,30 @@ def test_wheel_loop_feedback_filter_resets_on_reference_direction_change():
         dead_zone=0.0,
     )
     loop.compute(
-        state=_canonical_wheel_state(0.20, 0.20),
-        v_cmd=0.20,
-        omega_cmd=0.0,
-        omega_cmd_request=0.0,
-        v_l_ref=0.20,
-        v_r_ref=0.20,
-        dt=0.1,
+        left_reference_mps=0.20,
+        right_reference_mps=0.20,
+        left_measured_mps=0.20,
+        right_measured_mps=0.20,
+        dt_s=0.1,
         feedforward_pwm_l=0.0,
         feedforward_pwm_r=0.0,
+        maintenance_floor_pwm_l=0.0,
+        maintenance_floor_pwm_r=0.0,
     )
 
-    ok, _, _, diag = loop.compute(
-        state=_canonical_wheel_state(-0.08, -0.08),
-        v_cmd=-0.15,
-        omega_cmd=0.0,
-        omega_cmd_request=0.0,
-        v_l_ref=-0.15,
-        v_r_ref=-0.15,
-        dt=0.1,
+    _, _, diag = loop.compute(
+        left_reference_mps=-0.15,
+        right_reference_mps=-0.15,
+        left_measured_mps=-0.08,
+        right_measured_mps=-0.08,
+        dt_s=0.1,
         feedforward_pwm_l=0.0,
         feedforward_pwm_r=0.0,
+        maintenance_floor_pwm_l=0.0,
+        maintenance_floor_pwm_r=0.0,
     )
 
-    assert ok is True
-    assert diag["wheel_loop_v_l_control_meas"] == pytest.approx(-0.08)
-    assert diag["wheel_loop_control_err_l"] == pytest.approx(-0.07)
+    assert diag["left_control_error_mps"] == pytest.approx(-0.07)
 
 
 def test_active_wheel_pi_gain_is_below_delayed_map_loop_gain_limit():

@@ -1045,9 +1045,9 @@ def _clear_all_explicit_motion_layers(ctrl) -> None:
     _clear_service_pwm_command(ctrl)
     _clear_motion_public_target(ctrl)
     try:
-        heading_controller = getattr(ctrl, "heading_controller", None)
-        if heading_controller is not None and bool(heading_controller.status().get("active", False)):
-            heading_controller.cancel("SAFETY_ABORT")
+        motion_guidance = getattr(ctrl, "motion_guidance", None)
+        if motion_guidance is not None:
+            motion_guidance.cancel_heading_turn("SAFETY_ABORT")
     except Exception:
         pass
 
@@ -1221,8 +1221,9 @@ def soft_stop(ctrl, reason: str = "SOFT_STOP", source: str = "MANUAL") -> bool:
     except Exception:
         pass
     try:
-        if getattr(ctrl, "heading_controller", None) is not None:
-            ctrl.heading_controller.cancel("SOFT_STOP")
+        motion_guidance = getattr(ctrl, "motion_guidance", None)
+        if motion_guidance is not None:
+            motion_guidance.cancel_heading_turn("SOFT_STOP")
     except Exception:
         pass
     for component_name in ("motion_executor", "motion_controller"):

@@ -18,6 +18,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 WORKSPACE_SCHEMA = "R2B4_AGENT_WORKSPACE_V1"
 MANIFEST_SCHEMA = "R2B4_MANAGED_TREE_MANIFEST_V1"
 AUDIT_SCHEMA = "R2B4_CANDIDATE_AUDIT_V1"
+DIFF_SCHEMA = "R2B4_CANDIDATE_DIFF_V1"
+RESEAL_SCHEMA = "R2B4_CANDIDATE_RESEAL_V1"
 SNAPSHOT_SCHEMA = "R2B4_SOURCE_SNAPSHOT_V1"
 PROMOTION_JOURNAL_SCHEMA = "R2B4_PROMOTION_JOURNAL_V1"
 
@@ -223,6 +225,9 @@ def workspace_paths(root: Path, task_id: str, config: Mapping[str, Any]) -> Dict
         "meta": task_root / "meta",
         "base_manifest": task_root / "meta" / "base_manifest.json",
         "audit": task_root / "meta" / "audit.json",
+        "diff": task_root / "meta" / "diff.json",
+        "evidence": task_root / "meta" / "evidence.json",
+        "reseal": task_root / "meta" / "reseal.json",
         "relative_tree": Path(base_rel) / safe_id / "tree",
     }
 
@@ -337,6 +342,49 @@ def _diff_manifests(base: Mapping[str, Any], current: Mapping[str, Any]) -> List
     )
 
 
+def _diff_payload(
+    task_id: str,
+    base: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+) -> Dict[str, Any]:
+    before = dict(base.get("files") or {})
+    after = dict(candidate.get("files") or {})
+    rows: List[Dict[str, Any]] = []
+    for path in _diff_manifests(base, candidate):
+        old = before.get(path)
+        new = after.get(path)
+        rows.append(
+            {
+                "path": path,
+                "change": "ADDED" if old is None else ("DELETED" if new is None else "MODIFIED"),
+                "before": (
+                    None
+                    if old is None
+                    else {
+                        "sha256": old.get("sha256"),
+                        "size_bytes": old.get("size_bytes"),
+                    }
+                ),
+                "after": (
+                    None
+                    if new is None
+                    else {
+                        "sha256": new.get("sha256"),
+                        "size_bytes": new.get("size_bytes"),
+                    }
+                ),
+            }
+        )
+    return {
+        "schema": DIFF_SCHEMA,
+        "task_id": str(task_id),
+        "base_fingerprint": base.get("fingerprint"),
+        "candidate_fingerprint": candidate.get("fingerprint"),
+        "changed_file_count": len(rows),
+        "files": rows,
+    }
+
+
 def audit_workspace(root: Path, manifest: Mapping[str, Any], config: Mapping[str, Any]) -> Dict[str, Any]:
     project_root = Path(root).resolve()
     workspace = dict(manifest.get("workspace") or {})
@@ -364,6 +412,9 @@ def audit_workspace(root: Path, manifest: Mapping[str, Any], config: Mapping[str
     )
     mode_violations = protected_changes if task_mode == "CODE_CHANGE" else []
     status = "PASS" if not canonical_drift and not unexpected and not mode_violations else "FAIL"
+    paths = workspace_paths(project_root, str(manifest.get("task_id")), config)
+    diff = _diff_payload(str(manifest.get("task_id", "")), base, candidate)
+    _write_json_atomic(paths["diff"], diff, mode=0o444)
     result = {
         "schema": AUDIT_SCHEMA,
         "task_id": str(manifest.get("task_id", "")),
@@ -378,12 +429,169 @@ def audit_workspace(root: Path, manifest: Mapping[str, Any], config: Mapping[str
         "canonical_drift": canonical_drift,
         "protected_infrastructure_changes": protected_changes,
         "mode_violations": mode_violations,
+        "diff_path": paths["diff"].relative_to(project_root).as_posix(),
+        "diff_sha256": _sha256_file(paths["diff"]),
     }
-    paths = workspace_paths(project_root, str(manifest.get("task_id")), config)
     _write_json_atomic(paths["audit"], result, mode=0o444)
     result["audit_path"] = paths["audit"].relative_to(project_root).as_posix()
     result["audit_sha256"] = _sha256_file(paths["audit"])
     return result
+
+
+def reseal_workspace(
+    root: Path,
+    manifest: Mapping[str, Any],
+    config: Mapping[str, Any],
+    *,
+    state: str,
+    audit: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Fingerprint and make a terminal candidate non-writable without deleting lineage."""
+    project_root = Path(root).resolve()
+    task_id = _safe_task_id(manifest.get("task_id"))
+    workspace = dict(manifest.get("workspace") or {})
+    _relative, tree = _safe_relative(project_root, workspace.get("path"), label="workspace.path")
+    candidate = scan_managed_tree(tree, config)
+    if candidate.get("fingerprint") != audit.get("candidate_fingerprint"):
+        raise WorkspaceError("Candidate changed between audit and reseal")
+    normalized_state = str(state).strip().upper()
+    if normalized_state not in {"READY", "SUPERSEDED"}:
+        raise WorkspaceError(f"Unsupported candidate reseal state: {state}")
+    paths = workspace_paths(project_root, task_id, config)
+    record = {
+        "schema": RESEAL_SCHEMA,
+        "task_id": task_id,
+        "state": normalized_state,
+        "resealed_at_utc": _utc_now(),
+        "candidate_fingerprint": candidate.get("fingerprint"),
+        "audit_sha256": audit.get("audit_sha256"),
+        "diff_sha256": audit.get("diff_sha256"),
+    }
+    _write_json_atomic(paths["reseal"], record, mode=0o444)
+    marker_path = tree / ".r2b4_candidate.json"
+    marker = _read_json(marker_path)
+    if marker.get("schema") != WORKSPACE_SCHEMA or marker.get("task_id") != task_id:
+        raise WorkspaceError("Candidate marker contract mismatch during reseal")
+    marker["state"] = normalized_state
+    marker["candidate_fingerprint"] = candidate.get("fingerprint")
+    marker["resealed_at_utc"] = record["resealed_at_utc"]
+    _write_json_atomic(marker_path, marker, mode=0o444)
+    for relative, row in dict(candidate.get("files") or {}).items():
+        path = tree / relative
+        current_mode = int((row or {}).get("mode", 0o644))
+        path.chmod(current_mode & ~0o222)
+    return {
+        **record,
+        "path": paths["reseal"].relative_to(project_root).as_posix(),
+        "sha256": _sha256_file(paths["reseal"]),
+    }
+
+
+def clone_workspace(
+    root: Path,
+    task_id: str,
+    config: Mapping[str, Any],
+    *,
+    parent_manifest: Mapping[str, Any],
+    writable_paths: Optional[Iterable[str]] = None,
+) -> Dict[str, Any]:
+    """Clone a resealed SUPERSEDED candidate onto an unchanged canonical lineage."""
+    project_root = Path(root).resolve()
+    parent_id = _safe_task_id(parent_manifest.get("task_id"))
+    if parent_manifest.get("status") != "SUPERSEDED":
+        raise WorkspaceError("Candidate clone requires a SUPERSEDED parent")
+    parent_workspace = dict(parent_manifest.get("workspace") or {})
+    reseal = dict(parent_workspace.get("reseal") or {})
+    if parent_workspace.get("state") != "SUPERSEDED" or reseal.get("state") != "SUPERSEDED":
+        raise WorkspaceError("Candidate clone parent is not resealed SUPERSEDED")
+    _parent_relative, parent_tree = _safe_relative(
+        project_root,
+        parent_workspace.get("path"),
+        label="parent workspace.path",
+    )
+    parent_base = _load_base_manifest(project_root, parent_workspace)
+    _reseal_relative, reseal_path = _safe_relative(
+        project_root,
+        reseal.get("path"),
+        label="parent workspace.reseal.path",
+    )
+    if not reseal_path.is_file() or _sha256_file(reseal_path) != reseal.get("sha256"):
+        raise WorkspaceError("SUPERSEDED parent reseal artifact mismatch")
+    reseal_payload = _read_json(reseal_path)
+    if (
+        reseal_payload.get("schema") != RESEAL_SCHEMA
+        or reseal_payload.get("task_id") != parent_id
+        or reseal_payload.get("state") != "SUPERSEDED"
+    ):
+        raise WorkspaceError("SUPERSEDED parent reseal contract mismatch")
+    parent_candidate = scan_managed_tree(parent_tree, config)
+    if parent_candidate.get("fingerprint") != reseal.get("candidate_fingerprint"):
+        raise WorkspaceError("SUPERSEDED parent candidate fingerprint mismatch")
+    marker = _read_json(parent_tree / ".r2b4_candidate.json")
+    if (
+        marker.get("state") != "SUPERSEDED"
+        or marker.get("candidate_fingerprint") != parent_candidate.get("fingerprint")
+    ):
+        raise WorkspaceError("SUPERSEDED parent marker mismatch")
+    changed = _diff_manifests(parent_base, parent_candidate)
+    parent_audit = dict(parent_manifest.get("candidate_audit") or {})
+    if parent_audit.get("status") != "PASS" or changed != list(parent_audit.get("changed_files") or []):
+        raise WorkspaceError("SUPERSEDED parent lacks a matching PASS audit")
+    canonical = scan_managed_tree(project_root, config)
+    base_files = dict(parent_base.get("files") or {})
+    canonical_files = dict(canonical.get("files") or {})
+    conflicts = [
+        path
+        for path in changed
+        if (base_files.get(path) or {}).get("sha256")
+        != (canonical_files.get(path) or {}).get("sha256")
+        or (path in base_files) != (path in canonical_files)
+    ]
+    if conflicts:
+        raise WorkspaceError("Candidate clone canonical lineage conflict: " + ", ".join(conflicts))
+    declared = sorted(set(str(value) for value in (writable_paths or [])) | set(changed))
+    workspace = create_workspace(
+        project_root,
+        task_id,
+        config,
+        writable_paths=declared,
+    )
+    _new_relative, new_tree = _safe_relative(
+        project_root,
+        workspace.get("path"),
+        label="cloned workspace.path",
+    )
+    parent_files = dict(parent_candidate.get("files") or {})
+    try:
+        for relative in changed:
+            destination = new_tree / relative
+            row = parent_files.get(relative)
+            if row is None:
+                if destination.exists():
+                    destination.unlink()
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(parent_tree / relative, destination, follow_symlinks=False)
+            destination.chmod(stat.S_IMODE(destination.stat().st_mode) | stat.S_IWUSR)
+        cloned = scan_managed_tree(new_tree, config)
+        marker_path = new_tree / ".r2b4_candidate.json"
+        marker = _read_json(marker_path)
+        lineage = {
+            "parent_task_id": parent_id,
+            "parent_candidate_fingerprint": parent_candidate.get("fingerprint"),
+            "parent_reseal_sha256": reseal.get("sha256"),
+            "clone_mode": "THREE_WAY_NO_CONFLICT",
+            "cloned_at_utc": _utc_now(),
+        }
+        marker["lineage"] = lineage
+        _write_json_atomic(marker_path, marker, mode=0o444)
+        workspace["lineage"] = lineage
+        workspace["inherited_changed_files"] = changed
+        workspace["candidate_fingerprint_at_clone"] = cloned.get("fingerprint")
+        return workspace
+    except Exception:
+        discard_workspace(project_root, task_id, config)
+        raise
 
 
 def _protected_store(config: Mapping[str, Any]) -> Path:

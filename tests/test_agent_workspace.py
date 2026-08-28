@@ -9,10 +9,12 @@ from tools.agent_workspace import (
     PromotionInterrupted,
     WorkspaceError,
     audit_workspace,
+    clone_workspace,
     create_workspace,
     discard_workspace,
     promote_workspace,
     recover_promotion,
+    reseal_workspace,
     restore_promoted_source,
     seal_task_base,
     workspace_paths,
@@ -91,7 +93,80 @@ class AgentWorkspaceTests(unittest.TestCase):
 
         self.assertEqual(audit["status"], "PASS")
         self.assertEqual(audit["changed_files"], ["README.md"])
+        diff = json.loads((self.root / audit["diff_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(diff["files"][0]["change"], "MODIFIED")
+        self.assertEqual(diff["candidate_fingerprint"], audit["candidate_fingerprint"])
         self.assertEqual((self.root / "README.md").read_bytes(), canonical)
+
+    def test_resealed_superseded_candidate_clones_with_verified_lineage(self):
+        _tracker, manifest, tree = self._open(task_id="parent")
+        (tree / "README.md").write_text("carried candidate\n", encoding="utf-8")
+        audit = audit_workspace(self.root, manifest, self.config)
+        reseal = reseal_workspace(
+            self.root,
+            manifest,
+            self.config,
+            state="SUPERSEDED",
+            audit=audit,
+        )
+        parent = {
+            **manifest,
+            "status": "SUPERSEDED",
+            "candidate_audit": audit,
+            "workspace": {
+                **manifest["workspace"],
+                "state": "SUPERSEDED",
+                "reseal": reseal,
+            },
+        }
+
+        cloned = clone_workspace(
+            self.root,
+            "child",
+            self.config,
+            parent_manifest=parent,
+            writable_paths=["README.md"],
+        )
+
+        cloned_tree = self.root / cloned["path"]
+        self.assertEqual(
+            (cloned_tree / "README.md").read_text(encoding="utf-8"),
+            "carried candidate\n",
+        )
+        self.assertEqual(cloned["lineage"]["parent_task_id"], "parent")
+        self.assertEqual(cloned["inherited_changed_files"], ["README.md"])
+
+    def test_clone_fails_closed_when_canonical_changed_on_parent_diff_path(self):
+        _tracker, manifest, tree = self._open(task_id="parent")
+        (tree / "README.md").write_text("candidate\n", encoding="utf-8")
+        audit = audit_workspace(self.root, manifest, self.config)
+        reseal = reseal_workspace(
+            self.root,
+            manifest,
+            self.config,
+            state="SUPERSEDED",
+            audit=audit,
+        )
+        parent = {
+            **manifest,
+            "status": "SUPERSEDED",
+            "candidate_audit": audit,
+            "workspace": {
+                **manifest["workspace"],
+                "state": "SUPERSEDED",
+                "reseal": reseal,
+            },
+        }
+        (self.root / "README.md").write_text("new canonical\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(WorkspaceError, "canonical lineage conflict"):
+            clone_workspace(
+                self.root,
+                "child",
+                self.config,
+                parent_manifest=parent,
+                writable_paths=["README.md"],
+            )
 
     def test_declared_file_is_writable_without_false_mode_diff(self):
         (self.root / "README.md").chmod(0o444)

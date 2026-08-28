@@ -7,24 +7,54 @@ import math
 import platform
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, List, Protocol
 
-import motion_executor as motion_executor_module
 from controller.localization_gate import (
     apply_localization_gate_to_command,
     evaluate_localization_gate,
 )
-from controller.motion_controller import MotionController
-from controller.motion_resolver import limit_motion_proposals, resolve_motion_proposals
+from controller.heading_turn_controller import HeadingTurnController
+from controller.motion_controller import MotionController, MotionControllerConfig
+from controller.motion_guidance import MotionGuidance
+from controller.motion_guidance_contract import (
+    MotionGuidanceInput,
+    PoseSnapshot,
+    ResolvedMotionIntent,
+    WorldModelSnapshot,
+)
+from controller.motion_platform_adapter import ServiceActuationAdapter, contract_dict
+from controller.motion_platform_contract import (
+    CycleContext,
+    DriveCapabilities,
+    MotionEnvelope,
+    PhysicalMotionCommand,
+    ServiceActuationRequest,
+    WheelFeedback,
+    WheelVelocitySetpoint,
+)
+from controller.motion_resolver import (
+    build_resolved_motion_intent,
+    limit_motion_proposals,
+    resolve_motion_proposals,
+)
+from controller.motion_semantics_engine import MotionSemanticsEngine
 from controller.motion_tick_context import MotionTickContext, Pose2D, Velocity, new_motion_tick_cache
-from core.motion.speed_limits import MotionProfile, SpeedLimitsRuntime
+from core.motion.speed_limits import SpeedLimitsRuntime
 from middleware.ffp import PIDConfig
 from motion_executor import MotionExecutor
 
 from replayer.contracts import (
     ADAPTER_ID,
+    LAYER_BOUNDARIES_SCHEMA_V21,
+    LAYER_BOUNDARY_ORDER_V21,
+    LAYER_L6_INTENT_RESOLVER,
+    LAYER_L7A_MOTION_GUIDANCE,
+    LAYER_L10B_SAFETY_GATE,
+    LAYER_L8_MOTION_CONTROLLER,
+    LAYER_L9_MOTION_EXECUTOR,
+    LAYER_SERVICE_ACTUATION,
     PIPELINE_ADAPTER_ID,
+    PIPELINE_ADAPTER_ID_V21,
     PIPELINE_FRAME_SCHEMA_V2,
     PIPELINE_STAGE_ORDER,
     SOURCE_MANIFEST_SCHEMA,
@@ -50,6 +80,10 @@ SOURCE_FILES = (
     ("controller/motion_kinematics.py", "PRODUCTION_DEPENDENCY"),
     ("controller/localization_gate.py", "PRODUCTION_PIPELINE_COMPONENT"),
     ("controller/motion_controller.py", "PRODUCTION_PIPELINE_COMPONENT"),
+    ("controller/motion_guidance.py", "PRODUCTION_PIPELINE_COMPONENT"),
+    ("controller/motion_guidance_contract.py", "PRODUCTION_PIPELINE_CONTRACT"),
+    ("controller/heading_turn_controller.py", "PRODUCTION_PIPELINE_COMPONENT"),
+    ("controller/motion_semantics_engine.py", "PRODUCTION_PIPELINE_COMPONENT"),
     ("controller/motion_resolver.py", "PRODUCTION_PIPELINE_COMPONENT"),
     ("controller/motion_schema.py", "PRODUCTION_DEPENDENCY"),
     ("controller/motion_tick_context.py", "PRODUCTION_PIPELINE_DEPENDENCY"),
@@ -145,7 +179,7 @@ def executor_contract_from_instance(executor: MotionExecutor) -> Dict[str, Any]:
     pid_cfg = getattr(executor, "drive_pid_cfg", None)
     if not dataclasses.is_dataclass(pid_cfg):
         raise ReplayerError("pid_config_dataclass_required")
-    drive_ctrl = getattr(getattr(executor, "strategy", None), "drive_ctrl", None)
+    drive_ctrl = getattr(executor, "drive_ctrl", None)
     runtime_speed_map = dict(getattr(drive_ctrl, "speed_map", {}) or {})
     if not runtime_speed_map:
         raise ReplayerError("runtime_speed_map_missing")
@@ -155,46 +189,30 @@ def executor_contract_from_instance(executor: MotionExecutor) -> Dict[str, Any]:
         "control_mode": str(executor.get_control_mode()),
         "constructor": {
             "pid_config": dataclasses.asdict(pid_cfg),
-            "turn_intensity": float(executor.turn_intensity),
             "max_pwm": float(executor.max_pwm),
-            "track_width": float(executor.track_width),
             "direction_switch_hold_s": float(executor.direction_switch_hold_s),
             "direction_switch_debounce_cycles": int(executor.direction_switch_debounce_cycles),
-            "inplace_turn_omega_deadband": float(executor.inplace_turn_omega_deadband),
         },
         "runtime_bound_config": {"speed_map": runtime_speed_map},
     }
 
 
 def motion_pipeline_contract_from_controller(controller: Any) -> Dict[str, Any]:
-    """Bind V2 to the live production resolver/gate/shaper objects."""
+    """Build the legacy V2 semantic-stage contract for capture compatibility."""
     motion_controller = getattr(controller, "motion_controller", None)
     speed_limits = getattr(controller, "speed_limits", None)
     if not isinstance(motion_controller, MotionController):
         raise ReplayerError("production_motion_controller_required")
     if not isinstance(speed_limits, SpeedLimitsRuntime):
         raise ReplayerError("production_speed_limits_runtime_required")
-    constructor_fields = (
-        "track_width",
-        "enable_input_shaping",
-        "joy_deadband",
-        "joy_expo_v",
-        "joy_expo_omega",
-        "enable_slew",
-        "v_accel_m_s2",
-        "v_decel_m_s2",
-        "omega_accel_rad_s2",
-        "omega_decel_rad_s2",
-    )
-    constructor = {
-        field: getattr(motion_controller, field)
-        for field in constructor_fields
-    }
+    constructor = dataclasses.asdict(motion_controller.config)
     return {
         "adapter_id": PIPELINE_ADAPTER_ID,
         "components": [
             "controller.motion_resolver.limit_motion_proposals",
             "controller.motion_resolver.resolve_motion_proposals",
+            "controller.motion_guidance.MotionGuidance",
+            "controller.motion_semantics_engine.MotionSemanticsEngine",
             "controller.localization_gate.evaluate_localization_gate",
             "controller.localization_gate.apply_localization_gate_to_command",
             "controller.motion_controller.MotionController",
@@ -207,6 +225,162 @@ def motion_pipeline_contract_from_controller(controller: Any) -> Dict[str, Any]:
             "adapter_id": "NONE",
             "available": False,
             "boundary": "PWM_TO_PHYSICAL_OBSERVATION",
+        },
+    }
+
+
+def motion_layer_contract_from_controller(controller: Any) -> Dict[str, Any]:
+    """Bind V2.1 replay to the sealed physical layer boundaries."""
+    legacy = motion_pipeline_contract_from_controller(controller)
+    return {
+        **legacy,
+        "adapter_id": PIPELINE_ADAPTER_ID_V21,
+        "contract_version": "2.1",
+        "components": [
+            "controller.motion_resolver.resolve_motion_proposals",
+            "controller.motion_guidance.MotionGuidance",
+            "controller.motion_controller.MotionController",
+            "motion_executor.MotionExecutor",
+            "controller.motion_platform_adapter.ServiceActuationAdapter",
+        ],
+        "layer_order": list(LAYER_BOUNDARY_ORDER_V21),
+        "replayable_layers": [
+            LAYER_L6_INTENT_RESOLVER,
+            LAYER_L7A_MOTION_GUIDANCE,
+            LAYER_L8_MOTION_CONTROLLER,
+            LAYER_L9_MOTION_EXECUTOR,
+            LAYER_SERVICE_ACTUATION,
+        ],
+    }
+
+
+def motion_executor_output_projection(
+    executor_call: Dict[str, Any],
+    output: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Return the closed L9/service output fields available in V2 captures."""
+    call = dict(executor_call or {})
+    result = dict(output or {})
+    method = str(call.get("method", "") or "")
+    if method == "compute":
+        setpoint = dict(call.get("wheel_setpoint") or {})
+        return {
+            "schema": "R2B4_CANDIDATE_MOTOR_OUTPUT_REPLAY_PROJECTION_V1",
+            "contract_id": str(setpoint.get("contract_id", "") or ""),
+            "candidate_output_id": f"candidate:{setpoint.get('wheel_setpoint_id', '')}",
+            "wheel_setpoint_id": str(setpoint.get("wheel_setpoint_id", "") or ""),
+            "physical_command_id": str(setpoint.get("physical_command_id", "") or ""),
+            "resolved_id": str(setpoint.get("resolved_id", "") or ""),
+            "cycle_id": str(setpoint.get("cycle_id", "") or ""),
+            "left_pwm": float(result.get("left_pwm", result.get("pwm_l", 0.0)) or 0.0),
+            "right_pwm": float(result.get("right_pwm", result.get("pwm_r", 0.0)) or 0.0),
+            "output_reason": str(result.get("output_reason", "NONE") or "NONE"),
+        }
+    if method == "service_compute":
+        reason = str(result.get("reason", result.get("output_reason", "NONE")) or "NONE")
+        return {
+            "schema": "R2B4_SERVICE_ACTUATION_OUTPUT_REPLAY_PROJECTION_V1",
+            "left_pwm": float(result.get("left_pwm", result.get("pwm_l", 0.0)) or 0.0),
+            "right_pwm": float(result.get("right_pwm", result.get("pwm_r", 0.0)) or 0.0),
+            "accepted": bool(result.get("accepted", reason == "SERVICE_REQUEST_ACCEPTED")),
+            "reason": reason,
+        }
+    raise ReplayerError(f"unsupported_executor_method:{method or 'MISSING'}")
+
+
+def layer_boundaries_from_frame(frame: Dict[str, Any]) -> Dict[str, Any]:
+    """Project the existing passive tap into explicit V2.1 layer contracts."""
+    pipeline = dict(frame.get("pipeline") or {})
+    stages = dict(pipeline.get("stages") or {})
+    requested = dict(stages.get("requested_motion") or {})
+    resolver = dict(stages.get("resolver") or {})
+    guidance = dict(stages.get("guidance") or {})
+    reference = dict(stages.get("reference") or {})
+    executor = dict(stages.get("motion_executor") or {})
+    l8_input = dict(reference.get("input") or {})
+    l8_output = dict(reference.get("recorded_output") or {})
+    executor_call = dict(frame.get("executor_call") or {})
+    executor_output = dict(frame.get("recorded_executor_output") or {})
+    l6_input = {
+        "requested_motion": dict(requested.get("input") or {}),
+        "resolver": dict(resolver.get("input") or {}),
+        "cycle_context": dict(
+            (guidance.get("input") or {}).get("cycle_context") or {}
+        ),
+    }
+    l6_output = dict(resolver.get("recorded_output") or {})
+    l7_input = dict(guidance.get("input") or {})
+    l7_output = dict(guidance.get("recorded_output") or {})
+    if not l6_input["requested_motion"] or not l6_input["resolver"] or not l6_input["cycle_context"]:
+        raise ReplayerError("v21_l6_boundary_missing")
+    if not l6_output or not l7_input or not l7_output:
+        raise ReplayerError("v21_l7a_boundary_missing")
+    if dict(l6_output.get("resolved_intent") or {}) != dict(
+        l7_input.get("resolved_intent") or {}
+    ):
+        raise ReplayerError("v21_l6_l7a_lineage_mismatch")
+    if dict(l7_output.get("physical_command") or {}) != dict(
+        l8_input.get("physical_command") or {}
+    ):
+        raise ReplayerError("v21_l7a_l8_lineage_mismatch")
+    if not l8_input or not l8_output:
+        raise ReplayerError("v21_l8_boundary_missing")
+    if dict(executor.get("input") or {}) != executor_call:
+        raise ReplayerError("v21_l9_input_lineage_mismatch")
+    if dict(executor.get("recorded_output") or {}) != executor_output:
+        raise ReplayerError("v21_l9_output_lineage_mismatch")
+    method = str(executor_call.get("method", "") or "")
+    projection = motion_executor_output_projection(executor_call, executor_output)
+    l9_available = method == "compute"
+    service_available = method == "service_compute"
+    candidate = projection if l9_available else {}
+    service = projection if service_available else {}
+    return {
+        "schema": LAYER_BOUNDARIES_SCHEMA_V21,
+        "layer_order": list(LAYER_BOUNDARY_ORDER_V21),
+        "layers": {
+            LAYER_L6_INTENT_RESOLVER: {
+                "available": True,
+                "replayable": True,
+                "input": l6_input,
+                "recorded_output": l6_output,
+            },
+            LAYER_L7A_MOTION_GUIDANCE: {
+                "available": True,
+                "replayable": True,
+                "input": l7_input,
+                "recorded_output": l7_output,
+            },
+            LAYER_L8_MOTION_CONTROLLER: {
+                "available": True,
+                "replayable": True,
+                "input": l8_input,
+                "recorded_output": l8_output,
+            },
+            LAYER_L9_MOTION_EXECUTOR: {
+                "available": l9_available,
+                "replayable": True,
+                "unavailable_reason": "" if l9_available else "service_path_active",
+                "input": executor_call if l9_available else {},
+                "recorded_output": candidate,
+            },
+            LAYER_SERVICE_ACTUATION: {
+                "available": service_available,
+                "replayable": True,
+                "unavailable_reason": "" if service_available else "normal_motion_path_active",
+                "input": executor_call if service_available else {},
+                "recorded_output": service,
+            },
+            LAYER_L10B_SAFETY_GATE: {
+                "available": True,
+                "replayable": False,
+                "unavailable_reason": "raw_safety_snapshot_not_captured",
+                "input": {
+                    "candidate_output": projection,
+                    "safety_lineage": dict(frame.get("safety_lineage") or {}),
+                },
+                "recorded_output": dict(frame.get("final_output") or {}),
+            },
         },
     }
 
@@ -240,6 +414,37 @@ def motion_tick_context_capture_payload(context: MotionTickContext) -> Dict[str,
         "target_bearing_rad": finite_or_none(context.target_bearing_rad),
         "lidar_seq": int(context.lidar_seq),
     }
+
+
+def motion_guidance_input_from_capture_payload(
+    payload: Dict[str, Any],
+) -> MotionGuidanceInput:
+    """Rehydrate only the immutable L7A input captured at the boundary."""
+
+    source = dict(payload or {})
+    try:
+        return MotionGuidanceInput(
+            resolved_intent=ResolvedMotionIntent(
+                **dict(source["resolved_intent"])
+            ),
+            pose=PoseSnapshot(**dict(source["pose"])),
+            world=WorldModelSnapshot(**dict(source["world"])),
+            cycle_context=CycleContext(**dict(source["cycle_context"])),
+            drive_capabilities=DriveCapabilities(
+                **dict(source["drive_capabilities"])
+            ),
+            executed_left_mps=source.get("executed_left_mps"),
+            executed_right_mps=source.get("executed_right_mps"),
+            actual_linear_mps=source.get("actual_linear_mps"),
+            actual_angular_dps=source.get("actual_angular_dps"),
+            measured_left_mps=source.get("measured_left_mps"),
+            measured_right_mps=source.get("measured_right_mps"),
+            gyro_z_rad_s=source.get("gyro_z_rad_s"),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ReplayerError("guidance_input_contract_invalid") from exc
+
+
 class PlantAdapter(Protocol):
     """Narrow future seam; V2 deliberately ships without a physical model."""
 
@@ -252,20 +457,6 @@ class PlantAdapter(Protocol):
         dt_s: float,
         observation: Dict[str, Any],
     ) -> Dict[str, Any]: ...
-
-
-class _VirtualTime:
-    def __init__(self) -> None:
-        self.now_s = 0.0
-
-    def perf_counter(self) -> float:
-        return float(self.now_s)
-
-    def monotonic(self) -> float:
-        return float(self.now_s)
-
-    def time(self) -> float:
-        return float(self.now_s)
 
 
 class ProductionMotionExecutorAdapter:
@@ -291,19 +482,12 @@ class ProductionMotionExecutorAdapter:
             )
         self.executor = MotionExecutor(
             pid_config=PIDConfig(**pid_raw),
-            turn_intensity=float(constructor["turn_intensity"]),
             max_pwm=float(constructor["max_pwm"]),
-            track_width=float(constructor["track_width"]),
+            speed_map=runtime_speed_map,
             control_mode=str(contract["control_mode"]),
             direction_switch_hold_s=float(constructor["direction_switch_hold_s"]),
             direction_switch_debounce_cycles=int(constructor["direction_switch_debounce_cycles"]),
-            inplace_turn_omega_deadband=float(constructor["inplace_turn_omega_deadband"]),
         )
-        drive_ctrl = getattr(getattr(self.executor, "strategy", None), "drive_ctrl", None)
-        if drive_ctrl is None:
-            raise ReplayerError("production_speed_map_adapter_missing")
-        drive_ctrl.speed_map = dict(speed_map)
-        self._clock = _VirtualTime()
         self._last_executor_reset_generation: int | None = None
 
     @classmethod
@@ -330,37 +514,29 @@ class ProductionMotionExecutorAdapter:
             self._last_executor_reset_generation = reset_generation
         call = dict(frame.get("executor_call") or {})
         method = str(call.get("method", "") or "")
-        kwargs = dict(call.get("kwargs") or {})
-        self._clock.now_s = int(frame["monotonic_ns"]) / 1_000_000_000.0
-        original_time = motion_executor_module.time
-        motion_executor_module.time = self._clock
-        try:
-            if method == "compute_pwm":
-                pwm_l, pwm_r = self.executor.compute_pwm(
-                    float(kwargs["v_cmd"]),
-                    float(kwargs["omega_cmd"]),
-                    dict(kwargs.get("sensor_feedback") or {}),
-                    float(kwargs["dt"]),
-                    execution_mode=str(kwargs.get("execution_mode", "") or ""),
-                    track_reference=dict(kwargs.get("track_reference") or {}),
-                )
-            elif method == "compute_calibration_pwm":
-                pwm_l, pwm_r = self.executor.compute_calibration_pwm(
-                    left_pwm=float(kwargs["left_pwm"]),
-                    right_pwm=float(kwargs["right_pwm"]),
-                    v_hint=float(kwargs["v_hint"]),
-                    hard_cap=float(kwargs["hard_cap"]),
-                    phase=str(kwargs.get("phase", "maintenance") or "maintenance"),
-                )
-            else:
-                raise ReplayerError(f"unsupported_executor_method:{method or 'MISSING'}")
-        finally:
-            motion_executor_module.time = original_time
-        diag = self.executor.get_last_pid_diagnostics()
+        if method == "compute":
+            output = self.executor.compute(
+                CycleContext(**dict(call.get("cycle_context") or {})),
+                WheelVelocitySetpoint(**dict(call.get("wheel_setpoint") or {})),
+                WheelFeedback(**dict(call.get("wheel_feedback") or {})),
+            )
+            pwm_l = output.left_pwm
+            pwm_r = output.right_pwm
+            reason = output.output_reason
+        elif method == "service_compute":
+            output = ServiceActuationAdapter.compute(
+                ServiceActuationRequest(**dict(call.get("request") or {})),
+                monotonic_time=float(call.get("monotonic_time", 0.0)),
+            )
+            pwm_l = output.left_pwm
+            pwm_r = output.right_pwm
+            reason = output.reason
+        else:
+            raise ReplayerError(f"unsupported_executor_method:{method or 'MISSING'}")
         return {
             "pwm_l": float(pwm_l),
             "pwm_r": float(pwm_r),
-            "output_reason": str((diag or {}).get("output_reason", "NONE") or "NONE"),
+            "output_reason": str(reason or "NONE"),
         }
 
 
@@ -411,49 +587,116 @@ class ProductionMotionPipelineAdapter:
         plant_adapter: PlantAdapter | None = None,
     ) -> None:
         contract = dict(pipeline_contract or {})
-        if str(contract.get("adapter_id", "")) != PIPELINE_ADAPTER_ID:
+        if str(contract.get("adapter_id", "")) not in {
+            PIPELINE_ADAPTER_ID,
+            PIPELINE_ADAPTER_ID_V21,
+        }:
             raise ReplayerError("unsupported_pipeline_adapter_contract")
         if list(contract.get("stage_order") or []) != list(PIPELINE_STAGE_ORDER):
             raise ReplayerError("pipeline_stage_order_contract_mismatch")
+        if (
+            str(contract.get("adapter_id", "")) == PIPELINE_ADAPTER_ID_V21
+            and list(contract.get("layer_order") or []) != list(LAYER_BOUNDARY_ORDER_V21)
+        ):
+            raise ReplayerError("layer_boundary_order_contract_mismatch")
         constructor = dict(contract.get("motion_controller_constructor") or {})
-        required = {
-            "track_width",
-            "enable_input_shaping",
-            "joy_deadband",
-            "joy_expo_v",
-            "joy_expo_omega",
-            "enable_slew",
-            "v_accel_m_s2",
-            "v_decel_m_s2",
-            "omega_accel_rad_s2",
-            "omega_decel_rad_s2",
-        }
+        required = {field.name for field in dataclasses.fields(MotionControllerConfig)}
         if set(constructor) != required:
             raise ReplayerError("motion_controller_constructor_contract_mismatch")
-        self.motion_controller = MotionController(**constructor)
+        self.motion_controller = MotionController(
+            config=MotionControllerConfig(**constructor)
+        )
+        self.vezerles_config = dict(vezerles_config or {})
+        self.fizika_config = dict(fizika_config or {})
+        readiness_cfg = dict(
+            self.vezerles_config.get("motion_readiness") or {}
+        )
+        self.motion_guidance = MotionGuidance(
+            semantics=MotionSemanticsEngine(
+                dict(readiness_cfg.get("motion_semantics") or {})
+            ),
+            heading_controller=HeadingTurnController(
+                float(self.fizika_config.get("nyomtav_szelesseg_m", 0.175)),
+                dict(readiness_cfg.get("heading_turn") or {}),
+            ),
+            policy_config=dict(
+                self.vezerles_config.get("global_motion_policy") or {}
+            ),
+        )
         self.executor_adapter = ProductionMotionExecutorAdapter(
             contract=executor_contract,
             speed_map=speed_map,
         )
-        self.speed_limits = SpeedLimitsRuntime()
-        self.ctrl = SimpleNamespace(
-            cfg={
-                "vezerles": dict(vezerles_config or {}),
-                "fizika": dict(fizika_config or {}),
-            },
-            speed_limits=self.speed_limits,
-            motion_controller_state={},
-            motion_ref_v_l=0.0,
-            motion_ref_v_r=0.0,
-            last_speed_limit_debug={},
-            localization_gate_status={},
-            motion_resolution_status={},
-            motion_command_source="",
-            active_motion_command_type="",
-            active_motion_command_layer="",
-        )
-        self._reference_initialized = False
         self.plant_adapter = plant_adapter
+
+    @staticmethod
+    def _resolve_stage(
+        *,
+        requested_input: Dict[str, Any],
+        resolver_input: Dict[str, Any],
+    ) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        limited, limit_status = limit_motion_proposals(
+            list(requested_input.get("proposals") or []),
+            active_source=str(requested_input.get("active_source", "") or ""),
+            category_caps=dict(requested_input.get("category_caps") or {}),
+            max_total=int(requested_input.get("max_total", 8) or 8),
+        )
+        context = _motion_context_from_payload(
+            dict(resolver_input.get("motion_tick_context") or {})
+        )
+        resolved, resolution_status = resolve_motion_proposals(
+            limited,
+            active_source=str(requested_input.get("active_source", "") or ""),
+            context=context,
+            cache=new_motion_tick_cache(context),
+            proposal_limit_status=limit_status,
+            now_monotonic=float(resolver_input["now_monotonic_s"]),
+            now_wall=float(resolver_input["now_wall_s"]),
+        )
+        return (
+            {
+                "limited_motion_proposals": limited,
+                "proposal_limit_status": limit_status,
+            },
+            {
+                "resolved_motion": resolved,
+                "resolution_status": resolution_status,
+            },
+            resolved,
+        )
+
+    def replay_resolver(
+        self,
+        *,
+        requested_input: Dict[str, Any],
+        resolver_input: Dict[str, Any],
+        cycle_context: CycleContext,
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        requested_output, resolver_output, resolved = self._resolve_stage(
+            requested_input=dict(requested_input or {}),
+            resolver_input=dict(resolver_input or {}),
+        )
+        resolver_output["resolved_intent"] = contract_dict(
+            build_resolved_motion_intent(
+                resolved,
+                cycle_context=cycle_context,
+            )
+        )
+        return requested_output, resolver_output
+
+    def replay_guidance(
+        self,
+        guidance_input: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        typed_input = motion_guidance_input_from_capture_payload(guidance_input)
+        physical = self.motion_guidance.compute(typed_input)
+        diagnostics = self.motion_guidance.diagnostics()
+        if diagnostics is None:
+            raise ReplayerError("guidance_diagnostics_missing")
+        return {
+            "physical_command": contract_dict(physical),
+            "diagnostics": contract_dict(diagnostics),
+        }
 
     @classmethod
     def from_capture(
@@ -472,105 +715,25 @@ class ProductionMotionPipelineAdapter:
             plant_adapter=plant_adapter,
         )
 
-    def _restore_speed_limits(self, payload: Dict[str, Any]) -> None:
-        state = dict(payload or {})
-        profile = dict(state.get("profile") or {})
-        required_profile = {
-            "name",
-            "v_max",
-            "v_min",
-            "w_max",
-            "w_min",
-            "accel_limit",
-            "jerk_limit",
-            "source",
-        }
-        if set(profile) != required_profile:
-            raise ReplayerError("speed_limits_profile_contract_mismatch")
-        self.speed_limits.mode = str(state.get("mode_raw", "UNIFIED") or "UNIFIED")
-        self.speed_limits.profile = MotionProfile(
-            name=str(profile["name"]),
-            v_max=float(profile["v_max"]),
-            v_min=float(profile["v_min"]),
-            w_max=float(profile["w_max"]),
-            w_min=float(profile["w_min"]),
-            accel_limit=float(profile["accel_limit"]),
-            jerk_limit=float(profile["jerk_limit"]),
-            source=str(profile["source"]),
-        )
-        self.speed_limits.gear_level = int(state.get("gear_level", 0) or 0)
-        self.speed_limits.gear_ratio = float(state.get("gear_ratio", 0.0) or 0.0)
-        self.speed_limits.max_pwm_cap = float(state.get("pwm_cap", 0.90) or 0.90)
-        wheel_range = dict(state.get("calibrated_wheel_range_mps") or {})
-        self.speed_limits.calibrated_wheel_min_mps = float(wheel_range.get("minimum", 0.0) or 0.0)
-        self.speed_limits.calibrated_wheel_max_mps = float(wheel_range.get("maximum", 0.0) or 0.0)
-        self.speed_limits.track_width_m = float(state.get("track_width_m", 0.175) or 0.175)
-
     def _replay_reference(
         self,
         reference_input: Dict[str, Any],
         *,
-        resolved_status: Dict[str, Any],
+        physical_command: Dict[str, Any],
         gate_status: Dict[str, Any],
         gate_apply: Dict[str, Any],
     ) -> Dict[str, Any]:
         payload = dict(reference_input or {})
-        ctrl_state = dict(payload.get("controller_state") or {})
-        self._restore_speed_limits(dict(payload.get("speed_limits_state") or {}))
-        self.ctrl.motion_command_source = str(ctrl_state.get("motion_command_source", "") or "")
-        self.ctrl.active_motion_command_type = str(ctrl_state.get("active_motion_command_type", "") or "")
-        self.ctrl.active_motion_command_layer = str(ctrl_state.get("active_motion_command_layer", "") or "")
-        self.ctrl.motion_resolution_status = dict(resolved_status or {})
-        self.ctrl.localization_gate_status = {
-            **dict(gate_status or {}),
-            "apply": dict(gate_apply or {}),
-            "execution_mode": str(payload.get("execution_mode", "") or ""),
-        }
-        recorded_before = dict(payload.get("motion_controller_state_before") or {})
-        if not self._reference_initialized:
-            self.motion_controller._v_prev = float(recorded_before.get("v_prev", 0.0) or 0.0)
-            self.motion_controller._omega_prev = float(recorded_before.get("omega_prev", 0.0) or 0.0)
-            self._reference_initialized = True
-        state_before = {
-            "v_prev": float(self.motion_controller._v_prev),
-            "omega_prev": float(self.motion_controller._omega_prev),
-        }
-        # The captured reference input is the exact post-gate runtime boundary.
-        # It also includes the existing state/policy zero clamps that sit between
-        # the isolated production stages and are intentionally not reimplemented.
-        v_target = float(payload.get("v_target", 0.0) or 0.0)
-        omega_target = float(payload.get("omega_target", 0.0) or 0.0)
-        track_reference = dict(payload.get("requested_track_reference") or {})
-        mode = str(payload.get("mode", "BYPASS") or "BYPASS").upper()
-        force_zero = bool(payload.get("force_zero", False))
-        if mode == "TRACK":
-            v_target, omega_target, track_reference = self.motion_controller.tick_track_reference(
-                ctrl=self.ctrl,
-                left_target_mps=float(track_reference["left_mps"]),
-                right_target_mps=float(track_reference["right_mps"]),
-                dt=float(payload["dt_s"]),
-                force_zero=force_zero,
-            )
-        elif mode == "TWIST":
-            v_target, omega_target = self.motion_controller.tick(
-                ctrl=self.ctrl,
-                v_target=v_target,
-                omega_target=omega_target,
-                dt=float(payload["dt_s"]),
-                ekf_state=dict(payload.get("ekf_state") or {}),
-                force_zero=force_zero,
-            )
-        elif mode != "BYPASS":
-            raise ReplayerError(f"unsupported_reference_replay_mode:{mode}")
-        if bool(payload.get("clear_motion_controller_state", False)):
-            self.ctrl.motion_controller_state = {}
-        return {
-            "state_before": state_before,
-            "v_cmd": float(v_target),
-            "omega_cmd": float(omega_target),
-            "track_reference": dict(track_reference),
-            "motion_controller_state": dict(self.ctrl.motion_controller_state or {}),
-        }
+        captured_physical = dict(payload.get("physical_command") or {})
+        if captured_physical != dict(physical_command or {}):
+            raise ReplayerError("guidance_l8_physical_lineage_mismatch")
+        output = self.motion_controller.compute(
+            CycleContext(**dict(payload.get("cycle_context") or {})),
+            PhysicalMotionCommand(**dict(physical_command or {})),
+            MotionEnvelope(**dict(payload.get("motion_envelope") or {})),
+            DriveCapabilities(**dict(payload.get("drive_capabilities") or {})),
+        )
+        return contract_dict(output)
 
     def replay_frame(self, frame: Dict[str, Any]) -> Dict[str, Any]:
         pipeline = dict(frame.get("pipeline") or {})
@@ -580,33 +743,21 @@ class ProductionMotionPipelineAdapter:
             raise ReplayerError("pipeline_frame_stage_order_invalid")
         stages = dict(pipeline.get("stages") or {})
 
-        requested_input = dict((stages.get("requested_motion") or {}).get("input") or {})
-        limited, limit_status = limit_motion_proposals(
-            list(requested_input.get("proposals") or []),
-            active_source=str(requested_input.get("active_source", "") or ""),
-            category_caps=dict(requested_input.get("category_caps") or {}),
-            max_total=int(requested_input.get("max_total", 8) or 8),
+        requested_input = dict(
+            (stages.get("requested_motion") or {}).get("input") or {}
         )
-        requested_output = {
-            "limited_motion_proposals": limited,
-            "proposal_limit_status": limit_status,
-        }
-
         resolver_input = dict((stages.get("resolver") or {}).get("input") or {})
-        context = _motion_context_from_payload(dict(resolver_input.get("motion_tick_context") or {}))
-        resolved, resolution_status = resolve_motion_proposals(
-            limited,
-            active_source=str(requested_input.get("active_source", "") or ""),
-            context=context,
-            cache=new_motion_tick_cache(context),
-            proposal_limit_status=limit_status,
-            now_monotonic=float(resolver_input["now_monotonic_s"]),
-            now_wall=float(resolver_input["now_wall_s"]),
+        guidance_input = dict((stages.get("guidance") or {}).get("input") or {})
+        typed_guidance = motion_guidance_input_from_capture_payload(guidance_input)
+        requested_output, resolver_output = self.replay_resolver(
+            requested_input=requested_input,
+            resolver_input=resolver_input,
+            cycle_context=typed_guidance.cycle_context,
         )
-        resolver_output = {
-            "resolved_motion": resolved,
-            "resolution_status": resolution_status,
-        }
+        captured_intent = contract_dict(typed_guidance.resolved_intent)
+        if dict(resolver_output["resolved_intent"]) != captured_intent:
+            raise ReplayerError("resolver_guidance_intent_lineage_mismatch")
+        guidance_output = self.replay_guidance(guidance_input)
 
         gate_input = dict((stages.get("localization_gate") or {}).get("input") or {})
         captured_runtime = dict(gate_input.get("runtime_state") or {})
@@ -634,24 +785,20 @@ class ProductionMotionPipelineAdapter:
 
         reference_output = self._replay_reference(
             dict((stages.get("reference") or {}).get("input") or {}),
-            resolved_status=resolution_status,
+            physical_command=dict(guidance_output["physical_command"]),
             gate_status=gate_status,
             gate_apply=gate_apply,
         )
         call = dict(frame.get("executor_call") or {})
-        kwargs = dict(call.get("kwargs") or {})
-        if str(call.get("method", "") or "") == "compute_pwm":
-            kwargs["v_cmd"] = float(reference_output["v_cmd"])
-            kwargs["omega_cmd"] = float(reference_output["omega_cmd"])
-            kwargs["track_reference"] = dict(reference_output["track_reference"])
-            call["kwargs"] = kwargs
+        if str(call.get("method", "") or "") == "compute":
+            call["wheel_setpoint"] = dict(reference_output)
         executor_frame = dict(frame)
         executor_frame["executor_call"] = call
-        self.executor_adapter.executor.max_pwm = float(self.speed_limits.max_pwm_cap)
         executor_output = self.executor_adapter.replay_frame(executor_frame)
         stage_outputs = {
             "requested_motion": requested_output,
             "resolver": resolver_output,
+            "guidance": guidance_output,
             "localization_gate": gate_output,
             "reference": reference_output,
             "motion_executor": executor_output,
@@ -681,6 +828,137 @@ class ProductionMotionPipelineAdapter:
             "executor_output": executor_output,
             "plant": plant_result,
         }
+
+
+class ProductionMotionLayerAdapter:
+    """Replay only the sealed V2.1 boundary selected by the caller."""
+
+    def __init__(
+        self,
+        *,
+        pipeline_contract: Dict[str, Any],
+        executor_contract: Dict[str, Any],
+        speed_map: Dict[str, Any],
+        vezerles_config: Dict[str, Any],
+        fizika_config: Dict[str, Any],
+    ) -> None:
+        contract = dict(pipeline_contract or {})
+        if str(contract.get("adapter_id", "")) != PIPELINE_ADAPTER_ID_V21:
+            raise ReplayerError("unsupported_v21_layer_adapter_contract")
+        if list(contract.get("layer_order") or []) != list(LAYER_BOUNDARY_ORDER_V21):
+            raise ReplayerError("v21_layer_order_contract_mismatch")
+        self._pipeline = ProductionMotionPipelineAdapter(
+            pipeline_contract=contract,
+            executor_contract=executor_contract,
+            speed_map=speed_map,
+            vezerles_config=vezerles_config,
+            fizika_config=fizika_config,
+        )
+
+    @classmethod
+    def from_capture(
+        cls,
+        capture_path: Path,
+        manifest: Dict[str, Any],
+    ) -> "ProductionMotionLayerAdapter":
+        return cls(
+            pipeline_contract=dict(manifest.get("pipeline_contract") or {}),
+            executor_contract=dict(manifest.get("executor_contract") or {}),
+            speed_map=read_json(capture_path / "config" / "speed_map.json"),
+            vezerles_config=read_json(capture_path / "config" / "vezerles.json"),
+            fizika_config=read_json(capture_path / "config" / "fizika.json"),
+        )
+
+    @staticmethod
+    def _boundary(frame: Dict[str, Any], layer: str) -> Dict[str, Any]:
+        boundaries = dict(frame.get("layer_boundaries") or {})
+        if str(boundaries.get("schema", "")) != LAYER_BOUNDARIES_SCHEMA_V21:
+            raise ReplayerError("v21_layer_boundaries_schema_invalid")
+        boundary = dict((boundaries.get("layers") or {}).get(layer) or {})
+        if not boundary:
+            raise ReplayerError(f"v21_layer_boundary_missing:{layer}")
+        return boundary
+
+    def replay_layer(self, frame: Dict[str, Any], layer: str) -> Dict[str, Any]:
+        boundary = self._boundary(frame, layer)
+        if not bool(boundary.get("available", False)):
+            return {
+                "available": False,
+                "output": {},
+                "reason": str(boundary.get("unavailable_reason", "") or "not_available"),
+            }
+        if layer == LAYER_L6_INTENT_RESOLVER:
+            payload = dict(boundary.get("input") or {})
+            _, output = self._pipeline.replay_resolver(
+                requested_input=dict(payload.get("requested_motion") or {}),
+                resolver_input=dict(payload.get("resolver") or {}),
+                cycle_context=CycleContext(
+                    **dict(payload.get("cycle_context") or {})
+                ),
+            )
+            return {"available": True, "output": output, "reason": ""}
+        if layer == LAYER_L7A_MOTION_GUIDANCE:
+            return {
+                "available": True,
+                "output": self._pipeline.replay_guidance(
+                    dict(boundary.get("input") or {})
+                ),
+                "reason": "",
+            }
+        if layer == LAYER_L8_MOTION_CONTROLLER:
+            payload = dict(boundary.get("input") or {})
+            output = self._pipeline.motion_controller.compute(
+                CycleContext(**dict(payload.get("cycle_context") or {})),
+                PhysicalMotionCommand(**dict(payload.get("physical_command") or {})),
+                MotionEnvelope(**dict(payload.get("motion_envelope") or {})),
+                DriveCapabilities(**dict(payload.get("drive_capabilities") or {})),
+            )
+            return {"available": True, "output": contract_dict(output), "reason": ""}
+        if layer in {LAYER_L9_MOTION_EXECUTOR, LAYER_SERVICE_ACTUATION}:
+            replay_frame = dict(frame)
+            replay_frame["executor_call"] = dict(boundary.get("input") or {})
+            output = self._pipeline.executor_adapter.replay_frame(replay_frame)
+            return {
+                "available": True,
+                "output": motion_executor_output_projection(
+                    replay_frame["executor_call"],
+                    output,
+                ),
+                "reason": "",
+            }
+        raise ReplayerError(f"v21_layer_not_replayable:{layer}")
+
+    def relevant_state(self, layer: str) -> Dict[str, Any]:
+        if layer == LAYER_L6_INTENT_RESOLVER:
+            return {"stateful": False}
+        if layer == LAYER_L7A_MOTION_GUIDANCE:
+            diagnostics = self._pipeline.motion_guidance.diagnostics()
+            return {
+                "semantics": self._pipeline.motion_guidance.semantics.status(),
+                "guidance_reason": "" if diagnostics is None else diagnostics.reason,
+            }
+        if layer == LAYER_L8_MOTION_CONTROLLER:
+            controller = self._pipeline.motion_controller
+            return {
+                "left_slew_mps": float(controller._left_slew_mps),
+                "right_slew_mps": float(controller._right_slew_mps),
+            }
+        if layer == LAYER_L9_MOTION_EXECUTOR:
+            adapter = self._pipeline.executor_adapter
+            executor = adapter.executor
+            return {
+                "reset_generation": adapter._last_executor_reset_generation,
+                "last_sign": dict(executor._last_sign),
+                "pending_sign": dict(executor._pending_sign),
+                "pending_count": dict(executor._pending_count),
+                "direction_switch_hold_until": float(executor._direction_switch_hold_until),
+                "startup_active": dict(executor._startup_active),
+                "startup_release_dwell_s": dict(executor._startup_release_dwell_s),
+                "last_control": executor.get_last_pid_diagnostics(),
+            }
+        if layer == LAYER_SERVICE_ACTUATION:
+            return {"stateful": False}
+        return {}
 
 
 def current_config_comparison(project_root: Path, capture_path: Path) -> Dict[str, Any]:

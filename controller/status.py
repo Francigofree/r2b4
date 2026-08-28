@@ -24,7 +24,6 @@ from controller.motion_schema import (
 )
 from controller.motion_kinematics import (
     KINEMATICS_SIGN_CONVENTION,
-    twist_to_track_velocity,
 )
 from controller.runtime_affinity import (
     apply_active_service_thread_affinity,
@@ -791,24 +790,10 @@ def _forward_primitive_chain_compatible(*, primitives: list[str], execution_mode
     return families == {"FORWARD_TRANSLATION"}
 
 
-def _track_from_twist(v_mps: float, omega_rad_s: float, track_width_m: float) -> dict:
-    left_mps, right_mps = twist_to_track_velocity(
-        float(v_mps),
-        float(omega_rad_s),
-        float(track_width_m),
-    )
-    return {
-        "left_mps": float(left_mps),
-        "right_mps": float(right_mps),
-    }
-
-
 def _resolve_track_surface(
     *,
     primary_ref: dict | None,
-    fallback_twists: list[tuple[str, dict]],
     fallback_track_refs: list[tuple[str, dict]],
-    track_width_m: float,
 ) -> tuple[dict, str]:
     primary = dict(primary_ref or {})
     left = _maybe_float(primary.get("left_mps"))
@@ -818,14 +803,6 @@ def _resolve_track_surface(
             "left_mps": float(left),
             "right_mps": float(right),
         }, "direct"
-
-    for source_name, twist in list(fallback_twists or []):
-        src = dict(twist or {})
-        v_val = _maybe_float(src.get("v"))
-        omega_val = _maybe_float(src.get("omega"))
-        if v_val is None or omega_val is None:
-            continue
-        return _track_from_twist(float(v_val), float(omega_val), float(track_width_m)), str(source_name)
 
     for source_name, track_ref in list(fallback_track_refs or []):
         src = dict(track_ref or {})
@@ -985,6 +962,7 @@ def build_motion_command_semantics(ctrl, pid_diag=None) -> dict:
     motion_task = dict(getattr(ctrl, "motion_task_status", {}) or {})
     motion_contract = dict(getattr(ctrl, "motion_contract_status", {}) or {})
     motion_public = dict(getattr(ctrl, "motion_public_status", {}) or {})
+    motion_platform = dict(getattr(ctrl, "motion_platform_status", {}) or {})
     arc_runtime = dict(getattr(ctrl, "arc_runtime_status", {}) or {})
     command_type = str(getattr(ctrl, "active_motion_command_type", "idle") or "idle")
     active_layer = str(getattr(ctrl, "active_motion_command_layer", "IDLE") or "IDLE")
@@ -1025,12 +1003,15 @@ def build_motion_command_semantics(ctrl, pid_diag=None) -> dict:
     track_width = _track_width_m(ctrl)
     requested_track_norm, requested_track_source = _resolve_track_surface(
         primary_ref=requested_track,
-        fallback_twists=[
-            ("requested_motion_intent", requested_twist_norm),
-            ("limited_motion_intent", limited_twist_norm),
+        fallback_track_refs=[
+            (
+                "motion_platform_status",
+                {
+                    "left_mps": motion_platform.get("requested_left_mps"),
+                    "right_mps": motion_platform.get("requested_right_mps"),
+                },
+            ),
         ],
-        fallback_track_refs=[],
-        track_width_m=track_width,
     )
     track_targets, track_targets_source = _resolve_track_surface(
         primary_ref={
@@ -1045,12 +1026,16 @@ def build_motion_command_semantics(ctrl, pid_diag=None) -> dict:
                 else pid.get("v_r_ref")
             ),
         },
-        fallback_twists=[
-            ("limited_motion_intent", limited_twist_norm),
-            ("requested_motion_intent", requested_twist_norm),
+        fallback_track_refs=[
+            (
+                "motion_platform_status",
+                {
+                    "left_mps": motion_platform.get("executed_left_mps"),
+                    "right_mps": motion_platform.get("executed_right_mps"),
+                },
+            ),
+            ("requested_track_reference", requested_track_norm),
         ],
-        fallback_track_refs=[("requested_track_reference", requested_track_norm)],
-        track_width_m=track_width,
     )
 
     turn_semantics = classify_motion_layers(
