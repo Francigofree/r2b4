@@ -840,9 +840,9 @@ def _apply_recovery_normal_stop(ctrl, reason: str = "GUI_STOP_RECOVERY_NORMAL") 
 
     try:
         if hasattr(ctrl, "motor_l") and ctrl.motor_l:
-            ctrl.motor_l.set_pwm(0.0)
+            ctrl.motor_l.stop()
         if hasattr(ctrl, "motor_r") and ctrl.motor_r:
-            ctrl.motor_r.set_pwm(0.0)
+            ctrl.motor_r.stop()
     except Exception:
         pass
 

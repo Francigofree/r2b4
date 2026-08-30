@@ -1,11 +1,42 @@
 import subprocess
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from startup.phases import _i2c_scan, _i2c_scan_for_imu, _i2c_scan_until_imu_ready, _parse_i2cdetect_output
+from startup.phases import (
+    _i2c_scan,
+    _i2c_scan_for_imu,
+    _i2c_scan_until_imu_ready,
+    _motor_channel_config,
+    _parse_i2cdetect_output,
+)
 
 
 class StartupHardwareDiscoveryTests(unittest.TestCase):
+    def test_startup_resolves_explicit_immutable_motor_channel_config(self):
+        ctrl = SimpleNamespace(
+            cfg={
+                "hardver": {
+                    "motorok": {
+                        "pwm_decay_mode": "brake",
+                        "bal_oldal": {
+                            "gpio_in1": 12,
+                            "gpio_in2": 13,
+                            "invert": True,
+                        },
+                    },
+                },
+            },
+        )
+
+        config = _motor_channel_config(ctrl, "bal_oldal")
+
+        self.assertEqual(config.side_key, "bal_oldal")
+        self.assertEqual(config.gpio_in1, 12)
+        self.assertEqual(config.gpio_in2, 13)
+        self.assertTrue(config.invert)
+        self.assertEqual(config.pwm_decay_mode, "brake")
+
     def test_parse_i2cdetect_output_extracts_hex_addresses(self):
         output = """
              0 1 2 3 4 5 6 7 8 9 a b c d e f

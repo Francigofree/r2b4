@@ -201,10 +201,8 @@ class IdleState(AlbaState):
         # IDLE belépéskor PWM nullázás (beragadt parancsok elkerülésére)
         try:
             if hasattr(self.robot, "motor_l") and self.robot.motor_l:
-                self.robot.motor_l.set_pwm(0.0)
                 self.robot.motor_l.stop()
             if hasattr(self.robot, "motor_r") and self.robot.motor_r:
-                self.robot.motor_r.set_pwm(0.0)
                 self.robot.motor_r.stop()
         except Exception:
             pass
@@ -599,10 +597,8 @@ class FailSafeState(AlbaState):
     def on_enter(self, **kwargs):
         try:
             if hasattr(self.robot, "motor_l") and self.robot.motor_l:
-                self.robot.motor_l.set_pwm(0.0)
                 self.robot.motor_l.stop()
             if hasattr(self.robot, "motor_r") and self.robot.motor_r:
-                self.robot.motor_r.set_pwm(0.0)
                 self.robot.motor_r.stop()
         except Exception:
             pass

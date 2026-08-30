@@ -16,6 +16,8 @@ from v3.contracts import (
     TickContext,
 )
 
+from .motor_pwm import MotorChannelPhysicalConfig, PwmDecayMode
+
 
 class GpioBackend(Protocol):
     """The small injected subset of ``lgpio`` used by the live edge."""
@@ -41,25 +43,11 @@ def _require_nonnegative_int(value: int, name: str) -> None:
 
 
 @dataclass(frozen=True, slots=True)
-class MotorPinPair:
-    """Immutable DRV8871 input pins for one physical motor channel."""
-
-    in1: int
-    in2: int
-
-    def __post_init__(self) -> None:
-        _require_nonnegative_int(self.in1, "MotorPinPair.in1")
-        _require_nonnegative_int(self.in2, "MotorPinPair.in2")
-        if self.in1 == self.in2:
-            raise ValueError("one motor channel requires two distinct pins")
-
-
-@dataclass(frozen=True, slots=True)
 class GpioZeroWriterConfig:
     """Closed hardware configuration for the zero-only physical writer."""
 
-    left: MotorPinPair
-    right: MotorPinPair
+    left: MotorChannelPhysicalConfig
+    right: MotorChannelPhysicalConfig
     gpio_chip: int = 0
     pwm_frequency_hz: int = 8_000
 
@@ -101,7 +89,7 @@ class GpioZeroMotorWriter:
                     self._backend.gpio_claim_output(self._handle, pin),
                     f"claim GPIO {pin}",
                 )
-            self._apply_zero()
+                self._apply_zero_pin(pin)
         except Exception:
             try:
                 self._backend.gpiochip_close(self._handle)
@@ -135,15 +123,18 @@ class GpioZeroMotorWriter:
 
     def _apply_zero(self) -> None:
         for pin in self._pins:
-            self._checked_call(
-                self._backend.tx_pwm(
-                    self._handle,
-                    pin,
-                    self._config.pwm_frequency_hz,
-                    0.0,
-                ),
-                f"zero PWM on GPIO {pin}",
-            )
+            self._apply_zero_pin(pin)
+
+    def _apply_zero_pin(self, pin: int) -> None:
+        self._checked_call(
+            self._backend.tx_pwm(
+                self._handle,
+                pin,
+                self._config.pwm_frequency_hz,
+                0.0,
+            ),
+            f"zero PWM on GPIO {pin}",
+        )
 
     def write(self, command: FinalActuation) -> None:
         if self._closed:
@@ -222,5 +213,6 @@ __all__ = [
     "LiveIdleDeviceReader",
     "LiveIdleWriteRejected",
     "LockedStopCommandGateway",
-    "MotorPinPair",
+    "MotorChannelPhysicalConfig",
+    "PwmDecayMode",
 ]

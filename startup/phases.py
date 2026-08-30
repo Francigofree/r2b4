@@ -386,6 +386,27 @@ def phase_hardware_discovery(ctrl, sm: StartupStateMachine, sup: StartupSupervis
     return StartupState.PERIPHERAL_INIT, ""
 
 
+def _motor_channel_config(ctrl, side_key: str):
+    from driver.motor import MotorChannelConfig
+
+    hardware_cfg = ctrl.cfg.get("hardver") or {}
+    motors_cfg = hardware_cfg.get("motorok") or {}
+    motor_cfg = motors_cfg.get(side_key)
+    if not isinstance(motor_cfg, dict):
+        raise KeyError(f"Motor konfiguráció hiányzik: {side_key}")
+    decay_mode = str(
+        motor_cfg.get("pwm_decay_mode", motors_cfg.get("pwm_decay_mode", "coast"))
+        or "coast"
+    ).strip().lower()
+    return MotorChannelConfig(
+        side_key=side_key,
+        gpio_in1=motor_cfg.get("gpio_in1"),
+        gpio_in2=motor_cfg.get("gpio_in2"),
+        invert=bool(motor_cfg.get("invert", False)),
+        pwm_decay_mode=decay_mode,
+    )
+
+
 def phase_peripheral_init(ctrl, sm: StartupStateMachine) -> tuple[StartupState | None, str]:
     """
     PERIPHERAL_INIT: motor, enkóder, IMU, LIDAR, kamera driver inicializálás.
@@ -400,10 +421,8 @@ def phase_peripheral_init(ctrl, sm: StartupStateMachine) -> tuple[StartupState |
     # Motorok – első lépés, induláskor 0
     try:
         from driver.motor import AlbaMotor
-        ctrl.motor_l = AlbaMotor("bal_oldal")
-        ctrl.motor_r = AlbaMotor("jobb_oldal")
-        ctrl.motor_l.set_pwm(0.0)
-        ctrl.motor_r.set_pwm(0.0)
+        ctrl.motor_l = AlbaMotor(_motor_channel_config(ctrl, "bal_oldal"))
+        ctrl.motor_r = AlbaMotor(_motor_channel_config(ctrl, "jobb_oldal"))
         ctrl.motor_l.stop()
         ctrl.motor_r.stop()
         health["motor"] = {"ok": True}

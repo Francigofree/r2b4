@@ -8,7 +8,8 @@ from v3.adapters.live_idle import (
     GpioZeroMotorWriter,
     GpioZeroWriterConfig,
     LiveIdleWriteRejected,
-    MotorPinPair,
+    MotorChannelPhysicalConfig,
+    PwmDecayMode,
 )
 from v3.composition.live_idle import LiveIdleComposition, LiveIdleConfig
 from v3.contracts import FinalActuation, LifecycleState, SafetyDecision, TickContext
@@ -20,6 +21,8 @@ class FakeGpio:
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
         self.fail_pwm_call: int | None = None
+        self.fail_claim_call: int | None = None
+        self._claim_calls = 0
         self._pwm_calls = 0
 
     def gpiochip_open(self, chip: int) -> int:
@@ -27,7 +30,10 @@ class FakeGpio:
         return 7
 
     def gpio_claim_output(self, handle: int, pin: int) -> int:
+        self._claim_calls += 1
         self.calls.append(("claim", handle, pin))
+        if self.fail_claim_call == self._claim_calls:
+            raise OSError("injected GPIO claim failure")
         return 0
 
     def tx_pwm(self, handle: int, pin: int, frequency_hz: int, duty: float) -> int:
@@ -45,8 +51,17 @@ class FakeGpio:
 def _config() -> LiveIdleConfig:
     return LiveIdleConfig(
         GpioZeroWriterConfig(
-            left=MotorPinPair(12, 13),
-            right=MotorPinPair(18, 19),
+            left=MotorChannelPhysicalConfig(
+                12,
+                13,
+                pwm_decay_mode=PwmDecayMode.BRAKE,
+            ),
+            right=MotorChannelPhysicalConfig(
+                18,
+                19,
+                invert=True,
+                pwm_decay_mode=PwmDecayMode.BRAKE,
+            ),
         )
     )
 
@@ -70,12 +85,16 @@ def test_gpio_writer_claims_one_chip_and_initializes_every_pin_to_zero():
 
     writer = GpioZeroMotorWriter(gpio, _config().motors)
 
-    assert gpio.calls[:5] == [
+    assert gpio.calls[:9] == [
         ("open", 0),
         ("claim", 7, 12),
+        ("pwm", 7, 12, 8_000, 0.0),
         ("claim", 7, 13),
+        ("pwm", 7, 13, 8_000, 0.0),
         ("claim", 7, 18),
+        ("pwm", 7, 18, 8_000, 0.0),
         ("claim", 7, 19),
+        ("pwm", 7, 19, 8_000, 0.0),
     ]
     assert _pwm_calls(gpio) == [
         ("pwm", 7, 12, 8_000, 0.0),
@@ -85,6 +104,24 @@ def test_gpio_writer_claims_one_chip_and_initializes_every_pin_to_zero():
     ]
     writer.close()
     assert gpio.calls[-1] == ("close", 7)
+
+
+def test_gpio_writer_zeros_each_claimed_pin_before_claiming_the_next():
+    gpio = FakeGpio()
+    gpio.fail_claim_call = 3
+
+    with pytest.raises(OSError, match="claim failure"):
+        GpioZeroMotorWriter(gpio, _config().motors)
+
+    assert gpio.calls == [
+        ("open", 0),
+        ("claim", 7, 12),
+        ("pwm", 7, 12, 8_000, 0.0),
+        ("claim", 7, 13),
+        ("pwm", 7, 13, 8_000, 0.0),
+        ("claim", 7, 18),
+        ("close", 7),
+    ]
 
 
 def test_gpio_writer_rejects_allow_or_nonzero_without_touching_hardware():
@@ -150,8 +187,17 @@ def test_hardware_config_is_loaded_once_into_immutable_v3_values(tmp_path: Path)
         json.dumps(
             {
                 "motorok": {
-                    "bal_oldal": {"gpio_in1": 12, "gpio_in2": 13},
-                    "jobb_oldal": {"gpio_in1": 18, "gpio_in2": 19},
+                    "pwm_decay_mode": "brake",
+                    "bal_oldal": {
+                        "gpio_in1": 12,
+                        "gpio_in2": 13,
+                        "invert": False,
+                    },
+                    "jobb_oldal": {
+                        "gpio_in1": 18,
+                        "gpio_in2": 19,
+                        "invert": True,
+                    },
                 }
             }
         ),
@@ -164,8 +210,27 @@ def test_hardware_config_is_loaded_once_into_immutable_v3_values(tmp_path: Path)
     with pytest.raises(ValueError, match="unique"):
         replace(
             config.composition.motors,
-            right=MotorPinPair(13, 19),
+            right=MotorChannelPhysicalConfig(13, 19),
         )
+
+
+def test_hardware_config_rejects_unknown_physical_motor_semantics(tmp_path: Path):
+    path = tmp_path / "hardver.json"
+    path.write_text(
+        json.dumps(
+            {
+                "motorok": {
+                    "pwm_decay_mode": "unknown",
+                    "bal_oldal": {"gpio_in1": 12, "gpio_in2": 13},
+                    "jobb_oldal": {"gpio_in1": 18, "gpio_in2": 19},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="pwm_decay_mode is invalid"):
+        load_live_idle_runtime_config(path)
 
 
 def test_headless_owner_loop_has_no_active_transition_and_finishes_zero():

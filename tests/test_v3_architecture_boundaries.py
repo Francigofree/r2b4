@@ -43,6 +43,229 @@ def test_live_idle_entrypoint_cannot_reintroduce_legacy_runtime_authority():
     }
 
 
+def test_native_motor_pwm_planner_remains_io_and_writer_capability_free():
+    path = PROJECT_ROOT / "v3" / "adapters" / "motor_pwm.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        "enum",
+        "math",
+        "v3.contracts",
+    }
+
+
+def test_native_motor_writer_boundary_has_no_hardware_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "motor_writer.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        ".motor_pwm",
+        "typing",
+        "v3.contracts",
+    }
+
+
+def test_native_gpio_motor_sink_has_no_legacy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "gpio_motor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        ".motor_pwm",
+        "dataclasses",
+        "typing",
+        "v3.contracts",
+    }
+
+
+def test_native_motor_output_composition_has_no_pipeline_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "composition" / "motor_output.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "v3.adapters.gpio_motor",
+        "v3.adapters.motor_writer",
+        "v3.contracts",
+    }
+
+
+def test_bounded_command_gateway_has_no_runtime_or_control_layer_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "bounded_command.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        "math",
+        "v3.contracts",
+    }
+
+
+def test_native_live_input_aggregator_has_no_legacy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "live_inputs.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "collections.abc",
+        "dataclasses",
+        "typing",
+        "v3.contracts",
+    }
+
+
+def test_native_live_encoder_source_has_no_legacy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "live_encoder.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        ".live_inputs",
+        "math",
+        "typing",
+        "v3.contracts",
+    }
+
+
+def test_native_live_imu_source_has_no_legacy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "live_imu.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        ".live_inputs",
+        "math",
+        "typing",
+        "v3.contracts",
+    }
+
+
+def test_native_live_lidar_source_has_no_legacy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "live_lidar.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        ".live_inputs",
+        "math",
+        "typing",
+        "v3.contracts",
+    }
+
+
+def test_live_input_composition_has_no_hardware_clock_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "composition" / "live_inputs.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        ".input_shadow",
+        "v3.adapters.live_encoder",
+        "v3.adapters.live_imu",
+        "v3.adapters.live_inputs",
+        "v3.adapters.live_lidar",
+        "v3.contracts",
+        "v3.engine",
+        "v3.layers.l2_admission",
+        "v3.layers.l3_state_estimation",
+        "v3.layers.l4_world_model",
+    }
+    imported_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    assert "NativeStateEstimator" in imported_names
+    assert "ShadowStateEstimator" not in imported_names
+
+
+def test_native_l3_ekf_has_no_legacy_numpy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "layers" / "l3_state_estimation.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        "math",
+        "v3.contracts",
+    }
+
+
 def test_legacy_motor_driver_is_library_only_without_standalone_motion_entrypoint():
     path = PROJECT_ROOT / "driver" / "motor.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -80,6 +303,64 @@ def test_legacy_motor_driver_has_no_directional_convenience_write_paths():
 
     assert {"set_pwm", "stop", "close"} <= method_names
     assert {"forward", "backward"}.isdisjoint(method_names)
+
+
+def test_legacy_motor_driver_has_no_config_or_file_authority():
+    path = PROJECT_ROOT / "driver" / "motor.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_roots = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_roots.add(node.module.split(".", 1)[0])
+
+    motor_class = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "AlbaMotor"
+    )
+    method_names = {
+        node.name for node in motor_class.body if isinstance(node, ast.FunctionDef)
+    }
+
+    assert "config_manager" not in imported_roots
+    assert "json" not in imported_roots
+    assert "_load_config" not in method_names
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "open"
+        for node in ast.walk(tree)
+    )
+
+
+def test_legacy_motion_capable_set_pwm_is_only_the_final_control_commit():
+    call_sites = []
+    excluded_roots = {".git", ".venv", "build", "dist", "logs", "runtime", "tests"}
+    for path in PROJECT_ROOT.rglob("*.py"):
+        relative = path.relative_to(PROJECT_ROOT)
+        if relative.parts and relative.parts[0] in excluded_roots:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "set_pwm"
+            ):
+                call_sites.append(
+                    (
+                        relative.as_posix(),
+                        ast.unparse(node.func.value),
+                        tuple(ast.unparse(argument) for argument in node.args),
+                    )
+                )
+
+    assert sorted(call_sites) == [
+        ("cont.py", "self.motor_l", ("pwm_l",)),
+        ("cont.py", "self.motor_r", ("pwm_r",)),
+    ]
 
 
 def test_legacy_authority_gui_tool_and_test_imports_are_always_forbidden(tmp_path):

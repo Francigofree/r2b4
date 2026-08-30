@@ -46,6 +46,7 @@ class InputAdmission:
         }
         accepted: list[Observation] = []
         rejected: list[RejectedObservation] = []
+        rejection_keys: set[tuple[str, int, RejectionReason]] = set()
 
         for sample in frame.samples:
             key = (sample.device_id, sample.kind)
@@ -76,14 +77,17 @@ class InputAdmission:
                 self._last_sequences[key] = sample.sequence
 
             if reason is not None:
-                rejected.append(
-                    RejectedObservation(
-                        source_device_id=sample.device_id,
-                        source_sequence=sample.sequence,
-                        reason=reason,
-                        age_ns=age_ns,
+                rejection_key = (sample.device_id, sample.sequence, reason)
+                if rejection_key not in rejection_keys:
+                    rejected.append(
+                        RejectedObservation(
+                            source_device_id=sample.device_id,
+                            source_sequence=sample.sequence,
+                            reason=reason,
+                            age_ns=age_ns,
+                        )
                     )
-                )
+                    rejection_keys.add(rejection_key)
                 continue
             accepted.append(
                 Observation(

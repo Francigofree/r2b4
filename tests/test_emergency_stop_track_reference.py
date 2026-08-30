@@ -15,10 +15,14 @@ from controller.routines import emergency_stop, reset_position  # noqa: E402
 
 
 class _DummyMotor:
+    def __init__(self):
+        self.stop_calls = 0
+
     def set_pwm(self, value):
-        self.last_pwm = value
+        raise AssertionError(f"emergency stop used motion-capable set_pwm({value!r})")
 
     def stop(self):
+        self.stop_calls += 1
         self.stopped = True
 
 
@@ -89,6 +93,8 @@ class TestEmergencyStopTrackReference(unittest.TestCase):
         self.assertEqual(ctrl.state_track_reference, {"left_mps": 0.0, "right_mps": 0.0})
         self.assertEqual(ctrl.v_target, 0.0)
         self.assertEqual(ctrl.omega_target, 0.0)
+        self.assertGreaterEqual(ctrl.motor_l.stop_calls, 1)
+        self.assertGreaterEqual(ctrl.motor_r.stop_calls, 1)
 
     def test_reset_position_resets_ekf_manager_live_and_rebinds_legacy_pointer(self):
         stale_ekf = _DummyEKF(x=9.0, y=9.0, theta=1.0)

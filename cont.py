@@ -1226,8 +1226,6 @@ class AlbaController:
             except Exception:
                 pass
         try:
-            self.motor_l.set_pwm(0.0)
-            self.motor_r.set_pwm(0.0)
             self.motor_l.stop()
             self.motor_r.stop()
         except Exception:
@@ -1389,8 +1387,8 @@ class AlbaController:
                             self.v_cmd = 0.0
                             self.omega_target = 0.0
                             self.motion_target_owner = "MAINTENANCE_ZERO"
-                            self.motor_l.set_pwm(0.0)
-                            self.motor_r.set_pwm(0.0)
+                            self.motor_l.stop()
+                            self.motor_r.stop()
                         except Exception:
                             pass
                         with self.lidar_lock:

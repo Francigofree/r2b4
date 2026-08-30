@@ -1,25 +1,47 @@
 import lgpio
-import json
 import logging
 import threading
+from dataclasses import dataclass
 
-from config_manager import config as global_config
 
 # Logolás beállítása
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+@dataclass(frozen=True, slots=True)
+class MotorChannelConfig:
+    side_key: str
+    gpio_in1: int
+    gpio_in2: int
+    invert: bool = False
+    pwm_decay_mode: str = "coast"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.side_key, str) or not self.side_key.strip():
+            raise ValueError("motor side_key must be a non-empty string")
+        for name, pin in (("gpio_in1", self.gpio_in1), ("gpio_in2", self.gpio_in2)):
+            if isinstance(pin, bool) or not isinstance(pin, int) or pin < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        if self.gpio_in1 == self.gpio_in2:
+            raise ValueError("motor GPIO pins must be distinct")
+        if type(self.invert) is not bool:
+            raise ValueError("motor invert must be bool")
+        if self.pwm_decay_mode not in ("coast", "brake"):
+            raise ValueError("motor pwm_decay_mode must be 'coast' or 'brake'")
+
+
 class AlbaMotor:
     """
-    RPi 5 + DRV8871 motor driver. 
-    Konfiguráció a config_manager-ből (conf/hardver.json), hardveres PWM-et használ.
+    RPi 5 + DRV8871 motor driver explicit, immutable csatornakonfigurációval.
     """
-    def __init__(self, side_key: str, config_path: str | None = None):
-        """
-        side_key: "bal_oldal" vagy "jobb_oldal" (Magyar kulcsok a JSON-ből)
-        """
-        # Konfiguráció: elsődlegesen config_manager, szükség esetén fallback path
-        self._load_config(side_key, config_path)
+    def __init__(self, config: MotorChannelConfig):
+        if not isinstance(config, MotorChannelConfig):
+            raise TypeError("config must be MotorChannelConfig")
+        self.in1 = config.gpio_in1
+        self.in2 = config.gpio_in2
+        self.invert = config.invert
+        self.pwm_decay_mode = config.pwm_decay_mode
         self.freq = 8000
         self._io_lock = threading.Lock()
         self._closed = False
@@ -33,35 +55,10 @@ class AlbaMotor:
             lgpio.gpio_claim_output(self.handle, self.in2)
             self._apply_output_locked(0, 0.0)
             logger.info(
-                f"Motor inicializálva ({side_key}) - IN1: {self.in1}, IN2: {self.in2}, invert={self.invert}"
+                f"Motor inicializálva ({config.side_key}) - IN1: {self.in1}, IN2: {self.in2}, invert={self.invert}"
             )
         except Exception as e:
-            logger.error(f"Hiba az lgpio inicializálásakor ({side_key}): {e}")
-            raise
-
-    def _load_config(self, side_key: str, path: str | None):
-        try:
-            config = global_config.get("hardver", default={})
-            motor_cfg = config.get("motorok", {}).get(side_key)
-            if not motor_cfg and path:
-                with open(path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                motor_cfg = config.get("motorok", {}).get(side_key)
-            if not motor_cfg:
-                raise KeyError(f"Motor konfiguráció hiányzik: {side_key}")
-            self.in1 = motor_cfg["gpio_in1"]
-            self.in2 = motor_cfg["gpio_in2"]
-            motors_cfg = config.get("motorok", {}) or {}
-            decay_mode = str(
-                motor_cfg.get("pwm_decay_mode", motors_cfg.get("pwm_decay_mode", "coast"))
-                or "coast"
-            ).strip().lower()
-            self.pwm_decay_mode = decay_mode if decay_mode in ("coast", "brake") else "coast"
-            # Optional per-side polarity flip. This is required on some builds
-            # where H-bridge wiring polarity differs between tracks.
-            self.invert = bool(motor_cfg.get("invert", False))
-        except Exception as e:
-            logger.error(f"Konfigurációs hiba (motor): {e}")
+            logger.error(f"Hiba az lgpio inicializálásakor ({config.side_key}): {e}")
             raise
 
     def set_pwm(self, pwm: float):

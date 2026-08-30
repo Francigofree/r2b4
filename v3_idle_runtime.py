@@ -10,7 +10,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from v3.adapters.live_idle import GpioBackend, GpioZeroWriterConfig, MotorPinPair
+from v3.adapters.live_idle import (
+    GpioBackend,
+    GpioZeroWriterConfig,
+    MotorChannelPhysicalConfig,
+    PwmDecayMode,
+)
 from v3.composition.live_idle import LiveIdleComposition, LiveIdleConfig
 
 
@@ -34,13 +39,34 @@ class LiveIdleRuntimeConfig:
             raise ValueError("tick_period_ns must be a positive integer")
 
 
-def _pin_pair(motors: object, side: str) -> MotorPinPair:
+def _motor_channel_config(
+    motors: object,
+    side: str,
+) -> MotorChannelPhysicalConfig:
     if not isinstance(motors, dict):
         raise ValueError("hardware config motorok must be an object")
     value = motors.get(side)
     if not isinstance(value, dict):
         raise ValueError(f"hardware config is missing motorok.{side}")
-    return MotorPinPair(value.get("gpio_in1"), value.get("gpio_in2"))
+    invert = value.get("invert", False)
+    if type(invert) is not bool:
+        raise ValueError(f"hardware config motorok.{side}.invert must be bool")
+    raw_decay_mode = value.get(
+        "pwm_decay_mode",
+        motors.get("pwm_decay_mode", PwmDecayMode.COAST.value),
+    )
+    try:
+        decay_mode = PwmDecayMode(str(raw_decay_mode).strip().lower())
+    except ValueError as exc:
+        raise ValueError(
+            f"hardware config motorok.{side}.pwm_decay_mode is invalid"
+        ) from exc
+    return MotorChannelPhysicalConfig(
+        in1=value.get("gpio_in1"),
+        in2=value.get("gpio_in2"),
+        invert=invert,
+        pwm_decay_mode=decay_mode,
+    )
 
 
 def load_live_idle_runtime_config(
@@ -53,8 +79,8 @@ def load_live_idle_runtime_config(
         raise ValueError("hardware config root must be an object")
     motors = payload.get("motorok")
     writer = GpioZeroWriterConfig(
-        left=_pin_pair(motors, "bal_oldal"),
-        right=_pin_pair(motors, "jobb_oldal"),
+        left=_motor_channel_config(motors, "bal_oldal"),
+        right=_motor_channel_config(motors, "jobb_oldal"),
     )
     return LiveIdleRuntimeConfig(LiveIdleConfig(writer))
 

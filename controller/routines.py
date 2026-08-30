@@ -83,13 +83,9 @@ def emergency_stop(ctrl, reason="UNKNOWN"):
     except Exception:
         pass
 
-    # 1. MOTOR: AZONNAL 0 PWM, RÁMPA NÉLKÜL (első lépés, mindenki előtt)
+    # 1. MOTOR: stop-only capability, rámpa nélkül (első lépés, mindenki előtt)
     try:
         if hasattr(ctrl, "motor_l") and ctrl.motor_l:
-            try:
-                ctrl.motor_l.set_pwm(0.0)
-            except Exception:
-                pass
             try:
                 ctrl.motor_l.stop()
             except Exception:
@@ -99,17 +95,13 @@ def emergency_stop(ctrl, reason="UNKNOWN"):
     try:
         if hasattr(ctrl, "motor_r") and ctrl.motor_r:
             try:
-                ctrl.motor_r.set_pwm(0.0)
-            except Exception:
-                pass
-            try:
                 ctrl.motor_r.stop()
             except Exception:
                 pass
     except Exception:
         pass
 
-    # 2. HARDVERES FALLBACK (ha set_pwm/stop hibázott, közvetlen GPIO 0)
+    # 2. HARDVERES FALLBACK (ha stop hibázott, közvetlen GPIO 0)
     try:
         if hasattr(ctrl, "motor_l") and ctrl.motor_l:
             try:
@@ -417,10 +409,8 @@ def full_calibration(ctrl):
         "pulse_count_right": int(getattr(enc_r, "pulse_count", 0) or 0),
     }
     ctrl.last_encoder_calibration = dict(enc_cal or {})
-    # Beragadt PWM elkerülés: kalibráció után azonnal 0 és stop
+    # Beragadt PWM elkerülés: kalibráció után stop-only nullázás
     try:
-        ctrl.motor_l.set_pwm(0.0)
-        ctrl.motor_r.set_pwm(0.0)
         ctrl.motor_l.stop()
         ctrl.motor_r.stop()
     except Exception:

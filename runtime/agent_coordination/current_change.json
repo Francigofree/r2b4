@@ -2,51 +2,49 @@
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
   "candidate_audit": {
-    "audit_path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/audit.json",
-    "audit_sha256": "7759302974c3355192cafafe4b70327c3baa489d7a6d32971823bcff2c1bb973",
-    "audited_at_utc": "2026-08-30T08:10:13Z",
-    "base_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
-    "candidate_fingerprint": "843c80c87da6731b619b10a76e303b87db6641fd9d3412d076ccf94c334da50f",
+    "audit_path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/audit.json",
+    "audit_sha256": "ee02d1afa852550247705135bc9f30a0cc480330ccc9e27cd0eef6c7888594ff",
+    "audited_at_utc": "2026-08-30T18:40:25Z",
+    "base_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "candidate_fingerprint": "389c197d294e02d882e9b2f4e0216aa4988591825b24fc912592e3ae805037e1",
     "canonical_drift": [],
-    "canonical_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+    "canonical_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
     "changed_files": [
       "STRUKTURALIS_RETEGEK_V3.md",
-      "driver/motor.py",
-      "startup/phases.py",
-      "tests/test_drv8871_motor_hal.py",
-      "tests/test_startup_hardware_discovery.py",
-      "tests/test_v3_architecture_boundaries.py"
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_bounded_command.py",
+      "v3/adapters/__init__.py",
+      "v3/adapters/bounded_command.py"
     ],
-    "diff_path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/diff.json",
-    "diff_sha256": "de0153526a429a5537450d6fc742e3c9b992e8933ba709e1265b2366fb633147",
+    "diff_path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/diff.json",
+    "diff_sha256": "5d667058331ea732c4fa6e367cef0b538e29911f55f9dead3d039fa01fdefea1",
     "mode_violations": [],
     "protected_infrastructure_changes": [],
     "schema": "R2B4_CANDIDATE_AUDIT_V1",
     "status": "PASS",
-    "task_id": "v3_phase9_motor_config_injection_slice3_20260830",
+    "task_id": "v3_phase12_bounded_command_slice4_20260830",
     "task_mode": "CODE_CHANGE",
     "unexpected_changes": []
   },
   "changed_files": [
     "STRUKTURALIS_RETEGEK_V3.md",
-    "driver/motor.py",
-    "startup/phases.py",
-    "tests/test_drv8871_motor_hal.py",
-    "tests/test_startup_hardware_discovery.py",
-    "tests/test_v3_architecture_boundaries.py"
+    "tests/test_v3_architecture_boundaries.py",
+    "tests/test_v3_bounded_command.py",
+    "v3/adapters/__init__.py",
+    "v3/adapters/bounded_command.py"
   ],
-  "completed_at_utc": "2026-08-30T08:10:13Z",
+  "completed_at_utc": "2026-08-30T18:40:25Z",
   "files": [
     {
       "after": {
         "exists": true,
-        "sha256": "b7f58b0310a657970888dfb466baecc384cc9ea7cc56ab8f5beb19fedec954bc",
-        "size_bytes": 17436
+        "sha256": "ce7a01303efa1769077647ff72860b867665d584bba758f389244fc47123c9a6",
+        "size_bytes": 30400
       },
       "before": {
         "exists": true,
-        "sha256": "643018ceac58c5c460ae375fffb11d6a51f816f73f2c55fcfb7ea4dd9594e2a0",
-        "size_bytes": 17184
+        "sha256": "63b51ea05fe7df8fabf8e2b267c2384e98bf1de77b3c0bdf9ca44c5c5fb2f3e7",
+        "size_bytes": 29526
       },
       "changed": true,
       "path": "STRUKTURALIS_RETEGEK_V3.md"
@@ -54,82 +52,68 @@
     {
       "after": {
         "exists": true,
-        "sha256": "15a06adeba3f74d4f37b9e303356507db1c46386ef809627591731a78c7cf71e",
-        "size_bytes": 4730
+        "sha256": "69384c7d7fc2aa6047cb9b439b8f737d15381bd8fcb2b4e87ec9f8b53e227e8e",
+        "size_bytes": 17307
       },
       "before": {
         "exists": true,
-        "sha256": "9e480887cbe71ff141865d2de63dddcc02d31f0e508f9268028f9f53f5a6299f",
-        "size_bytes": 5080
-      },
-      "changed": true,
-      "path": "driver/motor.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "c56aa90d82260b5dc072d8d4d602cf7cfeef96e14d772547eb85d448fafb954c",
-        "size_bytes": 30195
-      },
-      "before": {
-        "exists": true,
-        "sha256": "7e5dccbcf17be58ef4a99f9592b7d4f4606801fb238aa4d7dbe6be1ae216c5f8",
-        "size_bytes": 29401
-      },
-      "changed": true,
-      "path": "startup/phases.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "6add8487f96fe9021ef4b9888a77aff143c8da7f79e32ca884f08068ede01664",
-        "size_bytes": 2451
-      },
-      "before": {
-        "exists": true,
-        "sha256": "655f9da8215ea72081568f595c68b81cfde470b2d5fb0778580cc40ffebd7f42",
-        "size_bytes": 2053
-      },
-      "changed": true,
-      "path": "tests/test_drv8871_motor_hal.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "a852e1bdecfec8b4cb9523de0f0a5f1c252691a286e451f696afcf6f9d285b6b",
-        "size_bytes": 6259
-      },
-      "before": {
-        "exists": true,
-        "sha256": "b4509744575c46dfb4bc6e6871fa6b2b2c66da61a4eec016cd23db350a251f9d",
-        "size_bytes": 5368
-      },
-      "changed": true,
-      "path": "tests/test_startup_hardware_discovery.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "2d03f83f803a0c02ac7c1728690837c67025b8e585135f39b1953dfac711250a",
-        "size_bytes": 8431
-      },
-      "before": {
-        "exists": true,
-        "sha256": "503b6a86ebae2e451c32ffe87663683c0b6cdf5b7018764c714f1770552a7c0d",
-        "size_bytes": 7363
+        "sha256": "858a6dc5fcc679ac58d4e9664ba376fc3d6fe6ff5f154cbee59f87c99e7b680c",
+        "size_bytes": 16658
       },
       "changed": true,
       "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "b2b48c8ade1c8514bed14a515f7ab2362369b2de81a661ef9d6d276ba509e439",
+        "size_bytes": 3673
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": true,
+      "path": "tests/test_v3_bounded_command.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "1a55c9a46e47011b8ec61cfa4f562d150d6a5c4b5b72dcf9ad1791bf48729124",
+        "size_bytes": 807
+      },
+      "before": {
+        "exists": true,
+        "sha256": "491579bf053ec72948bb6730f83d63bce2c167b9f2125140c23535154271fe14",
+        "size_bytes": 665
+      },
+      "changed": true,
+      "path": "v3/adapters/__init__.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "34c6d510d50e70fd9875de620eb926c18022c1244cdf4b7f2cf52d0fe814645f",
+        "size_bytes": 3920
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": true,
+      "path": "v3/adapters/bounded_command.py"
     }
   ],
-  "goal": "Continue V3 phase 9 by removing driver/motor.py global config_manager and file-loading authority, injecting an immutable validated motor-channel configuration from the legacy startup composition owner while preserving the current os.py default, DRV8871 PWM semantics, fail-closed stop/close behavior, IDLE-only V3 boundaries, and no live motion",
+  "goal": "Continue from promoted canonical phase-12 slice 3 with the smallest direct controlled-motion prerequisite not already owned by L5/L9: add a hardware-free BoundedTeleopCommandGateway whose immutable profile defines one explicit absolute tick window, finite v/omega targets and finite mission limits, emits typed TELEOP CommandRequest values only inside that window, and emits typed STOP before and forever after it; characterize direct L5 MissionManager acceptance and fail-closed validation while adding no duplicated navigation or operational constraint logic, legacy production import, external I/O, wall clock, state authority, activate API, lifecycle, layer pipeline, motor writer, GPIO, owner loop, thread, process, runtime entrypoint, hardware execution, live motion, safety relaxation, or automatic promotion",
   "promotion_status": "READY",
-  "reason": "Removed global config_manager, JSON, and file-loading authority from driver/motor.py; added frozen validated MotorChannelConfig injection owned by legacy startup composition; preserved active left/right hardware resolution, DRV8871 PWM semantics, fail-closed stop/close, current os.py default, and V3 IDLE-only boundaries",
+  "reason": "Added the next hardware-free phase-12 prerequisite: an immutable absolute-tick bounded TELEOP profile and CommandGateway that emits typed TELEOP only inside its finite window and typed STOP before and forever after it, reusing canonical L5/L9 limits without duplicating control authority and without runtime, activation, writer, GPIO, hardware execution, or live motion.",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-08-30T08:07:24Z",
+  "started_at_utc": "2026-08-30T18:38:24Z",
   "status": "COMPLETE",
-  "task_id": "v3_phase9_motor_config_injection_slice3_20260830",
+  "task_id": "v3_phase12_bounded_command_slice4_20260830",
   "task_mode": "CODE_CHANGE",
   "test_strategy": {
     "authoritative_test_count": 1,
@@ -142,35 +126,35 @@
   "tests": [
     {
       "authority": "CURRENT_CONTRACT",
-      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/tree R2B4_AGENT_CANDIDATE=1 pytest -q tests/test_drv8871_motor_hal.py tests/test_startup_hardware_discovery.py tests/test_v3_architecture_boundaries.py tests/test_v3_live_idle_cutover.py",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/tree R2B4_AGENT_CANDIDATE=1 pytest -q tests/test_v3_bounded_command.py tests/test_v3_l5_l9_mission_navigation.py tests/test_v3_architecture_boundaries.py",
       "status": "PASS"
     }
   ],
-  "updated_at_utc": "2026-08-30T08:10:13Z",
+  "updated_at_utc": "2026-08-30T18:40:25Z",
   "workflow_evidence": {
-    "audit_sha256": "7759302974c3355192cafafe4b70327c3baa489d7a6d32971823bcff2c1bb973",
-    "candidate_fingerprint": "843c80c87da6731b619b10a76e303b87db6641fd9d3412d076ccf94c334da50f",
-    "contract_fingerprint": "50ff800abfc1e4d7f63edd4bfbe7cda613b02452b1566ae562a0a21788025ce7",
-    "diff_sha256": "de0153526a429a5537450d6fc742e3c9b992e8933ba709e1265b2366fb633147",
-    "path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/evidence.json",
+    "audit_sha256": "ee02d1afa852550247705135bc9f30a0cc480330ccc9e27cd0eef6c7888594ff",
+    "candidate_fingerprint": "389c197d294e02d882e9b2f4e0216aa4988591825b24fc912592e3ae805037e1",
+    "contract_fingerprint": "7afbdd4d9dab38ed7c15d18e3cf7d82cd9465820c3af81165a10fef93becd103",
+    "diff_sha256": "5d667058331ea732c4fa6e367cef0b538e29911f55f9dead3d039fa01fdefea1",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/evidence.json",
     "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
-    "sha256": "d273d13b35a7145b1131353a14ed78187d13e7666c1ecd0f17cc18be8a4ee845"
+    "sha256": "d88bcbe0b17fc09946e22da272b26c9fde33b280686b1f68c0cf4550a2b4d318"
   },
   "workspace": {
-    "base_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
-    "base_manifest_path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/base_manifest.json",
-    "base_manifest_sha256": "dba0b0b626be070e4d958acba09b08825560d380cab7556c982caf06319e38c4",
-    "path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/tree",
+    "base_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "8c262b891b25178d96d9c58aa07cb70f7897d8aeeaee0787e48e16fe2de532ff",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/tree",
     "reseal": {
-      "audit_sha256": "7759302974c3355192cafafe4b70327c3baa489d7a6d32971823bcff2c1bb973",
-      "candidate_fingerprint": "843c80c87da6731b619b10a76e303b87db6641fd9d3412d076ccf94c334da50f",
-      "diff_sha256": "de0153526a429a5537450d6fc742e3c9b992e8933ba709e1265b2366fb633147",
-      "path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/reseal.json",
-      "resealed_at_utc": "2026-08-30T08:10:13Z",
+      "audit_sha256": "ee02d1afa852550247705135bc9f30a0cc480330ccc9e27cd0eef6c7888594ff",
+      "candidate_fingerprint": "389c197d294e02d882e9b2f4e0216aa4988591825b24fc912592e3ae805037e1",
+      "diff_sha256": "5d667058331ea732c4fa6e367cef0b538e29911f55f9dead3d039fa01fdefea1",
+      "path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T18:40:25Z",
       "schema": "R2B4_CANDIDATE_RESEAL_V1",
-      "sha256": "8185a42f8ed2b99d4ddf700cbb79b990ae4aa41ca3b016fe7898e233bb0622a4",
+      "sha256": "e86609a734a6b9c304613298965889b7562545ffb214a0a5637abb17da97da8e",
       "state": "READY",
-      "task_id": "v3_phase9_motor_config_injection_slice3_20260830"
+      "task_id": "v3_phase12_bounded_command_slice4_20260830"
     },
     "schema": "R2B4_AGENT_WORKSPACE_V1",
     "state": "READY"

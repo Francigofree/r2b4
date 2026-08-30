@@ -181,6 +181,14 @@ engedélyezett. Donor akkor használható, ha:
 Ha ehhez nagy adapter vagy legacy orchestration kellene, csak a tiszta
 algoritmikus mag emelhető át.
 
+Felső szintű legacy komponens alapértelmezés szerint nem portolandó. GUI, CLI,
+Test Hub, Replayer, state machine, Core/Task/AI orchestration, Follow/Search
+orchestration és legacy command/status infrastruktúra csak egy konkrét következő
+V3 funkció közvetlen igényére kap megfelelő V3 elemet. Az új elem ilyenkor
+minimális native V3 implementáció, amely a V3 contractokból indul ki; a legacy
+kód legfeljebb algoritmikus referencia vagy tiszta donor. Legacy API-,
+viselkedés- vagy struktúraparitás nem követelmény.
+
 ## 9. Replay és hibakeresés
 
 A replay célja reprodukálni a döntést és gyorsan megtalálni az első hibás
@@ -299,16 +307,178 @@ proof-kapu.
    GPIO-owner handle-t. A canonical `os.py` default és a legacy runtime nem
    változott. Minden későbbi élő újraindítás ismét friss preflightot, egyetlen
    runtime/writer ellenőrzést és külön explicit emberi engedélyt igényel.
-9. **Legacy eltávolítás — folyamatban:** az első célzott szelet kivette a
+9. **Legacy containment — evidence-bound módon folyamatban:** az első célzott
+   szelet kivette a
    `driver/motor.py` önállóan futtatható, közvetlen 50%-os PWM-mozgást indító
    tesztbelépési pontját. A második célzott szelet eltávolította a repositoryban
    fogyasztó nélküli `AlbaMotor.forward()` és `AlbaMotor.backward()` közvetlen
    write API-kat; a jelenlegi legacy default által használt `set_pwm`, valamint a
    fail-closed `stop` és `close` felület változatlan maradt. Az `AlbaMotor`
-   egyelőre könyvtári legacy dependency a canonical `os.py` default számára;
-   egyik szelet sem kapcsol át runtime-ot vagy indít élő mozgást. A
-   GUI/tool/shared-state authority és a fennmaradó régi motorutak kivonása
-   további külön, célzott taskokban történik.
+   harmadik szeletben már nem olvas globális `config_manager` state-et vagy
+   configfájlt: frozen, slotted `MotorChannelConfig` értéket kap a legacy startup
+   composition ownertől, indulás előtt közvetlen mezővalidációval. Az
+   `AlbaMotor` negyedik szelete minden lifecycle-, startup-, emergency- és
+   kalibrációs nullázást a stop-only `stop()` capabilityre szűkít; a
+   motion-capable `set_pwm()` egyetlen production call site-ja a `cont.py`
+   bal/jobb final control-loop commitja. A közvetlen GPIO-null emergency fallback
+   változatlanul megmarad, mert nem normál motion writer és driverhiba esetén
+   fail-closed leállítási út. Az
+   `AlbaMotor` egyelőre könyvtári legacy dependency a canonical `os.py` default
+   számára; egyik szelet sem kapcsol át runtime-ot vagy indít élő mozgást.
+   További legacy kivonás csak egy konkrét V3 funkció vagy bizonyított
+   safety-bypass miatt indul.
+10. **V3 hardening és fizikai contract-paritás — lezárva:** az első native
+    szelet a motorcsatornák pinjei mellett immutable contractba zárja az aktív
+    polaritás- és DRV8871 decay-szemantikát is, ismeretlen értéknél fail-closed
+    konfigurációhibával. A zero-only GPIO owner minden pint közvetlenül a claim
+    után nulláz, még a következő pin claimje előtt, így részleges inicializálási
+    hiba esetén is csak már nullázott pin maradhat a handle-en. Nincs `ACTIVE`,
+    nem nulla output vagy új felső szintű komponens. A második native szelet az
+    immutable csatornakonfigurációból tiszta, I/O-mentes `Drv8871PwmPlan` értékre
+    zárja a normalizált kerékkimenet polaritás-, irány- és coast/brake
+    leképezését. A STOP mindkét pinre nulla, a nem véges vagy tartományon kívüli
+    bemenet fail-closed hibát ad. A planner nincs a zero-only GPIO writerre
+    huzalozva, nem birtokol hardvercapabilityt és nem nyit `ACTIVE` vagy fizikai
+    motion útvonalat. A harmadik native szelet egyetlen immutable L12
+    `FinalActuation` döntést azonos tick-contextet és safety döntést őrző, páros
+    `Drv8871MotorFrame` értékre zár. A négy fizikai pin egyedisége kötelező,
+    STOP/FAULT esetén mindkét csatorna minden pinje nulla, `ALLOW` esetén pedig
+    pontosan a két tiszta csatornaplan alkotja a frame-et. Ez a frame-képzés is
+    I/O- és writer-capability nélküli, és nincs a live GPIO edge-re huzalozva. A
+    negyedik szelet külön offline karakterizációs kapuban, a teljes előre/hátra/
+    nulla tartomány reprezentatív rácsán, mindkét decay móddal és mindkét invert
+    állapottal közvetlenül összehasonlítja a native plant a canonical legacy
+    `AlbaMotor` pin-duty eredményével. A legacy import kizárólag a tesztben van;
+    a production planner továbbra is csak immutable V3 contractot importál. A
+    phase-10 lezárása nem aktiválja a phase-11 runtime-ot vagy fizikai motiont.
+11. **Live input és ACTIVE-ready runtime — folyamatban:** a phase-10 kapuk
+    lezárása után az első szelet egy injektált, natív L0 aggregációs határt ad.
+    A `NativeLiveInputReader` induláskor egyedi device-ID-kre zárt, rögzített
+    sorrendű source-listát birtokol; tickenként mindegyik source-ot pontosan
+    egyszer, kizárólag a composition által kapott `TickContext` értékkel olvassa,
+    majd csak azonos contextű és device-ID-jű immutable `LiveDeviceSnapshot`
+    értékeket zár egyetlen `RawDeviceBatch` értékbe. Source-hibánál nincs retry
+    vagy részleges batch. A szelet nem tartalmaz konkrét szenzordrivert,
+    falióraolvasást, threadet, legacy state-et, live composition-wiringot,
+    `activate` API-t vagy nem nulla writer utat; az ACTIVE-ready továbbra sem
+    jelent automatikus ACTIVE engedélyezést.
+    A második szelet egy `NativeEncoderSource` edge-et ad: az injektált backend
+    tickenként egy immutable, explicit sequence/capture-time, bal/jobb m/s,
+    trust, stale és timing-valid mezőjű `EncoderVelocityReading` értéket ad. Az
+    edge ebből pontosan egy `wheel_velocity` sample-t és OK/DEGRADED/FAILED
+    device health értéket zár; timing hiba FAILED, stale vagy alacsony trust
+    DEGRADED. A device-ID és trust küszöb immutable configból érkezik. A legacy
+    KIT0085 driver csak forrásreferencia marad: nincs production import, counter-
+    vagy reliability-orchestration port, konkrét backend, live wiring vagy
+    hardverhozzáférés.
+    A harmadik szelet egy `NativeImuSource` edge-et ad: az injektált backend
+    tickenként egy immutable, explicit sequence/capture-time, V3 pose-frame-ben
+    értelmezett CCW-pozitív yaw és szögsebesség, confidence, 0–3 kalibráció,
+    stale és timing-valid mezőjű `ImuHeadingReading` értéket ad. Az edge ebből
+    pontosan egy `ekf_heading` sample-t és OK/DEGRADED/FAILED device health
+    értéket zár; timing hiba FAILED, stale, alacsony kalibráció vagy alacsony
+    confidence DEGRADED. A device-ID és a két küszöb immutable configból
+    érkezik. A legacy BNO055 driver csak forrásreferencia marad: nincs
+    production import, tengely- vagy mértékegység-konverziós rejtett authority,
+    konkrét backend, live wiring vagy hardverhozzáférés.
+    A negyedik szelet egy `NativeLidarSource` edge-et ad: az injektált backend
+    tickenként egy immutable matcher-result revíziót, capture-time-ot,
+    forrásmérés-kort, confidence, stale és timing-valid mezőket tartalmazó
+    `LidarHealthReading` értéket ad. Az edge ebből pontosan a meglévő L4
+    contracttal egyező `lidar_health` sample-t és OK/DEGRADED/FAILED device
+    health értéket zár; timing hiba FAILED, explicit vagy küszöb feletti stale,
+    illetve alacsony confidence DEGRADED. A device-ID, confidence-küszöb és
+    maximális méréskor immutable configból érkezik. A legacy lidar driver,
+    service és scan-matcher contract csak forrásreferencia marad: nincs
+    production import, scan-payload, process, queue, thread, konkrét backend,
+    live wiring vagy hardverhozzáférés.
+    Az ötödik szelet egy `LiveInputComposition` rootot ad, amely pontosan egy
+    encoder-, IMU- és lidar-source-ból, ebben a rögzített sorrendben épít
+    `NativeLiveInputReader` példányt. Minden kívülről kapott `TickContext`
+    értéknél source-onként legfeljebb egy read történik, majd a lezárt batch a
+    stateful L1–L4 és a teljes L1–L12 láncon fut át rögzített IDLE lifecycle és
+    belső zero-only sink mellett. L0/source hiba retry és részleges batch nélkül
+    pontosan egy L12 FAULT/null commitra zárul. A compositionnek nincs
+    `activate` API-ja, saját órája, owner loopja, konkrét backendje, hardver- vagy
+    nem nulla writer-capabilityje.
+    A hatodik szelet a teljes legacy EKF algoritmikus mag és a tényleges V3 L3
+    inputcontract összevetése után native `NativeStateEstimator` implementációt
+    ad. Az L3-owned öt állapot (`x`, `y`, `yaw`, `v`, `gyro_bias`) tiszta Python
+    nonlinear predict/Jacobian, kovariancia-propagáció, wrapped encoder/heading
+    Kalman-update, trust/confidence R-skála, NIS gate, stationary ZUPT/bias
+    korrekció és kovariancia-stabilizálás útján készít immutable `RobotEstimate`
+    értéket. A `dt` kizárólag az egymást követő `TickContext` értékekből ered; gap
+    esetén nincs stale motion integráció. A `LiveInputComposition` ezt a native
+    estimatort injektálja, ezért a `ShadowStateEstimator` csak offline replay
+    szerepben marad. A szeletben még nem létező raw acceleration,
+    command-context és abszolút lidar-pose ágat nem pótolja kitalált bemenettel
+    vagy legacy hozzáféréssel.
+    A hetedik szelet a `LIDAR_FIRST` mód következő legkisebb előfeltételeként az
+    abszolút lidar-pose ágat explicit V3 inputtá teszi. Ugyanaz az egy immutable
+    matcher-result hordozza a health adatokat és az opcionális `LidarPoseReading`
+    értéket; a native edge azonos revízióval és capture-time-mal külön
+    `lidar_health` és `lidar_pose` sample-t zár. Pose sample csak timing-valid,
+    friss és a konfigurált confidence-küszöböt elérő eredményből készül, explicit
+    `R2B4_BOOT_ROBOT_MAP` frame-ID-val. Az L2 kindonkénti monoton historyja a
+    duplicate vagy out-of-order revíziót nem engedi vissza az L3-ba; az azonos
+    contract-szintű rejection diagnosztikát egyszer zárja, mert a
+    `RejectedObservation` nem hordoz sample-kindot. A `NativeStateEstimator` a
+    friss pose-t confidence- és matcher `r_scale`-függő mérési kovarianciával,
+    wrapped yaw-innovációval és közös háromtengelyes NIS-gate-tel korrigálja. A
+    tiszta Python magot közvetlen legacy EKF karakterizáció, extrém outlier,
+    yaw-wrap és measurement-reuse regresszió fedi. A raw acceleration és
+    command-context továbbra is későbbi typed inputbővítés. Nincs production
+    `middleware`, NumPy, shared state, API/runtime dependency, falióra, thread,
+    processz, hardverimport, `ACTIVE` vagy nem nulla writer út.
+12. **Első kontrollált V3 fizikai motion és navigation — folyamatban:** az első,
+    még mozgásmentes előkészítő szelet egy hardverfüggetlen `NativeMotorWriter`
+    határt ad. Az immutable bal/jobb fizikai konfigurációval egyetlen lezárt L12
+    `FinalActuation` döntésből pontosan egy validált `Drv8871MotorFrame` készül,
+    majd pontosan egy injektált `MotorFrameSink.write` hívás történik. Sink-hiba
+    változatlanul továbbterjed, nincs retry vagy fallback write. A szelet nem ad
+    GPIO backendet, device handle-t, owner loopot, lifecycle-/composition-
+    bekötést, `ACTIVE` engedélyezést vagy élő mozgást. Ezek csak külön emberi
+    kapuval, bounded profillal, friss preflighttal és végső PWM-nullal jöhetnek.
+    A második, továbbra is runtime-bekötés nélküli szelet egy natív
+    `GpioMotorFrameSink` edge-et ad. Egyetlen injektált GPIO backend-handle alatt
+    claimeli a négy immutable konfigurációjú motorpint, és mindegyiket közvetlenül
+    a claim után nullázza. Minden `Drv8871MotorFrame` előtt determinisztikus
+    break-before-make nullázás történik; csak `ALLOW` frame után kerülhetnek ki a
+    validált nem nulla duty értékek. Fizikai write-hibánál ugyanazon sink-híváson
+    belül best-effort vésznullázás és handle-zárás történik, az eredeti exception
+    továbbterjed, és a capability többé nem írhat; ez nem második L12 döntés vagy
+    normál retry. Szabályos close is nullázás után engedi el az egyetlen handle-t.
+    A sink nincs compositionhöz, command gatewayhez vagy konkrét `lgpio`
+    importhoz kötve; nincs owner loop, óra, `ACTIVE` átmenet, runtime cutover,
+    hardverfuttatás vagy élő motion.
+    A harmadik szelet egy runtime- és layer-pipeline nélküli
+    `NativeMotorOutputComposition` rootban zárja össze az előző két határt. Az
+    egyetlen immutable `GpioMotorFrameSinkConfig` azonos bal/jobb objektumai
+    vezérlik a normalizált output fizikai leképezését és a sink pin-ownolását,
+    így a planner és a GPIO edge konfigurációja nem térhet el. A root pontosan
+    egy privát `NativeMotorWriter` és egy privát `GpioMotorFrameSink` példányt
+    birtokol; kifelé csak a V3 `FinalActuation.write` portot, valamint az
+    idempotens, nullázás utáni handle-release `close` műveletet adja. Nincs
+    layer, reader, command gateway, lifecycle, `activate`, tick, owner loop,
+    runtime entrypoint, hardverfuttatás vagy élő motion.
+    A negyedik szelet nem duplikálja az L5 mission- és az L9 platform-,
+    gyorsulás- vagy lokalizációs limitjeit, hanem a még hiányzó időbeli korlátot
+    zárja explicit inputcontractba. Az immutable `BoundedTeleopProfile` egy
+    abszolút kezdő tickből, véges aktív tick-számból, véges velocity targetből és
+    annak explicit mission-limitjeiből áll. A hardvermentes
+    `BoundedTeleopCommandGateway` kizárólag ebben a zárt tick-ablakban ad az L5
+    által közvetlenül elfogadott typed `TELEOP` commandot; előtte és utána mindig
+    tick-lokális `STOP` értéket ad. Az abszolút ablak nem tolódik el késői start
+    vagy újraolvasás miatt, a gateway nem birtokol órát, számlálót, lifecycle-t,
+    `activate` API-t, külső I/O-t, layer- vagy motor-authorityt. Nincs runtime-
+    bekötés, hardverfuttatás vagy élő motion.
+13. **Minimális V3 toolchain-függetlenítés — tervezett:** csak a tényleges V3
+    üzemeltetési igényhez szükséges CLI/status, `REPLAYER_V3` és mini Test Hub;
+    legacy API-paritás nélkül.
+14. **Native V3 FOLLOW — tervezett:** új V3 contractokból, a legacy Follow/Search
+    orchestration portolása nélkül.
+15. **Emberkövetés fizikai hangolása — tervezett:** kizárólag a native FOLLOW és
+    az előző fizikai kapuk után.
 
 Minden fázis csak a következő fázishoz közvetlenül szükséges kódot és tesztet
 adja hozzá. Új evidence- vagy metadata-mechanizmust konkrét diagnosztikai hiba

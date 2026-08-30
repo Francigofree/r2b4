@@ -8,6 +8,7 @@ from .mission_navigation import (
     MissionNavigationInputs,
     MissionNavigationTrace,
 )
+from .motor_output import NativeMotorOutputComposition
 from .read_only_shadow import (
     ReadOnlyShadowConfig,
     ReadOnlyShadowSidecar,
@@ -27,6 +28,7 @@ __all__ = [
     "MissionNavigationComposition",
     "MissionNavigationInputs",
     "MissionNavigationTrace",
+    "NativeMotorOutputComposition",
     "ReadOnlyShadowConfig",
     "ReadOnlyShadowSidecar",
     "ShadowSidecarError",
