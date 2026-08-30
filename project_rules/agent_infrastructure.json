@@ -1,6 +1,6 @@
 {
   "schema": "R2B4_AGENT_INFRASTRUCTURE_V1",
-  "contract_id": "R2B4_AGENT_INFRA_HARDENED_V2",
+  "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
   "default_agent_mode": "single_agent",
   "max_auxiliary_agents": 1,
   "recursive_delegation_allowed": false,
@@ -18,24 +18,48 @@
       "document_role": "structural_motion_architecture",
       "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V2_1",
       "domains": ["motion_control"]
+    },
+    "v3_robot_architecture": {
+      "authority": "NORMATIVE_SSOT",
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "document_role": "v3_robot_architecture",
+      "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
+      "domains": ["robot_v3"]
     }
   },
   "universal_invariants": [
     "SOURCE_AND_ACTIVE_CONFIG_FIRST",
-    "UNIFIED_CONTROL_ONLY",
-    "ONE_TICK_ONE_INTENT_ONE_EKF_POSE_ONE_MOTOR_OUTPUT",
-    "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER",
     "NO_SAFETY_PASS_OR_QUALITY_GATE_RELAXATION",
     "NO_GIT_RECOVERY_ASSUMPTION",
     "LIVE_MOTION_EXPLICIT_SCOPE_PREFLIGHT_TEST_HUB_ONLY"
   ],
+  "domain_invariants": {
+    "motion_control": [
+      "UNIFIED_CONTROL_ONLY",
+      "ONE_TICK_ONE_INTENT_ONE_EKF_POSE_ONE_MOTOR_OUTPUT",
+      "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER"
+    ],
+    "robot_v3": [
+      "V3_ONE_TICK_ONE_INPUT_SNAPSHOT_ONE_DECISION_ONE_COMMIT",
+      "V3_L12_ONLY_NORMAL_MOTOR_WRITER",
+      "V3_FAIL_CLOSED_STOP",
+      "V3_NO_LEGACY_SHARED_STATE_OR_AUTHORITY",
+      "V3_REPLAYABLE_DECISIONS_REQUIRED"
+    ]
+  },
   "workflow": {
     "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
     "diagnostics": {
       "primary": "REPLAYER_V2_1",
       "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
       "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
-      "source_routes": ["replayer/README.md", "replayer/contracts.py"]
+      "source_routes": ["replayer/README.md", "replayer/contracts.py"],
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": ["v3/replay/README.md"]
+        }
+      }
     },
     "testing": {
       "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
@@ -183,6 +207,11 @@
     "motion_control": {
       "paths": ["cont.py", "motion_executor.py", "controller/", "core/", "amr/"],
       "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "STRUKTURALIS_RETEGEK.md", "conf/control_mode.json", "conf/speed_map.json"]
+    },
+    "robot_v3": {
+      "paths": ["v3/", "STRUKTURALIS_RETEGEK_V3.md"],
+      "sources": ["STRUKTURALIS_RETEGEK_V3.md"],
+      "required_authority": "v3_robot_architecture"
     },
     "localization_sensors": {
       "paths": ["middleware/", "sensors/", "driver/"],

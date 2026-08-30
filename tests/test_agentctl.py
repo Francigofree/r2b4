@@ -47,12 +47,23 @@ class AgentCtlTests(unittest.TestCase):
                     "auxiliary_output": 1024,
                 },
                 "universal_invariants": ["SOURCE_FIRST", "NO_GATE_RELAXATION"],
+                "domain_invariants": {
+                    "motion_control": ["MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER"],
+                    "robot_v3": ["V3_L12_ONLY_NORMAL_MOTOR_WRITER"],
+                },
                 "workflow": {
                     "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
                     "diagnostics": {
                         "primary": "REPLAYER_V2_1",
                         "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
                         "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+                        "source_routes": ["replayer/README.md", "replayer/contracts.py"],
+                        "domain_profiles": {
+                            "robot_v3": {
+                                "primary": "REPLAYER_V3",
+                                "source_routes": ["v3/replay/README.md"],
+                            }
+                        },
                     },
                     "testing": {
                         "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
@@ -121,6 +132,11 @@ class AgentCtlTests(unittest.TestCase):
                         "paths": ["controller/", "amr/"],
                         "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md"],
                     },
+                    "robot_v3": {
+                        "paths": ["v3/"],
+                        "sources": ["STRUKTURALIS_RETEGEK_V3.md"],
+                        "required_authority": "v3_robot_architecture",
+                    },
                 },
             },
         )
@@ -179,6 +195,83 @@ class AgentCtlTests(unittest.TestCase):
             "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
             capsule["source_routes"],
         )
+        self.assertIn(
+            "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER",
+            capsule["universal_invariants"],
+        )
+        self.assertNotIn("V3_L12_ONLY_NORMAL_MOTOR_WRITER", capsule["universal_invariants"])
+
+    def test_v3_scope_fails_closed_until_its_authority_is_registered(self):
+        (self.root / "runtime" / "agent_coordination" / "current_change.json").unlink()
+
+        result = self._main(
+            "open",
+            "--task-id",
+            "v3-without-authority",
+            "--goal",
+            "start isolated v3",
+            "--files",
+            "v3/contracts.py",
+        )
+
+        self.assertEqual(result, 2)
+        self.assertEqual(LeaseManager(self.root).inspect("workspace_write")["status"], "FREE")
+
+    def test_v3_scope_routes_v3_authority_and_diagnostic_profile(self):
+        config_path = self.root / "project_rules" / "agent_infrastructure.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config.setdefault("normative_authorities", {})["v3_robot_architecture"] = {
+            "authority": "NORMATIVE_SSOT",
+            "path": "STRUKTURALIS_RETEGEK_V3.md",
+            "document_role": "v3_robot_architecture",
+            "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
+            "domains": ["robot_v3"],
+        }
+        self._write_json("project_rules/agent_infrastructure.json", config)
+        self._write(
+            "STRUKTURALIS_RETEGEK_V3.md",
+            "**Contract:** `R2B4_ARCH_LAYER_CONTRACT_V3`\n",
+        )
+        self._write("v3/replay/README.md", "V3 deterministic replay\n")
+        ChangeTracker(self.root).add_files(["v3/contracts.py"])
+
+        capsule = build_capsule(self.root)
+
+        self.assertIn("robot_v3", capsule["domains"])
+        self.assertIn("STRUKTURALIS_RETEGEK_V3.md", capsule["source_routes"])
+        self.assertIn("v3/replay/README.md", capsule["source_routes"])
+        self.assertNotIn("replayer/README.md", capsule["source_routes"])
+        self.assertEqual(capsule["evidence"]["primary"], "REPLAYER_V3")
+        self.assertIn("V3_L12_ONLY_NORMAL_MOTOR_WRITER", capsule["universal_invariants"])
+        self.assertNotIn(
+            "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER",
+            capsule["universal_invariants"],
+        )
+
+    def test_v3_scope_cannot_run_legacy_replayer(self):
+        config_path = self.root / "project_rules" / "agent_infrastructure.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config.setdefault("normative_authorities", {})["v3_robot_architecture"] = {
+            "authority": "NORMATIVE_SSOT",
+            "path": "STRUKTURALIS_RETEGEK_V3.md",
+            "document_role": "v3_robot_architecture",
+            "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
+            "domains": ["robot_v3"],
+        }
+        self._write_json("project_rules/agent_infrastructure.json", config)
+        self._write("STRUKTURALIS_RETEGEK_V3.md", "V3\n")
+        ChangeTracker(self.root).add_files(["v3/contracts.py"])
+
+        with self.assertRaisesRegex(
+            AgentCtlError,
+            "Diagnostic backend is not implemented by agentctl: REPLAYER_V3",
+        ):
+            run_replay_diagnosis(
+                self.root,
+                ChangeTracker(self.root).inspect(),
+                load_infrastructure(self.root),
+                capture_id="capture-one",
+            )
 
     def test_unchanged_fingerprint_returns_tiny_delta(self):
         capsule = build_capsule(self.root)
@@ -470,6 +563,8 @@ class AgentCtlTests(unittest.TestCase):
             ).is_file()
         )
         self.assertEqual((self.root / "new_file.py").read_text(encoding="utf-8"), "VALUE = 1\n")
+        self.assertEqual(ChangeTracker(self.root).inspect_compact()["promotion_status"], "READY")
+        self.assertEqual(build_capsule(self.root)["task"]["promotion_status"], "COMMITTED")
         self.assertEqual(
             self._main(
                 "restore",

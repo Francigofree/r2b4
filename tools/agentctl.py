@@ -60,6 +60,7 @@ from tools.agent_change_tracker import (  # noqa: E402
     current_manifest_path,
 )
 from tools.agent_workspace import (  # noqa: E402
+    PROMOTION_JOURNAL_SCHEMA,
     PromotionInterrupted,
     WorkspaceError,
     audit_workspace,
@@ -180,11 +181,28 @@ def load_infrastructure(root: Path = PROJECT_ROOT) -> Dict[str, Any]:
         raise AgentCtlError("Replayer V2.1 must remain the primary diagnostic evidence")
     if diagnostics.get("sequence") != ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"]:
         raise AgentCtlError("Replay diagnostic sequence contract mismatch")
+    profiles = diagnostics.get("domain_profiles") or {}
+    if not isinstance(profiles, dict):
+        raise AgentCtlError("Diagnostic domain_profiles must be a JSON object")
+    for domain, profile in profiles.items():
+        if not isinstance(profile, dict) or not str(profile.get("primary", "")).strip():
+            raise AgentCtlError(f"Diagnostic profile is invalid for domain: {domain}")
+        routes = profile.get("source_routes") or []
+        if not isinstance(routes, list) or any(not str(value).strip() for value in routes):
+            raise AgentCtlError(f"Diagnostic profile source_routes are invalid for domain: {domain}")
     testing = dict(workflow.get("testing") or {})
     if testing.get("order") != ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"]:
         raise AgentCtlError("Targeted-first test order contract mismatch")
     if testing.get("legacy_contract_conflict_authority") != "NON_AUTHORITY":
         raise AgentCtlError("Legacy contract-conflict tests must remain non-authoritative")
+    domain_invariants = payload.get("domain_invariants") or {}
+    if not isinstance(domain_invariants, dict):
+        raise AgentCtlError("domain_invariants must be a JSON object")
+    for domain, invariants in domain_invariants.items():
+        if not isinstance(invariants, list) or any(
+            not isinstance(value, str) or not value.strip() for value in invariants
+        ):
+            raise AgentCtlError(f"Domain invariants are invalid for domain: {domain}")
     return payload
 
 
@@ -196,6 +214,7 @@ def _workflow(config: Dict[str, Any]) -> Dict[str, Any]:
             "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
             "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
             "source_routes": ["replayer/README.md", "replayer/contracts.py"],
+            "domain_profiles": {},
         },
         "testing": {
             "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
@@ -277,6 +296,61 @@ def classify_domains(paths: Iterable[str], config: Dict[str, Any]) -> List[str]:
         if any(_path_matches(path, pattern) for path in normalized for pattern in patterns):
             selected.append(str(domain))
     return sorted(set(selected))
+
+
+def _diagnostics_for_domains(config: Dict[str, Any], domains: Iterable[str]) -> Dict[str, Any]:
+    diagnostics = dict(_workflow(config).get("diagnostics") or {})
+    profiles = dict(diagnostics.pop("domain_profiles", {}) or {})
+    selected = [dict(profiles[domain]) for domain in domains if domain in profiles]
+    primaries = {str(profile.get("primary", "")).strip() for profile in selected}
+    if len(primaries) > 1:
+        raise AgentCtlError("Tracked scope selects conflicting diagnostic backends")
+    for profile in selected:
+        diagnostics.update(profile)
+    return diagnostics
+
+
+def _invariants_for_domains(config: Dict[str, Any], domains: Iterable[str]) -> List[str]:
+    invariants = [str(value) for value in config.get("universal_invariants") or []]
+    per_domain = dict(config.get("domain_invariants") or {})
+    for domain in domains:
+        invariants.extend(str(value) for value in per_domain.get(domain) or [])
+    return list(dict.fromkeys(invariants))
+
+
+def _validate_required_domain_authorities(
+    paths: Iterable[str],
+    config: Dict[str, Any],
+    root: Path,
+) -> None:
+    domains = classify_domains(paths, config)
+    authorities = dict(config.get("normative_authorities") or {})
+    domain_blocks = dict(config.get("domains") or {})
+    project_root = Path(root).resolve()
+    for domain in domains:
+        block = dict(domain_blocks.get(domain) or {})
+        authority_key = str(block.get("required_authority", "")).strip()
+        if not authority_key:
+            continue
+        authority = authorities.get(authority_key)
+        if not isinstance(authority, dict):
+            raise AgentCtlError(
+                f"Domain {domain} requires registered normative authority: {authority_key}"
+            )
+        if authority.get("authority") != "NORMATIVE_SSOT":
+            raise AgentCtlError(f"Domain {domain} authority is not NORMATIVE_SSOT")
+        if domain not in list(authority.get("domains") or []):
+            raise AgentCtlError(f"Domain {domain} is missing from its normative authority route")
+        relative = str(authority.get("path", "")).strip()
+        if not relative or relative not in list(block.get("sources") or []):
+            raise AgentCtlError(f"Domain {domain} does not route its normative authority source")
+        authority_path = (project_root / relative).resolve(strict=False)
+        try:
+            authority_path.relative_to(project_root)
+        except ValueError as exc:
+            raise AgentCtlError(f"Domain {domain} authority escapes the project root") from exc
+        if not authority_path.is_file():
+            raise AgentCtlError(f"Domain {domain} normative authority is missing: {relative}")
 
 
 def eligible_auxiliary_roles(paths: Iterable[str], config: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -682,6 +756,16 @@ def run_replay_diagnosis(
     layers: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     project_root = Path(root).resolve()
+    tracked_paths = [
+        str(row.get("path"))
+        for row in manifest.get("files", [])
+        if isinstance(row, dict)
+    ]
+    domains = classify_domains(tracked_paths, config)
+    diagnostics = _diagnostics_for_domains(config, domains)
+    primary = str(diagnostics.get("primary", "")).strip()
+    if primary != "REPLAYER_V2_1":
+        raise AgentCtlError(f"Diagnostic backend is not implemented by agentctl: {primary}")
     workspace = dict(manifest.get("workspace") or {})
     workspace_path = project_root / str(workspace.get("path"))
     if not workspace_path.is_dir():
@@ -739,7 +823,7 @@ def run_replay_diagnosis(
     if diagnosis_path is not None and diagnosis_path.parent != expected_result_path:
         raise AgentCtlError("Replay diagnosis_path is outside the result lineage")
     required_schema = str(
-        (dict(_workflow(config).get("diagnostics") or {})).get(
+        diagnostics.get(
             "diagnosis_required_for_capture_schema",
             "R2B4_REPLAYER_CAPTURE_V2_1",
         )
@@ -803,8 +887,26 @@ def build_capsule(
     config = load_infrastructure(root)
     tracker = ChangeTracker(root=root)
     report = tracker.inspect()
+    promotion_status = report.get("promotion_status")
+    task_id = str(report.get("task_id") or "")
+    if task_id:
+        journal_path = (
+            _protected_store(config) / "journals" / f"{_safe_task_id(task_id)}.json"
+        )
+        journal = _read_json(journal_path, required=False)
+        if journal:
+            if (
+                journal.get("schema") != PROMOTION_JOURNAL_SCHEMA
+                or journal.get("task_id") != task_id
+            ):
+                raise AgentCtlError("Promotion journal contract mismatch")
+            journal_state = str(journal.get("state") or "")
+            if journal_state not in {"PREPARED", "COMMITTED", "ROLLED_BACK", "RESTORED"}:
+                raise AgentCtlError("Promotion journal state mismatch")
+            promotion_status = journal_state
     paths = [str(row.get("path")) for row in report.get("files", [])]
     domains = classify_domains(paths, config)
+    diagnostics = _diagnostics_for_domains(config, domains)
     domain_sources: List[str] = []
     for domain in domains:
         domain_sources.extend(
@@ -813,14 +915,14 @@ def build_capsule(
     domain_sources.extend(
         str(value)
         for value in (
-            dict(_workflow(config).get("diagnostics") or {}).get("source_routes", [])
+            diagnostics.get("source_routes", [])
         )
     )
     baseline = _read_json(root / "project_rules" / "protected_baseline.json")
     hub_evidence = _evidence_summary(root, paths)
     replay_evidence = report.get("replay_evidence")
     evidence = {
-        "primary": "REPLAYER_V2_1",
+        "primary": diagnostics.get("primary"),
         "replay": replay_evidence,
         "hub": hub_evidence,
     }
@@ -831,7 +933,7 @@ def build_capsule(
         "task_mode": report.get("task_mode"),
         "workspace": report.get("workspace"),
         "candidate_audit": report.get("candidate_audit"),
-        "promotion_status": report.get("promotion_status"),
+        "promotion_status": promotion_status,
         "tracked": [
             {"path": row.get("path"), "sha256": (row.get("current") or {}).get("sha256")}
             for row in report.get("files", [])
@@ -877,9 +979,9 @@ def build_capsule(
             "auxiliary_agent": report.get("auxiliary_agent"),
             "workspace_path": (report.get("workspace") or {}).get("path"),
             "candidate_audit_status": (report.get("candidate_audit") or {}).get("status"),
-            "promotion_status": report.get("promotion_status"),
+            "promotion_status": promotion_status,
         },
-        "universal_invariants": list(config.get("universal_invariants") or []),
+        "universal_invariants": _invariants_for_domains(config, domains),
         "domains": domains,
         "source_routes": source_routes,
         "changed_files": [
@@ -1364,6 +1466,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 )
                 tracked_files = sorted(set(tracked_files) | set(str(value) for value in parent_changed))
             _validate_task_scope(tracked_files, args.mode, config)
+            _validate_required_domain_authorities(tracked_files, config, root)
             tracker = ChangeTracker(root=root)
             manager = LeaseManager(root)
             lease = manager.acquire("workspace_write", args.task_id)
@@ -1418,6 +1521,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 list(args.files) + [str(row.get("path")) for row in manifest.get("files", [])],
                 str(manifest.get("task_mode", "CODE_CHANGE")),
                 load_infrastructure(root),
+            )
+            _validate_required_domain_authorities(
+                list(args.files) + [str(row.get("path")) for row in manifest.get("files", [])],
+                load_infrastructure(root),
+                root,
             )
             report = ChangeTracker(root=root).add_files(args.files)
             refreshed = _manifest(root)

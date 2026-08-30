@@ -320,6 +320,51 @@ def _validate_normative_authorities(
     if relative not in list(workspace.get("agent_infrastructure_allowed_paths") or []):
         errors.append("normative authority cannot be maintained in AGENT_INFRA_CHANGE mode")
 
+    v3_key = "v3_robot_architecture"
+    v3_authority = authorities.get(v3_key)
+    if not isinstance(v3_authority, dict):
+        errors.append("V3 robot architecture normative authority is missing")
+        return
+
+    v3_expected = {
+        "authority": "NORMATIVE_SSOT",
+        "path": "STRUKTURALIS_RETEGEK_V3.md",
+        "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
+        "domains": ["robot_v3"],
+    }
+    for field, expected in v3_expected.items():
+        if v3_authority.get(field) != expected:
+            errors.append(f"V3 robot architecture authority {field} must be {expected!r}")
+
+    v3_relative = str(v3_authority.get("path", ""))
+    v3_path = _project_json_path(
+        root,
+        v3_relative,
+        field="normative_authorities.v3_robot_architecture.path",
+        require_canonical_relative=True,
+    )
+    if not v3_path.is_file() or v3_path.stat().st_size <= 0:
+        errors.append(f"V3 robot architecture authority file is missing or empty: {v3_relative}")
+    else:
+        content = _read_text(v3_path, label="V3 robot architecture authority")
+        declared_contracts = set(
+            re.findall(r"\bR2B4_ARCH_LAYER_CONTRACT_V[0-9A-Z_]+\b", content)
+        )
+        registered_contract = str(v3_authority.get("contract_id", ""))
+        if registered_contract not in declared_contracts:
+            errors.append("V3 robot architecture contract ID differs from registry")
+
+    v3_domain = domains.get("robot_v3")
+    if not isinstance(v3_domain, dict):
+        errors.append("V3 robot architecture route domain is missing: robot_v3")
+    else:
+        if "v3/" not in list(v3_domain.get("paths") or []):
+            errors.append("V3 robot architecture route does not cover v3/")
+        if v3_relative not in list(v3_domain.get("sources") or []):
+            errors.append("V3 robot architecture authority is not routed for domain: robot_v3")
+        if v3_domain.get("required_authority") != v3_key:
+            errors.append("robot_v3 domain lacks fail-closed V3 authority binding")
+
 
 def _validate_current_change(root: Path, now: datetime, errors: List[str]) -> Dict[str, Any]:
     runtime_path = root / "runtime" / "agent_coordination" / "current_change.json"

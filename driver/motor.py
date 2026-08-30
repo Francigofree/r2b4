@@ -79,20 +79,6 @@ class AlbaMotor:
         else:
             self.stop()
 
-    def forward(self, speed: float):
-        try:
-            pwm = abs(float(speed))
-        except (TypeError, ValueError):
-            pwm = 0.0
-        self.set_pwm(pwm)
-
-    def backward(self, speed: float):
-        try:
-            pwm = abs(float(speed))
-        except (TypeError, ValueError):
-            pwm = 0.0
-        self.set_pwm(-pwm)
-
     def stop(self):
         self._set_output(0, 0.0)
 
@@ -139,26 +125,3 @@ class AlbaMotor:
         else:
             lgpio.tx_pwm(self.handle, self.in1, self.freq, 0)
             lgpio.tx_pwm(self.handle, self.in2, self.freq, 0)
-
-if __name__ == "__main__":
-    import time
-    print("--- Alba Motor Teszt (Új Config) ---")
-    
-    m_left = None
-    m_right = None
-    try:
-        m_left = AlbaMotor(side_key="bal_oldal")
-        m_right = AlbaMotor(side_key="jobb_oldal")
-                
-        print("Mindkét motor előre (50%) - 2mp")
-        m_left.forward(0.5)
-        m_right.forward(0.5)            
-        time.sleep(2)
-        m_left.stop()
-        m_right.stop()
-        print("Teszt befejezve.")
-    except Exception as e:
-        print(f"Hiba: {e}")
-    finally:
-        if m_left: m_left.close()
-        if m_right: m_right.close()

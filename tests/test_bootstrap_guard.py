@@ -290,6 +290,13 @@ class TestBootstrapGuard(unittest.TestCase):
                             "document_role": "structural_motion_architecture",
                             "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V2_1",
                             "domains": ["motion_control"],
+                        },
+                        "v3_robot_architecture": {
+                            "authority": "NORMATIVE_SSOT",
+                            "path": "STRUKTURALIS_RETEGEK_V3.md",
+                            "document_role": "v3_robot_architecture",
+                            "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
+                            "domains": ["robot_v3"],
                         }
                     },
                     "leases": {
@@ -331,6 +338,11 @@ class TestBootstrapGuard(unittest.TestCase):
                         "motion_control": {
                             "paths": ["controller/", "core/", "amr/"],
                             "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md"],
+                        },
+                        "robot_v3": {
+                            "paths": ["v3/", "STRUKTURALIS_RETEGEK_V3.md"],
+                            "sources": ["STRUKTURALIS_RETEGEK_V3.md"],
+                            "required_authority": "v3_robot_architecture",
                         }
                     },
                 }
@@ -351,6 +363,11 @@ class TestBootstrapGuard(unittest.TestCase):
         )
         baseline_values = "\n".join(str(item) for value in identifiers.values() for item in (value if isinstance(value, list) else [value]))
         cls._write(root, "STRUKTURALIS_RETEGEK_V2_1_STRICT.md", strict_document)
+        cls._write(
+            root,
+            "STRUKTURALIS_RETEGEK_V3.md",
+            "# V3 architecture\n\nContract: R2B4_ARCH_LAYER_CONTRACT_V3\n",
+        )
         cls._write(root, "STRUKTURALIS_RETEGEK.md", f"baseline\n{baseline_values}\n")
         cls._write(root, "conf/control_mode.json", json.dumps({"control_mode": "UNIFIED"}))
         cls._write(
@@ -626,6 +643,85 @@ class TestBootstrapGuard(unittest.TestCase):
                     root,
                     now=datetime(2026, 7, 17, tzinfo=timezone.utc),
                 )
+
+    def test_v3_authority_file_is_required_without_baseline_hash(self):
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self._valid_project(root)
+            (root / "STRUKTURALIS_RETEGEK_V3.md").unlink()
+
+            with self.assertRaisesRegex(
+                bg.BootstrapGuardError,
+                "V3 robot architecture authority file is missing or empty",
+            ):
+                bg.validate_project_bootstrap(
+                    root,
+                    now=datetime(2026, 7, 17, tzinfo=timezone.utc),
+                )
+
+    def test_v3_contract_id_must_match_registry(self):
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self._valid_project(root)
+            self._write(
+                root,
+                "STRUKTURALIS_RETEGEK_V3.md",
+                "Contract: R2B4_ARCH_LAYER_CONTRACT_V4\n",
+            )
+
+            with self.assertRaisesRegex(
+                bg.BootstrapGuardError,
+                "V3 robot architecture contract ID differs from registry",
+            ):
+                bg.validate_project_bootstrap(
+                    root,
+                    now=datetime(2026, 7, 17, tzinfo=timezone.utc),
+                )
+
+    def test_v3_domain_requires_path_route_source_and_authority_binding(self):
+        mutations = (
+            ("paths", "V3 robot architecture route does not cover v3/"),
+            ("sources", "V3 robot architecture authority is not routed"),
+            ("required_authority", "robot_v3 domain lacks fail-closed V3 authority binding"),
+        )
+        for field, expected_error in mutations:
+            with self.subTest(field=field), TemporaryDirectory() as tmp_dir:
+                root = Path(tmp_dir)
+                self._valid_project(root)
+                path = root / "project_rules" / "agent_infrastructure.json"
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                domain = payload["domains"]["robot_v3"]
+                if field == "paths":
+                    domain["paths"].remove("v3/")
+                elif field == "sources":
+                    domain["sources"].remove("STRUKTURALIS_RETEGEK_V3.md")
+                else:
+                    domain["required_authority"] = "legacy"
+                self._write(root, "project_rules/agent_infrastructure.json", json.dumps(payload))
+
+                with self.assertRaisesRegex(bg.BootstrapGuardError, expected_error):
+                    bg.validate_project_bootstrap(
+                        root,
+                        now=datetime(2026, 7, 17, tzinfo=timezone.utc),
+                    )
+
+    def test_v3_content_can_evolve_without_baseline_hash_update(self):
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self._valid_project(root)
+            path = root / "STRUKTURALIS_RETEGEK_V3.md"
+            path.write_text(
+                path.read_text(encoding="utf-8")
+                + "\nNew layer rationale may evolve without an exact content hash.\n",
+                encoding="utf-8",
+            )
+
+            report = bg.validate_project_bootstrap(
+                root,
+                now=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual(report["status"], "PASS")
 
     def test_control_mode_contradiction_fails(self):
         with TemporaryDirectory() as tmp_dir:

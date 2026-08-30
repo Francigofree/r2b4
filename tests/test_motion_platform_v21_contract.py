@@ -193,7 +193,9 @@ def test_t003_controller_is_the_only_production_setpoint_producer():
     producers = []
     for path in PROJECT_ROOT.rglob("*.py"):
         relative = path.relative_to(PROJECT_ROOT)
-        if relative.parts[0] in {"tests", "tools", "runtime"}:
+        # V3 is an isolated, non-activated architecture with its own typed L10
+        # owner. This V2.1 guard remains authoritative for the legacy runtime.
+        if relative.parts[0] in {"tests", "tools", "runtime", "v3"}:
             continue
         if "WheelVelocitySetpoint(" in path.read_text(encoding="utf-8"):
             producers.append(relative.as_posix())
@@ -362,4 +364,3 @@ def test_t012_identical_contract_inputs_are_deterministic():
 
     assert setpoint_a == setpoint_b
     assert candidate_a == candidate_b
-

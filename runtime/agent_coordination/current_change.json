@@ -1,66 +1,178 @@
 {
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
-  "changed_files": [],
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/audit.json",
+    "audit_sha256": "7759302974c3355192cafafe4b70327c3baa489d7a6d32971823bcff2c1bb973",
+    "audited_at_utc": "2026-08-30T08:10:13Z",
+    "base_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+    "candidate_fingerprint": "843c80c87da6731b619b10a76e303b87db6641fd9d3412d076ccf94c334da50f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "driver/motor.py",
+      "startup/phases.py",
+      "tests/test_drv8871_motor_hal.py",
+      "tests/test_startup_hardware_discovery.py",
+      "tests/test_v3_architecture_boundaries.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/diff.json",
+    "diff_sha256": "de0153526a429a5537450d6fc742e3c9b992e8933ba709e1265b2366fb633147",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase9_motor_config_injection_slice3_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [
+    "STRUKTURALIS_RETEGEK_V3.md",
+    "driver/motor.py",
+    "startup/phases.py",
+    "tests/test_drv8871_motor_hal.py",
+    "tests/test_startup_hardware_discovery.py",
+    "tests/test_v3_architecture_boundaries.py"
+  ],
+  "completed_at_utc": "2026-08-30T08:10:13Z",
   "files": [
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "b7f58b0310a657970888dfb466baecc384cc9ea7cc56ab8f5beb19fedec954bc",
+        "size_bytes": 17436
+      },
       "before": {
         "exists": true,
-        "sha256": "6123297c021ea2b7c76665825c2220cc9cbec1269d09ce6ece99ceb6c6b118be",
-        "size_bytes": 111665
+        "sha256": "643018ceac58c5c460ae375fffb11d6a51f816f73f2c55fcfb7ea4dd9594e2a0",
+        "size_bytes": 17184
       },
-      "changed": null,
-      "path": "controller/local_planner.py"
+      "changed": true,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "15a06adeba3f74d4f37b9e303356507db1c46386ef809627591731a78c7cf71e",
+        "size_bytes": 4730
+      },
       "before": {
         "exists": true,
-        "sha256": "7e7f8616d467760ba713da508475f08b84c1e69fa05d335547085762e68b55aa",
-        "size_bytes": 32950
+        "sha256": "9e480887cbe71ff141865d2de63dddcc02d31f0e508f9268028f9f53f5a6299f",
+        "size_bytes": 5080
       },
-      "changed": null,
-      "path": "controller/room_cruise_v2.py"
+      "changed": true,
+      "path": "driver/motor.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "c56aa90d82260b5dc072d8d4d602cf7cfeef96e14d772547eb85d448fafb954c",
+        "size_bytes": 30195
+      },
       "before": {
         "exists": true,
-        "sha256": "3293d495ee5b817aad5ddda81f210b92e76415bd722f76683b33a4dfe4da42c9",
-        "size_bytes": 104651
+        "sha256": "7e5dccbcf17be58ef4a99f9592b7d4f4606801fb238aa4d7dbe6be1ae216c5f8",
+        "size_bytes": 29401
       },
-      "changed": null,
-      "path": "tests/test_motion_ssot_gates.py"
+      "changed": true,
+      "path": "startup/phases.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "6add8487f96fe9021ef4b9888a77aff143c8da7f79e32ca884f08068ede01664",
+        "size_bytes": 2451
+      },
       "before": {
         "exists": true,
-        "sha256": "1f2e5a857e12ef4e72b55ef7ffde2bc091c59cb5cfc65509add3c26b8861ffb2",
-        "size_bytes": 91428
+        "sha256": "655f9da8215ea72081568f595c68b81cfde470b2d5fb0778580cc40ffebd7f42",
+        "size_bytes": 2053
       },
-      "changed": null,
-      "path": "tests/test_navigation_layers.py"
+      "changed": true,
+      "path": "tests/test_drv8871_motor_hal.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "a852e1bdecfec8b4cb9523de0f0a5f1c252691a286e451f696afcf6f9d285b6b",
+        "size_bytes": 6259
+      },
+      "before": {
+        "exists": true,
+        "sha256": "b4509744575c46dfb4bc6e6871fa6b2b2c66da61a4eec016cd23db350a251f9d",
+        "size_bytes": 5368
+      },
+      "changed": true,
+      "path": "tests/test_startup_hardware_discovery.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "2d03f83f803a0c02ac7c1728690837c67025b8e585135f39b1953dfac711250a",
+        "size_bytes": 8431
+      },
+      "before": {
+        "exists": true,
+        "sha256": "503b6a86ebae2e451c32ffe87663683c0b6cdf5b7018764c714f1770552a7c0d",
+        "size_bytes": 7363
+      },
+      "changed": true,
+      "path": "tests/test_v3_architecture_boundaries.py"
     }
   ],
-  "goal": "Repair the L5 RoomCruise recovery transition exposed by the M3 unified live validation: preserve L2A fail-closed measurement trust while preventing an active RoomCruise from remaining in unjustified zero-output IDLE after transient encoder-trust loss.",
-  "promotion_status": "NOT_PROMOTED",
-  "reason": "",
+  "goal": "Continue V3 phase 9 by removing driver/motor.py global config_manager and file-loading authority, injecting an immutable validated motor-channel configuration from the legacy startup composition owner while preserving the current os.py default, DRV8871 PWM semantics, fail-closed stop/close behavior, IDLE-only V3 boundaries, and no live motion",
+  "promotion_status": "READY",
+  "reason": "Removed global config_manager, JSON, and file-loading authority from driver/motor.py; added frozen validated MotorChannelConfig injection owned by legacy startup composition; preserved active left/right hardware resolution, DRV8871 PWM semantics, fail-closed stop/close, current os.py default, and V3 IDLE-only boundaries",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-08-26T19:25:40Z",
-  "status": "ACTIVE",
-  "task_id": "m3_recovery_trust_gap_20260826",
+  "started_at_utc": "2026-08-30T08:07:24Z",
+  "status": "COMPLETE",
+  "task_id": "v3_phase9_motor_config_injection_slice3_20260830",
   "task_mode": "CODE_CHANGE",
-  "tests": [],
-  "updated_at_utc": "2026-08-26T19:25:40Z",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/tree R2B4_AGENT_CANDIDATE=1 pytest -q tests/test_drv8871_motor_hal.py tests/test_startup_hardware_discovery.py tests/test_v3_architecture_boundaries.py tests/test_v3_live_idle_cutover.py",
+      "status": "PASS"
+    }
+  ],
+  "updated_at_utc": "2026-08-30T08:10:13Z",
+  "workflow_evidence": {
+    "audit_sha256": "7759302974c3355192cafafe4b70327c3baa489d7a6d32971823bcff2c1bb973",
+    "candidate_fingerprint": "843c80c87da6731b619b10a76e303b87db6641fd9d3412d076ccf94c334da50f",
+    "contract_fingerprint": "50ff800abfc1e4d7f63edd4bfbe7cda613b02452b1566ae562a0a21788025ce7",
+    "diff_sha256": "de0153526a429a5537450d6fc742e3c9b992e8933ba709e1265b2366fb633147",
+    "path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "d273d13b35a7145b1131353a14ed78187d13e7666c1ecd0f17cc18be8a4ee845"
+  },
   "workspace": {
-    "base_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
-    "base_manifest_path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/meta/base_manifest.json",
-    "base_manifest_sha256": "aa0c3a2a0c5978ec9846e8149b9a985c5c313b9a913f19da477936d6111e51e9",
-    "path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/tree",
+    "base_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "dba0b0b626be070e4d958acba09b08825560d380cab7556c982caf06319e38c4",
+    "path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/tree",
+    "reseal": {
+      "audit_sha256": "7759302974c3355192cafafe4b70327c3baa489d7a6d32971823bcff2c1bb973",
+      "candidate_fingerprint": "843c80c87da6731b619b10a76e303b87db6641fd9d3412d076ccf94c334da50f",
+      "diff_sha256": "de0153526a429a5537450d6fc742e3c9b992e8933ba709e1265b2366fb633147",
+      "path": "runtime/agent_workspaces/v3_phase9_motor_config_injection_slice3_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T08:10:13Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "8185a42f8ed2b99d4ddf700cbb79b990ae4aa41ca3b016fe7898e233bb0622a4",
+      "state": "READY",
+      "task_id": "v3_phase9_motor_config_injection_slice3_20260830"
+    },
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "ACTIVE"
+    "state": "READY"
   }
 }
