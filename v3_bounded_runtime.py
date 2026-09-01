@@ -19,6 +19,7 @@ from v3.composition.bounded_physical_control import (
     BoundedPhysicalControlComposition,
     BoundedPhysicalControlConfig,
 )
+from v3.composition.native_sensor_inputs import NativeSensorInputOwner
 from v3.contracts import LifecycleState, TickContext
 
 
@@ -190,10 +191,37 @@ def run_bounded_physical_control(
         runtime.close()
 
 
+def run_owned_bounded_physical_control(
+    sensor_inputs: NativeSensorInputOwner,
+    gpio_backend: PwmGpioBackend,
+    config: BoundedPhysicalRuntimeConfig,
+    *,
+    stop_requested: Callable[[], bool],
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Run through the sole bounded path and always close every input owner."""
+
+    if not isinstance(sensor_inputs, NativeSensorInputOwner):
+        raise TypeError("sensor_inputs must be NativeSensorInputOwner")
+    try:
+        return run_bounded_physical_control(
+            *sensor_inputs.sources,
+            gpio_backend,
+            config,
+            stop_requested=stop_requested,
+            monotonic_ns=monotonic_ns,
+            sleep=sleep,
+        )
+    finally:
+        sensor_inputs.close()
+
+
 __all__ = [
     "BoundedPhysicalRuntimeConfig",
     "NativeEncoderRuntimeConfig",
     "RUN_FAULT",
     "RUN_OK",
     "run_bounded_physical_control",
+    "run_owned_bounded_physical_control",
 ]

@@ -586,6 +586,40 @@ proof-kapu.
     rejection-tesztek fedik a teljes határt. Nincs concrete hardverimport,
     `config_manager`, legacy driver/service, GPIO-open, runtime-bekötés, writer
     vagy élő motion; a concrete backend és source ownership következő külön kapu.
+    A tizenharmadik szelet a typed GPIO counter-configot, az explicit velocity-
+    mintapolicyt és a native source health-configot egyetlen
+    `NativeGpioEncoderSource` ownerben köti össze. A három immutable config még
+    GPIO-open előtt típusellenőrzött; ezután pontosan egy
+    `NativeGpioSignedCounterPair`, annak két capability-szűkített nézete és egy
+    `NativeCounterEncoderBackend` kerül a meglévő `NativeEncoderSource` port
+    mögé. A caller `TickContext` értékén kívül nincs óra vagy sampling policy,
+    a baseline és minden delta továbbra is tick-bound. Részleges GPIO-
+    inicializálási hiba minden megszerzett erőforrást felszabadít, a source
+    `close` idempotens, utána read nem lehetséges. Fake GPIO evidence bizonyítja
+    az egyhandle-es ownershipet, a teljes counter→velocity→typed snapshot utat,
+    a config-before-open kaput és a cleanupot. A modul nem importál concrete
+    GPIO-t vagy legacy kódot, nincs IMU/LiDAR binding, runtime-/motor-wiring,
+    owner loop, `ACTIVE` engedélyezés, hardverfuttatás vagy élő motion.
+    A tizennegyedik szelet az encoder után az IMU és LiDAR teljes native V3
+    input-bekötését zárja. Az injektált BNO055 fused-sample portot egy explicit
+    freshness-, tengely-, előjel- és yaw-offset config alakítja tick-bound,
+    `CCW_POSITIVE_LEFT` radiános `ImuHeadingReading` értékké; minden tick pontosan
+    egy forced atomic sample readet végez, falióra- vagy cache-authority nélkül.
+    Az injektált latest matcher port tickenként pontosan egy eredményt és egy
+    runtime-statust olvas, majd kötelezően ellenőrzi a
+    `R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1`,
+    `R2B4_SCAN_MATCH_CONFIDENCE_V2`, `process_latest_only`, `LIDAR_FIRST`,
+    `R2B4_BOOT_ROBOT_MAP`, `EKF_POSE_ODOMETRY_SSOT` és
+    `CCW_POSITIVE_LEFT` azonosságokat, mielőtt pose sample készülhet. Az egyetlen
+    `NativeSensorInputOwner` a már promotált GPIO encoder source-szal együtt
+    birtokolja mindhárom typed source élettartamát; a bounded runtime wrapper
+    normál, stop-, fault- vagy exception-kilépésnél is idempotensen lezárja a
+    LiDAR-, IMU- és encoder-capabilityt. Fake evidence fedi a unit/sign/idő-
+    konverziót, protected matcher-contract rejectiont, egy-read-per-tick utat,
+    config-before-GPIO ownershipet és teljes cleanupot. Nincs concrete
+    `smbus2`, LiDAR driver/service vagy legacy import a V3 modulokban, nincs
+    automatikus device/process start, runtime entrypoint, hardverfuttatás,
+    robotmozgás vagy új motorút.
 13. **Minimális V3 toolchain-függetlenítés — tervezett:** csak a tényleges V3
     üzemeltetési igényhez szükséges CLI/status, `REPLAYER_V3` és mini Test Hub;
     legacy API-paritás nélkül.

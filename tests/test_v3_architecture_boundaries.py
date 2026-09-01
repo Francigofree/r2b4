@@ -239,6 +239,7 @@ def test_bounded_physical_runtime_has_no_entrypoint_or_legacy_authority():
         "v3.adapters.live_imu",
         "v3.adapters.live_lidar",
         "v3.composition.bounded_physical_control",
+        "v3.composition.native_sensor_inputs",
         "v3.contracts",
     }
     assert "main" not in function_names

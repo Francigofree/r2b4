@@ -1,126 +1,562 @@
 {
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
-  "changed_files": [],
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_imu_lidar_full_binding_slice15_20260901/meta/audit.json",
+    "audit_sha256": "0971b174a07fe449155f77efd57ed7f8ed37ba858f108c3d1bb7ceced32348f4",
+    "audited_at_utc": "2026-09-01T05:13:34Z",
+    "base_fingerprint": "5042997586c3ca0fb11a4cc44bdc8b4a31fe186f4f55f0e34639cde2db83639a",
+    "candidate_fingerprint": "455c27c3b961002ba41392ced6d0473dd981d7ffce63c35a2076832f49489f13",
+    "canonical_drift": [],
+    "canonical_fingerprint": "5042997586c3ca0fb11a4cc44bdc8b4a31fe186f4f55f0e34639cde2db83639a",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_bno055_imu_backend.py",
+      "tests/test_v3_latest_lidar_backend.py",
+      "tests/test_v3_native_sensor_inputs.py",
+      "v3/adapters/bno055_imu.py",
+      "v3/adapters/latest_lidar.py",
+      "v3/composition/native_sensor_inputs.py",
+      "v3_bounded_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_imu_lidar_full_binding_slice15_20260901/meta/diff.json",
+    "diff_sha256": "d8a57ed0c2db6a502399e7bec4d5eb0b1154be8c13efb006cce4830f47530d05",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_imu_lidar_full_binding_slice15_20260901",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [
+    "STRUKTURALIS_RETEGEK_V3.md",
+    "tests/test_v3_architecture_boundaries.py",
+    "tests/test_v3_bno055_imu_backend.py",
+    "tests/test_v3_latest_lidar_backend.py",
+    "tests/test_v3_native_sensor_inputs.py",
+    "v3/adapters/bno055_imu.py",
+    "v3/adapters/latest_lidar.py",
+    "v3/composition/native_sensor_inputs.py",
+    "v3_bounded_runtime.py"
+  ],
+  "completed_at_utc": "2026-09-01T05:13:34Z",
   "files": [
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "e191e27e96856d1b4a64246c954dbead938c70b233396ddff1627540d122c8e6",
+        "size_bytes": 42095
+      },
       "before": {
         "exists": true,
-        "sha256": "3dd5bda70f3a189b0a1cd01e83b40d240e0ce3f91624e8ec68fd1932609bc025",
-        "size_bytes": 39513
+        "sha256": "878b61863259f4423471d1d31f24a04635ae28e23accb9e16e8a09103e4f6d9d",
+        "size_bytes": 40612
       },
-      "changed": null,
+      "changed": true,
       "path": "STRUKTURALIS_RETEGEK_V3.md"
     },
     {
-      "after": null,
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
+      "after": {
+        "exists": true,
+        "sha256": "8b0c3db899c7405ee119106230eceb4d19f33e262cf5ff1592350ce906128e44",
+        "size_bytes": 11637
       },
-      "changed": null,
-      "path": "tests/test_v3_bounded_runtime.py"
-    },
-    {
-      "after": null,
       "before": {
         "exists": true,
-        "sha256": "b27872205a6984864397394aa40b53caf373731c8a54b33715be0f81b389fa5d",
-        "size_bytes": 9768
+        "sha256": "8b0c3db899c7405ee119106230eceb4d19f33e262cf5ff1592350ce906128e44",
+        "size_bytes": 11637
       },
-      "changed": null,
-      "path": "tests/test_v3_counter_encoder_backend.py"
+      "changed": false,
+      "path": "driver/bno055.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "ba0c45b1edda18d98597f8f9c6d47d6a3595c9f6e47d23596deb29f9703bf8dc",
+        "size_bytes": 4862
+      },
+      "before": {
+        "exists": true,
+        "sha256": "ba0c45b1edda18d98597f8f9c6d47d6a3595c9f6e47d23596deb29f9703bf8dc",
+        "size_bytes": 4862
+      },
+      "changed": false,
+      "path": "driver/imu_factory.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "5c6917ff79c83ffb6e9c46aa866cbe7e105f6ffe7c78790cf05e74e610eb8ff7",
+        "size_bytes": 85915
+      },
+      "before": {
+        "exists": true,
+        "sha256": "5c6917ff79c83ffb6e9c46aa866cbe7e105f6ffe7c78790cf05e74e610eb8ff7",
+        "size_bytes": 85915
+      },
+      "changed": false,
+      "path": "middleware/lidar_estim.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "ae2d6bd77711f763b33a7a564841e6a4caf7ea14e2622086cdb37c47eeb0acad",
+        "size_bytes": 3032
+      },
+      "before": {
+        "exists": true,
+        "sha256": "ae2d6bd77711f763b33a7a564841e6a4caf7ea14e2622086cdb37c47eeb0acad",
+        "size_bytes": 3032
+      },
+      "changed": false,
+      "path": "middleware/scan_matcher_contract.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "1b754bf09ddbc06086a789df35c86610520c03ee9c9de40d244a86e164b61e58",
+        "size_bytes": 47587
+      },
+      "before": {
+        "exists": true,
+        "sha256": "1b754bf09ddbc06086a789df35c86610520c03ee9c9de40d244a86e164b61e58",
+        "size_bytes": 47587
+      },
+      "changed": false,
+      "path": "sensors/lidar_service.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "78c672afef6bc23c4e963856693b9c0d639cf42ce57a6bf5c0846a490ec8a841",
+        "size_bytes": 3060
+      },
+      "before": {
+        "exists": true,
+        "sha256": "78c672afef6bc23c4e963856693b9c0d639cf42ce57a6bf5c0846a490ec8a841",
+        "size_bytes": 3060
+      },
+      "changed": false,
+      "path": "tests/test_bno055_driver.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "88aa7617d8bfd1d756cf77fec4479c2c32d88434ea1509be915f5492fd445e05",
+        "size_bytes": 1169
+      },
+      "before": {
+        "exists": true,
+        "sha256": "88aa7617d8bfd1d756cf77fec4479c2c32d88434ea1509be915f5492fd445e05",
+        "size_bytes": 1169
+      },
+      "changed": false,
+      "path": "tests/test_imu_factory.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "235edef1c9e676fe6e864e2b88878d5fed3b4127225eaec6cd0c0033720bc9bd",
+        "size_bytes": 1765
+      },
+      "before": {
+        "exists": true,
+        "sha256": "235edef1c9e676fe6e864e2b88878d5fed3b4127225eaec6cd0c0033720bc9bd",
+        "size_bytes": 1765
+      },
+      "changed": false,
+      "path": "tests/test_lidar_service_latest_queue.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "0cdaade2ae80d4dde6d29f31966f6391348436e8eba3d42ab6b8723724a93432",
+        "size_bytes": 4346
+      },
+      "before": {
+        "exists": true,
+        "sha256": "0cdaade2ae80d4dde6d29f31966f6391348436e8eba3d42ab6b8723724a93432",
+        "size_bytes": 4346
+      },
+      "changed": false,
+      "path": "tests/test_lidar_service_process.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "965e2a5a7143cfa11d0d070e21c4bd84591df6bd55511f3ce043821ca1f7ab7c",
+        "size_bytes": 25062
+      },
+      "before": {
+        "exists": true,
+        "sha256": "49fd87f29d810577a20799cce2a52189a807f0f1f6a34dcd37fdb1d63730d315",
+        "size_bytes": 25015
+      },
+      "changed": true,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "459636203967c685599c64c8c82deddc179d24ee89075751aeaa6d2be0b15ca0",
+        "size_bytes": 4075
+      },
       "before": {
         "exists": false,
         "sha256": null,
         "size_bytes": 0
       },
-      "changed": null,
-      "path": "tests/test_v3_gpio_counter.py"
+      "changed": true,
+      "path": "tests/test_v3_bno055_imu_backend.py"
     },
     {
-      "after": null,
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
+      "after": {
+        "exists": true,
+        "sha256": "a0b732c91d5b0b6216c632f8fb13b66545e5befd60e93cc0bce642a76f299ffc",
+        "size_bytes": 10910
       },
-      "changed": null,
+      "before": {
+        "exists": true,
+        "sha256": "a0b732c91d5b0b6216c632f8fb13b66545e5befd60e93cc0bce642a76f299ffc",
+        "size_bytes": 10910
+      },
+      "changed": false,
+      "path": "tests/test_v3_bounded_live_control_composition.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "de4e81f3c61266284fb6edfd73ab7c6858ebeac7dd67e621dc7317eb934bcb25",
+        "size_bytes": 8330
+      },
+      "before": {
+        "exists": true,
+        "sha256": "de4e81f3c61266284fb6edfd73ab7c6858ebeac7dd67e621dc7317eb934bcb25",
+        "size_bytes": 8330
+      },
+      "changed": false,
+      "path": "tests/test_v3_bounded_physical_control_composition.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "7c583927a42fcb78ef9262367a129c5eb177675690239050c38b1f9f7e19e1e0",
+        "size_bytes": 9602
+      },
+      "before": {
+        "exists": true,
+        "sha256": "7c583927a42fcb78ef9262367a129c5eb177675690239050c38b1f9f7e19e1e0",
+        "size_bytes": 9602
+      },
+      "changed": false,
+      "path": "tests/test_v3_bounded_physical_runtime.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "ed8ed07cd557f600a4a4b48343a28c4683c81ade43d40b6a192b891fbd0e81f7",
+        "size_bytes": 11244
+      },
+      "before": {
+        "exists": true,
+        "sha256": "ed8ed07cd557f600a4a4b48343a28c4683c81ade43d40b6a192b891fbd0e81f7",
+        "size_bytes": 11244
+      },
+      "changed": false,
+      "path": "tests/test_v3_bounded_runtime_config.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "afef8041a73b5fdec4389c32b5276544a7c29ba2d5df445bdc9e912b80647b7f",
+        "size_bytes": 5692
+      },
+      "before": {
+        "exists": true,
+        "sha256": "afef8041a73b5fdec4389c32b5276544a7c29ba2d5df445bdc9e912b80647b7f",
+        "size_bytes": 5692
+      },
+      "changed": false,
       "path": "tests/test_v3_gpio_encoder_source.py"
     },
     {
-      "after": null,
-      "before": {
+      "after": {
         "exists": true,
-        "sha256": "300b02c4eeee256c9f482a0875a27a7529b5b6712d1597ca219beb9e5c2652a8",
-        "size_bytes": 8132
+        "sha256": "92076617a27257963e87f8f9c0137a357096706be9159b53887c96a7e346b06b",
+        "size_bytes": 5377
       },
-      "changed": null,
-      "path": "v3/adapters/counter_encoder.py"
-    },
-    {
-      "after": null,
-      "before": {
-        "exists": true,
-        "sha256": "2952583da09e6eb3d7c5aabcde5908eb4db66346268dbe9a9c2501bdf7179e36",
-        "size_bytes": 14090
-      },
-      "changed": null,
-      "path": "v3/adapters/gpio_counter.py"
-    },
-    {
-      "after": null,
       "before": {
         "exists": false,
         "sha256": null,
         "size_bytes": 0
       },
-      "changed": null,
+      "changed": true,
+      "path": "tests/test_v3_latest_lidar_backend.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "8a645631664a841de6f7d8528aff84a6fa769ea58dc9299ab35a87967aa24560",
+        "size_bytes": 5089
+      },
+      "before": {
+        "exists": true,
+        "sha256": "8a645631664a841de6f7d8528aff84a6fa769ea58dc9299ab35a87967aa24560",
+        "size_bytes": 5089
+      },
+      "changed": false,
+      "path": "tests/test_v3_live_imu_edge.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "9a7821c8c0b66e68fdebaf1077b95ea08151b8e8114c047a9bbfc95286d1e620",
+        "size_bytes": 2874
+      },
+      "before": {
+        "exists": true,
+        "sha256": "9a7821c8c0b66e68fdebaf1077b95ea08151b8e8114c047a9bbfc95286d1e620",
+        "size_bytes": 2874
+      },
+      "changed": false,
+      "path": "tests/test_v3_live_lidar.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "f45cbb30b392daa139d6b4de94a6d34a7a96f5e83f3166c0771d742b2f84f3ec",
+        "size_bytes": 5786
+      },
+      "before": {
+        "exists": true,
+        "sha256": "f45cbb30b392daa139d6b4de94a6d34a7a96f5e83f3166c0771d742b2f84f3ec",
+        "size_bytes": 5786
+      },
+      "changed": false,
+      "path": "tests/test_v3_live_lidar_edge.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "9c122c8c83ec897988e8eb173d67e135b1a6478eaeb2c17b9e767adb512bb3f3",
+        "size_bytes": 9784
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": true,
+      "path": "tests/test_v3_native_sensor_inputs.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "be8cb5b30dd20e2ec30d50253e9fae7f52a95a74ef30ff50b8c384c7a48cc0d7",
+        "size_bytes": 6320
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": true,
+      "path": "v3/adapters/bno055_imu.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "daf75c17d4a625f30e2df69a13f1625dfb31118ee162aaf94f48cfe6a4145281",
+        "size_bytes": 2597
+      },
+      "before": {
+        "exists": true,
+        "sha256": "daf75c17d4a625f30e2df69a13f1625dfb31118ee162aaf94f48cfe6a4145281",
+        "size_bytes": 2597
+      },
+      "changed": false,
       "path": "v3/adapters/gpio_encoder.py"
     },
     {
-      "after": null,
-      "before": {
+      "after": {
         "exists": true,
-        "sha256": "b1aa8bea22a70124778cbafa9fb2bc40a0efb81d329a49df6f13d9761f84192d",
-        "size_bytes": 4667
+        "sha256": "69c4bb2002bb2a53cee2f14f8a18d46cb03bafa402c539faca454afb41da71d2",
+        "size_bytes": 8573
       },
-      "changed": null,
-      "path": "v3/adapters/live_encoder.py"
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": true,
+      "path": "v3/adapters/latest_lidar.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "798b06bcc692863f031d809bc289d6d75727bb5da91fb4d94bd4669525eb0109",
+        "size_bytes": 5680
+      },
+      "before": {
+        "exists": true,
+        "sha256": "798b06bcc692863f031d809bc289d6d75727bb5da91fb4d94bd4669525eb0109",
+        "size_bytes": 5680
+      },
+      "changed": false,
+      "path": "v3/adapters/live_imu.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+        "size_bytes": 3701
+      },
+      "before": {
+        "exists": true,
+        "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+        "size_bytes": 3701
+      },
+      "changed": false,
+      "path": "v3/adapters/live_inputs.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "246a9570825165e8f69a3a6a374696de4beb4d7210286d10de59d653174aba97",
+        "size_bytes": 6923
+      },
+      "before": {
+        "exists": true,
+        "sha256": "246a9570825165e8f69a3a6a374696de4beb4d7210286d10de59d653174aba97",
+        "size_bytes": 6923
+      },
+      "changed": false,
+      "path": "v3/adapters/live_lidar.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "10e37485ca89e2f5fe65fd35fb77e558d4f67174749d72e27b8ebda33e435e22",
+        "size_bytes": 8091
+      },
+      "before": {
+        "exists": true,
+        "sha256": "10e37485ca89e2f5fe65fd35fb77e558d4f67174749d72e27b8ebda33e435e22",
+        "size_bytes": 8091
+      },
+      "changed": false,
+      "path": "v3/composition/bounded_live_control.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "56710f7c92ea9d4f8561411bb4bf069678c906d1dfa3599753fa3fd1f7f3778c",
+        "size_bytes": 3735
+      },
+      "before": {
+        "exists": true,
+        "sha256": "56710f7c92ea9d4f8561411bb4bf069678c906d1dfa3599753fa3fd1f7f3778c",
+        "size_bytes": 3735
+      },
+      "changed": false,
+      "path": "v3/composition/bounded_physical_control.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "5f733296194d4b63ccba3f3b320ddb9458947f0366a2d59aaf815b0f8daff4c7",
+        "size_bytes": 5361
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": true,
+      "path": "v3/composition/native_sensor_inputs.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "44f2fe3dcf93eb70610726d8eb3fdf5a2d5948f8053a51a0f2652f41f7e2e239",
+        "size_bytes": 8524
+      },
+      "before": {
+        "exists": true,
+        "sha256": "44f2fe3dcf93eb70610726d8eb3fdf5a2d5948f8053a51a0f2652f41f7e2e239",
+        "size_bytes": 8524
+      },
+      "changed": false,
+      "path": "v3_bounded_config.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "45a8448d3f7029d2bd79dfe75a639d0006a03b253c7639a1a37cbd597db4c648",
+        "size_bytes": 7793
+      },
       "before": {
         "exists": true,
         "sha256": "331782caaf0a1edcce1fe26c5004bf791698de0a3e2dc786e5e2264b5eb217b5",
         "size_bytes": 6845
       },
-      "changed": null,
+      "changed": true,
       "path": "v3_bounded_runtime.py"
     }
   ],
-  "goal": "Add the next layer-ordered native encoder source owner that wires the typed GPIO counter config through the signed-counter velocity backend into NativeEncoderSource with fail-closed construction and idempotent cleanup, without runtime activation, concrete hardware import, motor wiring, IMU/LiDAR scope, or live motion",
-  "promotion_status": "NOT_PROMOTED",
-  "reason": "",
+  "goal": "Complete the next V3 live-input binding slice by adding owned native IMU and LiDAR backend/source boundaries and wiring them with the promoted owned encoder source into the bounded V3 runtime construction path; close explicit immutable config, preserve CCW-positive R2B4_BOOT_ROBOT_MAP and LIDAR_FIRST/process-latest-only contracts, validate every dependency before ownership, read each source at most once per caller TickContext, and release resources fail-closed/idempotently, with fake/offline evidence only and no live runtime start, robot motion, motor command, safety relaxation, or alternative control path",
+  "promotion_status": "READY",
+  "reason": "Completed the full native V3 IMU/LiDAR binding slice: tick-bound BNO055 unit/sign/freshness conversion, protected latest-only LIDAR contract and pose conversion, one owner for promoted encoder plus IMU/LIDAR sources, and bounded runtime cleanup on every exit; fake/offline evidence only, with no hardware start, robot motion, or alternative motor path.",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-08-31T20:10:48Z",
-  "status": "ACTIVE",
-  "task_id": "v3_phase12_encoder_source_owner_slice14_20260831",
+  "started_at_utc": "2026-09-01T05:03:45Z",
+  "status": "COMPLETE",
+  "task_id": "v3_phase12_imu_lidar_full_binding_slice15_20260901",
   "task_mode": "CODE_CHANGE",
-  "tests": [],
-  "updated_at_utc": "2026-08-31T20:12:01Z",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=\"$PWD\" pytest -q tests/test_v3_bno055_imu_backend.py tests/test_v3_latest_lidar_backend.py tests/test_v3_native_sensor_inputs.py tests/test_v3_live_imu_edge.py tests/test_v3_live_lidar.py tests/test_v3_live_lidar_edge.py tests/test_v3_gpio_encoder_source.py tests/test_v3_counter_encoder_backend.py tests/test_v3_gpio_counter_owner.py tests/test_v3_bounded_live_control_composition.py tests/test_v3_bounded_physical_control_composition.py tests/test_v3_bounded_physical_runtime.py tests/test_v3_bounded_runtime_config.py tests/test_v3_architecture_boundaries.py tests/test_v3_contracts.py tests/test_bno055_driver.py tests/test_imu_factory.py tests/test_lidar_service_latest_queue.py",
+      "status": "PASS"
+    }
+  ],
+  "updated_at_utc": "2026-09-01T05:13:34Z",
+  "workflow_evidence": {
+    "audit_sha256": "0971b174a07fe449155f77efd57ed7f8ed37ba858f108c3d1bb7ceced32348f4",
+    "candidate_fingerprint": "455c27c3b961002ba41392ced6d0473dd981d7ffce63c35a2076832f49489f13",
+    "contract_fingerprint": "6b0051969fbabd84c58c262dc0a82f8978f839cc93416554c9b4cc190fff8e0f",
+    "diff_sha256": "d8a57ed0c2db6a502399e7bec4d5eb0b1154be8c13efb006cce4830f47530d05",
+    "path": "runtime/agent_workspaces/v3_phase12_imu_lidar_full_binding_slice15_20260901/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "d4070c88e49034d69f7be84b346d33a57d065f5cebdfcb84c8448d941cb5ee20"
+  },
   "workspace": {
-    "base_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
-    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_encoder_source_owner_slice14_20260831/meta/base_manifest.json",
-    "base_manifest_sha256": "c48da580c2c0f38d982550668c51dbd3cdb7cb2ef60002000a9953c2baa5c3cb",
-    "path": "runtime/agent_workspaces/v3_phase12_encoder_source_owner_slice14_20260831/tree",
+    "base_fingerprint": "5042997586c3ca0fb11a4cc44bdc8b4a31fe186f4f55f0e34639cde2db83639a",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_imu_lidar_full_binding_slice15_20260901/meta/base_manifest.json",
+    "base_manifest_sha256": "9fd45bf9c9c5963b63c5569f838507889c3a7bb60a21d8dc47cb0b7801fccb16",
+    "path": "runtime/agent_workspaces/v3_phase12_imu_lidar_full_binding_slice15_20260901/tree",
+    "reseal": {
+      "audit_sha256": "0971b174a07fe449155f77efd57ed7f8ed37ba858f108c3d1bb7ceced32348f4",
+      "candidate_fingerprint": "455c27c3b961002ba41392ced6d0473dd981d7ffce63c35a2076832f49489f13",
+      "diff_sha256": "d8a57ed0c2db6a502399e7bec4d5eb0b1154be8c13efb006cce4830f47530d05",
+      "path": "runtime/agent_workspaces/v3_phase12_imu_lidar_full_binding_slice15_20260901/meta/reseal.json",
+      "resealed_at_utc": "2026-09-01T05:13:34Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "aebde2c3b413994da69569bc5881eb2352d310a18798f6cd6d6a82dfdc65f076",
+      "state": "READY",
+      "task_id": "v3_phase12_imu_lidar_full_binding_slice15_20260901"
+    },
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "ACTIVE"
+    "state": "READY"
   }
 }
