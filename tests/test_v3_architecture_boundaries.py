@@ -135,6 +135,170 @@ def test_bounded_command_gateway_has_no_runtime_or_control_layer_authority():
     }
 
 
+def test_native_control_core_has_no_edge_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "composition" / "native_control.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "dataclasses",
+        "v3.contracts",
+        "v3.engine",
+        "v3.layers.l1_acquisition",
+        "v3.layers.l2_admission",
+        "v3.layers.l3_state_estimation",
+        "v3.layers.l4_world_model",
+        "v3.layers.l5_command_mission",
+        "v3.layers.l6_navigation",
+        "v3.layers.l7_motion_selection",
+        "v3.layers.l8_motion_realization",
+        "v3.layers.l9_operational_constraints",
+        "v3.layers.l10_chassis_control",
+        "v3.layers.l11_actuator_control",
+        "v3.layers.l12_safety_final",
+    }
+
+
+def test_bounded_live_control_has_no_physical_output_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "composition" / "bounded_live_control.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        ".native_control",
+        "dataclasses",
+        "v3.adapters.bounded_command",
+        "v3.adapters.live_encoder",
+        "v3.adapters.live_imu",
+        "v3.adapters.live_inputs",
+        "v3.adapters.live_lidar",
+        "v3.contracts",
+        "v3.engine",
+    }
+
+
+def test_bounded_physical_control_has_no_concrete_gpio_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "composition" / "bounded_physical_control.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        ".bounded_live_control",
+        ".motor_output",
+        "dataclasses",
+        "v3.adapters.gpio_motor",
+        "v3.adapters.live_encoder",
+        "v3.adapters.live_imu",
+        "v3.adapters.live_lidar",
+        "v3.contracts",
+        "v3.engine",
+    }
+
+
+def test_bounded_physical_runtime_has_no_entrypoint_or_legacy_authority():
+    path = PROJECT_ROOT / "v3_bounded_runtime.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    function_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function_names.add(node.name)
+
+    assert imported_modules <= {
+        "__future__",
+        "collections.abc",
+        "dataclasses",
+        "math",
+        "time",
+        "v3.adapters.counter_encoder",
+        "v3.adapters.gpio_counter",
+        "v3.adapters.gpio_motor",
+        "v3.adapters.live_encoder",
+        "v3.adapters.live_imu",
+        "v3.adapters.live_lidar",
+        "v3.composition.bounded_physical_control",
+        "v3.contracts",
+    }
+    assert "main" not in function_names
+    assert not imported_modules & {
+        "config_manager",
+        "cont",
+        "controller",
+        "driver",
+        "lgpio",
+        "motion_executor",
+        "signal",
+        "state",
+    }
+
+
+def test_bounded_runtime_config_loader_has_no_hardware_or_legacy_authority():
+    path = PROJECT_ROOT / "v3_bounded_config.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    function_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            function_names.add(node.name)
+
+    assert imported_modules <= {
+        "__future__",
+        "collections.abc",
+        "json",
+        "math",
+        "pathlib",
+        "v3.adapters.bounded_command",
+        "v3.adapters.gpio_counter",
+        "v3.adapters.gpio_motor",
+        "v3.adapters.motor_pwm",
+        "v3.composition.bounded_live_control",
+        "v3.composition.bounded_physical_control",
+        "v3.composition.native_control",
+        "v3.layers.l3_state_estimation",
+        "v3.layers.l10_chassis_control",
+        "v3.layers.l11_actuator_control",
+        "v3_bounded_runtime",
+    }
+    assert "main" not in function_names
+    assert not imported_modules & {
+        "config_manager",
+        "cont",
+        "controller",
+        "driver",
+        "lgpio",
+        "motion_executor",
+        "signal",
+        "state",
+        "time",
+    }
+
+
 def test_native_live_input_aggregator_has_no_legacy_or_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "live_inputs.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -172,6 +336,70 @@ def test_native_live_encoder_source_has_no_legacy_or_runtime_authority():
         "typing",
         "v3.contracts",
     }
+
+
+def test_counter_encoder_backend_has_no_hardware_legacy_or_pwm_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "counter_encoder.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    attribute_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+        elif isinstance(node, ast.Attribute):
+            attribute_names.add(node.attr)
+
+    assert imported_modules <= {
+        "__future__",
+        ".live_encoder",
+        "dataclasses",
+        "math",
+        "typing",
+        "v3.contracts",
+    }
+    assert not imported_modules & {
+        "config_manager",
+        "driver.encoder",
+        "lgpio",
+        "middleware.enc_estim",
+        "sensors.encoder_service",
+        "threading",
+        "time",
+    }
+    assert "set_last_pwm" not in attribute_names
+
+
+def test_gpio_counter_owner_has_no_concrete_hardware_legacy_or_runtime_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "gpio_counter.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    attribute_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+        elif isinstance(node, ast.Attribute):
+            attribute_names.add(node.attr)
+
+    assert imported_modules <= {
+        "__future__",
+        ".counter_encoder",
+        "dataclasses",
+        "threading",
+        "typing",
+    }
+    assert not imported_modules & {
+        "config_manager",
+        "driver.encoder",
+        "lgpio",
+        "middleware.enc_estim",
+        "sensors.encoder_service",
+        "time",
+    }
+    assert "Thread" not in attribute_names
 
 
 def test_native_live_imu_source_has_no_legacy_or_runtime_authority():

@@ -472,6 +472,120 @@ proof-kapu.
     vagy újraolvasás miatt, a gateway nem birtokol órát, számlálót, lifecycle-t,
     `activate` API-t, külső I/O-t, layer- vagy motor-authorityt. Nincs runtime-
     bekötés, hardverfuttatás vagy élő motion.
+    Az ötödik szelet egy zárt inputú `NativeControlComposition` core-ban köti
+    össze a canonical L1–L12 implementációkat. Az L3 a natív estimatort használja,
+    az L11 speed map kötelezően injektált, immutable és `ACTIVE`-validált; az L3
+    és L10 nyomtávja ugyanabban a configban egyezésre zárt. A caller már lezárt
+    `TickInputs` értéket vagy explicit fault tick-et ad, a core pedig pontosan egy
+    injektált writer-porton commitol. A bounded TELEOP ablak memory writerrel
+    végigfut az összes rétegen, az ablak után nulla outputra zár, és tickenként
+    pontosan egy commit történik; writer-hibánál nincs retry. A core nem birtokol
+    readert, command gatewayt, lifecycle-átmenetet, `activate` API-t, output-
+    handle-t, GPIO-t, órát vagy owner loopot, és nincs runtime-bekötés,
+    hardverfuttatás vagy élő motion.
+    A hatodik, nagyobb integrációs szelet egy manual-tick
+    `BoundedLiveControlComposition` rootban zárja össze az ordered encoder/IMU/
+    lidar live readert, a bounded command gatewayt és a natív control core-t.
+    Pontosan az immutable abszolút command-ablak idején választ `ACTIVE`
+    lifecycle-értéket; ehhez közvetlenül megelőző, konfigurált kornál frissebb,
+    minden source-on OK healthű, teljes L1–L12 IDLE tick és sikeres null commit
+    szükséges. Hiányzó vagy stale preflight, részleges/source hiba, upstream
+    FAULT vagy aktív ablak közbeni safety STOP az egyszeri sessiont fault-latchbe
+    zárja. Az ablak végén a root újra IDLE és null output; writer-hibánál nincs
+    retry, a későbbi tickek még source-t sem pollolnak. A rootnak nincs public
+    `activate`, saját óra, owner loop, external command API, fizikai writer-
+    default, GPIO/output-composition wiring, runtime entrypoint, hardverfuttatás
+    vagy élő motion.
+    A hetedik szelet egyetlen `BoundedPhysicalControlComposition` ownerben köti
+    össze a bounded live-control rootot és a natív motor-output compositiont.
+    Minden source és immutable config még GPIO-claim előtt validált; ezután
+    pontosan egy output owner és egy handle jut az L12 kizárólagos writer-útjára.
+    A teljes source→L1–L12→DRV8871 pin mapping fake szenzor- és GPIO backenddel
+    bizonyított: a friss preflight előtt és a véges ablak után minden pin nulla,
+    source-fault FAULT/null frame-et ad, fizikai write-hiba ugyanazon sink-hívás
+    vésznullázásával zárja a handle-t és nincs retry. Az idempotens root `close`
+    aktív, IDLE vagy fault állapottól függetlenül végső nullázás után engedi el a
+    sole handle-t. A root fizikailag ready, de nincs concrete `lgpio` import,
+    external command API, óra, owner loop, thread/process, runtime entrypoint,
+    automatikus start, valós hardverfuttatás vagy élő motion.
+    A nyolcadik szelet egy explicit, véges `run_bounded_physical_control`
+    owner loopot ad a fizikai root köré. Az immutable runtime-config a tick-
+    periódust a preflight freshness korlátján belül zárja; a callbackek és az
+    első monotonic clock-érték GPIO-claim előtt validáltak, kezdeti stop kérés
+    pedig handle-t sem nyit. A loop tick nullától az abszolút command-ablakot
+    követő első IDLE tickig készít `TickContext` értékeket, visszafelé vagy két
+    tick között nem haladó óránál fail-closed exceptionnel áll le. Committált
+    FAULT után nem pollol vagy tickel újra; normál vég, operator-stop, fault és
+    exception esetén is egyetlen `finally` ág nullázza és engedi el a sole GPIO
+    handlet. Fake source-, clock- és GPIO-evidence bizonyítja a preflight →
+    bounded ACTIVE → post-window IDLE/null sorrendet, a korai stopot, source-
+    faultot, writer-failure emergency close-t és clock-regressziót. A modul nem
+    importál concrete `lgpio`-t vagy legacy drivert, és nincs signal handler,
+    `main` entrypoint, concrete szenzorbackend, automatikus start, valódi
+    hardverfuttatás vagy élő motion.
+    A kilencedik szelet külön, side-effect-free config edge-en zárja az explicit
+    regular, nem symlink hardware-, fizika- és speed-map JSON forrásokat egy
+    `BoundedPhysicalRuntimeConfig` értékbe. Csak a motorpin/polaritás/decay
+    contract, a közös nyomtáv és az `ACTIVE` `R2B4_WHEEL_SPEED_MAP_V2` kerül át;
+    az L3 és L10 ugyanazt az egyszer beolvasott geometriát kapja. A bounded
+    command profil, tick-periódus és preflight-kor explicit typed V3 input marad,
+    ezért a loader nem teszi authorityvá a legacy config manager vagy control-
+    orchestration mezőit. A canonical aktív config mappinget, a path/symlink,
+    schema/state, geometria és motorcontract rejectiont célzott teszt fedi. A
+    modul nem importál concrete hardvert, szenzorbackendet, legacy drivert,
+    `config_manager`-t, CLI-t, signal handlert vagy `main` entrypointot; nem nyit
+    GPIO-t, nem futtat owner loopot vagy élő motiont.
+    A tizedik szelet a concrete inputlánc első szükséges native magjaként egy
+    hardverfüggetlen `NativeCounterEncoderBackend` implementációt ad. Két
+    injektált signed pulse-counterből az első `read(TickContext)` ugyanahhoz a
+    tickhez köti mindkét counter snapshotját és a teljes idő-baseline-t; a
+    konstruktor nem végez idő nélküli counter readet. Minden további tick
+    counterenként pontosan egy immutable snapshotot olvas. A bal/jobb sebességet
+    kizárólag a signed count-delta, az immutable oldalankénti step distance és a
+    tick monotonic ideje adja; nincs PWM- vagy command-context. `trust=1` és
+    esetleges nem nulla velocity kizárólag növekvő idejű, friss, futó counterű,
+    diagnosztikailag tiszta és a fizikai sebességhatáron belüli delta esetén
+    készülhet. A baseline, timing-invalid, stale, diagnosztikailag hibás vagy
+    fizikailag lehetetlen minta mindig `trust=0` és mindkét oldalon zéró
+    velocity; minden növekvő tick újrahorgonyozza a következő deltát. A contractot
+    direction, baseline binding, reanchor, stale recovery, diagnosztikai,
+    timing- és velocity rejection, valamint `NativeEncoderSource` integráció
+    fedi. A backend nem importál legacy drivert/service-t vagy global configot,
+    nem nyit GPIO-t, és nem birtokol callbacket, threadet, órát, runtime-ot vagy
+    writert. A valódi GPIO counter-owner, native IMU/LiDAR backend és élő teszt
+    továbbra is külön későbbi kapu.
+    A tizenegyedik szelet a velocity backend közvetlen fizikai előfeltételeként
+    egy páros natív GPIO signed pulse-counter ownert ad. Az immutable config a
+    két oldal négy egyedi A/B pinjét, a B irányszintet, invertálást, pull-upot és
+    A debounce-ot még GPIO-nyitás előtt zárja. Az owner pontosan egy injektált
+    lgpio-style backend-handlet nyit, mind a négy input alertet birtokolja,
+    oldalanként a B callbacket latch-eli, és csak az A rising callbacket számolja
+    előjelesen ugyanazon lock alatt. Kifelé két capability-szűkített,
+    lock-konzisztens immutable `SignedPulseCounterSnapshot` nézetet ad; sebesség-,
+    tick-, PWM- vagy command-policyt nem vesz át. Részleges konstrukciós hiba
+    minden már létrehozott callbacket, pint és a sole handlet felszabadítja; a
+    `close` előbb leállítja a callback-mutációt, majd idempotensen takarít. Fake
+    GPIO evidence bizonyítja az egyhandle-es ownershipet, direction/invert
+    viselkedést, malformed callback diagnosztikát, snapshot-immutabilitást,
+    partial-failure cleanupot és a `NativeCounterEncoderBackend` integrációt. A
+    modul nem importál concrete `lgpio`-t vagy legacy drivert/configot, nem indít
+    threadet, runtime-ot, writert, valódi hardvert vagy élő motiont; a concrete
+    backend-kötés, native IMU/LiDAR backend és élő teszt későbbi külön kapu.
+    A tizenkettedik szelet a counter-owner bekötése előtti side-effect-free
+    config-határt zárja. Az explicit regular, nem symlink hardware- és fizika-
+    JSON forrásból immutable `NativeEncoderRuntimeConfig` készül: a négy A/B
+    pin, közös forward B-szint, oldalankénti invert, pull-up, A debounce és GPIO
+    chip a `GpioCounterPairConfig`, az alap step-distance és bal/jobb szorzói
+    pedig külön fizikai geometria. Kötelező az `X1_A_RISING` count mode, a
+    hardware/physics counts-per-revolution egyezése, a véges pozitív step-
+    geometria, valamint a motor- és encoder-owner összes pinjének kölcsönös
+    egyedisége. A loader által visszaadott bounded runtime config ezt a typed
+    encoder értéket is hordozza, de a freshness/sample-age és maximum velocity
+    csak explicit caller-paraméterrel képezhet `CounterEncoderBackendConfig`
+    értéket; a legacy `snapshot_hz` nem V3 authority. Canonical mapping- és
+    rejection-tesztek fedik a teljes határt. Nincs concrete hardverimport,
+    `config_manager`, legacy driver/service, GPIO-open, runtime-bekötés, writer
+    vagy élő motion; a concrete backend és source ownership következő külön kapu.
 13. **Minimális V3 toolchain-függetlenítés — tervezett:** csak a tényleges V3
     üzemeltetési igényhez szükséges CLI/status, `REPLAYER_V3` és mini Test Hub;
     legacy API-paritás nélkül.
