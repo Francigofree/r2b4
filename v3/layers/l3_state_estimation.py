@@ -38,6 +38,23 @@ def _numeric_value(observation: Observation, key: str) -> float:
     return result
 
 
+def _optional_numeric_value(
+    observation: Observation,
+    key: str,
+    fallback: float,
+) -> float:
+    values = {field.key: field.value for field in observation.values}
+    if key not in values:
+        return fallback
+    value = values[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{observation.kind}.{key} must be numeric")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"{observation.kind}.{key} must be finite")
+    return result
+
+
 def _single_observation(frame: AdmittedFrame, kind: str) -> Observation:
     matches = tuple(item for item in frame.accepted if item.kind == kind)
     if len(matches) != 1:
@@ -311,14 +328,21 @@ class NativeStateEstimator:
         measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
         measured_omega = _numeric_value(heading, "omega_rad_s")
         heading_confidence = _numeric_value(heading, "confidence")
+        omega_confidence = _optional_numeric_value(
+            heading,
+            "omega_confidence",
+            heading_confidence,
+        )
         if not 0.0 <= encoder_trust <= 1.0:
             raise ValueError("wheel_velocity.trust must be in [0, 1]")
         if not 0.0 <= heading_confidence <= 1.0:
             raise ValueError("ekf_heading.confidence must be in [0, 1]")
+        if not 0.0 <= omega_confidence <= 1.0:
+            raise ValueError("ekf_heading.omega_confidence must be in [0, 1]")
         if max(abs(left_mps), abs(right_mps)) > self._config.max_abs_wheel_velocity_mps:
             raise ValueError("wheel_velocity exceeds the configured physical range")
 
-        if heading_confidence > 0.0:
+        if omega_confidence > 0.0:
             left_mps, right_mps = self._cross_check_wheels(
                 left_mps,
                 right_mps,
@@ -340,7 +364,8 @@ class NativeStateEstimator:
         else:
             dt_s = self._dt_s(frame)
             if dt_s > 0.0:
-                self._adapt_stationary_bias(measured_omega, dt_s, still)
+                if omega_confidence > 0.0:
+                    self._adapt_stationary_bias(measured_omega, dt_s, still)
                 self._predict(measured_omega, dt_s)
             quality_floor = self._config.minimum_measurement_quality
             self._update_scalar(
@@ -369,9 +394,13 @@ class NativeStateEstimator:
             self._update_lidar(lidar_pose)
 
         self._last_context = frame.context
-        self._last_omega = measured_omega - self._state[self._GYRO_BIAS]
+        self._last_omega = (
+            measured_omega - self._state[self._GYRO_BIAS]
+            if omega_confidence > 0.0
+            else measured_omega
+        )
         self._stabilize_covariance()
-        return self._estimate(frame, heading_confidence)
+        return self._estimate(frame, omega_confidence)
 
     def _cross_check_wheels(
         self,
@@ -588,7 +617,7 @@ class NativeStateEstimator:
     def _estimate(
         self,
         frame: AdmittedFrame,
-        heading_confidence: float,
+        omega_confidence: float,
     ) -> RobotEstimate:
         output_covariance = [row[:] for row in self._covariance]
         for index in range(self._SIZE - 1):
@@ -600,7 +629,7 @@ class NativeStateEstimator:
             ][index]
         output_covariance[self._GYRO_BIAS][self._GYRO_BIAS] += (
             self._config.omega_measurement_variance
-            / max(self._config.minimum_measurement_quality, heading_confidence)
+            / max(self._config.minimum_measurement_quality, omega_confidence)
         )
         return RobotEstimate(
             frame.context,
@@ -643,16 +672,23 @@ class ShadowStateEstimator:
         encoder_trust = _numeric_value(wheel, "trust")
         measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
         heading_confidence = _numeric_value(heading, "confidence")
+        omega_confidence = _optional_numeric_value(
+            heading,
+            "omega_confidence",
+            heading_confidence,
+        )
         if not 0.0 <= encoder_trust <= 1.0:
             raise ValueError("wheel_velocity.trust must be in [0, 1]")
         if not 0.0 <= heading_confidence <= 1.0:
             raise ValueError("ekf_heading.confidence must be in [0, 1]")
+        if not 0.0 <= omega_confidence <= 1.0:
+            raise ValueError("ekf_heading.omega_confidence must be in [0, 1]")
 
         dt_s = self._dt_s(frame)
         v_mps = 0.5 * (left_mps + right_mps)
         measured_omega = _numeric_value(heading, "omega_rad_s")
         wheel_omega = (right_mps - left_mps) / float(self._config.track_width_m)
-        omega_rad_s = measured_omega if heading_confidence > 0.0 else wheel_omega
+        omega_rad_s = measured_omega if omega_confidence > 0.0 else wheel_omega
 
         if dt_s > 0.0:
             yaw_delta = _normalize_angle(measured_yaw - self._yaw_rad)
@@ -669,13 +705,14 @@ class ShadowStateEstimator:
         self._yaw_rad = measured_yaw
         self._last_context = frame.context
         confidence_floor = max(0.05, heading_confidence)
+        omega_confidence_floor = max(0.05, omega_confidence)
         trust_floor = max(0.05, encoder_trust)
         diagonal = (
             self._position_variance,
             self._position_variance,
             float(self._config.yaw_variance) / confidence_floor,
             float(self._config.velocity_variance) / trust_floor,
-            float(self._config.omega_variance) / confidence_floor,
+            float(self._config.omega_variance) / omega_confidence_floor,
         )
         covariance = tuple(
             diagonal[row] if row == column else 0.0

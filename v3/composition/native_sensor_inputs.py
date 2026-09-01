@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 from v3.adapters.bno055_imu import (
     Bno055ImuBackendConfig,
     Bno055SamplePort,
     NativeBno055ImuBackend,
 )
+from v3.adapters.bno055_device import NativeBno055DeviceConfig
 from v3.adapters.counter_encoder import CounterEncoderBackendConfig
 from v3.adapters.gpio_counter import GpioCounterBackend, GpioCounterPairConfig
 from v3.adapters.gpio_encoder import NativeGpioEncoderSource
@@ -56,6 +58,35 @@ class NativeSensorInputConfig:
             raise ValueError("native sensor source device IDs must be unique")
         if self.lidar_source.pose_frame_id != self.lidar_backend.pose_frame_id:
             raise ValueError("lidar source and backend pose frame IDs must match")
+        if (
+            self.imu_source.allow_rate_only
+            and self.lidar_source.minimum_confidence <= 0.0
+        ):
+            raise ValueError(
+                "rate-only IMU health requires positive LIDAR_FIRST confidence"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class NativeSensorHardwareConfig:
+    """Closed native device and typed-source configuration for one owner."""
+
+    imu_device: NativeBno055DeviceConfig
+    inputs: NativeSensorInputConfig
+    lidar_danger_zone_m: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.imu_device, NativeBno055DeviceConfig):
+            raise TypeError("imu_device must be NativeBno055DeviceConfig")
+        if not isinstance(self.inputs, NativeSensorInputConfig):
+            raise TypeError("inputs must be NativeSensorInputConfig")
+        if (
+            isinstance(self.lidar_danger_zone_m, bool)
+            or not isinstance(self.lidar_danger_zone_m, (int, float))
+            or not math.isfinite(self.lidar_danger_zone_m)
+            or self.lidar_danger_zone_m <= 0.0
+        ):
+            raise ValueError("lidar_danger_zone_m must be finite and positive")
 
 
 class NativeSensorInputOwner:
@@ -80,22 +111,22 @@ class NativeSensorInputOwner:
         if not isinstance(config, NativeSensorInputConfig):
             raise TypeError("config must be NativeSensorInputConfig")
 
-        imu_backend = NativeBno055ImuBackend(imu_device, config.imu_backend)
-        lidar_backend = NativeLatestLidarBackend(lidar_port, config.lidar_backend)
-        encoder_source = NativeGpioEncoderSource(
-            counter_gpio_backend,
-            config.encoder_counter,
-            config.encoder_backend,
-            config.encoder_source,
-        )
         try:
+            imu_backend = NativeBno055ImuBackend(imu_device, config.imu_backend)
+            lidar_backend = NativeLatestLidarBackend(lidar_port, config.lidar_backend)
+            encoder_source = NativeGpioEncoderSource(
+                counter_gpio_backend,
+                config.encoder_counter,
+                config.encoder_backend,
+                config.encoder_source,
+            )
             imu_source = NativeImuSource(imu_backend, config.imu_source)
             lidar_source = NativeLidarSource(lidar_backend, config.lidar_source)
         except Exception:
             for close in (
-                lidar_port.stop,
-                imu_device.close,
-                encoder_source.close,
+                getattr(lidar_port, "stop", lambda: None),
+                getattr(imu_device, "close", lambda: None),
+                getattr(locals().get("encoder_source"), "close", lambda: None),
             ):
                 try:
                     close()
@@ -153,4 +184,8 @@ class NativeSensorInputOwner:
             raise first_error
 
 
-__all__ = ["NativeSensorInputConfig", "NativeSensorInputOwner"]
+__all__ = [
+    "NativeSensorHardwareConfig",
+    "NativeSensorInputConfig",
+    "NativeSensorInputOwner",
+]

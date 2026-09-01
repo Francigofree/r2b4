@@ -64,6 +64,7 @@ class LatestLidarBackendConfig:
     pose_frame_id: str = POSE_FRAME_ID
     pose_frame_owner: str = POSE_FRAME_OWNER
     pose_frame_yaw: str = POSE_FRAME_YAW
+    maximum_future_skew_ns: int = 0
 
     def __post_init__(self) -> None:
         maximum_age = _nonnegative_int(
@@ -72,6 +73,14 @@ class LatestLidarBackendConfig:
         )
         if maximum_age == 0:
             raise ValueError("maximum_result_age_ns must be positive")
+        future_skew = _nonnegative_int(
+            self.maximum_future_skew_ns,
+            "maximum_future_skew_ns",
+        )
+        if future_skew > maximum_age:
+            raise ValueError(
+                "maximum_future_skew_ns cannot exceed maximum_result_age_ns"
+            )
         r_scale = _finite(self.pose_r_scale, "pose_r_scale")
         if not 0.05 <= r_scale <= 20.0:
             raise ValueError("pose_r_scale must be within [0.05, 20]")
@@ -194,8 +203,8 @@ class NativeLatestLidarBackend:
         timing_valid = (
             runtime_contract_valid
             and summary_contract_valid
-            and result_age_ns >= 0
-            and measurement_age_ns >= 0
+            and result_age_ns >= -self._config.maximum_future_skew_ns
+            and measurement_age_ns >= -self._config.maximum_future_skew_ns
             and status.get("health") != "ERROR"
         )
         stale = (
@@ -215,7 +224,7 @@ class NativeLatestLidarBackend:
         )
         return LidarHealthReading(
             revision=revision,
-            captured_monotonic_ns=captured_ns,
+            captured_monotonic_ns=min(captured_ns, context.monotonic_ns),
             measurement_age_ns=max(0, measurement_age_ns),
             confidence=confidence,
             stale=stale,

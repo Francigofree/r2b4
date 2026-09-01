@@ -620,6 +620,32 @@ proof-kapu.
     `smbus2`, LiDAR driver/service vagy legacy import a V3 modulokban, nincs
     automatikus device/process start, runtime entrypoint, hardverfuttatás,
     robotmozgás vagy új motorút.
+    A tizenötödik, első concrete mérési szelet natív, injektált SMBus-portos
+    BNO055 device-ownert ad, amely a fused burstöt közvetlenül a caller
+    `TickContext` monoton idődoménjéhez köti; nincs több `perf_counter`/tick-clock
+    keverés vagy cache-authority. Az aktív hardware JSON a busz-, cím-, fusion-
+    és tengelyconfigot, valamint a LiDAR safety-zónát is immutable V3 configba
+    zárja, míg encoder/IMU/LiDAR freshness, trust és confidence policy továbbra
+    is explicit typed caller-input. A véges `run_finite_sensor_measurement`
+    kizárólag a zero-only `LiveInputComposition` útján fut, minden ticken teljes
+    L1–L12 trace-et és L3 estimate-et ad, signal/stop, exception és normál vég
+    után pedig idempotensen zárja a LiDAR-, SMBus- és encoder GPIO-ownert.
+    A protected matcher csak az előző lezárt L3 pose immutable, thread-safe
+    nézetét olvashatja; boot előtt a canonical map-origin `(0, 0, 0)`, aktuális
+    tickes vagy visszafelé mutató control-feedback nincs. Az aszinkron matcher
+    ugyanazon source-read ablakában mért legfeljebb 5.004 ms jövőbeli capture-
+    skewja explicit 10 ms boundon belül a tick zárási idejére clampelődik; ezen
+    túl timing-invalid marad, a 250 ms stale korlát változatlan. LIDAR_FIRST
+    módban az IMU heading- és gyro-rate confidence külön contract: rate-only OK
+    kizárólag pozitív LiDAR confidence-kapu mellett engedett, így a kalibrált
+    gyro használható akkor is, ha a mag/accel-függő abszolút heading még nem
+    trusted; LiDAR hiba továbbra is kritikus L12 STOP/FAULT. A concrete raised-
+    stand fizikai wrapper csak az egyetlen meglévő bounded owner loopot és L12
+    writert hívhatja az explicit approval token után; automatikus start vagy
+    második PWM-út nincs. Az élő zero-output encoder/IMU/LiDAR→L3 mérési kapu
+    lezárult. Fizikai ACTIVE futás továbbra sem történt: ehhez külön native V3
+    Test Hub profil és az infrastruktúra-policy szerinti friss explicit kapu
+    szükséges.
 13. **Minimális V3 toolchain-függetlenítés — tervezett:** csak a tényleges V3
     üzemeltetési igényhez szükséges CLI/status, `REPLAYER_V3` és mini Test Hub;
     legacy API-paritás nélkül.

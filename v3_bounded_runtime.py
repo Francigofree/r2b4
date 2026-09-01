@@ -19,8 +19,12 @@ from v3.composition.bounded_physical_control import (
     BoundedPhysicalControlComposition,
     BoundedPhysicalControlConfig,
 )
-from v3.composition.native_sensor_inputs import NativeSensorInputOwner
+from v3.composition.native_sensor_inputs import (
+    NativeSensorHardwareConfig,
+    NativeSensorInputOwner,
+)
 from v3.contracts import LifecycleState, TickContext
+from v3.engine import TickResult
 
 
 RUN_OK = 0
@@ -73,6 +77,7 @@ class BoundedPhysicalRuntimeConfig:
     composition: BoundedPhysicalControlConfig
     tick_period_ns: int = 20_000_000
     encoder: NativeEncoderRuntimeConfig | None = None
+    sensor_inputs: NativeSensorHardwareConfig | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.composition, BoundedPhysicalControlConfig):
@@ -92,6 +97,24 @@ class BoundedPhysicalRuntimeConfig:
             NativeEncoderRuntimeConfig,
         ):
             raise TypeError("encoder must be NativeEncoderRuntimeConfig or None")
+        if self.sensor_inputs is not None and not isinstance(
+            self.sensor_inputs,
+            NativeSensorHardwareConfig,
+        ):
+            raise TypeError("sensor_inputs must be NativeSensorHardwareConfig or None")
+        if self.sensor_inputs is not None:
+            if self.encoder is None:
+                raise ValueError("sensor_inputs require encoder runtime geometry")
+            inputs = self.sensor_inputs.inputs
+            if inputs.encoder_counter != self.encoder.counter_gpio:
+                raise ValueError("sensor and runtime encoder GPIO configs must match")
+            if (
+                inputs.encoder_backend.left_step_distance_m
+                != self.encoder.left_step_distance_m
+                or inputs.encoder_backend.right_step_distance_m
+                != self.encoder.right_step_distance_m
+            ):
+                raise ValueError("sensor and runtime encoder geometry must match")
 
 
 def _read_monotonic_ns(
@@ -123,6 +146,7 @@ def run_bounded_physical_control(
     stop_requested: Callable[[], bool],
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
+    tick_observer: Callable[[TickResult], None] | None = None,
 ) -> int:
     """Run one preflight-gated finite session and always release its GPIO owner.
 
@@ -140,6 +164,8 @@ def run_bounded_physical_control(
     ):
         if not callable(callback):
             raise TypeError(f"{name} must be callable")
+    if tick_observer is not None and not callable(tick_observer):
+        raise TypeError("tick_observer must be callable or None")
 
     if _stop_is_requested(stop_requested):
         return RUN_OK
@@ -177,7 +203,9 @@ def run_bounded_physical_control(
             if previous_tick_ns is not None and now_ns <= previous_tick_ns:
                 raise RuntimeError("monotonic clock did not advance between ticks")
 
-            runtime.tick(TickContext(tick_id, now_ns))
+            result = runtime.tick(TickContext(tick_id, now_ns))
+            if tick_observer is not None:
+                tick_observer(result)
             previous_tick_ns = now_ns
             tick_id += 1
             next_deadline_ns = max(
@@ -199,6 +227,7 @@ def run_owned_bounded_physical_control(
     stop_requested: Callable[[], bool],
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
+    tick_observer: Callable[[TickResult], None] | None = None,
 ) -> int:
     """Run through the sole bounded path and always close every input owner."""
 
@@ -212,6 +241,7 @@ def run_owned_bounded_physical_control(
             stop_requested=stop_requested,
             monotonic_ns=monotonic_ns,
             sleep=sleep,
+            tick_observer=tick_observer,
         )
     finally:
         sensor_inputs.close()

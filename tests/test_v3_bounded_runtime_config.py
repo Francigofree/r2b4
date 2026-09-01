@@ -7,6 +7,7 @@ import pytest
 from v3.adapters.bounded_command import BoundedTeleopProfile
 from v3.adapters.motor_pwm import PwmDecayMode
 from v3_bounded_config import (
+    NativeSensorPolicyConfig,
     POSE_FRAME_ID,
     load_bounded_physical_runtime_config,
 )
@@ -37,6 +38,27 @@ def _load(**kwargs):
         SPEED_MAP_PATH,
         _profile(),
         **kwargs,
+    )
+
+
+def _sensor_policy() -> NativeSensorPolicyConfig:
+    return NativeSensorPolicyConfig(
+        encoder_maximum_sample_interval_ns=100_000_000,
+        encoder_maximum_abs_velocity_mps=1.5,
+        encoder_minimum_trust=0.5,
+        imu_maximum_sample_age_ns=100_000_000,
+        imu_heading_clockwise_positive=True,
+        imu_yaw_rate_axis=2,
+        imu_yaw_rate_clockwise_positive=False,
+        imu_yaw_offset_rad=0.0,
+        imu_minimum_confidence=0.5,
+        imu_minimum_calibration=2,
+        imu_allow_rate_only=True,
+        lidar_maximum_result_age_ns=250_000_000,
+        lidar_maximum_future_skew_ns=10_000_000,
+        lidar_pose_r_scale=1.0,
+        lidar_minimum_confidence=0.2,
+        lidar_maximum_measurement_age_ns=250_000_000,
     )
 
 
@@ -108,6 +130,64 @@ def test_explicit_runtime_timing_and_gpio_values_are_validated_by_v3_contracts()
     assert config.composition.motor_output.pwm_frequency_hz == 10_000
     assert config.encoder is not None
     assert config.encoder.counter_gpio.gpio_chip == 2
+
+
+def test_active_sources_close_native_bno055_and_all_sensor_policy_once():
+    policy = _sensor_policy()
+    config = _load(sensor_policy=policy)
+    hardware = config.sensor_inputs
+
+    assert hardware is not None
+    assert hardware.imu_device.bus_number == 1
+    assert hardware.imu_device.address == 0x28
+    assert hardware.imu_device.operation_mode == "NDOF"
+    assert hardware.imu_device.axis_order == (0, 1, 2)
+    assert hardware.imu_device.axis_sign == (1, 1, 1)
+    assert hardware.imu_device.use_external_crystal is False
+    assert hardware.lidar_danger_zone_m == 0.1
+    assert config.encoder is not None
+    assert hardware.inputs.encoder_counter == config.encoder.counter_gpio
+    assert hardware.inputs.encoder_backend.maximum_sample_interval_ns == 100_000_000
+    assert hardware.inputs.encoder_backend.maximum_abs_velocity_mps == 1.5
+    assert hardware.inputs.encoder_source.device_id == "WHEEL_ENCODERS"
+    assert hardware.inputs.imu_backend.heading_clockwise_positive is True
+    assert hardware.inputs.imu_backend.yaw_rate_axis == 2
+    assert hardware.inputs.imu_backend.yaw_rate_clockwise_positive is False
+    assert hardware.inputs.imu_source.minimum_calibration == 2
+    assert hardware.inputs.imu_source.allow_rate_only is True
+    assert hardware.inputs.lidar_backend.maximum_result_age_ns == 250_000_000
+    assert hardware.inputs.lidar_backend.maximum_future_skew_ns == 10_000_000
+    assert hardware.inputs.lidar_source.pose_frame_id == POSE_FRAME_ID
+    with pytest.raises(FrozenInstanceError):
+        hardware.imu_device.address = 0x29  # type: ignore[misc]
+
+
+def test_sensor_policy_is_explicit_and_rejected_before_config_paths_are_opened(tmp_path: Path):
+    missing = tmp_path / "missing.json"
+    with pytest.raises(TypeError, match="sensor_policy"):
+        load_bounded_physical_runtime_config(
+            missing,
+            missing,
+            missing,
+            _profile(),
+            sensor_policy=object(),  # type: ignore[arg-type]
+        )
+
+
+def test_sensor_loader_rejects_implicit_or_malformed_bno055_values(tmp_path: Path):
+    def invalidate(payload):
+        payload["imu"]["bno055"]["address"] = "not-an-address"
+
+    hardware = _changed_json(tmp_path, HARDWARE_PATH, invalidate)
+
+    with pytest.raises(ValueError, match="integer or hexadecimal"):
+        load_bounded_physical_runtime_config(
+            hardware,
+            PHYSICS_PATH,
+            SPEED_MAP_PATH,
+            _profile(),
+            sensor_policy=_sensor_policy(),
+        )
 
 
 def test_encoder_sample_policy_is_explicit_and_not_loaded_from_snapshot_hz():

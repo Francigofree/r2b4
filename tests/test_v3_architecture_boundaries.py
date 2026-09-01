@@ -241,6 +241,7 @@ def test_bounded_physical_runtime_has_no_entrypoint_or_legacy_authority():
         "v3.composition.bounded_physical_control",
         "v3.composition.native_sensor_inputs",
         "v3.contracts",
+        "v3.engine",
     }
     assert "main" not in function_names
     assert not imported_modules & {
@@ -251,6 +252,29 @@ def test_bounded_physical_runtime_has_no_entrypoint_or_legacy_authority():
         "lgpio",
         "motion_executor",
         "signal",
+        "state",
+    }
+
+
+def test_hardware_runtime_keeps_concrete_modules_and_legacy_authority_outside():
+    path = PROJECT_ROOT / "v3_hardware_runtime.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert not imported_modules & {
+        "config_manager",
+        "cont",
+        "controller",
+        "driver",
+        "lgpio",
+        "middleware",
+        "sensors",
+        "smbus2",
         "state",
     }
 
@@ -271,16 +295,25 @@ def test_bounded_runtime_config_loader_has_no_hardware_or_legacy_authority():
     assert imported_modules <= {
         "__future__",
         "collections.abc",
+        "dataclasses",
         "json",
         "math",
         "pathlib",
+        "v3.adapters.bno055_device",
+        "v3.adapters.bno055_imu",
         "v3.adapters.bounded_command",
+        "v3.adapters.counter_encoder",
         "v3.adapters.gpio_counter",
         "v3.adapters.gpio_motor",
+        "v3.adapters.latest_lidar",
+        "v3.adapters.live_encoder",
+        "v3.adapters.live_imu",
+        "v3.adapters.live_lidar",
         "v3.adapters.motor_pwm",
         "v3.composition.bounded_live_control",
         "v3.composition.bounded_physical_control",
         "v3.composition.native_control",
+        "v3.composition.native_sensor_inputs",
         "v3.layers.l3_state_estimation",
         "v3.layers.l10_chassis_control",
         "v3.layers.l11_actuator_control",
@@ -420,6 +453,31 @@ def test_native_live_imu_source_has_no_legacy_or_runtime_authority():
         "math",
         "typing",
         "v3.contracts",
+    }
+
+
+def test_native_bno055_device_has_no_legacy_config_or_concrete_smbus_authority():
+    path = PROJECT_ROOT / "v3" / "adapters" / "bno055_device.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add("." * node.level + node.module)
+
+    assert imported_modules <= {
+        "__future__",
+        "collections.abc",
+        "dataclasses",
+        "math",
+        "time",
+        "typing",
+    }
+    assert not imported_modules & {
+        "config_manager",
+        "driver.bno055",
+        "smbus2",
     }
 
 

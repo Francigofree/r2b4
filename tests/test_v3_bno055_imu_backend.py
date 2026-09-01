@@ -62,6 +62,8 @@ def test_one_forced_sample_maps_units_sign_calibration_and_tick_identity():
     assert reading.omega_rad_s == pytest.approx(math.pi / 6.0)
     assert reading.calibration == 2
     assert reading.confidence == pytest.approx(2.0 / 3.0)
+    assert reading.omega_calibration == 3
+    assert reading.omega_confidence == 1.0
     assert reading.stale is False
     assert reading.timing_valid is True
 
@@ -102,6 +104,29 @@ def test_stale_and_device_failure_map_through_existing_native_source_health():
     assert failed_device.read_calls == [True]
     assert failed.health.state is DeviceHealthState.FAILED
     assert failed.health.reason == "IMU_TIMING_INVALID"
+
+
+def test_lidar_first_rate_only_health_keeps_calibrated_gyro_without_trusting_heading():
+    source = NativeImuSource(
+        NativeBno055ImuBackend(
+            Device(
+                _sample(
+                    calibration={"sys": 0, "gyro": 3, "accel": 0, "mag": 0},
+                )
+            ),
+            _config(),
+        ),
+        NativeImuConfig("imu", 0.5, 2, allow_rate_only=True),
+    )
+
+    snapshot = source.read(TickContext(1, 1_000_000_000))
+    fields = {field.key: field.value for field in snapshot.samples[0].values}
+
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert fields["confidence"] == 0.0
+    assert fields["calibration"] == 0
+    assert fields["omega_confidence"] == 1.0
+    assert fields["omega_calibration"] == 3
 
 
 @pytest.mark.parametrize(

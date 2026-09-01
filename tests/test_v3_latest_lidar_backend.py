@@ -164,8 +164,56 @@ def test_result_age_and_runtime_stale_health_are_degraded():
     assert status.timing_valid is True and status.stale is True
 
 
+def test_explicit_same_tick_acquisition_skew_is_bounded_and_clamped():
+    port = Port(
+        _result(
+            timestamp=1.005,
+            source_raw_scan_timestamp=1.004,
+        ),
+        _status(),
+    )
+    backend = NativeLatestLidarBackend(
+        port,
+        LatestLidarBackendConfig(
+            maximum_result_age_ns=20_000_000,
+            maximum_future_skew_ns=10_000_000,
+        ),
+    )
+
+    reading = backend.read(TickContext(7, 1_000_000_000))
+
+    assert reading.timing_valid is True
+    assert reading.stale is False
+    assert reading.captured_monotonic_ns == 1_000_000_000
+    assert reading.measurement_age_ns == 0
+
+
+def test_result_beyond_explicit_same_tick_skew_remains_failed():
+    port = Port(
+        _result(
+            timestamp=1.011,
+            source_raw_scan_timestamp=1.004,
+        ),
+        _status(),
+    )
+    backend = NativeLatestLidarBackend(
+        port,
+        LatestLidarBackendConfig(
+            maximum_result_age_ns=20_000_000,
+            maximum_future_skew_ns=10_000_000,
+        ),
+    )
+
+    assert backend.read(TickContext(7, 1_000_000_000)).timing_valid is False
+
+
 def test_protected_config_identifiers_cannot_be_overridden():
     with pytest.raises(ValueError, match="odometry_mode"):
         LatestLidarBackendConfig(20_000_000, odometry_mode="ENCODER_ONLY")
     with pytest.raises(ValueError, match="matcher_transport"):
         LatestLidarBackendConfig(20_000_000, matcher_transport="thread")
+    with pytest.raises(ValueError, match="cannot exceed"):
+        LatestLidarBackendConfig(
+            20_000_000,
+            maximum_future_skew_ns=20_000_001,
+        )

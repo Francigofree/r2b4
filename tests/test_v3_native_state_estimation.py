@@ -20,6 +20,7 @@ def _frame(
     omega_rad_s: float = 0.0,
     trust: float = 0.9,
     confidence: float = 0.9,
+    omega_confidence: float | None = None,
     lidar_pose: tuple[float, float, float] | None = None,
     lidar_confidence: float = 1.0,
     lidar_r_scale: float = 1.0,
@@ -48,6 +49,11 @@ def _frame(
                 DataField("yaw_rad", yaw_rad),
                 DataField("omega_rad_s", omega_rad_s),
                 DataField("confidence", confidence),
+            )
+            + (
+                (DataField("omega_confidence", omega_confidence),)
+                if omega_confidence is not None
+                else ()
             ),
         ),
     ]
@@ -223,6 +229,24 @@ def test_native_uses_wheel_yaw_rate_when_heading_rate_has_zero_confidence():
     )
 
     assert estimate.omega_rad_s == pytest.approx(0.5)
+
+
+def test_native_uses_calibrated_gyro_rate_without_trusting_absolute_heading():
+    estimator = NativeStateEstimator(_config(track_width_m=0.4))
+
+    estimate = estimator(
+        _frame(
+            0,
+            left_mps=0.1,
+            right_mps=0.3,
+            yaw_rad=0.0,
+            omega_rad_s=0.4,
+            confidence=0.0,
+            omega_confidence=1.0,
+        )
+    )
+
+    assert estimate.omega_rad_s == pytest.approx(0.4)
 
 
 def test_native_gap_reanchors_without_integrating_stale_motion():

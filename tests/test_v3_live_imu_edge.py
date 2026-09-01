@@ -35,6 +35,8 @@ def _reading(
     calibration: int = 3,
     stale: bool = False,
     timing_valid: bool = True,
+    omega_confidence: float | None = None,
+    omega_calibration: int | None = None,
 ) -> ImuHeadingReading:
     return ImuHeadingReading(
         sequence=21,
@@ -45,6 +47,8 @@ def _reading(
         calibration=calibration,
         stale=stale,
         timing_valid=timing_valid,
+        omega_confidence=omega_confidence,
+        omega_calibration=omega_calibration,
     )
 
 
@@ -83,6 +87,8 @@ def test_native_imu_source_closes_one_typed_heading_sample():
                 DataField("omega_rad_s", -0.2),
                 DataField("confidence", 0.9),
                 DataField("calibration", 3),
+                DataField("omega_confidence", 0.9),
+                DataField("omega_calibration", 3),
             ),
         ),
     )
@@ -135,6 +141,46 @@ def test_invalid_imu_timing_is_rejected_by_existing_l2_admission():
     assert admitted.degraded_sources == ("BNO055_IMU",)
 
 
+def test_rate_only_health_uses_separate_gyro_quality_and_keeps_heading_untrusted():
+    reading = _reading(
+        confidence=0.0,
+        calibration=0,
+        omega_confidence=1.0,
+        omega_calibration=3,
+    )
+    backend = _FakeImuBackend(reading)
+    source = NativeImuSource(
+        backend,
+        NativeImuConfig("BNO055_IMU", 0.4, 2, allow_rate_only=True),
+    )
+
+    snapshot = source.read(TickContext(5, 1_000))
+    values = {field.key: field.value for field in snapshot.samples[0].values}
+
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert values["confidence"] == 0.0
+    assert values["omega_confidence"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("reading", "reason"),
+    (
+        (_reading(omega_calibration=1), "IMU_RATE_CALIBRATION_LOW"),
+        (_reading(omega_confidence=0.2), "IMU_RATE_CONFIDENCE_LOW"),
+    ),
+)
+def test_rate_only_health_still_rejects_untrusted_gyro(reading, reason):
+    source = NativeImuSource(
+        _FakeImuBackend(reading),
+        NativeImuConfig("BNO055_IMU", 0.4, 2, allow_rate_only=True),
+    )
+
+    health = source.read(TickContext(5, 1_000)).health
+
+    assert health.state is DeviceHealthState.DEGRADED
+    assert health.reason == reason
+
+
 def test_imu_backend_failure_propagates_once_without_retry():
     context = TickContext(5, 1_000)
     backend = _FakeImuBackend(OSError("injected IMU failure"))
@@ -173,3 +219,7 @@ def test_imu_reading_and_config_are_immutable_and_validated():
         ImuHeadingReading(21, 990, 4.0, -0.2, 0.9, 3, False, True)
     with pytest.raises(ValueError, match="timing_valid must be bool"):
         ImuHeadingReading(21, 990, 0.0, -0.2, 0.9, 3, False, 1)
+    with pytest.raises(ValueError, match="omega_confidence"):
+        _reading(omega_confidence=1.1)
+    with pytest.raises(ValueError, match="allow_rate_only"):
+        NativeImuConfig("BNO055_IMU", 0.4, 2, allow_rate_only=1)

@@ -47,6 +47,7 @@ class NativeImuConfig:
     device_id: str
     minimum_confidence: float
     minimum_calibration: int
+    allow_rate_only: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.device_id, str) or not self.device_id.strip():
@@ -55,6 +56,8 @@ class NativeImuConfig:
         if not 0.0 <= confidence <= 1.0:
             raise ValueError("minimum_confidence must be within [0, 1]")
         _calibration_level(self.minimum_calibration, "minimum_calibration")
+        if type(self.allow_rate_only) is not bool:
+            raise ValueError("allow_rate_only must be bool")
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +77,8 @@ class ImuHeadingReading:
     calibration: int
     stale: bool
     timing_valid: bool
+    omega_confidence: float | None = None
+    omega_calibration: int | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.sequence, "sequence")
@@ -90,6 +95,31 @@ class ImuHeadingReading:
             raise ValueError("stale must be bool")
         if type(self.timing_valid) is not bool:
             raise ValueError("timing_valid must be bool")
+        if self.omega_confidence is not None:
+            omega_confidence = _finite(
+                self.omega_confidence,
+                "omega_confidence",
+            )
+            if not 0.0 <= omega_confidence <= 1.0:
+                raise ValueError("omega_confidence must be within [0, 1]")
+        if self.omega_calibration is not None:
+            _calibration_level(self.omega_calibration, "omega_calibration")
+
+    @property
+    def resolved_omega_confidence(self) -> float:
+        return (
+            self.confidence
+            if self.omega_confidence is None
+            else self.omega_confidence
+        )
+
+    @property
+    def resolved_omega_calibration(self) -> int:
+        return (
+            self.calibration
+            if self.omega_calibration is None
+            else self.omega_calibration
+        )
 
 
 class ImuHeadingBackend(Protocol):
@@ -132,13 +162,39 @@ class NativeImuSource:
                 DeviceHealthState.DEGRADED,
                 "IMU_STALE",
             )
-        elif reading.calibration < self._config.minimum_calibration:
+        elif (
+            self._config.allow_rate_only
+            and reading.resolved_omega_calibration
+            < self._config.minimum_calibration
+        ):
+            health = DeviceHealth(
+                self.device_id,
+                DeviceHealthState.DEGRADED,
+                "IMU_RATE_CALIBRATION_LOW",
+            )
+        elif (
+            self._config.allow_rate_only
+            and reading.resolved_omega_confidence
+            < self._config.minimum_confidence
+        ):
+            health = DeviceHealth(
+                self.device_id,
+                DeviceHealthState.DEGRADED,
+                "IMU_RATE_CONFIDENCE_LOW",
+            )
+        elif (
+            not self._config.allow_rate_only
+            and reading.calibration < self._config.minimum_calibration
+        ):
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.DEGRADED,
                 "IMU_CALIBRATION_LOW",
             )
-        elif reading.confidence < self._config.minimum_confidence:
+        elif (
+            not self._config.allow_rate_only
+            and reading.confidence < self._config.minimum_confidence
+        ):
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.DEGRADED,
@@ -157,6 +213,14 @@ class NativeImuSource:
                 DataField("omega_rad_s", reading.omega_rad_s),
                 DataField("confidence", reading.confidence),
                 DataField("calibration", reading.calibration),
+                DataField(
+                    "omega_confidence",
+                    reading.resolved_omega_confidence,
+                ),
+                DataField(
+                    "omega_calibration",
+                    reading.resolved_omega_calibration,
+                ),
             ),
         )
         return LiveDeviceSnapshot(context, health, (sample,))

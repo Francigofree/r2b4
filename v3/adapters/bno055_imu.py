@@ -110,7 +110,7 @@ class NativeBno055ImuBackend:
         return self._device
 
     @staticmethod
-    def _calibration(sample: Mapping[str, object]) -> int:
+    def _calibration(sample: Mapping[str, object]) -> tuple[int, int]:
         value = sample.get("calibration")
         if not isinstance(value, Mapping):
             raise TypeError("BNO055 calibration must be a mapping")
@@ -120,12 +120,17 @@ class NativeBno055ImuBackend:
         )
         if any(level > 3 for level in levels):
             raise ValueError("BNO055 calibration levels must be within [0, 3]")
-        return min(levels)
+        return min(levels), levels[1]
 
     def read(self, context: TickContext) -> ImuHeadingReading:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
-        sample = self._device.read_sample(force=True)
+        tick_bound_read = getattr(self._device, "read_sample_at", None)
+        sample = (
+            tick_bound_read(context.monotonic_ns)
+            if callable(tick_bound_read)
+            else self._device.read_sample(force=True)
+        )
         if not isinstance(sample, Mapping):
             raise TypeError("BNO055 read_sample must return a mapping")
 
@@ -147,7 +152,7 @@ class NativeBno055ImuBackend:
             gyro[self._config.yaw_rate_axis],
             "gyro_dps[yaw_rate_axis]",
         )
-        calibration = self._calibration(sample)
+        calibration, omega_calibration = self._calibration(sample)
         system_error = _nonnegative_int(sample.get("sys_error", 0), "sys_error")
 
         yaw_sign = -1.0 if self._config.heading_clockwise_positive else 1.0
@@ -178,6 +183,10 @@ class NativeBno055ImuBackend:
             calibration=calibration,
             stale=stale,
             timing_valid=timing_valid,
+            omega_confidence=(
+                omega_calibration / 3.0 if timing_valid else 0.0
+            ),
+            omega_calibration=omega_calibration,
         )
 
 

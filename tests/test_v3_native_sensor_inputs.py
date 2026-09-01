@@ -186,6 +186,17 @@ def _input_config() -> NativeSensorInputConfig:
     )
 
 
+def test_rate_only_imu_requires_a_positive_lidar_first_confidence_gate():
+    config = _input_config()
+
+    with pytest.raises(ValueError, match="positive LIDAR_FIRST confidence"):
+        replace(
+            config,
+            imu_source=replace(config.imu_source, allow_rate_only=True),
+            lidar_source=replace(config.lidar_source, minimum_confidence=0.0),
+        )
+
+
 def _owner():
     gpio = CounterGpio()
     imu = ImuDevice()
