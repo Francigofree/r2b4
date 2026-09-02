@@ -82,14 +82,35 @@ class FakePwmGpio:
     def __init__(self, *, fail_nonzero: bool = False) -> None:
         self.fail_nonzero = fail_nonzero
         self.calls: list[tuple[object, ...]] = []
+        self.levels: dict[int, int] = {}
+        self.pwm_busy: set[int] = set()
 
     def gpiochip_open(self, chip: int) -> int:
         self.calls.append(("open", chip))
         return 11
 
-    def gpio_claim_output(self, handle: int, pin: int) -> int:
-        self.calls.append(("claim", handle, pin))
+    def gpio_claim_output(self, handle: int, pin: int, initial_level: int) -> int:
+        self.calls.append(("claim", handle, pin, initial_level))
+        self.levels[pin] = initial_level
         return 0
+
+    def gpio_write(self, handle: int, pin: int, level: int) -> int:
+        self.calls.append(("write", handle, pin, level))
+        self.levels[pin] = level
+        return 0
+
+    def gpio_read(self, handle: int, pin: int) -> int:
+        self.calls.append(("read", handle, pin))
+        return self.levels[pin]
+
+    def gpio_free(self, handle: int, pin: int) -> int:
+        self.calls.append(("free", handle, pin))
+        self.pwm_busy.discard(pin)
+        return 0
+
+    def tx_busy(self, handle: int, pin: int, kind: int) -> int:
+        self.calls.append(("busy", handle, pin, kind))
+        return int(pin in self.pwm_busy)
 
     def tx_pwm(
         self,
@@ -101,6 +122,10 @@ class FakePwmGpio:
         self.calls.append(("pwm", handle, pin, frequency_hz, duty_cycle))
         if self.fail_nonzero and duty_cycle != 0.0:
             raise OSError("injected GPIO PWM failure")
+        if frequency_hz == 0:
+            self.pwm_busy.discard(pin)
+        elif duty_cycle != 0.0:
+            self.pwm_busy.add(pin)
         return 0
 
     def gpiochip_close(self, handle: int) -> int:
@@ -215,7 +240,8 @@ def test_owner_loop_runs_preflight_bounded_active_post_window_and_final_zero():
     assert status == RUN_OK
     assert [context.tick_id for context in encoder.calls] == [0, 1, 2, 3, 4]
     assert any(call[-1] != 0.0 for call in _pwm_calls(gpio))
-    assert all(call[-1] == 0.0 for call in _pwm_calls(gpio)[-8:])
+    assert gpio.pwm_busy == set()
+    assert gpio.levels == {12: 0, 13: 0, 18: 0, 19: 0}
     assert gpio.calls[-1] == ("close", 11)
     assert gpio.calls.count(("close", 11)) == 1
 

@@ -1,7 +1,9 @@
-"""Unwired native V3 GPIO sink for one paired DRV8871 motor frame."""
+"""Native V3 GPIO sink for one paired DRV8871 motor frame."""
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -15,7 +17,20 @@ class PwmGpioBackend(Protocol):
 
     def gpiochip_open(self, chip: int) -> int: ...
 
-    def gpio_claim_output(self, handle: int, pin: int) -> object: ...
+    def gpio_claim_output(
+        self,
+        handle: int,
+        pin: int,
+        initial_level: int,
+    ) -> object: ...
+
+    def gpio_write(self, handle: int, pin: int, level: int) -> object: ...
+
+    def gpio_read(self, handle: int, pin: int) -> object: ...
+
+    def gpio_free(self, handle: int, pin: int) -> object: ...
+
+    def tx_busy(self, handle: int, pin: int, kind: int) -> object: ...
 
     def tx_pwm(
         self,
@@ -62,23 +77,44 @@ class GpioMotorFrameSinkConfig:
 class GpioMotorFrameSink:
     """Own one GPIO handle and apply paired frames fail-closed.
 
-    Each normal write first drives all four pins to zero. ALLOW duties are
-    applied only after that break-before-make boundary. A physical write error
-    permanently closes this capability after best-effort emergency zeroing.
+    Every write first cancels PWM and explicitly drives all four inputs LOW.
+    ALLOW duties are applied only after that verified break-before-make
+    boundary. STOP, FAULT and close retain the verified LOW state long enough
+    for the DRV8871 to enter sleep before the GPIO handle is released. A
+    physical error permanently closes this capability after best-effort
+    emergency hard-low handling.
     """
 
-    __slots__ = ("_backend", "_closed", "_config", "_failed", "_handle")
+    _DRV8871_SLEEP_HOLD_S = 0.002
+
+    __slots__ = (
+        "_backend",
+        "_claimed_pins",
+        "_closed",
+        "_config",
+        "_failed",
+        "_handle",
+        "_sleep",
+    )
 
     def __init__(
         self,
         backend: PwmGpioBackend,
         config: GpioMotorFrameSinkConfig,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not isinstance(config, GpioMotorFrameSinkConfig):
             raise TypeError("config must be GpioMotorFrameSinkConfig")
+        if not callable(sleep):
+            raise TypeError("sleep must be callable")
         for method_name in (
             "gpiochip_open",
             "gpio_claim_output",
+            "gpio_write",
+            "gpio_read",
+            "gpio_free",
+            "tx_busy",
             "tx_pwm",
             "gpiochip_close",
         ):
@@ -91,20 +127,31 @@ class GpioMotorFrameSink:
         self._config = config
         self._closed = False
         self._failed = False
+        self._sleep = sleep
+        self._claimed_pins: list[int] = []
         self._handle = self._open_handle()
         try:
+            initialization_error: Exception | None = None
             for pin in self._config.pins:
-                self._checked_call(
-                    self._backend.gpio_claim_output(self._handle, pin),
-                    f"claim GPIO {pin}",
-                )
-                self._apply_pin(pin, 0.0)
+                # Include the attempted pin in emergency handling: a backend
+                # may raise after the kernel has already accepted the claim.
+                self._claimed_pins.append(pin)
+                try:
+                    self._checked_call(
+                        self._backend.gpio_claim_output(self._handle, pin, 0),
+                        f"claim GPIO {pin}",
+                    )
+                    self._cancel_pwm(pin)
+                    self._write_low(pin)
+                    self._verify_low(pin)
+                except Exception as exc:
+                    if initialization_error is None:
+                        initialization_error = exc
+            if initialization_error is not None:
+                raise initialization_error
+            self._hold_and_reverify_low()
         except Exception:
-            try:
-                self._backend.gpiochip_close(self._handle)
-            finally:
-                self._closed = True
-                self._failed = True
+            self._emergency_hard_low_and_close()
             raise
 
     @property
@@ -137,9 +184,54 @@ class GpioMotorFrameSink:
             f"PWM write on GPIO {pin}",
         )
 
-    def _apply_zero(self) -> None:
-        for pin in self._config.pins:
-            self._apply_pin(pin, 0.0)
+    def _cancel_pwm(self, pin: int) -> None:
+        # lgpio rejects the nominal 0 Hz cancellation call when no
+        # transmitter record exists. Querying the single-writer-owned record
+        # first makes cancellation both explicit and valid on that backend.
+        busy = self._backend.tx_busy(self._handle, pin, 0)
+        if (
+            not isinstance(busy, int)
+            or isinstance(busy, bool)
+            or busy not in (0, 1)
+        ):
+            raise OSError(f"GPIO {pin} PWM busy query returned {busy!r}")
+        if busy:
+            self._checked_call(
+                self._backend.tx_pwm(self._handle, pin, 0, 0.0),
+                f"PWM cancel on GPIO {pin}",
+            )
+
+    def _write_low(self, pin: int) -> None:
+        self._checked_call(
+            self._backend.gpio_write(self._handle, pin, 0),
+            f"LOW write on GPIO {pin}",
+        )
+
+    def _verify_low(self, pin: int) -> None:
+        level = self._backend.gpio_read(self._handle, pin)
+        if (
+            not isinstance(level, int)
+            or isinstance(level, bool)
+            or level not in (0, 1)
+        ):
+            raise OSError(f"GPIO {pin} readback returned invalid level {level!r}")
+        if level != 0:
+            raise OSError(f"GPIO {pin} remained HIGH after the LOW write")
+
+    def _hold_and_reverify_low(self) -> None:
+        self._sleep(self._DRV8871_SLEEP_HOLD_S)
+        for pin in self._claimed_pins:
+            self._verify_low(pin)
+
+    def _hard_low(self, *, enter_sleep: bool) -> None:
+        for pin in self._claimed_pins:
+            self._cancel_pwm(pin)
+        for pin in self._claimed_pins:
+            self._write_low(pin)
+        for pin in self._claimed_pins:
+            self._verify_low(pin)
+        if enter_sleep:
+            self._hold_and_reverify_low()
 
     def _target_duties(
         self,
@@ -152,11 +244,40 @@ class GpioMotorFrameSink:
             (self._config.right.in2, frame.right.in2_duty_cycle),
         )
 
-    def _emergency_zero_and_close(self) -> None:
+    def _emergency_hard_low_and_close(self) -> None:
         self._failed = True
-        for pin in self._config.pins:
+        for pin in self._claimed_pins:
             try:
-                self._apply_pin(pin, 0.0)
+                self._cancel_pwm(pin)
+            except Exception:
+                # gpio_free synchronously invalidates lgpio's transmitter
+                # record. Reclaim at LOW so a broken busy/cancel path cannot
+                # leave a software PWM worker with authority over the pin.
+                try:
+                    self._backend.gpio_free(self._handle, pin)
+                except Exception:
+                    pass
+                try:
+                    self._backend.gpio_claim_output(self._handle, pin, 0)
+                except Exception:
+                    pass
+        for pin in self._claimed_pins:
+            try:
+                self._write_low(pin)
+            except Exception:
+                pass
+        for pin in self._claimed_pins:
+            try:
+                self._verify_low(pin)
+            except Exception:
+                pass
+        try:
+            self._sleep(self._DRV8871_SLEEP_HOLD_S)
+        except Exception:
+            pass
+        for pin in self._claimed_pins:
+            try:
+                self._verify_low(pin)
             except Exception:
                 pass
         try:
@@ -173,30 +294,35 @@ class GpioMotorFrameSink:
         if not isinstance(frame, Drv8871MotorFrame):
             raise TypeError("frame must be Drv8871MotorFrame")
         try:
-            self._apply_zero()
+            self._hard_low(
+                enter_sleep=frame.safety_decision is not SafetyDecision.ALLOW
+            )
             if frame.safety_decision is SafetyDecision.ALLOW:
                 for pin, duty_cycle in self._target_duties(frame):
                     if duty_cycle != 0.0:
                         self._apply_pin(pin, duty_cycle)
         except Exception:
-            self._emergency_zero_and_close()
+            self._emergency_hard_low_and_close()
             raise
 
     def close(self) -> None:
-        """Zero the paired output and release the handle exactly once."""
+        """Cancel PWM, hold verified LOW, and release the handle once."""
 
         if self._closed:
             return
         try:
-            self._apply_zero()
+            self._hard_low(enter_sleep=True)
         except Exception:
-            self._emergency_zero_and_close()
+            self._emergency_hard_low_and_close()
             raise
         try:
             self._checked_call(
                 self._backend.gpiochip_close(self._handle),
                 "close GPIO chip",
             )
+        except Exception:
+            self._emergency_hard_low_and_close()
+            raise
         finally:
             self._closed = True
 

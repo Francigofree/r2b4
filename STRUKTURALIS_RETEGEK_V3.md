@@ -441,13 +441,18 @@ proof-kapu.
     kapuval, bounded profillal, friss preflighttal és végső PWM-nullal jöhetnek.
     A második, továbbra is runtime-bekötés nélküli szelet egy natív
     `GpioMotorFrameSink` edge-et ad. Egyetlen injektált GPIO backend-handle alatt
-    claimeli a négy immutable konfigurációjú motorpint, és mindegyiket közvetlenül
-    a claim után nullázza. Minden `Drv8871MotorFrame` előtt determinisztikus
-    break-before-make nullázás történik; csak `ALLOW` frame után kerülhetnek ki a
-    validált nem nulla duty értékek. Fizikai write-hibánál ugyanazon sink-híváson
-    belül best-effort vésznullázás és handle-zárás történik, az eredeti exception
-    továbbterjed, és a capability többé nem írhat; ez nem második L12 döntés vagy
-    normál retry. Szabályos close is nullázás után engedi el az egyetlen handle-t.
+    claimeli a négy immutable konfigurációjú motorpint explicit LOW kezdőszinttel.
+    A claimet PWM-busy ellenőrzés, explicit LOW írás és LOW readback követi.
+    Minden `Drv8871MotorFrame` előtt determinisztikus, visszaolvasott
+    break-before-make LOW történik; csak `ALLOW` frame után kerülhetnek ki a
+    validált nem nulla duty értékek. A STOP, FAULT és close minden aktív
+    software-PWM rekordot explicit leállít, mind a négy DRV8871 bemenetet LOW-ra
+    hajtja és visszaolvassa, legalább 2 ms-ig LOW-on tartja, majd újra ellenőrzi;
+    a GPIO-handle csak ezután engedhető el. Busy/cancel backend-hibánál a
+    `gpio_free` + LOW-on újraclaim vészút szinkron elveszi a PWM authorityt.
+    Más fizikai hibánál ugyanazon sink-híváson belül best-effort hard-low és
+    handle-zárás történik, az eredeti exception továbbterjed, és a capability
+    többé nem írhat; ez nem második L12 döntés vagy normál retry.
     A sink nincs compositionhöz, command gatewayhez vagy konkrét `lgpio`
     importhoz kötve; nincs owner loop, óra, `ACTIVE` átmenet, runtime cutover,
     hardverfuttatás vagy élő motion.
@@ -643,9 +648,15 @@ proof-kapu.
     stand fizikai wrapper csak az egyetlen meglévő bounded owner loopot és L12
     writert hívhatja az explicit approval token után; automatikus start vagy
     második PWM-út nincs. Az élő zero-output encoder/IMU/LiDAR→L3 mérési kapu
-    lezárult. Fizikai ACTIVE futás továbbra sem történt: ehhez külön native V3
-    Test Hub profil és az infrastruktúra-policy szerinti friss explicit kapu
-    szükséges.
+    lezárult. Az első raised-stand ACTIVE próba 200. tickje engedélyezett bounded
+    kimenetet adott, a 201. tick encoder low-trust hibája pedig L12 FAULT-ot.
+    A GPIO recorder null duty-kat és handle-close-t látott, de a human fizikai
+    megfigyelés szerint a kerekek csak a motor-táp kézi megszakításakor álltak
+    meg. Ez bizonyította, hogy a duty=0 kérés önmagában nem fizikai stop-authority.
+    Az eset óta powered ACTIVE futás tiltott; a hard-low javítás motor-táp nélküli
+    próbája mind a négy pin explicit LOW írását, LOW readbackjét és close utáni
+    `op dl` állapotát igazolta. Új ACTIVE futás csak a javítás promotionje, friss
+    native V3 Test Hub profil, preflight és explicit human kapu után történhet.
 13. **Minimális V3 toolchain-függetlenítés — tervezett:** csak a tényleges V3
     üzemeltetési igényhez szükséges CLI/status, `REPLAYER_V3` és mini Test Hub;
     legacy API-paritás nélkül.

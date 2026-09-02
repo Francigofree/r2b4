@@ -93,7 +93,9 @@ def test_native_gpio_motor_sink_has_no_legacy_or_runtime_authority():
     assert imported_modules <= {
         "__future__",
         ".motor_pwm",
+        "collections.abc",
         "dataclasses",
+        "time",
         "typing",
         "v3.contracts",
     }

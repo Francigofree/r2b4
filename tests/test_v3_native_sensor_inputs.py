@@ -153,17 +153,42 @@ class LidarPort:
 class MotorGpio:
     def __init__(self) -> None:
         self.calls = []
+        self.levels = {}
+        self.pwm_busy = set()
 
     def gpiochip_open(self, chip):
         self.calls.append(("open", chip))
         return 20
 
-    def gpio_claim_output(self, handle, pin):
-        self.calls.append(("claim", pin))
+    def gpio_claim_output(self, handle, pin, initial_level):
+        self.calls.append(("claim", pin, initial_level))
+        self.levels[pin] = initial_level
         return 0
+
+    def gpio_write(self, handle, pin, level):
+        self.calls.append(("write", pin, level))
+        self.levels[pin] = level
+        return 0
+
+    def gpio_read(self, handle, pin):
+        self.calls.append(("read", pin))
+        return self.levels[pin]
+
+    def gpio_free(self, handle, pin):
+        self.calls.append(("free", pin))
+        self.pwm_busy.discard(pin)
+        return 0
+
+    def tx_busy(self, handle, pin, kind):
+        self.calls.append(("busy", pin, kind))
+        return int(pin in self.pwm_busy)
 
     def tx_pwm(self, handle, pin, frequency_hz, duty_cycle):
         self.calls.append(("pwm", pin, duty_cycle))
+        if frequency_hz == 0:
+            self.pwm_busy.discard(pin)
+        elif duty_cycle != 0.0:
+            self.pwm_busy.add(pin)
         return 0
 
     def gpiochip_close(self, handle):

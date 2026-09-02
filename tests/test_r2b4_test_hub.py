@@ -9,6 +9,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -364,6 +365,460 @@ class TestR2B4TestHub(unittest.TestCase):
         self.assertEqual(
             command[command.index("--forward-clearance-m") + 1],
             "1.80",
+        )
+
+    def test_native_v3_profile_requires_fresh_sensor_gate_and_per_run_approval(self):
+        profile = hub._scenario_registry()[hub.V3_NATIVE_RAISED_STAND_PROFILE]
+        listed = {
+            item["name"]: item
+            for item in hub.list_profiles().get("profiles", [])
+        }[profile.name]
+
+        self.assertTrue(profile.live)
+        self.assertTrue(profile.requires_preflight)
+        self.assertEqual(profile.preflight_kind, hub.V3_NATIVE_PREFLIGHT_KIND)
+        self.assertFalse(profile.requires_managed_runtime)
+        self.assertEqual(
+            tuple(profile.command[-2:]),
+            ("tools/r2b4_test_hub.py", hub.V3_NATIVE_MOTION_COMMAND),
+        )
+        self.assertNotIn(hub.V3_NATIVE_MOTION_APPROVAL, profile.command)
+        self.assertEqual(listed["preflight_kind"], hub.V3_NATIVE_PREFLIGHT_KIND)
+        self.assertFalse(listed["requires_managed_runtime"])
+
+    def test_native_v3_sensor_preflight_enforces_complete_healthy_zero_window(self):
+        profile = hub.SCENARIOS[hub.V3_NATIVE_RAISED_STAND_PROFILE]
+        base = {
+            "status": "PASS",
+            "tick_count": 300,
+            "healthy_tick_count": 120,
+            "fault_tick_count": 0,
+            "l3_estimate_count": 300,
+            "operator_stopped": False,
+            "all_commits_zero": True,
+        }
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(
+            hub,
+            "_run_subprocess",
+            return_value={
+                "return_code": 0,
+                "stdout_json": dict(base),
+            },
+        ) as run_mock:
+            result = hub._run_v3_native_sensor_preflight(
+                run_dir=Path(td),
+                profile=profile,
+                env={"unit": "true"},
+                retry_delay_s=0.0,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["payload"]["errors"], [])
+        self.assertEqual(result["payload"]["hub_gate"]["minimum_healthy_tick_count"], 1)
+        command = list(run_mock.call_args.args[0])
+        self.assertIn("tools/v3_sensor_measurement.py", command[1])
+        self.assertEqual(command[command.index("--ticks") + 1], "300")
+        preflight_env = run_mock.call_args.kwargs["env"]
+        self.assertEqual(
+            preflight_env["PYTHONPATH"].split(os.pathsep)[0],
+            str(hub.PROJECT_ROOT),
+        )
+
+        weak = {**base, "healthy_tick_count": 0}
+        with tempfile.TemporaryDirectory() as td, mock.patch.object(
+            hub,
+            "_run_subprocess",
+            return_value={"return_code": 0, "stdout_json": weak},
+        ):
+            rejected = hub._run_v3_native_sensor_preflight(
+                run_dir=Path(td),
+                profile=profile,
+                env={},
+                retry_delay_s=0.0,
+            )
+        self.assertFalse(rejected["ok"])
+        self.assertIn(
+            "native_sensor_healthy_window_too_short",
+            rejected["payload"]["errors"],
+        )
+
+    def test_native_v3_motion_rejects_missing_approval_before_any_hardware_gate(self):
+        with mock.patch.object(
+            hub,
+            "_v3_profile_artifact_path",
+            side_effect=AssertionError("artifact path must not be evaluated"),
+        ), mock.patch.object(
+            hub,
+            "_verify_v3_motion_leases",
+            side_effect=AssertionError("leases must not be evaluated"),
+        ):
+            result = hub._run_v3_native_raised_stand_motion("not-approved")
+
+        self.assertEqual(result["status"], "FAIL")
+        self.assertFalse(result["success"])
+        self.assertEqual(
+            result["error"],
+            "explicit_powered_raised_stand_approval_required",
+        )
+
+    def test_native_v3_lease_root_resolves_outer_canonical_from_nested_candidate(self):
+        with tempfile.TemporaryDirectory() as td:
+            canonical = Path(td) / "canonical"
+            candidate = canonical / "runtime" / "agent_workspaces" / "task" / "tree"
+            for root in (canonical, candidate):
+                (root / "tools").mkdir(parents=True)
+                (root / "tools" / "agentctl.py").touch()
+                coordination = root / "runtime" / "agent_coordination"
+                coordination.mkdir(parents=True)
+                (coordination / "current_change.json").write_text(
+                    '{}\n',
+                    encoding="utf-8",
+                )
+            with mock.patch.object(hub, "PROJECT_ROOT", candidate), mock.patch.dict(
+                os.environ,
+                {},
+                clear=False,
+            ):
+                os.environ.pop(hub.V3_AGENT_LEASE_ROOT_ENV_VAR, None)
+                resolved = hub._v3_agent_lease_root()
+
+        self.assertEqual(resolved, canonical.resolve())
+
+    def test_native_v3_motor_evidence_requires_active_cancel_and_verified_low_close(self):
+        class Backend:
+            def __init__(self):
+                self.levels = {}
+                self.busy = set()
+
+            def gpiochip_open(self, _chip):
+                return 7
+
+            def gpio_claim_output(self, _handle, pin, initial_level):
+                self.levels[pin] = initial_level
+                return 0
+
+            def gpio_write(self, _handle, pin, level):
+                self.levels[pin] = level
+                return 0
+
+            def gpio_read(self, _handle, pin):
+                return self.levels[pin]
+
+            def gpio_free(self, _handle, pin):
+                self.busy.discard(pin)
+                return 0
+
+            def tx_busy(self, _handle, pin, _kind):
+                return int(pin in self.busy)
+
+            def tx_pwm(self, _handle, pin, frequency_hz, duty_cycle):
+                if frequency_hz == 0 and duty_cycle == 0.0:
+                    self.busy.discard(pin)
+                elif duty_cycle != 0.0:
+                    self.busy.add(pin)
+                return 0
+
+            def gpiochip_close(self, _handle):
+                return 0
+
+        recorder = hub._V3MotorGpioRecorder(Backend())
+        handle = recorder.gpiochip_open(0)
+        pins = (12, 13, 18, 19)
+        for pin in pins:
+            recorder.gpio_claim_output(handle, pin, 0)
+        recorder.tx_pwm(handle, 12, 8_000, 0.2)
+        recorder.tx_pwm(handle, 18, 8_000, 0.2)
+        for pin in pins:
+            if recorder.tx_busy(handle, pin, 0):
+                recorder.tx_pwm(handle, pin, 0, 0.0)
+        for pin in pins:
+            recorder.gpio_write(handle, pin, 0)
+        for pin in pins:
+            self.assertEqual(recorder.gpio_read(handle, pin), 0)
+        time.sleep(0.003)
+        for pin in pins:
+            self.assertEqual(recorder.gpio_read(handle, pin), 0)
+        recorder.gpiochip_close(handle)
+
+        evidence = hub._v3_motor_gpio_evidence(recorder, pins)
+
+        self.assertEqual(evidence["opened_handle_count"], 1)
+        self.assertTrue(evidence["all_expected_pins_claimed_low"])
+        self.assertEqual(evidence["nonzero_pwm_write_count"], 2)
+        self.assertTrue(evidence["all_active_pwm_cancelled"])
+        self.assertTrue(evidence["all_final_verified_low"])
+        self.assertGreaterEqual(evidence["minimum_verified_low_hold_ms"], 2.0)
+        self.assertTrue(evidence["gpio_closed_after_verified_low"])
+        self.assertEqual(evidence["failed_event_count"], 0)
+
+    def test_native_v3_motion_handler_records_pass_without_bypassing_canonical_runner(self):
+        class Backend:
+            def __init__(self):
+                self.levels = {}
+                self.busy = set()
+
+            def gpiochip_open(self, _chip):
+                return 11
+
+            def gpio_claim_output(self, _handle, pin, initial_level):
+                self.levels[pin] = initial_level
+                return 0
+
+            def gpio_write(self, _handle, pin, level):
+                self.levels[pin] = level
+                return 0
+
+            def gpio_read(self, _handle, pin):
+                return self.levels[pin]
+
+            def gpio_free(self, _handle, pin):
+                self.busy.discard(pin)
+                return 0
+
+            def tx_busy(self, _handle, pin, _kind):
+                return int(pin in self.busy)
+
+            def tx_pwm(self, _handle, pin, frequency_hz, duty_cycle):
+                if frequency_hz == 0 and duty_cycle == 0.0:
+                    self.busy.discard(pin)
+                elif duty_cycle != 0.0:
+                    self.busy.add(pin)
+                return 0
+
+            def gpiochip_close(self, _handle):
+                return 0
+
+        backend = Backend()
+        pins = (12, 13, 18, 19)
+        config = SimpleNamespace(
+            composition=SimpleNamespace(
+                motor_output=SimpleNamespace(pins=pins),
+            ),
+            sensor_inputs=SimpleNamespace(lidar_danger_zone_m=0.1),
+            tick_period_ns=20_000_000,
+        )
+        run_calls = []
+
+        class FakeOwner:
+            def __init__(self, counter_gpio, open_imu_bus, open_lidar, sensor_inputs):
+                self.inputs = object()
+                self.open_args = (counter_gpio, open_imu_bus, open_lidar, sensor_inputs)
+                self.close_calls = 0
+
+            def publish_tick_result(self, _result):
+                return None
+
+            def close(self):
+                self.close_calls += 1
+
+        def fake_canonical_run_owned(
+            sensor_inputs,
+            motor_gpio,
+            received_config,
+            *,
+            stop_requested,
+            tick_observer,
+        ):
+            run_calls.append(
+                (sensor_inputs, received_config)
+            )
+            self.assertFalse(stop_requested())
+            handle = motor_gpio.gpiochip_open(0)
+            for pin in pins:
+                motor_gpio.gpio_claim_output(handle, pin, 0)
+            motor_gpio.tx_pwm(handle, 12, 8_000, 0.2)
+            motor_gpio.tx_pwm(handle, 18, 8_000, 0.2)
+            for pin in pins:
+                if motor_gpio.tx_busy(handle, pin, 0):
+                    motor_gpio.tx_pwm(handle, pin, 0, 0.0)
+            for pin in pins:
+                motor_gpio.gpio_write(handle, pin, 0)
+            for pin in pins:
+                self.assertEqual(motor_gpio.gpio_read(handle, pin), 0)
+            time.sleep(0.003)
+            for pin in pins:
+                self.assertEqual(motor_gpio.gpio_read(handle, pin), 0)
+            motor_gpio.gpiochip_close(handle)
+            final_tick_id = (
+                hub.V3_NATIVE_START_TICK_ID + hub.V3_NATIVE_ACTIVE_TICK_COUNT
+            )
+            for tick_id in range(final_tick_id + 1):
+                active = (
+                    hub.V3_NATIVE_START_TICK_ID
+                    <= tick_id
+                    < final_tick_id
+                )
+                command = SimpleNamespace(
+                    safety_decision=SimpleNamespace(value="ALLOW" if active else "STOP"),
+                    reason="ACTIVE" if active else "NOT_ACTIVE",
+                    enabled=active,
+                    left_output=0.2 if active else 0.0,
+                    right_output=0.2 if active else 0.0,
+                )
+                tick_observer(
+                    SimpleNamespace(
+                        trace=SimpleNamespace(
+                            context=SimpleNamespace(
+                                tick_id=tick_id,
+                                monotonic_ns=1_000_000_000 + tick_id,
+                            ),
+                            fault_layer=None,
+                            layers=(),
+                        ),
+                        final_actuation=command,
+                    )
+                )
+            return 0
+
+        with tempfile.TemporaryDirectory() as td:
+            logs_dir = Path(td) / "logs"
+            artifact_dir = logs_dir / "session" / "tests" / hub.V3_NATIVE_RAISED_STAND_PROFILE
+            with mock.patch.object(hub, "LOGS_DIR", logs_dir), mock.patch.dict(
+                os.environ,
+                {
+                    hub.V3_NATIVE_PROFILE_ENV_VAR: hub.V3_NATIVE_RAISED_STAND_PROFILE,
+                    hub.TEST_SESSION_ENV_VAR: str(artifact_dir),
+                },
+                clear=False,
+            ), mock.patch.object(
+                hub,
+                "_verify_v3_motion_leases",
+                return_value={"ok": True, "task_id": "unit", "leases": {}, "errors": []},
+            ), mock.patch.object(
+                hub,
+                "_v3_native_runtime_config",
+                return_value=config,
+            ), mock.patch.object(
+                hub,
+                "_v3_hardware_api",
+                return_value={
+                    "counter_gpio": object(),
+                    "motor_gpio": backend,
+                    "open_imu_bus": object(),
+                    "lidar_service_type": object(),
+                    "sensor_owner_type": FakeOwner,
+                    "run_owned": fake_canonical_run_owned,
+                },
+            ), mock.patch.object(
+                hub,
+                "_v3_post_close_pin_state",
+                return_value={
+                    "status": "PASS",
+                    "ok": True,
+                    "pins": {
+                        str(pin): {"output": True, "drive_low": True}
+                        for pin in pins
+                    },
+                    "errors": [],
+                },
+            ):
+                result = hub._run_v3_native_raised_stand_motion(
+                    hub.V3_NATIVE_MOTION_APPROVAL
+                )
+
+            artifact = artifact_dir / "v3_native_raised_stand_motion.json"
+            self.assertTrue(artifact.is_file())
+            persisted = json.loads(artifact.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(run_calls), 1)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(persisted["final_lifecycle"], "IDLE")
+        self.assertEqual(
+            persisted["motor_power"],
+            "ON_RAISED_STAND_BY_EXPLICIT_APPROVAL",
+        )
+        self.assertTrue(persisted["motor_gpio"]["all_active_pwm_cancelled"])
+        self.assertTrue(persisted["motor_gpio"]["all_final_verified_low"])
+        self.assertTrue(persisted["motor_gpio"]["gpio_closed_after_verified_low"])
+        self.assertTrue(persisted["post_close_pins"]["ok"])
+
+    def test_native_v3_profile_checks_legacy_runtime_is_stopped_before_custom_preflight(self):
+        profile = hub.SCENARIOS[hub.V3_NATIVE_RAISED_STAND_PROFILE]
+        events = []
+        with tempfile.TemporaryDirectory() as td:
+            run_dir = Path(td) / "logs" / "session_v3_native"
+            run_dir.mkdir(parents=True)
+
+            def runtime_action(action):
+                events.append(f"runtime:{action}")
+                return {
+                    "ok": False,
+                    "payload": {
+                        "running": False,
+                        "ready_for_live_tests": False,
+                        "processes": [],
+                    },
+                    "run": {
+                        "ok": True,
+                        "timed_out": False,
+                        "return_code": 1,
+                    },
+                }
+
+            with mock.patch.object(
+                hub,
+                "_new_hub_session_dir",
+                return_value=run_dir,
+            ), mock.patch.object(
+                hub,
+                "apply_runtime_affinity",
+                return_value={},
+            ), mock.patch.object(
+                hub,
+                "_runtime_manager_action",
+                side_effect=runtime_action,
+            ), mock.patch.object(
+                hub,
+                "_run_v3_native_sensor_preflight",
+                side_effect=lambda **_kwargs: events.append("v3-preflight")
+                or {"ok": True, "payload": {"ok": True, "status": "PASS"}},
+            ), mock.patch.object(
+                hub,
+                "_run_preflight",
+                side_effect=AssertionError("managed-runtime preflight must not run"),
+            ), mock.patch.object(
+                hub,
+                "_run_subprocess",
+                side_effect=lambda command, **_kwargs: events.append(
+                    "scenario:" + " ".join(command[-2:])
+                )
+                or {
+                    "ok": True,
+                    "timed_out": False,
+                    "return_code": 0,
+                    "duration_s": 0.1,
+                    "stdout_tail": '{"success": true, "status": "PASS"}',
+                    "stderr_tail": "",
+                    "stdout_json": {"success": True, "status": "PASS"},
+                    "stderr_json": None,
+                },
+            ), mock.patch.object(
+                hub,
+                "_logger_lifecycle_snapshot",
+                side_effect=[
+                    {"logger_queue_depth": 0, "dropped_messages": 0, "write_errors": 0},
+                    {"logger_queue_depth": 0, "dropped_messages": 0, "write_errors": 0},
+                ],
+            ), mock.patch.object(
+                hub,
+                "_publish_hub_alias_bundle",
+                return_value=[],
+            ):
+                result = hub._run_profile_unlocked(
+                    profile.name,
+                    auto_runtime=True,
+                    archive_logs=False,
+                    extra_args=["--", "--approval", hub.V3_NATIVE_MOTION_APPROVAL],
+                )
+
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(
+            events,
+            [
+                "runtime:status",
+                "v3-preflight",
+                f"scenario:--approval {hub.V3_NATIVE_MOTION_APPROVAL}",
+            ],
         )
 
     def test_m4_room_cruise_profile_is_bounded_and_uses_common_speed_band(self):

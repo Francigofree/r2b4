@@ -11,6 +11,8 @@ class FakePwmGpio:
         self.calls: list[tuple[object, ...]] = []
         self.fail_pwm_call: int | None = None
         self._pwm_calls = 0
+        self._levels: dict[int, int] = {}
+        self._pwm_busy: set[int] = set()
 
     @property
     def pwm_calls(self) -> int:
@@ -20,9 +22,28 @@ class FakePwmGpio:
         self.calls.append(("open", chip))
         return 7
 
-    def gpio_claim_output(self, handle: int, pin: int) -> int:
-        self.calls.append(("claim", handle, pin))
+    def gpio_claim_output(self, handle: int, pin: int, initial_level: int) -> int:
+        self.calls.append(("claim", handle, pin, initial_level))
+        self._levels[pin] = initial_level
         return 0
+
+    def gpio_write(self, handle: int, pin: int, level: int) -> int:
+        self.calls.append(("write", handle, pin, level))
+        self._levels[pin] = level
+        return 0
+
+    def gpio_read(self, handle: int, pin: int) -> int:
+        self.calls.append(("read", handle, pin))
+        return self._levels[pin]
+
+    def gpio_free(self, handle: int, pin: int) -> int:
+        self.calls.append(("free", handle, pin))
+        self._pwm_busy.discard(pin)
+        return 0
+
+    def tx_busy(self, handle: int, pin: int, kind: int) -> int:
+        self.calls.append(("busy", handle, pin, kind))
+        return int(pin in self._pwm_busy)
 
     def tx_pwm(
         self,
@@ -35,6 +56,10 @@ class FakePwmGpio:
         self.calls.append(("pwm", handle, pin, frequency_hz, duty_cycle))
         if self.fail_pwm_call == self._pwm_calls:
             raise OSError("injected GPIO PWM failure")
+        if frequency_hz == 0:
+            self._pwm_busy.discard(pin)
+        elif duty_cycle != 0.0:
+            self._pwm_busy.add(pin)
         return 0
 
     def gpiochip_close(self, handle: int) -> int:
@@ -88,10 +113,18 @@ def test_one_config_closes_final_actuation_to_the_owned_gpio_pin_mapping():
 
     assert result is None
     assert gpio.calls == [
-        ("pwm", 7, 12, 8_000, 0.0),
-        ("pwm", 7, 13, 8_000, 0.0),
-        ("pwm", 7, 18, 8_000, 0.0),
-        ("pwm", 7, 19, 8_000, 0.0),
+        ("busy", 7, 12, 0),
+        ("busy", 7, 13, 0),
+        ("busy", 7, 18, 0),
+        ("busy", 7, 19, 0),
+        ("write", 7, 12, 0),
+        ("write", 7, 13, 0),
+        ("write", 7, 18, 0),
+        ("write", 7, 19, 0),
+        ("read", 7, 12),
+        ("read", 7, 13),
+        ("read", 7, 18),
+        ("read", 7, 19),
         ("pwm", 7, 12, 8_000, 25.0),
         ("pwm", 7, 18, 8_000, 100.0),
         ("pwm", 7, 19, 8_000, 50.0),
@@ -106,15 +139,28 @@ def test_stop_and_fault_remain_one_all_zero_frame_sink_call(
 ):
     gpio = FakePwmGpio()
     output = NativeMotorOutputComposition(gpio, _config())
+    output.write(
+        _command(
+            SafetyDecision.ALLOW,
+            left_output=0.2,
+            right_output=0.2,
+            enabled=True,
+        )
+    )
     gpio.calls.clear()
 
     output.write(_command(decision))
 
-    assert gpio.calls == [
-        ("pwm", 7, 12, 8_000, 0.0),
-        ("pwm", 7, 13, 8_000, 0.0),
-        ("pwm", 7, 18, 8_000, 0.0),
-        ("pwm", 7, 19, 8_000, 0.0),
+    assert [call for call in gpio.calls if call[0] == "pwm"] == [
+        ("pwm", 7, 12, 0, 0.0),
+        ("pwm", 7, 18, 0, 0.0),
+        ("pwm", 7, 19, 0, 0.0),
+    ]
+    assert [call for call in gpio.calls if call[0] == "write"] == [
+        ("write", 7, 12, 0),
+        ("write", 7, 13, 0),
+        ("write", 7, 18, 0),
+        ("write", 7, 19, 0),
     ]
 
 
@@ -146,6 +192,14 @@ def test_physical_error_propagates_and_closes_the_only_output_capability():
 def test_invalid_command_never_reaches_gpio_and_does_not_close_the_owner():
     gpio = FakePwmGpio()
     output = NativeMotorOutputComposition(gpio, _config())
+    output.write(
+        _command(
+            SafetyDecision.ALLOW,
+            left_output=0.2,
+            right_output=0.2,
+            enabled=True,
+        )
+    )
     gpio.calls.clear()
 
     with pytest.raises(TypeError, match="command must be FinalActuation"):
@@ -158,18 +212,25 @@ def test_invalid_command_never_reaches_gpio_and_does_not_close_the_owner():
 def test_close_zeros_releases_once_and_no_runtime_authority_is_exposed():
     gpio = FakePwmGpio()
     output = NativeMotorOutputComposition(gpio, _config())
+    output.write(
+        _command(
+            SafetyDecision.ALLOW,
+            left_output=0.2,
+            right_output=0.2,
+            enabled=True,
+        )
+    )
     gpio.calls.clear()
 
     output.close()
     output.close()
 
-    assert gpio.calls == [
-        ("pwm", 7, 12, 8_000, 0.0),
-        ("pwm", 7, 13, 8_000, 0.0),
-        ("pwm", 7, 18, 8_000, 0.0),
-        ("pwm", 7, 19, 8_000, 0.0),
-        ("close", 7),
+    assert [call for call in gpio.calls if call[0] == "pwm"] == [
+        ("pwm", 7, 12, 0, 0.0),
+        ("pwm", 7, 18, 0, 0.0),
+        ("pwm", 7, 19, 0, 0.0),
     ]
+    assert gpio.calls[-1] == ("close", 7)
     assert output.closed
     assert not hasattr(output, "activate")
     assert not hasattr(output, "tick")

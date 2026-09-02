@@ -7,39 +7,109 @@
       "after": null,
       "before": {
         "exists": true,
-        "sha256": "57aab6e8ec5ceffcefe03f0ab5d0800fe567722efd9a804e540a74d873bb9e09",
-        "size_bytes": 120216
+        "sha256": "0b5a2ed48b5d9330422e6ae971c117f0c78649cd0fc27314a5ce6178301bea47",
+        "size_bytes": 10549
       },
       "changed": null,
-      "path": "tests/test_r2b4_test_hub.py"
+      "path": "tests/test_v3_bounded_physical_runtime.py"
     },
     {
       "after": null,
       "before": {
         "exists": true,
-        "sha256": "3b686b81e4016d7e03b2f140561487c49cd333b9275135385a7b8563ce91f16c",
-        "size_bytes": 242252
+        "sha256": "194c6ea2b5b0ed78d41de254b1fd81fbbcd2ed1cfd65c8df4e0a72539787faec",
+        "size_bytes": 11322
       },
       "changed": null,
-      "path": "tools/r2b4_test_hub.py"
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "88a104b83cf37e1703a1332263c6f8348d52a14219aee84c09f6d6b680e0b51f",
+        "size_bytes": 1707
+      },
+      "changed": null,
+      "path": "v3/composition/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/resident_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/resident_physical_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "af2beacd10fd04993f614dd9575b372974c3a7a39161aee7bd59807ddea63d77",
+        "size_bytes": 9259
+      },
+      "changed": null,
+      "path": "v3_bounded_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "74add5916e69d757fef99446aca889f1b6d7ec6fcb3a2203a0bf1b6e177d5cc5",
+        "size_bytes": 14955
+      },
+      "changed": null,
+      "path": "v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3_runtime.py"
     }
   ],
-  "goal": "Add a fail-closed native V3 raised-stand Test Hub profile that invokes only the canonical bounded hardware runtime, requires explicit human motion approval and fresh sensor preflight evidence, captures run-specific structured evidence, and proves final lifecycle IDLE plus PWM-null/resource cleanup before enabling the authorized physical verification.",
+  "goal": "Turn the proven finite native V3 hardware composition into a production-shaped resident runtime lifecycle with one owned sensor and motor capability, signal-driven fail-closed shutdown, explicit command-source boundary, compact runtime status, and deterministic tests, without adding any alternate or legacy motor-control path.",
   "promotion_status": "NOT_PROMOTED",
   "reason": "",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-09-01T16:43:13Z",
+  "started_at_utc": "2026-09-02T08:47:05Z",
   "status": "ACTIVE",
-  "task_id": "v3_test_hub_native_profile_slice17_20260901",
-  "task_mode": "AGENT_INFRA_CHANGE",
+  "task_id": "v3_resident_hardware_runtime_slice20_20260902",
+  "task_mode": "CODE_CHANGE",
   "tests": [],
-  "updated_at_utc": "2026-09-01T16:43:13Z",
+  "updated_at_utc": "2026-09-02T08:49:37Z",
   "workspace": {
-    "base_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
-    "base_manifest_path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/meta/base_manifest.json",
-    "base_manifest_sha256": "ddc068e0fd529f479eb00dad2a1499eabdf7f38137a540aa45b3123d9508f52a",
-    "path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/tree",
+    "base_fingerprint": "025c4e62a4418f7abd830489c550671312976146f70bc9cb2465fcca6f1aaed8",
+    "base_manifest_path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "924fedfc965eb5e497ffd8fd28058d274057e3f272ee34a09d69fefd5eec648d",
+    "path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/tree",
     "schema": "R2B4_AGENT_WORKSPACE_V1",
     "state": "ACTIVE"
   }

@@ -24,6 +24,7 @@ import gzip
 import json
 import math
 import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -86,6 +87,17 @@ M2_CHASSIS_DYNAMICS_CONTRACT_ID = (
 LATEST_HUB_SEQUENCE_SUMMARY_PATH = latest_artifact_path("latest_hub_sequence_summary.json")
 LATEST_HUB_SEQUENCE_RUN_PATH = latest_artifact_path("latest_hub_sequence_run.json")
 LIVE_PROFILE_LOCK_PATH = AGENT_RUNTIME_DIR / "live_profile.lock"
+V3_NATIVE_SENSOR_TOOL_PATH = PROJECT_ROOT / "tools" / "v3_sensor_measurement.py"
+V3_NATIVE_RAISED_STAND_PROFILE = "v3_native_raised_stand_bounded"
+V3_NATIVE_PREFLIGHT_KIND = "v3-native-sensors"
+V3_NATIVE_MOTION_COMMAND = "v3-native-raised-stand-bounded"
+V3_NATIVE_MOTION_APPROVAL = "powered-raised-stand-hard-low-v3"
+V3_NATIVE_PROFILE_ENV_VAR = "R2B4_TEST_HUB_PROFILE"
+V3_AGENT_LEASE_ROOT_ENV_VAR = "R2B4_AGENT_LEASE_ROOT"
+V3_NATIVE_MOTION_SCHEMA = "R2B4_V3_NATIVE_RAISED_STAND_MOTION_V2"
+V3_NATIVE_START_TICK_ID = 200
+V3_NATIVE_ACTIVE_TICK_COUNT = 1
+V3_NATIVE_V_MPS = 0.04
 
 DEFAULT_ARCHIVE_MAX_FILE_MB = 10.0
 DEFAULT_ARCHIVE_KEEP_LATEST_SESSIONS = 6
@@ -117,11 +129,44 @@ class ScenarioProfile:
     requires_preflight: bool = True
     requires_ekf_truth_gate: bool = False
     preflight_pose_reset: bool = False
+    preflight_kind: str = "managed-runtime"
+    requires_managed_runtime: bool = True
 
 
 def _scenario_registry() -> Dict[str, ScenarioProfile]:
     py = sys.executable
     return {
+        V3_NATIVE_RAISED_STAND_PROFILE: ScenarioProfile(
+            name=V3_NATIVE_RAISED_STAND_PROFILE,
+            family="v3_native_hardware",
+            description=(
+                "Finite native V3 powered raised-wheel validation through the "
+                "canonical bounded L12 motor writer."
+            ),
+            live=True,
+            timeout_s=45.0,
+            command=(
+                py,
+                "tools/r2b4_test_hub.py",
+                V3_NATIVE_MOTION_COMMAND,
+            ),
+            preflight_clearance_m=0.0,
+            artifact_hints=(),
+            goals=(
+                "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+                "explicit per-run powered raised-stand approval with no approval embedded in the profile",
+                "one 20 ms 0.04 m/s command pulse with the robot immobilized on stands",
+                "active PWM busy/cancel proof followed by final IDLE and verified four-pin hard-low",
+                "post-close pinctrl proof that all four DRV8871 inputs remain output-low",
+                "exclusive native hardware ownership without starting the legacy managed runtime",
+            ),
+            requires_measurement_truth=False,
+            requires_preflight=True,
+            requires_ekf_truth_gate=False,
+            preflight_pose_reset=False,
+            preflight_kind=V3_NATIVE_PREFLIGHT_KIND,
+            requires_managed_runtime=False,
+        ),
         "runtime_loop_stress_20x": ScenarioProfile(
             name="runtime_loop_stress_20x",
             family="runtime_health",
@@ -3032,6 +3077,7 @@ def _hub_child_env(run_dir: Path, profile_name: str) -> Dict[str, str]:
     env = dict(os.environ)
     env[SESSION_ENV_VAR] = str(run_dir)
     env[TEST_SESSION_ENV_VAR] = str(_profile_artifacts_dir(run_dir, profile_name))
+    env[V3_NATIVE_PROFILE_ENV_VAR] = str(profile_name)
     return env
 
 
@@ -3063,7 +3109,12 @@ def _publish_session_latest_aliases(run_dir: Path) -> List[Dict[str, Any]]:
 def _latest_artifact_publish_lease():
     """Serialize every Test Hub latest-pointer publication across processes."""
     owner = f"test_hub_publish_{os.getpid()}"
-    manager = LeaseManager(PROJECT_ROOT)
+    lease_root = (
+        _v3_agent_lease_root()
+        if os.environ.get(V3_AGENT_LEASE_ROOT_ENV_VAR)
+        else PROJECT_ROOT
+    )
+    manager = LeaseManager(lease_root)
     try:
         manager.acquire("latest_artifact_publish", owner)
     except AgentCtlError as exc:
@@ -3545,6 +3596,890 @@ def _run_preflight(
         "payload": payload,
         "ok": ok,
     }
+
+
+def _run_v3_native_sensor_preflight(
+    *,
+    run_dir: Path,
+    profile: ScenarioProfile,
+    env: Dict[str, str],
+    tick_count: int = 300,
+    max_attempts: int = 2,
+    retry_delay_s: float = 1.0,
+) -> Dict[str, Any]:
+    """Prove the concrete V3 input/L3 chain with zero actuator authority."""
+
+    if profile.preflight_kind != V3_NATIVE_PREFLIGHT_KIND:
+        raise ValueError("profile does not declare the native V3 preflight kind")
+    if not isinstance(tick_count, int) or isinstance(tick_count, bool) or tick_count < 100:
+        raise ValueError("native V3 preflight tick_count must be at least 100")
+    if not isinstance(max_attempts, int) or isinstance(max_attempts, bool) or not 1 <= max_attempts <= 3:
+        raise ValueError("native V3 preflight max_attempts must be within [1, 3]")
+    if not math.isfinite(retry_delay_s) or retry_delay_s < 0.0 or retry_delay_s > 5.0:
+        raise ValueError("native V3 preflight retry_delay_s must be within [0, 5]")
+
+    child_env = dict(env)
+    existing_pythonpath = str(child_env.get("PYTHONPATH", "") or "").strip()
+    child_env["PYTHONPATH"] = (
+        str(PROJECT_ROOT)
+        if not existing_pythonpath
+        else os.pathsep.join((str(PROJECT_ROOT), existing_pythonpath))
+    )
+    minimum_healthy_ticks = 1
+    attempts: List[Dict[str, Any]] = []
+    cmd: List[str] = []
+    run: Dict[str, Any] = {}
+    payload: Dict[str, Any] = {}
+    errors: List[str] = ["native_sensor_preflight_not_run"]
+    selected_output_path: Optional[Path] = None
+    for attempt_number in range(1, max_attempts + 1):
+        output_path = (
+            _profile_artifacts_dir(run_dir, profile.name)
+            / f"v3_native_sensor_preflight_attempt_{attempt_number}.json"
+        )
+        cmd = [
+            sys.executable,
+            str(V3_NATIVE_SENSOR_TOOL_PATH),
+            "--ticks",
+            str(tick_count),
+            "--output",
+            str(output_path),
+        ]
+        run = _run_subprocess(
+            cmd,
+            timeout_s=max(20.0, tick_count * 0.03),
+            env=child_env,
+        )
+        payload = run.get("stdout_json") if isinstance(run.get("stdout_json"), dict) else {}
+        if output_path.exists():
+            artifact_payload = _read_json(output_path)
+            if artifact_payload:
+                payload = artifact_payload
+
+        measured_ticks = _safe_int(payload.get("tick_count"), 0)
+        healthy_ticks = _safe_int(payload.get("healthy_tick_count"), 0)
+        l3_estimates = _safe_int(payload.get("l3_estimate_count"), 0)
+        fault_ticks = _safe_int(payload.get("fault_tick_count"), -1)
+        errors = []
+        if int(_safe_int(run.get("return_code"), -1)) != 0:
+            errors.append("native_sensor_command_failed")
+        if str(payload.get("status", "")).upper() != "PASS":
+            errors.append("native_sensor_measurement_not_pass")
+        if measured_ticks != tick_count:
+            errors.append("native_sensor_tick_count_incomplete")
+        if healthy_ticks < minimum_healthy_ticks:
+            errors.append("native_sensor_healthy_window_too_short")
+        if l3_estimates != measured_ticks:
+            errors.append("native_sensor_l3_estimate_count_mismatch")
+        if fault_ticks != 0:
+            errors.append("native_sensor_fault_tick_present")
+        if payload.get("all_commits_zero") is not True:
+            errors.append("native_sensor_preflight_nonzero_commit")
+        if payload.get("operator_stopped") is not False:
+            errors.append("native_sensor_preflight_interrupted")
+        attempts.append(
+            {
+                "attempt": attempt_number,
+                "status": "PASS" if not errors else "FAIL",
+                "return_code": _safe_int(run.get("return_code"), -1),
+                "tick_count": measured_ticks,
+                "healthy_tick_count": healthy_ticks,
+                "l3_estimate_count": l3_estimates,
+                "fault_tick_count": fault_ticks,
+                "all_commits_zero": payload.get("all_commits_zero") is True,
+                "errors": list(errors),
+                "artifact_path": _rel(output_path),
+            }
+        )
+        if not errors:
+            selected_output_path = output_path
+            break
+        if attempt_number < max_attempts and retry_delay_s > 0.0:
+            time.sleep(retry_delay_s)
+
+    gate_ok = selected_output_path is not None
+    compact_measurement = dict(payload)
+    compact_measurement.pop("ticks", None)
+    gate_artifact_path = (
+        _profile_artifacts_dir(run_dir, profile.name)
+        / "v3_native_sensor_preflight_gate.json"
+    )
+    gate_payload = {
+        **compact_measurement,
+        "status": "PASS" if gate_ok else "FAIL",
+        "ok": gate_ok,
+        "errors": errors,
+        "attempt_count": len(attempts),
+        "attempts": attempts,
+        "artifact_path": _rel(gate_artifact_path),
+        "measurement_artifact_path": (
+            _rel(selected_output_path)
+            if selected_output_path is not None
+            else attempts[-1]["artifact_path"]
+        ),
+        "hub_gate": {
+            "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1",
+            "required_tick_count": tick_count,
+            "minimum_healthy_tick_count": minimum_healthy_ticks,
+            "measured_tick_count": _safe_int(payload.get("tick_count"), 0),
+            "healthy_tick_count": _safe_int(payload.get("healthy_tick_count"), 0),
+            "l3_estimate_count": _safe_int(payload.get("l3_estimate_count"), 0),
+            "fault_tick_count": _safe_int(payload.get("fault_tick_count"), -1),
+            "all_commits_zero": payload.get("all_commits_zero") is True,
+        },
+    }
+    _write_json_atomic(gate_artifact_path, gate_payload)
+    return {
+        "command": cmd,
+        "run": run,
+        "payload": gate_payload,
+        "ok": gate_ok,
+    }
+
+
+class _V3SignalStop:
+    """Signal-safe stop flag shared with the finite canonical owner loop."""
+
+    def __init__(self) -> None:
+        self.requested = False
+
+    def handle(self, _signum: int, _frame: Any) -> None:
+        self.requested = True
+
+    def __call__(self) -> bool:
+        return self.requested
+
+
+class _V3MotorGpioRecorder:
+    """Transparent GPIO capability proxy recording only L12 physical writes."""
+
+    def __init__(self, backend: Any) -> None:
+        self._backend = backend
+        self.events: List[Dict[str, Any]] = []
+
+    def _record(self, operation: str, **values: Any) -> None:
+        self.events.append(
+            {
+                "sequence": len(self.events),
+                "monotonic_ns": time.monotonic_ns(),
+                "operation": operation,
+                **values,
+            }
+        )
+
+    def gpiochip_open(self, chip: int) -> int:
+        try:
+            result = self._backend.gpiochip_open(chip)
+        except Exception as exc:
+            self._record("gpiochip_open", chip=int(chip), ok=False, error=type(exc).__name__)
+            raise
+        self._record("gpiochip_open", chip=int(chip), handle=result, ok=True)
+        return result
+
+    def gpio_claim_output(
+        self,
+        handle: int,
+        pin: int,
+        initial_level: int,
+    ) -> Any:
+        try:
+            result = self._backend.gpio_claim_output(handle, pin, initial_level)
+        except Exception as exc:
+            self._record(
+                "gpio_claim_output",
+                handle=int(handle),
+                pin=int(pin),
+                initial_level=int(initial_level),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record(
+            "gpio_claim_output",
+            handle=int(handle),
+            pin=int(pin),
+            initial_level=int(initial_level),
+            result=result,
+            ok=True,
+        )
+        return result
+
+    def gpio_write(self, handle: int, pin: int, level: int) -> Any:
+        try:
+            result = self._backend.gpio_write(handle, pin, level)
+        except Exception as exc:
+            self._record(
+                "gpio_write",
+                handle=int(handle),
+                pin=int(pin),
+                level=int(level),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record(
+            "gpio_write",
+            handle=int(handle),
+            pin=int(pin),
+            level=int(level),
+            result=result,
+            ok=True,
+        )
+        return result
+
+    def gpio_read(self, handle: int, pin: int) -> Any:
+        try:
+            result = self._backend.gpio_read(handle, pin)
+        except Exception as exc:
+            self._record(
+                "gpio_read",
+                handle=int(handle),
+                pin=int(pin),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record(
+            "gpio_read",
+            handle=int(handle),
+            pin=int(pin),
+            result=result,
+            ok=True,
+        )
+        return result
+
+    def gpio_free(self, handle: int, pin: int) -> Any:
+        try:
+            result = self._backend.gpio_free(handle, pin)
+        except Exception as exc:
+            self._record(
+                "gpio_free",
+                handle=int(handle),
+                pin=int(pin),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record(
+            "gpio_free",
+            handle=int(handle),
+            pin=int(pin),
+            result=result,
+            ok=True,
+        )
+        return result
+
+    def tx_busy(self, handle: int, pin: int, kind: int) -> Any:
+        try:
+            result = self._backend.tx_busy(handle, pin, kind)
+        except Exception as exc:
+            self._record(
+                "tx_busy",
+                handle=int(handle),
+                pin=int(pin),
+                kind=int(kind),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record(
+            "tx_busy",
+            handle=int(handle),
+            pin=int(pin),
+            kind=int(kind),
+            result=result,
+            ok=True,
+        )
+        return result
+
+    def tx_pwm(
+        self,
+        handle: int,
+        pin: int,
+        frequency_hz: int,
+        duty_cycle: float,
+    ) -> Any:
+        try:
+            result = self._backend.tx_pwm(handle, pin, frequency_hz, duty_cycle)
+        except Exception as exc:
+            self._record(
+                "tx_pwm",
+                handle=int(handle),
+                pin=int(pin),
+                frequency_hz=int(frequency_hz),
+                duty_cycle=float(duty_cycle),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record(
+            "tx_pwm",
+            handle=int(handle),
+            pin=int(pin),
+            frequency_hz=int(frequency_hz),
+            duty_cycle=float(duty_cycle),
+            result=result,
+            ok=True,
+        )
+        return result
+
+    def gpiochip_close(self, handle: int) -> Any:
+        try:
+            result = self._backend.gpiochip_close(handle)
+        except Exception as exc:
+            self._record(
+                "gpiochip_close",
+                handle=int(handle),
+                ok=False,
+                error=type(exc).__name__,
+            )
+            raise
+        self._record("gpiochip_close", handle=int(handle), result=result, ok=True)
+        return result
+
+
+def _v3_motor_gpio_evidence(
+    recorder: _V3MotorGpioRecorder,
+    expected_pins: Sequence[int],
+) -> Dict[str, Any]:
+    pins = tuple(int(pin) for pin in expected_pins)
+    successful = [event for event in recorder.events if event.get("ok") is True]
+    failed = [event for event in recorder.events if event.get("ok") is False]
+
+    def operations(name: str, pin: Optional[int] = None) -> List[Dict[str, Any]]:
+        return [
+            event
+            for event in successful
+            if event.get("operation") == name
+            and (pin is None or int(event.get("pin", -1)) == pin)
+        ]
+
+    opens = operations("gpiochip_open")
+    closes = operations("gpiochip_close")
+    last_close_sequence = max(
+        (int(event["sequence"]) for event in closes),
+        default=-1,
+    )
+    claimed_pins = {
+        pin
+        for pin in pins
+        if any(
+            int(event.get("initial_level", -1)) == 0
+            for event in operations("gpio_claim_output", pin)
+        )
+    }
+    pin_evidence: Dict[str, Dict[str, Any]] = {}
+    maximum_abs_pwm_by_pin: Dict[str, float] = {}
+    active_pwm_pins: List[int] = []
+    cancelled_pwm_pins: List[int] = []
+    hold_ms_values: List[float] = []
+    for pin in pins:
+        pwm_events = operations("tx_pwm", pin)
+        nonzero = [
+            event
+            for event in pwm_events
+            if float(event.get("duty_cycle", 0.0)) != 0.0
+        ]
+        maximum_abs_pwm_by_pin[str(pin)] = max(
+            (abs(float(event.get("duty_cycle", 0.0))) for event in pwm_events),
+            default=0.0,
+        )
+        last_nonzero_sequence = max(
+            (int(event["sequence"]) for event in nonzero),
+            default=-1,
+        )
+        if nonzero:
+            active_pwm_pins.append(pin)
+        busy_true = [
+            event
+            for event in operations("tx_busy", pin)
+            if int(event.get("result", 0)) == 1
+            and int(event["sequence"]) > last_nonzero_sequence
+        ]
+        first_busy_true_sequence = min(
+            (int(event["sequence"]) for event in busy_true),
+            default=-1,
+        )
+        cancel = [
+            event
+            for event in pwm_events
+            if int(event.get("frequency_hz", -1)) == 0
+            and float(event.get("duty_cycle", -1.0)) == 0.0
+            and int(event["sequence"]) > first_busy_true_sequence
+        ]
+        cancel_sequence = min(
+            (int(event["sequence"]) for event in cancel),
+            default=-1,
+        )
+        active_cancelled = bool(
+            nonzero
+            and first_busy_true_sequence > last_nonzero_sequence
+            and cancel_sequence > first_busy_true_sequence
+        )
+        if active_cancelled:
+            cancelled_pwm_pins.append(pin)
+
+        low_writes = [
+            event
+            for event in operations("gpio_write", pin)
+            if int(event.get("level", -1)) == 0
+            and int(event["sequence"]) < last_close_sequence
+        ]
+        final_low_write = max(
+            low_writes,
+            key=lambda event: int(event["sequence"]),
+            default=None,
+        )
+        final_low_write_sequence = (
+            int(final_low_write["sequence"])
+            if final_low_write is not None
+            else -1
+        )
+        low_reads = [
+            event
+            for event in operations("gpio_read", pin)
+            if int(event.get("result", -1)) == 0
+            and final_low_write_sequence < int(event["sequence"]) < last_close_sequence
+        ]
+        hold_ms = 0.0
+        if len(low_reads) >= 2:
+            hold_ms = (
+                int(low_reads[-1]["monotonic_ns"])
+                - int(low_reads[0]["monotonic_ns"])
+            ) / 1_000_000.0
+            hold_ms_values.append(hold_ms)
+        pin_evidence[str(pin)] = {
+            "nonzero_pwm_write_count": len(nonzero),
+            "last_nonzero_pwm_sequence": last_nonzero_sequence,
+            "busy_true_after_nonzero_sequence": first_busy_true_sequence,
+            "cancel_sequence": cancel_sequence,
+            "active_pwm_cancelled": active_cancelled,
+            "final_low_write_sequence": final_low_write_sequence,
+            "final_low_readback_count": len(low_reads),
+            "verified_low_hold_ms": round(hold_ms, 3),
+            "final_verified_low": bool(len(low_reads) >= 2 and hold_ms >= 2.0),
+        }
+
+    all_final_verified_low = bool(
+        set(claimed_pins) == set(pins)
+        and all(pin_evidence[str(pin)]["final_verified_low"] for pin in pins)
+    )
+    last_verified_low_sequence = max(
+        (
+            int(event["sequence"])
+            for pin in pins
+            for event in operations("gpio_read", pin)
+            if int(event.get("result", -1)) == 0
+        ),
+        default=-1,
+    )
+    closed_after_verified_low = bool(
+        len(closes) == 1
+        and last_close_sequence > last_verified_low_sequence
+        and all_final_verified_low
+    )
+    return {
+        "expected_pins": list(pins),
+        "opened_handle_count": len(opens),
+        "claimed_pins": sorted(claimed_pins),
+        "active_pwm_pins": active_pwm_pins,
+        "cancelled_pwm_pins": cancelled_pwm_pins,
+        "nonzero_pwm_write_count": sum(
+            int(row["nonzero_pwm_write_count"])
+            for row in pin_evidence.values()
+        ),
+        "maximum_abs_pwm_by_pin": maximum_abs_pwm_by_pin,
+        "all_expected_pins_claimed_low": claimed_pins == set(pins),
+        "all_active_pwm_cancelled": bool(
+            active_pwm_pins
+            and set(cancelled_pwm_pins) == set(active_pwm_pins)
+        ),
+        "all_final_verified_low": all_final_verified_low,
+        "minimum_verified_low_hold_ms": round(min(hold_ms_values), 3)
+        if hold_ms_values
+        else 0.0,
+        "gpio_closed_after_verified_low": closed_after_verified_low,
+        "failed_event_count": len(failed),
+        "pin_evidence": pin_evidence,
+        "event_count": len(recorder.events),
+        "event_tail": list(recorder.events[-192:]),
+    }
+
+
+def _v3_post_close_pin_state(expected_pins: Sequence[int]) -> Dict[str, Any]:
+    """Read the SoC pinmux/level state after lgpio released its handle."""
+
+    pins = tuple(int(pin) for pin in expected_pins)
+    executable = shutil.which("pinctrl")
+    if not executable:
+        return {
+            "status": "FAIL",
+            "ok": False,
+            "errors": ["pinctrl_not_available"],
+            "pins": {},
+        }
+    command = [executable, "get", ",".join(str(pin) for pin in pins)]
+    run = _run_subprocess(command, timeout_s=5.0)
+    raw = str(run.get("stdout_tail", "") or "")
+    states: Dict[str, Dict[str, Any]] = {}
+    for line in raw.splitlines():
+        prefix, separator, detail = line.partition(":")
+        if not separator:
+            continue
+        try:
+            pin = int(prefix.strip())
+        except ValueError:
+            continue
+        mode_tokens = detail.split("|", 1)[0].strip().split()
+        states[str(pin)] = {
+            "raw": line.strip(),
+            "output": bool(mode_tokens and mode_tokens[0] == "op"),
+            "drive_low": "dl" in mode_tokens,
+        }
+    errors: List[str] = []
+    if int(_safe_int(run.get("return_code"), -1)) != 0:
+        errors.append("pinctrl_get_failed")
+    for pin in pins:
+        state = states.get(str(pin), {})
+        if not (state.get("output") is True and state.get("drive_low") is True):
+            errors.append(f"gpio_{pin}_not_output_low_after_close")
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "ok": not errors,
+        "command": command,
+        "return_code": _safe_int(run.get("return_code"), -1),
+        "pins": states,
+        "errors": errors,
+    }
+
+
+def _v3_tick_result_summary(result: Any) -> Dict[str, Any]:
+    trace = result.trace
+    command = result.final_actuation
+    source_health: List[Dict[str, Any]] = []
+    estimate: Dict[str, Any] = {}
+    for record in trace.layers:
+        if record.layer == "L1":
+            for health in tuple(getattr(record.output, "io_health", ()) or ()):
+                state = getattr(health.state, "value", health.state)
+                source_health.append(
+                    {
+                        "device_id": str(health.device_id),
+                        "state": str(state),
+                        "reason": str(health.reason),
+                    }
+                )
+        elif record.layer == "L3":
+            output = record.output
+            if all(hasattr(output, key) for key in ("x_m", "y_m", "yaw_rad", "v_mps", "omega_rad_s")):
+                estimate = {
+                    "x_m": float(output.x_m),
+                    "y_m": float(output.y_m),
+                    "yaw_rad": float(output.yaw_rad),
+                    "v_mps": float(output.v_mps),
+                    "omega_rad_s": float(output.omega_rad_s),
+                }
+    decision = getattr(command.safety_decision, "value", command.safety_decision)
+    return {
+        "tick_id": int(trace.context.tick_id),
+        "monotonic_ns": int(trace.context.monotonic_ns),
+        "fault_layer": trace.fault_layer,
+        "safety_decision": str(decision),
+        "safety_reason": str(command.reason),
+        "enabled": bool(command.enabled),
+        "left_output": float(command.left_output),
+        "right_output": float(command.right_output),
+        "source_health": source_health,
+        "estimate": estimate,
+    }
+
+
+def _v3_agent_lease_root() -> Path:
+    configured = str(os.environ.get(V3_AGENT_LEASE_ROOT_ENV_VAR, "") or "").strip()
+    if configured:
+        candidates = [Path(configured).resolve()]
+    else:
+        project_root = PROJECT_ROOT.resolve()
+        candidates = [project_root, *project_root.parents]
+    eligible = [
+        root
+        for root in candidates
+        if (root / "tools" / "agentctl.py").is_file()
+        and (
+            root / "runtime" / "agent_coordination" / "current_change.json"
+        ).is_file()
+    ]
+    if not eligible:
+        raise RuntimeError("native V3 motion lease root is not an agent-controlled project")
+    # An agent candidate is a complete project clone nested below the canonical
+    # project. Both contain current_change.json, but only the outermost eligible
+    # root owns the machine leases. Direct canonical runs still have one match.
+    return min(eligible, key=lambda root: len(root.parts))
+
+
+def _verify_v3_motion_leases() -> Dict[str, Any]:
+    root = _v3_agent_lease_root()
+    manifest = _read_json(root / "runtime" / "agent_coordination" / "current_change.json")
+    task_id = str(manifest.get("task_id", "") or "")
+    errors: List[str] = []
+    if not task_id or str(manifest.get("status", "")).upper() != "ACTIVE":
+        errors.append("active_agent_task_missing")
+    manager = LeaseManager(root)
+    leases: Dict[str, Any] = {}
+    for resource in ("runtime_control", "live_motion"):
+        state = manager.inspect(resource)
+        leases[resource] = {
+            "status": state.get("status"),
+            "owner_task_id": state.get("owner_task_id"),
+            "expires_at_utc": state.get("expires_at_utc"),
+        }
+        if state.get("status") != "HELD" or state.get("owner_task_id") != task_id:
+            errors.append(f"{resource}_lease_not_held_by_active_task")
+    return {
+        "ok": not errors,
+        "task_id": task_id,
+        "root": str(root),
+        "leases": leases,
+        "errors": errors,
+    }
+
+
+def _v3_native_runtime_config() -> Any:
+    from tools.v3_sensor_measurement import native_sensor_policy
+    from v3.adapters.bounded_command import BoundedTeleopProfile
+    from v3_bounded_config import load_bounded_physical_runtime_config
+
+    return load_bounded_physical_runtime_config(
+        PROJECT_ROOT / "conf" / "hardver.json",
+        PROJECT_ROOT / "conf" / "fizika.json",
+        PROJECT_ROOT / "conf" / "speed_map.json",
+        BoundedTeleopProfile(
+            command_id="v3-native-raised-stand-hub",
+            start_tick_id=V3_NATIVE_START_TICK_ID,
+            active_tick_count=V3_NATIVE_ACTIVE_TICK_COUNT,
+            v_mps=V3_NATIVE_V_MPS,
+            omega_rad_s=0.0,
+            max_v_mps=0.05,
+            max_omega_rad_s=0.05,
+        ),
+        sensor_policy=native_sensor_policy(),
+    )
+
+
+def _v3_hardware_api() -> Dict[str, Any]:
+    import lgpio
+    import smbus2
+
+    from sensors.lidar_service import LidarService
+    from v3_bounded_runtime import run_owned_bounded_physical_control
+    from v3_hardware_runtime import NativeHardwareSensorOwner
+
+    return {
+        "counter_gpio": lgpio,
+        "motor_gpio": lgpio,
+        "open_imu_bus": smbus2.SMBus,
+        "lidar_service_type": LidarService,
+        "sensor_owner_type": NativeHardwareSensorOwner,
+        "run_owned": run_owned_bounded_physical_control,
+    }
+
+
+def _v3_profile_artifact_path() -> Path:
+    if os.environ.get(V3_NATIVE_PROFILE_ENV_VAR) != V3_NATIVE_RAISED_STAND_PROFILE:
+        raise PermissionError("native V3 motion must be launched by its Test Hub profile")
+    configured = str(os.environ.get(TEST_SESSION_ENV_VAR, "") or "").strip()
+    if not configured:
+        raise RuntimeError("Test Hub session artifact directory is missing")
+    directory = Path(configured).resolve()
+    try:
+        directory.relative_to(LOGS_DIR.resolve())
+    except ValueError as exc:
+        raise PermissionError("native V3 artifact directory must stay under logs") from exc
+    return directory / "v3_native_raised_stand_motion.json"
+
+
+def _run_v3_native_raised_stand_motion(approval: str) -> Dict[str, Any]:
+    """Execute one fixed bounded profile after every external gate is closed."""
+
+    if approval != V3_NATIVE_MOTION_APPROVAL:
+        return {
+            "schema": V3_NATIVE_MOTION_SCHEMA,
+            "status": "FAIL",
+            "success": False,
+            "error": "explicit_powered_raised_stand_approval_required",
+        }
+
+    artifact_path = _v3_profile_artifact_path()
+    lease_gate = _verify_v3_motion_leases()
+    recorder: Optional[_V3MotorGpioRecorder] = None
+    stop = _V3SignalStop()
+    old_handlers = {
+        signum: signal.signal(signum, stop.handle)
+        for signum in (signal.SIGINT, signal.SIGTERM)
+    }
+    started_at_utc = _now_iso_utc()
+    started_monotonic = time.monotonic()
+    payload: Dict[str, Any]
+    try:
+        if not lease_gate.get("ok", False):
+            raise PermissionError(f"native V3 motion leases failed: {lease_gate.get('errors')}")
+        api = _v3_hardware_api()
+        config = _v3_native_runtime_config()
+        expected_pins = tuple(config.composition.motor_output.pins)
+        recorder = _V3MotorGpioRecorder(api["motor_gpio"])
+        tick_evidence: Dict[str, Any] = {
+            "observed_tick_count": 0,
+            "first_allow": None,
+            "first_fault": None,
+            "last_tick": None,
+        }
+
+        def open_lidar(pose_provider: Any) -> Any:
+            service = api["lidar_service_type"](
+                danger_zone=config.sensor_inputs.lidar_danger_zone_m,
+                pose_provider=pose_provider,
+            )
+            try:
+                if service.start() is not True:
+                    raise RuntimeError("protected latest-only lidar service did not start")
+                return service
+            except Exception:
+                service.stop()
+                raise
+
+        owner = api["sensor_owner_type"](
+            api["counter_gpio"],
+            api["open_imu_bus"],
+            open_lidar,
+            config.sensor_inputs,
+        )
+        try:
+            def observe_tick(result: Any) -> None:
+                owner.publish_tick_result(result)
+                summary = _v3_tick_result_summary(result)
+                tick_evidence["observed_tick_count"] = int(
+                    tick_evidence["observed_tick_count"]
+                ) + 1
+                if (
+                    tick_evidence["first_allow"] is None
+                    and summary["safety_decision"] == "ALLOW"
+                ):
+                    tick_evidence["first_allow"] = summary
+                if (
+                    tick_evidence["first_fault"] is None
+                    and summary["fault_layer"] is not None
+                ):
+                    tick_evidence["first_fault"] = summary
+                tick_evidence["last_tick"] = summary
+
+            run_status = api["run_owned"](
+                owner.inputs,
+                recorder,
+                config,
+                stop_requested=stop,
+                tick_observer=observe_tick,
+            )
+        finally:
+            owner.close()
+        motor = _v3_motor_gpio_evidence(recorder, expected_pins)
+        post_close_pins = _v3_post_close_pin_state(expected_pins)
+        final_tick = tick_evidence.get("last_tick") or {}
+        expected_final_tick_id = (
+            V3_NATIVE_START_TICK_ID + V3_NATIVE_ACTIVE_TICK_COUNT
+        )
+        final_tick_is_idle = bool(
+            final_tick.get("tick_id") == expected_final_tick_id
+            and final_tick.get("fault_layer") is None
+            and final_tick.get("safety_decision") == "STOP"
+            and final_tick.get("safety_reason") == "NOT_ACTIVE"
+            and final_tick.get("enabled") is False
+            and final_tick.get("left_output") == 0.0
+            and final_tick.get("right_output") == 0.0
+        )
+        success = bool(
+            run_status == 0
+            and not stop.requested
+            and tick_evidence.get("observed_tick_count") == expected_final_tick_id + 1
+            and tick_evidence.get("first_allow") is not None
+            and tick_evidence.get("first_fault") is None
+            and final_tick_is_idle
+            and motor.get("opened_handle_count") == 1
+            and motor.get("all_expected_pins_claimed_low") is True
+            and int(_safe_int(motor.get("nonzero_pwm_write_count"), 0)) > 0
+            and motor.get("all_active_pwm_cancelled") is True
+            and motor.get("all_final_verified_low") is True
+            and float(motor.get("minimum_verified_low_hold_ms", 0.0)) >= 2.0
+            and motor.get("gpio_closed_after_verified_low") is True
+            and int(_safe_int(motor.get("failed_event_count"), -1)) == 0
+            and post_close_pins.get("ok") is True
+        )
+        payload = {
+            "schema": V3_NATIVE_MOTION_SCHEMA,
+            "status": "PASS" if success else "FAIL",
+            "success": success,
+            "profile": V3_NATIVE_RAISED_STAND_PROFILE,
+            "started_at_utc": started_at_utc,
+            "ended_at_utc": _now_iso_utc(),
+            "duration_s": round(time.monotonic() - started_monotonic, 3),
+            "approval": approval,
+            "motor_power": "ON_RAISED_STAND_BY_EXPLICIT_APPROVAL",
+            "lease_gate": lease_gate,
+            "run_status": run_status,
+            "operator_stopped": stop.requested,
+            "command_window": {
+                "start_tick_id": V3_NATIVE_START_TICK_ID,
+                "active_tick_count": V3_NATIVE_ACTIVE_TICK_COUNT,
+                "v_mps": V3_NATIVE_V_MPS,
+                "omega_rad_s": 0.0,
+                "tick_period_ns": config.tick_period_ns,
+            },
+            "tick_evidence": tick_evidence,
+            "motor_gpio": motor,
+            "post_close_pins": post_close_pins,
+            "final_lifecycle": "IDLE" if success else "FAULT_OR_INTERRUPTED",
+            "final_lifecycle_basis": (
+                "canonical finite runner returned RUN_OK after the observed post-window IDLE tick; "
+                "L12 cancelled active PWM, held two verified LOW readbacks for at least 2 ms, "
+                "closed the GPIO handle, and pinctrl still observed all four pins output-low"
+            ),
+            "artifact_path": _rel(artifact_path),
+        }
+    except Exception as exc:
+        motor = (
+            _v3_motor_gpio_evidence(recorder, (12, 13, 18, 19))
+            if recorder is not None
+            else {}
+        )
+        post_close_pins = (
+            _v3_post_close_pin_state((12, 13, 18, 19))
+            if recorder is not None
+            else {}
+        )
+        payload = {
+            "schema": V3_NATIVE_MOTION_SCHEMA,
+            "status": "ERROR",
+            "success": False,
+            "profile": V3_NATIVE_RAISED_STAND_PROFILE,
+            "started_at_utc": started_at_utc,
+            "ended_at_utc": _now_iso_utc(),
+            "duration_s": round(time.monotonic() - started_monotonic, 3),
+            "approval": approval,
+            "motor_power": "ON_RAISED_STAND_BY_EXPLICIT_APPROVAL",
+            "lease_gate": lease_gate,
+            "operator_stopped": stop.requested,
+            "motor_gpio": motor,
+            "post_close_pins": post_close_pins,
+            "final_lifecycle": "FAULT_OR_INTERRUPTED",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "artifact_path": _rel(artifact_path),
+        }
+    finally:
+        for signum, handler in old_handlers.items():
+            signal.signal(signum, handler)
+
+    _write_json_atomic(artifact_path, payload)
+    return payload
 
 
 def _http_json(
@@ -4793,6 +5728,7 @@ def _run_profile_unlocked(
     runtime_stop: Optional[Dict[str, Any]] = None
     runtime_recovery: List[Dict[str, Any]] = []
     started_runtime_here = False
+    requires_managed_runtime = bool(profile.requires_managed_runtime)
     runtime_ready_for_live_tests = True
 
     preflight_result: Optional[Dict[str, Any]] = None
@@ -4803,7 +5739,35 @@ def _run_profile_unlocked(
     m3_artifact_finalize: Dict[str, Any] = {}
     payload: Dict[str, Any] = {}
 
-    if profile.live and auto_runtime:
+    if profile.live and auto_runtime and not requires_managed_runtime:
+        runtime_before = _runtime_manager_action("status")
+        payload = runtime_before.get("payload") if isinstance(runtime_before.get("payload"), dict) else {}
+        managed_runtime_running = bool(payload.get("running", False))
+        status_run = runtime_before.get("run") if isinstance(runtime_before.get("run"), dict) else {}
+        status_observed = bool(
+            "running" in payload
+            and status_run.get("ok", False)
+            and not status_run.get("timed_out", False)
+            and int(_safe_int(status_run.get("return_code"), -1)) in (0, 1)
+        )
+        runtime_ready_for_live_tests = bool(
+            status_observed
+            and not managed_runtime_running
+            and not list(payload.get("processes") or [])
+        )
+        runtime_recovery.append(
+            {
+                "action": "verify_managed_runtime_stopped",
+                "ok": runtime_ready_for_live_tests,
+                "payload": payload,
+                "reason": (
+                    "exclusive_native_hardware_ready"
+                    if runtime_ready_for_live_tests
+                    else "managed_runtime_must_be_stopped_for_native_hardware"
+                ),
+            }
+        )
+    if profile.live and auto_runtime and requires_managed_runtime:
         runtime_before = _runtime_manager_action("status")
         payload = runtime_before.get("payload") if isinstance(runtime_before.get("payload"), dict) else {}
         runtime_ready_for_live_tests = bool(payload.get("ready_for_live_tests", False))
@@ -4847,11 +5811,18 @@ def _run_profile_unlocked(
 
     if profile.live and profile.requires_preflight and truth_gate_ok and preflight_prepare_ok:
         if runtime_ready_for_live_tests:
-            preflight_result = _run_preflight(
-                clearance_m=float(profile.preflight_clearance_m),
-                timeout_s=_preflight_timeout_for_profile(profile),
-                clearance_mode=str(profile.preflight_clearance_mode),
-            )
+            if profile.preflight_kind == V3_NATIVE_PREFLIGHT_KIND:
+                preflight_result = _run_v3_native_sensor_preflight(
+                    run_dir=run_dir,
+                    profile=profile,
+                    env=child_env,
+                )
+            else:
+                preflight_result = _run_preflight(
+                    clearance_m=float(profile.preflight_clearance_m),
+                    timeout_s=_preflight_timeout_for_profile(profile),
+                    clearance_mode=str(profile.preflight_clearance_mode),
+                )
         else:
             preflight_result = {
                 "command": [],
@@ -4941,7 +5912,13 @@ def _run_profile_unlocked(
             "surface_summary": {},
         }
 
-    if profile.live and auto_runtime and stop_runtime_after and started_runtime_here:
+    if (
+        profile.live
+        and auto_runtime
+        and requires_managed_runtime
+        and stop_runtime_after
+        and started_runtime_here
+    ):
         runtime_stop = _runtime_manager_action("stop")
 
     logger_lifecycle_after = _logger_lifecycle_snapshot(force=True)
@@ -5632,6 +6609,8 @@ def list_profiles() -> Dict[str, Any]:
                 "preflight_clearance_mode": str(p.preflight_clearance_mode),
                 "requires_preflight": bool(p.requires_preflight),
                 "preflight_pose_reset": bool(p.preflight_pose_reset),
+                "preflight_kind": str(p.preflight_kind),
+                "requires_managed_runtime": bool(p.requires_managed_runtime),
                 "requires_measurement_truth": bool(p.requires_measurement_truth),
                 "measurement_truth_max_age_s": float(p.measurement_truth_max_age_s),
                 "measurement_truth_artifact_hint": str(p.measurement_truth_artifact_hint or ""),
@@ -5647,6 +6626,10 @@ def list_profiles() -> Dict[str, Any]:
             "python3 tools/r2b4_test_hub.py run runtime_loop_stress_20x",
             "python3 tools/r2b4_test_hub.py run person_follow_camera_live",
             "python3 tools/r2b4_test_hub.py run person_follow_camera_live_v2",
+            (
+                "python3 tools/r2b4_test_hub.py run v3_native_raised_stand_bounded "
+                "-- --approval raised-stand-bounded-v3"
+            ),
             "python3 tools/r2b4_test_hub.py run-sequence --sequence motion_levels_M0_M4_1",
             "python3 tools/r2b4_test_hub.py run --stop-runtime-after M4_1_room_cruise_quality_validator",
             "python3 tools/r2b4_test_hub.py report",
@@ -5697,6 +6680,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_archive.add_argument("--keep-latest-sessions", type=int, default=DEFAULT_ARCHIVE_KEEP_LATEST_SESSIONS)
     p_archive.add_argument("--min-age-s", type=float, default=DEFAULT_ARCHIVE_MIN_AGE_S)
     p_archive.add_argument("--dry-run", action="store_true")
+
+    p_v3_native = sub.add_parser(
+        V3_NATIVE_MOTION_COMMAND,
+        help=argparse.SUPPRESS,
+    )
+    p_v3_native.add_argument("--approval", required=True)
 
     ap.add_argument("--json", action="store_true", help="Always print full JSON payload")
     return ap
@@ -5779,6 +6768,11 @@ def main() -> int:
     args = parser.parse_args()
 
     command = str(args.command)
+    if command == V3_NATIVE_MOTION_COMMAND:
+        payload = _run_v3_native_raised_stand_motion(str(args.approval))
+        _print_payload(payload, json_mode=True)
+        return 0 if str(payload.get("status", "")).upper() == "PASS" else 1
+
     if command == "list":
         payload = list_profiles()
         _print_payload(payload, json_mode=bool(args.json))
