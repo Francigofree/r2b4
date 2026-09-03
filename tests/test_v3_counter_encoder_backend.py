@@ -6,6 +6,7 @@ from v3.adapters.counter_encoder import (
     SignedPulseCounterSnapshot,
 )
 from v3.adapters.live_encoder import NativeEncoderConfig, NativeEncoderSource
+from v3.adapters.live_encoder import EncoderRejectionCode
 from v3.contracts import DeviceHealthState, TickContext
 
 
@@ -59,6 +60,13 @@ def _assert_rejected(reading) -> None:
     assert reading.right_mps == 0.0
 
 
+def _sample_values(snapshot) -> dict[str, object]:
+    return {
+        field.key: field.value
+        for field in snapshot.samples[0].values
+    }
+
+
 def test_constructor_does_not_create_an_untimed_counter_baseline():
     backend, left, right = _backend(
         (_snapshot(100),),
@@ -75,6 +83,15 @@ def test_constructor_does_not_create_an_untimed_counter_baseline():
     assert baseline.captured_monotonic_ns == baseline_context.monotonic_ns
     assert baseline.timing_valid is True
     assert baseline.stale is False
+    assert baseline.diagnostics is not None
+    assert baseline.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert baseline.diagnostics.raw_left_pulse_count == 100
+    assert baseline.diagnostics.raw_right_pulse_count == 200
+    assert baseline.diagnostics.left_pulse_delta is None
+    assert baseline.diagnostics.right_pulse_delta is None
+    assert baseline.diagnostics.sample_interval_ns is None
+    assert baseline.diagnostics.computed_left_mps is None
+    assert baseline.diagnostics.computed_right_mps is None
     assert left.calls == 1
     assert right.calls == 1
 
@@ -93,6 +110,15 @@ def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     assert reading.trust == 1.0
     assert reading.stale is False
     assert reading.timing_valid is True
+    assert reading.diagnostics is not None
+    assert reading.diagnostics.rejection_code is EncoderRejectionCode.NONE
+    assert reading.diagnostics.raw_left_pulse_count == 110
+    assert reading.diagnostics.raw_right_pulse_count == 195
+    assert reading.diagnostics.left_pulse_delta == 10
+    assert reading.diagnostics.right_pulse_delta == -5
+    assert reading.diagnostics.sample_interval_ns == 100_000_000
+    assert reading.diagnostics.computed_left_mps == pytest.approx(0.1)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(-0.1)
     assert left.calls == 2
     assert right.calls == 2
     assert not hasattr(backend, "set_last_pwm")
@@ -128,6 +154,16 @@ def test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery():
     _assert_rejected(stale)
     assert stale.stale is True
     assert stale.timing_valid is True
+    assert stale.diagnostics is not None
+    assert (
+        stale.diagnostics.rejection_code
+        is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+    )
+    assert stale.diagnostics.left_pulse_delta == 20
+    assert stale.diagnostics.right_pulse_delta == 10
+    assert stale.diagnostics.sample_interval_ns == 300_000_000
+    assert stale.diagnostics.computed_left_mps == pytest.approx(0.0666666667)
+    assert stale.diagnostics.computed_right_mps == pytest.approx(0.0666666667)
     assert recovered.trust == 1.0
     assert recovered.left_mps == pytest.approx(0.05)
     assert recovered.right_mps == pytest.approx(0.04)
@@ -156,6 +192,25 @@ def test_counter_diagnostic_error_is_untrusted_and_zero(side, diagnostic):
     _assert_rejected(reading)
     assert reading.timing_valid is True
     assert reading.stale is False
+    assert reading.diagnostics is not None
+    expected_code = (
+        EncoderRejectionCode.COUNTER_READ_ERROR_CHANGED
+        if "read_errors" in diagnostic
+        else EncoderRejectionCode.COUNTER_INVALID_ALERT_CHANGED
+    )
+    assert reading.diagnostics.rejection_code is expected_code
+    assert reading.diagnostics.left_read_error_delta == (
+        1 if side == "left" and "read_errors" in diagnostic else 0
+    )
+    assert reading.diagnostics.right_read_error_delta == (
+        1 if side == "right" and "read_errors" in diagnostic else 0
+    )
+    assert reading.diagnostics.left_invalid_alert_delta == (
+        1 if side == "left" and "invalid_alerts" in diagnostic else 0
+    )
+    assert reading.diagnostics.right_invalid_alert_delta == (
+        1 if side == "right" and "invalid_alerts" in diagnostic else 0
+    )
 
 
 @pytest.mark.parametrize(
@@ -203,6 +258,15 @@ def test_stopped_counter_is_timing_invalid_untrusted_and_zero():
     _assert_rejected(reading)
     assert reading.timing_valid is False
     assert reading.stale is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.COUNTER_NOT_RUNNING
+    )
+    assert reading.diagnostics.left_counter_running is False
+    assert reading.diagnostics.right_counter_running is True
+    assert reading.diagnostics.computed_left_mps == pytest.approx(0.1)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.2)
 
 
 def test_impossible_velocity_is_untrusted_and_zero():
@@ -217,6 +281,16 @@ def test_impossible_velocity_is_untrusted_and_zero():
     _assert_rejected(reading)
     assert reading.timing_valid is True
     assert reading.stale is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.LEFT_VELOCITY_LIMIT_EXCEEDED
+    )
+    assert reading.diagnostics.left_pulse_delta == 1_000
+    assert reading.diagnostics.right_pulse_delta == 0
+    assert reading.diagnostics.computed_left_mps == pytest.approx(10.0)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.0)
+    assert reading.diagnostics.maximum_abs_velocity_mps == pytest.approx(1.5)
 
 
 def test_nonincreasing_tick_time_is_invalid_zero_and_does_not_reanchor():
@@ -231,6 +305,16 @@ def test_nonincreasing_tick_time_is_invalid_zero_and_does_not_reanchor():
 
     _assert_rejected(invalid)
     assert invalid.timing_valid is False
+    assert invalid.diagnostics is not None
+    assert (
+        invalid.diagnostics.rejection_code
+        is EncoderRejectionCode.NONINCREASING_TICK_TIME
+    )
+    assert invalid.diagnostics.sample_interval_ns == 0
+    assert invalid.diagnostics.left_pulse_delta == 1
+    assert invalid.diagnostics.right_pulse_delta == 1
+    assert invalid.diagnostics.computed_left_mps is None
+    assert invalid.diagnostics.computed_right_mps is None
     assert recovered.trust == 1.0
     assert recovered.left_mps == pytest.approx(0.02)
     assert recovered.right_mps == pytest.approx(0.04)
@@ -248,16 +332,30 @@ def test_native_encoder_source_sees_low_trust_baseline_then_ok_delta():
 
     assert baseline.health.state is DeviceHealthState.DEGRADED
     assert baseline.health.reason == "ENCODER_LOW_TRUST"
-    assert tuple(field.value for field in baseline.samples[0].values) == (
-        0.0,
-        0.0,
-        0.0,
-    )
+    baseline_values = _sample_values(baseline)
+    assert (baseline_values["left_mps"], baseline_values["right_mps"]) == (0.0, 0.0)
+    assert baseline_values["trust"] == 0.0
+    assert baseline_values["rejection_code"] == "BASELINE"
+    assert baseline_values["raw_left_pulse_count"] == 0
+    assert baseline_values["raw_right_pulse_count"] == 0
+    assert baseline_values["left_pulse_delta"] is None
+    assert baseline_values["right_pulse_delta"] is None
     assert current.health.state is DeviceHealthState.OK
     assert current.samples[0].sequence == 1
-    assert tuple(field.value for field in current.samples[0].values) == pytest.approx(
-        (0.1, 0.1, 1.0)
-    )
+    current_values = _sample_values(current)
+    assert (
+        current_values["left_mps"],
+        current_values["right_mps"],
+        current_values["trust"],
+    ) == pytest.approx((0.1, 0.1, 1.0))
+    assert current_values["rejection_code"] == "NONE"
+    assert current_values["raw_left_pulse_count"] == 10
+    assert current_values["raw_right_pulse_count"] == 5
+    assert current_values["left_pulse_delta"] == 10
+    assert current_values["right_pulse_delta"] == 5
+    assert current_values["sample_interval_ns"] == 100_000_000
+    assert current_values["computed_left_mps"] == pytest.approx(0.1)
+    assert current_values["computed_right_mps"] == pytest.approx(0.1)
 
 
 def test_first_read_from_stopped_counter_is_invalid_zero_baseline():
@@ -269,6 +367,53 @@ def test_first_read_from_stopped_counter_is_invalid_zero_baseline():
 
     _assert_rejected(reading)
     assert reading.timing_valid is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.COUNTER_NOT_RUNNING
+    )
+
+
+def test_combined_counter_diagnostics_have_one_exact_code_and_per_side_deltas():
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(4, read_errors=2)),
+        (_snapshot(0), _snapshot(3, invalid_alerts=1)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.COUNTER_READ_ERROR_AND_INVALID_ALERT_CHANGED
+    )
+    assert reading.diagnostics.left_read_error_delta == 2
+    assert reading.diagnostics.right_read_error_delta == 0
+    assert reading.diagnostics.left_invalid_alert_delta == 0
+    assert reading.diagnostics.right_invalid_alert_delta == 1
+    assert reading.diagnostics.computed_left_mps == pytest.approx(0.04)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.06)
+
+
+def test_both_velocity_limits_have_a_distinct_rejection_code():
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(200)),
+        (_snapshot(0), _snapshot(-100)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.BOTH_VELOCITY_LIMIT_EXCEEDED
+    )
+    assert reading.diagnostics.computed_left_mps == pytest.approx(2.0)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(-2.0)
 
 
 def test_malformed_snapshot_is_rejected_without_a_second_left_read():

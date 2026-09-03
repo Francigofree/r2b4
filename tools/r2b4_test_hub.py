@@ -34,10 +34,11 @@ import traceback
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -89,15 +90,34 @@ LATEST_HUB_SEQUENCE_RUN_PATH = latest_artifact_path("latest_hub_sequence_run.jso
 LIVE_PROFILE_LOCK_PATH = AGENT_RUNTIME_DIR / "live_profile.lock"
 V3_NATIVE_SENSOR_TOOL_PATH = PROJECT_ROOT / "tools" / "v3_sensor_measurement.py"
 V3_NATIVE_RAISED_STAND_PROFILE = "v3_native_raised_stand_bounded"
+V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE = "v3_native_resident_raised_stand"
+V3_NATIVE_FLOOR_MOTION_PROFILE = "v3_native_floor_motion_capture"
 V3_NATIVE_PREFLIGHT_KIND = "v3-native-sensors"
 V3_NATIVE_MOTION_COMMAND = "v3-native-raised-stand-bounded"
+V3_NATIVE_RESIDENT_MOTION_COMMAND = "v3-native-resident-raised-stand"
+V3_NATIVE_FLOOR_MOTION_COMMAND = "v3-native-floor-motion-capture"
 V3_NATIVE_MOTION_APPROVAL = "powered-raised-stand-hard-low-v3"
+V3_NATIVE_RESIDENT_MOTION_APPROVAL = "powered-raised-stand-resident-hard-low-v3"
+V3_NATIVE_FLOOR_MOTION_APPROVAL = "floor-clear-0p50m-speed-0p15-v3"
 V3_NATIVE_PROFILE_ENV_VAR = "R2B4_TEST_HUB_PROFILE"
 V3_AGENT_LEASE_ROOT_ENV_VAR = "R2B4_AGENT_LEASE_ROOT"
 V3_NATIVE_MOTION_SCHEMA = "R2B4_V3_NATIVE_RAISED_STAND_MOTION_V2"
+V3_NATIVE_RESIDENT_MOTION_SCHEMA = "R2B4_V3_NATIVE_RESIDENT_RAISED_STAND_V2"
+V3_NATIVE_FLOOR_MOTION_SCHEMA = "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V1"
 V3_NATIVE_START_TICK_ID = 200
 V3_NATIVE_ACTIVE_TICK_COUNT = 1
 V3_NATIVE_V_MPS = 0.04
+V3_NATIVE_RESIDENT_MAX_WARMUP_TICK_ID = 300
+V3_NATIVE_RESIDENT_V_MPS = 0.04
+V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT = 50
+V3_NATIVE_FLOOR_V_MPS = 0.15
+V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M = 0.50
+V3_NATIVE_FLOOR_ACTIVE_CLEARANCE_M = 0.30
+V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT = 2
+V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M = 0.30
+V3_NATIVE_FLOOR_MAX_YAW_DELTA_RAD = 0.35
+V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S = 1.50
+V3_NATIVE_FLOOR_MAX_ENCODER_ABS_MPS = 0.45
 
 DEFAULT_ARCHIVE_MAX_FILE_MB = 10.0
 DEFAULT_ARCHIVE_KEEP_LATEST_SESSIONS = 6
@@ -136,6 +156,69 @@ class ScenarioProfile:
 def _scenario_registry() -> Dict[str, ScenarioProfile]:
     py = sys.executable
     return {
+        V3_NATIVE_FLOOR_MOTION_PROFILE: ScenarioProfile(
+            name=V3_NATIVE_FLOOR_MOTION_PROFILE,
+            family="v3_native_hardware",
+            description=(
+                "Health-armed one-second native V3 floor motion with current raw "
+                "LiDAR clearance, full L1-L12 capture and bounded shutdown."
+            ),
+            live=True,
+            timeout_s=60.0,
+            command=(
+                py,
+                "tools/r2b4_test_hub.py",
+                V3_NATIVE_FLOOR_MOTION_COMMAND,
+            ),
+            preflight_clearance_m=V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M,
+            preflight_clearance_mode="front-sector",
+            artifact_hints=(),
+            goals=(
+                "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+                "current raw LiDAR front-sector clearance of at least 0.50 m before health arming",
+                "exactly 50 resident ticks at 0.15 m/s nominal straight speed (1.0 s at 20 ms)",
+                "immediate signal stop on raw LiDAR, encoder, L3 displacement, yaw or elapsed-time bound",
+                "complete per-tick L1-L12, control, actuation, GPIO/PWM and de-duplicated raw-scan capture",
+                "post-active IDLE, SIGTERM SHUTDOWN and verified four-pin hard-low after close",
+            ),
+            requires_measurement_truth=False,
+            requires_preflight=True,
+            requires_ekf_truth_gate=False,
+            preflight_pose_reset=False,
+            preflight_kind=V3_NATIVE_PREFLIGHT_KIND,
+            requires_managed_runtime=False,
+        ),
+        V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE: ScenarioProfile(
+            name=V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE,
+            family="v3_native_hardware",
+            description=(
+                "Resident native V3 raised-wheel validation through the "
+                "canonical command gateway, L0-L12 engine and sole motor writer."
+            ),
+            live=True,
+            timeout_s=45.0,
+            command=(
+                py,
+                "tools/r2b4_test_hub.py",
+                V3_NATIVE_RESIDENT_MOTION_COMMAND,
+            ),
+            preflight_clearance_m=0.0,
+            artifact_hints=(),
+            goals=(
+                "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+                "resident IDLE preflight and re-arm before exactly one 20 ms 0.04 m/s raised-wheel command",
+                "post-active IDLE followed by a real SIGTERM-driven canonical SHUTDOWN tick",
+                "compact resident report plus active PWM cancel and verified four-pin hard-low evidence",
+                "post-close pinctrl proof that all four DRV8871 inputs remain output-low",
+                "exclusive native sensor and motor ownership without the legacy managed runtime",
+            ),
+            requires_measurement_truth=False,
+            requires_preflight=True,
+            requires_ekf_truth_gate=False,
+            preflight_pose_reset=False,
+            preflight_kind=V3_NATIVE_PREFLIGHT_KIND,
+            requires_managed_runtime=False,
+        ),
         V3_NATIVE_RAISED_STAND_PROFILE: ScenarioProfile(
             name=V3_NATIVE_RAISED_STAND_PROFILE,
             family="v3_native_hardware",
@@ -4194,6 +4277,142 @@ def _v3_tick_result_summary(result: Any) -> Dict[str, Any]:
     }
 
 
+def _v3_capture_value(value: Any) -> Any:
+    """Convert immutable V3 contracts and edge snapshots into stable JSON."""
+
+    if isinstance(value, Enum):
+        return value.value
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            "__type__": type(value).__name__,
+            **{
+                item.name: _v3_capture_value(getattr(value, item.name))
+                for item in fields(value)
+            },
+        }
+    if isinstance(value, Mapping):
+        return {
+            str(key): _v3_capture_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (tuple, list)):
+        return [_v3_capture_value(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return sorted(_v3_capture_value(item) for item in value)
+    return {"__type__": type(value).__name__, "repr": repr(value)}
+
+
+def _v3_full_tick_capture(
+    result: Any,
+    motor_events: Sequence[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Capture every completed layer plus the L12-side GPIO writes for one tick."""
+
+    return {
+        "tick_id": int(result.trace.context.tick_id),
+        "monotonic_ns": int(result.trace.context.monotonic_ns),
+        "fault_layer": result.trace.fault_layer,
+        "layer_count": len(tuple(result.trace.layers)),
+        "layers": {
+            str(record.layer): _v3_capture_value(record.output)
+            for record in result.trace.layers
+        },
+        "final_actuation": _v3_capture_value(result.final_actuation),
+        "motor_gpio_events": [dict(event) for event in motor_events],
+    }
+
+
+def _v3_encoder_abs_speed_mps(result: Any) -> Optional[float]:
+    for record in result.trace.layers:
+        if record.layer != "L1":
+            continue
+        for sample in tuple(getattr(record.output, "samples", ()) or ()):
+            if str(getattr(sample, "kind", "")) != "wheel_velocity":
+                continue
+            values = {
+                str(getattr(item, "key", "")): getattr(item, "value", None)
+                for item in tuple(getattr(sample, "values", ()) or ())
+            }
+            try:
+                speeds = (float(values["left_mps"]), float(values["right_mps"]))
+            except (KeyError, TypeError, ValueError):
+                return None
+            if not all(math.isfinite(item) for item in speeds):
+                return None
+            return max(abs(item) for item in speeds)
+    return None
+
+
+def _v3_wrapped_angle(value: float) -> float:
+    return (float(value) + math.pi) % (2.0 * math.pi) - math.pi
+
+
+def _v3_lidar_tick_evidence(
+    service: Any,
+    tick_monotonic_ns: int,
+    *,
+    clearance_m: float,
+) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Read one immutable current raw scan and evaluate fail-closed clearance."""
+
+    snapshot = service.get_snapshot() if service is not None else None
+    if snapshot is None:
+        return {
+            "ok": False,
+            "reason": "LIDAR_SNAPSHOT_MISSING",
+            "required_clearance_m": float(clearance_m),
+        }, None
+    summary = dict(getattr(snapshot, "summary", {}) or {})
+    raw_scan_id = int(getattr(snapshot, "raw_scan_id", 0) or 0)
+    raw_timestamp = float(getattr(snapshot, "raw_scan_timestamp", 0.0) or 0.0)
+    raw_age_s = max(0.0, tick_monotonic_ns / 1_000_000_000.0 - raw_timestamp)
+    min_front_m = float(summary.get("min_dist", 0.0) or 0.0)
+    min_narrow_m = float(summary.get("min_dist_narrow", 0.0) or 0.0)
+    front_point = dict(summary.get("raw_safety_min_dist_point") or {})
+    valid_point_count = int(summary.get("raw_safety_valid_point_count", 0) or 0)
+    snapshot_health = str(getattr(snapshot, "health", "ERROR") or "ERROR")
+    blockers: List[str] = []
+    if snapshot_health != "OK":
+        blockers.append("LIDAR_RAW_HEALTH_NOT_OK")
+    if raw_scan_id <= 0 or raw_timestamp <= 0.0:
+        blockers.append("LIDAR_RAW_LINEAGE_MISSING")
+    if raw_age_s > 0.25:
+        blockers.append("LIDAR_RAW_SCAN_STALE")
+    if valid_point_count <= 0 or not front_point:
+        blockers.append("LIDAR_FRONT_SECTOR_UNOBSERVED")
+    if bool(summary.get("blocked_front", True)):
+        blockers.append("LIDAR_FRONT_BLOCKED")
+    if not math.isfinite(min_front_m) or min_front_m < float(clearance_m):
+        blockers.append("LIDAR_FRONT_CLEARANCE_LOW")
+    evidence = {
+        "ok": not blockers,
+        "reason": "CLEAR" if not blockers else blockers[0],
+        "blockers": blockers,
+        "required_clearance_m": float(clearance_m),
+        "raw_scan_id": raw_scan_id,
+        "raw_scan_timestamp": raw_timestamp,
+        "raw_scan_age_s": round(raw_age_s, 6),
+        "health": snapshot_health,
+        "blocked_front": bool(summary.get("blocked_front", True)),
+        "min_front_m": min_front_m,
+        "min_front_narrow_m": min_narrow_m,
+        "valid_point_count": valid_point_count,
+        "front_min_point": _v3_capture_value(front_point),
+    }
+    raw_capture = {
+        "raw_scan_id": raw_scan_id,
+        "raw_scan_timestamp": raw_timestamp,
+        "health": snapshot_health,
+        "summary": _v3_capture_value(summary),
+        "raw_scan": _v3_capture_value(
+            list(getattr(snapshot, "raw_scan", ()) or ())
+        ),
+    }
+    return evidence, raw_capture
+
+
 def _v3_agent_lease_root() -> Path:
     configured = str(os.environ.get(V3_AGENT_LEASE_ROOT_ENV_VAR, "") or "").strip()
     if configured:
@@ -4284,6 +4503,149 @@ def _v3_hardware_api() -> Dict[str, Any]:
     }
 
 
+class _V3ResidentRaisedStandGateway:
+    """Health-armed bounded command edge with no physical output capability."""
+
+    def __init__(
+        self,
+        max_warmup_tick_id: int = V3_NATIVE_RESIDENT_MAX_WARMUP_TICK_ID,
+        *,
+        active_tick_count: int = 1,
+        v_mps: float = V3_NATIVE_RESIDENT_V_MPS,
+        max_v_mps: float = 0.05,
+        command_prefix: str = "v3-resident-raised-stand",
+    ):
+        if (
+            not isinstance(max_warmup_tick_id, int)
+            or isinstance(max_warmup_tick_id, bool)
+            or max_warmup_tick_id < 1
+        ):
+            raise ValueError("max_warmup_tick_id must be a positive integer")
+        if (
+            not isinstance(active_tick_count, int)
+            or isinstance(active_tick_count, bool)
+            or not 1 <= active_tick_count <= 100
+        ):
+            raise ValueError("active_tick_count must be an integer within [1, 100]")
+        if (
+            isinstance(v_mps, bool)
+            or not isinstance(v_mps, (int, float))
+            or not math.isfinite(float(v_mps))
+            or float(v_mps) <= 0.0
+        ):
+            raise ValueError("v_mps must be positive and finite")
+        if (
+            isinstance(max_v_mps, bool)
+            or not isinstance(max_v_mps, (int, float))
+            or not math.isfinite(float(max_v_mps))
+            or float(max_v_mps) <= 0.0
+            or float(v_mps) > float(max_v_mps)
+            or float(max_v_mps) > 0.15
+        ):
+            raise ValueError("max_v_mps must be within [v_mps, 0.15]")
+        if not isinstance(command_prefix, str) or not command_prefix.strip():
+            raise ValueError("command_prefix must be non-empty")
+        self.max_warmup_tick_id = max_warmup_tick_id
+        self.active_tick_count = active_tick_count
+        self.v_mps = float(v_mps)
+        self.max_v_mps = float(max_v_mps)
+        self.command_prefix = command_prefix.strip()
+        self.active_tick_id: Optional[int] = None
+        self.post_active_idle_tick_id: Optional[int] = None
+        self.shutdown_tick_id: Optional[int] = None
+        self.warmup_timeout_tick_id: Optional[int] = None
+
+    def snapshot(self, context: Any) -> Any:
+        from v3.contracts import CommandMode, CommandRequest, DataField
+
+        tick_id = int(context.tick_id)
+        active = bool(
+            self.active_tick_id is not None
+            and self.active_tick_id <= tick_id
+            < self.active_tick_id + self.active_tick_count
+        )
+        return CommandRequest(
+            context=context,
+            command_id=f"{self.command_prefix}.{tick_id}",
+            mode=CommandMode.TELEOP if active else CommandMode.STOP,
+            goal=(
+                (
+                    DataField("v_mps", self.v_mps),
+                    DataField("omega_rad_s", 0.0),
+                    DataField("max_v_mps", self.max_v_mps),
+                    DataField("max_omega_rad_s", 0.05),
+                )
+                if active
+                else ()
+            ),
+            expiry_tick=int(context.tick_id),
+        )
+
+    def observe(
+        self,
+        summary: Mapping[str, Any],
+        *,
+        arm_permitted: bool = True,
+    ) -> str:
+        """Arm once from a completed healthy IDLE tick or bound warmup."""
+
+        if self.active_tick_id is not None:
+            return "SCHEDULED"
+        if self.warmup_timeout_tick_id is not None:
+            return "TIMED_OUT"
+        tick_id = int(summary.get("tick_id", -1))
+        source_health = list(summary.get("source_health") or [])
+        healthy_idle = bool(
+            tick_id >= 0
+            and summary.get("fault_layer") is None
+            and summary.get("safety_decision") == "STOP"
+            and summary.get("safety_reason") == "NOT_ACTIVE"
+            and summary.get("enabled") is False
+            and summary.get("left_output") == 0.0
+            and summary.get("right_output") == 0.0
+            and len(source_health) == 3
+            and len({str(row.get("device_id")) for row in source_health}) == 3
+            and all(row.get("state") == "OK" for row in source_health)
+        )
+        if healthy_idle and arm_permitted:
+            self.active_tick_id = tick_id + 1
+            self.post_active_idle_tick_id = (
+                self.active_tick_id + self.active_tick_count
+            )
+            self.shutdown_tick_id = self.post_active_idle_tick_id + 1
+            return "ARMED"
+        if tick_id >= self.max_warmup_tick_id:
+            self.warmup_timeout_tick_id = tick_id
+            return "TIMEOUT"
+        return "WAITING"
+
+
+def _v3_native_resident_runtime_config() -> Any:
+    from v3_runtime import ResidentPhysicalRuntimeConfig
+
+    return ResidentPhysicalRuntimeConfig.from_bounded(_v3_native_runtime_config())
+
+
+def _v3_resident_hardware_api() -> Dict[str, Any]:
+    import lgpio
+    import smbus2
+
+    from sensors.lidar_service import LidarService
+    from v3_hardware_runtime import (
+        RESIDENT_PHYSICAL_RUN_APPROVAL,
+        run_native_hardware_resident_control,
+    )
+
+    return {
+        "counter_gpio": lgpio,
+        "motor_gpio": lgpio,
+        "open_imu_bus": smbus2.SMBus,
+        "lidar_service_type": LidarService,
+        "resident_approval": RESIDENT_PHYSICAL_RUN_APPROVAL,
+        "run_resident": run_native_hardware_resident_control,
+    }
+
+
 def _v3_profile_artifact_path() -> Path:
     if os.environ.get(V3_NATIVE_PROFILE_ENV_VAR) != V3_NATIVE_RAISED_STAND_PROFILE:
         raise PermissionError("native V3 motion must be launched by its Test Hub profile")
@@ -4296,6 +4658,48 @@ def _v3_profile_artifact_path() -> Path:
     except ValueError as exc:
         raise PermissionError("native V3 artifact directory must stay under logs") from exc
     return directory / "v3_native_raised_stand_motion.json"
+
+
+def _v3_resident_profile_artifact_path() -> Path:
+    if (
+        os.environ.get(V3_NATIVE_PROFILE_ENV_VAR)
+        != V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE
+    ):
+        raise PermissionError(
+            "resident native V3 motion must be launched by its Test Hub profile"
+        )
+    configured = str(os.environ.get(TEST_SESSION_ENV_VAR, "") or "").strip()
+    if not configured:
+        raise RuntimeError("Test Hub session artifact directory is missing")
+    directory = Path(configured).resolve()
+    try:
+        directory.relative_to(LOGS_DIR.resolve())
+    except ValueError as exc:
+        raise PermissionError(
+            "resident native V3 artifact directory must stay under logs"
+        ) from exc
+    return directory / "v3_native_resident_raised_stand.json"
+
+
+def _v3_floor_profile_artifact_paths() -> Tuple[Path, Path]:
+    if os.environ.get(V3_NATIVE_PROFILE_ENV_VAR) != V3_NATIVE_FLOOR_MOTION_PROFILE:
+        raise PermissionError(
+            "floor-motion native V3 validation must be launched by its Test Hub profile"
+        )
+    configured = str(os.environ.get(TEST_SESSION_ENV_VAR, "") or "").strip()
+    if not configured:
+        raise RuntimeError("Test Hub session artifact directory is missing")
+    directory = Path(configured).resolve()
+    try:
+        directory.relative_to(LOGS_DIR.resolve())
+    except ValueError as exc:
+        raise PermissionError(
+            "floor-motion native V3 artifact directory must stay under logs"
+        ) from exc
+    return (
+        directory / "v3_native_floor_motion_capture.json",
+        directory / "v3_native_floor_motion_ticks.json",
+    )
 
 
 def _run_v3_native_raised_stand_motion(approval: str) -> Dict[str, Any]:
@@ -4478,6 +4882,713 @@ def _run_v3_native_raised_stand_motion(approval: str) -> Dict[str, Any]:
         for signum, handler in old_handlers.items():
             signal.signal(signum, handler)
 
+    _write_json_atomic(artifact_path, payload)
+    return payload
+
+
+def _run_v3_native_resident_raised_stand_motion(approval: str) -> Dict[str, Any]:
+    """Run the resident owner until a post-active IDLE tick raises SIGTERM."""
+
+    if approval != V3_NATIVE_RESIDENT_MOTION_APPROVAL:
+        return {
+            "schema": V3_NATIVE_RESIDENT_MOTION_SCHEMA,
+            "status": "FAIL",
+            "success": False,
+            "error": "explicit_powered_resident_raised_stand_approval_required",
+        }
+
+    artifact_path = _v3_resident_profile_artifact_path()
+    lease_gate = _verify_v3_motion_leases()
+    recorder: Optional[_V3MotorGpioRecorder] = None
+    expected_pins: Tuple[int, ...] = (12, 13, 18, 19)
+    stop = _V3SignalStop()
+    old_handlers = {
+        signum: signal.signal(signum, stop.handle)
+        for signum in (signal.SIGINT, signal.SIGTERM)
+    }
+    started_at_utc = _now_iso_utc()
+    started_monotonic = time.monotonic()
+    payload: Dict[str, Any]
+    try:
+        if not lease_gate.get("ok", False):
+            raise PermissionError(
+                f"resident native V3 motion leases failed: {lease_gate.get('errors')}"
+            )
+        api = _v3_resident_hardware_api()
+        config = _v3_native_resident_runtime_config()
+        expected_pins = tuple(config.composition.motor_output.pins)
+        recorder = _V3MotorGpioRecorder(api["motor_gpio"])
+        gateway = _V3ResidentRaisedStandGateway()
+        tick_evidence: Dict[str, Any] = {
+            "observed_tick_count": 0,
+            "resident_preflight": None,
+            "first_allow": None,
+            "post_active_idle": None,
+            "shutdown_tick": None,
+            "first_fault": None,
+            "last_tick": None,
+            "signal_raised_after_tick": None,
+            "warmup_timeout_tick": None,
+        }
+
+        def open_lidar(pose_provider: Any) -> Any:
+            service = api["lidar_service_type"](
+                danger_zone=config.sensor_inputs.lidar_danger_zone_m,
+                pose_provider=pose_provider,
+            )
+            try:
+                if service.start() is not True:
+                    raise RuntimeError("protected latest-only lidar service did not start")
+                return service
+            except Exception:
+                service.stop()
+                raise
+
+        def observe_tick(result: Any) -> None:
+            summary = _v3_tick_result_summary(result)
+            tick_id = int(summary["tick_id"])
+            tick_evidence["observed_tick_count"] = int(
+                tick_evidence["observed_tick_count"]
+            ) + 1
+            schedule = gateway.observe(summary)
+            if schedule == "ARMED":
+                tick_evidence["resident_preflight"] = summary
+            elif schedule == "TIMEOUT":
+                tick_evidence["warmup_timeout_tick"] = tick_id
+                signal.raise_signal(signal.SIGTERM)
+            if (
+                tick_evidence["first_allow"] is None
+                and summary["safety_decision"] == "ALLOW"
+            ):
+                tick_evidence["first_allow"] = summary
+            if (
+                tick_evidence["first_fault"] is None
+                and summary["fault_layer"] is not None
+            ):
+                tick_evidence["first_fault"] = summary
+            if tick_id == gateway.post_active_idle_tick_id:
+                tick_evidence["post_active_idle"] = summary
+                if tick_evidence["signal_raised_after_tick"] is None:
+                    tick_evidence["signal_raised_after_tick"] = tick_id
+                    signal.raise_signal(signal.SIGTERM)
+            if tick_id == gateway.shutdown_tick_id:
+                tick_evidence["shutdown_tick"] = summary
+            tick_evidence["last_tick"] = summary
+
+        report = api["run_resident"](
+            api["counter_gpio"],
+            api["open_imu_bus"],
+            open_lidar,
+            gateway,
+            recorder,
+            config,
+            approval=api["resident_approval"],
+            stop_requested=stop,
+            tick_observer=observe_tick,
+        )
+        report_payload = report.as_dict()
+        motor = _v3_motor_gpio_evidence(recorder, expected_pins)
+        post_close_pins = _v3_post_close_pin_state(expected_pins)
+        first_allow = tick_evidence.get("first_allow") or {}
+        post_active_idle = tick_evidence.get("post_active_idle") or {}
+        shutdown_tick = tick_evidence.get("shutdown_tick") or {}
+        active_tick_id = gateway.active_tick_id
+        post_active_idle_tick_id = gateway.post_active_idle_tick_id
+        shutdown_tick_id = gateway.shutdown_tick_id
+        success = bool(
+            report_payload.get("status") == "PASS"
+            and report_payload.get("exit_reason") == "STOP_REQUESTED"
+            and shutdown_tick_id is not None
+            and report_payload.get("normal_tick_count") == shutdown_tick_id
+            and report_payload.get("tick_count") == shutdown_tick_id + 1
+            and report_payload.get("last_tick_id") == shutdown_tick_id
+            and report_payload.get("final_lifecycle") == "SHUTDOWN"
+            and report_payload.get("final_safety_decision") == "STOP"
+            and report_payload.get("fault_layer") is None
+            and report_payload.get("operator_stopped") is True
+            and stop.requested
+            and tick_evidence.get("observed_tick_count")
+            == shutdown_tick_id + 1
+            and tick_evidence.get("resident_preflight") is not None
+            and first_allow.get("tick_id") == active_tick_id
+            and first_allow.get("fault_layer") is None
+            and first_allow.get("safety_decision") == "ALLOW"
+            and first_allow.get("enabled") is True
+            and post_active_idle.get("tick_id") == post_active_idle_tick_id
+            and post_active_idle.get("safety_decision") == "STOP"
+            and post_active_idle.get("enabled") is False
+            and shutdown_tick.get("tick_id") == shutdown_tick_id
+            and shutdown_tick.get("fault_layer") is None
+            and shutdown_tick.get("safety_decision") == "STOP"
+            and shutdown_tick.get("enabled") is False
+            and tick_evidence.get("first_fault") is None
+            and tick_evidence.get("signal_raised_after_tick")
+            == post_active_idle_tick_id
+            and tick_evidence.get("warmup_timeout_tick") is None
+            and motor.get("opened_handle_count") == 1
+            and motor.get("all_expected_pins_claimed_low") is True
+            and int(_safe_int(motor.get("nonzero_pwm_write_count"), 0)) > 0
+            and motor.get("all_active_pwm_cancelled") is True
+            and motor.get("all_final_verified_low") is True
+            and float(motor.get("minimum_verified_low_hold_ms", 0.0)) >= 2.0
+            and motor.get("gpio_closed_after_verified_low") is True
+            and int(_safe_int(motor.get("failed_event_count"), -1)) == 0
+            and post_close_pins.get("ok") is True
+        )
+        payload = {
+            "schema": V3_NATIVE_RESIDENT_MOTION_SCHEMA,
+            "status": "PASS" if success else "FAIL",
+            "success": success,
+            "profile": V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE,
+            "started_at_utc": started_at_utc,
+            "ended_at_utc": _now_iso_utc(),
+            "duration_s": round(time.monotonic() - started_monotonic, 3),
+            "approval": approval,
+            "motor_power": "ON_RAISED_STAND_BY_EXPLICIT_APPROVAL",
+            "lease_gate": lease_gate,
+            "resident_report": report_payload,
+            "operator_stopped": stop.requested,
+            "command_window": {
+                "maximum_warmup_tick_id": gateway.max_warmup_tick_id,
+                "active_tick_id": active_tick_id,
+                "active_tick_count": 1,
+                "signal_after_tick_id": post_active_idle_tick_id,
+                "shutdown_tick_id": shutdown_tick_id,
+                "v_mps": V3_NATIVE_RESIDENT_V_MPS,
+                "omega_rad_s": 0.0,
+                "tick_period_ns": config.tick_period_ns,
+            },
+            "tick_evidence": tick_evidence,
+            "motor_gpio": motor,
+            "post_close_pins": post_close_pins,
+            "final_lifecycle": (
+                str(report_payload.get("final_lifecycle"))
+                if success
+                else "FAULT_OR_INTERRUPTED"
+            ),
+            "final_lifecycle_basis": (
+                "canonical resident runner observed a healthy IDLE re-arm, one ACTIVE tick, "
+                "one post-active IDLE tick, then handled SIGTERM with an explicit SHUTDOWN "
+                "STOP commit before L12 cancelled PWM, verified and held all pins LOW, and "
+                "released the sole GPIO capability"
+            ),
+            "artifact_path": _rel(artifact_path),
+        }
+    except Exception as exc:
+        motor = (
+            _v3_motor_gpio_evidence(recorder, expected_pins)
+            if recorder is not None
+            else {}
+        )
+        post_close_pins = (
+            _v3_post_close_pin_state(expected_pins)
+            if recorder is not None
+            else {}
+        )
+        payload = {
+            "schema": V3_NATIVE_RESIDENT_MOTION_SCHEMA,
+            "status": "ERROR",
+            "success": False,
+            "profile": V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE,
+            "started_at_utc": started_at_utc,
+            "ended_at_utc": _now_iso_utc(),
+            "duration_s": round(time.monotonic() - started_monotonic, 3),
+            "approval": approval,
+            "motor_power": "ON_RAISED_STAND_BY_EXPLICIT_APPROVAL",
+            "lease_gate": lease_gate,
+            "operator_stopped": stop.requested,
+            "motor_gpio": motor,
+            "post_close_pins": post_close_pins,
+            "final_lifecycle": "FAULT_OR_INTERRUPTED",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "artifact_path": _rel(artifact_path),
+        }
+    finally:
+        for signum, handler in old_handlers.items():
+            signal.signal(signum, handler)
+
+    _write_json_atomic(artifact_path, payload)
+    return payload
+
+
+def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
+    """Run one health/clearance-armed floor pulse and preserve complete evidence."""
+
+    if approval != V3_NATIVE_FLOOR_MOTION_APPROVAL:
+        return {
+            "schema": V3_NATIVE_FLOOR_MOTION_SCHEMA,
+            "status": "FAIL",
+            "success": False,
+            "error": "explicit_floor_clearance_and_speed_approval_required",
+        }
+
+    artifact_path, tick_capture_path = _v3_floor_profile_artifact_paths()
+    lease_gate = _verify_v3_motion_leases()
+    recorder: Optional[_V3MotorGpioRecorder] = None
+    expected_pins: Tuple[int, ...] = (12, 13, 18, 19)
+    stop = _V3SignalStop()
+    old_handlers = {
+        signum: signal.signal(signum, stop.handle)
+        for signum in (signal.SIGINT, signal.SIGTERM)
+    }
+    started_at_utc = _now_iso_utc()
+    started_monotonic = time.monotonic()
+    full_ticks: List[Dict[str, Any]] = []
+    raw_lidar_scans: Dict[int, Dict[str, Any]] = {}
+    motor_event_cursor = 0
+    payload: Dict[str, Any]
+    capture_payload: Dict[str, Any]
+    try:
+        if not lease_gate.get("ok", False):
+            raise PermissionError(
+                f"floor-motion native V3 leases failed: {lease_gate.get('errors')}"
+            )
+        api = _v3_resident_hardware_api()
+        config = _v3_native_resident_runtime_config()
+        expected_pins = tuple(config.composition.motor_output.pins)
+        recorder = _V3MotorGpioRecorder(api["motor_gpio"])
+        gateway = _V3ResidentRaisedStandGateway(
+            active_tick_count=V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT,
+            v_mps=V3_NATIVE_FLOOR_V_MPS,
+            max_v_mps=V3_NATIVE_FLOOR_V_MPS,
+            command_prefix="v3-native-floor-motion",
+        )
+        lidar_service: Dict[str, Any] = {"value": None}
+        clear_scan_ids: List[int] = []
+        clear_scan_evidence: List[Dict[str, Any]] = []
+        last_clearance_scan_id: Optional[int] = None
+        baseline_estimate: Dict[str, Any] = {}
+        active_start_monotonic_ns: Optional[int] = None
+        motion_metrics: Dict[str, Any] = {
+            "maximum_displacement_m": 0.0,
+            "maximum_abs_yaw_delta_rad": 0.0,
+            "maximum_encoder_abs_mps": 0.0,
+            "minimum_active_front_clearance_m": None,
+            "active_duration_s": None,
+            "active_metric_count": 0,
+        }
+        tick_evidence: Dict[str, Any] = {
+            "observed_tick_count": 0,
+            "resident_preflight": None,
+            "clearance_preflight_scans": clear_scan_evidence,
+            "allow_tick_ids": [],
+            "first_allow": None,
+            "last_allow": None,
+            "post_active_idle": None,
+            "shutdown_tick": None,
+            "first_fault": None,
+            "last_tick": None,
+            "signal_raised_after_tick": None,
+            "signal_reason": None,
+            "warmup_timeout_tick": None,
+            "safety_abort": None,
+        }
+
+        def open_lidar(pose_provider: Any) -> Any:
+            service = api["lidar_service_type"](
+                danger_zone=config.sensor_inputs.lidar_danger_zone_m,
+                pose_provider=pose_provider,
+            )
+            try:
+                if service.start() is not True:
+                    raise RuntimeError("protected latest-only lidar service did not start")
+                lidar_service["value"] = service
+                return service
+            except Exception:
+                service.stop()
+                raise
+
+        def request_signal(
+            reason: str,
+            tick_id: int,
+            *,
+            safety_abort: Optional[Dict[str, Any]] = None,
+        ) -> None:
+            if tick_evidence["signal_raised_after_tick"] is not None:
+                return
+            tick_evidence["signal_raised_after_tick"] = int(tick_id)
+            tick_evidence["signal_reason"] = str(reason)
+            if safety_abort is not None:
+                tick_evidence["safety_abort"] = dict(safety_abort)
+            signal.raise_signal(signal.SIGTERM)
+
+        def observe_tick(result: Any) -> None:
+            nonlocal motor_event_cursor
+            nonlocal last_clearance_scan_id
+            nonlocal baseline_estimate
+            nonlocal active_start_monotonic_ns
+
+            summary = _v3_tick_result_summary(result)
+            tick_id = int(summary["tick_id"])
+            tick_ns = int(summary["monotonic_ns"])
+            current_events = list(recorder.events[motor_event_cursor:])
+            motor_event_cursor = len(recorder.events)
+            tick_capture = _v3_full_tick_capture(result, current_events)
+            clearance, raw_capture = _v3_lidar_tick_evidence(
+                lidar_service["value"],
+                tick_ns,
+                clearance_m=(
+                    V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M
+                    if gateway.active_tick_id is None
+                    else V3_NATIVE_FLOOR_ACTIVE_CLEARANCE_M
+                ),
+            )
+            tick_capture["lidar_raw_evidence"] = clearance
+            full_ticks.append(tick_capture)
+            if raw_capture is not None:
+                scan_id = int(raw_capture.get("raw_scan_id", 0) or 0)
+                if scan_id > 0 and scan_id not in raw_lidar_scans:
+                    raw_lidar_scans[scan_id] = raw_capture
+
+            tick_evidence["observed_tick_count"] = int(
+                tick_evidence["observed_tick_count"]
+            ) + 1
+
+            if gateway.active_tick_id is None:
+                scan_id = int(clearance.get("raw_scan_id", 0) or 0)
+                if scan_id > 0 and scan_id != last_clearance_scan_id:
+                    last_clearance_scan_id = scan_id
+                    if clearance.get("ok") is True:
+                        clear_scan_ids.append(scan_id)
+                        clear_scan_evidence.append(dict(clearance))
+                        del clear_scan_ids[:-V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT]
+                        del clear_scan_evidence[:-V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT]
+                    else:
+                        clear_scan_ids.clear()
+                        clear_scan_evidence.clear()
+            schedule = gateway.observe(
+                summary,
+                arm_permitted=(
+                    len(clear_scan_ids)
+                    >= V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT
+                ),
+            )
+            if schedule == "ARMED":
+                tick_evidence["resident_preflight"] = {
+                    **summary,
+                    "lidar_raw_clearance": dict(clearance),
+                }
+                baseline_estimate = dict(summary.get("estimate") or {})
+            elif schedule == "TIMEOUT":
+                tick_evidence["warmup_timeout_tick"] = tick_id
+                request_signal("WARMUP_TIMEOUT", tick_id)
+
+            active = bool(
+                gateway.active_tick_id is not None
+                and gateway.active_tick_id <= tick_id
+                < gateway.active_tick_id + gateway.active_tick_count
+            )
+            if active:
+                if active_start_monotonic_ns is None:
+                    active_start_monotonic_ns = tick_ns
+                if summary["safety_decision"] == "ALLOW":
+                    tick_evidence["allow_tick_ids"].append(tick_id)
+                    if tick_evidence["first_allow"] is None:
+                        tick_evidence["first_allow"] = summary
+                    tick_evidence["last_allow"] = summary
+
+                blockers: List[Dict[str, Any]] = []
+                if clearance.get("ok") is not True:
+                    blockers.append(
+                        {
+                            "code": "ACTIVE_LIDAR_CLEARANCE_GATE",
+                            "detail": dict(clearance),
+                        }
+                    )
+                encoder_abs_mps = _v3_encoder_abs_speed_mps(result)
+                if encoder_abs_mps is None:
+                    blockers.append({"code": "ACTIVE_ENCODER_MEASUREMENT_MISSING"})
+                else:
+                    motion_metrics["maximum_encoder_abs_mps"] = max(
+                        float(motion_metrics["maximum_encoder_abs_mps"]),
+                        encoder_abs_mps,
+                    )
+                    if encoder_abs_mps > V3_NATIVE_FLOOR_MAX_ENCODER_ABS_MPS:
+                        blockers.append(
+                            {
+                                "code": "ACTIVE_ENCODER_SPEED_BOUND",
+                                "measured_mps": encoder_abs_mps,
+                                "limit_mps": V3_NATIVE_FLOOR_MAX_ENCODER_ABS_MPS,
+                            }
+                        )
+                estimate = dict(summary.get("estimate") or {})
+                if not baseline_estimate or not estimate:
+                    blockers.append({"code": "ACTIVE_L3_ESTIMATE_MISSING"})
+                else:
+                    displacement_m = math.hypot(
+                        float(estimate["x_m"]) - float(baseline_estimate["x_m"]),
+                        float(estimate["y_m"]) - float(baseline_estimate["y_m"]),
+                    )
+                    yaw_delta_rad = abs(
+                        _v3_wrapped_angle(
+                            float(estimate["yaw_rad"])
+                            - float(baseline_estimate["yaw_rad"])
+                        )
+                    )
+                    motion_metrics["maximum_displacement_m"] = max(
+                        float(motion_metrics["maximum_displacement_m"]),
+                        displacement_m,
+                    )
+                    motion_metrics["maximum_abs_yaw_delta_rad"] = max(
+                        float(motion_metrics["maximum_abs_yaw_delta_rad"]),
+                        yaw_delta_rad,
+                    )
+                    if displacement_m > V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M:
+                        blockers.append(
+                            {
+                                "code": "ACTIVE_L3_DISPLACEMENT_BOUND",
+                                "measured_m": displacement_m,
+                                "limit_m": V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M,
+                            }
+                        )
+                    if yaw_delta_rad > V3_NATIVE_FLOOR_MAX_YAW_DELTA_RAD:
+                        blockers.append(
+                            {
+                                "code": "ACTIVE_L3_YAW_BOUND",
+                                "measured_rad": yaw_delta_rad,
+                                "limit_rad": V3_NATIVE_FLOOR_MAX_YAW_DELTA_RAD,
+                            }
+                        )
+                active_elapsed_s = (
+                    tick_ns - int(active_start_monotonic_ns)
+                ) / 1_000_000_000.0
+                if active_elapsed_s > V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S:
+                    blockers.append(
+                        {
+                            "code": "ACTIVE_ELAPSED_TIME_BOUND",
+                            "measured_s": active_elapsed_s,
+                            "limit_s": V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S,
+                        }
+                    )
+                current_front_m = clearance.get("min_front_m")
+                if isinstance(current_front_m, (int, float)):
+                    previous_min = motion_metrics["minimum_active_front_clearance_m"]
+                    motion_metrics["minimum_active_front_clearance_m"] = (
+                        float(current_front_m)
+                        if previous_min is None
+                        else min(float(previous_min), float(current_front_m))
+                    )
+                motion_metrics["active_metric_count"] = int(
+                    motion_metrics["active_metric_count"]
+                ) + 1
+                if blockers:
+                    request_signal(
+                        "SAFETY_ABORT",
+                        tick_id,
+                        safety_abort={
+                            "tick_id": tick_id,
+                            "blockers": blockers,
+                            "summary": summary,
+                        },
+                    )
+
+            if (
+                tick_evidence["first_fault"] is None
+                and summary["fault_layer"] is not None
+            ):
+                tick_evidence["first_fault"] = summary
+            if tick_id == gateway.post_active_idle_tick_id:
+                tick_evidence["post_active_idle"] = summary
+                if active_start_monotonic_ns is not None:
+                    motion_metrics["active_duration_s"] = round(
+                        (tick_ns - active_start_monotonic_ns) / 1_000_000_000.0,
+                        6,
+                    )
+                request_signal("BOUNDED_WINDOW_COMPLETE", tick_id)
+            signal_tick = tick_evidence.get("signal_raised_after_tick")
+            if (
+                signal_tick is not None
+                and tick_id > int(signal_tick)
+                and tick_evidence["shutdown_tick"] is None
+            ):
+                tick_evidence["shutdown_tick"] = summary
+            tick_evidence["last_tick"] = summary
+
+        report = api["run_resident"](
+            api["counter_gpio"],
+            api["open_imu_bus"],
+            open_lidar,
+            gateway,
+            recorder,
+            config,
+            approval=api["resident_approval"],
+            stop_requested=stop,
+            tick_observer=observe_tick,
+        )
+        report_payload = report.as_dict()
+        motor = _v3_motor_gpio_evidence(recorder, expected_pins)
+        post_close_pins = _v3_post_close_pin_state(expected_pins)
+        active_tick_id = gateway.active_tick_id
+        expected_allow_tick_ids = (
+            list(
+                range(
+                    active_tick_id,
+                    active_tick_id + gateway.active_tick_count,
+                )
+            )
+            if active_tick_id is not None
+            else []
+        )
+        allow_tick_ids = list(tick_evidence.get("allow_tick_ids") or [])
+        post_active_idle = tick_evidence.get("post_active_idle") or {}
+        shutdown_tick = tick_evidence.get("shutdown_tick") or {}
+        shutdown_tick_id = gateway.shutdown_tick_id
+        active_duration_s = motion_metrics.get("active_duration_s")
+        complete_layer_tick_count = sum(
+            int(item.get("layer_count", 0)) == 12 for item in full_ticks
+        )
+        success = bool(
+            report_payload.get("status") == "PASS"
+            and report_payload.get("exit_reason") == "STOP_REQUESTED"
+            and shutdown_tick_id is not None
+            and report_payload.get("normal_tick_count") == shutdown_tick_id
+            and report_payload.get("tick_count") == shutdown_tick_id + 1
+            and report_payload.get("last_tick_id") == shutdown_tick_id
+            and report_payload.get("final_lifecycle") == "SHUTDOWN"
+            and report_payload.get("final_safety_decision") == "STOP"
+            and report_payload.get("fault_layer") is None
+            and report_payload.get("operator_stopped") is True
+            and stop.requested
+            and tick_evidence.get("observed_tick_count") == shutdown_tick_id + 1
+            and tick_evidence.get("resident_preflight") is not None
+            and len(clear_scan_ids) >= V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT
+            and allow_tick_ids == expected_allow_tick_ids
+            and len(allow_tick_ids) == V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT
+            and post_active_idle.get("tick_id") == gateway.post_active_idle_tick_id
+            and post_active_idle.get("safety_decision") == "STOP"
+            and post_active_idle.get("enabled") is False
+            and shutdown_tick.get("tick_id") == shutdown_tick_id
+            and shutdown_tick.get("fault_layer") is None
+            and shutdown_tick.get("safety_decision") == "STOP"
+            and shutdown_tick.get("enabled") is False
+            and tick_evidence.get("first_fault") is None
+            and tick_evidence.get("signal_reason") == "BOUNDED_WINDOW_COMPLETE"
+            and tick_evidence.get("signal_raised_after_tick")
+            == gateway.post_active_idle_tick_id
+            and tick_evidence.get("warmup_timeout_tick") is None
+            and tick_evidence.get("safety_abort") is None
+            and isinstance(active_duration_s, (int, float))
+            and 0.90 <= float(active_duration_s)
+            <= V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S
+            and len(full_ticks) == report_payload.get("tick_count")
+            and complete_layer_tick_count == len(full_ticks)
+            and len(raw_lidar_scans) > 0
+            and motor.get("opened_handle_count") == 1
+            and motor.get("all_expected_pins_claimed_low") is True
+            and int(_safe_int(motor.get("nonzero_pwm_write_count"), 0)) > 0
+            and motor.get("all_active_pwm_cancelled") is True
+            and motor.get("all_final_verified_low") is True
+            and float(motor.get("minimum_verified_low_hold_ms", 0.0)) >= 2.0
+            and motor.get("gpio_closed_after_verified_low") is True
+            and int(_safe_int(motor.get("failed_event_count"), -1)) == 0
+            and post_close_pins.get("ok") is True
+        )
+        payload = {
+            "schema": V3_NATIVE_FLOOR_MOTION_SCHEMA,
+            "status": "PASS" if success else "FAIL",
+            "success": success,
+            "profile": V3_NATIVE_FLOOR_MOTION_PROFILE,
+            "started_at_utc": started_at_utc,
+            "ended_at_utc": _now_iso_utc(),
+            "duration_s": round(time.monotonic() - started_monotonic, 3),
+            "approval": approval,
+            "motor_power": "ON_FLOOR_BY_EXPLICIT_APPROVAL_AND_RAW_LIDAR_GATE",
+            "lease_gate": lease_gate,
+            "resident_report": report_payload,
+            "operator_stopped": stop.requested,
+            "command_window": {
+                "maximum_warmup_tick_id": gateway.max_warmup_tick_id,
+                "active_tick_id": active_tick_id,
+                "active_tick_count": gateway.active_tick_count,
+                "nominal_duration_s": round(
+                    gateway.active_tick_count * config.tick_period_ns / 1_000_000_000.0,
+                    6,
+                ),
+                "signal_after_tick_id": gateway.post_active_idle_tick_id,
+                "shutdown_tick_id": shutdown_tick_id,
+                "v_mps": gateway.v_mps,
+                "max_v_mps": gateway.max_v_mps,
+                "omega_rad_s": 0.0,
+                "tick_period_ns": config.tick_period_ns,
+            },
+            "safety_bounds": {
+                "preflight_clearance_m": V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M,
+                "active_clearance_m": V3_NATIVE_FLOOR_ACTIVE_CLEARANCE_M,
+                "maximum_displacement_m": V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M,
+                "maximum_abs_yaw_delta_rad": V3_NATIVE_FLOOR_MAX_YAW_DELTA_RAD,
+                "maximum_active_duration_s": V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S,
+                "maximum_encoder_abs_mps": V3_NATIVE_FLOOR_MAX_ENCODER_ABS_MPS,
+            },
+            "motion_metrics": motion_metrics,
+            "tick_evidence": tick_evidence,
+            "capture_evidence": {
+                "tick_capture_count": len(full_ticks),
+                "complete_l1_l12_tick_count": complete_layer_tick_count,
+                "unique_raw_lidar_scan_count": len(raw_lidar_scans),
+                "capture_path": _rel(tick_capture_path),
+            },
+            "motor_gpio": motor,
+            "post_close_pins": post_close_pins,
+            "final_lifecycle": (
+                str(report_payload.get("final_lifecycle"))
+                if success
+                else "FAULT_OR_INTERRUPTED"
+            ),
+            "artifact_path": _rel(artifact_path),
+        }
+    except Exception as exc:
+        motor = (
+            _v3_motor_gpio_evidence(recorder, expected_pins)
+            if recorder is not None
+            else {}
+        )
+        post_close_pins = (
+            _v3_post_close_pin_state(expected_pins)
+            if recorder is not None
+            else {}
+        )
+        payload = {
+            "schema": V3_NATIVE_FLOOR_MOTION_SCHEMA,
+            "status": "ERROR",
+            "success": False,
+            "profile": V3_NATIVE_FLOOR_MOTION_PROFILE,
+            "started_at_utc": started_at_utc,
+            "ended_at_utc": _now_iso_utc(),
+            "duration_s": round(time.monotonic() - started_monotonic, 3),
+            "approval": approval,
+            "motor_power": "ON_FLOOR_BY_EXPLICIT_APPROVAL_AND_RAW_LIDAR_GATE",
+            "lease_gate": lease_gate,
+            "operator_stopped": stop.requested,
+            "motor_gpio": motor,
+            "post_close_pins": post_close_pins,
+            "final_lifecycle": "FAULT_OR_INTERRUPTED",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "artifact_path": _rel(artifact_path),
+            "capture_path": _rel(tick_capture_path),
+        }
+    finally:
+        for signum, handler in old_handlers.items():
+            signal.signal(signum, handler)
+
+    capture_payload = {
+        "schema": "R2B4_V3_NATIVE_FLOOR_TICK_CAPTURE_V1",
+        "profile": V3_NATIVE_FLOOR_MOTION_PROFILE,
+        "status": payload.get("status"),
+        "tick_count": len(full_ticks),
+        "ticks": full_ticks,
+        "unique_raw_lidar_scan_count": len(raw_lidar_scans),
+        "raw_lidar_scans": [
+            raw_lidar_scans[key] for key in sorted(raw_lidar_scans)
+        ],
+        "motor_gpio_events_after_last_tick": (
+            list(recorder.events[motor_event_cursor:])
+            if recorder is not None
+            else []
+        ),
+    }
+    _write_json_atomic(tick_capture_path, capture_payload)
     _write_json_atomic(artifact_path, payload)
     return payload
 
@@ -6687,6 +7798,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_v3_native.add_argument("--approval", required=True)
 
+    p_v3_resident = sub.add_parser(
+        V3_NATIVE_RESIDENT_MOTION_COMMAND,
+        help=argparse.SUPPRESS,
+    )
+    p_v3_resident.add_argument("--approval", required=True)
+
+    p_v3_floor = sub.add_parser(
+        V3_NATIVE_FLOOR_MOTION_COMMAND,
+        help=argparse.SUPPRESS,
+    )
+    p_v3_floor.add_argument("--approval", required=True)
+
     ap.add_argument("--json", action="store_true", help="Always print full JSON payload")
     return ap
 
@@ -6768,6 +7891,16 @@ def main() -> int:
     args = parser.parse_args()
 
     command = str(args.command)
+    if command == V3_NATIVE_FLOOR_MOTION_COMMAND:
+        payload = _run_v3_native_floor_motion_capture(str(args.approval))
+        _print_payload(payload, json_mode=True)
+        return 0 if str(payload.get("status", "")).upper() == "PASS" else 1
+    if command == V3_NATIVE_RESIDENT_MOTION_COMMAND:
+        payload = _run_v3_native_resident_raised_stand_motion(
+            str(args.approval)
+        )
+        _print_payload(payload, json_mode=True)
+        return 0 if str(payload.get("status", "")).upper() == "PASS" else 1
     if command == V3_NATIVE_MOTION_COMMAND:
         payload = _run_v3_native_raised_stand_motion(str(args.approval))
         _print_payload(payload, json_mode=True)

@@ -4,14 +4,23 @@ import pytest
 
 from v3.adapters.bno055_device import NativeBno055Device
 from v3.adapters.bounded_command import BoundedTeleopProfile
-from v3.contracts import SafetyDecision
+from v3.contracts import (
+    CommandMode,
+    CommandRequest,
+    DataField,
+    LifecycleState,
+    SafetyDecision,
+)
 from v3_bounded_config import NativeSensorPolicyConfig, load_bounded_physical_runtime_config
 from v3_hardware_runtime import (
     FiniteSensorMeasurementConfig,
     PHYSICAL_RUN_APPROVAL,
+    RESIDENT_PHYSICAL_RUN_APPROVAL,
     run_finite_sensor_measurement,
     run_native_hardware_bounded_physical_control,
+    run_native_hardware_resident_control,
 )
+from v3_runtime import ResidentPhysicalRuntimeConfig
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -197,6 +206,44 @@ class StepClock:
         return value
 
 
+class StopAfterCall:
+    def __init__(self, stop_on_call) -> None:
+        self.stop_on_call = stop_on_call
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        return self.calls >= self.stop_on_call
+
+
+class ResidentGateway:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def snapshot(self, context):
+        self.calls.append(context.tick_id)
+        if context.tick_id == 2:
+            return CommandRequest(
+                context,
+                "resident-hardware-active",
+                CommandMode.TELEOP,
+                (
+                    DataField("v_mps", 0.05),
+                    DataField("omega_rad_s", 0.0),
+                    DataField("max_v_mps", 0.10),
+                    DataField("max_omega_rad_s", 0.20),
+                ),
+                context.tick_id,
+            )
+        return CommandRequest(
+            context,
+            f"resident-hardware-stop-{context.tick_id}",
+            CommandMode.STOP,
+            (),
+            context.tick_id,
+        )
+
+
 def _policy() -> NativeSensorPolicyConfig:
     return NativeSensorPolicyConfig(
         encoder_maximum_sample_interval_ns=100_000_000,
@@ -379,3 +426,79 @@ def test_invalid_measurement_config_fails_before_any_factory_call():
             tick_count=1,
             tick_period_ns=300_000_000,
         )
+
+
+def test_resident_hardware_surface_owns_all_edges_and_signal_shutdowns_zero():
+    resident = ResidentPhysicalRuntimeConfig.from_bounded(_runtime_config())
+    events, counter, imu, lidar, open_imu, open_lidar, pose_providers = _ports(
+        (1.06, 1.08, 1.10, 1.12)
+    )
+    motor = MotorGpio()
+    gateway = ResidentGateway()
+    observed = []
+
+    report = run_native_hardware_resident_control(
+        counter,
+        open_imu,
+        open_lidar,
+        gateway,
+        motor,
+        resident,
+        approval=RESIDENT_PHYSICAL_RUN_APPROVAL,
+        stop_requested=StopAfterCall(6),
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+        tick_observer=observed.append,
+    )
+
+    assert report.status == 0
+    assert report.exit_reason == "STOP_REQUESTED"
+    assert report.normal_tick_count == 3
+    assert report.tick_count == 4
+    assert report.final_lifecycle is LifecycleState.SHUTDOWN
+    assert report.final_safety_decision is SafetyDecision.STOP
+    assert gateway.calls == [0, 1, 2]
+    assert [item.trace.context.tick_id for item in observed] == [0, 1, 2, 3]
+    assert any(call[0] == "pwm" and call[2] != 0.0 for call in motor.calls)
+    assert motor.pwm_busy == set()
+    assert motor.calls[-1] == ("close", 20)
+    assert events == ["imu-open", "lidar-open", "counter-open"]
+    assert imu.close_calls == 1
+    assert lidar.stop_calls == 1
+    assert counter.close_calls == 1
+    assert len(pose_providers) == 1
+
+
+def test_resident_hardware_approval_and_initial_stop_open_no_device():
+    resident = ResidentPhysicalRuntimeConfig.from_bounded(_runtime_config())
+    events, counter, imu, lidar, open_imu, open_lidar, _ = _ports(())
+    gateway = ResidentGateway()
+
+    with pytest.raises(PermissionError, match="resident V3 approval"):
+        run_native_hardware_resident_control(
+            counter,
+            open_imu,
+            open_lidar,
+            gateway,
+            MotorGpio(),
+            resident,
+            approval="wrong",
+            stop_requested=lambda: False,
+        )
+    assert events == []
+
+    report = run_native_hardware_resident_control(
+        counter,
+        open_imu,
+        open_lidar,
+        gateway,
+        MotorGpio(),
+        resident,
+        approval=RESIDENT_PHYSICAL_RUN_APPROVAL,
+        stop_requested=lambda: True,
+    )
+    assert report.exit_reason == "STOP_REQUESTED_BEFORE_START"
+    assert report.tick_count == 0
+    assert events == []
+    assert imu.close_calls == 0
+    assert lidar.stop_calls == 0

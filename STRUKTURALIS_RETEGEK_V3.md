@@ -367,7 +367,12 @@ proof-kapu.
     trust, stale és timing-valid mezőjű `EncoderVelocityReading` értéket ad. Az
     edge ebből pontosan egy `wheel_velocity` sample-t és OK/DEGRADED/FAILED
     device health értéket zár; timing hiba FAILED, stale vagy alacsony trust
-    DEGRADED. A device-ID és trust küszöb immutable configból érkezik. A legacy
+    DEGRADED. A counter backend opcionális immutable `EncoderEdgeDiagnostics`
+    rekordja ugyanebben a sample-ben kizárólag megfigyelési célú nyers countot,
+    count-deltát, időközt, counter állapotot, read-error/invalid-alert összesítőt
+    és deltát, a reject előtt számított sebességet, a plausibility limitet és egy
+    stabil rejection code-ot ad; ezek egyike sem írhatja felül a trust-, health-
+    vagy safety-döntést. A device-ID és trust küszöb immutable configból érkezik. A legacy
     KIT0085 driver csak forrásreferencia marad: nincs production import, counter-
     vagy reliability-orchestration port, konkrét backend, live wiring vagy
     hardverhozzáférés.
@@ -552,7 +557,10 @@ proof-kapu.
     diagnosztikailag tiszta és a fizikai sebességhatáron belüli delta esetén
     készülhet. A baseline, timing-invalid, stale, diagnosztikailag hibás vagy
     fizikailag lehetetlen minta mindig `trust=0` és mindkét oldalon zéró
-    velocity; minden növekvő tick újrahorgonyozza a következő deltát. A contractot
+    velocity; a nyers count/delta, időköz, counter-diagnosztikai változás, reject
+    előtt számított sebesség és a pontos rejection code ettől elkülönített,
+    passzív typed diagnosztika. Minden növekvő tick újrahorgonyozza a következő
+    deltát. A contractot
     direction, baseline binding, reanchor, stale recovery, diagnosztikai,
     timing- és velocity rejection, valamint `NativeEncoderSource` integráció
     fedi. A backend nem importál legacy drivert/service-t vagy global configot,
@@ -564,8 +572,9 @@ proof-kapu.
     két oldal négy egyedi A/B pinjét, a B irányszintet, invertálást, pull-upot és
     A debounce-ot még GPIO-nyitás előtt zárja. Az owner pontosan egy injektált
     lgpio-style backend-handlet nyit, mind a négy input alertet birtokolja,
-    oldalanként a B callbacket latch-eli, és csak az A rising callbacket számolja
-    előjelesen ugyanazon lock alatt. Kifelé két capability-szűkített,
+    az aszinkron callback gpiochip-sorszámát (nem az opaque open handlet) és
+    pinjét ellenőrzi, oldalanként a B callbacket latch-eli, és csak az A rising
+    callbacket számolja előjelesen ugyanazon lock alatt. Kifelé két capability-szűkített,
     lock-konzisztens immutable `SignedPulseCounterSnapshot` nézetet ad; sebesség-,
     tick-, PWM- vagy command-policyt nem vesz át. Részleges konstrukciós hiba
     minden már létrehozott callbacket, pint és a sole handlet felszabadítja; a

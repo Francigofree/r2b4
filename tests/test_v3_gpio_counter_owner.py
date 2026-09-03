@@ -69,7 +69,7 @@ class FakeGpio:
         self.calls.append(("close", handle))
         return 0
 
-    def emit(self, pin, level, *, chip=7, delivered_pin=None, tick=1):
+    def emit(self, pin, level, *, chip=2, delivered_pin=None, tick=1):
         self.callbacks[pin].function(
             chip,
             pin if delivered_pin is None else delivered_pin,
@@ -145,6 +145,20 @@ def test_b_latch_controls_a_rising_direction_and_invert():
     assert owner.right_counter.snapshot().pulse_count == 0
     assert owner.left_counter.snapshot().invalid_alerts == 0
     assert owner.right_counter.snapshot().invalid_alerts == 0
+
+    owner.close()
+
+
+def test_callbacks_validate_gpiochip_number_not_opaque_open_handle():
+    gpio = FakeGpio({18: 1, 23: 0})
+    owner = NativeGpioSignedCounterPair(gpio, _config())
+
+    gpio.emit(17, 1, chip=2)
+    gpio.emit(17, 1, chip=7)
+
+    snapshot = owner.left_counter.snapshot()
+    assert snapshot.pulse_count == 1
+    assert snapshot.invalid_alerts == 1
 
     owner.close()
 

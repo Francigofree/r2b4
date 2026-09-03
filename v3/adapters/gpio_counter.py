@@ -295,10 +295,13 @@ class NativeGpioSignedCounterPair:
         return callback
 
     def _valid_alert(self, chip: object, gpio: object, expected_pin: int) -> bool:
+        # lgpio callback payloads identify the gpiochip device number, not the
+        # opaque handle returned by gpiochip_open().  Backend operations still
+        # use the handle; only asynchronous alert lineage uses gpio_chip.
         return (
             isinstance(chip, int)
             and not isinstance(chip, bool)
-            and chip == self._handle
+            and chip == self._config.gpio_chip
             and isinstance(gpio, int)
             and not isinstance(gpio, bool)
             and gpio == expected_pin

@@ -26,18 +26,26 @@ from v3.composition.native_sensor_inputs import (
 from v3.contracts import (
     AcquisitionFrame,
     DeviceHealthState,
+    LifecycleState,
     RobotEstimate,
     TickContext,
 )
 from v3.engine import TickResult
+from v3.ports import CommandGateway
 from v3_bounded_runtime import (
     BoundedPhysicalRuntimeConfig,
     RUN_OK,
     run_owned_bounded_physical_control,
 )
+from v3_runtime import (
+    ResidentPhysicalRuntimeConfig,
+    ResidentRuntimeReport,
+    run_owned_resident_physical_control,
+)
 
 
 PHYSICAL_RUN_APPROVAL = "raised-stand-bounded-v3"
+RESIDENT_PHYSICAL_RUN_APPROVAL = "native-resident-v3"
 
 
 class ImuBusFactory(Protocol):
@@ -429,12 +437,91 @@ def run_native_hardware_bounded_physical_control(
         owner.close()
 
 
+def run_native_hardware_resident_control(
+    counter_gpio_backend: GpioCounterBackend,
+    open_imu_bus: ImuBusFactory,
+    open_lidar_port: LidarPortFactory,
+    command_gateway: CommandGateway,
+    motor_gpio_backend: PwmGpioBackend,
+    config: ResidentPhysicalRuntimeConfig,
+    *,
+    approval: str,
+    stop_requested: Callable[[], bool],
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    sleep: Callable[[float], None] = time.sleep,
+    tick_observer: Callable[[TickResult], None] | None = None,
+) -> ResidentRuntimeReport:
+    """Own all hardware for one resident session behind an explicit cutover gate."""
+
+    if approval != RESIDENT_PHYSICAL_RUN_APPROVAL:
+        raise PermissionError("explicit native resident V3 approval is required")
+    if not isinstance(config, ResidentPhysicalRuntimeConfig):
+        raise TypeError("config must be ResidentPhysicalRuntimeConfig")
+    for callback, name in (
+        (open_imu_bus, "open_imu_bus"),
+        (open_lidar_port, "open_lidar_port"),
+        (stop_requested, "stop_requested"),
+        (monotonic_ns, "monotonic_ns"),
+        (sleep, "sleep"),
+    ):
+        if not callable(callback):
+            raise TypeError(f"{name} must be callable")
+    if not callable(getattr(command_gateway, "snapshot", None)):
+        raise TypeError("command_gateway must provide a callable snapshot method")
+    if tick_observer is not None and not callable(tick_observer):
+        raise TypeError("tick_observer must be callable or None")
+    if _stop_value(stop_requested):
+        return ResidentRuntimeReport(
+            status=RUN_OK,
+            exit_reason="STOP_REQUESTED_BEFORE_START",
+            tick_count=0,
+            normal_tick_count=0,
+            last_tick_id=None,
+            final_lifecycle=LifecycleState.SHUTDOWN,
+            final_safety_decision=None,
+            final_reason=None,
+            fault_layer=None,
+            operator_stopped=True,
+        )
+
+    owner = NativeHardwareSensorOwner(
+        counter_gpio_backend,
+        open_imu_bus,
+        open_lidar_port,
+        config.sensor_inputs,
+        monotonic_ns=monotonic_ns,
+        sleep=sleep,
+    )
+    try:
+        def observe(result: TickResult) -> None:
+            owner.publish_tick_result(result)
+            if tick_observer is not None:
+                tick_observer(result)
+
+        return run_owned_resident_physical_control(
+            owner.inputs,
+            command_gateway,
+            motor_gpio_backend,
+            config,
+            stop_requested=stop_requested,
+            monotonic_ns=monotonic_ns,
+            sleep=sleep,
+            tick_observer=observe,
+        )
+    finally:
+        owner.close()
+
+
 __all__ = [
     "FiniteSensorMeasurementConfig",
     "NativeHardwareSensorOwner",
     "NativePoseFeedback",
     "PHYSICAL_RUN_APPROVAL",
+    "RESIDENT_PHYSICAL_RUN_APPROVAL",
+    "ResidentPhysicalRuntimeConfig",
+    "ResidentRuntimeReport",
     "SensorMeasurementReport",
     "run_finite_sensor_measurement",
     "run_native_hardware_bounded_physical_control",
+    "run_native_hardware_resident_control",
 ]

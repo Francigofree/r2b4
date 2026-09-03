@@ -24,6 +24,14 @@ from .read_only_shadow import (
     ShadowSidecarError,
     ShadowTickResult,
 )
+from .resident_live_control import (
+    ResidentLiveControlComposition,
+    ResidentLiveControlConfig,
+)
+from .resident_physical_control import (
+    ResidentPhysicalControlComposition,
+    ResidentPhysicalControlConfig,
+)
 from .stop_only import LifecycleTransitionError, StopOnlyComposition
 
 __all__ = [
@@ -46,6 +54,10 @@ __all__ = [
     "NativeControlCompositionConfig",
     "ReadOnlyShadowConfig",
     "ReadOnlyShadowSidecar",
+    "ResidentLiveControlComposition",
+    "ResidentLiveControlConfig",
+    "ResidentPhysicalControlComposition",
+    "ResidentPhysicalControlConfig",
     "ShadowSidecarError",
     "ShadowTickResult",
     "StopOnlyComposition",

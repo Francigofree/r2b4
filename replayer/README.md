@@ -1,4 +1,37 @@
-# R2B4 Replayer V2.1
+# R2B4 Replayer V2.1 és V3
+
+## Native V3 teljes tick replay
+
+A `v3.replay` a `R2B4_V3_NATIVE_FLOOR_TICK_CAPTURE_V1` fájlokat offline,
+közvetlen typed érték-összehasonlítással játssza vissza. A capture L1 értéke a
+production `RawDeviceBatch -> AcquisitionFrame` tiszta másolata, ezért az input
+veszteségmentesen visszaállítható. A bounded floor profil per-tick STOP/TELEOP
+requestje a capture-kori gateway-contract és az L5 érték alapján áll vissza.
+Hardver-, szenzor-, óra-, GPIO- vagy motor-I/O nincs; az L12 writer memóriabeli.
+
+A replay kétszer, friss composition példányokkal futtatja a production L1-L12
+láncot, majd minden tick minden rétegét és a final actuationt összeveti a
+capture-rel. Az eredmény emellett rögzíti az L10 setpointot, a production L11
+speed-map feed-forward/P/I/integrátor értékeit, a ramp-, saturation- és output
+limiteket, valamint a bal/jobb mért sebességet és bias-t.
+
+```bash
+python3 -m v3.replay inspect /path/to/v3_floor_ticks.json
+python3 -m v3.replay replay /path/to/v3_floor_ticks.json \
+  --physics-config conf/fizika.json \
+  --speed-map-config conf/speed_map.json \
+  --capture-source-manifest /path/to/capture_workspace/base_manifest.json \
+  --output logs/session_<run-id>/v3_replay_result.json
+python3 -m v3.replay verify-result \
+  logs/session_<run-id>/v3_replay_result.json
+```
+
+`MATCH` csak akkor készül, ha nincs első divergencia, a két replay trace azonos,
+és minden tickhez pontosan egy offline L12 write tartozik. A capture-time source
+manifest opcionális: ha elérhető, a report külön jelzi a releváns production
+forrás és aktív konfiguráció hash-egyezését.
+
+## Legacy Replayer V2.1
 
 A V2.1 az új, lezárt fizikai réteghatárokat replayeli:
 

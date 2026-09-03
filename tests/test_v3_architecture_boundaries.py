@@ -367,6 +367,7 @@ def test_native_live_encoder_source_has_no_legacy_or_runtime_authority():
     assert imported_modules <= {
         "__future__",
         "dataclasses",
+        "enum",
         ".live_inputs",
         "math",
         "typing",

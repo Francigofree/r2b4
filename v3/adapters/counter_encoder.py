@@ -8,7 +8,11 @@ from typing import Protocol
 
 from v3.contracts import TickContext
 
-from .live_encoder import EncoderVelocityReading
+from .live_encoder import (
+    EncoderEdgeDiagnostics,
+    EncoderRejectionCode,
+    EncoderVelocityReading,
+)
 
 
 def _positive_float(value: object, name: str) -> float:
@@ -77,7 +81,12 @@ class CounterEncoderBackendConfig:
 class _CounterPair:
     left: SignedPulseCounterSnapshot
     right: SignedPulseCounterSnapshot
-    running: bool
+    left_running: bool
+    right_running: bool
+
+    @property
+    def running(self) -> bool:
+        return self.left_running and self.right_running
 
 
 class NativeCounterEncoderBackend:
@@ -134,23 +143,63 @@ class NativeCounterEncoderBackend:
         right = self._snapshot(self._right, "right")
         left_running = self._running(self._left, "left")
         right_running = self._running(self._right, "right")
-        return _CounterPair(left, right, left_running and right_running)
+        return _CounterPair(left, right, left_running, right_running)
 
     @staticmethod
-    def _diagnostics_unchanged(
-        previous: _CounterPair,
+    def _edge_diagnostics(
         current: _CounterPair,
-    ) -> bool:
-        """Accept a clean interval while retaining cumulative diagnostics."""
-
-        return all(
-            current_value == previous_value
-            for previous_value, current_value in (
-                (previous.left.read_errors, current.left.read_errors),
-                (previous.left.invalid_alerts, current.left.invalid_alerts),
-                (previous.right.read_errors, current.right.read_errors),
-                (previous.right.invalid_alerts, current.right.invalid_alerts),
-            )
+        previous: _CounterPair | None,
+        *,
+        sample_interval_ns: int | None,
+        computed_left_mps: float | None,
+        computed_right_mps: float | None,
+        rejection_code: EncoderRejectionCode,
+        maximum_abs_velocity_mps: float,
+    ) -> EncoderEdgeDiagnostics:
+        return EncoderEdgeDiagnostics(
+            raw_left_pulse_count=current.left.pulse_count,
+            raw_right_pulse_count=current.right.pulse_count,
+            left_pulse_delta=(
+                None
+                if previous is None
+                else current.left.pulse_count - previous.left.pulse_count
+            ),
+            right_pulse_delta=(
+                None
+                if previous is None
+                else current.right.pulse_count - previous.right.pulse_count
+            ),
+            sample_interval_ns=sample_interval_ns,
+            left_counter_running=current.left_running,
+            right_counter_running=current.right_running,
+            left_read_errors=current.left.read_errors,
+            right_read_errors=current.right.read_errors,
+            left_read_error_delta=(
+                None
+                if previous is None
+                else current.left.read_errors - previous.left.read_errors
+            ),
+            right_read_error_delta=(
+                None
+                if previous is None
+                else current.right.read_errors - previous.right.read_errors
+            ),
+            left_invalid_alerts=current.left.invalid_alerts,
+            right_invalid_alerts=current.right.invalid_alerts,
+            left_invalid_alert_delta=(
+                None
+                if previous is None
+                else current.left.invalid_alerts - previous.left.invalid_alerts
+            ),
+            right_invalid_alert_delta=(
+                None
+                if previous is None
+                else current.right.invalid_alerts - previous.right.invalid_alerts
+            ),
+            computed_left_mps=computed_left_mps,
+            computed_right_mps=computed_right_mps,
+            maximum_abs_velocity_mps=maximum_abs_velocity_mps,
+            rejection_code=rejection_code,
         )
 
     @staticmethod
@@ -159,6 +208,7 @@ class NativeCounterEncoderBackend:
         *,
         stale: bool,
         timing_valid: bool,
+        diagnostics: EncoderEdgeDiagnostics,
     ) -> EncoderVelocityReading:
         return EncoderVelocityReading(
             sequence=context.tick_id,
@@ -168,7 +218,44 @@ class NativeCounterEncoderBackend:
             trust=0.0,
             stale=stale,
             timing_valid=timing_valid,
+            diagnostics=diagnostics,
         )
+
+    @staticmethod
+    def _diagnostic_rejection_code(
+        previous: _CounterPair,
+        current: _CounterPair,
+    ) -> EncoderRejectionCode:
+        read_error_changed = (
+            current.left.read_errors != previous.left.read_errors
+            or current.right.read_errors != previous.right.read_errors
+        )
+        invalid_alert_changed = (
+            current.left.invalid_alerts != previous.left.invalid_alerts
+            or current.right.invalid_alerts != previous.right.invalid_alerts
+        )
+        if read_error_changed and invalid_alert_changed:
+            return EncoderRejectionCode.COUNTER_READ_ERROR_AND_INVALID_ALERT_CHANGED
+        if read_error_changed:
+            return EncoderRejectionCode.COUNTER_READ_ERROR_CHANGED
+        if invalid_alert_changed:
+            return EncoderRejectionCode.COUNTER_INVALID_ALERT_CHANGED
+        return EncoderRejectionCode.NONE
+
+    def _velocity_rejection_code(
+        self,
+        left_mps: float,
+        right_mps: float,
+    ) -> EncoderRejectionCode:
+        left_exceeded = abs(left_mps) > self._config.maximum_abs_velocity_mps
+        right_exceeded = abs(right_mps) > self._config.maximum_abs_velocity_mps
+        if left_exceeded and right_exceeded:
+            return EncoderRejectionCode.BOTH_VELOCITY_LIMIT_EXCEEDED
+        if left_exceeded:
+            return EncoderRejectionCode.LEFT_VELOCITY_LIMIT_EXCEEDED
+        if right_exceeded:
+            return EncoderRejectionCode.RIGHT_VELOCITY_LIMIT_EXCEEDED
+        return EncoderRejectionCode.NONE
 
     def read(self, context: TickContext) -> EncoderVelocityReading:
         """Read each counter once and close one fail-closed velocity sample."""
@@ -186,6 +273,21 @@ class NativeCounterEncoderBackend:
                 context,
                 stale=False,
                 timing_valid=current.running,
+                diagnostics=self._edge_diagnostics(
+                    current,
+                    None,
+                    sample_interval_ns=None,
+                    computed_left_mps=None,
+                    computed_right_mps=None,
+                    rejection_code=(
+                        EncoderRejectionCode.BASELINE
+                        if current.running
+                        else EncoderRejectionCode.COUNTER_NOT_RUNNING
+                    ),
+                    maximum_abs_velocity_mps=(
+                        self._config.maximum_abs_velocity_mps
+                    ),
+                ),
             )
 
         elapsed_ns = context.monotonic_ns - previous_monotonic_ns
@@ -194,15 +296,9 @@ class NativeCounterEncoderBackend:
             timing_valid
             and elapsed_ns > self._config.maximum_sample_interval_ns
         )
-        accepted = (
-            timing_valid
-            and not stale
-            and self._diagnostics_unchanged(previous, current)
-        )
-
-        left_mps = 0.0
-        right_mps = 0.0
-        if accepted:
+        left_mps: float | None = None
+        right_mps: float | None = None
+        if elapsed_ns > 0:
             elapsed_s = elapsed_ns / 1_000_000_000.0
             left_mps = (
                 current.left.pulse_count - previous.left.pulse_count
@@ -210,21 +306,41 @@ class NativeCounterEncoderBackend:
             right_mps = (
                 current.right.pulse_count - previous.right.pulse_count
             ) * self._config.right_step_distance_m / elapsed_s
-            accepted = (
-                abs(left_mps) <= self._config.maximum_abs_velocity_mps
-                and abs(right_mps) <= self._config.maximum_abs_velocity_mps
-            )
+
+        if elapsed_ns <= 0:
+            rejection_code = EncoderRejectionCode.NONINCREASING_TICK_TIME
+        elif not current.running:
+            rejection_code = EncoderRejectionCode.COUNTER_NOT_RUNNING
+        elif stale:
+            rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+        else:
+            rejection_code = self._diagnostic_rejection_code(previous, current)
+            if rejection_code is EncoderRejectionCode.NONE:
+                assert left_mps is not None and right_mps is not None
+                rejection_code = self._velocity_rejection_code(left_mps, right_mps)
+
+        diagnostics = self._edge_diagnostics(
+            current,
+            previous,
+            sample_interval_ns=elapsed_ns,
+            computed_left_mps=left_mps,
+            computed_right_mps=right_mps,
+            rejection_code=rejection_code,
+            maximum_abs_velocity_mps=self._config.maximum_abs_velocity_mps,
+        )
 
         if elapsed_ns > 0:
             self._previous = current
             self._previous_monotonic_ns = context.monotonic_ns
 
-        if not accepted:
+        if rejection_code is not EncoderRejectionCode.NONE:
             return self._rejected_reading(
                 context,
                 stale=stale,
                 timing_valid=timing_valid,
+                diagnostics=diagnostics,
             )
+        assert left_mps is not None and right_mps is not None
         return EncoderVelocityReading(
             sequence=context.tick_id,
             captured_monotonic_ns=context.monotonic_ns,
@@ -233,6 +349,7 @@ class NativeCounterEncoderBackend:
             trust=1.0,
             stale=False,
             timing_valid=True,
+            diagnostics=diagnostics,
         )
 
 

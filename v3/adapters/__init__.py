@@ -12,6 +12,11 @@ from .live_idle import (
     MotorChannelPhysicalConfig,
     PwmDecayMode,
 )
+from .resident_command import (
+    AtomicResidentCommandGateway,
+    RESIDENT_COMMAND_SCHEMA,
+    ResidentCommandMailboxConfig,
+)
 
 __all__ = [
     "BoundedTeleopCommandGateway",
@@ -24,6 +29,9 @@ __all__ = [
     "LockedStopCommandGateway",
     "MotorChannelPhysicalConfig",
     "PwmDecayMode",
+    "AtomicResidentCommandGateway",
+    "RESIDENT_COMMAND_SCHEMA",
+    "ResidentCommandMailboxConfig",
     "ReplayerV1CaptureConfig",
     "ReplayerV1InputAdapter",
 ]

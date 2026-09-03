@@ -461,6 +461,142 @@ class TestR2B4TestHub(unittest.TestCase):
             "explicit_powered_raised_stand_approval_required",
         )
 
+    def test_resident_v3_profile_and_approval_gate_are_explicit(self):
+        profile = hub.SCENARIOS[hub.V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE]
+
+        self.assertTrue(profile.live)
+        self.assertFalse(profile.requires_managed_runtime)
+        self.assertEqual(profile.preflight_kind, hub.V3_NATIVE_PREFLIGHT_KIND)
+        self.assertEqual(
+            profile.command[-1],
+            hub.V3_NATIVE_RESIDENT_MOTION_COMMAND,
+        )
+        with mock.patch.object(
+            hub,
+            "_v3_resident_profile_artifact_path",
+            side_effect=AssertionError("artifact path must not be evaluated"),
+        ), mock.patch.object(
+            hub,
+            "_verify_v3_motion_leases",
+            side_effect=AssertionError("leases must not be evaluated"),
+        ):
+            result = hub._run_v3_native_resident_raised_stand_motion(
+                "not-approved"
+            )
+
+        self.assertEqual(result["status"], "FAIL")
+        self.assertFalse(result["success"])
+        self.assertEqual(
+            result["error"],
+            "explicit_powered_resident_raised_stand_approval_required",
+        )
+
+    def test_floor_v3_profile_and_approval_gate_are_explicit(self):
+        profile = hub.SCENARIOS[hub.V3_NATIVE_FLOOR_MOTION_PROFILE]
+
+        self.assertTrue(profile.live)
+        self.assertFalse(profile.requires_managed_runtime)
+        self.assertEqual(profile.preflight_kind, hub.V3_NATIVE_PREFLIGHT_KIND)
+        self.assertEqual(profile.preflight_clearance_m, 0.50)
+        self.assertEqual(profile.command[-1], hub.V3_NATIVE_FLOOR_MOTION_COMMAND)
+        self.assertNotIn(hub.V3_NATIVE_FLOOR_MOTION_APPROVAL, profile.command)
+        with mock.patch.object(
+            hub,
+            "_v3_floor_profile_artifact_paths",
+            side_effect=AssertionError("artifact paths must not be evaluated"),
+        ), mock.patch.object(
+            hub,
+            "_verify_v3_motion_leases",
+            side_effect=AssertionError("leases must not be evaluated"),
+        ):
+            result = hub._run_v3_native_floor_motion_capture("not-approved")
+
+        self.assertEqual(result["status"], "FAIL")
+        self.assertFalse(result["success"])
+        self.assertEqual(
+            result["error"],
+            "explicit_floor_clearance_and_speed_approval_required",
+        )
+
+    def test_floor_v3_gateway_schedules_exact_one_second_at_0p15_mps(self):
+        from v3.contracts import CommandMode, TickContext
+
+        gateway = hub._V3ResidentRaisedStandGateway(
+            active_tick_count=hub.V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT,
+            v_mps=hub.V3_NATIVE_FLOOR_V_MPS,
+            max_v_mps=hub.V3_NATIVE_FLOOR_V_MPS,
+            command_prefix="floor-unit",
+        )
+        healthy = {
+            "tick_id": 7,
+            "fault_layer": None,
+            "safety_decision": "STOP",
+            "safety_reason": "NOT_ACTIVE",
+            "enabled": False,
+            "left_output": 0.0,
+            "right_output": 0.0,
+            "source_health": [
+                {"device_id": device, "state": "OK"}
+                for device in ("encoder", "imu", "lidar")
+            ],
+        }
+
+        self.assertEqual(
+            gateway.observe(healthy, arm_permitted=False),
+            "WAITING",
+        )
+        self.assertEqual(gateway.observe(healthy), "ARMED")
+        self.assertEqual(gateway.active_tick_id, 8)
+        self.assertEqual(gateway.post_active_idle_tick_id, 58)
+        self.assertEqual(gateway.shutdown_tick_id, 59)
+        active = [
+            tick_id
+            for tick_id in range(8, 59)
+            if gateway.snapshot(TickContext(tick_id, 1000 + tick_id)).mode
+            is CommandMode.TELEOP
+        ]
+        command = gateway.snapshot(TickContext(8, 1008))
+        values = {item.key: item.value for item in command.goal}
+
+        self.assertEqual(active, list(range(8, 58)))
+        self.assertEqual(values["v_mps"], 0.15)
+        self.assertEqual(values["max_v_mps"], 0.15)
+
+    def test_floor_v3_raw_lidar_gate_is_current_and_fail_closed(self):
+        snapshot = SimpleNamespace(
+            raw_scan_id=12,
+            raw_scan_timestamp=1.0,
+            health="OK",
+            raw_scan=[{"angle": 0.0, "dist": 900.0, "quality": 10}],
+            summary={
+                "blocked_front": False,
+                "min_dist": 0.9,
+                "min_dist_narrow": 0.9,
+                "raw_safety_valid_point_count": 1,
+                "raw_safety_min_dist_point": {
+                    "angle_deg": 0.0,
+                    "distance_m": 0.9,
+                },
+            },
+        )
+        service = SimpleNamespace(get_snapshot=lambda: snapshot)
+
+        clear, raw = hub._v3_lidar_tick_evidence(
+            service,
+            1_100_000_000,
+            clearance_m=0.50,
+        )
+        blocked, _ = hub._v3_lidar_tick_evidence(
+            service,
+            1_400_000_000,
+            clearance_m=0.50,
+        )
+
+        self.assertTrue(clear["ok"])
+        self.assertEqual(raw["raw_scan"][0]["dist"], 900.0)
+        self.assertFalse(blocked["ok"])
+        self.assertIn("LIDAR_RAW_SCAN_STALE", blocked["blockers"])
+
     def test_native_v3_lease_root_resolves_outer_canonical_from_nested_candidate(self):
         with tempfile.TemporaryDirectory() as td:
             canonical = Path(td) / "canonical"
@@ -820,6 +956,573 @@ class TestR2B4TestHub(unittest.TestCase):
                 f"scenario:--approval {hub.V3_NATIVE_MOTION_APPROVAL}",
             ],
         )
+
+    def test_resident_v3_handler_signals_shutdown_and_records_hard_low_pass(self):
+        from v3.contracts import CommandMode, TickContext
+
+        class Backend:
+            def __init__(self):
+                self.levels = {}
+                self.busy = set()
+
+            def gpiochip_open(self, _chip):
+                return 31
+
+            def gpio_claim_output(self, _handle, pin, initial_level):
+                self.levels[pin] = initial_level
+                return 0
+
+            def gpio_write(self, _handle, pin, level):
+                self.levels[pin] = level
+                return 0
+
+            def gpio_read(self, _handle, pin):
+                return self.levels[pin]
+
+            def gpio_free(self, _handle, pin):
+                self.busy.discard(pin)
+                return 0
+
+            def tx_busy(self, _handle, pin, _kind):
+                return int(pin in self.busy)
+
+            def tx_pwm(self, _handle, pin, frequency_hz, duty_cycle):
+                if frequency_hz == 0 and duty_cycle == 0.0:
+                    self.busy.discard(pin)
+                elif duty_cycle != 0.0:
+                    self.busy.add(pin)
+                return 0
+
+            def gpiochip_close(self, _handle):
+                return 0
+
+        pins = (12, 13, 18, 19)
+        backend = Backend()
+        config = SimpleNamespace(
+            composition=SimpleNamespace(
+                motor_output=SimpleNamespace(pins=pins),
+            ),
+            sensor_inputs=SimpleNamespace(lidar_danger_zone_m=0.1),
+            tick_period_ns=20_000_000,
+        )
+        run_calls = []
+
+        def result_for(tick_id, *, active=False, healthy=True):
+            health = tuple(
+                SimpleNamespace(
+                    device_id=device,
+                    state=SimpleNamespace(
+                        value=(
+                            "DEGRADED"
+                            if device == "lidar" and not healthy
+                            else "OK"
+                        )
+                    ),
+                    reason=(
+                        "LIDAR_STALE"
+                        if device == "lidar" and not healthy
+                        else "OK"
+                    ),
+                )
+                for device in ("encoder", "imu", "lidar")
+            )
+            return SimpleNamespace(
+                trace=SimpleNamespace(
+                    context=SimpleNamespace(
+                        tick_id=tick_id,
+                        monotonic_ns=1_000_000_000 + tick_id * 20_000_000,
+                    ),
+                    fault_layer=None,
+                    layers=(
+                        SimpleNamespace(
+                            layer="L1",
+                            output=SimpleNamespace(io_health=health),
+                        ),
+                    ),
+                ),
+                final_actuation=SimpleNamespace(
+                    safety_decision=SimpleNamespace(
+                        value="ALLOW" if active else "STOP"
+                    ),
+                    reason="ACTIVE" if active else "NOT_ACTIVE",
+                    enabled=active,
+                    left_output=0.2 if active else 0.0,
+                    right_output=0.2 if active else 0.0,
+                ),
+            )
+
+        def fake_resident_run(
+            counter_gpio,
+            open_imu_bus,
+            open_lidar,
+            command_gateway,
+            motor_gpio,
+            received_config,
+            *,
+            approval,
+            stop_requested,
+            tick_observer,
+        ):
+            run_calls.append((counter_gpio, open_imu_bus, open_lidar, received_config))
+            self.assertEqual(approval, "native-resident-v3")
+            self.assertFalse(stop_requested())
+            handle = motor_gpio.gpiochip_open(0)
+            for pin in pins:
+                motor_gpio.gpio_claim_output(handle, pin, 0)
+            active_ticks = []
+            last_normal_tick_id = None
+            for tick_id in range(20):
+                context = TickContext(
+                    tick_id,
+                    1_000_000_000 + tick_id * 20_000_000,
+                )
+                command = command_gateway.snapshot(context)
+                active = command.mode is CommandMode.TELEOP
+                if active:
+                    active_ticks.append(tick_id)
+                    motor_gpio.tx_pwm(handle, 12, 8_000, 0.2)
+                    motor_gpio.tx_pwm(handle, 18, 8_000, 0.2)
+                if tick_id == command_gateway.post_active_idle_tick_id:
+                    for pin in pins:
+                        if motor_gpio.tx_busy(handle, pin, 0):
+                            motor_gpio.tx_pwm(handle, pin, 0, 0.0)
+                tick_observer(
+                    result_for(
+                        tick_id,
+                        active=active,
+                        healthy=tick_id >= 6,
+                    )
+                )
+                last_normal_tick_id = tick_id
+                if stop_requested():
+                    break
+            self.assertTrue(stop_requested())
+            self.assertEqual(active_ticks, [7])
+            self.assertEqual(command_gateway.active_tick_id, 7)
+            self.assertEqual(command_gateway.post_active_idle_tick_id, 8)
+            self.assertEqual(command_gateway.shutdown_tick_id, 9)
+            self.assertEqual(last_normal_tick_id, 8)
+            tick_observer(
+                result_for(command_gateway.shutdown_tick_id)
+            )
+            for pin in pins:
+                motor_gpio.gpio_write(handle, pin, 0)
+            for pin in pins:
+                self.assertEqual(motor_gpio.gpio_read(handle, pin), 0)
+            time.sleep(0.003)
+            for pin in pins:
+                self.assertEqual(motor_gpio.gpio_read(handle, pin), 0)
+            motor_gpio.gpiochip_close(handle)
+            return SimpleNamespace(
+                as_dict=lambda: {
+                    "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V1",
+                    "status": "PASS",
+                    "run_status": 0,
+                    "exit_reason": "STOP_REQUESTED",
+                    "tick_count": command_gateway.shutdown_tick_id + 1,
+                    "normal_tick_count": command_gateway.shutdown_tick_id,
+                    "last_tick_id": command_gateway.shutdown_tick_id,
+                    "final_lifecycle": "SHUTDOWN",
+                    "final_safety_decision": "STOP",
+                    "final_reason": "NOT_ACTIVE",
+                    "fault_layer": None,
+                    "operator_stopped": True,
+                }
+            )
+
+        with tempfile.TemporaryDirectory() as td:
+            logs_dir = Path(td) / "logs"
+            artifact_dir = (
+                logs_dir
+                / "session"
+                / "tests"
+                / hub.V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE
+            )
+            with mock.patch.object(hub, "LOGS_DIR", logs_dir), mock.patch.dict(
+                os.environ,
+                {
+                    hub.V3_NATIVE_PROFILE_ENV_VAR:
+                        hub.V3_NATIVE_RESIDENT_RAISED_STAND_PROFILE,
+                    hub.TEST_SESSION_ENV_VAR: str(artifact_dir),
+                },
+                clear=False,
+            ), mock.patch.object(
+                hub,
+                "_verify_v3_motion_leases",
+                return_value={"ok": True, "task_id": "unit", "leases": {}, "errors": []},
+            ), mock.patch.object(
+                hub,
+                "_v3_native_resident_runtime_config",
+                return_value=config,
+            ), mock.patch.object(
+                hub,
+                "_v3_resident_hardware_api",
+                return_value={
+                    "counter_gpio": object(),
+                    "motor_gpio": backend,
+                    "open_imu_bus": object(),
+                    "lidar_service_type": object(),
+                    "resident_approval": "native-resident-v3",
+                    "run_resident": fake_resident_run,
+                },
+            ), mock.patch.object(
+                hub,
+                "_v3_post_close_pin_state",
+                return_value={
+                    "status": "PASS",
+                    "ok": True,
+                    "pins": {
+                        str(pin): {"output": True, "drive_low": True}
+                        for pin in pins
+                    },
+                    "errors": [],
+                },
+            ):
+                result = hub._run_v3_native_resident_raised_stand_motion(
+                    hub.V3_NATIVE_RESIDENT_MOTION_APPROVAL
+                )
+
+            artifact = artifact_dir / "v3_native_resident_raised_stand.json"
+            persisted = json.loads(artifact.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(run_calls), 1)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(persisted["final_lifecycle"], "SHUTDOWN")
+        self.assertEqual(
+            persisted["tick_evidence"]["signal_raised_after_tick"],
+            8,
+        )
+        self.assertEqual(persisted["command_window"]["active_tick_id"], 7)
+        self.assertEqual(persisted["command_window"]["shutdown_tick_id"], 9)
+        self.assertEqual(
+            persisted["tick_evidence"]["resident_preflight"]["tick_id"],
+            6,
+        )
+        self.assertTrue(persisted["motor_gpio"]["all_active_pwm_cancelled"])
+        self.assertTrue(persisted["motor_gpio"]["all_final_verified_low"])
+        self.assertTrue(persisted["post_close_pins"]["ok"])
+
+    def test_floor_v3_handler_captures_50_active_ticks_and_hard_low_pass(self):
+        from v3.contracts import CommandMode, TickContext
+
+        class Backend:
+            def __init__(self):
+                self.levels = {}
+                self.busy = set()
+
+            def gpiochip_open(self, _chip):
+                return 41
+
+            def gpio_claim_output(self, _handle, pin, initial_level):
+                self.levels[pin] = initial_level
+                return 0
+
+            def gpio_write(self, _handle, pin, level):
+                self.levels[pin] = level
+                return 0
+
+            def gpio_read(self, _handle, pin):
+                return self.levels[pin]
+
+            def gpio_free(self, _handle, pin):
+                self.busy.discard(pin)
+                return 0
+
+            def tx_busy(self, _handle, pin, _kind):
+                return int(pin in self.busy)
+
+            def tx_pwm(self, _handle, pin, frequency_hz, duty_cycle):
+                if frequency_hz == 0 and duty_cycle == 0.0:
+                    self.busy.discard(pin)
+                elif duty_cycle != 0.0:
+                    self.busy.add(pin)
+                return 0
+
+            def gpiochip_close(self, _handle):
+                return 0
+
+        class FakeLidar:
+            def __init__(self, **_kwargs):
+                self.tick_id = 0
+                self.started = False
+
+            def start(self):
+                self.started = True
+                return True
+
+            def stop(self):
+                self.started = False
+
+            def get_snapshot(self):
+                tick_id = self.tick_id
+                return SimpleNamespace(
+                    raw_scan_id=tick_id + 1,
+                    raw_scan_timestamp=1.0 + tick_id * 0.02,
+                    health="OK",
+                    raw_scan=[
+                        {"angle": 0.0, "dist": 1000.0, "quality": 15},
+                        {"angle": 90.0, "dist": 1200.0, "quality": 12},
+                    ],
+                    summary={
+                        "blocked_front": False,
+                        "min_dist": 1.0,
+                        "min_dist_narrow": 1.0,
+                        "raw_safety_valid_point_count": 2,
+                        "raw_safety_min_dist_point": {
+                            "angle_deg": 0.0,
+                            "distance_m": 1.0,
+                        },
+                        "raw_scan_id": tick_id + 1,
+                    },
+                )
+
+        pins = (12, 13, 18, 19)
+        backend = Backend()
+        config = SimpleNamespace(
+            composition=SimpleNamespace(
+                motor_output=SimpleNamespace(pins=pins),
+            ),
+            sensor_inputs=SimpleNamespace(lidar_danger_zone_m=0.1),
+            tick_period_ns=20_000_000,
+        )
+
+        def result_for(tick_id, *, active, x_m):
+            health = tuple(
+                SimpleNamespace(
+                    device_id=device,
+                    state=SimpleNamespace(value="OK"),
+                    reason="OK",
+                )
+                for device in ("encoder", "imu", "lidar")
+            )
+            encoder = SimpleNamespace(
+                kind="wheel_velocity",
+                values=(
+                    SimpleNamespace(key="left_mps", value=0.15 if active else 0.0),
+                    SimpleNamespace(key="right_mps", value=0.15 if active else 0.0),
+                ),
+            )
+            l1 = SimpleNamespace(io_health=health, samples=(encoder,))
+            l3 = SimpleNamespace(
+                x_m=x_m,
+                y_m=0.0,
+                yaw_rad=0.0,
+                v_mps=0.15 if active else 0.0,
+                omega_rad_s=0.0,
+            )
+            final = SimpleNamespace(
+                safety_decision=SimpleNamespace(
+                    value="ALLOW" if active else "STOP"
+                ),
+                reason="ACTIVE" if active else "NOT_ACTIVE",
+                enabled=active,
+                left_output=0.25 if active else 0.0,
+                right_output=0.25 if active else 0.0,
+            )
+            layers = [
+                SimpleNamespace(layer="L1", output=l1),
+                SimpleNamespace(layer="L2", output=SimpleNamespace(tick=tick_id)),
+                SimpleNamespace(layer="L3", output=l3),
+            ]
+            layers.extend(
+                SimpleNamespace(
+                    layer=f"L{layer_id}",
+                    output=(final if layer_id == 12 else SimpleNamespace(tick=tick_id)),
+                )
+                for layer_id in range(4, 13)
+            )
+            return SimpleNamespace(
+                trace=SimpleNamespace(
+                    context=SimpleNamespace(
+                        tick_id=tick_id,
+                        monotonic_ns=1_000_000_000 + tick_id * 20_000_000,
+                    ),
+                    fault_layer=None,
+                    layers=tuple(layers),
+                ),
+                final_actuation=final,
+            )
+
+        def fake_resident_run(
+            counter_gpio,
+            open_imu_bus,
+            open_lidar,
+            command_gateway,
+            motor_gpio,
+            received_config,
+            *,
+            approval,
+            stop_requested,
+            tick_observer,
+        ):
+            self.assertEqual(approval, "native-resident-v3")
+            lidar = open_lidar(None)
+            handle = motor_gpio.gpiochip_open(0)
+            for pin in pins:
+                motor_gpio.gpio_claim_output(handle, pin, 0)
+            x_m = 0.0
+            last_normal_tick_id = None
+            for tick_id in range(80):
+                lidar.tick_id = tick_id
+                command = command_gateway.snapshot(
+                    TickContext(
+                        tick_id,
+                        1_000_000_000 + tick_id * 20_000_000,
+                    )
+                )
+                active = command.mode is CommandMode.TELEOP
+                if active:
+                    x_m += 0.0025
+                    motor_gpio.tx_pwm(handle, 12, 8_000, 0.25)
+                    motor_gpio.tx_pwm(handle, 18, 8_000, 0.25)
+                if tick_id == command_gateway.post_active_idle_tick_id:
+                    for pin in pins:
+                        if motor_gpio.tx_busy(handle, pin, 0):
+                            motor_gpio.tx_pwm(handle, pin, 0, 0.0)
+                tick_observer(result_for(tick_id, active=active, x_m=x_m))
+                last_normal_tick_id = tick_id
+                if stop_requested():
+                    break
+            self.assertEqual(command_gateway.active_tick_id, 2)
+            self.assertEqual(command_gateway.post_active_idle_tick_id, 52)
+            self.assertEqual(command_gateway.shutdown_tick_id, 53)
+            self.assertEqual(last_normal_tick_id, 52)
+            lidar.tick_id = command_gateway.shutdown_tick_id
+            tick_observer(
+                result_for(
+                    command_gateway.shutdown_tick_id,
+                    active=False,
+                    x_m=x_m,
+                )
+            )
+            for pin in pins:
+                motor_gpio.gpio_write(handle, pin, 0)
+            for pin in pins:
+                self.assertEqual(motor_gpio.gpio_read(handle, pin), 0)
+            time.sleep(0.003)
+            for pin in pins:
+                self.assertEqual(motor_gpio.gpio_read(handle, pin), 0)
+            motor_gpio.gpiochip_close(handle)
+            lidar.stop()
+            return SimpleNamespace(
+                as_dict=lambda: {
+                    "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V1",
+                    "status": "PASS",
+                    "run_status": 0,
+                    "exit_reason": "STOP_REQUESTED",
+                    "tick_count": 54,
+                    "normal_tick_count": 53,
+                    "last_tick_id": 53,
+                    "final_lifecycle": "SHUTDOWN",
+                    "final_safety_decision": "STOP",
+                    "final_reason": "NOT_ACTIVE",
+                    "fault_layer": None,
+                    "operator_stopped": True,
+                }
+            )
+
+        with tempfile.TemporaryDirectory() as td:
+            logs_dir = Path(td) / "logs"
+            artifact_dir = (
+                logs_dir
+                / "session"
+                / "tests"
+                / hub.V3_NATIVE_FLOOR_MOTION_PROFILE
+            )
+            with mock.patch.object(hub, "LOGS_DIR", logs_dir), mock.patch.dict(
+                os.environ,
+                {
+                    hub.V3_NATIVE_PROFILE_ENV_VAR:
+                        hub.V3_NATIVE_FLOOR_MOTION_PROFILE,
+                    hub.TEST_SESSION_ENV_VAR: str(artifact_dir),
+                },
+                clear=False,
+            ), mock.patch.object(
+                hub,
+                "_verify_v3_motion_leases",
+                return_value={"ok": True, "task_id": "unit", "leases": {}, "errors": []},
+            ), mock.patch.object(
+                hub,
+                "_v3_native_resident_runtime_config",
+                return_value=config,
+            ), mock.patch.object(
+                hub,
+                "_v3_resident_hardware_api",
+                return_value={
+                    "counter_gpio": object(),
+                    "motor_gpio": backend,
+                    "open_imu_bus": object(),
+                    "lidar_service_type": FakeLidar,
+                    "resident_approval": "native-resident-v3",
+                    "run_resident": fake_resident_run,
+                },
+            ), mock.patch.object(
+                hub,
+                "_v3_post_close_pin_state",
+                return_value={
+                    "status": "PASS",
+                    "ok": True,
+                    "pins": {
+                        str(pin): {"output": True, "drive_low": True}
+                        for pin in pins
+                    },
+                    "errors": [],
+                },
+            ):
+                result = hub._run_v3_native_floor_motion_capture(
+                    hub.V3_NATIVE_FLOOR_MOTION_APPROVAL
+                )
+
+            persisted = json.loads(
+                (artifact_dir / "v3_native_floor_motion_capture.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            capture = json.loads(
+                (artifact_dir / "v3_native_floor_motion_ticks.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(persisted["command_window"]["v_mps"], 0.15)
+        self.assertEqual(persisted["command_window"]["active_tick_count"], 50)
+        self.assertEqual(persisted["tick_evidence"]["allow_tick_ids"], list(range(2, 52)))
+        self.assertEqual(persisted["motion_metrics"]["active_duration_s"], 1.0)
+        self.assertEqual(capture["tick_count"], 54)
+        self.assertEqual(capture["unique_raw_lidar_scan_count"], 54)
+        self.assertTrue(persisted["motor_gpio"]["all_active_pwm_cancelled"])
+        self.assertTrue(persisted["motor_gpio"]["all_final_verified_low"])
+        self.assertTrue(persisted["post_close_pins"]["ok"])
+
+    def test_resident_v3_gateway_bounds_unhealthy_matcher_warmup_without_active(self):
+        from v3.contracts import CommandMode, TickContext
+
+        gateway = hub._V3ResidentRaisedStandGateway(max_warmup_tick_id=2)
+        unhealthy = {
+            "fault_layer": None,
+            "safety_decision": "STOP",
+            "safety_reason": "CRITICAL_DEVICE_DEGRADED",
+            "enabled": False,
+            "left_output": 0.0,
+            "right_output": 0.0,
+            "source_health": [
+                {"device_id": "encoder", "state": "OK"},
+                {"device_id": "imu", "state": "OK"},
+                {"device_id": "lidar", "state": "DEGRADED"},
+            ],
+        }
+
+        for tick_id, expected in ((0, "WAITING"), (1, "WAITING"), (2, "TIMEOUT")):
+            command = gateway.snapshot(TickContext(tick_id, 1_000 + tick_id))
+            self.assertIs(command.mode, CommandMode.STOP)
+            self.assertEqual(
+                gateway.observe({**unhealthy, "tick_id": tick_id}),
+                expected,
+            )
+
+        self.assertIsNone(gateway.active_tick_id)
+        self.assertEqual(gateway.warmup_timeout_tick_id, 2)
 
     def test_m4_room_cruise_profile_is_bounded_and_uses_common_speed_band(self):
         profile = hub._scenario_registry()["M4_room_cruise_quality_validator"]
