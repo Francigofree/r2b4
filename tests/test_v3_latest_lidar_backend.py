@@ -32,6 +32,19 @@ def _summary(**changes):
         "lidar_pose_y": -0.10,
         "lidar_pose_theta": 0.20,
         "lidar_pose_confidence": 0.8,
+        "matcher_reason": "",
+        "tracking_ready": True,
+        "matcher_timed_out": False,
+        "matcher_degenerate": False,
+        "matcher_degeneracy_reasons": [],
+        "matcher_runtime_ms": 28.5,
+        "matcher_queue_delay_ms": 1.25,
+        "matcher_quality": {
+            "robust_rmse_m": 0.012,
+            "sector_coverage": 0.5,
+            "observability_score": 0.8,
+            "ambiguity_margin": 0.9,
+        },
     }
     value.update(changes)
     return value
@@ -108,6 +121,17 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
     assert reading.pose.r_scale == 1.0
     assert reading.timing_valid is True
     assert reading.stale is False
+    assert reading.diagnostics is not None
+    assert reading.diagnostics.candidate_id == 17
+    assert reading.diagnostics.source_raw_scan_id == 31
+    assert reading.diagnostics.source_raw_scan_timestamp_ns == 980_000_000
+    assert reading.diagnostics.tracking_ready is True
+    assert reading.diagnostics.matcher_runtime_ms == 28.5
+    assert reading.diagnostics.matcher_queue_delay_ms == 1.25
+    assert reading.diagnostics.robust_rmse_m == 0.012
+    assert reading.diagnostics.sector_coverage == 0.5
+    assert reading.diagnostics.observability_score == 0.8
+    assert reading.diagnostics.ambiguity_margin == 0.9
 
 
 @pytest.mark.parametrize(
@@ -133,7 +157,10 @@ def test_contract_or_timing_drift_is_failed_and_pose_is_not_admitted(result, sta
     assert port.status_calls == 1
     assert snapshot.health.state is DeviceHealthState.FAILED
     assert snapshot.health.reason == "LIDAR_TIMING_INVALID"
-    assert tuple(sample.kind for sample in snapshot.samples) == ("lidar_health",)
+    assert tuple(sample.kind for sample in snapshot.samples) == (
+        "lidar_health",
+        "lidar_matcher_diagnostics",
+    )
 
 
 def test_missing_latest_result_is_stale_without_retry_or_pose():

@@ -53,6 +53,8 @@ class ResidentPhysicalRuntimeConfig:
     def from_bounded(
         cls,
         runtime: BoundedPhysicalRuntimeConfig,
+        *,
+        required_lidar_preflight_revisions: int = 3,
     ) -> ResidentPhysicalRuntimeConfig:
         """Reuse the canonical hardware/control config without its test profile."""
 
@@ -66,6 +68,9 @@ class ResidentPhysicalRuntimeConfig:
                 live_control=ResidentLiveControlConfig(
                     control=bounded_live.control,
                     max_preflight_age_ns=bounded_live.max_preflight_age_ns,
+                    required_lidar_preflight_revisions=(
+                        required_lidar_preflight_revisions
+                    ),
                 ),
                 motor_output=runtime.composition.motor_output,
             ),
@@ -76,7 +81,7 @@ class ResidentPhysicalRuntimeConfig:
 
 @dataclass(frozen=True, slots=True)
 class ResidentRuntimeReport:
-    """Compact terminal status for one resident runtime ownership session."""
+    """Compact terminal status returned after resident output ownership closes."""
 
     status: int
     exit_reason: str
@@ -122,7 +127,7 @@ class ResidentRuntimeReport:
         """Return the bounded status surface used by a later process entrypoint."""
 
         return {
-            "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V1",
+            "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
             "status": "PASS" if self.status == RUN_OK else "FAULT",
             "run_status": self.status,
             "exit_reason": self.exit_reason,
@@ -138,7 +143,18 @@ class ResidentRuntimeReport:
             "final_reason": self.final_reason,
             "fault_layer": self.fault_layer,
             "operator_stopped": self.operator_stopped,
+            "termination_class": self.termination_class,
         }
+
+    @property
+    def termination_class(self) -> str:
+        """Expose verified-close safety without replacing the FAULT lifecycle."""
+
+        if self.last_tick_id is None:
+            return "OUTPUT_NOT_OPENED"
+        if self.status == RUN_FAULT:
+            return "FAULT_SAFE_LOW"
+        return "SHUTDOWN_SAFE_LOW"
 
 
 def _read_monotonic_ns(

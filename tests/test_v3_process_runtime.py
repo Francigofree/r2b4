@@ -179,6 +179,7 @@ def test_signal_latch_and_cli_approval_fail_before_hardware_import(capsys):
 
 def test_process_paths_cannot_escape_runtime_and_config_closes_native_sensors():
     config = process.load_resident_runtime_config(PROJECT_ROOT)
+    assert config.composition.live_control.required_lidar_preflight_revisions == 3
     assert config.sensor_inputs.inputs.lidar_source.pose_frame_id == "R2B4_BOOT_ROBOT_MAP"
     assert process._runtime_owned_path(
         "runtime/v3_command.json",

@@ -98,25 +98,27 @@ V3_NATIVE_RESIDENT_MOTION_COMMAND = "v3-native-resident-raised-stand"
 V3_NATIVE_FLOOR_MOTION_COMMAND = "v3-native-floor-motion-capture"
 V3_NATIVE_MOTION_APPROVAL = "powered-raised-stand-hard-low-v3"
 V3_NATIVE_RESIDENT_MOTION_APPROVAL = "powered-raised-stand-resident-hard-low-v3"
-V3_NATIVE_FLOOR_MOTION_APPROVAL = "floor-clear-0p50m-speed-0p15-v3"
+V3_NATIVE_FLOOR_MOTION_APPROVAL = "floor-clear-1p30m-distance-1p00m-speed-0p15-v3"
 V3_NATIVE_PROFILE_ENV_VAR = "R2B4_TEST_HUB_PROFILE"
 V3_AGENT_LEASE_ROOT_ENV_VAR = "R2B4_AGENT_LEASE_ROOT"
 V3_NATIVE_MOTION_SCHEMA = "R2B4_V3_NATIVE_RAISED_STAND_MOTION_V2"
 V3_NATIVE_RESIDENT_MOTION_SCHEMA = "R2B4_V3_NATIVE_RESIDENT_RAISED_STAND_V2"
-V3_NATIVE_FLOOR_MOTION_SCHEMA = "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V1"
+V3_NATIVE_FLOOR_MOTION_SCHEMA = "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V2"
 V3_NATIVE_START_TICK_ID = 200
 V3_NATIVE_ACTIVE_TICK_COUNT = 1
 V3_NATIVE_V_MPS = 0.04
 V3_NATIVE_RESIDENT_MAX_WARMUP_TICK_ID = 300
 V3_NATIVE_RESIDENT_V_MPS = 0.04
-V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT = 50
+V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT = 500
 V3_NATIVE_FLOOR_V_MPS = 0.15
-V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M = 0.50
+V3_NATIVE_FLOOR_TARGET_DISTANCE_M = 1.00
+V3_NATIVE_FLOOR_TARGET_OVERSHOOT_M = 0.05
+V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M = 1.30
 V3_NATIVE_FLOOR_ACTIVE_CLEARANCE_M = 0.30
 V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT = 2
-V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M = 0.30
+V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M = 1.10
 V3_NATIVE_FLOOR_MAX_YAW_DELTA_RAD = 0.35
-V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S = 1.50
+V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S = 10.50
 V3_NATIVE_FLOOR_MAX_ENCODER_ABS_MPS = 0.45
 
 DEFAULT_ARCHIVE_MAX_FILE_MB = 10.0
@@ -160,8 +162,8 @@ def _scenario_registry() -> Dict[str, ScenarioProfile]:
             name=V3_NATIVE_FLOOR_MOTION_PROFILE,
             family="v3_native_hardware",
             description=(
-                "Health-armed one-second native V3 floor motion with current raw "
-                "LiDAR clearance, full L1-L12 capture and bounded shutdown."
+                "Health-armed distance-targeted native V3 floor motion at 0.15 m/s "
+                "to approximately 1.0 m with full L1-L12 capture and bounded shutdown."
             ),
             live=True,
             timeout_s=60.0,
@@ -175,8 +177,9 @@ def _scenario_registry() -> Dict[str, ScenarioProfile]:
             artifact_hints=(),
             goals=(
                 "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
-                "current raw LiDAR front-sector clearance of at least 0.50 m before health arming",
-                "exactly 50 resident ticks at 0.15 m/s nominal straight speed (1.0 s at 20 ms)",
+                "current raw LiDAR front-sector clearance of at least 1.30 m before health arming",
+                "distance-targeted STOP at 1.00 m L3 displacement with a maximum 500-tick ACTIVE window",
+                "0.15 m/s nominal straight speed and at most 0.05 m accepted endpoint overshoot",
                 "immediate signal stop on raw LiDAR, encoder, L3 displacement, yaw or elapsed-time bound",
                 "complete per-tick L1-L12, control, actuation, GPIO/PWM and de-duplicated raw-scan capture",
                 "post-active IDLE, SIGTERM SHUTDOWN and verified four-pin hard-low after close",
@@ -4511,6 +4514,7 @@ class _V3ResidentRaisedStandGateway:
         max_warmup_tick_id: int = V3_NATIVE_RESIDENT_MAX_WARMUP_TICK_ID,
         *,
         active_tick_count: int = 1,
+        maximum_active_tick_count: int = 100,
         v_mps: float = V3_NATIVE_RESIDENT_V_MPS,
         max_v_mps: float = 0.05,
         command_prefix: str = "v3-resident-raised-stand",
@@ -4522,11 +4526,21 @@ class _V3ResidentRaisedStandGateway:
         ):
             raise ValueError("max_warmup_tick_id must be a positive integer")
         if (
+            not isinstance(maximum_active_tick_count, int)
+            or isinstance(maximum_active_tick_count, bool)
+            or not 1 <= maximum_active_tick_count <= 500
+        ):
+            raise ValueError(
+                "maximum_active_tick_count must be an integer within [1, 500]"
+            )
+        if (
             not isinstance(active_tick_count, int)
             or isinstance(active_tick_count, bool)
-            or not 1 <= active_tick_count <= 100
+            or not 1 <= active_tick_count <= maximum_active_tick_count
         ):
-            raise ValueError("active_tick_count must be an integer within [1, 100]")
+            raise ValueError(
+                "active_tick_count must be within the configured maximum"
+            )
         if (
             isinstance(v_mps, bool)
             or not isinstance(v_mps, (int, float))
@@ -4546,6 +4560,7 @@ class _V3ResidentRaisedStandGateway:
         if not isinstance(command_prefix, str) or not command_prefix.strip():
             raise ValueError("command_prefix must be non-empty")
         self.max_warmup_tick_id = max_warmup_tick_id
+        self.maximum_active_tick_count = maximum_active_tick_count
         self.active_tick_count = active_tick_count
         self.v_mps = float(v_mps)
         self.max_v_mps = float(max_v_mps)
@@ -4554,6 +4569,18 @@ class _V3ResidentRaisedStandGateway:
         self.post_active_idle_tick_id: Optional[int] = None
         self.shutdown_tick_id: Optional[int] = None
         self.warmup_timeout_tick_id: Optional[int] = None
+
+    def complete_active_after(self, tick_id: int) -> None:
+        """End the scheduled ACTIVE window after one already committed tick."""
+
+        if self.active_tick_id is None:
+            raise RuntimeError("ACTIVE window has not been armed")
+        completed_count = int(tick_id) - self.active_tick_id + 1
+        if not 1 <= completed_count <= self.active_tick_count:
+            raise ValueError("completion tick must be inside the ACTIVE window")
+        self.active_tick_count = completed_count
+        self.post_active_idle_tick_id = int(tick_id) + 1
+        self.shutdown_tick_id = int(tick_id) + 2
 
     def snapshot(self, context: Any) -> Any:
         from v3.contracts import CommandMode, CommandRequest, DataField
@@ -5149,7 +5176,8 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
         expected_pins = tuple(config.composition.motor_output.pins)
         recorder = _V3MotorGpioRecorder(api["motor_gpio"])
         gateway = _V3ResidentRaisedStandGateway(
-            active_tick_count=V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT,
+            active_tick_count=V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT,
+            maximum_active_tick_count=V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT,
             v_mps=V3_NATIVE_FLOOR_V_MPS,
             max_v_mps=V3_NATIVE_FLOOR_V_MPS,
             command_prefix="v3-native-floor-motion",
@@ -5167,6 +5195,9 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
             "minimum_active_front_clearance_m": None,
             "active_duration_s": None,
             "active_metric_count": 0,
+            "target_distance_m": V3_NATIVE_FLOOR_TARGET_DISTANCE_M,
+            "target_reached_tick_id": None,
+            "target_reached_displacement_m": None,
         }
         tick_evidence: Dict[str, Any] = {
             "observed_tick_count": 0,
@@ -5382,6 +5413,13 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
                             "summary": summary,
                         },
                     )
+                elif (
+                    displacement_m >= V3_NATIVE_FLOOR_TARGET_DISTANCE_M
+                    and motion_metrics["target_reached_tick_id"] is None
+                ):
+                    gateway.complete_active_after(tick_id)
+                    motion_metrics["target_reached_tick_id"] = tick_id
+                    motion_metrics["target_reached_displacement_m"] = displacement_m
 
             if (
                 tick_evidence["first_fault"] is None
@@ -5454,7 +5492,8 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
             and tick_evidence.get("resident_preflight") is not None
             and len(clear_scan_ids) >= V3_NATIVE_FLOOR_PREFLIGHT_CLEAR_SCAN_COUNT
             and allow_tick_ids == expected_allow_tick_ids
-            and len(allow_tick_ids) == V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT
+            and len(allow_tick_ids) == gateway.active_tick_count
+            and gateway.active_tick_count <= V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT
             and post_active_idle.get("tick_id") == gateway.post_active_idle_tick_id
             and post_active_idle.get("safety_decision") == "STOP"
             and post_active_idle.get("enabled") is False
@@ -5468,8 +5507,17 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
             == gateway.post_active_idle_tick_id
             and tick_evidence.get("warmup_timeout_tick") is None
             and tick_evidence.get("safety_abort") is None
+            and motion_metrics.get("target_reached_tick_id") == allow_tick_ids[-1]
+            and isinstance(
+                motion_metrics.get("target_reached_displacement_m"),
+                (int, float),
+            )
+            and V3_NATIVE_FLOOR_TARGET_DISTANCE_M
+            <= float(motion_metrics["target_reached_displacement_m"])
+            <= V3_NATIVE_FLOOR_TARGET_DISTANCE_M
+            + V3_NATIVE_FLOOR_TARGET_OVERSHOOT_M
             and isinstance(active_duration_s, (int, float))
-            and 0.90 <= float(active_duration_s)
+            and 0.0 < float(active_duration_s)
             <= V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S
             and len(full_ticks) == report_payload.get("tick_count")
             and complete_layer_tick_count == len(full_ticks)
@@ -5501,6 +5549,7 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
                 "maximum_warmup_tick_id": gateway.max_warmup_tick_id,
                 "active_tick_id": active_tick_id,
                 "active_tick_count": gateway.active_tick_count,
+                "maximum_active_tick_count": V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT,
                 "nominal_duration_s": round(
                     gateway.active_tick_count * config.tick_period_ns / 1_000_000_000.0,
                     6,
@@ -5515,6 +5564,8 @@ def _run_v3_native_floor_motion_capture(approval: str) -> Dict[str, Any]:
             "safety_bounds": {
                 "preflight_clearance_m": V3_NATIVE_FLOOR_PREFLIGHT_CLEARANCE_M,
                 "active_clearance_m": V3_NATIVE_FLOOR_ACTIVE_CLEARANCE_M,
+                "target_distance_m": V3_NATIVE_FLOOR_TARGET_DISTANCE_M,
+                "target_overshoot_m": V3_NATIVE_FLOOR_TARGET_OVERSHOOT_M,
                 "maximum_displacement_m": V3_NATIVE_FLOOR_MAX_DISPLACEMENT_M,
                 "maximum_abs_yaw_delta_rad": V3_NATIVE_FLOOR_MAX_YAW_DELTA_RAD,
                 "maximum_active_duration_s": V3_NATIVE_FLOOR_MAX_ACTIVE_DURATION_S,

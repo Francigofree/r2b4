@@ -1,144 +1,46 @@
 {
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
-  "candidate_audit": {
-    "audit_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/audit.json",
-    "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
-    "audited_at_utc": "2026-09-02T19:02:42Z",
-    "base_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
-    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
-    "canonical_drift": [],
-    "canonical_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
-    "changed_files": [
-      "replayer/README.md",
-      "tests/test_v3_replay.py",
-      "v3/replay.py"
-    ],
-    "diff_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/diff.json",
-    "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d",
-    "mode_violations": [],
-    "protected_infrastructure_changes": [],
-    "schema": "R2B4_CANDIDATE_AUDIT_V1",
-    "status": "PASS",
-    "task_id": "v3_replay_floor_load_root_cause_slice30_20260902",
-    "task_mode": "CODE_CHANGE",
-    "unexpected_changes": []
-  },
-  "changed_files": [
-    "replayer/README.md",
-    "tests/test_v3_replay.py",
-    "v3/replay.py"
-  ],
-  "completed_at_utc": "2026-09-02T19:02:42Z",
+  "changed_files": [],
   "files": [
     {
-      "after": {
-        "exists": true,
-        "sha256": "900658f100c0fdbf624b24fea259de4509fdf64e5b660bac3037f38a1660051e",
-        "size_bytes": 7013
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "b1a5a9ec04b9828a5b41e16d66c843ec982b04092daf4f374d2160fe0ba13878",
-        "size_bytes": 5341
+        "sha256": "d13ea30e0d55b45c0d07c46ec21979334604673411bc2f14503d95b460421e8e",
+        "size_bytes": 165864
       },
-      "changed": true,
-      "path": "replayer/README.md"
+      "changed": null,
+      "path": "tests/test_r2b4_test_hub.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "b8f04bd983743a08a449e437f42d899c8ed8b170f05996994468271c9523d29b",
-        "size_bytes": 6973
-      },
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
-      },
-      "changed": true,
-      "path": "tests/test_v3_replay.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
-        "size_bytes": 13005
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
-        "size_bytes": 13005
+        "sha256": "46f8777fcefb3e64a87cb0a914b76337270749a3728143099e93d1bf31f78e21",
+        "size_bytes": 331726
       },
-      "changed": false,
-      "path": "v3/layers/l11_actuator_control.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "151be6a685d23100ac1e4ec74e6144e24e1dc87e80ec51d2d182955c26eb01b7",
-        "size_bytes": 46409
-      },
-      "before": {
-        "exists": true,
-        "sha256": "f33453184f4600f5eb94963d1c56d531260138b77666713ee7ca560a31cfb9b9",
-        "size_bytes": 3105
-      },
-      "changed": true,
-      "path": "v3/replay.py"
+      "changed": null,
+      "path": "tools/r2b4_test_hub.py"
     }
   ],
-  "goal": "Deterministically replay the existing 2.0 s V3 floor-load full-tick capture, extend Replayer V3 only as necessary, and produce source-first root-cause evidence for L10/L11 setpoint, speed-map feed-forward, PI terms, integrator growth, limits, measured wheel speeds, and bias.",
-  "promotion_status": "READY",
-  "reason": "Replayer V3 file-based full-chain replay added and the immutable 2.0 s floor-load capture replayed twice: 212/212 L1-L12 ticks and offline L12 writes MATCH with no divergence; all capture-time control/config hashes match. Source-first diagnosis identifies category 1 speed-map/feed-forward floor-load mismatch as primary, with weak/resetting PI integration and the 12-tick L9 acceleration ramp secondary; no steady limit, saturation, or L12 output modification exists, so no additional live run was evidence-required.",
+  "goal": "Update the native V3 1 m floor Test Hub profile to schedule ACTIVE only after three distinct monotonically newer healthy lidar matcher revisions plus existing raw-clearance gates; publish per-revision matcher diagnostics and explicit terminal safe-low classification; preserve the 0.2 active safety threshold; add targeted regression coverage for repeated-revision non-arming and failed-run evidence.",
+  "promotion_status": "NOT_PROMOTED",
+  "reason": "",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-09-02T18:41:39Z",
-  "status": "COMPLETE",
-  "task_id": "v3_replay_floor_load_root_cause_slice30_20260902",
-  "task_mode": "CODE_CHANGE",
-  "test_strategy": {
-    "authoritative_test_count": 1,
-    "default": "TARGETED",
-    "full_regression_reason": null,
-    "full_regression_recorded": false,
-    "full_regression_required": false,
-    "legacy_non_authority_count": 0
-  },
-  "tests": [
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m pytest -q tests/test_v3_*.py; python3 -m v3.replay replay <capture> --capture-source-manifest <capture-base-manifest> --output logs/session_replay_20260902T1848Z/v3_replay_result.json; python3 -m v3.replay verify-result logs/session_replay_20260902T1848Z/v3_replay_result.json",
-      "status": "PASS"
-    }
-  ],
-  "updated_at_utc": "2026-09-02T19:02:42Z",
-  "workflow_evidence": {
-    "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
-    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
-    "contract_fingerprint": "09c4e0f114018f098d63deb3a9194569a629499985cecb8157501b60bd8dd75b",
-    "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d",
-    "path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/evidence.json",
-    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
-    "sha256": "d9459036e2a405b30fabe933f0882f125cbb7938efb3b1f929db40534603f1b1"
-  },
+  "started_at_utc": "2026-09-03T18:12:55Z",
+  "status": "ACTIVE",
+  "task_id": "v3_floor_readiness_evidence_v2_20260903",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "tests": [],
+  "updated_at_utc": "2026-09-03T18:12:55Z",
   "workspace": {
-    "base_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
-    "base_manifest_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/base_manifest.json",
-    "base_manifest_sha256": "b2e7eb92f8c7ac9615554a79f69d15f84d5c51cb4c2fe5e416621e0f99859b78",
-    "path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/tree",
-    "reseal": {
-      "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
-      "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
-      "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d",
-      "path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/reseal.json",
-      "resealed_at_utc": "2026-09-02T19:02:42Z",
-      "schema": "R2B4_CANDIDATE_RESEAL_V1",
-      "sha256": "e4f76c529f50efe6456b960ae5a40361e7d138a33a95157c7126cba235e462eb",
-      "state": "READY",
-      "task_id": "v3_replay_floor_load_root_cause_slice30_20260902"
-    },
+    "base_fingerprint": "920c1cd09d4c2b821bfc05e267aa3fcaa788fb4e360c4a88e7f50a5f61893002",
+    "base_manifest_path": "runtime/agent_workspaces/v3_floor_readiness_evidence_v2_20260903/meta/base_manifest.json",
+    "base_manifest_sha256": "5b90f2d611e66e7d06853c18b2b043026cb5ceebd6847aac4aaf7ae336c44f6c",
+    "path": "runtime/agent_workspaces/v3_floor_readiness_evidence_v2_20260903/tree",
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "READY"
+    "state": "ACTIVE"
   }
 }

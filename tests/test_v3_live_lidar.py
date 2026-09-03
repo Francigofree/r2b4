@@ -4,6 +4,7 @@ import pytest
 
 from v3.adapters.live_lidar import (
     LidarHealthReading,
+    LidarMatcherDiagnostics,
     LidarPoseReading,
     NativeLidarConfig,
     NativeLidarSource,
@@ -30,6 +31,20 @@ def _reading(*, confidence: float = 0.9, stale: bool = False):
         stale=stale,
         timing_valid=True,
         pose=LidarPoseReading(0.25, -0.10, 0.20, r_scale=0.8),
+        diagnostics=LidarMatcherDiagnostics(
+            candidate_id=17,
+            source_raw_scan_id=31,
+            source_raw_scan_timestamp_ns=960,
+            tracking_ready=True,
+            matcher_timed_out=False,
+            matcher_degenerate=False,
+            matcher_runtime_ms=28.5,
+            matcher_queue_delay_ms=1.25,
+            robust_rmse_m=0.012,
+            sector_coverage=0.5,
+            observability_score=0.8,
+            ambiguity_margin=0.9,
+        ),
     )
 
 
@@ -53,11 +68,33 @@ def test_native_lidar_source_closes_health_and_pose_from_one_matcher_result():
     assert snapshot.health.state is DeviceHealthState.OK
     assert tuple(sample.kind for sample in snapshot.samples) == (
         "lidar_health",
+        "lidar_matcher_diagnostics",
         "lidar_pose",
     )
-    health, pose = snapshot.samples
-    assert health.sequence == pose.sequence == 17
-    assert health.captured_monotonic_ns == pose.captured_monotonic_ns == 980
+    health, diagnostics, pose = snapshot.samples
+    assert health.sequence == diagnostics.sequence == pose.sequence == 17
+    assert (
+        health.captured_monotonic_ns
+        == diagnostics.captured_monotonic_ns
+        == pose.captured_monotonic_ns
+        == 980
+    )
+    assert {field.key: field.value for field in diagnostics.values} == {
+        "candidate_id": 17,
+        "source_raw_scan_id": 31,
+        "source_raw_scan_timestamp_ns": 960,
+        "matcher_reason": "",
+        "tracking_ready": True,
+        "matcher_timed_out": False,
+        "matcher_degenerate": False,
+        "degeneracy_reasons": "",
+        "matcher_runtime_ms": 28.5,
+        "matcher_queue_delay_ms": 1.25,
+        "robust_rmse_m": 0.012,
+        "sector_coverage": 0.5,
+        "observability_score": 0.8,
+        "ambiguity_margin": 0.9,
+    }
     assert {field.key: field.value for field in pose.values} == {
         "frame_id": "R2B4_BOOT_ROBOT_MAP",
         "x_m": 0.25,
@@ -85,7 +122,10 @@ def test_native_lidar_source_retains_health_but_omits_untrusted_pose(
 
     assert snapshot.health.state is DeviceHealthState.DEGRADED
     assert snapshot.health.reason == reason
-    assert tuple(sample.kind for sample in snapshot.samples) == ("lidar_health",)
+    assert tuple(sample.kind for sample in snapshot.samples) == (
+        "lidar_health",
+        "lidar_matcher_diagnostics",
+    )
 
 
 def test_native_lidar_pose_contract_is_immutable_and_fail_closed():

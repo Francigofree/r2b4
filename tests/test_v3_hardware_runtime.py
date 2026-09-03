@@ -429,7 +429,10 @@ def test_invalid_measurement_config_fails_before_any_factory_call():
 
 
 def test_resident_hardware_surface_owns_all_edges_and_signal_shutdowns_zero():
-    resident = ResidentPhysicalRuntimeConfig.from_bounded(_runtime_config())
+    resident = ResidentPhysicalRuntimeConfig.from_bounded(
+        _runtime_config(),
+        required_lidar_preflight_revisions=1,
+    )
     events, counter, imu, lidar, open_imu, open_lidar, pose_providers = _ports(
         (1.06, 1.08, 1.10, 1.12)
     )

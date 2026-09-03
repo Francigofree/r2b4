@@ -14,6 +14,7 @@ from v3.contracts import (
     DeviceHealth,
     DeviceHealthState,
     LifecycleState,
+    RawDeviceBatch,
     SafetyDecision,
     TickContext,
 )
@@ -29,6 +30,7 @@ class ResidentLiveControlConfig:
 
     control: NativeControlCompositionConfig
     max_preflight_age_ns: int = 250_000_000
+    required_lidar_preflight_revisions: int = 3
 
     def __post_init__(self) -> None:
         if not isinstance(self.control, NativeControlCompositionConfig):
@@ -39,16 +41,26 @@ class ResidentLiveControlConfig:
             or self.max_preflight_age_ns <= 0
         ):
             raise ValueError("max_preflight_age_ns must be a positive integer")
+        if (
+            not isinstance(self.required_lidar_preflight_revisions, int)
+            or isinstance(self.required_lidar_preflight_revisions, bool)
+            or not 1 <= self.required_lidar_preflight_revisions <= 32
+        ):
+            raise ValueError(
+                "required_lidar_preflight_revisions must be within [1, 32]"
+            )
 
 
 class ResidentLiveControlComposition:
     """Run repeated V3 ticks through one authenticated command gateway.
 
-    Every transition from IDLE to ACTIVE requires the immediately preceding
-    tick to be a fully healthy STOP/IDLE preflight. Any input, command, layer,
-    or writer fault latches the composition in FAULT. Shutdown bypasses the
-    external command source but still closes one explicit zero decision through
-    the canonical L0-L12 engine before the physical owner is released.
+    Every transition from IDLE to ACTIVE requires the configured number of
+    distinct, monotonically newer healthy lidar matcher revisions and an
+    immediately preceding healthy STOP/IDLE tick. Re-reading one revision does
+    not advance readiness. Any input, command, layer, or writer fault latches
+    the composition in FAULT. Shutdown bypasses the external command source but
+    still closes one explicit zero decision through the canonical L0-L12 engine
+    before the physical owner is released.
     """
 
     __slots__ = (
@@ -58,6 +70,8 @@ class ResidentLiveControlComposition:
         "_control",
         "_faulted",
         "_lifecycle",
+        "_lidar_preflight_revision_count",
+        "_last_lidar_preflight_revision",
         "_preflight_context",
         "_reader",
         "_shutdown",
@@ -92,6 +106,8 @@ class ResidentLiveControlComposition:
         self._config = config
         self._lifecycle = LifecycleState.BOOTING
         self._preflight_context: TickContext | None = None
+        self._last_lidar_preflight_revision: int | None = None
+        self._lidar_preflight_revision_count = 0
         self._active = False
         self._faulted = False
         self._write_failed = False
@@ -103,14 +119,60 @@ class ResidentLiveControlComposition:
 
     @property
     def preflight_complete(self) -> bool:
-        return self._preflight_context is not None
+        return bool(
+            self._preflight_context is not None
+            and self._lidar_preflight_revision_count
+            >= self._config.required_lidar_preflight_revisions
+        )
+
+    @property
+    def lidar_preflight_revision_count(self) -> int:
+        return self._lidar_preflight_revision_count
+
+    @property
+    def last_lidar_preflight_revision(self) -> int | None:
+        return self._last_lidar_preflight_revision
 
     def _preflight_is_fresh_for(self, context: TickContext) -> bool:
         previous = self._preflight_context
-        if previous is None or context.tick_id != previous.tick_id + 1:
+        if (
+            not self.preflight_complete
+            or previous is None
+            or context.tick_id != previous.tick_id + 1
+        ):
             return False
         elapsed_ns = context.monotonic_ns - previous.monotonic_ns
         return 0 < elapsed_ns <= self._config.max_preflight_age_ns
+
+    def _reset_preflight(self) -> None:
+        self._preflight_context = None
+        self._last_lidar_preflight_revision = None
+        self._lidar_preflight_revision_count = 0
+
+    def _record_healthy_idle(
+        self,
+        batch: RawDeviceBatch,
+        context: TickContext,
+    ) -> None:
+        lidar_health = tuple(
+            sample for sample in batch.samples if sample.kind == "lidar_health"
+        )
+        if len(lidar_health) != 1 or lidar_health[0].sequence <= 0:
+            self._reset_preflight()
+            return
+        revision = lidar_health[0].sequence
+        previous = self._last_lidar_preflight_revision
+        if previous is None:
+            self._lidar_preflight_revision_count = 1
+        elif revision > previous:
+            self._lidar_preflight_revision_count = min(
+                self._config.required_lidar_preflight_revisions,
+                self._lidar_preflight_revision_count + 1,
+            )
+        elif revision < previous:
+            self._lidar_preflight_revision_count = 1
+        self._last_lidar_preflight_revision = revision
+        self._preflight_context = context
 
     @staticmethod
     def _is_healthy_idle(
@@ -228,9 +290,11 @@ class ResidentLiveControlComposition:
             self._active = active
             self._lifecycle = scheduled_lifecycle
             if not active and self._is_healthy_idle(batch.device_health, result):
-                self._preflight_context = context
+                self._record_healthy_idle(batch, context)
             elif not active:
-                self._preflight_context = None
+                self._reset_preflight()
+            else:
+                self._reset_preflight()
         return result
 
     def shutdown(self, context: TickContext) -> TickResult:

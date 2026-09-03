@@ -199,6 +199,14 @@ réteget. A minimális replay input:
 - a futáshoz ténylegesen használt konfiguráció egyszer, tartalom szerint;
 - randomizált algoritmus esetén a seed.
 
+A terminális futási verdict és a replay verdict külön fogalom. Strukturálisan
+teljes `FAIL/FAULT` capture ugyanúgy replayelendő, mint a `PASS`, mert éppen a
+fail-closed döntési lánc az elsődleges hibakeresési evidence; nem terminális vagy
+integritáshibás capture viszont nem kaphat `MATCH` eredményt. Resident
+`IDLE -> ACTIVE` átmenet előtt legalább három különálló, monoton újabb, egészséges
+LiDAR matcher-revízió szükséges. Ugyanazon latest-only revízió több tickes
+újraolvasása nem növeli a readiness számlálót.
+
 A `TickTrace` tickenként L1–L12 typed outputokat tartalmaz. Két futás közvetlen
 dataclass-egyenlőséggel hasonlítható össze; az első eltérő rekord megadja a
 `tick_id`-t és a layer nevet. Nem kötelező:

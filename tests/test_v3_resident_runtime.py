@@ -65,9 +65,12 @@ class ImuBackend:
 
 
 class LidarBackend:
+    def __init__(self, revisions=None):
+        self.revisions = dict(revisions or {})
+
     def read(self, context):
         return LidarHealthReading(
-            context.tick_id,
+            self.revisions.get(context.tick_id, context.tick_id + 1),
             context.monotonic_ns,
             measurement_age_ns=0,
             confidence=1.0,
@@ -209,7 +212,7 @@ def _policy():
     )
 
 
-def _runtime_config():
+def _runtime_config(*, required_lidar_preflight_revisions=1):
     bounded = load_bounded_physical_runtime_config(
         PROJECT_ROOT / "conf" / "hardver.json",
         PROJECT_ROOT / "conf" / "fizika.json",
@@ -225,15 +228,18 @@ def _runtime_config():
         ),
         sensor_policy=_policy(),
     )
-    return ResidentPhysicalRuntimeConfig.from_bounded(bounded)
+    return ResidentPhysicalRuntimeConfig.from_bounded(
+        bounded,
+        required_lidar_preflight_revisions=required_lidar_preflight_revisions,
+    )
 
 
-def _sources(encoder):
+def _sources(encoder, lidar_backend=None):
     return (
         NativeEncoderSource(encoder, NativeEncoderConfig("encoder", 0.5)),
         NativeImuSource(ImuBackend(), NativeImuConfig("imu", 0.5, 2)),
         NativeLidarSource(
-            LidarBackend(),
+            lidar_backend or LidarBackend(),
             NativeLidarConfig("lidar", 0.5, 100_000_000),
         ),
     )
@@ -266,7 +272,7 @@ def test_resident_runtime_rearms_then_runs_active_and_signal_shutdown_tick():
     assert report.final_reason == "NOT_ACTIVE"
     assert report.operator_stopped is True
     assert report.as_dict() == {
-        "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V1",
+        "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
         "status": "PASS",
         "run_status": RUN_OK,
         "exit_reason": "STOP_REQUESTED",
@@ -278,6 +284,7 @@ def test_resident_runtime_rearms_then_runs_active_and_signal_shutdown_tick():
         "final_reason": "NOT_ACTIVE",
         "fault_layer": None,
         "operator_stopped": True,
+        "termination_class": "SHUTDOWN_SAFE_LOW",
     }
     assert gateway.calls == [0, 1, 2]
     assert [item.trace.context.tick_id for item in observed] == [0, 1, 2, 3]
@@ -307,6 +314,8 @@ def test_resident_runtime_rejects_active_first_tick_and_latches_fault_zero():
     assert report.final_safety_decision is SafetyDecision.FAULT
     assert report.final_reason == "PREFLIGHT_REQUIRED"
     assert report.fault_layer == "ResidentLiveControl"
+    assert report.termination_class == "FAULT_SAFE_LOW"
+    assert report.as_dict()["termination_class"] == "FAULT_SAFE_LOW"
     assert not any(call[0] == "pwm" and call[-1] != 0.0 for call in motor.calls)
     assert motor.calls[-1] == ("close", 4)
 
@@ -387,6 +396,7 @@ def test_initial_stop_and_invalid_gateway_claim_no_motor_capability():
     assert report.status == RUN_OK
     assert report.exit_reason == "STOP_REQUESTED_BEFORE_START"
     assert report.tick_count == 0
+    assert report.termination_class == "OUTPUT_NOT_OPENED"
     assert motor.calls == []
 
     with pytest.raises(TypeError, match="command_gateway"):
@@ -398,3 +408,33 @@ def test_initial_stop_and_invalid_gateway_claim_no_motor_capability():
             stop_requested=lambda: False,
         )
     assert motor.calls == []
+
+
+def test_resident_activation_requires_three_distinct_healthy_lidar_revisions():
+    successful = run_resident_physical_control(
+        *_sources(EncoderBackend()),
+        SequenceGateway(active_ticks=(3,)),
+        MotorGpio(),
+        _runtime_config(required_lidar_preflight_revisions=3),
+        stop_requested=StopAfterCall(6),
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+    )
+
+    repeated_revision = run_resident_physical_control(
+        *_sources(
+            EncoderBackend(),
+            LidarBackend({0: 1, 1: 1, 2: 2, 3: 3}),
+        ),
+        SequenceGateway(active_ticks=(3,)),
+        MotorGpio(),
+        _runtime_config(required_lidar_preflight_revisions=3),
+        stop_requested=lambda: False,
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+    )
+
+    assert successful.status == RUN_OK
+    assert repeated_revision.status == RUN_FAULT
+    assert repeated_revision.final_reason == "PREFLIGHT_REQUIRED"
+    assert repeated_revision.fault_layer == "ResidentLiveControl"

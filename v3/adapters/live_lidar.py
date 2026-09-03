@@ -33,6 +33,12 @@ def _nonnegative_integer(value: object, name: str) -> int:
     return value
 
 
+def _optional_finite(value: object, name: str) -> float | None:
+    if value is None:
+        return None
+    return _finite(value, name)
+
+
 @dataclass(frozen=True, slots=True)
 class NativeLidarConfig:
     """Immutable identity, pose frame and gates for one lidar matcher source."""
@@ -75,6 +81,67 @@ class LidarPoseReading:
 
 
 @dataclass(frozen=True, slots=True)
+class LidarMatcherDiagnostics:
+    """Passive matcher identity and quality evidence for one result revision."""
+
+    candidate_id: int
+    source_raw_scan_id: int
+    source_raw_scan_timestamp_ns: int
+    matcher_reason: str = ""
+    tracking_ready: bool | None = None
+    matcher_timed_out: bool | None = None
+    matcher_degenerate: bool | None = None
+    degeneracy_reasons: tuple[str, ...] = ()
+    matcher_runtime_ms: float | None = None
+    matcher_queue_delay_ms: float | None = None
+    robust_rmse_m: float | None = None
+    sector_coverage: float | None = None
+    observability_score: float | None = None
+    ambiguity_margin: float | None = None
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.candidate_id, "candidate_id")
+        if self.candidate_id == 0:
+            raise ValueError("candidate_id must be positive")
+        _nonnegative_integer(self.source_raw_scan_id, "source_raw_scan_id")
+        if self.source_raw_scan_id == 0:
+            raise ValueError("source_raw_scan_id must be positive")
+        _nonnegative_integer(
+            self.source_raw_scan_timestamp_ns,
+            "source_raw_scan_timestamp_ns",
+        )
+        if not isinstance(self.matcher_reason, str):
+            raise ValueError("matcher_reason must be a string")
+        for value, name in (
+            (self.tracking_ready, "tracking_ready"),
+            (self.matcher_timed_out, "matcher_timed_out"),
+            (self.matcher_degenerate, "matcher_degenerate"),
+        ):
+            if value is not None and type(value) is not bool:
+                raise ValueError(f"{name} must be bool or None")
+        if not isinstance(self.degeneracy_reasons, tuple) or any(
+            not isinstance(item, str) for item in self.degeneracy_reasons
+        ):
+            raise ValueError("degeneracy_reasons must be a tuple of strings")
+        for value, name in (
+            (self.matcher_runtime_ms, "matcher_runtime_ms"),
+            (self.matcher_queue_delay_ms, "matcher_queue_delay_ms"),
+            (self.robust_rmse_m, "robust_rmse_m"),
+        ):
+            parsed = _optional_finite(value, name)
+            if parsed is not None and parsed < 0.0:
+                raise ValueError(f"{name} must be non-negative or None")
+        for value, name in (
+            (self.sector_coverage, "sector_coverage"),
+            (self.observability_score, "observability_score"),
+            (self.ambiguity_margin, "ambiguity_margin"),
+        ):
+            parsed = _optional_finite(value, name)
+            if parsed is not None and not 0.0 <= parsed <= 1.0:
+                raise ValueError(f"{name} must be within [0, 1] or None")
+
+
+@dataclass(frozen=True, slots=True)
 class LidarHealthReading:
     """One backend-owned matcher result and its source-measurement quality."""
 
@@ -85,6 +152,7 @@ class LidarHealthReading:
     stale: bool
     timing_valid: bool
     pose: LidarPoseReading | None = None
+    diagnostics: LidarMatcherDiagnostics | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
@@ -99,6 +167,16 @@ class LidarHealthReading:
             raise ValueError("timing_valid must be bool")
         if self.pose is not None and not isinstance(self.pose, LidarPoseReading):
             raise ValueError("pose must be LidarPoseReading or None")
+        if self.diagnostics is not None and not isinstance(
+            self.diagnostics,
+            LidarMatcherDiagnostics,
+        ):
+            raise ValueError("diagnostics must be LidarMatcherDiagnostics or None")
+        if (
+            self.diagnostics is not None
+            and self.diagnostics.candidate_id != self.revision
+        ):
+            raise ValueError("diagnostics candidate_id must match revision")
 
 
 class LidarHealthBackend(Protocol):
@@ -168,6 +246,56 @@ class NativeLidarSource:
             ),
         )
         samples = [health_sample]
+        if reading.diagnostics is not None:
+            diagnostics = reading.diagnostics
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_matcher_diagnostics",
+                    sequence=reading.revision,
+                    captured_monotonic_ns=reading.captured_monotonic_ns,
+                    values=(
+                        DataField("candidate_id", diagnostics.candidate_id),
+                        DataField(
+                            "source_raw_scan_id",
+                            diagnostics.source_raw_scan_id,
+                        ),
+                        DataField(
+                            "source_raw_scan_timestamp_ns",
+                            diagnostics.source_raw_scan_timestamp_ns,
+                        ),
+                        DataField("matcher_reason", diagnostics.matcher_reason),
+                        DataField("tracking_ready", diagnostics.tracking_ready),
+                        DataField(
+                            "matcher_timed_out",
+                            diagnostics.matcher_timed_out,
+                        ),
+                        DataField(
+                            "matcher_degenerate",
+                            diagnostics.matcher_degenerate,
+                        ),
+                        DataField(
+                            "degeneracy_reasons",
+                            "|".join(diagnostics.degeneracy_reasons),
+                        ),
+                        DataField(
+                            "matcher_runtime_ms",
+                            diagnostics.matcher_runtime_ms,
+                        ),
+                        DataField(
+                            "matcher_queue_delay_ms",
+                            diagnostics.matcher_queue_delay_ms,
+                        ),
+                        DataField("robust_rmse_m", diagnostics.robust_rmse_m),
+                        DataField("sector_coverage", diagnostics.sector_coverage),
+                        DataField(
+                            "observability_score",
+                            diagnostics.observability_score,
+                        ),
+                        DataField("ambiguity_margin", diagnostics.ambiguity_margin),
+                    ),
+                )
+            )
         if (
             reading.pose is not None
             and reading.timing_valid
@@ -198,6 +326,7 @@ class NativeLidarSource:
 __all__ = [
     "LidarHealthBackend",
     "LidarHealthReading",
+    "LidarMatcherDiagnostics",
     "LidarPoseReading",
     "NativeLidarConfig",
     "NativeLidarSource",

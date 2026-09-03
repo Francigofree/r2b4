@@ -15,6 +15,14 @@ capture-rel. Az eredmény emellett rögzíti az L10 setpointot, a production L11
 speed-map feed-forward/P/I/integrátor értékeit, a ramp-, saturation- és output
 limiteket, valamint a bal/jobb mért sebességet és bias-t.
 
+A szerkezetileg teljes, terminális `PASS`, `FAIL` és `FAULT` capture egyaránt
+replayelhető. A capture futási eredménye (`execution.capture_status`) külön
+authority a replay `MATCH/MISMATCH` eredményétől: egy biztonságosan leállított
+`FAIL` futás helyes determinisztikus reprodukciója `MATCH`. `ACTIVE`, `INVALID`
+vagy más nem terminális/érvénytelen capture továbbra sem replayelhető. Nulla
+L12 `ALLOW` tick esetén is készül eredmény, de a wheel-control klasszifikáció
+explicit `0_NO_L12_ALLOW_CONTROL_WINDOW` lesz.
+
 ```bash
 python3 -m v3.replay inspect /path/to/v3_floor_ticks.json
 python3 -m v3.replay replay /path/to/v3_floor_ticks.json \
@@ -30,6 +38,11 @@ python3 -m v3.replay verify-result \
 és minden tickhez pontosan egy offline L12 write tartozik. A capture-time source
 manifest opcionális: ha elérhető, a report külön jelzi a releváns production
 forrás és aktív konfiguráció hash-egyezését.
+
+A V3 LiDAR L1 snapshot minden elérhető matcher-revíziónál passzívan megőrzi a
+matcher/source-scan identitást, readiness/timeout/degeneráció állapotot és a
+legfontosabb minőségi mérőszámokat. Ezek a mezők replay-evidence-ek, nem új
+control- vagy safety-authority-k.
 
 ## Legacy Replayer V2.1
 

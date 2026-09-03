@@ -45,9 +45,10 @@ from .layers.l3_state_estimation import NativeStateEstimatorConfig
 
 
 V3_FLOOR_CAPTURE_SCHEMA = "R2B4_V3_NATIVE_FLOOR_TICK_CAPTURE_V1"
-V3_REPLAY_RESULT_SCHEMA = "R2B4_REPLAYER_V3_RESULT_V1"
+V3_REPLAY_RESULT_SCHEMA = "R2B4_REPLAYER_V3_RESULT_V2"
 V3_REPLAY_STATUS_MATCH = "MATCH"
 V3_REPLAY_STATUS_MISMATCH = "MISMATCH"
+_REPLAYABLE_CAPTURE_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
 _LAYER_ORDER = tuple(f"L{index}" for index in range(1, 13))
 _SOURCE_FIRST_PATHS = (
     "conf/fizika.json",
@@ -183,6 +184,8 @@ def inspect_floor_capture(capture_path: str | Path) -> dict[str, object]:
     return {
         "schema": payload["schema"],
         "status": payload["status"],
+        "execution_status": payload["status"],
+        "execution_passed": payload["status"] == "PASS",
         "profile": payload.get("profile"),
         "tick_count": len(ticks),
         "first_tick_id": first["tick_id"],
@@ -245,10 +248,11 @@ def replay_floor_capture(
             "tick_count": len(ticks),
             "status": payload["status"],
         },
+        "execution": _execution_summary(ticks, str(payload["status"])),
         "reconstruction_contract": {
             "raw_devices": "L1_REVERSIBLE_ACQUISITION_COPY",
             "command": "CAPTURE_TIME_FLOOR_GATEWAY_FROM_L5",
-            "lifecycle": "ACTIVE_IFF_CAPTURED_L12_ALLOW_OTHERWISE_IDLE",
+            "lifecycle": "ACTIVE_IFF_CAPTURED_L5_MISSION_ACTIVE_OTHERWISE_IDLE",
             "external_io": "NONE",
         },
         "source_first": source_first,
@@ -663,7 +667,38 @@ def _analyze_control_rows(
     config: NativeControlCompositionConfig,
 ) -> dict[str, object]:
     if not rows:
-        raise V3ReplayError("capture contains no L12 ALLOW control ticks")
+        return {
+            "primary_cause": "0_NO_L12_ALLOW_CONTROL_WINDOW",
+            "primary_cause_explanation": (
+                "The terminal capture is replayable, but it contains no L12 ALLOW "
+                "tick from which wheel-control performance could be classified."
+            ),
+            "secondary_findings": ["CONTROL_TUNING_REQUIRES_ALLOW_TICKS"],
+            "classification_gates": {"available": False},
+            "setpoint_timeline": {
+                "active_tick_count": 0,
+                "first_active_tick_id": None,
+                "first_full_setpoint_tick_id": None,
+                "ramp_tick_count": 0,
+                "ramp_duration_s": None,
+                "requested_v_mps": None,
+                "first_l10_left_mps": None,
+                "first_l10_right_mps": None,
+                "steady_tick_count": 0,
+            },
+            "speed_map_feed_forward": {"available": False},
+            "pi_dynamics": {
+                "available": False,
+                "kp": config.wheel_pi.kp,
+                "ki": config.wheel_pi.ki,
+                "integrator_limit": config.wheel_pi.integrator_limit,
+            },
+            "limits": {
+                "available": False,
+                "l11_max_normalized_output": config.wheel_pi.max_normalized_output,
+            },
+            "measured_wheel_speed": {"available": False},
+        }
     requested_max = max(abs(float(row["l8_requested_v_mps"])) for row in rows)
     steady = [
         row
@@ -938,10 +973,10 @@ def _reconstruct_inputs(tick: Mapping[str, object]) -> TickInputs:
             f"tick {tick_id} floor capture command mode is not STOP/TELEOP"
         )
     command = CommandRequest(context, command_id, mode, goal, tick_id)
-    l12 = _mapping(layers.get("L12"), "tick.layers.L12")
+    mission_lifecycle = str(l5.get("lifecycle", ""))
     lifecycle = (
         LifecycleState.ACTIVE
-        if str(l12.get("safety_decision", "")) == SafetyDecision.ALLOW.value
+        if mission_lifecycle == LifecycleState.ACTIVE.value
         else LifecycleState.IDLE
     )
     return TickInputs(context, raw, command, lifecycle)
@@ -974,8 +1009,10 @@ def _validate_capture(
 ) -> tuple[Mapping[str, object], ...]:
     if payload.get("schema") != V3_FLOOR_CAPTURE_SCHEMA:
         raise V3ReplayError("unsupported V3 floor capture schema")
-    if payload.get("status") != "PASS":
-        raise V3ReplayError("V3 floor capture status must be PASS")
+    if payload.get("status") not in _REPLAYABLE_CAPTURE_STATUSES:
+        raise V3ReplayError(
+            "V3 floor capture status must be terminal PASS/FAIL/FAULT"
+        )
     ticks = _mapping_sequence(payload.get("ticks"), "capture.ticks")
     if not ticks:
         raise V3ReplayError("V3 floor capture contains no ticks")
@@ -999,6 +1036,48 @@ def _validate_capture(
         previous_tick_id = tick_id
         previous_ns = monotonic_ns
     return ticks
+
+
+def _execution_summary(
+    ticks: tuple[Mapping[str, object], ...],
+    capture_status: str,
+) -> dict[str, object]:
+    """Describe the recorded execution independently of replay equivalence."""
+
+    decision_counts = {item.value: 0 for item in SafetyDecision}
+    first_allow_tick_id: int | None = None
+    first_non_allow_active_tick_id: int | None = None
+    for tick in ticks:
+        tick_id = _integer(tick.get("tick_id"), "tick.tick_id")
+        layers = _mapping(tick.get("layers"), "tick.layers")
+        l5 = _mapping(layers.get("L5"), "tick.layers.L5")
+        l12 = _mapping(layers.get("L12"), "tick.layers.L12")
+        decision = SafetyDecision(str(l12.get("safety_decision", "")))
+        decision_counts[decision.value] += 1
+        if decision is SafetyDecision.ALLOW and first_allow_tick_id is None:
+            first_allow_tick_id = tick_id
+        if (
+            str(l5.get("lifecycle", "")) == LifecycleState.ACTIVE.value
+            and decision is not SafetyDecision.ALLOW
+            and first_non_allow_active_tick_id is None
+        ):
+            first_non_allow_active_tick_id = tick_id
+
+    terminal = _mapping(ticks[-1].get("final_actuation"), "tick.final_actuation")
+    terminal_layers = _mapping(ticks[-1].get("layers"), "tick.layers")
+    terminal_l5 = _mapping(terminal_layers.get("L5"), "tick.layers.L5")
+    return {
+        "capture_status": capture_status,
+        "capture_passed": capture_status == "PASS",
+        "decision_counts": decision_counts,
+        "first_allow_tick_id": first_allow_tick_id,
+        "first_non_allow_active_tick_id": first_non_allow_active_tick_id,
+        "terminal_tick_id": _integer(ticks[-1].get("tick_id"), "tick.tick_id"),
+        "terminal_lifecycle": str(terminal_l5.get("lifecycle", "")),
+        "terminal_safety_decision": str(terminal.get("safety_decision", "")),
+        "terminal_reason": terminal.get("reason"),
+        "terminal_fault_layer": ticks[-1].get("fault_layer"),
+    }
 
 
 def _source_first_evidence(

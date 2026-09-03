@@ -290,6 +290,7 @@ def test_owner_closes_three_native_sources_into_one_ordered_tick_batch():
         "wheel_velocity",
         "ekf_heading",
         "lidar_health",
+        "lidar_matcher_diagnostics",
         "lidar_pose",
     )
     assert imu.read_calls == 1

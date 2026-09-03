@@ -9,7 +9,11 @@ from typing import Protocol
 
 from v3.contracts import TickContext
 
-from .live_lidar import LidarHealthReading, LidarPoseReading
+from .live_lidar import (
+    LidarHealthReading,
+    LidarMatcherDiagnostics,
+    LidarPoseReading,
+)
 
 
 MATCHER_CONTRACT_ID = "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1"
@@ -35,6 +39,30 @@ def _nonnegative_int(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{name} must be a non-negative integer")
     return value
+
+
+def _optional_finite(value: object, name: str) -> float | None:
+    if value is None:
+        return None
+    return _finite(value, name)
+
+
+def _optional_bool(value: object, name: str) -> bool | None:
+    if value is None:
+        return None
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be bool or None")
+    return value
+
+
+def _string_tuple(value: object, name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)) or any(
+        not isinstance(item, str) for item in value
+    ):
+        raise ValueError(f"{name} must be a string sequence")
+    return tuple(value)
 
 
 def _wrapped_yaw(value: float) -> float:
@@ -222,6 +250,62 @@ class NativeLatestLidarBackend:
             ),
             r_scale=self._config.pose_r_scale,
         )
+        quality_value = summary.get("matcher_quality")
+        if quality_value is None:
+            quality: Mapping[str, object] = {}
+        elif isinstance(quality_value, Mapping):
+            quality = quality_value
+        else:
+            raise TypeError("matcher_quality must be a mapping or None")
+        reason = summary.get("matcher_reason", "")
+        if not isinstance(reason, str):
+            raise TypeError("matcher_reason must be a string")
+        diagnostics = LidarMatcherDiagnostics(
+            candidate_id=candidate_id,
+            source_raw_scan_id=source_scan_id,
+            source_raw_scan_timestamp_ns=source_ns,
+            matcher_reason=reason,
+            tracking_ready=_optional_bool(
+                summary.get("tracking_ready"),
+                "tracking_ready",
+            ),
+            matcher_timed_out=_optional_bool(
+                summary.get("matcher_timed_out"),
+                "matcher_timed_out",
+            ),
+            matcher_degenerate=_optional_bool(
+                summary.get("matcher_degenerate"),
+                "matcher_degenerate",
+            ),
+            degeneracy_reasons=_string_tuple(
+                summary.get("matcher_degeneracy_reasons"),
+                "matcher_degeneracy_reasons",
+            ),
+            matcher_runtime_ms=_optional_finite(
+                summary.get("matcher_runtime_ms"),
+                "matcher_runtime_ms",
+            ),
+            matcher_queue_delay_ms=_optional_finite(
+                summary.get("matcher_queue_delay_ms"),
+                "matcher_queue_delay_ms",
+            ),
+            robust_rmse_m=_optional_finite(
+                quality.get("robust_rmse_m"),
+                "robust_rmse_m",
+            ),
+            sector_coverage=_optional_finite(
+                quality.get("sector_coverage"),
+                "sector_coverage",
+            ),
+            observability_score=_optional_finite(
+                quality.get("observability_score"),
+                "observability_score",
+            ),
+            ambiguity_margin=_optional_finite(
+                quality.get("ambiguity_margin"),
+                "ambiguity_margin",
+            ),
+        )
         return LidarHealthReading(
             revision=revision,
             captured_monotonic_ns=min(captured_ns, context.monotonic_ns),
@@ -230,6 +314,7 @@ class NativeLatestLidarBackend:
             stale=stale,
             timing_valid=timing_valid,
             pose=pose,
+            diagnostics=diagnostics,
         )
 
 

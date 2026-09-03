@@ -497,7 +497,7 @@ class TestR2B4TestHub(unittest.TestCase):
         self.assertTrue(profile.live)
         self.assertFalse(profile.requires_managed_runtime)
         self.assertEqual(profile.preflight_kind, hub.V3_NATIVE_PREFLIGHT_KIND)
-        self.assertEqual(profile.preflight_clearance_m, 0.50)
+        self.assertEqual(profile.preflight_clearance_m, 1.30)
         self.assertEqual(profile.command[-1], hub.V3_NATIVE_FLOOR_MOTION_COMMAND)
         self.assertNotIn(hub.V3_NATIVE_FLOOR_MOTION_APPROVAL, profile.command)
         with mock.patch.object(
@@ -518,11 +518,12 @@ class TestR2B4TestHub(unittest.TestCase):
             "explicit_floor_clearance_and_speed_approval_required",
         )
 
-    def test_floor_v3_gateway_schedules_exact_one_second_at_0p15_mps(self):
+    def test_floor_v3_gateway_bounds_then_distance_completes_at_0p15_mps(self):
         from v3.contracts import CommandMode, TickContext
 
         gateway = hub._V3ResidentRaisedStandGateway(
-            active_tick_count=hub.V3_NATIVE_FLOOR_ACTIVE_TICK_COUNT,
+            active_tick_count=hub.V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT,
+            maximum_active_tick_count=hub.V3_NATIVE_FLOOR_MAX_ACTIVE_TICK_COUNT,
             v_mps=hub.V3_NATIVE_FLOOR_V_MPS,
             max_v_mps=hub.V3_NATIVE_FLOOR_V_MPS,
             command_prefix="floor-unit",
@@ -547,18 +548,22 @@ class TestR2B4TestHub(unittest.TestCase):
         )
         self.assertEqual(gateway.observe(healthy), "ARMED")
         self.assertEqual(gateway.active_tick_id, 8)
-        self.assertEqual(gateway.post_active_idle_tick_id, 58)
-        self.assertEqual(gateway.shutdown_tick_id, 59)
+        self.assertEqual(gateway.post_active_idle_tick_id, 508)
+        self.assertEqual(gateway.shutdown_tick_id, 509)
+        gateway.complete_active_after(407)
+        self.assertEqual(gateway.active_tick_count, 400)
+        self.assertEqual(gateway.post_active_idle_tick_id, 408)
+        self.assertEqual(gateway.shutdown_tick_id, 409)
         active = [
             tick_id
-            for tick_id in range(8, 59)
+            for tick_id in range(8, 410)
             if gateway.snapshot(TickContext(tick_id, 1000 + tick_id)).mode
             is CommandMode.TELEOP
         ]
         command = gateway.snapshot(TickContext(8, 1008))
         values = {item.key: item.value for item in command.goal}
 
-        self.assertEqual(active, list(range(8, 58)))
+        self.assertEqual(active, list(range(8, 408)))
         self.assertEqual(values["v_mps"], 0.15)
         self.assertEqual(values["max_v_mps"], 0.15)
 
@@ -1202,7 +1207,7 @@ class TestR2B4TestHub(unittest.TestCase):
         self.assertTrue(persisted["motor_gpio"]["all_final_verified_low"])
         self.assertTrue(persisted["post_close_pins"]["ok"])
 
-    def test_floor_v3_handler_captures_50_active_ticks_and_hard_low_pass(self):
+    def test_floor_v3_handler_distance_completes_1m_and_hard_low_pass(self):
         from v3.contracts import CommandMode, TickContext
 
         class Backend:
@@ -1260,17 +1265,17 @@ class TestR2B4TestHub(unittest.TestCase):
                     raw_scan_timestamp=1.0 + tick_id * 0.02,
                     health="OK",
                     raw_scan=[
-                        {"angle": 0.0, "dist": 1000.0, "quality": 15},
-                        {"angle": 90.0, "dist": 1200.0, "quality": 12},
+                        {"angle": 0.0, "dist": 1500.0, "quality": 15},
+                        {"angle": 90.0, "dist": 1600.0, "quality": 12},
                     ],
                     summary={
                         "blocked_front": False,
-                        "min_dist": 1.0,
-                        "min_dist_narrow": 1.0,
+                        "min_dist": 1.5,
+                        "min_dist_narrow": 1.5,
                         "raw_safety_valid_point_count": 2,
                         "raw_safety_min_dist_point": {
                             "angle_deg": 0.0,
-                            "distance_m": 1.0,
+                            "distance_m": 1.5,
                         },
                         "raw_scan_id": tick_id + 1,
                     },
@@ -1361,8 +1366,9 @@ class TestR2B4TestHub(unittest.TestCase):
             for pin in pins:
                 motor_gpio.gpio_claim_output(handle, pin, 0)
             x_m = 0.0
+            active_tick_count = 0
             last_normal_tick_id = None
-            for tick_id in range(80):
+            for tick_id in range(600):
                 lidar.tick_id = tick_id
                 command = command_gateway.snapshot(
                     TickContext(
@@ -1372,7 +1378,8 @@ class TestR2B4TestHub(unittest.TestCase):
                 )
                 active = command.mode is CommandMode.TELEOP
                 if active:
-                    x_m += 0.0025
+                    active_tick_count += 1
+                    x_m = active_tick_count * 0.0025
                     motor_gpio.tx_pwm(handle, 12, 8_000, 0.25)
                     motor_gpio.tx_pwm(handle, 18, 8_000, 0.25)
                 if tick_id == command_gateway.post_active_idle_tick_id:
@@ -1384,9 +1391,10 @@ class TestR2B4TestHub(unittest.TestCase):
                 if stop_requested():
                     break
             self.assertEqual(command_gateway.active_tick_id, 2)
-            self.assertEqual(command_gateway.post_active_idle_tick_id, 52)
-            self.assertEqual(command_gateway.shutdown_tick_id, 53)
-            self.assertEqual(last_normal_tick_id, 52)
+            self.assertEqual(command_gateway.active_tick_count, 400)
+            self.assertEqual(command_gateway.post_active_idle_tick_id, 402)
+            self.assertEqual(command_gateway.shutdown_tick_id, 403)
+            self.assertEqual(last_normal_tick_id, 402)
             lidar.tick_id = command_gateway.shutdown_tick_id
             tick_observer(
                 result_for(
@@ -1410,9 +1418,9 @@ class TestR2B4TestHub(unittest.TestCase):
                     "status": "PASS",
                     "run_status": 0,
                     "exit_reason": "STOP_REQUESTED",
-                    "tick_count": 54,
-                    "normal_tick_count": 53,
-                    "last_tick_id": 53,
+                    "tick_count": command_gateway.shutdown_tick_id + 1,
+                    "normal_tick_count": command_gateway.shutdown_tick_id,
+                    "last_tick_id": command_gateway.shutdown_tick_id,
                     "final_lifecycle": "SHUTDOWN",
                     "final_safety_decision": "STOP",
                     "final_reason": "NOT_ACTIVE",
@@ -1486,11 +1494,23 @@ class TestR2B4TestHub(unittest.TestCase):
 
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(persisted["command_window"]["v_mps"], 0.15)
-        self.assertEqual(persisted["command_window"]["active_tick_count"], 50)
-        self.assertEqual(persisted["tick_evidence"]["allow_tick_ids"], list(range(2, 52)))
-        self.assertEqual(persisted["motion_metrics"]["active_duration_s"], 1.0)
-        self.assertEqual(capture["tick_count"], 54)
-        self.assertEqual(capture["unique_raw_lidar_scan_count"], 54)
+        self.assertEqual(persisted["command_window"]["active_tick_count"], 400)
+        self.assertEqual(
+            persisted["command_window"]["maximum_active_tick_count"],
+            500,
+        )
+        self.assertEqual(
+            persisted["tick_evidence"]["allow_tick_ids"],
+            list(range(2, 402)),
+        )
+        self.assertEqual(persisted["motion_metrics"]["active_duration_s"], 8.0)
+        self.assertEqual(persisted["motion_metrics"]["target_reached_tick_id"], 401)
+        self.assertEqual(
+            persisted["motion_metrics"]["target_reached_displacement_m"],
+            1.0,
+        )
+        self.assertEqual(capture["tick_count"], 404)
+        self.assertEqual(capture["unique_raw_lidar_scan_count"], 404)
         self.assertTrue(persisted["motor_gpio"]["all_active_pwm_cancelled"])
         self.assertTrue(persisted["motor_gpio"]["all_final_verified_low"])
         self.assertTrue(persisted["post_close_pins"]["ok"])
