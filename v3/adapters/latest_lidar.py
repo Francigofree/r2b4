@@ -13,6 +13,7 @@ from .live_lidar import (
     LidarHealthReading,
     LidarMatcherDiagnostics,
     LidarPoseReading,
+    LidarScanReading,
 )
 
 
@@ -75,6 +76,8 @@ class LatestMatcherResultPort(Protocol):
     def get_matcher_result(self) -> object | None: ...
 
     def get_runtime_status(self) -> Mapping[str, object]: ...
+
+    def get_raw_scan_snapshot(self) -> object | None: ...
 
     def stop(self) -> object: ...
 
@@ -161,6 +164,112 @@ class NativeLatestLidarBackend:
             and status.get("matcher_process_alive") is True
         )
 
+    def _read_raw_snapshot(
+        self,
+        context: TickContext,
+        status: Mapping[str, object],
+    ) -> LidarScanReading:
+        reader = getattr(self._port, "get_raw_scan_snapshot", None)
+        if not callable(reader):
+            reader = getattr(self._port, "get_snapshot", None)
+        snapshot = reader() if callable(reader) else None
+        physical_runtime_valid = (
+            type(status.get("running")) is bool
+            and status.get("running") is True
+            and type(status.get("driver_connected", True)) is bool
+            and status.get("driver_connected", True) is True
+        )
+        if snapshot is None:
+            return LidarScanReading(
+                revision=0,
+                captured_monotonic_ns=context.monotonic_ns,
+                measurement_age_ns=0,
+                health="STALE" if physical_runtime_valid else "ERROR",
+                stale=physical_runtime_valid,
+                timing_valid=physical_runtime_valid,
+                point_count=0,
+                front_clearance_m=0.0,
+                rear_clearance_m=0.0,
+                left_clearance_m=0.0,
+                right_clearance_m=0.0,
+                front_observation_count=0,
+                rear_observation_count=0,
+                left_observation_count=0,
+                right_observation_count=0,
+            )
+        revision = _nonnegative_int(
+            getattr(snapshot, "raw_scan_id", None),
+            "raw_scan_id",
+        )
+        if revision == 0:
+            raise ValueError("raw_scan_id must be positive")
+        captured_s = _finite(
+            getattr(snapshot, "raw_scan_timestamp", None),
+            "raw_scan_timestamp",
+        )
+        captured_ns = int(round(captured_s * 1_000_000_000.0))
+        measurement_age_ns = context.monotonic_ns - captured_ns
+        snapshot_health = getattr(snapshot, "health", None)
+        if snapshot_health not in {"OK", "STALE", "ERROR"}:
+            raise ValueError("raw scan health must be OK, STALE or ERROR")
+        summary = getattr(snapshot, "summary", None)
+        if not isinstance(summary, Mapping):
+            raise TypeError("raw scan summary must be a mapping")
+
+        def clearance(primary: str, legacy: str) -> float:
+            value = _finite(summary.get(primary, summary.get(legacy)), primary)
+            if value < 0.0:
+                raise ValueError(f"{primary} must be non-negative")
+            return value
+
+        def count(name: str, fallback: int = 0) -> int:
+            return _nonnegative_int(summary.get(name, fallback), name)
+
+        point_count = count(
+            "raw_safety_valid_point_count",
+            len(tuple(getattr(snapshot, "raw_scan", ()) or ())),
+        )
+        timing_valid = bool(
+            physical_runtime_valid
+            and measurement_age_ns >= -self._config.maximum_future_skew_ns
+        )
+        stale = bool(
+            timing_valid
+            and (
+                snapshot_health != "OK"
+                or measurement_age_ns > self._config.maximum_result_age_ns
+            )
+        )
+        return LidarScanReading(
+            revision=revision,
+            captured_monotonic_ns=min(captured_ns, context.monotonic_ns),
+            measurement_age_ns=max(0, measurement_age_ns),
+            health=str(snapshot_health),
+            stale=stale,
+            timing_valid=timing_valid,
+            point_count=point_count,
+            front_clearance_m=clearance("front_clearance_m", "min_dist"),
+            rear_clearance_m=clearance("rear_clearance_m", "min_back"),
+            left_clearance_m=clearance("left_clearance_m", "avg_left"),
+            right_clearance_m=clearance("right_clearance_m", "avg_right"),
+            front_observation_count=count(
+                "front_observation_count",
+                point_count if summary.get("raw_safety_min_dist_point") else 0,
+            ),
+            rear_observation_count=count(
+                "rear_observation_count",
+                point_count if clearance("rear_clearance_m", "min_back") > 0.0 else 0,
+            ),
+            left_observation_count=count(
+                "left_observation_count",
+                point_count if clearance("left_clearance_m", "avg_left") > 0.0 else 0,
+            ),
+            right_observation_count=count(
+                "right_observation_count",
+                point_count if clearance("right_clearance_m", "avg_right") > 0.0 else 0,
+            ),
+        )
+
     def read(self, context: TickContext) -> LidarHealthReading:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
@@ -168,6 +277,7 @@ class NativeLatestLidarBackend:
         status = self._port.get_runtime_status()
         if not isinstance(status, Mapping):
             raise TypeError("get_runtime_status must return a mapping")
+        scan = self._read_raw_snapshot(context, status)
         runtime_contract_valid = self._runtime_contract_valid(status)
 
         if result is None:
@@ -178,6 +288,7 @@ class NativeLatestLidarBackend:
                 confidence=0.0,
                 stale=runtime_contract_valid,
                 timing_valid=runtime_contract_valid,
+                scan=scan,
             )
 
         revision = _nonnegative_int(
@@ -315,6 +426,7 @@ class NativeLatestLidarBackend:
             timing_valid=timing_valid,
             pose=pose,
             diagnostics=diagnostics,
+            scan=scan,
         )
 
 

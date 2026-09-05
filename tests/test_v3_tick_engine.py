@@ -27,13 +27,14 @@ from v3.contracts import (
     Observation,
     RawDeviceBatch,
     RobotEstimate,
+    SafetyDecision,
     TickContext,
     Waypoint,
     WheelVelocitySetpoint,
     WorldSnapshot,
 )
 from v3.engine import PipelineLayers, TickEngine, TickExecutionError, TickInputs
-from v3.layers.l12_safety_final import FinalSafetyGate
+from v3.layers.l12_safety_final import FinalSafetyGate, LidarSafetyConfig
 from v3.replay import first_divergence, run_replay
 
 
@@ -289,3 +290,96 @@ def test_successful_fail_closed_tick_still_advances_tick_order():
     assert skipped.trace.fault_layer == "TickEngine"
     assert skipped.final_actuation.reason == "INVALID_TICK_ORDER"
     assert len(writer.calls) == 2
+
+
+def _safety_sample(
+    context: TickContext,
+    *,
+    front: float = 1.0,
+    rear: float = 1.0,
+    left: float = 1.0,
+    right: float = 1.0,
+) -> DeviceSample:
+    return DeviceSample(
+        "RPLIDAR_C1",
+        "lidar_safety_clearance",
+        context.tick_id + 1,
+        context.monotonic_ns,
+        (
+            DataField("age_ns", 0),
+            DataField("front_clearance_m", front),
+            DataField("rear_clearance_m", rear),
+            DataField("left_clearance_m", left),
+            DataField("right_clearance_m", right),
+            DataField("front_observation_count", 10),
+            DataField("rear_observation_count", 10),
+            DataField("left_observation_count", 10),
+            DataField("right_observation_count", 10),
+        ),
+    )
+
+
+def test_l12_uses_direct_l1_lidar_clearance_without_changing_device_health():
+    context = TickContext(0, 1_000)
+    writer = RecordingWriter([])
+    gate = FinalSafetyGate(
+        writer,
+        LidarSafetyConfig("RPLIDAR_C1", minimum_clearance_m=0.2),
+    )
+    request = ActuatorRequest(context, 0.2, 0.2)
+
+    blocked = gate.finalize(
+        context,
+        request,
+        (DeviceHealth("RPLIDAR_C1", DeviceHealthState.OK),),
+        LifecycleState.ACTIVE,
+        None,
+        (_safety_sample(context, front=0.19),),
+    )
+
+    assert blocked.safety_decision is SafetyDecision.STOP
+    assert blocked.reason == "LIDAR_CLEARANCE_LOW"
+    assert blocked.left_output == blocked.right_output == 0.0
+
+
+def test_l12_directional_lidar_gate_fails_closed_for_missing_or_unseen_sector():
+    context = TickContext(0, 1_000)
+    config = LidarSafetyConfig("RPLIDAR_C1", minimum_clearance_m=0.2)
+
+    missing = FinalSafetyGate(RecordingWriter([]), config).finalize(
+        context,
+        ActuatorRequest(context, 0.2, 0.2),
+        (),
+        LifecycleState.ACTIVE,
+        None,
+    )
+    unseen = replace(
+        _safety_sample(context),
+        values=tuple(
+            DataField(field.key, 0)
+            if field.key == "left_observation_count"
+            else field
+            for field in _safety_sample(context).values
+        ),
+    )
+    turning = FinalSafetyGate(RecordingWriter([]), config).finalize(
+        context,
+        ActuatorRequest(context, -0.2, 0.2),
+        (),
+        LifecycleState.ACTIVE,
+        None,
+        (unseen,),
+    )
+    calibrated_straight = FinalSafetyGate(RecordingWriter([]), config).finalize(
+        context,
+        ActuatorRequest(context, 0.2, 0.3),
+        (),
+        LifecycleState.ACTIVE,
+        None,
+        (unseen,),
+        WheelVelocitySetpoint(context, 0.1, 0.1),
+    )
+
+    assert missing.reason == "LIDAR_SAFETY_MISSING"
+    assert turning.reason == "LIDAR_SAFETY_UNOBSERVED"
+    assert calibrated_straight.safety_decision is SafetyDecision.ALLOW

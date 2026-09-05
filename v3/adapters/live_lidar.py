@@ -1,4 +1,4 @@
-"""Native V3 live lidar health and absolute-pose source."""
+"""Native V3 physical-scan, safety and optional localization source."""
 
 from __future__ import annotations
 
@@ -142,8 +142,55 @@ class LidarMatcherDiagnostics:
 
 
 @dataclass(frozen=True, slots=True)
+class LidarScanReading:
+    """One physical scan and its matcher-independent sector safety result."""
+
+    revision: int
+    captured_monotonic_ns: int
+    measurement_age_ns: int
+    health: str
+    stale: bool
+    timing_valid: bool
+    point_count: int
+    front_clearance_m: float
+    rear_clearance_m: float
+    left_clearance_m: float
+    right_clearance_m: float
+    front_observation_count: int
+    rear_observation_count: int
+    left_observation_count: int
+    right_observation_count: int
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.revision, "revision")
+        _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
+        _nonnegative_integer(self.measurement_age_ns, "measurement_age_ns")
+        if self.health not in {"OK", "STALE", "ERROR"}:
+            raise ValueError("health must be OK, STALE or ERROR")
+        if type(self.stale) is not bool or type(self.timing_valid) is not bool:
+            raise ValueError("stale and timing_valid must be bool")
+        for value, name in (
+            (self.point_count, "point_count"),
+            (self.front_observation_count, "front_observation_count"),
+            (self.rear_observation_count, "rear_observation_count"),
+            (self.left_observation_count, "left_observation_count"),
+            (self.right_observation_count, "right_observation_count"),
+        ):
+            _nonnegative_integer(value, name)
+        for value, name in (
+            (self.front_clearance_m, "front_clearance_m"),
+            (self.rear_clearance_m, "rear_clearance_m"),
+            (self.left_clearance_m, "left_clearance_m"),
+            (self.right_clearance_m, "right_clearance_m"),
+        ):
+            parsed = _finite(value, name)
+            if parsed < 0.0:
+                raise ValueError(f"{name} must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
 class LidarHealthReading:
-    """One backend-owned matcher result and its source-measurement quality."""
+    """One physical scan plus the latest optional localization result."""
 
     revision: int
     captured_monotonic_ns: int
@@ -153,6 +200,7 @@ class LidarHealthReading:
     timing_valid: bool
     pose: LidarPoseReading | None = None
     diagnostics: LidarMatcherDiagnostics | None = None
+    scan: LidarScanReading | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
@@ -177,6 +225,8 @@ class LidarHealthReading:
             and self.diagnostics.candidate_id != self.revision
         ):
             raise ValueError("diagnostics candidate_id must match revision")
+        if self.scan is not None and not isinstance(self.scan, LidarScanReading):
+            raise ValueError("scan must be LidarScanReading or None")
 
 
 class LidarHealthBackend(Protocol):
@@ -186,7 +236,7 @@ class LidarHealthBackend(Protocol):
 
 
 class NativeLidarSource:
-    """Convert one injected matcher result into one native device snapshot."""
+    """Split one acquired scan into independent native V3 capabilities."""
 
     __slots__ = ("_backend", "_config")
 
@@ -211,26 +261,39 @@ class NativeLidarSource:
         if not isinstance(reading, LidarHealthReading):
             raise TypeError("lidar backend must return LidarHealthReading")
 
-        if not reading.timing_valid:
+        scan = reading.scan
+        # The fallback exists only for isolated pre-native test edges. The
+        # production backend always supplies a scan reading, including startup.
+        if scan is None:
+            physical_revision = reading.revision
+            physical_captured_ns = reading.captured_monotonic_ns
+            physical_age_ns = reading.measurement_age_ns
+            physical_stale = reading.stale
+            physical_timing_valid = reading.timing_valid
+            physical_health = "OK"
+        else:
+            physical_revision = scan.revision
+            physical_captured_ns = scan.captured_monotonic_ns
+            physical_age_ns = scan.measurement_age_ns
+            physical_stale = scan.stale
+            physical_timing_valid = scan.timing_valid
+            physical_health = scan.health
+
+        if not physical_timing_valid or physical_health == "ERROR":
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.FAILED,
                 "LIDAR_TIMING_INVALID",
             )
         elif (
-            reading.stale
-            or reading.measurement_age_ns > self._config.maximum_measurement_age_ns
+            physical_stale
+            or physical_health == "STALE"
+            or physical_age_ns > self._config.maximum_measurement_age_ns
         ):
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.DEGRADED,
                 "LIDAR_STALE",
-            )
-        elif reading.confidence < self._config.minimum_confidence:
-            health = DeviceHealth(
-                self.device_id,
-                DeviceHealthState.DEGRADED,
-                "LIDAR_LOW_CONFIDENCE",
             )
         else:
             health = DeviceHealth(self.device_id, DeviceHealthState.OK)
@@ -238,14 +301,82 @@ class NativeLidarSource:
         health_sample = DeviceSample(
             device_id=self.device_id,
             kind="lidar_health",
-            sequence=reading.revision,
-            captured_monotonic_ns=reading.captured_monotonic_ns,
+            sequence=physical_revision,
+            captured_monotonic_ns=physical_captured_ns,
             values=(
-                DataField("age_ns", reading.measurement_age_ns),
-                DataField("confidence", reading.confidence),
+                (
+                    DataField("age_ns", physical_age_ns),
+                    DataField("point_count", scan.point_count),
+                )
+                if scan is not None
+                else (
+                    DataField("age_ns", physical_age_ns),
+                    DataField("confidence", reading.confidence),
+                )
             ),
         )
         samples = [health_sample]
+        if scan is not None and scan.revision > 0:
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_safety_clearance",
+                    sequence=scan.revision,
+                    captured_monotonic_ns=scan.captured_monotonic_ns,
+                    values=(
+                        DataField("age_ns", scan.measurement_age_ns),
+                        DataField("front_clearance_m", scan.front_clearance_m),
+                        DataField("rear_clearance_m", scan.rear_clearance_m),
+                        DataField("left_clearance_m", scan.left_clearance_m),
+                        DataField("right_clearance_m", scan.right_clearance_m),
+                        DataField(
+                            "front_observation_count",
+                            scan.front_observation_count,
+                        ),
+                        DataField(
+                            "rear_observation_count",
+                            scan.rear_observation_count,
+                        ),
+                        DataField(
+                            "left_observation_count",
+                            scan.left_observation_count,
+                        ),
+                        DataField(
+                            "right_observation_count",
+                            scan.right_observation_count,
+                        ),
+                    ),
+                )
+            )
+        localization_usable = bool(
+            reading.pose is not None
+            and reading.timing_valid
+            and not reading.stale
+            and reading.measurement_age_ns
+            <= self._config.maximum_measurement_age_ns
+            and reading.confidence >= self._config.minimum_confidence
+        )
+        has_localization = bool(
+            reading.revision > 0
+            or reading.pose is not None
+            or reading.diagnostics is not None
+        )
+        if has_localization:
+            samples.append(
+                DeviceSample(
+                    device_id=self.device_id,
+                    kind="lidar_localization_health",
+                    sequence=reading.revision,
+                    captured_monotonic_ns=reading.captured_monotonic_ns,
+                    values=(
+                        DataField("age_ns", reading.measurement_age_ns),
+                        DataField("confidence", reading.confidence),
+                        DataField("timing_valid", reading.timing_valid),
+                        DataField("stale", reading.stale),
+                        DataField("usable", localization_usable),
+                    ),
+                )
+            )
         if reading.diagnostics is not None:
             diagnostics = reading.diagnostics
             samples.append(
@@ -296,14 +427,8 @@ class NativeLidarSource:
                     ),
                 )
             )
-        if (
-            reading.pose is not None
-            and reading.timing_valid
-            and not reading.stale
-            and reading.measurement_age_ns
-            <= self._config.maximum_measurement_age_ns
-            and reading.confidence >= self._config.minimum_confidence
-        ):
+        if localization_usable:
+            assert reading.pose is not None
             samples.append(
                 DeviceSample(
                     device_id=self.device_id,
@@ -328,6 +453,7 @@ __all__ = [
     "LidarHealthReading",
     "LidarMatcherDiagnostics",
     "LidarPoseReading",
+    "LidarScanReading",
     "NativeLidarConfig",
     "NativeLidarSource",
 ]

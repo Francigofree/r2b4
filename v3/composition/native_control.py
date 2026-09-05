@@ -30,7 +30,7 @@ from v3.layers.l11_actuator_control import (
     WheelPiConfig,
     WheelSpeedMap,
 )
-from v3.layers.l12_safety_final import FinalSafetyGate
+from v3.layers.l12_safety_final import FinalSafetyGate, LidarSafetyConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +55,7 @@ class NativeControlCompositionConfig:
         integrator_limit=0.5,
         max_normalized_output=1.0,
     )
+    lidar_safety: LidarSafetyConfig | None = None
 
     def __post_init__(self) -> None:
         expected_types = (
@@ -82,6 +83,11 @@ class NativeControlCompositionConfig:
                 raise TypeError(f"{name} must be {expected_type.__name__}")
         if self.estimation.track_width_m != self.chassis_control.track_width_m:
             raise ValueError("L3 and L10 must use the same injected track width")
+        if self.lidar_safety is not None and not isinstance(
+            self.lidar_safety,
+            LidarSafetyConfig,
+        ):
+            raise TypeError("lidar_safety must be LidarSafetyConfig or None")
 
 
 class NativeControlComposition:
@@ -121,7 +127,7 @@ class NativeControlComposition:
                     config.speed_map,
                     config.wheel_pi,
                 ),
-                final_safety=FinalSafetyGate(motor_writer),
+                final_safety=FinalSafetyGate(motor_writer, config.lidar_safety),
             )
         )
 

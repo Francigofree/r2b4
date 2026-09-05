@@ -20,6 +20,33 @@ class Result:
     summary: dict
 
 
+@dataclass(frozen=True)
+class RawSnapshot:
+    raw_scan_id: int = 31
+    raw_scan_timestamp: float = 0.980
+    health: str = "OK"
+    raw_scan: tuple = ()
+    summary: dict | None = None
+
+    def __post_init__(self):
+        if self.summary is None:
+            object.__setattr__(
+                self,
+                "summary",
+                {
+                    "raw_safety_valid_point_count": 80,
+                    "front_clearance_m": 1.2,
+                    "rear_clearance_m": 1.1,
+                    "left_clearance_m": 0.9,
+                    "right_clearance_m": 1.0,
+                    "front_observation_count": 20,
+                    "rear_observation_count": 20,
+                    "left_observation_count": 20,
+                    "right_observation_count": 20,
+                },
+            )
+
+
 def _summary(**changes):
     value = {
         "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
@@ -70,6 +97,7 @@ def _status(**changes):
         "matcher_transport": "process_latest_only",
         "running": True,
         "matcher_process_alive": True,
+        "driver_connected": True,
         "health": "OK",
     }
     value.update(changes)
@@ -77,11 +105,13 @@ def _status(**changes):
 
 
 class Port:
-    def __init__(self, result=None, status=None) -> None:
+    def __init__(self, result=None, status=None, raw=None) -> None:
         self.result = _result() if result is None else result
         self.status = _status() if status is None else status
+        self.raw = RawSnapshot() if raw is None else raw
         self.result_calls = 0
         self.status_calls = 0
+        self.raw_calls = 0
         self.stop_calls = 0
 
     def get_matcher_result(self):
@@ -91,6 +121,10 @@ class Port:
     def get_runtime_status(self):
         self.status_calls += 1
         return self.status
+
+    def get_raw_scan_snapshot(self):
+        self.raw_calls += 1
+        return self.raw
 
     def stop(self) -> None:
         self.stop_calls += 1
@@ -110,6 +144,7 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
 
     assert port.result_calls == 1
     assert port.status_calls == 1
+    assert port.raw_calls == 1
     assert reading.revision == 17
     assert reading.captured_monotonic_ns == 995_000_000
     assert reading.measurement_age_ns == 20_000_000
@@ -132,6 +167,9 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
     assert reading.diagnostics.sector_coverage == 0.5
     assert reading.diagnostics.observability_score == 0.8
     assert reading.diagnostics.ambiguity_margin == 0.9
+    assert reading.scan is not None
+    assert reading.scan.revision == 31
+    assert reading.scan.front_clearance_m == 1.2
 
 
 @pytest.mark.parametrize(
@@ -144,7 +182,7 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
         (_result(timestamp=1.100), _status()),
     ),
 )
-def test_contract_or_timing_drift_is_failed_and_pose_is_not_admitted(result, status):
+def test_matcher_drift_does_not_fail_physical_scan_and_pose_is_not_admitted(result, status):
     port = Port(result, status)
     source = NativeLidarSource(
         _backend(port),
@@ -155,15 +193,16 @@ def test_contract_or_timing_drift_is_failed_and_pose_is_not_admitted(result, sta
 
     assert port.result_calls == 1
     assert port.status_calls == 1
-    assert snapshot.health.state is DeviceHealthState.FAILED
-    assert snapshot.health.reason == "LIDAR_TIMING_INVALID"
+    assert snapshot.health.state is DeviceHealthState.OK
     assert tuple(sample.kind for sample in snapshot.samples) == (
         "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_localization_health",
         "lidar_matcher_diagnostics",
     )
 
 
-def test_missing_latest_result_is_stale_without_retry_or_pose():
+def test_missing_latest_result_keeps_independent_physical_safety_without_pose():
     port = Port()
     port.result = None
     source = NativeLidarSource(
@@ -175,9 +214,11 @@ def test_missing_latest_result_is_stale_without_retry_or_pose():
 
     assert port.result_calls == 1
     assert port.status_calls == 1
-    assert snapshot.health.state is DeviceHealthState.DEGRADED
-    assert snapshot.health.reason == "LIDAR_STALE"
-    assert tuple(sample.kind for sample in snapshot.samples) == ("lidar_health",)
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert tuple(sample.kind for sample in snapshot.samples) == (
+        "lidar_health",
+        "lidar_safety_clearance",
+    )
 
 
 def test_result_age_and_runtime_stale_health_are_degraded():

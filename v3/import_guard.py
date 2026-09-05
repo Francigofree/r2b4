@@ -46,7 +46,7 @@ LEGACY_PROJECT_ROOTS = frozenset(
     }
 )
 
-LEGACY_DONOR_ALLOWLIST: frozenset[str] = frozenset()
+LEGACY_DONOR_ALLOWLIST: frozenset[str] = frozenset({"middleware.lidar_estim"})
 APPROVED_THIRD_PARTY_ROOTS: frozenset[str] = frozenset()
 STDLIB_ROOTS = frozenset(sys.stdlib_module_names) | frozenset({"__future__"})
 DONOR_ADAPTER_PREFIX = "v3.adapters.legacy_donors"

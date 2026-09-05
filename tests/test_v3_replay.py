@@ -21,6 +21,7 @@ from v3.contracts import (
 from v3.engine import TickInputs
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
+from v3.layers.l12_safety_final import LidarSafetyConfig
 from v3.layers.l3_state_estimation import NativeStateEstimatorConfig
 from v3.replay import (
     V3ReplayError,
@@ -40,7 +41,7 @@ class _Writer:
         return None
 
 
-def _config() -> NativeControlCompositionConfig:
+def _config(*, native_lidar_safety: bool = False) -> NativeControlCompositionConfig:
     physics = json.loads((PROJECT_ROOT / "conf/fizika.json").read_text(encoding="utf-8"))
     speed_map = json.loads(
         (PROJECT_ROOT / "conf/speed_map.json").read_text(encoding="utf-8")
@@ -53,6 +54,11 @@ def _config() -> NativeControlCompositionConfig:
             track_width_m=track_width,
         ),
         chassis_control=ChassisControlConfig(track_width),
+        lidar_safety=(
+            LidarSafetyConfig("RPLIDAR_C1", 0.1)
+            if native_lidar_safety
+            else None
+        ),
     )
 
 
@@ -61,8 +67,9 @@ def _raw(
     measured_mps: float,
     *,
     lidar_state: DeviceHealthState = DeviceHealthState.OK,
+    native_lidar_clearance_m: float | None = None,
 ) -> RawDeviceBatch:
-    samples = (
+    samples = [
         DeviceSample(
             "WHEEL_ENCODERS",
             "wheel_velocity",
@@ -98,7 +105,27 @@ def _raw(
                 ),
             ),
         ),
-    )
+    ]
+    if native_lidar_clearance_m is not None:
+        samples.append(
+            DeviceSample(
+                "RPLIDAR_C1",
+                "lidar_safety_clearance",
+                context.tick_id + 1,
+                context.monotonic_ns,
+                (
+                    DataField("age_ns", 0),
+                    DataField("front_clearance_m", native_lidar_clearance_m),
+                    DataField("front_observation_count", 5),
+                    DataField("rear_clearance_m", 1.0),
+                    DataField("rear_observation_count", 5),
+                    DataField("left_clearance_m", 1.0),
+                    DataField("left_observation_count", 5),
+                    DataField("right_clearance_m", 1.0),
+                    DataField("right_observation_count", 5),
+                ),
+            )
+        )
     health = (
         DeviceHealth("WHEEL_ENCODERS", DeviceHealthState.OK),
         DeviceHealth("BNO055_IMU", DeviceHealthState.OK),
@@ -110,7 +137,7 @@ def _raw(
             else None,
         ),
     )
-    return RawDeviceBatch(context, samples, health)
+    return RawDeviceBatch(context, tuple(samples), health)
 
 
 def _command(context: TickContext, active: bool) -> CommandRequest:
@@ -132,8 +159,11 @@ def _command(context: TickContext, active: bool) -> CommandRequest:
     )
 
 
-def _capture(tmp_path: Path) -> Path:
-    composition = NativeControlComposition(_Writer(), _config())
+def _capture(tmp_path: Path, *, native_lidar_safety: bool = False) -> Path:
+    composition = NativeControlComposition(
+        _Writer(),
+        _config(native_lidar_safety=native_lidar_safety),
+    )
     ticks = []
     for tick_id in range(5):
         context = TickContext(tick_id, 1_000_000_000 + tick_id * 20_000_000)
@@ -141,7 +171,15 @@ def _capture(tmp_path: Path) -> Path:
         result = composition.run_tick(
             TickInputs(
                 context,
-                _raw(context, measured_mps=0.04 if active else 0.0),
+                _raw(
+                    context,
+                    measured_mps=0.04 if active else 0.0,
+                    native_lidar_clearance_m=(
+                        0.05 if native_lidar_safety and tick_id == 2 else 1.0
+                    )
+                    if native_lidar_safety
+                    else None,
+                ),
                 _command(context, active),
                 LifecycleState.ACTIVE if active else LifecycleState.IDLE,
             )
@@ -258,6 +296,28 @@ def test_file_replay_matches_every_production_layer_twice(tmp_path):
 
     result_path = write_replay_result(result, tmp_path / "result.json")
     assert verify_replay_result(result_path)["status"] == "PASS"
+
+
+def test_file_replay_reconstructs_native_lidar_safety_gate(tmp_path):
+    capture = _capture(tmp_path, native_lidar_safety=True)
+
+    result = replay_floor_capture(
+        capture,
+        physics_config_path=PROJECT_ROOT / "conf/fizika.json",
+        speed_map_config_path=PROJECT_ROOT / "conf/speed_map.json",
+        hardware_config_path=PROJECT_ROOT / "conf/hardver.json",
+        project_root=PROJECT_ROOT,
+    )
+
+    assert result["status"] == "MATCH"
+    assert result["first_divergence"] is None
+    assert result["reconstruction_contract"]["lidar_safety"] == {
+        "active": True,
+        "device_id": "RPLIDAR_C1",
+        "minimum_clearance_m": 0.1,
+        "maximum_sample_age_ns": 250_000_000,
+        "source": "CAPTURE_DEVICE_ID_PLUS_ACTIVE_HARDWARE_CONFIG",
+    }
 
 
 def test_file_replay_names_the_first_changed_layer(tmp_path):

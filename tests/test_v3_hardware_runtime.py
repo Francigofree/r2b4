@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -128,11 +129,13 @@ class LidarPort:
         self.result_calls = 0
         self.status_calls = 0
         self.stop_calls = 0
+        self.current_timestamp = 0.0
 
     def get_matcher_result(self):
         self.result_calls += 1
         self.revision += 1
-        return MatcherResult(self.revision, next(self.timestamps))
+        self.current_timestamp = next(self.timestamps)
+        return MatcherResult(self.revision, self.current_timestamp)
 
     def get_runtime_status(self):
         self.status_calls += 1
@@ -142,8 +145,28 @@ class LidarPort:
             "matcher_transport": "process_latest_only",
             "running": True,
             "matcher_process_alive": True,
+            "driver_connected": True,
             "health": "OK",
         }
+
+    def get_raw_scan_snapshot(self):
+        return SimpleNamespace(
+            raw_scan_id=self.revision,
+            raw_scan_timestamp=self.current_timestamp,
+            health="OK",
+            raw_scan=(),
+            summary={
+                "raw_safety_valid_point_count": 80,
+                "front_clearance_m": 1.0,
+                "rear_clearance_m": 1.0,
+                "left_clearance_m": 1.0,
+                "right_clearance_m": 1.0,
+                "front_observation_count": 20,
+                "rear_observation_count": 20,
+                "left_observation_count": 20,
+                "right_observation_count": 20,
+            },
+        )
 
     def stop(self):
         self.stop_calls += 1

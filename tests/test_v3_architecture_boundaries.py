@@ -319,6 +319,7 @@ def test_bounded_runtime_config_loader_has_no_hardware_or_legacy_authority():
         "v3.layers.l3_state_estimation",
         "v3.layers.l10_chassis_control",
         "v3.layers.l11_actuator_control",
+        "v3.layers.l12_safety_final",
         "v3_bounded_runtime",
     }
     assert "main" not in function_names

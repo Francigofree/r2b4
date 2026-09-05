@@ -42,6 +42,7 @@ from .layers.l11_actuator_control import (
     WheelSpeedMap,
 )
 from .layers.l3_state_estimation import NativeStateEstimatorConfig
+from .layers.l12_safety_final import LidarSafetyConfig
 
 
 V3_FLOOR_CAPTURE_SCHEMA = "R2B4_V3_NATIVE_FLOOR_TICK_CAPTURE_V1"
@@ -51,9 +52,12 @@ V3_REPLAY_STATUS_MISMATCH = "MISMATCH"
 _REPLAYABLE_CAPTURE_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
 _LAYER_ORDER = tuple(f"L{index}" for index in range(1, 13))
 _SOURCE_FIRST_PATHS = (
+    "conf/hardver.json",
     "conf/fizika.json",
     "conf/speed_map.json",
     "v3/composition/native_control.py",
+    "v3/engine.py",
+    "v3/layers/l12_safety_final.py",
     "v3/layers/l9_operational_constraints.py",
     "v3/layers/l10_chassis_control.py",
     "v3/layers/l11_actuator_control.py",
@@ -201,6 +205,7 @@ def replay_floor_capture(
     *,
     physics_config_path: str | Path,
     speed_map_config_path: str | Path,
+    hardware_config_path: str | Path | None = None,
     project_root: str | Path | None = None,
     capture_source_manifest_path: str | Path | None = None,
 ) -> dict[str, object]:
@@ -213,13 +218,22 @@ def replay_floor_capture(
     """
 
     capture = _regular_file(capture_path, "capture")
+    root = Path(project_root).resolve() if project_root is not None else Path.cwd()
     physics_path = _regular_file(physics_config_path, "physics config")
     speed_map_path = _regular_file(speed_map_config_path, "speed-map config")
-    root = Path(project_root).resolve() if project_root is not None else Path.cwd()
+    hardware_path = _regular_file(
+        hardware_config_path or root / "conf/hardver.json",
+        "hardware config",
+    )
     payload = _json_object(capture, "capture")
     ticks = _validate_capture(payload)
-    config = _load_control_config(physics_path, speed_map_path)
     inputs = tuple(_reconstruct_inputs(tick) for tick in ticks)
+    config = _load_control_config(
+        physics_path,
+        speed_map_path,
+        hardware_path,
+        inputs,
+    )
 
     first_results, first_writes = _run_native_replay(inputs, config)
     second_results, second_writes = _run_native_replay(inputs, config)
@@ -253,6 +267,7 @@ def replay_floor_capture(
             "raw_devices": "L1_REVERSIBLE_ACQUISITION_COPY",
             "command": "CAPTURE_TIME_FLOOR_GATEWAY_FROM_L5",
             "lifecycle": "ACTIVE_IFF_CAPTURED_L5_MISSION_ACTIVE_OTHERWISE_IDLE",
+            "lidar_safety": _lidar_safety_reconstruction(config.lidar_safety),
             "external_io": "NONE",
         },
         "source_first": source_first,
@@ -985,15 +1000,19 @@ def _reconstruct_inputs(tick: Mapping[str, object]) -> TickInputs:
 def _load_control_config(
     physics_path: Path,
     speed_map_path: Path,
+    hardware_path: Path,
+    inputs: Sequence[TickInputs],
 ) -> NativeControlCompositionConfig:
     physics = _json_object(physics_path, "physics config")
     speed_map_raw = _json_object(speed_map_path, "speed-map config")
+    hardware = _json_object(hardware_path, "hardware config")
     track_width = _number(
         physics.get("nyomtav_szelesseg_m"),
         "physics.nyomtav_szelesseg_m",
     )
     if track_width <= 0.0:
         raise V3ReplayError("physics.nyomtav_szelesseg_m must be positive")
+    lidar_safety = _load_lidar_safety_config(hardware, inputs)
     return NativeControlCompositionConfig(
         speed_map=WheelSpeedMap.from_mapping(speed_map_raw),
         estimation=NativeStateEstimatorConfig(
@@ -1001,7 +1020,59 @@ def _load_control_config(
             track_width_m=track_width,
         ),
         chassis_control=ChassisControlConfig(track_width),
+        lidar_safety=lidar_safety,
     )
+
+
+def _load_lidar_safety_config(
+    hardware: Mapping[str, object],
+    inputs: Sequence[TickInputs],
+) -> LidarSafetyConfig | None:
+    """Reconstruct the native gate while retaining pre-native capture support."""
+
+    device_ids = {
+        sample.device_id
+        for tick_input in inputs
+        for sample in tick_input.raw_devices.samples
+        if sample.kind == "lidar_safety_clearance"
+    }
+    if not device_ids:
+        return None
+    if len(device_ids) != 1:
+        raise V3ReplayError(
+            "capture contains lidar safety samples from multiple device IDs"
+        )
+    lidar = _mapping(hardware.get("lidar"), "hardware config lidar")
+    minimum_clearance_m = _number(
+        lidar.get("biztonsagi_zona_m"),
+        "hardware.lidar.biztonsagi_zona_m",
+    )
+    if minimum_clearance_m <= 0.0:
+        raise V3ReplayError(
+            "hardware.lidar.biztonsagi_zona_m must be positive"
+        )
+    return LidarSafetyConfig(
+        device_id=next(iter(device_ids)),
+        minimum_clearance_m=minimum_clearance_m,
+        maximum_sample_age_ns=250_000_000,
+    )
+
+
+def _lidar_safety_reconstruction(
+    config: LidarSafetyConfig | None,
+) -> dict[str, object]:
+    if config is None:
+        return {
+            "active": False,
+            "compatibility": "PRE_NATIVE_CAPTURE_WITHOUT_LIDAR_SAFETY_SAMPLE",
+        }
+    return {
+        "active": True,
+        "device_id": config.device_id,
+        "minimum_clearance_m": config.minimum_clearance_m,
+        "maximum_sample_age_ns": config.maximum_sample_age_ns,
+        "source": "CAPTURE_DEVICE_ID_PLUS_ACTIVE_HARDWARE_CONFIG",
+    }
 
 
 def _validate_capture(
@@ -1247,6 +1318,7 @@ def _parser() -> argparse.ArgumentParser:
     replay_parser.add_argument("capture_path")
     replay_parser.add_argument("--physics-config", default="conf/fizika.json")
     replay_parser.add_argument("--speed-map-config", default="conf/speed_map.json")
+    replay_parser.add_argument("--hardware-config", default="conf/hardver.json")
     replay_parser.add_argument("--project-root", default=".")
     replay_parser.add_argument("--capture-source-manifest")
     replay_parser.add_argument("--output", required=True)
@@ -1265,6 +1337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.capture_path,
                 physics_config_path=args.physics_config,
                 speed_map_config_path=args.speed_map_config,
+                hardware_config_path=args.hardware_config,
                 project_root=args.project_root,
                 capture_source_manifest_path=args.capture_source_manifest,
             )

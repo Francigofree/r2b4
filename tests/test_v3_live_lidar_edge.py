@@ -78,17 +78,19 @@ def test_native_lidar_source_closes_one_l4_compatible_health_sample():
         "LIDAR_LOCALIZATION",
         DeviceHealthState.OK,
     )
-    assert snapshot.samples == (
-        DeviceSample(
-            "LIDAR_LOCALIZATION",
-            "lidar_health",
-            31,
-            990,
-            (
-                DataField("age_ns", 40),
-                DataField("confidence", 0.8),
-            ),
+    assert snapshot.samples[0] == DeviceSample(
+        "LIDAR_LOCALIZATION",
+        "lidar_health",
+        31,
+        990,
+        (
+            DataField("age_ns", 40),
+            DataField("confidence", 0.8),
         ),
+    )
+    assert tuple(sample.kind for sample in snapshot.samples) == (
+        "lidar_health",
+        "lidar_localization_health",
     )
 
 
@@ -106,11 +108,6 @@ def test_native_lidar_source_closes_one_l4_compatible_health_sample():
             DeviceHealthState.DEGRADED,
             "LIDAR_STALE",
         ),
-        (
-            _reading(confidence=0.2),
-            DeviceHealthState.DEGRADED,
-            "LIDAR_LOW_CONFIDENCE",
-        ),
     ),
 )
 def test_native_lidar_source_maps_health_fail_closed(
@@ -122,6 +119,18 @@ def test_native_lidar_source_maps_health_fail_closed(
 
     assert snapshot.health.state is expected_state
     assert snapshot.health.reason == expected_reason
+
+
+def test_low_localization_confidence_does_not_degrade_physical_device_health():
+    snapshot = _source(_reading(confidence=0.2))[0].read(TickContext(5, 1_000))
+
+    assert snapshot.health.state is DeviceHealthState.OK
+    localization = next(
+        sample
+        for sample in snapshot.samples
+        if sample.kind == "lidar_localization_health"
+    )
+    assert dict((field.key, field.value) for field in localization.values)["usable"] is False
 
 
 def test_invalid_lidar_timing_is_rejected_by_existing_l2_admission():

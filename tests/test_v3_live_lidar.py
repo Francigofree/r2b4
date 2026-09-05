@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -6,6 +7,7 @@ from v3.adapters.live_lidar import (
     LidarHealthReading,
     LidarMatcherDiagnostics,
     LidarPoseReading,
+    LidarScanReading,
     NativeLidarConfig,
     NativeLidarSource,
 )
@@ -45,6 +47,23 @@ def _reading(*, confidence: float = 0.9, stale: bool = False):
             observability_score=0.8,
             ambiguity_margin=0.9,
         ),
+        scan=LidarScanReading(
+            revision=31,
+            captured_monotonic_ns=960,
+            measurement_age_ns=40,
+            health="OK",
+            stale=False,
+            timing_valid=True,
+            point_count=80,
+            front_clearance_m=1.2,
+            rear_clearance_m=1.1,
+            left_clearance_m=0.9,
+            right_clearance_m=1.0,
+            front_observation_count=20,
+            rear_observation_count=20,
+            left_observation_count=20,
+            right_observation_count=20,
+        ),
     )
 
 
@@ -68,17 +87,16 @@ def test_native_lidar_source_closes_health_and_pose_from_one_matcher_result():
     assert snapshot.health.state is DeviceHealthState.OK
     assert tuple(sample.kind for sample in snapshot.samples) == (
         "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_localization_health",
         "lidar_matcher_diagnostics",
         "lidar_pose",
     )
-    health, diagnostics, pose = snapshot.samples
-    assert health.sequence == diagnostics.sequence == pose.sequence == 17
-    assert (
-        health.captured_monotonic_ns
-        == diagnostics.captured_monotonic_ns
-        == pose.captured_monotonic_ns
-        == 980
-    )
+    health, safety, localization, diagnostics, pose = snapshot.samples
+    assert health.sequence == safety.sequence == 31
+    assert health.captured_monotonic_ns == safety.captured_monotonic_ns == 960
+    assert localization.sequence == diagnostics.sequence == pose.sequence == 17
+    assert localization.captured_monotonic_ns == diagnostics.captured_monotonic_ns == pose.captured_monotonic_ns == 980
     assert {field.key: field.value for field in diagnostics.values} == {
         "candidate_id": 17,
         "source_raw_scan_id": 31,
@@ -105,27 +123,46 @@ def test_native_lidar_source_closes_health_and_pose_from_one_matcher_result():
     }
 
 
-@pytest.mark.parametrize(
-    ("reading", "reason"),
-    (
-        (_reading(confidence=0.2), "LIDAR_LOW_CONFIDENCE"),
-        (_reading(stale=True), "LIDAR_STALE"),
-    ),
-)
-def test_native_lidar_source_retains_health_but_omits_untrusted_pose(
-    reading,
-    reason,
-):
+@pytest.mark.parametrize("reading", (_reading(confidence=0.2), _reading(stale=True)))
+def test_localization_quality_does_not_change_physical_health(reading):
     snapshot = NativeLidarSource(_Backend(reading), _config()).read(
         TickContext(7, 1_000)
     )
 
-    assert snapshot.health.state is DeviceHealthState.DEGRADED
-    assert snapshot.health.reason == reason
+    assert snapshot.health.state is DeviceHealthState.OK
     assert tuple(sample.kind for sample in snapshot.samples) == (
         "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_localization_health",
         "lidar_matcher_diagnostics",
     )
+
+
+def test_physical_scan_staleness_degrades_device_but_keeps_localization_separate():
+    stale_scan = LidarScanReading(
+        revision=31,
+        captured_monotonic_ns=960,
+        measurement_age_ns=40,
+        health="STALE",
+        stale=True,
+        timing_valid=True,
+        point_count=80,
+        front_clearance_m=1.2,
+        rear_clearance_m=1.1,
+        left_clearance_m=0.9,
+        right_clearance_m=1.0,
+        front_observation_count=20,
+        rear_observation_count=20,
+        left_observation_count=20,
+        right_observation_count=20,
+    )
+    snapshot = NativeLidarSource(
+        _Backend(dataclasses.replace(_reading(), scan=stale_scan)),
+        _config(),
+    ).read(TickContext(7, 1_000))
+
+    assert snapshot.health.state is DeviceHealthState.DEGRADED
+    assert snapshot.health.reason == "LIDAR_STALE"
 
 
 def test_native_lidar_pose_contract_is_immutable_and_fail_closed():

@@ -371,6 +371,49 @@ lehet.
 Az átmeneti compatibility edge nem válhat a V3 architecture authority részévé,
 és a natív adatút elkészülésével eltávolíthatónak kell lennie.
 
+### 8.6 Aktív natív V3 LiDAR-zárás
+
+Az aktív egyszerű production megvalósítás egyetlen ownership-lánc:
+
+```text
+NativeRplidarC1
+→ NativeLidarPort (bounded latest-only matcher process)
+→ NativeLatestLidarBackend
+→ NativeLidarSource
+```
+
+Az owner ugyanabból a teljes fizikai scanből az alábbi külön immutable L1
+mintákat zárja:
+
+* `lidar_health`: fizikai stream/scan revision, freshness és pontszám;
+* `lidar_safety_clearance`: front/rear/left/right clearance és szektoronkénti
+  observation count;
+* `lidar_localization_health`: a matcher eredmény saját freshness-, confidence-
+  és usability-állapota;
+* `lidar_pose`: csak használható localization eredménynél;
+* `lidar_matcher_diagnostics`: passzív matcher lineage és quality evidence.
+
+Az L12 a `lidar_safety_clearance` mintát közvetlenül az L1 outputból kapja. A
+szükséges irányt a logikai L10 kerék-setpointból vezeti le, nem a kalibráció
+miatt oldalanként eltérő fizikai PWM-ből. Hiányzó, stale, nem megfigyelt vagy a
+konfigurált clearance-határ alatti szükséges szektor esetén nem enged
+actuationt.
+
+A stateful scan-matching matematika egyetlen explicit donor adapteren keresztül
+használja a meglévő `LidarEstimator` algoritmust. A production út nem importálja
+a legacy drivert, service-t vagy matcher-processzt, és nem vesz át legacy
+runtime/shared-state authorityt.
+
+A V3 Replayer a teljes zárt L1 contractot generikusan és veszteség nélkül
+rögzíti és állítja vissza, ezért az új mintákhoz nem szükséges külön replay
+schema vagy alternatív diagnosztikai út. A korábbi capture-ek régi
+`lidar_health` alakja továbbra is determinisztikusan olvasható. Natív safety
+minta jelenlétében a Replayer a capture device identityjét és a source-first
+ellenőrzött aktív `hardver.json` clearance-küszöbét zárja vissza az L12-be; ezt
+a replay result `reconstruction_contract.lidar_safety` mezője expliciten
+diagnosztizálja. Safety mintát még nem tartalmazó régi capture esetén ez az új
+kapu compatibility módban inaktív marad.
+
 ## 9. Motion és command szabadság
 
 A robot normál mozgatásának egyetlen canonical V3 útja van:

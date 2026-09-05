@@ -12,6 +12,7 @@ from .contracts import (
     CommandRequest,
     ConstrainedMotion,
     DeviceHealth,
+    DeviceSample,
     FinalActuation,
     LifecycleState,
     MissionIntent,
@@ -50,6 +51,8 @@ class FinalSafety(Protocol):
         critical_health: tuple[DeviceHealth, ...],
         lifecycle: LifecycleState,
         upstream_fault: str | None,
+        safety_samples: tuple[DeviceSample, ...] = (),
+        wheel_setpoint: WheelVelocitySetpoint | None = None,
     ) -> FinalActuation:
         """Make the L12 decision and perform the single final motor write."""
 
@@ -122,6 +125,8 @@ class TickEngine:
         request: ActuatorRequest | None = None
         fault_layer: str | None = None
         upstream_fault: str | None = self._tick_order_fault(inputs.context)
+        safety_samples: tuple[DeviceSample, ...] = ()
+        wheel_setpoint: WheelVelocitySetpoint | None = None
 
         try:
             if upstream_fault is None:
@@ -133,6 +138,7 @@ class TickEngine:
                     self._layers.acquisition,
                     inputs.raw_devices,
                 )
+                safety_samples = acquisition.samples
                 admitted = self._evaluate(
                     records,
                     "L2",
@@ -211,6 +217,7 @@ class TickEngine:
                     self._layers.chassis_control,
                     constrained,
                 )
+                wheel_setpoint = wheels
                 request = self._evaluate(
                     records,
                     "L11",
@@ -233,6 +240,8 @@ class TickEngine:
             critical_health=inputs.raw_devices.device_health,
             lifecycle=inputs.lifecycle,
             upstream_fault=upstream_fault,
+            safety_samples=safety_samples,
+            wheel_setpoint=wheel_setpoint,
             records=records,
             fault_layer=fault_layer,
         )
@@ -257,6 +266,8 @@ class TickEngine:
             critical_health=critical_health,
             lifecycle=lifecycle,
             upstream_fault=reason,
+            safety_samples=(),
+            wheel_setpoint=None,
             records=[],
             fault_layer=fault_layer,
         )
@@ -269,6 +280,8 @@ class TickEngine:
         critical_health: tuple[DeviceHealth, ...],
         lifecycle: LifecycleState,
         upstream_fault: str | None,
+        safety_samples: tuple[DeviceSample, ...],
+        wheel_setpoint: WheelVelocitySetpoint | None,
         records: list[LayerRecord],
         fault_layer: str | None,
     ) -> TickResult:
@@ -279,6 +292,8 @@ class TickEngine:
                 critical_health,
                 lifecycle,
                 upstream_fault,
+                safety_samples,
+                wheel_setpoint,
             )
         except Exception as exc:
             raise TickExecutionError("L12 final safety could not complete") from exc

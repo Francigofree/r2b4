@@ -19,7 +19,12 @@ from v3.adapters.resident_command import (
     AtomicResidentCommandGateway,
     ResidentCommandMailboxConfig,
 )
+from v3.adapters.native_lidar_port import (
+    load_native_lidar_port_config,
+    open_native_lidar_port,
+)
 from v3.contracts import AcquisitionFrame, RobotEstimate
+from v3.composition.native_sensor_inputs import NativeSensorHardwareConfig
 from v3.engine import TickResult
 from v3_bounded_config import (
     NativeSensorPolicyConfig,
@@ -385,6 +390,31 @@ def load_resident_runtime_config(project_root: Path = PROJECT_ROOT) -> ResidentP
     return ResidentPhysicalRuntimeConfig.from_bounded(bounded)
 
 
+def native_lidar_factory(
+    sensors: NativeSensorHardwareConfig,
+    serial_factory: Callable[..., object],
+    project_root: Path = PROJECT_ROOT,
+) -> Callable[[Callable[[], tuple[float, float, float]]], object]:
+    """Close active LiDAR config once and return the sole production opener."""
+
+    if not isinstance(sensors, NativeSensorHardwareConfig):
+        raise TypeError("sensors must be NativeSensorHardwareConfig")
+    if not callable(serial_factory):
+        raise TypeError("serial_factory must be callable")
+    lidar_config = load_native_lidar_port_config(
+        project_root / "conf" / "hardver.json",
+        project_root / "conf" / "vezerles.json",
+        danger_zone_m=sensors.lidar_danger_zone_m,
+    )
+
+    def open_lidar(
+        pose_provider: Callable[[], tuple[float, float, float]],
+    ) -> object:
+        return open_native_lidar_port(lidar_config, pose_provider, serial_factory)
+
+    return open_lidar
+
+
 def _runtime_owned_path(value: str, project_root: Path) -> Path:
     path = Path(value)
     if not path.is_absolute():
@@ -439,22 +469,15 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         import lgpio
+        import serial
         import smbus2
 
-        from sensors.lidar_service import LidarService
-
-        def open_lidar(pose_provider: Callable[[], tuple[float, float, float]]) -> object:
-            service = LidarService(
-                danger_zone=runtime_config.sensor_inputs.lidar_danger_zone_m,
-                pose_provider=pose_provider,
-            )
-            try:
-                if service.start() is not True:
-                    raise RuntimeError("protected latest-only lidar service did not start")
-                return service
-            except Exception:
-                service.stop()
-                raise
+        if runtime_config.sensor_inputs is None:
+            raise ValueError("resident runtime did not close native sensor inputs")
+        open_lidar = native_lidar_factory(
+            runtime_config.sensor_inputs,
+            serial.Serial,
+        )
 
         report = run_v3_resident_process(
             lgpio,
@@ -499,6 +522,7 @@ __all__ = [
     "SignalStop",
     "load_resident_runtime_config",
     "main",
+    "native_lidar_factory",
     "native_sensor_policy",
     "run_v3_resident_process",
 ]

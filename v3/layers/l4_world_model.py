@@ -63,23 +63,32 @@ class ShadowWorldModel:
         if lidar:
             values = _values(lidar[0])
             age_ns = _number(values, "age_ns")
-            confidence = _number(values, "confidence")
-            if age_ns < 0.0 or not 0.0 <= confidence <= 1.0:
+            if "point_count" in values:
+                point_count = _number(values, "point_count")
+                quality_valid = point_count >= 0.0
+                measurement_ns = lidar[0].captured_monotonic_ns
+            else:
+                # Replay V1 captures predate the split physical/localization
+                # samples. Preserve their closed interpretation without using
+                # localization confidence as new device-health authority.
+                confidence = _number(values, "confidence")
+                quality_valid = 0.0 <= confidence <= 1.0
+                measurement_ns = max(
+                    0,
+                    lidar[0].captured_monotonic_ns - int(round(age_ns)),
+                )
+            if age_ns < 0.0 or not quality_valid:
                 raise ValueError("lidar health values are outside their physical range")
-            measurement_ns = max(
-                0,
-                lidar[0].captured_monotonic_ns - int(round(age_ns)),
-            )
             if (
                 self._last_lidar_sequence is not None
-                and lidar[0].source_sequence <= self._last_lidar_sequence
+                and lidar[0].source_sequence < self._last_lidar_sequence
             ):
-                raise ValueError("L4 lidar sequence must increase")
+                raise ValueError("L4 lidar sequence must not move backwards")
             if (
                 self._last_lidar_measurement_ns is not None
-                and measurement_ns <= self._last_lidar_measurement_ns
+                and measurement_ns < self._last_lidar_measurement_ns
             ):
-                raise ValueError("L4 lidar measurement time must increase")
+                raise ValueError("L4 lidar measurement time must not move backwards")
             if self._last_lidar_sequence is None or (
                 lidar[0].source_sequence > self._last_lidar_sequence
             ):

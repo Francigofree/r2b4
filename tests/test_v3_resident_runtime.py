@@ -11,6 +11,7 @@ from v3.adapters.live_encoder import (
 from v3.adapters.live_imu import ImuHeadingReading, NativeImuConfig, NativeImuSource
 from v3.adapters.live_lidar import (
     LidarHealthReading,
+    LidarScanReading,
     NativeLidarConfig,
     NativeLidarSource,
 )
@@ -69,13 +70,31 @@ class LidarBackend:
         self.revisions = dict(revisions or {})
 
     def read(self, context):
+        revision = self.revisions.get(context.tick_id, context.tick_id + 1)
         return LidarHealthReading(
-            self.revisions.get(context.tick_id, context.tick_id + 1),
+            revision,
             context.monotonic_ns,
             measurement_age_ns=0,
             confidence=1.0,
             stale=False,
             timing_valid=True,
+            scan=LidarScanReading(
+                revision=revision,
+                captured_monotonic_ns=context.monotonic_ns,
+                measurement_age_ns=0,
+                health="OK",
+                stale=False,
+                timing_valid=True,
+                point_count=80,
+                front_clearance_m=1.0,
+                rear_clearance_m=1.0,
+                left_clearance_m=1.0,
+                right_clearance_m=1.0,
+                front_observation_count=20,
+                rear_observation_count=20,
+                left_observation_count=20,
+                right_observation_count=20,
+            ),
         )
 
 
@@ -240,7 +259,7 @@ def _sources(encoder, lidar_backend=None):
         NativeImuSource(ImuBackend(), NativeImuConfig("imu", 0.5, 2)),
         NativeLidarSource(
             lidar_backend or LidarBackend(),
-            NativeLidarConfig("lidar", 0.5, 100_000_000),
+            NativeLidarConfig("RPLIDAR_C1", 0.5, 100_000_000),
         ),
     )
 

@@ -32,6 +32,7 @@ from v3.composition.native_sensor_inputs import (
 from v3.layers.l3_state_estimation import NativeStateEstimatorConfig
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
+from v3.layers.l12_safety_final import LidarSafetyConfig
 from v3_bounded_runtime import (
     BoundedPhysicalRuntimeConfig,
     NativeEncoderRuntimeConfig,
@@ -229,7 +230,7 @@ def _sensor_hardware_config(
             maximum_future_skew_ns=policy.lidar_maximum_future_skew_ns,
         ),
         lidar_source=NativeLidarConfig(
-            "LIDAR_LOCALIZATION",
+            "RPLIDAR_C1",
             policy.lidar_minimum_confidence,
             policy.lidar_maximum_measurement_age_ns,
             POSE_FRAME_ID,
@@ -394,6 +395,20 @@ def load_bounded_physical_runtime_config(
     )
     speed_map = WheelSpeedMap.from_mapping(speed_map_value)
 
+    sensor_inputs = (
+        _sensor_hardware_config(hardware, encoder, sensor_policy)
+        if sensor_policy is not None
+        else None
+    )
+    lidar_safety = (
+        LidarSafetyConfig(
+            device_id=sensor_inputs.inputs.lidar_source.device_id,
+            minimum_clearance_m=sensor_inputs.lidar_danger_zone_m,
+            maximum_sample_age_ns=sensor_policy.lidar_maximum_measurement_age_ns,
+        )
+        if sensor_inputs is not None and sensor_policy is not None
+        else None
+    )
     control = NativeControlCompositionConfig(
         speed_map=speed_map,
         estimation=NativeStateEstimatorConfig(
@@ -401,6 +416,7 @@ def load_bounded_physical_runtime_config(
             track_width_m=track_width_m,
         ),
         chassis_control=ChassisControlConfig(track_width_m=track_width_m),
+        lidar_safety=lidar_safety,
     )
     physical = BoundedPhysicalControlConfig(
         live_control=BoundedLiveControlConfig(
@@ -414,11 +430,7 @@ def load_bounded_physical_runtime_config(
         composition=physical,
         tick_period_ns=tick_period_ns,
         encoder=encoder,
-        sensor_inputs=(
-            _sensor_hardware_config(hardware, encoder, sensor_policy)
-            if sensor_policy is not None
-            else None
-        ),
+        sensor_inputs=sensor_inputs,
     )
 
 

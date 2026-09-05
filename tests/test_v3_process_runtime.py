@@ -187,3 +187,43 @@ def test_process_paths_cannot_escape_runtime_and_config_closes_native_sensors():
     ) == PROJECT_ROOT / "runtime" / "v3_command.json"
     with pytest.raises(ValueError, match="runtime directory"):
         process._runtime_owned_path("/tmp/v3-command.json", PROJECT_ROOT)
+
+
+def test_process_native_lidar_factory_closes_config_once_without_legacy_service(monkeypatch):
+    runtime = process.load_resident_runtime_config(PROJECT_ROOT)
+    assert runtime.sensor_inputs is not None
+    config_token = object()
+    port_token = object()
+    loads = []
+    opens = []
+
+    def fake_load(hardware_path, control_path, *, danger_zone_m):
+        loads.append((hardware_path, control_path, danger_zone_m))
+        return config_token
+
+    def fake_open(config, pose_provider, serial_factory):
+        opens.append((config, pose_provider, serial_factory))
+        return port_token
+
+    monkeypatch.setattr(process, "load_native_lidar_port_config", fake_load)
+    monkeypatch.setattr(process, "open_native_lidar_port", fake_open)
+    serial_factory = mock.Mock()
+    factory = process.native_lidar_factory(
+        runtime.sensor_inputs,
+        serial_factory,
+        PROJECT_ROOT,
+    )
+    pose_provider = lambda: (0.0, 0.0, 0.0)
+
+    assert factory(pose_provider) is port_token
+    assert loads == [
+        (
+            PROJECT_ROOT / "conf" / "hardver.json",
+            PROJECT_ROOT / "conf" / "vezerles.json",
+            0.1,
+        )
+    ]
+    assert opens == [(config_token, pose_provider, serial_factory)]
+    assert "sensors.lidar_service" not in Path(process.__file__).read_text(
+        encoding="utf-8"
+    )

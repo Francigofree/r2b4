@@ -7,12 +7,18 @@ import argparse
 import json
 import signal
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import lgpio
+import serial
 import smbus2
 
-from sensors.lidar_service import LidarService
+from v3.adapters.native_lidar_port import (
+    NativeLidarPort,
+    load_native_lidar_port_config,
+    open_native_lidar_port,
+)
 from v3.adapters.bounded_command import BoundedTeleopProfile
 from v3.contracts import AcquisitionFrame, AdmittedFrame, RobotEstimate
 from v3_bounded_config import (
@@ -72,6 +78,14 @@ def _layer(result, layer: str):
 
 def _sample_values(sample) -> dict[str, object]:
     return {field.key: field.value for field in sample.values}
+
+
+def _json_value(value):
+    if isinstance(value, Mapping):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_json_value(item) for item in value]
+    return value
 
 
 def summarize_report(report: SensorMeasurementReport) -> dict[str, object]:
@@ -165,21 +179,16 @@ def summarize_report(report: SensorMeasurementReport) -> dict[str, object]:
     }
 
 
-def _open_lidar_port(danger_zone_m: float, pose_provider) -> LidarService:
-    service = LidarService(
-        danger_zone=danger_zone_m,
-        pose_provider=pose_provider,
+def _open_lidar_port(danger_zone_m: float, pose_provider) -> NativeLidarPort:
+    config = load_native_lidar_port_config(
+        PROJECT_ROOT / "conf" / "hardver.json",
+        PROJECT_ROOT / "conf" / "vezerles.json",
+        danger_zone_m=danger_zone_m,
     )
-    try:
-        if service.start() is not True:
-            raise RuntimeError("protected latest-only lidar service did not start")
-        return service
-    except Exception:
-        service.stop()
-        raise
+    return open_native_lidar_port(config, pose_provider, serial.Serial)
 
 
-def _lidar_diagnostics(service: LidarService | None) -> dict[str, object] | None:
+def _lidar_diagnostics(service: NativeLidarPort | None) -> dict[str, object] | None:
     if service is None:
         return None
     status = service.get_runtime_status()
@@ -212,7 +221,9 @@ def _lidar_diagnostics(service: LidarService | None) -> dict[str, object] | None
             {
                 "matcher_result_id": getattr(result, "matcher_result_id", None),
                 "source_raw_scan_id": getattr(result, "source_raw_scan_id", None),
-                "summary": dict(result_summary) if isinstance(result_summary, dict) else None,
+                "summary": _json_value(result_summary)
+                if isinstance(result_summary, Mapping)
+                else None,
             }
             if result is not None
             else None
@@ -255,9 +266,9 @@ def main(argv: list[str] | None = None) -> int:
         signum: signal.signal(signum, stop.handle)
         for signum in (signal.SIGINT, signal.SIGTERM)
     }
-    lidar_service: LidarService | None = None
+    lidar_service: NativeLidarPort | None = None
 
-    def open_lidar(pose_provider) -> LidarService:
+    def open_lidar(pose_provider) -> NativeLidarPort:
         nonlocal lidar_service
         lidar_service = _open_lidar_port(
             config.sensors.lidar_danger_zone_m,

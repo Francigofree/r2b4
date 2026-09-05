@@ -1,4 +1,5 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -143,8 +144,28 @@ class LidarPort:
             "matcher_transport": "process_latest_only",
             "running": True,
             "matcher_process_alive": True,
+            "driver_connected": True,
             "health": "OK",
         }
+
+    def get_raw_scan_snapshot(self):
+        return SimpleNamespace(
+            raw_scan_id=1,
+            raw_scan_timestamp=1.0,
+            health="OK",
+            raw_scan=(),
+            summary={
+                "raw_safety_valid_point_count": 80,
+                "front_clearance_m": 1.0,
+                "rear_clearance_m": 1.0,
+                "left_clearance_m": 1.0,
+                "right_clearance_m": 1.0,
+                "front_observation_count": 20,
+                "rear_observation_count": 20,
+                "left_observation_count": 20,
+                "right_observation_count": 20,
+            },
+        )
 
     def stop(self):
         self.stop_calls += 1
@@ -290,6 +311,8 @@ def test_owner_closes_three_native_sources_into_one_ordered_tick_batch():
         "wheel_velocity",
         "ekf_heading",
         "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_localization_health",
         "lidar_matcher_diagnostics",
         "lidar_pose",
     )

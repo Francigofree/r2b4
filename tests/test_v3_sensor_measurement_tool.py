@@ -1,4 +1,6 @@
-from tools.v3_sensor_measurement import summarize_report
+from types import MappingProxyType
+
+from tools.v3_sensor_measurement import _json_value, summarize_report
 from v3.adapters.live_encoder import EncoderVelocityReading, NativeEncoderConfig, NativeEncoderSource
 from v3.adapters.live_imu import ImuHeadingReading, NativeImuConfig, NativeImuSource
 from v3.adapters.live_lidar import LidarHealthReading, NativeLidarConfig, NativeLidarSource
@@ -13,6 +15,14 @@ class Backend:
 
     def read(self, _context):
         return next(self.values)
+
+
+def test_native_lidar_diagnostics_mapping_is_recursively_json_compatible():
+    value = MappingProxyType(
+        {"quality": MappingProxyType({"reasons": ("a", "b")})}
+    )
+
+    assert _json_value(value) == {"quality": {"reasons": ["a", "b"]}}
 
 
 def test_summary_exposes_health_ranges_estimate_and_zero_commit():
