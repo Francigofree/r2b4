@@ -14,7 +14,6 @@ from v3.contracts import (
     DeviceHealth,
     DeviceHealthState,
     DeviceSample,
-    RejectionReason,
     TickContext,
 )
 from v3.layers.l2_admission import AdmissionConfig, InputAdmission
@@ -82,35 +81,25 @@ def test_native_encoder_source_closes_one_typed_wheel_velocity_sample():
                 DataField("left_mps", 0.12),
                 DataField("right_mps", 0.15),
                 DataField("trust", 0.8),
+                DataField("measurement_stale", False),
+                DataField("measurement_timing_valid", True),
             ),
         ),
     )
 
 
 @pytest.mark.parametrize(
-    ("reading", "expected_state", "expected_reason"),
-    (
-        (
-            _reading(timing_valid=False),
-            DeviceHealthState.FAILED,
-            "ENCODER_TIMING_INVALID",
-        ),
-        (_reading(stale=True), DeviceHealthState.DEGRADED, "ENCODER_STALE"),
-        (_reading(trust=0.2), DeviceHealthState.DEGRADED, "ENCODER_LOW_TRUST"),
-    ),
+    "reading",
+    (_reading(timing_valid=False), _reading(stale=True), _reading(trust=0.2)),
 )
-def test_native_encoder_source_maps_health_fail_closed(
-    reading: EncoderVelocityReading,
-    expected_state: DeviceHealthState,
-    expected_reason: str,
-):
+def test_measurement_uncertainty_does_not_become_encoder_device_failure(reading):
     snapshot = _source(reading)[0].read(TickContext(5, 1_000))
 
-    assert snapshot.health.state is expected_state
-    assert snapshot.health.reason == expected_reason
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert snapshot.health.reason is None
 
 
-def test_invalid_encoder_timing_is_rejected_by_existing_l2_admission():
+def test_invalid_measurement_timing_is_degraded_without_device_failure():
     context = TickContext(5, 1_000)
     source, _ = _source(_reading(timing_valid=False))
     batch = NativeLiveInputReader((source,)).read(context)
@@ -118,10 +107,8 @@ def test_invalid_encoder_timing_is_rejected_by_existing_l2_admission():
         AcquisitionFrame(batch.context, batch.samples, batch.device_health)
     )
 
-    assert admitted.accepted == ()
-    assert tuple(item.reason for item in admitted.rejected) == (
-        RejectionReason.UNTRUSTED,
-    )
+    assert tuple(item.kind for item in admitted.accepted) == ("wheel_velocity",)
+    assert admitted.rejected == ()
     assert admitted.degraded_sources == ("KIT0085_ENCODER",)
 
 

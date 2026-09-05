@@ -366,6 +366,9 @@ def native_sensor_policy() -> NativeSensorPolicyConfig:
         lidar_pose_r_scale=1.0,
         lidar_minimum_confidence=0.2,
         lidar_maximum_measurement_age_ns=250_000_000,
+        encoder_minimum_estimation_pulses=4,
+        encoder_minimum_estimation_window_ns=40_000_000,
+        encoder_maximum_estimation_window_ns=160_000_000,
     )
 
 

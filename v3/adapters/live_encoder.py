@@ -100,6 +100,20 @@ class EncoderEdgeDiagnostics:
     right_invalid_alert_delta: int | None
     computed_left_mps: float | None
     computed_right_mps: float | None
+    instantaneous_left_mps: float | None
+    instantaneous_right_mps: float | None
+    raw_left_distance_m: float
+    raw_right_distance_m: float
+    left_distance_delta_m: float | None
+    right_distance_delta_m: float | None
+    left_estimation_pulse_delta: int | None
+    right_estimation_pulse_delta: int | None
+    left_estimation_window_ns: int | None
+    right_estimation_window_ns: int | None
+    left_velocity_uncertainty_mps: float | None
+    right_velocity_uncertainty_mps: float | None
+    left_measurement_trust: float
+    right_measurement_trust: float
     maximum_abs_velocity_mps: float
     rejection_code: EncoderRejectionCode
 
@@ -118,6 +132,10 @@ class EncoderEdgeDiagnostics:
             (self.right_read_error_delta, "right_read_error_delta"),
             (self.left_invalid_alert_delta, "left_invalid_alert_delta"),
             (self.right_invalid_alert_delta, "right_invalid_alert_delta"),
+            (self.left_estimation_pulse_delta, "left_estimation_pulse_delta"),
+            (self.right_estimation_pulse_delta, "right_estimation_pulse_delta"),
+            (self.left_estimation_window_ns, "left_estimation_window_ns"),
+            (self.right_estimation_window_ns, "right_estimation_window_ns"),
         ):
             _optional_integer(value, name)
         for value, name in (
@@ -135,6 +153,32 @@ class EncoderEdgeDiagnostics:
             _nonnegative_integer(value, name)
         _optional_finite(self.computed_left_mps, "computed_left_mps")
         _optional_finite(self.computed_right_mps, "computed_right_mps")
+        _optional_finite(self.instantaneous_left_mps, "instantaneous_left_mps")
+        _optional_finite(self.instantaneous_right_mps, "instantaneous_right_mps")
+        _finite(self.raw_left_distance_m, "raw_left_distance_m")
+        _finite(self.raw_right_distance_m, "raw_right_distance_m")
+        _optional_finite(self.left_distance_delta_m, "left_distance_delta_m")
+        _optional_finite(self.right_distance_delta_m, "right_distance_delta_m")
+        for value, name in (
+            (
+                self.left_velocity_uncertainty_mps,
+                "left_velocity_uncertainty_mps",
+            ),
+            (
+                self.right_velocity_uncertainty_mps,
+                "right_velocity_uncertainty_mps",
+            ),
+        ):
+            _optional_finite(value, name)
+            if value is not None and value < 0.0:
+                raise ValueError(f"{name} must be non-negative")
+        for value, name in (
+            (self.left_measurement_trust, "left_measurement_trust"),
+            (self.right_measurement_trust, "right_measurement_trust"),
+        ):
+            trust = _finite(value, name)
+            if not 0.0 <= trust <= 1.0:
+                raise ValueError(f"{name} must be within [0, 1]")
         if _finite(
             self.maximum_abs_velocity_mps,
             "maximum_abs_velocity_mps",
@@ -208,23 +252,29 @@ class NativeEncoderSource:
         if not isinstance(reading, EncoderVelocityReading):
             raise TypeError("encoder backend must return EncoderVelocityReading")
 
-        if not reading.timing_valid:
+        rejection_code = (
+            reading.diagnostics.rejection_code
+            if reading.diagnostics is not None
+            else EncoderRejectionCode.NONE
+        )
+        if rejection_code is EncoderRejectionCode.COUNTER_NOT_RUNNING:
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.FAILED,
-                "ENCODER_TIMING_INVALID",
+                "ENCODER_COUNTER_NOT_RUNNING",
             )
-        elif reading.stale:
+        elif rejection_code in {
+            EncoderRejectionCode.COUNTER_READ_ERROR_CHANGED,
+            EncoderRejectionCode.COUNTER_INVALID_ALERT_CHANGED,
+            EncoderRejectionCode.COUNTER_READ_ERROR_AND_INVALID_ALERT_CHANGED,
+            EncoderRejectionCode.LEFT_VELOCITY_LIMIT_EXCEEDED,
+            EncoderRejectionCode.RIGHT_VELOCITY_LIMIT_EXCEEDED,
+            EncoderRejectionCode.BOTH_VELOCITY_LIMIT_EXCEEDED,
+        }:
             health = DeviceHealth(
                 self.device_id,
                 DeviceHealthState.DEGRADED,
-                "ENCODER_STALE",
-            )
-        elif reading.trust < self._config.minimum_trust:
-            health = DeviceHealth(
-                self.device_id,
-                DeviceHealthState.DEGRADED,
-                "ENCODER_LOW_TRUST",
+                "ENCODER_COUNTER_DIAGNOSTIC",
             )
         else:
             health = DeviceHealth(self.device_id, DeviceHealthState.OK)
@@ -238,6 +288,8 @@ class NativeEncoderSource:
                 DataField("left_mps", reading.left_mps),
                 DataField("right_mps", reading.right_mps),
                 DataField("trust", reading.trust),
+                DataField("measurement_stale", reading.stale),
+                DataField("measurement_timing_valid", reading.timing_valid),
             ) + self._diagnostic_fields(reading.diagnostics),
         )
         return LiveDeviceSnapshot(context, health, (sample,))
@@ -273,6 +325,38 @@ class NativeEncoderSource:
             ),
             DataField("computed_left_mps", diagnostics.computed_left_mps),
             DataField("computed_right_mps", diagnostics.computed_right_mps),
+            DataField("instantaneous_left_mps", diagnostics.instantaneous_left_mps),
+            DataField("instantaneous_right_mps", diagnostics.instantaneous_right_mps),
+            DataField("raw_left_distance_m", diagnostics.raw_left_distance_m),
+            DataField("raw_right_distance_m", diagnostics.raw_right_distance_m),
+            DataField("left_distance_delta_m", diagnostics.left_distance_delta_m),
+            DataField("right_distance_delta_m", diagnostics.right_distance_delta_m),
+            DataField(
+                "left_estimation_pulse_delta",
+                diagnostics.left_estimation_pulse_delta,
+            ),
+            DataField(
+                "right_estimation_pulse_delta",
+                diagnostics.right_estimation_pulse_delta,
+            ),
+            DataField(
+                "left_estimation_window_ns",
+                diagnostics.left_estimation_window_ns,
+            ),
+            DataField(
+                "right_estimation_window_ns",
+                diagnostics.right_estimation_window_ns,
+            ),
+            DataField(
+                "left_velocity_uncertainty_mps",
+                diagnostics.left_velocity_uncertainty_mps,
+            ),
+            DataField(
+                "right_velocity_uncertainty_mps",
+                diagnostics.right_velocity_uncertainty_mps,
+            ),
+            DataField("left_measurement_trust", diagnostics.left_measurement_trust),
+            DataField("right_measurement_trust", diagnostics.right_measurement_trust),
             DataField(
                 "maximum_abs_velocity_mps",
                 diagnostics.maximum_abs_velocity_mps,

@@ -53,6 +53,17 @@ class InputAdmission:
             previous_sequence = self._last_sequences.get(key)
             reason: RejectionReason | None = None
             age_ns = max(0, frame.context.monotonic_ns - sample.captured_monotonic_ns)
+            values = {field.key: field.value for field in sample.values}
+            measurement_timing_valid = values.get("measurement_timing_valid", True)
+            measurement_stale = values.get("measurement_stale", False)
+            for value, name in (
+                (measurement_timing_valid, "measurement_timing_valid"),
+                (measurement_stale, "measurement_stale"),
+            ):
+                if type(value) is not bool:
+                    raise ValueError(f"{sample.kind}.{name} must be bool")
+            if not measurement_timing_valid or measurement_stale:
+                degraded.add(sample.device_id)
 
             if previous_sequence is not None and sample.sequence == previous_sequence:
                 reason = RejectionReason.DUPLICATE

@@ -133,8 +133,8 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
     current = source.read(TickContext(1, 1_100_000_000))
 
     assert gpio.open_calls == 1
-    assert baseline.health.state is DeviceHealthState.DEGRADED
-    assert baseline.health.reason == "ENCODER_LOW_TRUST"
+    assert baseline.health.state is DeviceHealthState.OK
+    assert baseline.health.reason is None
     assert current.health.state is DeviceHealthState.OK
     assert current.context == TickContext(1, 1_100_000_000)
     values = {
@@ -142,7 +142,7 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
         for field in current.samples[0].values
     }
     assert (values["left_mps"], values["right_mps"], values["trust"]) == pytest.approx(
-        (0.1, 0.2, 1.0)
+        (0.1, 0.2, 0.4)
     )
     assert values["rejection_code"] == "NONE"
     assert values["raw_left_pulse_count"] == 1
@@ -156,6 +156,10 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
     assert values["right_invalid_alert_delta"] == 0
     assert values["computed_left_mps"] == pytest.approx(0.1)
     assert values["computed_right_mps"] == pytest.approx(0.2)
+    assert values["raw_left_distance_m"] == pytest.approx(0.01)
+    assert values["raw_right_distance_m"] == pytest.approx(0.02)
+    assert values["left_distance_delta_m"] == pytest.approx(0.01)
+    assert values["right_distance_delta_m"] == pytest.approx(0.02)
     assert values["maximum_abs_velocity_mps"] == pytest.approx(1.0)
 
     callbacks = tuple(gpio.callbacks.values())

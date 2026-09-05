@@ -55,6 +55,27 @@ def _optional_numeric_value(
     return result
 
 
+def _optional_wheel_distance_delta(
+    observation: Observation,
+) -> tuple[float, float] | None:
+    values = {field.key: field.value for field in observation.values}
+    keys = ("left_distance_delta_m", "right_distance_delta_m")
+    if all(key not in values or values[key] is None for key in keys):
+        return None
+    if any(key not in values or values[key] is None for key in keys):
+        raise ValueError("wheel_velocity raw distance deltas must be a complete pair")
+    result = []
+    for key in keys:
+        value = values[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"wheel_velocity.{key} must be numeric")
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            raise ValueError(f"wheel_velocity.{key} must be finite")
+        result.append(numeric)
+    return result[0], result[1]
+
+
 def _single_observation(frame: AdmittedFrame, kind: str) -> Observation:
     matches = tuple(item for item in frame.accepted if item.kind == kind)
     if len(matches) != 1:
@@ -325,6 +346,7 @@ class NativeStateEstimator:
         left_mps = _numeric_value(wheel, "left_mps")
         right_mps = _numeric_value(wheel, "right_mps")
         encoder_trust = _numeric_value(wheel, "trust")
+        wheel_distance_delta = _optional_wheel_distance_delta(wheel)
         measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
         measured_omega = _numeric_value(heading, "omega_rad_s")
         heading_confidence = _numeric_value(heading, "confidence")
@@ -366,7 +388,7 @@ class NativeStateEstimator:
             if dt_s > 0.0:
                 if omega_confidence > 0.0:
                     self._adapt_stationary_bias(measured_omega, dt_s, still)
-                self._predict(measured_omega, dt_s)
+                self._predict(measured_omega, dt_s, wheel_distance_delta)
             quality_floor = self._config.minimum_measurement_quality
             self._update_scalar(
                 self._VELOCITY,
@@ -436,12 +458,22 @@ class NativeStateEstimator:
             self._config.stationary_bias_gain * residual * dt_s
         )
 
-    def _predict(self, measured_omega: float, dt_s: float) -> None:
+    def _predict(
+        self,
+        measured_omega: float,
+        dt_s: float,
+        wheel_distance_delta: tuple[float, float] | None,
+    ) -> None:
         x_m, y_m, yaw_rad, velocity_mps, gyro_bias = self._state
         omega_rad_s = measured_omega - gyro_bias
+        distance_m = (
+            velocity_mps * dt_s
+            if wheel_distance_delta is None
+            else 0.5 * (wheel_distance_delta[0] + wheel_distance_delta[1])
+        )
         self._state = [
-            x_m + velocity_mps * math.cos(yaw_rad) * dt_s,
-            y_m + velocity_mps * math.sin(yaw_rad) * dt_s,
+            x_m + distance_m * math.cos(yaw_rad),
+            y_m + distance_m * math.sin(yaw_rad),
             _normalize_angle(yaw_rad + omega_rad_s * dt_s),
             velocity_mps,
             gyro_bias,
@@ -449,13 +481,21 @@ class NativeStateEstimator:
 
         transition = _identity(self._SIZE)
         transition[self._X][self._YAW] = (
-            -velocity_mps * math.sin(yaw_rad) * dt_s
+            -distance_m * math.sin(yaw_rad)
         )
-        transition[self._X][self._VELOCITY] = math.cos(yaw_rad) * dt_s
+        transition[self._X][self._VELOCITY] = (
+            math.cos(yaw_rad) * dt_s
+            if wheel_distance_delta is None
+            else 0.0
+        )
         transition[self._Y][self._YAW] = (
-            velocity_mps * math.cos(yaw_rad) * dt_s
+            distance_m * math.cos(yaw_rad)
         )
-        transition[self._Y][self._VELOCITY] = math.sin(yaw_rad) * dt_s
+        transition[self._Y][self._VELOCITY] = (
+            math.sin(yaw_rad) * dt_s
+            if wheel_distance_delta is None
+            else 0.0
+        )
         transition[self._YAW][self._GYRO_BIAS] = -dt_s
         predicted = _matmul(
             _matmul(transition, self._covariance),
@@ -670,6 +710,7 @@ class ShadowStateEstimator:
         left_mps = _numeric_value(wheel, "left_mps")
         right_mps = _numeric_value(wheel, "right_mps")
         encoder_trust = _numeric_value(wheel, "trust")
+        wheel_distance_delta = _optional_wheel_distance_delta(wheel)
         measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
         heading_confidence = _numeric_value(heading, "confidence")
         omega_confidence = _optional_numeric_value(
@@ -693,7 +734,11 @@ class ShadowStateEstimator:
         if dt_s > 0.0:
             yaw_delta = _normalize_angle(measured_yaw - self._yaw_rad)
             midpoint_yaw = _normalize_angle(self._yaw_rad + 0.5 * yaw_delta)
-            distance_m = v_mps * dt_s
+            distance_m = (
+                v_mps * dt_s
+                if wheel_distance_delta is None
+                else 0.5 * (wheel_distance_delta[0] + wheel_distance_delta[1])
+            )
             self._x_m += distance_m * math.cos(midpoint_yaw)
             self._y_m += distance_m * math.sin(midpoint_yaw)
             self._position_variance += (

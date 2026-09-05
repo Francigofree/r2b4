@@ -1,216 +1,574 @@
 {
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
-  "changed_files": [],
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_encoder_estimator_20260905/meta/audit.json",
+    "audit_sha256": "5be1bb59af037a0273968783af4b2cf0e062b49ac986c8b8ffbe67d58f33451f",
+    "audited_at_utc": "2026-09-05T16:56:14Z",
+    "base_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
+    "candidate_fingerprint": "683fe506e73737e7e4d86be9c9b1e008f12b601f77ee62efb3a084f04e292eff",
+    "canonical_drift": [],
+    "canonical_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_counter_encoder_backend.py",
+      "tests/test_v3_gpio_encoder_source.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_live_encoder_edge.py",
+      "tests/test_v3_native_state_estimation.py",
+      "tools/v3_sensor_measurement.py",
+      "v3/adapters/counter_encoder.py",
+      "v3/adapters/live_encoder.py",
+      "v3/composition/bounded_live_control.py",
+      "v3/layers/l2_admission.py",
+      "v3/layers/l3_state_estimation.py",
+      "v3_bounded_config.py",
+      "v3_bounded_runtime.py",
+      "v3_process_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_encoder_estimator_20260905/meta/diff.json",
+    "diff_sha256": "685cff762c33c4910912efad64e347448739b624b8391027fdee161fa4127397",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_encoder_estimator_20260905",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [
+    "STRUKTURALIS_RETEGEK_V3.md",
+    "tests/test_v3_counter_encoder_backend.py",
+    "tests/test_v3_gpio_encoder_source.py",
+    "tests/test_v3_hardware_runtime.py",
+    "tests/test_v3_live_encoder_edge.py",
+    "tests/test_v3_native_state_estimation.py",
+    "tools/v3_sensor_measurement.py",
+    "v3/adapters/counter_encoder.py",
+    "v3/adapters/live_encoder.py",
+    "v3/composition/bounded_live_control.py",
+    "v3/layers/l2_admission.py",
+    "v3/layers/l3_state_estimation.py",
+    "v3_bounded_config.py",
+    "v3_bounded_runtime.py",
+    "v3_process_runtime.py"
+  ],
+  "completed_at_utc": "2026-09-05T16:56:14Z",
   "files": [
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "ae5a9b91829577e4d74be02fefd6b70e79b6ef742598ab76fc8d9d6024451532",
+        "size_bytes": 28981
+      },
       "before": {
         "exists": true,
         "sha256": "71495aeb88a3c053d2113a1a9d18c9bbd1272e0b560044211c30abf2e6c94959",
         "size_bytes": 27491
       },
-      "changed": null,
+      "changed": true,
       "path": "STRUKTURALIS_RETEGEK_V3.md"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "85954d87ac0c64a032b944c64c9b7a04ea3d2877c2c0cff0a41b68fe5270f9a5",
+        "size_bytes": 9968
+      },
       "before": {
         "exists": true,
         "sha256": "85954d87ac0c64a032b944c64c9b7a04ea3d2877c2c0cff0a41b68fe5270f9a5",
         "size_bytes": 9968
       },
-      "changed": null,
+      "changed": false,
       "path": "tests/fixtures/v3_l0_l4_capture_excerpt.jsonl"
     },
     {
-      "after": null,
-      "before": {
-        "exists": true,
-        "sha256": "096761ce9ff70f20eb05770cb4e255eeb5a26d1f9ba1147e689def32e9cde9b8",
-        "size_bytes": 27007
+      "after": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
       },
-      "changed": null,
-      "path": "tests/test_v3_architecture_boundaries.py"
-    },
-    {
-      "after": null,
-      "before": {
-        "exists": true,
-        "sha256": "ea9d78d9ef501c79566bd8fbc1ec9257be19367e223dd762f17b92b019bf881e",
-        "size_bytes": 16361
-      },
-      "changed": null,
-      "path": "tests/test_v3_counter_encoder_backend.py"
-    },
-    {
-      "after": null,
       "before": {
         "exists": false,
         "sha256": null,
         "size_bytes": 0
       },
-      "changed": null,
+      "changed": false,
+      "path": "tests/test_v3_admission.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "096761ce9ff70f20eb05770cb4e255eeb5a26d1f9ba1147e689def32e9cde9b8",
+        "size_bytes": 27007
+      },
+      "before": {
+        "exists": true,
+        "sha256": "096761ce9ff70f20eb05770cb4e255eeb5a26d1f9ba1147e689def32e9cde9b8",
+        "size_bytes": 27007
+      },
+      "changed": false,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "a0b732c91d5b0b6216c632f8fb13b66545e5befd60e93cc0bce642a76f299ffc",
+        "size_bytes": 10910
+      },
+      "before": {
+        "exists": true,
+        "sha256": "a0b732c91d5b0b6216c632f8fb13b66545e5befd60e93cc0bce642a76f299ffc",
+        "size_bytes": 10910
+      },
+      "changed": false,
+      "path": "tests/test_v3_bounded_live_control_composition.py"
+    },
+    {
+      "after": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": false,
+      "path": "tests/test_v3_capture_edges.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "782dd01a66fa78b04ecae28c2608262331611cd469d3c05c66df63834e7bdbc9",
+        "size_bytes": 22199
+      },
+      "before": {
+        "exists": true,
+        "sha256": "ea9d78d9ef501c79566bd8fbc1ec9257be19367e223dd762f17b92b019bf881e",
+        "size_bytes": 16361
+      },
+      "changed": true,
+      "path": "tests/test_v3_counter_encoder_backend.py"
+    },
+    {
+      "after": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": false,
       "path": "tests/test_v3_encoder_estimator.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "92c3ee183e1debff47e01b95e22fd11d0ea4808e88abc9962799a940762940f8",
+        "size_bytes": 8664
+      },
+      "before": {
+        "exists": true,
+        "sha256": "92c3ee183e1debff47e01b95e22fd11d0ea4808e88abc9962799a940762940f8",
+        "size_bytes": 8664
+      },
+      "changed": false,
+      "path": "tests/test_v3_gpio_counter_owner.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "accbf2ab7650dc33bfb809d8f20054b9f20c8fbe511df411ed72197632e2272d",
+        "size_bytes": 6697
+      },
       "before": {
         "exists": true,
         "sha256": "b03d281879eb93d54f9bd22df0e14abb43bd2d73d599397e3d0c1a7f5492fa43",
         "size_bytes": 6456
       },
-      "changed": null,
+      "changed": true,
       "path": "tests/test_v3_gpio_encoder_source.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "a308f54ef2361dc100068e350af2b190024f40963b24679adca1c197bc4f9887",
+        "size_bytes": 15948
+      },
+      "before": {
+        "exists": true,
+        "sha256": "32bd333ef4b2223a7fcc4b857e5b1f680aee5ed466ad171d64a08e13c5289e2c",
+        "size_bytes": 15983
+      },
+      "changed": true,
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "0eb6429316736efde3a9bc16daa5d62f82ba63b1b6f2b9336ce058c70978aae9",
+        "size_bytes": 4210
+      },
       "before": {
         "exists": true,
         "sha256": "f1a56f8f91f1369109d4e4fe6c9dce92f7ceaeedd791653dabe729a776db02af",
         "size_bytes": 4491
       },
-      "changed": null,
+      "changed": true,
       "path": "tests/test_v3_live_encoder_edge.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "5cc91f98a41c673b4e3380e4dd09fc602ae3502b6132b1807ba28b27b7f127f4",
+        "size_bytes": 7439
+      },
+      "before": {
+        "exists": true,
+        "sha256": "5cc91f98a41c673b4e3380e4dd09fc602ae3502b6132b1807ba28b27b7f127f4",
+        "size_bytes": 7439
+      },
+      "changed": false,
+      "path": "tests/test_v3_native_lidar_port.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "2ce075a819b6c3cec13afd9b9d326b9c6c164662aa775be569972cfa1c35e596",
+        "size_bytes": 11763
+      },
       "before": {
         "exists": true,
         "sha256": "2ce075a819b6c3cec13afd9b9d326b9c6c164662aa775be569972cfa1c35e596",
         "size_bytes": 11763
       },
-      "changed": null,
+      "changed": false,
       "path": "tests/test_v3_native_sensor_inputs.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "aa5b2995c2f10987b755d6ef5d5af9a2d19d9615847688011876bdf4f8e26117",
+        "size_bytes": 10292
+      },
+      "before": {
+        "exists": true,
+        "sha256": "c397ca378c640688e3b6fa6ab6ac015380bea9792466f2425c473c6ef3ba82a9",
+        "size_bytes": 9437
+      },
+      "changed": true,
+      "path": "tests/test_v3_native_state_estimation.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
+        "size_bytes": 7753
+      },
       "before": {
         "exists": true,
         "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
         "size_bytes": 7753
       },
-      "changed": null,
+      "changed": false,
       "path": "tests/test_v3_process_runtime.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "fbf9a6f287e3f47f1f8d8679050e810a99798884d7daecfa01bbb0a68c18a583",
+        "size_bytes": 13253
+      },
       "before": {
         "exists": true,
         "sha256": "fbf9a6f287e3f47f1f8d8679050e810a99798884d7daecfa01bbb0a68c18a583",
         "size_bytes": 13253
       },
-      "changed": null,
+      "changed": false,
       "path": "tests/test_v3_replay.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "a5e5ba38868b396b13b368c027a813275583cfe4b8eede527449cf1af6d0831b",
+        "size_bytes": 2183
+      },
       "before": {
         "exists": true,
         "sha256": "a5e5ba38868b396b13b368c027a813275583cfe4b8eede527449cf1af6d0831b",
         "size_bytes": 2183
       },
-      "changed": null,
+      "changed": false,
       "path": "tests/test_v3_sensor_measurement_tool.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": false,
+      "path": "tests/test_v3_shadow_state_estimation.py"
+    },
+    {
+      "after": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": false,
+      "path": "tests/test_v3_state_estimation.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "83501c3b3f3ca699858672f7be95e932d36d2fed69efdee7329e7f128bff6fdc",
+        "size_bytes": 10974
+      },
       "before": {
         "exists": true,
         "sha256": "5a05b468a89482cd420908f6bb7642263ef4c4927270e75d907892c6f138776a",
         "size_bytes": 10814
       },
-      "changed": null,
+      "changed": true,
       "path": "tools/v3_sensor_measurement.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "ad917176bff8e699f5c5d82fcc04410b5ce879bf759526287e785d0cbe9b908e",
+        "size_bytes": 12243
+      },
+      "before": {
+        "exists": true,
+        "sha256": "ad917176bff8e699f5c5d82fcc04410b5ce879bf759526287e785d0cbe9b908e",
+        "size_bytes": 12243
+      },
+      "changed": false,
+      "path": "v3/adapters/capture_edges.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "cbceb57ef00d6d0a7e16310f84da8fa1800e48e638e1264d17de2f0a76e45147",
+        "size_bytes": 20908
+      },
       "before": {
         "exists": true,
         "sha256": "3135b62da4db547e5e912f2da2f4d8b6caeb1f04f193836e609310b602be6a6c",
         "size_bytes": 13004
       },
-      "changed": null,
+      "changed": true,
       "path": "v3/adapters/counter_encoder.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "daf75c17d4a625f30e2df69a13f1625dfb31118ee162aaf94f48cfe6a4145281",
+        "size_bytes": 2597
+      },
       "before": {
         "exists": true,
         "sha256": "daf75c17d4a625f30e2df69a13f1625dfb31118ee162aaf94f48cfe6a4145281",
         "size_bytes": 2597
       },
-      "changed": null,
+      "changed": false,
       "path": "v3/adapters/gpio_encoder.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "acbbf3b363cd0304a06326099f03a1ffa496815a33b6202e928802b19477ef44",
+        "size_bytes": 14997
+      },
       "before": {
         "exists": true,
         "sha256": "06a751ab4bd3219a51888e07e2c240742a100248d6faccd8dd44e1c9c9bc07ba",
         "size_bytes": 10793
       },
-      "changed": null,
+      "changed": true,
       "path": "v3/adapters/live_encoder.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "24e9b37c4975f4acbc8465419e566a0fc2ee4212275f627d9c0ee7f4730b88d6",
+        "size_bytes": 8413
+      },
+      "before": {
+        "exists": true,
+        "sha256": "10e37485ca89e2f5fe65fd35fb77e558d4f67174749d72e27b8ebda33e435e22",
+        "size_bytes": 8091
+      },
+      "changed": true,
+      "path": "v3/composition/bounded_live_control.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "29c00f1602cd08541f53f49b9046afe36f78060bf5b89477cff4b157de58ca0b",
+        "size_bytes": 6770
+      },
       "before": {
         "exists": true,
         "sha256": "29c00f1602cd08541f53f49b9046afe36f78060bf5b89477cff4b157de58ca0b",
         "size_bytes": 6770
       },
-      "changed": null,
+      "changed": false,
       "path": "v3/composition/native_sensor_inputs.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "e19b4ec64eace1774625e62cfeb3c9d85b99a640e0bb7c6bd73ced102bec3e74",
+        "size_bytes": 5308
+      },
+      "before": {
+        "exists": true,
+        "sha256": "2d8dd7a535ffbef3e30a3c6b889cf3142744bd86f0be78c8d1a4c51d60e0ddf6",
+        "size_bytes": 4670
+      },
+      "changed": true,
+      "path": "v3/layers/l2_admission.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "b0dc38a22c5e298252449b58fbbc267f88f46a521b3512eaa99be36484325de9",
+        "size_bytes": 30222
+      },
+      "before": {
+        "exists": true,
+        "sha256": "be2ed7e557a36151252eb50d338bf2ae3b1c19984c51edf1088c1218e27599b5",
+        "size_bytes": 28595
+      },
+      "changed": true,
+      "path": "v3/layers/l3_state_estimation.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "53e9b9d027c1dc2f55345a03c990bc267b429202093e9104895fa20a9a46704e",
+        "size_bytes": 52435
+      },
       "before": {
         "exists": true,
         "sha256": "53e9b9d027c1dc2f55345a03c990bc267b429202093e9104895fa20a9a46704e",
         "size_bytes": 52435
       },
-      "changed": null,
+      "changed": false,
       "path": "v3/replay.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "dafdec20d43a2e97fe504f9efd4750202f4e190d4947ae31df36d2043699775d",
+        "size_bytes": 17027
+      },
       "before": {
         "exists": true,
         "sha256": "ffea800e5537fb1f01ab1e20472fabba5bef07b0c4fbc568a198a8e2a39abca7",
         "size_bytes": 16235
       },
-      "changed": null,
+      "changed": true,
       "path": "v3_bounded_config.py"
     },
     {
-      "after": null,
+      "after": {
+        "exists": true,
+        "sha256": "28afa5e170f0f5810fd76824c9e1217706d29ce5dda46346b5c25b0764dec8a8",
+        "size_bytes": 9623
+      },
+      "before": {
+        "exists": true,
+        "sha256": "af2beacd10fd04993f614dd9575b372974c3a7a39161aee7bd59807ddea63d77",
+        "size_bytes": 9259
+      },
+      "changed": true,
+      "path": "v3_bounded_runtime.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "63444311b06d9d3fbacdfde5d9f8ce4ef1f711388195b8537a1d593e09c8ffd6",
+        "size_bytes": 18061
+      },
       "before": {
         "exists": true,
         "sha256": "c6fb2fa6ec188c50b0635896129da8f6acdc8515f655896a5258e7c34ca47edb",
         "size_bytes": 17901
       },
-      "changed": null,
+      "changed": true,
       "path": "v3_process_runtime.py"
     }
   ],
   "goal": "Plan and implement a simple deterministic adaptive multi-pulse V3 encoder velocity estimator that preserves raw signed pulse count and distance, separates measurement uncertainty from encoder device health, validates source-first with existing captures, and only then runs an authorized 0.15 m/s live motion test with fail-closed safety.",
-  "promotion_status": "NOT_PROMOTED",
-  "reason": "",
+  "promotion_status": "READY",
+  "reason": "Implemented the native adaptive multi-pulse encoder estimator with 40-160 ms per-wheel windows, raw signed count/distance preservation, explicit uncertainty/trust diagnostics, device-health separation, raw-distance L3 propagation, active configuration, documentation, and source-first capture regression. Targeted tests pass. The authorized 0.15 m/s Test Hub profile was attempted after fresh preflight but executed zero ALLOW ticks: a tick-0 LIDAR_TIMING_INVALID caused L4 FAULT_SAFE_LOW before movement; four motor pins were verified output-low, so live motion acceptance remains outstanding without gate relaxation.",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
   "started_at_utc": "2026-09-05T16:31:40Z",
-  "status": "ACTIVE",
+  "status": "COMPLETE",
   "task_id": "v3_encoder_estimator_20260905",
   "task_mode": "CODE_CHANGE",
-  "tests": [],
-  "updated_at_utc": "2026-09-05T16:35:25Z",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree python3 -m pytest -q tests/test_v3_counter_encoder_backend.py tests/test_v3_live_encoder_edge.py tests/test_v3_gpio_encoder_source.py tests/test_v3_native_sensor_inputs.py tests/test_v3_native_state_estimation.py tests/test_v3_bounded_live_control_composition.py tests/test_v3_hardware_runtime.py tests/test_v3_replay.py tests/test_v3_architecture_boundaries.py tests/test_v3_process_runtime.py tests/test_v3_sensor_measurement_tool.py tests/test_v3_gpio_counter_owner.py",
+      "status": "PASS"
+    }
+  ],
+  "updated_at_utc": "2026-09-05T16:56:14Z",
+  "workflow_evidence": {
+    "audit_sha256": "5be1bb59af037a0273968783af4b2cf0e062b49ac986c8b8ffbe67d58f33451f",
+    "candidate_fingerprint": "683fe506e73737e7e4d86be9c9b1e008f12b601f77ee62efb3a084f04e292eff",
+    "contract_fingerprint": "359f218e1d261fac2da6010535a56b14237def846c6702e32b5c979cc10d7a8d",
+    "diff_sha256": "685cff762c33c4910912efad64e347448739b624b8391027fdee161fa4127397",
+    "path": "runtime/agent_workspaces/v3_encoder_estimator_20260905/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "8ed0ebe8753e18d9884d96b299b4f08e46a4d6fec9a0a2eee6936e3c82900de5"
+  },
   "workspace": {
     "base_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
     "base_manifest_path": "runtime/agent_workspaces/v3_encoder_estimator_20260905/meta/base_manifest.json",
     "base_manifest_sha256": "6e4f9e2ef15b4f0930075d0ed4f56a2ade9b0d801f60c6e70ec4f7785ba5a8f4",
     "path": "runtime/agent_workspaces/v3_encoder_estimator_20260905/tree",
+    "reseal": {
+      "audit_sha256": "5be1bb59af037a0273968783af4b2cf0e062b49ac986c8b8ffbe67d58f33451f",
+      "candidate_fingerprint": "683fe506e73737e7e4d86be9c9b1e008f12b601f77ee62efb3a084f04e292eff",
+      "diff_sha256": "685cff762c33c4910912efad64e347448739b624b8391027fdee161fa4127397",
+      "path": "runtime/agent_workspaces/v3_encoder_estimator_20260905/meta/reseal.json",
+      "resealed_at_utc": "2026-09-05T16:56:14Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "2b2ec07f55cab55b6fe60a9c8c1ff97b91a0f4fccee118df8c36a1dabaab38ad",
+      "state": "READY",
+      "task_id": "v3_encoder_estimator_20260905"
+    },
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "ACTIVE"
+    "state": "READY"
   }
 }

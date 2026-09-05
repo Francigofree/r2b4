@@ -25,6 +25,7 @@ def _frame(
     lidar_confidence: float = 1.0,
     lidar_r_scale: float = 1.0,
     lidar_sequence: int | None = None,
+    wheel_distance_delta: tuple[float, float] | None = None,
     step_ns: int = 20_000_000,
 ) -> AdmittedFrame:
     context = TickContext(tick_id, tick_id * step_ns)
@@ -38,6 +39,14 @@ def _frame(
                 DataField("left_mps", left_mps),
                 DataField("right_mps", right_mps),
                 DataField("trust", trust),
+            )
+            + (
+                (
+                    DataField("left_distance_delta_m", wheel_distance_delta[0]),
+                    DataField("right_distance_delta_m", wheel_distance_delta[1]),
+                )
+                if wheel_distance_delta is not None
+                else ()
             ),
         ),
         Observation(
@@ -212,6 +221,24 @@ def test_native_stationary_zupt_drives_velocity_toward_zero():
 
     assert moving.v_mps == pytest.approx(0.3)
     assert abs(stopped.v_mps) < 0.05
+
+
+def test_native_position_uses_raw_pulse_distance_not_windowed_velocity():
+    estimator = NativeStateEstimator(_config())
+    estimator(_frame(0, left_mps=0.5, right_mps=0.5, yaw_rad=0.0))
+
+    estimate = estimator(
+        _frame(
+            1,
+            left_mps=0.25,
+            right_mps=0.25,
+            yaw_rad=0.0,
+            wheel_distance_delta=(0.001, 0.003),
+        )
+    )
+
+    assert estimate.x_m == pytest.approx(0.002)
+    assert estimate.y_m == pytest.approx(0.0)
 
 
 def test_native_uses_wheel_yaw_rate_when_heading_rate_has_zero_confidence():

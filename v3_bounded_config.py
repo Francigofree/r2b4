@@ -62,6 +62,9 @@ class NativeSensorPolicyConfig:
     lidar_pose_r_scale: float
     lidar_minimum_confidence: float
     lidar_maximum_measurement_age_ns: int
+    encoder_minimum_estimation_pulses: int = 4
+    encoder_minimum_estimation_window_ns: int = 40_000_000
+    encoder_maximum_estimation_window_ns: int = 160_000_000
 
     def __post_init__(self) -> None:
         # Construct the downstream immutable contracts now, before any file or
@@ -71,6 +74,13 @@ class NativeSensorPolicyConfig:
             1.0,
             maximum_sample_interval_ns=self.encoder_maximum_sample_interval_ns,
             maximum_abs_velocity_mps=self.encoder_maximum_abs_velocity_mps,
+            minimum_estimation_pulses=self.encoder_minimum_estimation_pulses,
+            minimum_estimation_window_ns=(
+                self.encoder_minimum_estimation_window_ns
+            ),
+            maximum_estimation_window_ns=(
+                self.encoder_maximum_estimation_window_ns
+            ),
         )
         NativeEncoderConfig("validation-encoder", self.encoder_minimum_trust)
         Bno055ImuBackendConfig(
@@ -206,6 +216,13 @@ def _sensor_hardware_config(
         encoder_backend=encoder.backend_config(
             maximum_sample_interval_ns=policy.encoder_maximum_sample_interval_ns,
             maximum_abs_velocity_mps=policy.encoder_maximum_abs_velocity_mps,
+            minimum_estimation_pulses=policy.encoder_minimum_estimation_pulses,
+            minimum_estimation_window_ns=(
+                policy.encoder_minimum_estimation_window_ns
+            ),
+            maximum_estimation_window_ns=(
+                policy.encoder_maximum_estimation_window_ns
+            ),
         ),
         encoder_source=NativeEncoderConfig(
             "WHEEL_ENCODERS",

@@ -347,7 +347,7 @@ def test_finite_measurement_runs_real_l1_l3_path_and_closes_every_owner():
     assert events == ["imu-open", "lidar-open", "counter-open"]
     assert len(report.ticks) == 3
     assert report.operator_stopped is False
-    assert report.healthy_tick_count == 2  # Tick 0 is the encoder baseline.
+    assert report.healthy_tick_count == 3
     assert len(report.l3_estimates) == 3
     assert report.fault_tick_count == 0
     assert report.all_commits_zero is True

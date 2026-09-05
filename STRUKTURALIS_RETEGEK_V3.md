@@ -240,6 +240,29 @@ A capability-k szétválasztása nem jelent párhuzamos control authorityt. A
 különböző szenzorágak csak typed adatot szolgáltatnak; a végső actuation
 authority továbbra is az L12.
 
+### 7.1 Natív encoder sebesség és RAW út
+
+A natív encoder edge minden ticken pontosan egyszer olvassa ki a két signed
+impulzusszámlálót. A kumulatív számláló, a tickenkénti signed delta és az ezekből
+közvetlenül számolt kumulatív/tick távolság RAW evidence: nem simítható, nem
+becsülhető vissza PWM-ből, és nem írható át a sebességszűrő eredményével.
+
+Csak a keréksebesség becslése időablakos. A két kerék külön a legrövidebb friss
+ablakot választja, amely legalább a konfigurált impulzusszámot és minimális időt
+tartalmazza; ha ez nem teljesül, az ablak a konfigurált maximumig nő. Az aktív
+policy négy impulzust, 40 ms minimumot és 160 ms maximumot használ. Így nagy
+sebességnél az ablak rövid, kis sebességnél hosszabb, de mindig véges és
+determinisztikus.
+
+A measurement `trust` és a kerékenkénti egyimpulzusos sebességbizonytalanság a
+kiválasztott ablak minőségét írja le. Baseline, kevés impulzus, stale minta vagy
+hibás tick-idő önmagában nem encoder device-hiba. Device health csak konkrét
+counter-hibából, leállt counterből vagy fizikailag lehetetlen pulse-rate-ből
+romolhat. L2 a mérés timing/freshness állapotát ettől külön kezeli, L3 pedig az
+ablakolt sebességet velocity measurementként, a RAW tick-távolságot pedig
+elmozdulásként használja. Régi capture raw távolságmezők nélkül a meglévő
+sebességintegrálás fallbackje replay-kompatibilitási célból megmarad.
+
 ## 8. Natív LiDAR adatút
 
 A natív V3 LiDAR egy fizikai RPLIDAR acquisitionből több, egymástól független

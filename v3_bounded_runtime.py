@@ -59,6 +59,9 @@ class NativeEncoderRuntimeConfig:
         *,
         maximum_sample_interval_ns: int,
         maximum_abs_velocity_mps: float,
+        minimum_estimation_pulses: int = 4,
+        minimum_estimation_window_ns: int = 40_000_000,
+        maximum_estimation_window_ns: int = 250_000_000,
     ) -> CounterEncoderBackendConfig:
         """Add explicit V3 sample policy to the closed physical geometry."""
 
@@ -67,6 +70,9 @@ class NativeEncoderRuntimeConfig:
             right_step_distance_m=self.right_step_distance_m,
             maximum_sample_interval_ns=maximum_sample_interval_ns,
             maximum_abs_velocity_mps=maximum_abs_velocity_mps,
+            minimum_estimation_pulses=minimum_estimation_pulses,
+            minimum_estimation_window_ns=minimum_estimation_window_ns,
+            maximum_estimation_window_ns=maximum_estimation_window_ns,
         )
 
 

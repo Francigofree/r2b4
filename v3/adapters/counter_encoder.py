@@ -64,6 +64,9 @@ class CounterEncoderBackendConfig:
     right_step_distance_m: float
     maximum_sample_interval_ns: int = 250_000_000
     maximum_abs_velocity_mps: float = 1.5
+    minimum_estimation_pulses: int = 4
+    minimum_estimation_window_ns: int = 40_000_000
+    maximum_estimation_window_ns: int = 250_000_000
 
     def __post_init__(self) -> None:
         _positive_float(self.left_step_distance_m, "left_step_distance_m")
@@ -75,6 +78,34 @@ class CounterEncoderBackendConfig:
         if interval == 0:
             raise ValueError("maximum_sample_interval_ns must be positive")
         _positive_float(self.maximum_abs_velocity_mps, "maximum_abs_velocity_mps")
+        pulses = _nonnegative_int(
+            self.minimum_estimation_pulses,
+            "minimum_estimation_pulses",
+        )
+        if pulses == 0:
+            raise ValueError("minimum_estimation_pulses must be positive")
+        minimum_window = _nonnegative_int(
+            self.minimum_estimation_window_ns,
+            "minimum_estimation_window_ns",
+        )
+        if minimum_window == 0:
+            raise ValueError("minimum_estimation_window_ns must be positive")
+        window = _nonnegative_int(
+            self.maximum_estimation_window_ns,
+            "maximum_estimation_window_ns",
+        )
+        if window == 0:
+            raise ValueError("maximum_estimation_window_ns must be positive")
+        if window < interval:
+            raise ValueError(
+                "maximum_estimation_window_ns cannot be shorter than "
+                "maximum_sample_interval_ns"
+            )
+        if minimum_window > window:
+            raise ValueError(
+                "minimum_estimation_window_ns cannot exceed "
+                "maximum_estimation_window_ns"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +120,21 @@ class _CounterPair:
         return self.left_running and self.right_running
 
 
+@dataclass(frozen=True, slots=True)
+class _TimedCounterPair:
+    monotonic_ns: int
+    counters: _CounterPair
+
+
+@dataclass(frozen=True, slots=True)
+class _WheelVelocityEstimate:
+    velocity_mps: float
+    pulse_delta: int
+    window_ns: int
+    uncertainty_mps: float
+    trust: float
+
+
 class NativeCounterEncoderBackend:
     """Derive signed wheel velocity from tick-bound counter snapshots.
 
@@ -98,6 +144,7 @@ class NativeCounterEncoderBackend:
 
     __slots__ = (
         "_config",
+        "_history",
         "_left",
         "_previous",
         "_previous_monotonic_ns",
@@ -119,6 +166,7 @@ class NativeCounterEncoderBackend:
         self._left = left
         self._right = right
         self._config = config
+        self._history: list[_TimedCounterPair] = []
         self._previous: _CounterPair | None = None
         self._previous_monotonic_ns: int | None = None
 
@@ -147,28 +195,34 @@ class NativeCounterEncoderBackend:
 
     @staticmethod
     def _edge_diagnostics(
+        config: CounterEncoderBackendConfig,
         current: _CounterPair,
         previous: _CounterPair | None,
         *,
         sample_interval_ns: int | None,
         computed_left_mps: float | None,
         computed_right_mps: float | None,
+        instantaneous_left_mps: float | None,
+        instantaneous_right_mps: float | None,
+        left_estimate: _WheelVelocityEstimate | None,
+        right_estimate: _WheelVelocityEstimate | None,
         rejection_code: EncoderRejectionCode,
-        maximum_abs_velocity_mps: float,
     ) -> EncoderEdgeDiagnostics:
+        left_pulse_delta = (
+            None
+            if previous is None
+            else current.left.pulse_count - previous.left.pulse_count
+        )
+        right_pulse_delta = (
+            None
+            if previous is None
+            else current.right.pulse_count - previous.right.pulse_count
+        )
         return EncoderEdgeDiagnostics(
             raw_left_pulse_count=current.left.pulse_count,
             raw_right_pulse_count=current.right.pulse_count,
-            left_pulse_delta=(
-                None
-                if previous is None
-                else current.left.pulse_count - previous.left.pulse_count
-            ),
-            right_pulse_delta=(
-                None
-                if previous is None
-                else current.right.pulse_count - previous.right.pulse_count
-            ),
+            left_pulse_delta=left_pulse_delta,
+            right_pulse_delta=right_pulse_delta,
             sample_interval_ns=sample_interval_ns,
             left_counter_running=current.left_running,
             right_counter_running=current.right_running,
@@ -198,8 +252,111 @@ class NativeCounterEncoderBackend:
             ),
             computed_left_mps=computed_left_mps,
             computed_right_mps=computed_right_mps,
-            maximum_abs_velocity_mps=maximum_abs_velocity_mps,
+            instantaneous_left_mps=instantaneous_left_mps,
+            instantaneous_right_mps=instantaneous_right_mps,
+            raw_left_distance_m=(
+                current.left.pulse_count * config.left_step_distance_m
+            ),
+            raw_right_distance_m=(
+                current.right.pulse_count * config.right_step_distance_m
+            ),
+            left_distance_delta_m=(
+                None
+                if left_pulse_delta is None
+                else left_pulse_delta * config.left_step_distance_m
+            ),
+            right_distance_delta_m=(
+                None
+                if right_pulse_delta is None
+                else right_pulse_delta * config.right_step_distance_m
+            ),
+            left_estimation_pulse_delta=(
+                None if left_estimate is None else left_estimate.pulse_delta
+            ),
+            right_estimation_pulse_delta=(
+                None if right_estimate is None else right_estimate.pulse_delta
+            ),
+            left_estimation_window_ns=(
+                None if left_estimate is None else left_estimate.window_ns
+            ),
+            right_estimation_window_ns=(
+                None if right_estimate is None else right_estimate.window_ns
+            ),
+            left_velocity_uncertainty_mps=(
+                None if left_estimate is None else left_estimate.uncertainty_mps
+            ),
+            right_velocity_uncertainty_mps=(
+                None if right_estimate is None else right_estimate.uncertainty_mps
+            ),
+            left_measurement_trust=(
+                0.0 if left_estimate is None else left_estimate.trust
+            ),
+            right_measurement_trust=(
+                0.0 if right_estimate is None else right_estimate.trust
+            ),
+            maximum_abs_velocity_mps=config.maximum_abs_velocity_mps,
             rejection_code=rejection_code,
+        )
+
+    def _reset_history(self, context: TickContext, current: _CounterPair) -> None:
+        self._history = [_TimedCounterPair(context.monotonic_ns, current)]
+
+    def _append_history(self, context: TickContext, current: _CounterPair) -> None:
+        self._history.append(_TimedCounterPair(context.monotonic_ns, current))
+        cutoff_ns = context.monotonic_ns - self._config.maximum_estimation_window_ns
+        self._history = [
+            item for item in self._history if item.monotonic_ns >= cutoff_ns
+        ]
+
+    def _estimate_wheel(
+        self,
+        *,
+        side: str,
+        step_distance_m: float,
+    ) -> _WheelVelocityEstimate | None:
+        if len(self._history) < 2:
+            return None
+        current = self._history[-1]
+        current_snapshot = getattr(current.counters, side)
+        selected: _TimedCounterPair | None = None
+        for candidate in reversed(self._history[:-1]):
+            elapsed_ns = current.monotonic_ns - candidate.monotonic_ns
+            if elapsed_ns <= 0:
+                continue
+            if elapsed_ns > self._config.maximum_estimation_window_ns:
+                break
+            selected = candidate
+            candidate_snapshot = getattr(candidate.counters, side)
+            pulse_delta = (
+                current_snapshot.pulse_count - candidate_snapshot.pulse_count
+            )
+            if (
+                abs(pulse_delta) >= self._config.minimum_estimation_pulses
+                and elapsed_ns >= self._config.minimum_estimation_window_ns
+            ):
+                break
+        if selected is None:
+            return None
+        selected_snapshot = getattr(selected.counters, side)
+        pulse_delta = current_snapshot.pulse_count - selected_snapshot.pulse_count
+        window_ns = current.monotonic_ns - selected.monotonic_ns
+        elapsed_s = window_ns / 1_000_000_000.0
+        velocity_mps = pulse_delta * step_distance_m / elapsed_s
+        pulse_coverage = abs(pulse_delta) / self._config.minimum_estimation_pulses
+        coverage = (
+            min(1.0, window_ns / self._config.minimum_estimation_window_ns)
+            if pulse_coverage >= 1.0
+            else max(
+                pulse_coverage,
+                window_ns / self._config.maximum_estimation_window_ns,
+            )
+        )
+        return _WheelVelocityEstimate(
+            velocity_mps=float(velocity_mps),
+            pulse_delta=pulse_delta,
+            window_ns=window_ns,
+            uncertainty_mps=float(step_distance_m / elapsed_s),
+            trust=float(min(1.0, coverage)),
         )
 
     @staticmethod
@@ -269,23 +426,26 @@ class NativeCounterEncoderBackend:
         if previous is None or previous_monotonic_ns is None:
             self._previous = current
             self._previous_monotonic_ns = context.monotonic_ns
+            self._reset_history(context, current)
             return self._rejected_reading(
                 context,
                 stale=False,
                 timing_valid=current.running,
                 diagnostics=self._edge_diagnostics(
+                    self._config,
                     current,
                     None,
                     sample_interval_ns=None,
                     computed_left_mps=None,
                     computed_right_mps=None,
+                    instantaneous_left_mps=None,
+                    instantaneous_right_mps=None,
+                    left_estimate=None,
+                    right_estimate=None,
                     rejection_code=(
                         EncoderRejectionCode.BASELINE
                         if current.running
                         else EncoderRejectionCode.COUNTER_NOT_RUNNING
-                    ),
-                    maximum_abs_velocity_mps=(
-                        self._config.maximum_abs_velocity_mps
                     ),
                 ),
             )
@@ -296,14 +456,14 @@ class NativeCounterEncoderBackend:
             timing_valid
             and elapsed_ns > self._config.maximum_sample_interval_ns
         )
-        left_mps: float | None = None
-        right_mps: float | None = None
+        instantaneous_left_mps: float | None = None
+        instantaneous_right_mps: float | None = None
         if elapsed_ns > 0:
             elapsed_s = elapsed_ns / 1_000_000_000.0
-            left_mps = (
+            instantaneous_left_mps = (
                 current.left.pulse_count - previous.left.pulse_count
             ) * self._config.left_step_distance_m / elapsed_s
-            right_mps = (
+            instantaneous_right_mps = (
                 current.right.pulse_count - previous.right.pulse_count
             ) * self._config.right_step_distance_m / elapsed_s
 
@@ -316,17 +476,49 @@ class NativeCounterEncoderBackend:
         else:
             rejection_code = self._diagnostic_rejection_code(previous, current)
             if rejection_code is EncoderRejectionCode.NONE:
-                assert left_mps is not None and right_mps is not None
-                rejection_code = self._velocity_rejection_code(left_mps, right_mps)
+                assert instantaneous_left_mps is not None
+                assert instantaneous_right_mps is not None
+                rejection_code = self._velocity_rejection_code(
+                    instantaneous_left_mps,
+                    instantaneous_right_mps,
+                )
+
+        left_estimate: _WheelVelocityEstimate | None = None
+        right_estimate: _WheelVelocityEstimate | None = None
+        if rejection_code is EncoderRejectionCode.NONE:
+            self._append_history(context, current)
+            left_estimate = self._estimate_wheel(
+                side="left",
+                step_distance_m=self._config.left_step_distance_m,
+            )
+            right_estimate = self._estimate_wheel(
+                side="right",
+                step_distance_m=self._config.right_step_distance_m,
+            )
+
+        computed_left_mps = (
+            instantaneous_left_mps
+            if rejection_code is not EncoderRejectionCode.NONE
+            else (None if left_estimate is None else left_estimate.velocity_mps)
+        )
+        computed_right_mps = (
+            instantaneous_right_mps
+            if rejection_code is not EncoderRejectionCode.NONE
+            else (None if right_estimate is None else right_estimate.velocity_mps)
+        )
 
         diagnostics = self._edge_diagnostics(
+            self._config,
             current,
             previous,
             sample_interval_ns=elapsed_ns,
-            computed_left_mps=left_mps,
-            computed_right_mps=right_mps,
+            computed_left_mps=computed_left_mps,
+            computed_right_mps=computed_right_mps,
+            instantaneous_left_mps=instantaneous_left_mps,
+            instantaneous_right_mps=instantaneous_right_mps,
+            left_estimate=left_estimate,
+            right_estimate=right_estimate,
             rejection_code=rejection_code,
-            maximum_abs_velocity_mps=self._config.maximum_abs_velocity_mps,
         )
 
         if elapsed_ns > 0:
@@ -334,19 +526,21 @@ class NativeCounterEncoderBackend:
             self._previous_monotonic_ns = context.monotonic_ns
 
         if rejection_code is not EncoderRejectionCode.NONE:
+            if elapsed_ns > 0:
+                self._reset_history(context, current)
             return self._rejected_reading(
                 context,
                 stale=stale,
                 timing_valid=timing_valid,
                 diagnostics=diagnostics,
             )
-        assert left_mps is not None and right_mps is not None
+        assert left_estimate is not None and right_estimate is not None
         return EncoderVelocityReading(
             sequence=context.tick_id,
             captured_monotonic_ns=context.monotonic_ns,
-            left_mps=float(left_mps),
-            right_mps=float(right_mps),
-            trust=1.0,
+            left_mps=left_estimate.velocity_mps,
+            right_mps=right_estimate.velocity_mps,
+            trust=min(left_estimate.trust, right_estimate.trust),
             stale=False,
             timing_valid=True,
             diagnostics=diagnostics,

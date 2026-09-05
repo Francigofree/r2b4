@@ -13,6 +13,7 @@ from v3.adapters.live_imu import NativeImuSource
 from v3.adapters.live_inputs import NativeLiveInputReader
 from v3.adapters.live_lidar import NativeLidarSource
 from v3.contracts import (
+    AdmittedFrame,
     DeviceHealth,
     DeviceHealthState,
     LifecycleState,
@@ -121,9 +122,19 @@ class BoundedLiveControlComposition:
         result: TickResult,
     ) -> bool:
         command = result.final_actuation
+        admission = next(
+            (
+                record.output
+                for record in result.trace.layers
+                if record.layer == "L2"
+            ),
+            None,
+        )
         return (
             bool(batch_health)
             and all(item.state is DeviceHealthState.OK for item in batch_health)
+            and isinstance(admission, AdmittedFrame)
+            and not admission.degraded_sources
             and result.trace.fault_layer is None
             and command.safety_decision is SafetyDecision.STOP
             and not command.enabled
