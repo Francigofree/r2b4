@@ -1,0 +1,208 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_live_imu_slice3_20260830/meta/audit.json",
+    "audit_sha256": "22122a8d6e66df178fd73ac5ccce0f8054117edf3007cf4a8e673b6f81204645",
+    "audited_at_utc": "2026-08-30T13:26:48Z",
+    "base_fingerprint": "cc397d1f30cc9cfa99302573ecce73fbc651e60e4e1160406d6f77d8206b624b",
+    "candidate_fingerprint": "dd28bf7751a32862932a8bc12f7b9d20cbe6a29d33dba799d4861de420a7efa2",
+    "canonical_drift": [],
+    "canonical_fingerprint": "cc397d1f30cc9cfa99302573ecce73fbc651e60e4e1160406d6f77d8206b624b",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_live_imu_edge.py",
+      "v3/adapters/live_imu.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase11_live_imu_slice3_20260830/meta/diff.json",
+    "diff_sha256": "bf59cbacf34c318ec6ccaac18903811573486d6f54ea8f67535f9af527067136",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase11_live_imu_slice3_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "63ff523501d51298e174d2e87a08dce84792f9f377fe2f1832a4fd8424673e01",
+        "size_bytes": 22557
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "daef0e05546ef9b83a1104f823eb9e65b8ae0e8ca971db13e3b69f4f72f827c2",
+        "size_bytes": 1030
+      },
+      "changed": null,
+      "path": "conf/hardver.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c7a6bfe89b35d49c17fb480cc7df0aee1b70a5c071c5e0c8e3509fa5880c02e3",
+        "size_bytes": 16945
+      },
+      "changed": null,
+      "path": "conf/vezerles.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8b0c3db899c7405ee119106230eceb4d19f33e262cf5ff1592350ce906128e44",
+        "size_bytes": 11637
+      },
+      "changed": null,
+      "path": "driver/bno055.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "78c672afef6bc23c4e963856693b9c0d639cf42ce57a6bf5c0846a490ec8a841",
+        "size_bytes": 3060
+      },
+      "changed": null,
+      "path": "tests/test_bno055_driver.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0de816394efbd6ccdf75bb0cf7968b94abd315b90a22da77187575f0c241b5e0",
+        "size_bytes": 11498
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_imu_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0463eb93f066ce5b5b6b76569de7cbe4a8ee295b658d38f4ef04c0cb2b55fde5",
+        "size_bytes": 5349
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/live_imu.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+        "size_bytes": 3701
+      },
+      "changed": null,
+      "path": "v3/adapters/live_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/contracts.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "22bfd395018166e231fab6e53b4fdd83286ff3394ed0eb735dbf8c581bf8ef08",
+        "size_bytes": 4382
+      },
+      "changed": null,
+      "path": "v3/layers/l2_admission.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b2f44a606e69feb769ade5539fb7710075af95eda67c238ae7975bb51a63a306",
+        "size_bytes": 7324
+      },
+      "changed": null,
+      "path": "v3/layers/l3_state_estimation.py"
+    }
+  ],
+  "goal": "Continue V3 phase 11 with exactly one native live IMU source edge that converts one injected primitive heading snapshot per supplied TickContext into an immutable ekf_heading sample and typed device health for NativeLiveInputReader, with explicit sequence, capture time, yaw, angular velocity, confidence, stale, calibration, and timing validity semantics; use the legacy BNO055 only as source reference, add no production legacy import, shared state, wall clock, thread, retry, concrete backend, composition wiring, activate API, physical writer, hardware access, or motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T13:24:13Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase11_live_imu_slice3_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T13:24:13Z",
+  "workflow_evidence": {
+    "audit_sha256": "22122a8d6e66df178fd73ac5ccce0f8054117edf3007cf4a8e673b6f81204645",
+    "candidate_fingerprint": "dd28bf7751a32862932a8bc12f7b9d20cbe6a29d33dba799d4861de420a7efa2",
+    "contract_fingerprint": "ec712c0fce4f4cd5db3f4a120e492f51a737495452cdfefae9c4a6753638ef8f",
+    "diff_sha256": "bf59cbacf34c318ec6ccaac18903811573486d6f54ea8f67535f9af527067136",
+    "path": "runtime/agent_workspaces/v3_phase11_live_imu_slice3_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "c0e5874743c864c0fe2eedc2f2489c9592f5274a59e737caae86715c950bf9a9"
+  },
+  "workspace": {
+    "base_fingerprint": "cc397d1f30cc9cfa99302573ecce73fbc651e60e4e1160406d6f77d8206b624b",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase11_live_imu_slice3_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "308227877d2c50af871f309109f1758449569d348dfeb74013df8e21be01c650",
+    "path": "runtime/agent_workspaces/v3_phase11_live_imu_slice3_20260830/tree",
+    "reseal": {
+      "audit_sha256": "22122a8d6e66df178fd73ac5ccce0f8054117edf3007cf4a8e673b6f81204645",
+      "candidate_fingerprint": "dd28bf7751a32862932a8bc12f7b9d20cbe6a29d33dba799d4861de420a7efa2",
+      "diff_sha256": "bf59cbacf34c318ec6ccaac18903811573486d6f54ea8f67535f9af527067136",
+      "path": "runtime/agent_workspaces/v3_phase11_live_imu_slice3_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T13:26:48Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "dd0bf559e87c73bec8b1cd6c2a87a737e1d08866c3411e669c11b2a6a0145912",
+      "state": "READY",
+      "task_id": "v3_phase11_live_imu_slice3_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

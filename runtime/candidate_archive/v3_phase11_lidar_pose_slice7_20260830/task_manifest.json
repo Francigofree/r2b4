@@ -1,0 +1,161 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_lidar_pose_slice7_20260830/meta/audit.json",
+    "audit_sha256": "14f14e340bb5c889f8ed61358c63f93160404a89bde75ba0bef28775a1f36397",
+    "audited_at_utc": "2026-08-30T17:20:38Z",
+    "base_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+    "candidate_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "canonical_drift": [],
+    "canonical_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_live_input_composition.py",
+      "tests/test_v3_live_lidar.py",
+      "tests/test_v3_native_state_estimation.py",
+      "v3/adapters/live_lidar.py",
+      "v3/layers/l2_admission.py",
+      "v3/layers/l3_state_estimation.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase11_lidar_pose_slice7_20260830/meta/diff.json",
+    "diff_sha256": "54a2e6e4f191db834c117e977b986a6489a4c324e30b92c29f2937759c989dff",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase11_lidar_pose_slice7_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e4b0f6728bc93f554045d6ad1eb51daf33ee95c4dd4e97b120d92e0ceeea2f42",
+        "size_bytes": 25996
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4777958c300c7ce0ce315077d77f979d779bbf932b099a81896871330d34529a",
+        "size_bytes": 14668
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "31a3a7dc8c859e27e381a6fcfe168e01bccae360e059563dd3a2343d772e7b6d",
+        "size_bytes": 5576
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b6634c00aba68463be64ad031d2cc0046f6cfe3d42168c57149500e91fde97d3",
+        "size_bytes": 6020
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_state_estimation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f7263a01b08ceadb33624ea1aee8dae5741e3d6ce31bf2a084e18b9b0bca2320",
+        "size_bytes": 4909
+      },
+      "changed": null,
+      "path": "v3/adapters/live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "22bfd395018166e231fab6e53b4fdd83286ff3394ed0eb735dbf8c581bf8ef08",
+        "size_bytes": 4382
+      },
+      "changed": null,
+      "path": "v3/layers/l2_admission.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "6ac9a675c1791d55ecf6bfd242702ce81d82c44fa3231896f3498ceb9d3dbf58",
+        "size_bytes": 21496
+      },
+      "changed": null,
+      "path": "v3/layers/l3_state_estimation.py"
+    }
+  ],
+  "goal": "Continue V3 phase 11 with the smallest LIDAR_FIRST prerequisite: extend the native lidar edge with one typed absolute pose observation from the same immutable matcher result, admit it without duplicate or out-of-order reuse, and add a pure-Python confidence-scaled wrapped three-axis NIS-gated lidar correction to NativeStateEstimator; keep LiveInputComposition IDLE/STOP with its zero-only sink and add no legacy production import, process, queue, thread, wall clock, concrete backend, hardware access, owner loop, activate API, non-zero writer path, runtime cutover, or motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T17:13:02Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase11_lidar_pose_slice7_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T17:13:02Z",
+  "workflow_evidence": {
+    "audit_sha256": "14f14e340bb5c889f8ed61358c63f93160404a89bde75ba0bef28775a1f36397",
+    "candidate_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "contract_fingerprint": "7e06a2f68e0a575f29ff4ebdc57846a41d9b3285065802428245b2170716b014",
+    "diff_sha256": "54a2e6e4f191db834c117e977b986a6489a4c324e30b92c29f2937759c989dff",
+    "path": "runtime/agent_workspaces/v3_phase11_lidar_pose_slice7_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "51843118ec6536ac2526d15d9725fb012e086129f671914bf9fce53caf7fc7d4"
+  },
+  "workspace": {
+    "base_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase11_lidar_pose_slice7_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "f5d8439ffae9d6c0c47b898b2e3b6e99991251ba9a153553c2ea8fd4497b1847",
+    "path": "runtime/agent_workspaces/v3_phase11_lidar_pose_slice7_20260830/tree",
+    "reseal": {
+      "audit_sha256": "14f14e340bb5c889f8ed61358c63f93160404a89bde75ba0bef28775a1f36397",
+      "candidate_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+      "diff_sha256": "54a2e6e4f191db834c117e977b986a6489a4c324e30b92c29f2937759c989dff",
+      "path": "runtime/agent_workspaces/v3_phase11_lidar_pose_slice7_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T17:20:38Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "d007ae38763da9bad3b5e9799d803f555c73348c7112b248f5a6cd5671c2a91c",
+      "state": "READY",
+      "task_id": "v3_phase11_lidar_pose_slice7_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

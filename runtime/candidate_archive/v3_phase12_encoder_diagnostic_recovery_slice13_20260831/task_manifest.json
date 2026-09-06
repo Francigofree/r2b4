@@ -1,0 +1,96 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_encoder_diagnostic_recovery_slice13_20260831/meta/audit.json",
+    "audit_sha256": "10a25e9b165dfe3a6e6aae1993c3b84da0abd3bb61a61c5ddf565fb43b4be94d",
+    "audited_at_utc": "2026-08-31T20:04:08Z",
+    "base_fingerprint": "856f97531696e568839471a089ba0ad6a6e51b4f49ffae32d4aacfcf17c9f6ab",
+    "candidate_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "856f97531696e568839471a089ba0ad6a6e51b4f49ffae32d4aacfcf17c9f6ab",
+    "changed_files": [
+      "tests/test_v3_counter_encoder_backend.py",
+      "v3/adapters/counter_encoder.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_encoder_diagnostic_recovery_slice13_20260831/meta/diff.json",
+    "diff_sha256": "691a5a8e562d4bff507befcae03409e603b1167f9802b40ccd7face16c0ba257",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_encoder_diagnostic_recovery_slice13_20260831",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e551a5b634add36692574f7de0f5ea74648ff1d2b0efdeccbb56a5d51f3878f8",
+        "size_bytes": 8626
+      },
+      "changed": null,
+      "path": "tests/test_v3_counter_encoder_backend.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c87cedc29765a44e013cd52abb4c033f4b0e53646d30958c541976c4033fd60f",
+        "size_bytes": 7756
+      },
+      "changed": null,
+      "path": "v3/adapters/counter_encoder.py"
+    }
+  ],
+  "goal": "Analyze whether cumulative encoder invalid_alerts/read_errors incorrectly keep trust at zero after reanchor; if needed, make trust depend only on per-tick diagnostic counter increments and prove clean-interval recovery with a targeted test, without opening any other scope",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-31T20:00:57Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_encoder_diagnostic_recovery_slice13_20260831",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-31T20:00:57Z",
+  "workflow_evidence": {
+    "audit_sha256": "10a25e9b165dfe3a6e6aae1993c3b84da0abd3bb61a61c5ddf565fb43b4be94d",
+    "candidate_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "contract_fingerprint": "050287f6dca9d0c92e5ec14a06583f5d6d48ca15145347d070aaee229f02b67a",
+    "diff_sha256": "691a5a8e562d4bff507befcae03409e603b1167f9802b40ccd7face16c0ba257",
+    "path": "runtime/agent_workspaces/v3_phase12_encoder_diagnostic_recovery_slice13_20260831/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "01a7ebcf8f9d423bf9fc746e0d3bdd92c9ec2eb583b30235178e525ec697332f"
+  },
+  "workspace": {
+    "base_fingerprint": "856f97531696e568839471a089ba0ad6a6e51b4f49ffae32d4aacfcf17c9f6ab",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_encoder_diagnostic_recovery_slice13_20260831/meta/base_manifest.json",
+    "base_manifest_sha256": "0ff946dfdd4826ba38730fd68ebb26b698c4bb52dd0272e3a4bcba16c2c097d9",
+    "path": "runtime/agent_workspaces/v3_phase12_encoder_diagnostic_recovery_slice13_20260831/tree",
+    "reseal": {
+      "audit_sha256": "10a25e9b165dfe3a6e6aae1993c3b84da0abd3bb61a61c5ddf565fb43b4be94d",
+      "candidate_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+      "diff_sha256": "691a5a8e562d4bff507befcae03409e603b1167f9802b40ccd7face16c0ba257",
+      "path": "runtime/agent_workspaces/v3_phase12_encoder_diagnostic_recovery_slice13_20260831/meta/reseal.json",
+      "resealed_at_utc": "2026-08-31T20:04:08Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "ac5017f590475a2e8bfcdf9fbe09acb0d7f4eac9707d161bed8e11b8144689d1",
+      "state": "READY",
+      "task_id": "v3_phase12_encoder_diagnostic_recovery_slice13_20260831"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

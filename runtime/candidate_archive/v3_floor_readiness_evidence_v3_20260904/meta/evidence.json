@@ -1,0 +1,112 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_floor_readiness_evidence_v3_20260904/meta/audit.json",
+    "audit_sha256": "d218b4922deb62bb596ab00e90e820c6db4ed51723fe71f377cf5e72fd2451df",
+    "base_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "candidate_fingerprint": "4ab4f83a9613380eccb717026a34dcd6a58159615de8cd981c5af22efcd54c7b",
+    "canonical_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "diff_path": "runtime/agent_workspaces/v3_floor_readiness_evidence_v3_20260904/meta/diff.json",
+    "diff_sha256": "cf1ec508e0dfc00f33c90561b237bd21de666a37b2353aeba9c48339e6cc8952"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "2873ad232941ec0a3a06c282e0c84e984299719fd6f266a21f7beef6572f5c78",
+        "canonical_sha256": "2873ad232941ec0a3a06c282e0c84e984299719fd6f266a21f7beef6572f5c78"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "f67e107c2f00ca178cf26e25d50c90693922eef5c44a294b565d9cdf403b3044",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-09-04T18:46:50Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_floor_readiness_evidence_v3_20260904",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m pytest -q tests/test_r2b4_test_hub.py tests/test_v3_resident_runtime.py tests/test_v3_live_lidar.py tests/test_v3_latest_lidar_backend.py",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

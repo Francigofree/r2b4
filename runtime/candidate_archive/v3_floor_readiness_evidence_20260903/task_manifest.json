@@ -1,0 +1,100 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_floor_readiness_evidence_20260903/meta/audit.json",
+    "audit_sha256": "6dff553ccd6dfe7eb9d0b633d47004da74ee325ef45240ddd1973d1b0d54ca70",
+    "audited_at_utc": "2026-09-03T18:12:40Z",
+    "base_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "candidate_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "canonical_drift": [],
+    "canonical_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/v3_floor_readiness_evidence_20260903/meta/diff.json",
+    "diff_sha256": "4531e7e181537ff2045e9faf8228bd8c49f9960bfc0e3c3537267d1626c74c12",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_floor_readiness_evidence_20260903",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "completed_at_utc": "2026-09-03T18:12:40Z",
+  "files": [
+    {
+      "after": {
+        "exists": true,
+        "sha256": "d13ea30e0d55b45c0d07c46ec21979334604673411bc2f14503d95b460421e8e",
+        "size_bytes": 165864
+      },
+      "before": {
+        "exists": true,
+        "sha256": "d13ea30e0d55b45c0d07c46ec21979334604673411bc2f14503d95b460421e8e",
+        "size_bytes": 165864
+      },
+      "changed": false,
+      "path": "tests/test_r2b4_test_hub.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "46f8777fcefb3e64a87cb0a914b76337270749a3728143099e93d1bf31f78e21",
+        "size_bytes": 331726
+      },
+      "before": {
+        "exists": true,
+        "sha256": "46f8777fcefb3e64a87cb0a914b76337270749a3728143099e93d1bf31f78e21",
+        "size_bytes": 331726
+      },
+      "changed": false,
+      "path": "tools/r2b4_test_hub.py"
+    }
+  ],
+  "goal": "Update the native V3 1 m floor Test Hub profile to schedule ACTIVE only after three distinct monotonically newer healthy lidar matcher revisions plus existing raw-clearance gates; publish per-revision matcher diagnostics and explicit terminal safe-low classification; preserve the 0.2 active safety threshold; add targeted regression coverage for repeated-revision non-arming and failed-run evidence.",
+  "promotion_status": "SUPERSEDED",
+  "reason": "Reopen after the approved runtime/replayer candidate is promoted so the Test Hub candidate is based on the new canonical contracts.",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-03T18:11:54Z",
+  "status": "SUPERSEDED",
+  "task_id": "v3_floor_readiness_evidence_20260903",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "superseded task; no completion claim",
+      "status": "NOT_RUN"
+    }
+  ],
+  "updated_at_utc": "2026-09-03T18:12:40Z",
+  "workflow_evidence": {
+    "audit_sha256": "6dff553ccd6dfe7eb9d0b633d47004da74ee325ef45240ddd1973d1b0d54ca70",
+    "candidate_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "contract_fingerprint": "1a83f12b0c1483147b4d5c9834076586ea1583afd2139918cec10640ee848fc9",
+    "diff_sha256": "4531e7e181537ff2045e9faf8228bd8c49f9960bfc0e3c3537267d1626c74c12",
+    "path": "runtime/agent_workspaces/v3_floor_readiness_evidence_20260903/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "af036e615836215adc957e28fa941a3735c3b4be4c70b13f65743e4267422544"
+  },
+  "workspace": {
+    "base_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "base_manifest_path": "runtime/agent_workspaces/v3_floor_readiness_evidence_20260903/meta/base_manifest.json",
+    "base_manifest_sha256": "cbc5e927a65e46dff76dd02c1726e1dc818fb0df8a5694af754c653d007582bf",
+    "path": "runtime/agent_workspaces/v3_floor_readiness_evidence_20260903/tree",
+    "reseal": {
+      "audit_sha256": "6dff553ccd6dfe7eb9d0b633d47004da74ee325ef45240ddd1973d1b0d54ca70",
+      "candidate_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+      "diff_sha256": "4531e7e181537ff2045e9faf8228bd8c49f9960bfc0e3c3537267d1626c74c12",
+      "path": "runtime/agent_workspaces/v3_floor_readiness_evidence_20260903/meta/reseal.json",
+      "resealed_at_utc": "2026-09-03T18:12:40Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "5cef4c306346bcf60322ba48580c441f6f035a3bbdaaae9241f232eb351437b3",
+      "state": "SUPERSEDED",
+      "task_id": "v3_floor_readiness_evidence_20260903"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "SUPERSEDED"
+  }
+}

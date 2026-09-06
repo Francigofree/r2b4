@@ -1,0 +1,142 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_live_forward_1m_015_analysis_20260903/meta/audit.json",
+    "audit_sha256": "e056e8fb4f2d42b7c729999fb9bdef809bb9659a64c30fe0aad0f05c37f49f6e",
+    "audited_at_utc": "2026-09-03T17:27:45Z",
+    "base_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "canonical_drift": [],
+    "canonical_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/v3_live_forward_1m_015_analysis_20260903/meta/diff.json",
+    "diff_sha256": "08792b3a61e9418593c87c305787ee5cc6753efa90f9b309b67a2192e668d366",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_live_forward_1m_015_analysis_20260903",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "completed_at_utc": "2026-09-03T17:27:45Z",
+  "files": [
+    {
+      "after": {
+        "exists": true,
+        "sha256": "bc77bf6a71374c8945bb24cc497d5fc80898fe3dee7292174bc272256a3188fc",
+        "size_bytes": 45843
+      },
+      "before": {
+        "exists": true,
+        "sha256": "bc77bf6a71374c8945bb24cc497d5fc80898fe3dee7292174bc272256a3188fc",
+        "size_bytes": 45843
+      },
+      "changed": false,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "900658f100c0fdbf624b24fea259de4509fdf64e5b660bac3037f38a1660051e",
+        "size_bytes": 7013
+      },
+      "before": {
+        "exists": true,
+        "sha256": "900658f100c0fdbf624b24fea259de4509fdf64e5b660bac3037f38a1660051e",
+        "size_bytes": 7013
+      },
+      "changed": false,
+      "path": "replayer/README.md"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "b8f04bd983743a08a449e437f42d899c8ed8b170f05996994468271c9523d29b",
+        "size_bytes": 6973
+      },
+      "before": {
+        "exists": true,
+        "sha256": "b8f04bd983743a08a449e437f42d899c8ed8b170f05996994468271c9523d29b",
+        "size_bytes": 6973
+      },
+      "changed": false,
+      "path": "tests/test_v3_replay.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
+        "size_bytes": 13005
+      },
+      "before": {
+        "exists": true,
+        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
+        "size_bytes": 13005
+      },
+      "changed": false,
+      "path": "v3/layers/l11_actuator_control.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "151be6a685d23100ac1e4ec74e6144e24e1dc87e80ec51d2d182955c26eb01b7",
+        "size_bytes": 46409
+      },
+      "before": {
+        "exists": true,
+        "sha256": "151be6a685d23100ac1e4ec74e6144e24e1dc87e80ec51d2d182955c26eb01b7",
+        "size_bytes": 46409
+      },
+      "changed": false,
+      "path": "v3/replay.py"
+    }
+  ],
+  "goal": "Run one explicitly scoped V3 live forward motion of approximately 1.0 m at approximately 0.15 m/s under fresh preflight and Test Hub control, verify final IDLE/PWM-null, analyze run-scoped evidence with Replayer V3, and derive prioritized V3 development steps from evidence and source.",
+  "promotion_status": "SUPERSEDED",
+  "reason": "Explicit user approval requires a fresh AGENT_INFRA_CHANGE task for the fixed native V3 1 m Test Hub profile; preserve the unchanged analysis candidate lineage.",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-03T17:21:18Z",
+  "status": "SUPERSEDED",
+  "task_id": "v3_live_forward_1m_015_analysis_20260903",
+  "task_mode": "CODE_CHANGE",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "superseded task; no completion claim",
+      "status": "NOT_RUN"
+    }
+  ],
+  "updated_at_utc": "2026-09-03T17:27:45Z",
+  "workflow_evidence": {
+    "audit_sha256": "e056e8fb4f2d42b7c729999fb9bdef809bb9659a64c30fe0aad0f05c37f49f6e",
+    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "contract_fingerprint": "5fd89293fb400d4184f93324fb3fe28b5bb35df3ce8c8db52359dc405721d48e",
+    "diff_sha256": "08792b3a61e9418593c87c305787ee5cc6753efa90f9b309b67a2192e668d366",
+    "path": "runtime/agent_workspaces/v3_live_forward_1m_015_analysis_20260903/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "2d2afef8712f9d259cce21d6234dfef2fb5d030bbf22ddbaf01caa2fc605cd5c"
+  },
+  "workspace": {
+    "base_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "base_manifest_path": "runtime/agent_workspaces/v3_live_forward_1m_015_analysis_20260903/meta/base_manifest.json",
+    "base_manifest_sha256": "2b8f86d2335dc33132cd8f25cb449430d103c7dfaffe3ddebbff9a27d86196f7",
+    "path": "runtime/agent_workspaces/v3_live_forward_1m_015_analysis_20260903/tree",
+    "reseal": {
+      "audit_sha256": "e056e8fb4f2d42b7c729999fb9bdef809bb9659a64c30fe0aad0f05c37f49f6e",
+      "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+      "diff_sha256": "08792b3a61e9418593c87c305787ee5cc6753efa90f9b309b67a2192e668d366",
+      "path": "runtime/agent_workspaces/v3_live_forward_1m_015_analysis_20260903/meta/reseal.json",
+      "resealed_at_utc": "2026-09-03T17:27:45Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "b293f5d25631c3abbccb6f53f6f9cd14f54677fa5ba4de4d1bc30a606f4e4f22",
+      "state": "SUPERSEDED",
+      "task_id": "v3_live_forward_1m_015_analysis_20260903"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "SUPERSEDED"
+  }
+}

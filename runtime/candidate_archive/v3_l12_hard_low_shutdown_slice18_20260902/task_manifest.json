@@ -1,0 +1,173 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_l12_hard_low_shutdown_slice18_20260902/meta/audit.json",
+    "audit_sha256": "20f07735dcebf033ba7d390ade0e6e4ff582477aa47cd4abd25c99d9bfa962b7",
+    "audited_at_utc": "2026-09-02T08:10:28Z",
+    "base_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
+    "candidate_fingerprint": "57705adacdb0dda8669227aab368a4d978d01b095390a541550fdb3a8616d27f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_bounded_physical_control_composition.py",
+      "tests/test_v3_bounded_physical_runtime.py",
+      "tests/test_v3_gpio_motor.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_motor_output_composition.py",
+      "tests/test_v3_native_sensor_inputs.py",
+      "v3/adapters/gpio_motor.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_l12_hard_low_shutdown_slice18_20260902/meta/diff.json",
+    "diff_sha256": "972498befcdd3e3be2039d6218413d76aa8614e8347d261bf966f27956d10b9e",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_l12_hard_low_shutdown_slice18_20260902",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "964457941681117c30838bae9b535665c2603710901f1b4e8c12130a0bb10b0b",
+        "size_bytes": 44168
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7593a1db396e2404613da08d7756fef5fa378b329c25c7d46eef8923a3993515",
+        "size_bytes": 26910
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "de4e81f3c61266284fb6edfd73ab7c6858ebeac7dd67e621dc7317eb934bcb25",
+        "size_bytes": 8330
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_control_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7c583927a42fcb78ef9262367a129c5eb177675690239050c38b1f9f7e19e1e0",
+        "size_bytes": 9602
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e25455455b8fbeb9e9eb988e0e2928b85048b4889e5c2cb24d510ad4f87b1153",
+        "size_bytes": 6217
+      },
+      "changed": null,
+      "path": "tests/test_v3_gpio_motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bb24cde60817f9a9d9e4a9697286acc893a2abb398e79ecc869216d91f70c17e",
+        "size_bytes": 10539
+      },
+      "changed": null,
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "edd34af47b329cc791e91de3fc34b8274b4210fe4f4e15008c637968b51a5c4b",
+        "size_bytes": 5007
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_output_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4b0f2784eab0fb45b11dc62248182066ab980db43ea9577bf0d87e0b87bdebd4",
+        "size_bytes": 10166
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_sensor_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "6ab8f5988a404fe84ba53e12eaab3fdd0fd6e36253174480c520e5a89df320f2",
+        "size_bytes": 6815
+      },
+      "changed": null,
+      "path": "v3/adapters/gpio_motor.py"
+    }
+  ],
+  "goal": "Fix the human-confirmed V3 L12 shutdown safety defect so every STOP, fault, constructor failure and close cancels PWM and explicitly drives all four DRV8871 input GPIOs to a verified low level before releasing the chip; preserve single-writer and brake/drive semantics, add deterministic regression coverage for physical call ordering and failure paths, and validate the GPIO surface without energizing motor power before any later Test Hub retry.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T07:33:21Z",
+  "status": "ACTIVE",
+  "task_id": "v3_l12_hard_low_shutdown_slice18_20260902",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T07:48:39Z",
+  "workflow_evidence": {
+    "audit_sha256": "20f07735dcebf033ba7d390ade0e6e4ff582477aa47cd4abd25c99d9bfa962b7",
+    "candidate_fingerprint": "57705adacdb0dda8669227aab368a4d978d01b095390a541550fdb3a8616d27f",
+    "contract_fingerprint": "a284162bc6eaecb8e352e8cfe9db9a70cf32cb9ab76103fc3dd493cf4d9879a8",
+    "diff_sha256": "972498befcdd3e3be2039d6218413d76aa8614e8347d261bf966f27956d10b9e",
+    "path": "runtime/agent_workspaces/v3_l12_hard_low_shutdown_slice18_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "839332a4e3cff34b5a573b2a1ef9f9d4e24445cc0f8dabc72dc71d25db4f0eb1"
+  },
+  "workspace": {
+    "base_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
+    "base_manifest_path": "runtime/agent_workspaces/v3_l12_hard_low_shutdown_slice18_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "ddc068e0fd529f479eb00dad2a1499eabdf7f38137a540aa45b3123d9508f52a",
+    "path": "runtime/agent_workspaces/v3_l12_hard_low_shutdown_slice18_20260902/tree",
+    "reseal": {
+      "audit_sha256": "20f07735dcebf033ba7d390ade0e6e4ff582477aa47cd4abd25c99d9bfa962b7",
+      "candidate_fingerprint": "57705adacdb0dda8669227aab368a4d978d01b095390a541550fdb3a8616d27f",
+      "diff_sha256": "972498befcdd3e3be2039d6218413d76aa8614e8347d261bf966f27956d10b9e",
+      "path": "runtime/agent_workspaces/v3_l12_hard_low_shutdown_slice18_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T08:10:28Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "df79311f7cd4c29e5c524737968332ac0d505deb53da794327de895a98b86567",
+      "state": "READY",
+      "task_id": "v3_l12_hard_low_shutdown_slice18_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

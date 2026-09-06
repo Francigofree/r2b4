@@ -1,0 +1,121 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/meta/audit.json",
+    "audit_sha256": "846ca1946796b529d923668251cf0abbabaf25f7842bd8bc09026368fc7abdfa",
+    "audited_at_utc": "2026-09-02T08:35:12Z",
+    "base_fingerprint": "57705adacdb0dda8669227aab368a4d978d01b095390a541550fdb3a8616d27f",
+    "candidate_fingerprint": "389bd343b0e46a4edd978f7c66af92a51be91e0b427d58ee3a8546c426059d84",
+    "canonical_drift": [],
+    "canonical_fingerprint": "57705adacdb0dda8669227aab368a4d978d01b095390a541550fdb3a8616d27f",
+    "changed_files": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/meta/diff.json",
+    "diff_sha256": "e006301067eaee64ee664abdf23594f201e2c6518b24455627bd8ba0a44219fe",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_test_hub_hard_low_cancel_validation_slice19_20260902",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [
+    "tests/test_r2b4_test_hub.py",
+    "tools/r2b4_test_hub.py"
+  ],
+  "completed_at_utc": "2026-09-02T08:35:13Z",
+  "files": [
+    {
+      "after": {
+        "exists": true,
+        "sha256": "a328ea357cd44cf1b86cee8c9d77313ac6d307046c7d4a9464dc55e615636565",
+        "size_bytes": 136750
+      },
+      "before": {
+        "exists": true,
+        "sha256": "57aab6e8ec5ceffcefe03f0ab5d0800fe567722efd9a804e540a74d873bb9e09",
+        "size_bytes": 120216
+      },
+      "changed": true,
+      "path": "tests/test_r2b4_test_hub.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "abb056184aacac88e79a29f208228d8326bd7ca8b3b6b04cc0dbfc4e8a66df87",
+        "size_bytes": 279061
+      },
+      "before": {
+        "exists": true,
+        "sha256": "3b686b81e4016d7e03b2f140561487c49cd333b9275135385a7b8563ce91f16c",
+        "size_bytes": 242252
+      },
+      "changed": true,
+      "path": "tools/r2b4_test_hub.py"
+    }
+  ],
+  "goal": "Restore the native V3 raised-stand Test Hub profile on top of the promoted hard-low L12 sink, update GPIO recording and acceptance to the tx_busy/cancel/write/read/free contract, add a motor-power-off active-PWM cancellation validation phase with exact per-run approval and final verified LOW evidence, and run the real sensor plus signal-level chain without powered motor motion.",
+  "promotion_status": "SUPERSEDED",
+  "reason": "Human changed live validation state from motor-power-off to powered raised stand; preserve the audited candidate and continue under an exact powered approval task.",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T08:21:12Z",
+  "status": "SUPERSEDED",
+  "task_id": "v3_test_hub_hard_low_cancel_validation_slice19_20260902",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "superseded task; no completion claim",
+      "status": "NOT_RUN"
+    }
+  ],
+  "updated_at_utc": "2026-09-02T08:35:13Z",
+  "workflow_evidence": {
+    "audit_sha256": "846ca1946796b529d923668251cf0abbabaf25f7842bd8bc09026368fc7abdfa",
+    "candidate_fingerprint": "389bd343b0e46a4edd978f7c66af92a51be91e0b427d58ee3a8546c426059d84",
+    "contract_fingerprint": "cb132f3c96163f46e04f28c91972aaaa9da04010af6ef0f26175f094de226b0e",
+    "diff_sha256": "e006301067eaee64ee664abdf23594f201e2c6518b24455627bd8ba0a44219fe",
+    "path": "runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "9cb9145790bef9695b7f8521adc516e204f5fafffdbcd3f408d80cd92dfc49c1"
+  },
+  "workspace": {
+    "base_fingerprint": "57705adacdb0dda8669227aab368a4d978d01b095390a541550fdb3a8616d27f",
+    "base_manifest_path": "runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "3d4c2b46d0af21bc4b374b5fe49f198e6375b7c12ceb0eaa6a78139ae6caff75",
+    "candidate_fingerprint_at_clone": "9ad3788511f8e53373a94dcea97589e7651bd37731dee0d9ecbbcc1fad0caed3",
+    "inherited_changed_files": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "lineage": {
+      "clone_mode": "THREE_WAY_NO_CONFLICT",
+      "cloned_at_utc": "2026-09-02T08:21:12Z",
+      "parent_candidate_fingerprint": "ce72b25716299e8165166ae424bca9b1f6b866be2b0d72eee214288a34c9123f",
+      "parent_reseal_sha256": "1a169967ec2715905e26344dc5a11ad76353efbc0320d4713b32fe11a8b6a8e2",
+      "parent_task_id": "v3_test_hub_native_profile_slice17_20260901"
+    },
+    "path": "runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree",
+    "reseal": {
+      "audit_sha256": "846ca1946796b529d923668251cf0abbabaf25f7842bd8bc09026368fc7abdfa",
+      "candidate_fingerprint": "389bd343b0e46a4edd978f7c66af92a51be91e0b427d58ee3a8546c426059d84",
+      "diff_sha256": "e006301067eaee64ee664abdf23594f201e2c6518b24455627bd8ba0a44219fe",
+      "path": "runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T08:35:13Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "cd02b5c425f49c6813f40e14802c9394a9b374ea2e7ce770bd9aa61d79bb7d79",
+      "state": "SUPERSEDED",
+      "task_id": "v3_test_hub_hard_low_cancel_validation_slice19_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "SUPERSEDED"
+  }
+}

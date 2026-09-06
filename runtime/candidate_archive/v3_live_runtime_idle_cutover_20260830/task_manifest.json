@@ -1,0 +1,293 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_live_runtime_idle_cutover_20260830/meta/audit.json",
+    "audit_sha256": "39614b97fd76b8e7a468cee0a1d2e02b9226df11bd878cb18c3ba2857af69508",
+    "audited_at_utc": "2026-08-30T07:15:53Z",
+    "base_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "candidate_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "canonical_drift": [],
+    "canonical_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_live_idle_cutover.py",
+      "v3/adapters/__init__.py",
+      "v3/adapters/live_idle.py",
+      "v3/composition/__init__.py",
+      "v3/composition/live_idle.py",
+      "v3/composition/stop_only.py",
+      "v3_idle_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_live_runtime_idle_cutover_20260830/meta/diff.json",
+    "diff_sha256": "3bcc020d38162488bf440edd7c9282bc522d454385db2fbcefcd4a84cbd6a8f5",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_live_runtime_idle_cutover_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0c4243eddde80214159f0c3cfa8fb7fb87a3134c21253ffedf2483b2c6448dfa",
+        "size_bytes": 15290
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "daef0e05546ef9b83a1104f823eb9e65b8ae0e8ca971db13e3b69f4f72f827c2",
+        "size_bytes": 1030
+      },
+      "changed": null,
+      "path": "conf/hardver.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "52cd43c30bd45da0077adb8e79fdd0d1b61492ce70ab7356a81acaf86b17b055",
+        "size_bytes": 6054
+      },
+      "changed": null,
+      "path": "driver/motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f2d2dcf8e1937f3bec46fcf99f0dc2ef99e94a97512d35de1fa606ddecf195f7",
+        "size_bytes": 8775
+      },
+      "changed": null,
+      "path": "os.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "655f9da8215ea72081568f595c68b81cfde470b2d5fb0778580cc40ffebd7f42",
+        "size_bytes": 2053
+      },
+      "changed": null,
+      "path": "tests/test_drv8871_motor_hal.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "905e77d51029262519790078cab3e2a356701ab99e42ce54ecd82e218c3db714",
+        "size_bytes": 5201
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_idle_cutover.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d25b765323c5e314b122b17d283567956b8c4696717e735ce86d5ae80c5238d3",
+        "size_bytes": 7403
+      },
+      "changed": null,
+      "path": "tests/test_v3_stop_only_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ac21cd31294fc4af8ee7d01fd1703aae53fda66fdcb52338902b6238ef817f9f",
+        "size_bytes": 209
+      },
+      "changed": null,
+      "path": "v3/adapters/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2539e4889bab146b90a185798a02be3c932be46cd62b59f0a27691c3c2a08f09",
+        "size_bytes": 2397
+      },
+      "changed": null,
+      "path": "v3/adapters/fake_edges.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8d30923f049e8fe06ca2634de473652dfd3be99a21ba0e539fe9b4601f06f2d0",
+        "size_bytes": 989
+      },
+      "changed": null,
+      "path": "v3/composition/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ad4ca25429b349b72772f87cf48772b91be74697de06044802b79640409019e0",
+        "size_bytes": 5034
+      },
+      "changed": null,
+      "path": "v3/composition/stop_only.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "aeca4cc8f30b9c5d6c7ec39a3243bdf0ec40bcf0af254c7f97f611ab4b2937c7",
+        "size_bytes": 1600
+      },
+      "changed": null,
+      "path": "v3/contracts/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "346cbf01a1a54fc96ba53d07aa6e8486fae8693ef88e0e1fb3fbca0493584a4f",
+        "size_bytes": 2504
+      },
+      "changed": null,
+      "path": "v3/contracts/base.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "07e68616aeab24ed0b47508fc8edc6512fc18948aca0a1b90ea4776c8b598b75",
+        "size_bytes": 19469
+      },
+      "changed": null,
+      "path": "v3/contracts/messages.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "5042fa0f52454eb8892466f9c69917e14af26a34b81bcb3bd6e56b154b76606d",
+        "size_bytes": 11480
+      },
+      "changed": null,
+      "path": "v3/import_guard.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ff0bbd73e15fc0caf5e49310cf1449072176ea236ee2088a98560b991aed6557",
+        "size_bytes": 3739
+      },
+      "changed": null,
+      "path": "v3/layers/l12_safety_final.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+        "size_bytes": 1007
+      },
+      "changed": null,
+      "path": "v3/ports.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3_idle_runtime.py"
+    }
+  ],
+  "goal": "Build a V3 live-runtime cutover candidate that starts BOOTING to IDLE, uses exactly one L12-owned physical motor writer, enforces PWM zero on every reachable state, has no ACTIVE transition, and remains unpromoted until a separate human gate",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T07:07:04Z",
+  "status": "ACTIVE",
+  "task_id": "v3_live_runtime_idle_cutover_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T07:08:50Z",
+  "workflow_evidence": {
+    "audit_sha256": "39614b97fd76b8e7a468cee0a1d2e02b9226df11bd878cb18c3ba2857af69508",
+    "candidate_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "contract_fingerprint": "6d61b64896df834ade783339f4b323bc5e4c3e0c38821148859b176034ac0506",
+    "diff_sha256": "3bcc020d38162488bf440edd7c9282bc522d454385db2fbcefcd4a84cbd6a8f5",
+    "path": "runtime/agent_workspaces/v3_live_runtime_idle_cutover_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "1327dcf352255eaa56dbb4e77f1580ec2a0848c2583c679b5fb3535a5072d55e"
+  },
+  "workspace": {
+    "base_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "base_manifest_path": "runtime/agent_workspaces/v3_live_runtime_idle_cutover_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "75336383b12fc0b5828e2bcdc5fe5b418f679fa3b4c3a3c829de55ca940aac18",
+    "path": "runtime/agent_workspaces/v3_live_runtime_idle_cutover_20260830/tree",
+    "reseal": {
+      "audit_sha256": "39614b97fd76b8e7a468cee0a1d2e02b9226df11bd878cb18c3ba2857af69508",
+      "candidate_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+      "diff_sha256": "3bcc020d38162488bf440edd7c9282bc522d454385db2fbcefcd4a84cbd6a8f5",
+      "path": "runtime/agent_workspaces/v3_live_runtime_idle_cutover_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T07:15:53Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "f3d6640b0ce3576786a8a9e18bf4e7d90507b6ce6e4bdd02fe3d20f3315f581f",
+      "state": "READY",
+      "task_id": "v3_live_runtime_idle_cutover_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

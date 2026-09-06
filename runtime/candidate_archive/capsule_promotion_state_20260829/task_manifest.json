@@ -1,0 +1,99 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/capsule_promotion_state_20260829/meta/audit.json",
+    "audit_sha256": "80374dd693ac5ed813cd5dc269dc4251a501eb146def011eb5200bf9a0aeaa6d",
+    "audited_at_utc": "2026-08-29T17:30:31Z",
+    "base_fingerprint": "0bc959d4a5b2338383aceed795b539cafbb10e733054a5a57228a843f7624029",
+    "candidate_fingerprint": "2ec7b9025e039000570926b80171038c89eb5a28c6e0e977d4c38085cd4ff76f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "0bc959d4a5b2338383aceed795b539cafbb10e733054a5a57228a843f7624029",
+    "changed_files": [
+      "tests/test_agentctl.py",
+      "tools/agentctl.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/capsule_promotion_state_20260829/meta/diff.json",
+    "diff_sha256": "01096eba87813758cd3304c38f94b25f6e1de8c354e2c235aad8950fb8c22b63",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "tests/test_agentctl.py",
+      "tools/agentctl.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "capsule_promotion_state_20260829",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "001356be912ad13bce0f7c724766ebd18f18a9dd855c28d0f763993bae149971",
+        "size_bytes": 32146
+      },
+      "changed": null,
+      "path": "tests/test_agentctl.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a97763f27e8544f8374be782bd72f72d3888c1de61da45392a59538396f46c6d",
+        "size_bytes": 83585
+      },
+      "changed": null,
+      "path": "tools/agentctl.py"
+    }
+  ],
+  "goal": "Resolve capsule promotion_status from the protected promotion journal so a committed promotion overrides the immutable candidate READY snapshot",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-29T17:28:04Z",
+  "status": "ACTIVE",
+  "task_id": "capsule_promotion_state_20260829",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": true,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-29T17:28:04Z",
+  "workflow_evidence": {
+    "audit_sha256": "80374dd693ac5ed813cd5dc269dc4251a501eb146def011eb5200bf9a0aeaa6d",
+    "candidate_fingerprint": "2ec7b9025e039000570926b80171038c89eb5a28c6e0e977d4c38085cd4ff76f",
+    "contract_fingerprint": "e2fcacbb8a8b75afa40db7ed15aa171f9b2b7412970b833d6560707d045e73b2",
+    "diff_sha256": "01096eba87813758cd3304c38f94b25f6e1de8c354e2c235aad8950fb8c22b63",
+    "path": "runtime/agent_workspaces/capsule_promotion_state_20260829/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "b71a926b3f9b9d5177b945eb7044d2a991a14773cc293512a1990f7e64f68abb"
+  },
+  "workspace": {
+    "base_fingerprint": "0bc959d4a5b2338383aceed795b539cafbb10e733054a5a57228a843f7624029",
+    "base_manifest_path": "runtime/agent_workspaces/capsule_promotion_state_20260829/meta/base_manifest.json",
+    "base_manifest_sha256": "463e5a0d522a375e58dd7ff7ca56c992a1e0012c34873e64b6ac192c68303d28",
+    "path": "runtime/agent_workspaces/capsule_promotion_state_20260829/tree",
+    "reseal": {
+      "audit_sha256": "80374dd693ac5ed813cd5dc269dc4251a501eb146def011eb5200bf9a0aeaa6d",
+      "candidate_fingerprint": "2ec7b9025e039000570926b80171038c89eb5a28c6e0e977d4c38085cd4ff76f",
+      "diff_sha256": "01096eba87813758cd3304c38f94b25f6e1de8c354e2c235aad8950fb8c22b63",
+      "path": "runtime/agent_workspaces/capsule_promotion_state_20260829/meta/reseal.json",
+      "resealed_at_utc": "2026-08-29T17:30:31Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "cd04c210400b653f0b5dca5840fd07ef4ba26480c518522643ea926446810fd3",
+      "state": "READY",
+      "task_id": "capsule_promotion_state_20260829"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

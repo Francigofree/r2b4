@@ -1,0 +1,182 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/meta/audit.json",
+    "audit_sha256": "cb30f0012cc931a3687f8ca2bfedc82997ec9275d677e53001baa779baf45986",
+    "audited_at_utc": "2026-09-02T17:49:55Z",
+    "base_fingerprint": "9a0f3a512b169c00eaf66c525d5f67b8f0993f1460227d1591cdebd12ecf8bd8",
+    "candidate_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "canonical_drift": [],
+    "canonical_fingerprint": "9a0f3a512b169c00eaf66c525d5f67b8f0993f1460227d1591cdebd12ecf8bd8",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_counter_encoder_backend.py",
+      "tests/test_v3_gpio_counter_owner.py",
+      "tests/test_v3_gpio_encoder_source.py",
+      "v3/adapters/counter_encoder.py",
+      "v3/adapters/gpio_counter.py",
+      "v3/adapters/live_encoder.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/meta/diff.json",
+    "diff_sha256": "4bd27953b9e2a6a9f18b917b2d22821191d8cdf6d6d932957ba9b431282c97b4",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_encoder_reject_diagnostics_slice28_20260902",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8631c7193451c93aac3c44a4c0711ddcb52f179f975c236209e98f22f3bc2cbb",
+        "size_bytes": 45111
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7cc368cbc48eb6942137c5adeec4056932fd9244f8df79d492bef9435498d399",
+        "size_bytes": 26953
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b27872205a6984864397394aa40b53caf373731c8a54b33715be0f81b389fa5d",
+        "size_bytes": 9768
+      },
+      "changed": null,
+      "path": "tests/test_v3_counter_encoder_backend.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2fd8f0e6962d3f3262d99686cd022d04026afb7caea725802c00b90c0ce080d3",
+        "size_bytes": 8298
+      },
+      "changed": null,
+      "path": "tests/test_v3_gpio_counter_owner.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "afef8041a73b5fdec4389c32b5276544a7c29ba2d5df445bdc9e912b80647b7f",
+        "size_bytes": 5692
+      },
+      "changed": null,
+      "path": "tests/test_v3_gpio_encoder_source.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f1a56f8f91f1369109d4e4fe6c9dce92f7ceaeedd791653dabe729a776db02af",
+        "size_bytes": 4491
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_encoder_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "300b02c4eeee256c9f482a0875a27a7529b5b6712d1597ca219beb9e5c2652a8",
+        "size_bytes": 8132
+      },
+      "changed": null,
+      "path": "v3/adapters/counter_encoder.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2952583da09e6eb3d7c5aabcde5908eb4db66346268dbe9a9c2501bdf7179e36",
+        "size_bytes": 14090
+      },
+      "changed": null,
+      "path": "v3/adapters/gpio_counter.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "daf75c17d4a625f30e2df69a13f1625dfb31118ee162aaf94f48cfe6a4145281",
+        "size_bytes": 2597
+      },
+      "changed": null,
+      "path": "v3/adapters/gpio_encoder.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b1aa8bea22a70124778cbafa9fb2bc40a0efb81d329a49df6f13d9761f84192d",
+        "size_bytes": 4667
+      },
+      "changed": null,
+      "path": "v3/adapters/live_encoder.py"
+    }
+  ],
+  "goal": "Add exact V3 encoder edge rejection diagnostics without relaxing trust or L11 safety, verify with targeted tests, then run one bounded 0.15 m/s raised-stand Test Hub diagnostic to identify noise, counter/read faults, or plausibility rejection; change debounce/counting/plausibility only if run-scoped evidence justifies it.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T15:36:30Z",
+  "status": "ACTIVE",
+  "task_id": "v3_encoder_reject_diagnostics_slice28_20260902",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T17:48:20Z",
+  "workflow_evidence": {
+    "audit_sha256": "cb30f0012cc931a3687f8ca2bfedc82997ec9275d677e53001baa779baf45986",
+    "candidate_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "contract_fingerprint": "7a67fc74be8ff9082370321a7eec7f67dd36badab1149cd27bea4cab9ebacaaf",
+    "diff_sha256": "4bd27953b9e2a6a9f18b917b2d22821191d8cdf6d6d932957ba9b431282c97b4",
+    "path": "runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "92128062364ac62ae0b02c102a962ac536e53d72ad516952aa88e04cd2dc197d"
+  },
+  "workspace": {
+    "base_fingerprint": "9a0f3a512b169c00eaf66c525d5f67b8f0993f1460227d1591cdebd12ecf8bd8",
+    "base_manifest_path": "runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "879f5e8ff0548f5635252123be95f60759436ab47f31b5bc4c8126bbdfcd6a40",
+    "path": "runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree",
+    "reseal": {
+      "audit_sha256": "cb30f0012cc931a3687f8ca2bfedc82997ec9275d677e53001baa779baf45986",
+      "candidate_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+      "diff_sha256": "4bd27953b9e2a6a9f18b917b2d22821191d8cdf6d6d932957ba9b431282c97b4",
+      "path": "runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T17:49:55Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "eabda94e639471632bae5b19a7af9adb74bd286b1044a603331ccd5bfcd35ba5",
+      "state": "READY",
+      "task_id": "v3_encoder_reject_diagnostics_slice28_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

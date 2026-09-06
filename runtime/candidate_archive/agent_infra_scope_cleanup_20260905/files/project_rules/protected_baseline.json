@@ -1,0 +1,281 @@
+{
+  "schema": "R2B4_PROTECTED_BASELINE_V1",
+  "verified_date": "2026-08-25",
+  "documents": {
+    "agent_workflow": "AGENTS.md",
+    "structural_motion_architecture": "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
+    "stable_baseline": "STRUKTURALIS_RETEGEK.md",
+    "current_change": "runtime/agent_coordination/current_change.json",
+    "validation_guide": "docs/AGENT_RUNTIME.md",
+    "agent_prompt": "project_rules/agent_system_prompt.txt",
+    "agent_infrastructure": "project_rules/agent_infrastructure.json"
+  },
+  "document_sha256": {
+    "structural_motion_architecture": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+  },
+  "identifiers": {
+    "control_mode": "UNIFIED",
+    "odometry_mode": "LIDAR_FIRST",
+    "pose_frame_id": "R2B4_BOOT_ROBOT_MAP",
+    "pose_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+    "pose_frame_yaw": "CCW_POSITIVE_LEFT",
+    "scan_matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+    "scan_matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+    "scan_matcher_transport": "process_latest_only",
+    "speed_map_schema": "R2B4_WHEEL_SPEED_MAP_V2",
+    "speed_map_state": "ACTIVE",
+    "speed_map_curves": [
+      "left_forward",
+      "left_reverse",
+      "right_forward",
+      "right_reverse"
+    ]
+  },
+  "scan_matcher_contract": {
+    "constants_file": "middleware/scan_matcher_contract.py",
+    "constants": {
+      "SCAN_MATCHER_CONTRACT_ID": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+      "SCAN_MATCH_CONFIDENCE_MODEL": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+      "SCAN_MATCHER_TRANSPORT": "process_latest_only",
+      "SCAN_MATCHER_PROCESS_START_METHOD": "spawn",
+      "SCAN_MATCHER_INPUT_QUEUE_SIZE": 1,
+      "SCAN_MATCHER_RESULT_QUEUE_SIZE": 1,
+      "SCAN_MATCHER_MAX_INPUT_AGE_S": 0.25,
+      "SCAN_MATCHER_MAX_RESULT_AGE_S": 0.25
+    },
+    "required_config_values": {
+      "lidar_runtime.matcher_process_start_method": "spawn",
+      "lidar_runtime.latest_scan_queue_size": 1,
+      "lidar_runtime.latest_result_queue_size": 1,
+      "lidar_runtime.matcher_max_input_age_s": 0.25,
+      "lidar_runtime.matcher_max_result_age_s": 0.25,
+      "lidar_pose.matcher_budget_ms": 45.0,
+      "lidar_pose.slow_path_budget_ms": 120.0,
+      "lidar_pose.robust_inlier_distance_m": 0.18,
+      "lidar_pose.robust_trim_fraction": 0.8,
+      "lidar_pose.confidence_residual_scale_m": 0.15,
+      "lidar_pose.confidence_sector_count": 12,
+      "lidar_pose.confidence_target_sector_coverage": 0.5,
+      "lidar_pose.ambiguity_translation_m": 0.08,
+      "lidar_pose.ambiguity_rotation_rad": 0.12,
+      "lidar_pose.ambiguity_margin_scale": 0.2,
+      "lidar_pose.ambiguity_residual_margin_scale_m": 0.04,
+      "lidar_pose.observability_translation_step_m": 0.03,
+      "lidar_pose.observability_rotation_step_rad": 0.06,
+      "lidar_pose.observability_cost_scale": 0.0004,
+      "lidar_odometry.min_confidence": 0.2,
+      "lidar_odometry.max_scan_age_s": 0.25
+    },
+    "required_source_tokens": {
+      "middleware/scan_matching.py": [
+        "from scipy.spatial import cKDTree",
+        "def _robust_match_metrics",
+        "ambiguous_alternative",
+        "observability_score",
+        "stats[\"confidence_model\"] = SCAN_MATCH_CONFIDENCE_MODEL"
+      ],
+      "sensors/lidar_service.py": [
+        "validate_matcher_runtime_config(runtime_cfg)",
+        "multiprocessing.get_context",
+        "self._mp_context.Process",
+        "target=matcher_process_main",
+        "self._publish_raw_snapshot(",
+        "self._queue_latest(",
+        "packet.get(\"matcher_contract_id\") != SCAN_MATCHER_CONTRACT_ID",
+        "int(scan_seq) != int(current_raw_scan_id)",
+        "result_age_s > self._matcher_max_result_age_s"
+      ],
+      "sensors/lidar_matcher_process.py": [
+        "def _put_latest",
+        "def _drain_latest",
+        "packet.get(\"matcher_contract_id\") != SCAN_MATCHER_CONTRACT_ID",
+        "generation != estimator_generation"
+      ],
+      "middleware/lidar_odometry.py": [
+        "lidar_odometry_measurement_id",
+        "rejected_duplicate_matcher_result",
+        "rejected_duplicate_raw_scan"
+      ]
+    },
+    "forbidden_source_tokens": {
+      "sensors/lidar_service.py": [
+        "def _matcher_worker",
+        "target=self._matcher_worker",
+        "\"thread_latest_only\""
+      ],
+      "middleware/scan_matching.py": [
+        "from scipy.spatial import KDTree"
+      ]
+    }
+  },
+  "logger_jitter_contract": {
+    "housekeeping": {
+      "file": "log/unified_logger.py",
+      "class": "UnifiedLogger",
+      "method": "run_housekeeping",
+      "required_queue_call": "_queue_runtime_stats",
+      "forbidden_io_calls": [
+        "_write_runtime_stats",
+        "write_text",
+        "write_bytes",
+        "open"
+      ]
+    },
+    "async_snapshot": {
+      "file": "log/async_logger.py",
+      "class": "AsyncLogger",
+      "enqueue_method": "write_json_snapshot",
+      "enqueue_forbidden_io_calls": [
+        "write_text",
+        "write_bytes",
+        "open",
+        "replace"
+      ],
+      "worker_method": "_flush_worker",
+      "worker_flush_call": "_flush_all",
+      "flush_method": "_flush_all",
+      "flush_writer_call": "_write_json_snapshot",
+      "writer_method": "_write_json_snapshot"
+    }
+  },
+  "legacy_contract": {
+    "motion_profiles_exactly": ["UNIFIED"],
+    "legacy_motion_contract_types_empty": true,
+    "legacy_resolver_command_types_empty": true,
+    "gui_direct_pwm_removed_marker": "Command removed: set_motor_pwm is no longer available.",
+    "legacy_tank_removed_marker": "legacy_tank_removed_from_runtime",
+    "forbidden_runtime_files": [
+      "controller/motion_stack.py",
+      "controller/smooth_trajectory.py",
+      "controller/velocity_tracking.py"
+    ],
+    "forbidden_motion_config_keys": [
+      "motion_stack",
+      "smooth_joy_enabled",
+      "smooth_trajectory",
+      "velocity_tracking",
+      "velocity_tracking_enabled",
+      "RAW_ENCODER_DIAGNOSTIC_MODE",
+      "use_motor_pid",
+      "derivalo_tag_d",
+      "straight_hold_kd",
+      "straight_hold_yaw_deadband_rad_s",
+      "holtsav_kuszob",
+      "gyorsulasi_ramp_limit",
+      "forward_clearance_adaptive_enable",
+      "forward_blocked_front_hard_stop",
+      "forward_clearance_hard_floor_m",
+      "forward_clearance_hard_m",
+      "forward_clearance_hard_cap_m",
+      "forward_clearance_speed_gain",
+      "forward_clearance_warn_m",
+      "forward_clearance_warn_extra_m",
+    "forward_clearance_warn_speed_gain",
+    "forward_clearance_warn_cap_m",
+    "forward_clearance_min_scale",
+    "degraded_timing_s",
+    "timing_degraded_scale",
+    "timing_severe_ratio"
+    ],
+    "required_motion_config_values": {
+      "lidar_pose.matcher_seed_translation_prior_weight": 1.0,
+      "lidar_pose.matcher_seed_rotation_prior_weight": 0.05,
+    "pid_szabalyzo.aranyos_tag_p": 0.25,
+    "pid_szabalyzo.integralo_tag_i": 0.08,
+    "pid_szabalyzo.integralo_limit": 0.18,
+    "idozites.runtime_gc.policy": "motion_safe",
+    "idozites.runtime_gc.idle_collect_interval_s": 30.0,
+    "idozites.runtime_cpu_affinity.enabled": true,
+    "idozites.runtime_cpu_affinity.required": true,
+    "idozites.runtime_cpu_affinity.service_cpus": [0, 1, 2],
+    "idozites.runtime_cpu_affinity.control_cpus": [3],
+    "motion_readiness.encoder_reliability.timing_gap_invalid_s": 0.04
+    },
+    "required_speed_map_curve_points": {
+      "left_forward": [[0.15, 0.19566], [0.19, 0.23924], [0.26, 0.31161], [0.35, 0.40339], [0.5, 0.52693], [0.582, 0.64]],
+      "right_forward": [[0.15, 0.1921], [0.19, 0.2361], [0.26, 0.30642], [0.35, 0.39858], [0.5, 0.51155], [0.582, 0.59812]],
+      "left_reverse": [[0.15, 0.20154], [0.19, 0.24131], [0.26, 0.30608], [0.35, 0.36693], [0.5, 0.54586], [0.582, 0.62466]],
+      "right_reverse": [[0.15, 0.21547], [0.19, 0.25197], [0.26, 0.3187], [0.35, 0.37712], [0.5, 0.56729], [0.582, 0.63815]]
+    },
+    "forbidden_runtime_source_tokens": {
+      "controller/command_bus.py": [
+        ".readlines()"
+      ],
+      "cont.py": [
+        "motion_executor.apply_ramp",
+        "motion_executor.ramp_limit"
+      ],
+      "motion_executor.py": [
+        "def apply_ramp",
+        "self._v_cmd_current",
+        "self.ramp_limit"
+      ],
+      "controller/commands.py": [
+        "motion_executor.ramp_limit"
+      ],
+      "controller/components.py": [
+        "ramp_limit="
+      ],
+      "controller/routines.py": [
+        "motion_executor.ramp_limit",
+        "ramp_limit="
+      ],
+      "core/control_strategies.py": [
+        "LOW_SPEED_REF_MAX_MPS",
+        "LOW_SPEED_KP",
+        "LOW_SPEED_CORRECTION_MAX_PWM",
+        "track_deadband",
+        "wheel_loop_low_speed_scheduled",
+        "wheel_loop_unequal_track_schedule_active"
+      ],
+    "controller/motion_readiness.py": [
+      "forward_clearance_adaptive_enable",
+      "FORWARD_CLEARANCE_SCALED",
+      "FORWARD_BLOCKED_FRONT_ZERO",
+      "ENCODER_TIMING_DEGRADED",
+      "degraded_timing_s",
+      "timing_degraded_scale",
+      "timing_severe_ratio"
+      ]
+    },
+    "required_runtime_source_tokens": {
+    "controller/command_bus.py": [
+      "COMMAND_STATUS_TAIL_CHUNK_BYTES",
+      "def _iter_command_status_tail",
+      "lines = _iter_command_status_tail"
+    ],
+    "core/control_strategies.py": [
+      "maintenance_floor_pwm_l=maintenance_floor_l",
+      "maintenance_floor_pwm_r=maintenance_floor_r",
+      "wheel_loop_left_maintenance_floor_applied",
+      "wheel_loop_right_maintenance_floor_applied",
+      "encoder_timing_gap",
+      "ENCODER_TIMING_GAP"
+    ],
+      "controller/motion_readiness.py": [
+        "timing_gap_invalid_s",
+        "ENCODER_TIMING_GAP",
+        "motion_timing_gap_count",
+        "canonical_available",
+        "ekf_usage_reason = \"TIMING_GAP\""
+    ],
+    "controller/slow_tick_diagnostics.py": [
+      "class MotionGcContract",
+      "GC_FORBIDDEN_WHILE_MOTION_ACTIVE",
+      "self._gc.disable()",
+      "IDLE_MAINTENANCE"
+    ],
+    "cont.py": [
+      "self.motion_gc_contract.initialize_after_startup",
+      "_motion_gc_context(self, pwm_l=pwm_l, pwm_r=pwm_r)",
+      "fail_closed_active",
+      "R2B4_GC_POLICY_requires_R2B4_GC_AB_VALIDATION=1"
+    ],
+    "safety/safety_supervisor.py": [
+      "_amr_lidar_last_observation_id",
+      "distinct_lidar_observation",
+      "observation_id != self._amr_lidar_last_observation_id"
+    ]
+    }
+  }
+}

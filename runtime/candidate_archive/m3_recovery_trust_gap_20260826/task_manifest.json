@@ -1,0 +1,113 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/meta/audit.json",
+    "audit_sha256": "bfe65b9d867ec114bea3bcbfebf54a2e1f0b56f5c7d3c1a01d52657c38f916d9",
+    "audited_at_utc": "2026-08-28T18:41:30Z",
+    "base_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "candidate_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "canonical_drift": [],
+    "canonical_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/meta/diff.json",
+    "diff_sha256": "ec11c06d2e720fba79853249b2a2b61c91cdd676650ca98d255006cca66dd5c6",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "m3_recovery_trust_gap_20260826",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "6123297c021ea2b7c76665825c2220cc9cbec1269d09ce6ece99ceb6c6b118be",
+        "size_bytes": 111665
+      },
+      "changed": null,
+      "path": "controller/local_planner.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7e7f8616d467760ba713da508475f08b84c1e69fa05d335547085762e68b55aa",
+        "size_bytes": 32950
+      },
+      "changed": null,
+      "path": "controller/room_cruise_v2.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "3293d495ee5b817aad5ddda81f210b92e76415bd722f76683b33a4dfe4da42c9",
+        "size_bytes": 104651
+      },
+      "changed": null,
+      "path": "tests/test_motion_ssot_gates.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1f2e5a857e12ef4e72b55ef7ffde2bc091c59cb5cfc65509add3c26b8861ffb2",
+        "size_bytes": 91428
+      },
+      "changed": null,
+      "path": "tests/test_navigation_layers.py"
+    }
+  ],
+  "goal": "Repair the L5 RoomCruise recovery transition exposed by the M3 unified live validation: preserve L2A fail-closed measurement trust while preventing an active RoomCruise from remaining in unjustified zero-output IDLE after transient encoder-trust loss.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-26T19:25:40Z",
+  "status": "ACTIVE",
+  "task_id": "m3_recovery_trust_gap_20260826",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-26T19:25:40Z",
+  "workflow_evidence": {
+    "audit_sha256": "bfe65b9d867ec114bea3bcbfebf54a2e1f0b56f5c7d3c1a01d52657c38f916d9",
+    "candidate_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "contract_fingerprint": "07cafce056660c02139e008f5d31dd2c3804a665858fd9d181da631f730cb4e5",
+    "diff_sha256": "ec11c06d2e720fba79853249b2a2b61c91cdd676650ca98d255006cca66dd5c6",
+    "path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "b1cbd461c87d3089bf713b309e76c221e8d73cadacbd5968dde0a0884d300b5e"
+  },
+  "workspace": {
+    "base_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "base_manifest_path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/meta/base_manifest.json",
+    "base_manifest_sha256": "aa0c3a2a0c5978ec9846e8149b9a985c5c313b9a913f19da477936d6111e51e9",
+    "path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/tree",
+    "reseal": {
+      "audit_sha256": "bfe65b9d867ec114bea3bcbfebf54a2e1f0b56f5c7d3c1a01d52657c38f916d9",
+      "candidate_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+      "diff_sha256": "ec11c06d2e720fba79853249b2a2b61c91cdd676650ca98d255006cca66dd5c6",
+      "path": "runtime/agent_workspaces/m3_recovery_trust_gap_20260826/meta/reseal.json",
+      "resealed_at_utc": "2026-08-28T18:41:30Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "50c7caa34ff24bb9bf4a42f19e3b5a04138cf6f8a60f36263107c94cdbce6e16",
+      "state": "READY",
+      "task_id": "m3_recovery_trust_gap_20260826"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

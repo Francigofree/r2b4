@@ -1,0 +1,448 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v21_guidance_sealing_20260826/meta/audit.json",
+    "audit_sha256": "9322b75b8e601a97c517eb76d473e73ee98aeee44c80a5638e659dd55da18ea2",
+    "audited_at_utc": "2026-08-26T18:23:44Z",
+    "base_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+    "candidate_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "canonical_drift": [],
+    "canonical_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+    "changed_files": [
+      "cont.py",
+      "control_loop.py",
+      "controller/behavior_motion_interface.py",
+      "controller/commands.py",
+      "controller/components.py",
+      "controller/encoder_reliability.py",
+      "controller/heading_turn_controller.py",
+      "controller/motion_guidance.py",
+      "controller/motion_guidance_contract.py",
+      "controller/motion_platform_adapter.py",
+      "controller/motion_platform_contract.py",
+      "controller/motion_policy.py",
+      "controller/motion_readiness.py",
+      "controller/motion_resolver.py",
+      "controller/motion_semantics_engine.py",
+      "controller/obstacle_avoidance.py",
+      "replayer/adapters.py",
+      "replayer/capture.py",
+      "replayer/cli.py",
+      "replayer/contracts.py",
+      "replayer/replay.py",
+      "state.py",
+      "tests/test_encoder_arc_asymmetry.py",
+      "tests/test_encoder_canonical_window.py",
+      "tests/test_global_motion_policy.py",
+      "tests/test_heading_pivot_primitive.py",
+      "tests/test_motion_guidance_v21.py",
+      "tests/test_motion_layer_dependencies_v21.py",
+      "tests/test_motion_readiness_layer_split.py",
+      "tests/test_motion_semantics.py",
+      "tests/test_replayer_v2.py",
+      "tests/test_replayer_v21.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v21_guidance_sealing_20260826/meta/diff.json",
+    "diff_sha256": "10bbbb324c73874d3042f2fd7e1aca4d6aba0e8f148abc19eed5e46c63561cbd",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v21_guidance_sealing_20260826",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4f893f9cd4f7e91e3ccbc9cc0d2cadcb1ab74d6e55baa852bf422f0d53ca967b",
+        "size_bytes": 260911
+      },
+      "changed": null,
+      "path": "cont.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "37877a0b66964634ee2c1aa433161aa952049bc6930eea97de4c1b807481540d",
+        "size_bytes": 98294
+      },
+      "changed": null,
+      "path": "control_loop.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7d3389337df18d59c0b0a5d7baa44ed5c976b910b7b99211f896ad05fb3ee72e",
+        "size_bytes": 10015
+      },
+      "changed": null,
+      "path": "controller/behavior_motion_interface.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "302913387459fa676993ffad89fb7c3d7f3524c77dc41b7f145ed3504805f5fa",
+        "size_bytes": 180911
+      },
+      "changed": null,
+      "path": "controller/commands.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "dea8119832826184d9806783825542f21416ddde41b34e9a99d4c4fbf9271007",
+        "size_bytes": 39898
+      },
+      "changed": null,
+      "path": "controller/components.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/encoder_reliability.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/heading_turn_controller.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/motion_guidance.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/motion_guidance_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "6675e6d0c7ab5a466d17e028da990e2e58f67d36044134dd45f072abf5401ee2",
+        "size_bytes": 9072
+      },
+      "changed": null,
+      "path": "controller/motion_platform_adapter.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "864903a4672b565bf05c9ec43f93373ff1bdfbcd9cc681d7cda0731c4a8e4a76",
+        "size_bytes": 4599
+      },
+      "changed": null,
+      "path": "controller/motion_platform_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2225321f7daee5fa501587c51f793eedef255e6f1f9dc91a9aba3dd97963b1f0",
+        "size_bytes": 122672
+      },
+      "changed": null,
+      "path": "controller/motion_policy.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d68e6e386d3918713797b3948fabc933b180523572c1fb8829f4a442dd2ec05f",
+        "size_bytes": 124854
+      },
+      "changed": null,
+      "path": "controller/motion_readiness.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c8a724673723d079cf11d22fd11a0b7bff873ceff5fd142f0af5020b02720c40",
+        "size_bytes": 25217
+      },
+      "changed": null,
+      "path": "controller/motion_resolver.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/motion_semantics_engine.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "5dc189e00bd01fdea1230bc2ccc79ee18d58dfebd7cc3ed5e8f074659f4df9f2",
+        "size_bytes": 41625
+      },
+      "changed": null,
+      "path": "controller/obstacle_avoidance.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a5664e966a12e03a7c8edef6fbd24eba7d8c0099fefc99cd229751f981800f73",
+        "size_bytes": 34320
+      },
+      "changed": null,
+      "path": "replayer/adapters.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c5f54aeaa6c6dd0eeb4274a04bcb57fe56a680f65576caa32c369ac9d0efad65",
+        "size_bytes": 54535
+      },
+      "changed": null,
+      "path": "replayer/capture.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "31386f051129a58025b76252a8bdf50915413a763e3c0d39b6b88bb7dd8d2bfc",
+        "size_bytes": 3660
+      },
+      "changed": null,
+      "path": "replayer/cli.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "89fd1370e4dce0a3f99a78ce90b52b4f2fcc08d5c609e0682d254694ceac0adb",
+        "size_bytes": 4912
+      },
+      "changed": null,
+      "path": "replayer/contracts.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f2df6814648419180ad8cbadb9c60c2f11e36e9e0d3e886d78b16336707a32f1",
+        "size_bytes": 50345
+      },
+      "changed": null,
+      "path": "replayer/replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a4c56166286a78d3ca7c864234870ca3c3cea393fe781739b57c2b4f64cd9ab7",
+        "size_bytes": 25822
+      },
+      "changed": null,
+      "path": "state.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "fc5c352fcd23bb7f0094fdc262863451d69e85dc769dc076579eeae6a0cea426",
+        "size_bytes": 3991
+      },
+      "changed": null,
+      "path": "tests/test_encoder_arc_asymmetry.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0048a580dce10e27fa531f9aa198d4b38f4091cd16933e6f1aee23af3cf42dd4",
+        "size_bytes": 12768
+      },
+      "changed": null,
+      "path": "tests/test_encoder_canonical_window.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "893c501ebb4fa25e85cdf6d94f485f4cf315a06c9fefa2683c88daa6db057eef",
+        "size_bytes": 38082
+      },
+      "changed": null,
+      "path": "tests/test_global_motion_policy.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "79baefe987efee834f62767ca49fe403d03b90c6515d7a0910a3ee4ec0875e81",
+        "size_bytes": 10260
+      },
+      "changed": null,
+      "path": "tests/test_heading_pivot_primitive.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_motion_guidance_v21.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_motion_layer_dependencies_v21.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "aedbb78396c43bfebf9fa33ce9c6266fe70f641acb5bc9dd690f45859a02f6d4",
+        "size_bytes": 12685
+      },
+      "changed": null,
+      "path": "tests/test_motion_platform_v21_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f519d5067cad75082ce272086d83b941b2e428e8336147e4ec77dd60c88c25d1",
+        "size_bytes": 3440
+      },
+      "changed": null,
+      "path": "tests/test_motion_readiness_layer_split.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "936773aa6286d845389a2dbb6727cf83163c8b0799218282d4bdd3237f7f750a",
+        "size_bytes": 16032
+      },
+      "changed": null,
+      "path": "tests/test_motion_semantics.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4dafc7bcf85232992b40bb86c910458e24b72cf0c2c1851968ef4572d9613697",
+        "size_bytes": 22378
+      },
+      "changed": null,
+      "path": "tests/test_replayer_v2.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "af70c143f4c31de81a6c438dcaba40908754e3313c48a8017bc8441cb52eacb0",
+        "size_bytes": 6714
+      },
+      "changed": null,
+      "path": "tests/test_replayer_v21.py"
+    }
+  ],
+  "goal": "Continue R2B4 V2.1 source-first refactor by separating L2A and L7A ownership, replacing shared ctrl guidance inputs with typed contracts, centralizing post-resolver guidance, and proving T001-T012 plus Replayer V2.1 without legacy-contract accommodation",
+  "promotion_status": "READY",
+  "reason": "",
+  "replay_evidence": {
+    "capture_id": "v21_guidance_sealing",
+    "capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+    "diagnosis_path": "/tmp/r2b4_v21_replay_dhWRGK/replayer_data/results/v21_guidance_sealing/diagnosis_v21_guidance_sealing_20260826_6d66fd23ac2e/diagnosis.json",
+    "diagnosis_sha256": "4a6ae410be5a688ac497dde926d83b96056c3d09178064eb3e1f0b07cfbad3a1",
+    "path": "logs/agent_tasks/v21_guidance_sealing_20260826/replay_diagnosis.json",
+    "replay_status": "MATCH",
+    "result_id": "diagnosis_v21_guidance_sealing_20260826_6d66fd23ac2e",
+    "schema": "R2B4_AGENT_REPLAY_DIAGNOSIS_V1",
+    "sha256": "639e857f69efc35613959b223081704e841de4717657d73cf94005492968e77e",
+    "status": "MATCH"
+  },
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-26T16:07:15Z",
+  "status": "ACTIVE",
+  "task_id": "v21_guidance_sealing_20260826",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": "EXPLICIT_USER_REQUEST",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-26T18:22:12Z",
+  "workflow_evidence": {
+    "audit_sha256": "9322b75b8e601a97c517eb76d473e73ee98aeee44c80a5638e659dd55da18ea2",
+    "candidate_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+    "contract_fingerprint": "8e4bed349e8df769a04c6482fec5aeeb2a859d75cfc6c1c554ebc60d96fea6fe",
+    "diff_sha256": "10bbbb324c73874d3042f2fd7e1aca4d6aba0e8f148abc19eed5e46c63561cbd",
+    "path": "runtime/agent_workspaces/v21_guidance_sealing_20260826/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "df052096c7d3dfcded8ff73ca2f973459b28e4c9d69fb20ef4b8b90a20bc6347"
+  },
+  "workspace": {
+    "base_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+    "base_manifest_path": "runtime/agent_workspaces/v21_guidance_sealing_20260826/meta/base_manifest.json",
+    "base_manifest_sha256": "2e9d84f9fb9b340b87ab457ea5b479a528d42b09f81edb3f265b60238b32c3d3",
+    "path": "runtime/agent_workspaces/v21_guidance_sealing_20260826/tree",
+    "reseal": {
+      "audit_sha256": "9322b75b8e601a97c517eb76d473e73ee98aeee44c80a5638e659dd55da18ea2",
+      "candidate_fingerprint": "4531a95cac0ff3a64468bb009c40e6f8e187150eca7757074ab5dbedb91ceb30",
+      "diff_sha256": "10bbbb324c73874d3042f2fd7e1aca4d6aba0e8f148abc19eed5e46c63561cbd",
+      "path": "runtime/agent_workspaces/v21_guidance_sealing_20260826/meta/reseal.json",
+      "resealed_at_utc": "2026-08-26T18:23:44Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "0d0b35edb6c2fdbc3429e0b31ef819225c81ab0a8987b8ba5bd7da7d0210620c",
+      "state": "READY",
+      "task_id": "v21_guidance_sealing_20260826"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

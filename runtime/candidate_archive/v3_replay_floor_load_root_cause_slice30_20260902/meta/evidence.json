@@ -1,0 +1,114 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/audit.json",
+    "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
+    "base_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "canonical_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "diff_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/diff.json",
+    "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "bc77bf6a71374c8945bb24cc497d5fc80898fe3dee7292174bc272256a3188fc",
+        "canonical_sha256": "bc77bf6a71374c8945bb24cc497d5fc80898fe3dee7292174bc272256a3188fc"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "09c4e0f114018f098d63deb3a9194569a629499985cecb8157501b60bd8dd75b",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "replayer/README.md",
+      "tests/test_v3_replay.py",
+      "v3/layers/l11_actuator_control.py",
+      "v3/replay.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-09-02T19:02:42Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_replay_floor_load_root_cause_slice30_20260902",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m pytest -q tests/test_v3_*.py; python3 -m v3.replay replay <capture> --capture-source-manifest <capture-base-manifest> --output logs/session_replay_20260902T1848Z/v3_replay_result.json; python3 -m v3.replay verify-result logs/session_replay_20260902T1848Z/v3_replay_result.json",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

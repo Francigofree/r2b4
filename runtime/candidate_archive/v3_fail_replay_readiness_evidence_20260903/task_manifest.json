@@ -1,0 +1,458 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/audit.json",
+    "audit_sha256": "0ebfe2de2ea7771371c176dd6f91c9958a73022e295e618b004975e3c4c1c7ca",
+    "audited_at_utc": "2026-09-03T18:11:38Z",
+    "base_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "candidate_fingerprint": "920c1cd09d4c2b821bfc05e267aa3fcaa788fb4e360c4a88e7f50a5f61893002",
+    "canonical_drift": [],
+    "canonical_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "replayer/README.md",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_latest_lidar_backend.py",
+      "tests/test_v3_live_lidar.py",
+      "tests/test_v3_native_sensor_inputs.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_replay.py",
+      "tests/test_v3_resident_runtime.py",
+      "v3/adapters/latest_lidar.py",
+      "v3/adapters/live_lidar.py",
+      "v3/composition/resident_live_control.py",
+      "v3/replay.py",
+      "v3_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/diff.json",
+    "diff_sha256": "f364516c141e2a0d3c8a199273862cbc921760b5dc97620ef1d83c9ac24935e9",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_fail_replay_readiness_evidence_20260903",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bc77bf6a71374c8945bb24cc497d5fc80898fe3dee7292174bc272256a3188fc",
+        "size_bytes": 45843
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c7a6bfe89b35d49c17fb480cc7df0aee1b70a5c071c5e0c8e3509fa5880c02e3",
+        "size_bytes": 16945
+      },
+      "changed": null,
+      "path": "conf/vezerles.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "900658f100c0fdbf624b24fea259de4509fdf64e5b660bac3037f38a1660051e",
+        "size_bytes": 7013
+      },
+      "changed": null,
+      "path": "replayer/README.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2e5645a6ca4a57142c37aa8ab8091ec6745bc9ab512d870ae262de058e49f6c9",
+        "size_bytes": 9704
+      },
+      "changed": null,
+      "path": "sensors/lidar_matcher_process.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1b754bf09ddbc06086a789df35c86610520c03ee9c9de40d244a86e164b61e58",
+        "size_bytes": 47587
+      },
+      "changed": null,
+      "path": "sensors/lidar_service.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a0b732c91d5b0b6216c632f8fb13b66545e5befd60e93cc0bce642a76f299ffc",
+        "size_bytes": 10910
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_live_control_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ab8fd2b741a9042c3bd4e531bd37e17368784d13561a1e8ae6849e83082927d1",
+        "size_bytes": 9254
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_control_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0b5a2ed48b5d9330422e6ae971c117f0c78649cd0fc27314a5ce6178301bea47",
+        "size_bytes": 10549
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0a60da459f6df237beefe6f7ebab4386fed257f404a777847da040635d3b94e6",
+        "size_bytes": 14545
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_runtime_config.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_gpio_motor_sink.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "5f2a62a3f667cfb38db52da43a3915a51022458a7409c2153804598a453ca30f",
+        "size_bytes": 15092
+      },
+      "changed": null,
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1f65a997e360f2853b19e6a332ca6cd43b639cd5a700dec24a3e4a9e06df9dd6",
+        "size_bytes": 6688
+      },
+      "changed": null,
+      "path": "tests/test_v3_latest_lidar_backend.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f1135612ac715ff169f2bca1cbb9c02a61cdd46f5336964660631f3553b107f4",
+        "size_bytes": 7340
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9a7821c8c0b66e68fdebaf1077b95ea08151b8e8114c047a9bbfc95286d1e620",
+        "size_bytes": 2874
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f45cbb30b392daa139d6b4de94a6d34a7a96f5e83f3166c0771d742b2f84f3ec",
+        "size_bytes": 5786
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "92c2422d53415275bb29662d84e656cb4674ff1dd6d34530c88162a00a20427f",
+        "size_bytes": 6829
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_output_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f8eced2a27135586adb3f88f2ba530b8ef35743dd51d4410b86e461d25dc5564",
+        "size_bytes": 10949
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_sensor_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "fac2f8c833585645f670a522e42b385767053590d1d7484b4c93d39ae889f433",
+        "size_bytes": 6325
+      },
+      "changed": null,
+      "path": "tests/test_v3_process_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b8f04bd983743a08a449e437f42d899c8ed8b170f05996994468271c9523d29b",
+        "size_bytes": 6973
+      },
+      "changed": null,
+      "path": "tests/test_v3_replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "99485f1ea458b075a359bb2e741aa21e449a00118dbff8476a459ccda9d488e2",
+        "size_bytes": 12047
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "deed084921c298c9ca9fdc95a54bd7bbb656692379edb3ca397aa56a9aac9823",
+        "size_bytes": 11307
+      },
+      "changed": null,
+      "path": "v3/adapters/gpio_motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7e3b048c1ef65c9b141eaf2774642732bf96b40136c85660c8401a2d580dfc9a",
+        "size_bytes": 8994
+      },
+      "changed": null,
+      "path": "v3/adapters/latest_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "246a9570825165e8f69a3a6a374696de4beb4d7210286d10de59d653174aba97",
+        "size_bytes": 6923
+      },
+      "changed": null,
+      "path": "v3/adapters/live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "10e37485ca89e2f5fe65fd35fb77e558d4f67174749d72e27b8ebda33e435e22",
+        "size_bytes": 8091
+      },
+      "changed": null,
+      "path": "v3/composition/bounded_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "56710f7c92ea9d4f8561411bb4bf069678c906d1dfa3599753fa3fd1f7f3778c",
+        "size_bytes": 3735
+      },
+      "changed": null,
+      "path": "v3/composition/bounded_physical_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d260b6c572fb6e312794187fe03f39a5f52bfdf93f482e8712d5ce3360ecb43d",
+        "size_bytes": 1815
+      },
+      "changed": null,
+      "path": "v3/composition/motor_output.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "29c00f1602cd08541f53f49b9046afe36f78060bf5b89477cff4b157de58ca0b",
+        "size_bytes": 6770
+      },
+      "changed": null,
+      "path": "v3/composition/native_sensor_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0b2aa2b4018b3105a342e268fcb4cd391e2c8abdfbf037fca3c6da3a16784c01",
+        "size_bytes": 10222
+      },
+      "changed": null,
+      "path": "v3/composition/resident_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/contracts.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "aeca4cc8f30b9c5d6c7ec39a3243bdf0ec40bcf0af254c7f97f611ab4b2937c7",
+        "size_bytes": 1600
+      },
+      "changed": null,
+      "path": "v3/contracts/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "346cbf01a1a54fc96ba53d07aa6e8486fae8693ef88e0e1fb3fbca0493584a4f",
+        "size_bytes": 2504
+      },
+      "changed": null,
+      "path": "v3/contracts/base.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "07e68616aeab24ed0b47508fc8edc6512fc18948aca0a1b90ea4776c8b598b75",
+        "size_bytes": 19469
+      },
+      "changed": null,
+      "path": "v3/contracts/messages.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "151be6a685d23100ac1e4ec74e6144e24e1dc87e80ec51d2d182955c26eb01b7",
+        "size_bytes": 46409
+      },
+      "changed": null,
+      "path": "v3/replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "016fcdf8d800c844bc7d7ca5a45c34bb569a15137ba6e5b48e4edba72d63996e",
+        "size_bytes": 15768
+      },
+      "changed": null,
+      "path": "v3_bounded_config.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "af2beacd10fd04993f614dd9575b372974c3a7a39161aee7bd59807ddea63d77",
+        "size_bytes": 9259
+      },
+      "changed": null,
+      "path": "v3_bounded_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "dc6b56e4e28a94d8092d03dc9cbbef35cf224c069e48229257340fb254f8b559",
+        "size_bytes": 18028
+      },
+      "changed": null,
+      "path": "v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bc0d9bb597fb860367a6bca32d1585459ac56d853df2e508219716ed1fb1d95b",
+        "size_bytes": 13295
+      },
+      "changed": null,
+      "path": "v3_runtime.py"
+    }
+  ],
+  "goal": "Implement structurally valid FAIL/FAULT V3 capture replay with explicit execution-versus-replay status and correct captured lifecycle; add distinct consecutive LiDAR matcher-revision activation readiness without lowering the active 0.2 safety threshold; preserve matcher identity and quality diagnostics for every observed result revision; expose explicit FAULT_SAFE_LOW runtime termination evidence; add regression coverage and documentation.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-03T17:57:54Z",
+  "status": "ACTIVE",
+  "task_id": "v3_fail_replay_readiness_evidence_20260903",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-03T18:00:49Z",
+  "workflow_evidence": {
+    "audit_sha256": "0ebfe2de2ea7771371c176dd6f91c9958a73022e295e618b004975e3c4c1c7ca",
+    "candidate_fingerprint": "920c1cd09d4c2b821bfc05e267aa3fcaa788fb4e360c4a88e7f50a5f61893002",
+    "contract_fingerprint": "030392f01696e4ed90bacfa47f0b1097b679f8d5c0ecab26d3086f101ce92bb2",
+    "diff_sha256": "f364516c141e2a0d3c8a199273862cbc921760b5dc97620ef1d83c9ac24935e9",
+    "path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "72db371d42002faab95a4cf7d968db0fed6d5bd8a59b469413cedab1a7781386"
+  },
+  "workspace": {
+    "base_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "base_manifest_path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/base_manifest.json",
+    "base_manifest_sha256": "cbc5e927a65e46dff76dd02c1726e1dc818fb0df8a5694af754c653d007582bf",
+    "path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/tree",
+    "reseal": {
+      "audit_sha256": "0ebfe2de2ea7771371c176dd6f91c9958a73022e295e618b004975e3c4c1c7ca",
+      "candidate_fingerprint": "920c1cd09d4c2b821bfc05e267aa3fcaa788fb4e360c4a88e7f50a5f61893002",
+      "diff_sha256": "f364516c141e2a0d3c8a199273862cbc921760b5dc97620ef1d83c9ac24935e9",
+      "path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/reseal.json",
+      "resealed_at_utc": "2026-09-03T18:11:38Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "4dac030e7960093362c46a5c016ccc0e5a14c806f35342b797c989ec1916ce71",
+      "state": "READY",
+      "task_id": "v3_fail_replay_readiness_evidence_20260903"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

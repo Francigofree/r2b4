@@ -1,0 +1,112 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/audit.json",
+    "audit_sha256": "84f4a5db02b77e0622113d9d20d9373ab47f73ce1f5caa99135866b848a656c6",
+    "base_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "canonical_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "diff_path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/diff.json",
+    "diff_sha256": "82b7cb952dc712b91a67a717a89f7f476070298f71cc2c6e35c1c7efdf78147f"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "8631c7193451c93aac3c44a4c0711ddcb52f179f975c236209e98f22f3bc2cbb",
+        "canonical_sha256": "8631c7193451c93aac3c44a4c0711ddcb52f179f975c236209e98f22f3bc2cbb"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "589f69fbb4448c66a33a31d164a3ede2d7ecb5c8265c489876776c1cb8946105",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "v3_hardware_runtime.py",
+      "v3_runtime.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-09-02T13:34:20Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_resident_live_warmup_validation_slice25_20260902",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "live resident evidence verification logs/session_20260902T133313Z",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

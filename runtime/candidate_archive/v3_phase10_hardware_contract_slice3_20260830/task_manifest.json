@@ -1,0 +1,148 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice3_20260830/meta/audit.json",
+    "audit_sha256": "7763948a1129dc3656d193a610d2362073d16582171e26bc5e05caa34cb4d42e",
+    "audited_at_utc": "2026-08-30T12:48:47Z",
+    "base_fingerprint": "5295a9647ed857c55cebd828c51d76f4ce23274b7d1044df420f71e4a5cb456a",
+    "candidate_fingerprint": "8db1447e8ebfe12d1a965070edca29867cd3b23fa23c4d7297c20c53cf2c7f3e",
+    "canonical_drift": [],
+    "canonical_fingerprint": "5295a9647ed857c55cebd828c51d76f4ce23274b7d1044df420f71e4a5cb456a",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_motor_pwm_contract.py",
+      "v3/adapters/motor_pwm.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice3_20260830/meta/diff.json",
+    "diff_sha256": "939912dd52304cc1b09170ab213354e11dd4fe08ddb38c4ee904c23f5f2900f2",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase10_hardware_contract_slice3_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9ba50d4725631cafb71699782c63d4d90b19819c440460660eb31f488dc2eac9",
+        "size_bytes": 20215
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "efffc25b8bd784c7732077576e91d98b425672faf62139b8e5eaeaa26d4bb7a0",
+        "size_bytes": 10105
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9a81d662e06060dc14ab069ee4237fa8465b71693f5b498d94b9056b9ddd1f65",
+        "size_bytes": 8080
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_idle_cutover.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d99a88524f589139e8aadc5f299f8b841c703f7e89b3fae50742fe7b50b610d0",
+        "size_bytes": 2589
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_pwm_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "08b99018f9c2836c64b5a1caecfe5ad53c29277ff98bec40f80d18c4b998c251",
+        "size_bytes": 6687
+      },
+      "changed": null,
+      "path": "v3/adapters/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c17c4b902ed6bb818b3048544bcc0be7c7416dd68c53d1cbefe6406753d42908",
+        "size_bytes": 3438
+      },
+      "changed": null,
+      "path": "v3/adapters/motor_pwm.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/contracts.py"
+    }
+  ],
+  "goal": "Continue V3 phase 10 with exactly one bounded I/O-free physical-contract slice that closes one immutable L12 FinalActuation into one paired left/right native DRV8871 PWM frame, preserving tick context and fail-closed STOP/FAULT zero semantics; do not add a backend, writer capability, ACTIVE transition, live input, physical motion, runtime cutover, or legacy API port",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T12:45:52Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase10_hardware_contract_slice3_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T12:45:52Z",
+  "workflow_evidence": {
+    "audit_sha256": "7763948a1129dc3656d193a610d2362073d16582171e26bc5e05caa34cb4d42e",
+    "candidate_fingerprint": "8db1447e8ebfe12d1a965070edca29867cd3b23fa23c4d7297c20c53cf2c7f3e",
+    "contract_fingerprint": "9f79ce1b7c01cfd007ddcf78d5c6e08e92e3b7be34f54d6c6820824068d5a9ce",
+    "diff_sha256": "939912dd52304cc1b09170ab213354e11dd4fe08ddb38c4ee904c23f5f2900f2",
+    "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice3_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "69f1fa18e8827e515401e0408306edb9ba27676e78d99fa9ed863a57879194a3"
+  },
+  "workspace": {
+    "base_fingerprint": "5295a9647ed857c55cebd828c51d76f4ce23274b7d1044df420f71e4a5cb456a",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice3_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "552cbb1e7c4688b1152d89a3c8c65f76b129ec77b4d92f9c31db74100d465cf0",
+    "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice3_20260830/tree",
+    "reseal": {
+      "audit_sha256": "7763948a1129dc3656d193a610d2362073d16582171e26bc5e05caa34cb4d42e",
+      "candidate_fingerprint": "8db1447e8ebfe12d1a965070edca29867cd3b23fa23c4d7297c20c53cf2c7f3e",
+      "diff_sha256": "939912dd52304cc1b09170ab213354e11dd4fe08ddb38c4ee904c23f5f2900f2",
+      "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice3_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T12:48:47Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "d3c8ecea8a6a6b24f94eded3928d4ffaff2e4ad5c815d405e1c55aff7c2ed158",
+      "state": "READY",
+      "task_id": "v3_phase10_hardware_contract_slice3_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

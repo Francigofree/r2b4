@@ -1,0 +1,124 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/audit.json",
+    "audit_sha256": "e0282335bb2ae27abc9ab08fc1bca6c0321c6597a8d92265d2a88cb20e191675",
+    "base_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "candidate_fingerprint": "a95502e9d1387906ac3a3ff2f3b6630cf754f2188671ce393c99064e5a86561a",
+    "canonical_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "diff_path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/diff.json",
+    "diff_sha256": "ecbe4b8c6c6113c1a55f1ee482f1cf03b88f16c12989bc325183e6041d783f55"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "5129e86d1df239682f48ebc5df56622bbb75e610c990f3c800e495cbc3ce1614",
+        "canonical_sha256": "66eca24595e9551b993493976c47ed8779e87121700e48f279fbd53856163481"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "8c7a2943e9c501176bd572d8de0f34eeb58291331c9b6d6be20d18538cc1367e",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_l0_l4_shadow.py",
+      "tests/test_v3_live_idle_cutover.py",
+      "tests/test_v3_live_input_edge.py",
+      "v3/adapters/capture_edges.py",
+      "v3/adapters/live_inputs.py",
+      "v3/composition/input_shadow.py",
+      "v3/composition/live_idle.py",
+      "v3/layers/l1_acquisition.py",
+      "v3/layers/l2_admission.py",
+      "v3/layers/l3_state_estimation.py",
+      "v3/layers/l4_world_model.py",
+      "v3/ports.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-08-30T13:04:37Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_phase11_live_input_slice1_20260830",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/tree R2B4_AGENT_CANDIDATE=1 pytest -q tests/test_v3_*.py tests/test_drv8871_motor_hal.py tests/test_bootstrap_guard.py",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

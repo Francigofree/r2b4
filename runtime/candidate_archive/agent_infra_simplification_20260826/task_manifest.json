@@ -1,0 +1,171 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/agent_infra_simplification_20260826/meta/audit.json",
+    "audit_sha256": "9eea874fcbd211b129f9fa636471de1b22a8e9dffa413ecd237a159d531be38a",
+    "audited_at_utc": "2026-08-26T15:39:35Z",
+    "base_fingerprint": "733c07b85fb814693f5e587b2a8661045f45aef09f8b90ab2f5831fa5137d823",
+    "candidate_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "canonical_drift": [],
+    "canonical_fingerprint": "733c07b85fb814693f5e587b2a8661045f45aef09f8b90ab2f5831fa5137d823",
+    "changed_files": [
+      "AGENTS.md",
+      "project_rules/agent_infrastructure.json",
+      "tests/test_agent_change_tracker.py",
+      "tests/test_agent_workspace.py",
+      "tests/test_agentctl.py",
+      "tools/agent_change_tracker.py",
+      "tools/agent_workspace.py",
+      "tools/agentctl.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/agent_infra_simplification_20260826/meta/diff.json",
+    "diff_sha256": "c5caa4a4f386130203e6ff4f6c39b043afc47cd4d6ecc90ab7ec48c3fe4c719d",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "AGENTS.md",
+      "project_rules/agent_infrastructure.json",
+      "tests/test_agent_change_tracker.py",
+      "tests/test_agent_workspace.py",
+      "tests/test_agentctl.py",
+      "tools/agent_change_tracker.py",
+      "tools/agent_workspace.py",
+      "tools/agentctl.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "agent_infra_simplification_20260826",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "eb7fb5d0e6a0c7e5cbcaa06472d21c9f94cb37ab809f9c5b156ea937d26465d4",
+        "size_bytes": 3036
+      },
+      "changed": null,
+      "path": "AGENTS.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "797bac5a7678302f1f4dc6d602a37efae3b37c3c544b9a22c17571490d17d5c3",
+        "size_bytes": 5666
+      },
+      "changed": null,
+      "path": "project_rules/agent_infrastructure.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b852d76739ad31ab9b1d1bdf496861adb24e72fec007c980072517a59f97ff5c",
+        "size_bytes": 9864
+      },
+      "changed": null,
+      "path": "tests/test_agent_change_tracker.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "64072500553dc37b8e918064039acf44159813cb3fdb2ef4ca7a9cd6fae6d23e",
+        "size_bytes": 13159
+      },
+      "changed": null,
+      "path": "tests/test_agent_workspace.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4134b6276a995f92efd73dfa6891a8666ee9c1a85411e3656f0c414324613728",
+        "size_bytes": 18910
+      },
+      "changed": null,
+      "path": "tests/test_agentctl.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "67d0d0702175f252741e64bd9cc2aa86638e0d00ec0f0a60b0eb7105c49a22b8",
+        "size_bytes": 21135
+      },
+      "changed": null,
+      "path": "tools/agent_change_tracker.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4ed1ad60f535d93eaecab69fcdf350447d0673ae140d3980c70968748a86b3f0",
+        "size_bytes": 32884
+      },
+      "changed": null,
+      "path": "tools/agent_workspace.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b62f8fe81063eaa436d5a6922b2878de017d98f8e7aed2444035596fc0fbd87d",
+        "size_bytes": 50192
+      },
+      "changed": null,
+      "path": "tools/agentctl.py"
+    }
+  ],
+  "goal": "Simplify the existing agent infrastructure with source-first contract-aware replay-first diagnostics, automated evidence and lifecycle handling while preserving canonical protection and fail-closed guarantees",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-26T12:39:18Z",
+  "status": "ACTIVE",
+  "task_id": "agent_infra_simplification_20260826",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 3,
+    "default": "TARGETED",
+    "full_regression_reason": "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": true,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-26T12:54:53Z",
+  "workflow_evidence": {
+    "audit_sha256": "9eea874fcbd211b129f9fa636471de1b22a8e9dffa413ecd237a159d531be38a",
+    "candidate_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "contract_fingerprint": "27383468efc36094703bccedac8475fbeda0c36bbd2fef547ad567b7d4c0335f",
+    "diff_sha256": "c5caa4a4f386130203e6ff4f6c39b043afc47cd4d6ecc90ab7ec48c3fe4c719d",
+    "path": "runtime/agent_workspaces/agent_infra_simplification_20260826/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "52968a0eabf5b1828ce9b4ff60b460512468787909f86a7d9ff5512412db7e59"
+  },
+  "workspace": {
+    "base_fingerprint": "733c07b85fb814693f5e587b2a8661045f45aef09f8b90ab2f5831fa5137d823",
+    "base_manifest_path": "runtime/agent_workspaces/agent_infra_simplification_20260826/meta/base_manifest.json",
+    "base_manifest_sha256": "d026ea2066183533a5b2baa82821f23fb7bad2e8053aa783e1e8a488293ba625",
+    "path": "runtime/agent_workspaces/agent_infra_simplification_20260826/tree",
+    "reseal": {
+      "audit_sha256": "9eea874fcbd211b129f9fa636471de1b22a8e9dffa413ecd237a159d531be38a",
+      "candidate_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+      "diff_sha256": "c5caa4a4f386130203e6ff4f6c39b043afc47cd4d6ecc90ab7ec48c3fe4c719d",
+      "path": "runtime/agent_workspaces/agent_infra_simplification_20260826/meta/reseal.json",
+      "resealed_at_utc": "2026-08-26T15:39:35Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "9f87972b179ed52a024b8a43e08139049760de338dd2807bbfee82cc8d7f65c4",
+      "state": "READY",
+      "task_id": "agent_infra_simplification_20260826"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

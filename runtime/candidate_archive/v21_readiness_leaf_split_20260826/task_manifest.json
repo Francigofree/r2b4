@@ -1,0 +1,129 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/audit.json",
+    "audit_sha256": "38c659327b3131490b11b8a212a7c40c4f6acf1a0748ae78acf2fc17b0761e29",
+    "audited_at_utc": "2026-08-26T15:57:57Z",
+    "base_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "candidate_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+    "canonical_drift": [],
+    "canonical_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "changed_files": [
+      "controller/behavior_motion_interface.py",
+      "controller/components.py",
+      "controller/motion_qa_monitor.py",
+      "controller/motion_readiness.py",
+      "tests/test_motion_readiness_layer_split.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/diff.json",
+    "diff_sha256": "992c68016ec4c8e5f4e8023074d2b12695095b5cc377bf0e67c67b2632b6d80c",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v21_readiness_leaf_split_20260826",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/behavior_motion_interface.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "5ef2cf0320944962f2334f1b87b2d271b4e416c706664959cfe01eaefd93b583",
+        "size_bytes": 39818
+      },
+      "changed": null,
+      "path": "controller/components.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "controller/motion_qa_monitor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8004a99112ae219749e9fe1ba5d86c0ca2ddb7c9229abb7a76425bf079269ffa",
+        "size_bytes": 146579
+      },
+      "changed": null,
+      "path": "controller/motion_readiness.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_motion_readiness_layer_split.py"
+    }
+  ],
+  "goal": "Split V2.1 L4 behavior adapter and L11 diagnostics ownership out of mixed motion_readiness without changing motion semantics or lower-platform contracts",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-26T15:53:21Z",
+  "status": "ACTIVE",
+  "task_id": "v21_readiness_leaf_split_20260826",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-26T15:53:25Z",
+  "workflow_evidence": {
+    "audit_sha256": "38c659327b3131490b11b8a212a7c40c4f6acf1a0748ae78acf2fc17b0761e29",
+    "candidate_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+    "contract_fingerprint": "199774e5a40c51dcc493becb46773a63c4cd4476faa286a62100385a2c7e99fd",
+    "diff_sha256": "992c68016ec4c8e5f4e8023074d2b12695095b5cc377bf0e67c67b2632b6d80c",
+    "path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "1f959481816db5e98700223b7107f3b24c9271f1d535ff5f2c3d522d81a35b5c"
+  },
+  "workspace": {
+    "base_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "base_manifest_path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/base_manifest.json",
+    "base_manifest_sha256": "82d50b5a73974fd594b8cd7705d094d54865888035916a2b3cc86b413fe14d96",
+    "path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/tree",
+    "reseal": {
+      "audit_sha256": "38c659327b3131490b11b8a212a7c40c4f6acf1a0748ae78acf2fc17b0761e29",
+      "candidate_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+      "diff_sha256": "992c68016ec4c8e5f4e8023074d2b12695095b5cc377bf0e67c67b2632b6d80c",
+      "path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/reseal.json",
+      "resealed_at_utc": "2026-08-26T15:57:57Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "74bea9597e1c8b52a77f683deb74fe4e218cfefd94be01b5e022d7e8dd4f56f6",
+      "state": "READY",
+      "task_id": "v21_readiness_leaf_split_20260826"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

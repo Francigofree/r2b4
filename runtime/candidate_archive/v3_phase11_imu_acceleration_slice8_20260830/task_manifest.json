@@ -1,0 +1,160 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_imu_acceleration_slice8_20260830/meta/audit.json",
+    "audit_sha256": "d8b6860c2bbfaed9610eb0f3be21f8233fe47f5e861c1b93ce3da039e2d2c58c",
+    "audited_at_utc": "2026-08-30T17:30:24Z",
+    "base_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "candidate_fingerprint": "4db1ebc4077b1de9bb6db621fe17604b2152f57ace7e8e84fea71b281dd31e80",
+    "canonical_drift": [],
+    "canonical_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_live_imu.py",
+      "tests/test_v3_live_input_composition.py",
+      "tests/test_v3_native_state_estimation.py",
+      "v3/adapters/live_imu.py",
+      "v3/layers/l3_state_estimation.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase11_imu_acceleration_slice8_20260830/meta/diff.json",
+    "diff_sha256": "247fc3d277ff99c51e46a241b1f7efd911611823c1e4c8166af8238d6c1c0597",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase11_imu_acceleration_slice8_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "eb5c4f590e41181264445d1f689b626ec1844ba054270105a4bd9b00fca2af66",
+        "size_bytes": 27185
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c42239a7a32c81a35d1ab60958aae54bb134c4297de60210c39cb446a088b055",
+        "size_bytes": 56555
+      },
+      "changed": null,
+      "path": "middleware/ekf.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4777958c300c7ce0ce315077d77f979d779bbf932b099a81896871330d34529a",
+        "size_bytes": 14668
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_imu.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f1135612ac715ff169f2bca1cbb9c02a61cdd46f5336964660631f3553b107f4",
+        "size_bytes": 7340
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "083aaa9decff35655415ae97aef5947676269a7bad97aac7e48602c86272f9d9",
+        "size_bytes": 8781
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_state_estimation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "798b06bcc692863f031d809bc289d6d75727bb5da91fb4d94bd4669525eb0109",
+        "size_bytes": 5680
+      },
+      "changed": null,
+      "path": "v3/adapters/live_imu.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9f885935668d98fd83a1fd047ef3b66000a2aa9f328b6cb8cc37c8a2df5ae087",
+        "size_bytes": 27311
+      },
+      "changed": null,
+      "path": "v3/layers/l3_state_estimation.py"
+    }
+  ],
+  "goal": "Continue V3 phase 11 with the next smallest motion-free estimator prerequisite: extend the injected native IMU result with an optional immutable robot-forward longitudinal acceleration sample from the same read and use it in NativeStateEstimator nonlinear prediction and covariance propagation with explicit physical bounds; preserve the existing heading-only compatibility path, injected TickContext timing, deterministic immutable output, CCW-positive pose contract, IDLE/STOP LiveInputComposition and zero-only sink, while adding no command-context back-edge, legacy production import, shared state, API/runtime dependency, wall clock, thread, process, concrete backend, hardware access, owner loop, activate API, non-zero writer path, cutover, or motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T17:24:48Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase11_imu_acceleration_slice8_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T17:24:48Z",
+  "workflow_evidence": {
+    "audit_sha256": "d8b6860c2bbfaed9610eb0f3be21f8233fe47f5e861c1b93ce3da039e2d2c58c",
+    "candidate_fingerprint": "4db1ebc4077b1de9bb6db621fe17604b2152f57ace7e8e84fea71b281dd31e80",
+    "contract_fingerprint": "ff0ffee99348a08981953e56c04fb9100c6e88c04a401aa8c0c7caf8fec1fb1f",
+    "diff_sha256": "247fc3d277ff99c51e46a241b1f7efd911611823c1e4c8166af8238d6c1c0597",
+    "path": "runtime/agent_workspaces/v3_phase11_imu_acceleration_slice8_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "a8c363fde7e445656a4c3d87da80603ce68c8d94aa82720911558bd3e84e8fe3"
+  },
+  "workspace": {
+    "base_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase11_imu_acceleration_slice8_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "e957a25101d8919d02f1f52aff07489dbc8d3ec5e9ee528186c965429447bc86",
+    "path": "runtime/agent_workspaces/v3_phase11_imu_acceleration_slice8_20260830/tree",
+    "reseal": {
+      "audit_sha256": "d8b6860c2bbfaed9610eb0f3be21f8233fe47f5e861c1b93ce3da039e2d2c58c",
+      "candidate_fingerprint": "4db1ebc4077b1de9bb6db621fe17604b2152f57ace7e8e84fea71b281dd31e80",
+      "diff_sha256": "247fc3d277ff99c51e46a241b1f7efd911611823c1e4c8166af8238d6c1c0597",
+      "path": "runtime/agent_workspaces/v3_phase11_imu_acceleration_slice8_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T17:30:24Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "453d5867a5198c8153ded58962390ca8b9e7e26e20dbf7cdc88c1ff141132ce3",
+      "state": "READY",
+      "task_id": "v3_phase11_imu_acceleration_slice8_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

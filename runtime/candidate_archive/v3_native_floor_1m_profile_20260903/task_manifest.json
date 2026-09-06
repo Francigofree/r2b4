@@ -1,0 +1,99 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_native_floor_1m_profile_20260903/meta/audit.json",
+    "audit_sha256": "cdbec2c0c44e08786379f089b82a378e1fc48838401358b84dd30f2b72ae74f6",
+    "audited_at_utc": "2026-09-03T17:33:53Z",
+    "base_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "candidate_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "canonical_drift": [],
+    "canonical_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "changed_files": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_native_floor_1m_profile_20260903/meta/diff.json",
+    "diff_sha256": "150f63d5207fda36721d8cc7676c32ddb82ce9b0d47599637c956461218eba53",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_native_floor_1m_profile_20260903",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4374d16f75481ee9b6bfb6ef30584d8992984ab2a36940e3326e0b2061e8eb45",
+        "size_bytes": 164917
+      },
+      "changed": null,
+      "path": "tests/test_r2b4_test_hub.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a944a4e189bf694775a1ff365c38156bf56f9d03a8b787e6ef4cddbed47c933f",
+        "size_bytes": 329009
+      },
+      "changed": null,
+      "path": "tools/r2b4_test_hub.py"
+    }
+  ],
+  "goal": "Create and verify a fixed, fail-closed native V3 Test Hub profile for approximately 1.0 m forward travel at 0.15 m/s, preserving exclusive L12 motor ownership, fresh native-sensor preflight, active LiDAR/encoder/yaw/time/displacement bounds, distance-targeted STOP, post-active IDLE, SHUTDOWN, and final four-pin hard-low evidence.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-03T17:27:54Z",
+  "status": "ACTIVE",
+  "task_id": "v3_native_floor_1m_profile_20260903",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-03T17:27:54Z",
+  "workflow_evidence": {
+    "audit_sha256": "cdbec2c0c44e08786379f089b82a378e1fc48838401358b84dd30f2b72ae74f6",
+    "candidate_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "contract_fingerprint": "1a83f12b0c1483147b4d5c9834076586ea1583afd2139918cec10640ee848fc9",
+    "diff_sha256": "150f63d5207fda36721d8cc7676c32ddb82ce9b0d47599637c956461218eba53",
+    "path": "runtime/agent_workspaces/v3_native_floor_1m_profile_20260903/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "f115926feae6beb5be7e2e4e1ede094a0e294bd58ed881e30743e57496f2b9c6"
+  },
+  "workspace": {
+    "base_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "base_manifest_path": "runtime/agent_workspaces/v3_native_floor_1m_profile_20260903/meta/base_manifest.json",
+    "base_manifest_sha256": "2b8f86d2335dc33132cd8f25cb449430d103c7dfaffe3ddebbff9a27d86196f7",
+    "path": "runtime/agent_workspaces/v3_native_floor_1m_profile_20260903/tree",
+    "reseal": {
+      "audit_sha256": "cdbec2c0c44e08786379f089b82a378e1fc48838401358b84dd30f2b72ae74f6",
+      "candidate_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+      "diff_sha256": "150f63d5207fda36721d8cc7676c32ddb82ce9b0d47599637c956461218eba53",
+      "path": "runtime/agent_workspaces/v3_native_floor_1m_profile_20260903/meta/reseal.json",
+      "resealed_at_utc": "2026-09-03T17:33:53Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "4f62215f7fe244d7fe3f0cd2ebda3d627e5af83674c4d1046f2c7a1b20eb9537",
+      "state": "READY",
+      "task_id": "v3_native_floor_1m_profile_20260903"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

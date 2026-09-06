@@ -1,0 +1,93 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/audit.json",
+    "audit_sha256": "84f4a5db02b77e0622113d9d20d9373ab47f73ce1f5caa99135866b848a656c6",
+    "audited_at_utc": "2026-09-02T13:34:20Z",
+    "base_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "canonical_drift": [],
+    "canonical_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/diff.json",
+    "diff_sha256": "82b7cb952dc712b91a67a717a89f7f476070298f71cc2c6e35c1c7efdf78147f",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_resident_live_warmup_validation_slice25_20260902",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "dc6b56e4e28a94d8092d03dc9cbbef35cf224c069e48229257340fb254f8b559",
+        "size_bytes": 18028
+      },
+      "changed": null,
+      "path": "v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bc0d9bb597fb860367a6bca32d1585459ac56d853df2e508219716ed1fb1d95b",
+        "size_bytes": 13295
+      },
+      "changed": null,
+      "path": "v3_runtime.py"
+    }
+  ],
+  "goal": "Execute the promoted health-adaptive resident V3 raised-stand Test Hub profile with fresh native sensor preflight, one bounded active tick, real SIGTERM shutdown, final PWM-null/hard-LOW/post-close proof, and preserve run-scoped evidence without source changes.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T13:32:56Z",
+  "status": "ACTIVE",
+  "task_id": "v3_resident_live_warmup_validation_slice25_20260902",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T13:32:56Z",
+  "workflow_evidence": {
+    "audit_sha256": "84f4a5db02b77e0622113d9d20d9373ab47f73ce1f5caa99135866b848a656c6",
+    "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "contract_fingerprint": "589f69fbb4448c66a33a31d164a3ede2d7ecb5c8265c489876776c1cb8946105",
+    "diff_sha256": "82b7cb952dc712b91a67a717a89f7f476070298f71cc2c6e35c1c7efdf78147f",
+    "path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "d16249697ad19b00e6f626c6905bec12cc315bef58c84f4e835086308d0592f3"
+  },
+  "workspace": {
+    "base_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "base_manifest_path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "8b1daae41c3465ae1cd70501c80e82cf0be033629950f73633bbf09cb74262e5",
+    "path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/tree",
+    "reseal": {
+      "audit_sha256": "84f4a5db02b77e0622113d9d20d9373ab47f73ce1f5caa99135866b848a656c6",
+      "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+      "diff_sha256": "82b7cb952dc712b91a67a717a89f7f476070298f71cc2c6e35c1c7efdf78147f",
+      "path": "runtime/agent_workspaces/v3_resident_live_warmup_validation_slice25_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T13:34:20Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "8d4d94f11a7a64337cba7886796459b6fd8cc2e1a35b7c52ef3adaf6479c014c",
+      "state": "READY",
+      "task_id": "v3_resident_live_warmup_validation_slice25_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

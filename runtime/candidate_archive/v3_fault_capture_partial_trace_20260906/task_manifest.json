@@ -1,0 +1,163 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/audit.json",
+    "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
+    "audited_at_utc": "2026-09-06T09:53:17Z",
+    "base_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
+    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "canonical_drift": [],
+    "canonical_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "docs/AGENT_RUNTIME.md",
+      "tests/test_v3_capture.py",
+      "tests/test_v3_replay.py",
+      "tests/test_v3_test_hub.py",
+      "tests/v3_validation_helpers.py",
+      "v3/capture.py",
+      "v3/replay.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/diff.json",
+    "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
+    "protected_infrastructure_changes": [
+      "docs/AGENT_RUNTIME.md"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_fault_capture_partial_trace_20260906",
+    "task_mode": "CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "73a99bfde442c6f864f2962045364b0457eed73cb03c49d208a1fcfd20b5be81",
+        "size_bytes": 30149
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7f53d17d971f7aec91b30f5c2c29dac0926cb0e569c5e48a82367906ac99a348",
+        "size_bytes": 4024
+      },
+      "changed": null,
+      "path": "docs/AGENT_RUNTIME.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "73e14b8e536eca597e2f67df6482dda11a9f21fd86d47e4f7022408738dc5a0e",
+        "size_bytes": 1252
+      },
+      "changed": null,
+      "path": "tests/test_v3_capture.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "63e6d8c9892bb0e203b6e537b2053e9fa13ce982f39a5bc308fd21d4e04cb69d",
+        "size_bytes": 15534
+      },
+      "changed": null,
+      "path": "tests/test_v3_replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "13508b4de2ab193b19adec29f57cab51db60151c951630f9598e74dc60e616b8",
+        "size_bytes": 2496
+      },
+      "changed": null,
+      "path": "tests/test_v3_test_hub.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "daa3639043bfba169412e00d4a42b24c1c03aacae60d30375738b0569cd161f8",
+        "size_bytes": 4584
+      },
+      "changed": null,
+      "path": "tests/v3_validation_helpers.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a497de1eb68c3b5bb4ecb0dc645d91fa00f819ccf719ec32391e786a63e5339d",
+        "size_bytes": 10575
+      },
+      "changed": null,
+      "path": "v3/capture.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e7d36692546dac2d93ace68461b5eecf08ab735ce0ad7031b237cbf87bf5ad28",
+        "size_bytes": 71158
+      },
+      "changed": null,
+      "path": "v3/replay.py"
+    }
+  ],
+  "goal": "Allow general V3 capture and replay to preserve structurally valid fail-closed partial traces: contiguous L1 prefix, explicit fault_layer, and mandatory terminal L12; add fault-aware L1-L12 diagnostics and regression evidence.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-06T09:49:18Z",
+  "status": "ACTIVE",
+  "task_id": "v3_fault_capture_partial_trace_20260906",
+  "task_mode": "CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 5,
+    "default": "TARGETED",
+    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": true,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-06T09:49:55Z",
+  "workflow_evidence": {
+    "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
+    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "contract_fingerprint": "af59df228a4b4975d32b31cc35177ab231a7d37dbf6bb7a407abeeeb26db6c22",
+    "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
+    "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "a8597c694c33eb4cfcfdab9d8bb378b566362d57dc270cf8ff967d7243a153e0"
+  },
+  "workspace": {
+    "base_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
+    "base_manifest_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "3ba1032e6fc6843e2a49aad8db626bf68f177b4900bc13be69685005fcd1eec9",
+    "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/tree",
+    "reseal": {
+      "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
+      "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+      "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
+      "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/reseal.json",
+      "resealed_at_utc": "2026-09-06T09:53:17Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "765c1a923286aaed8ae0eaeec6ed56e299319fc30899ff3f331926d81bba8a55",
+      "state": "READY",
+      "task_id": "v3_fault_capture_partial_trace_20260906"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

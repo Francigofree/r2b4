@@ -1,105 +1,277 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
+import json
+import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-DEFAULT_REPO = Path("/home/alba/project_r2b4")
+DEFAULT_REPO = Path('/home/alba/project_r2b4')
+WORKSPACE_ROOT = Path('runtime/agent_workspaces')
+ARCHIVE_ROOT = Path('runtime/candidate_archive')
+TERMINAL_RESEAL_STATES = {'READY', 'SUPERSEDED'}
+META_FILES = ('audit.json', 'diff.json', 'evidence.json', 'reseal.json')
 
 
 def run(cmd, cwd, capture=False):
-    print("+", " ".join(cmd))
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        text=True,
-        capture_output=capture,
-    )
+    print('+', ' '.join(cmd))
+    result = subprocess.run(cmd, cwd=cwd, text=True, capture_output=capture)
     if result.returncode != 0:
         if capture:
             if result.stdout:
-                print(result.stdout, end="")
+                print(result.stdout, end='')
             if result.stderr:
-                print(result.stderr, end="", file=sys.stderr)
+                print(result.stderr, end='', file=sys.stderr)
         sys.exit(result.returncode)
-    return result.stdout.strip() if capture else ""
+    return result.stdout.strip() if capture else ''
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_json(path):
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f'Hibás JSON: {path}: {exc}') from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f'JSON objektum szükséges: {path}')
+    return payload
+
+
+def safe_relative(root, relative):
+    if not isinstance(relative, str) or not relative.strip():
+        raise RuntimeError('Üres candidate fájlútvonal.')
+    path = Path(relative)
+    if path.is_absolute():
+        raise RuntimeError(f'Abszolút candidate fájlútvonal tiltott: {relative}')
+    resolved = (root / path).resolve(strict=False)
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise RuntimeError(f'Candidate fájl kilép a workspace-ből: {relative}') from exc
+    return resolved
+
+
+def archive_candidate(repo, task_dir):
+    task_id = task_dir.name
+    tree = task_dir / 'tree'
+    meta = task_dir / 'meta'
+    diff_path = meta / 'diff.json'
+    audit_path = meta / 'audit.json'
+    reseal_path = meta / 'reseal.json'
+
+    if not (tree.is_dir() and diff_path.is_file() and audit_path.is_file() and reseal_path.is_file()):
+        return 'SKIP_ACTIVE'
+
+    audit = read_json(audit_path)
+    reseal = read_json(reseal_path)
+    diff = read_json(diff_path)
+
+    if str(audit.get('status', '')).upper() != 'PASS':
+        return 'SKIP_FAILED'
+
+    reseal_state = str(reseal.get('state', '')).upper()
+    if reseal_state not in TERMINAL_RESEAL_STATES:
+        return 'SKIP_ACTIVE'
+
+    candidate_fingerprint = str(
+        reseal.get('candidate_fingerprint')
+        or audit.get('candidate_fingerprint')
+        or diff.get('candidate_fingerprint')
+        or ''
+    )
+    if not candidate_fingerprint:
+        raise RuntimeError(f'{task_id}: hiányzik a candidate fingerprint.')
+
+    archive_dir = repo / ARCHIVE_ROOT / task_id
+    archive_manifest = archive_dir / 'archive_manifest.json'
+    if archive_manifest.is_file():
+        existing = read_json(archive_manifest)
+        if str(existing.get('candidate_fingerprint', '')) != candidate_fingerprint:
+            raise RuntimeError(
+                f'{task_id}: a már archivált candidate fingerprintje eltér; nem írom felül automatikusan.'
+            )
+        return 'ALREADY_ARCHIVED'
+
+    temp_dir = repo / ARCHIVE_ROOT / f'.{task_id}.tmp'
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=False)
+
+    archived_meta = {}
+    archived_files = {}
+    changed_rows = []
+
+    try:
+        meta_out = temp_dir / 'meta'
+        meta_out.mkdir()
+        for name in META_FILES:
+            source = meta / name
+            if source.is_file():
+                target = meta_out / name
+                shutil.copy2(source, target)
+                archived_meta[name] = sha256_file(target)
+
+        marker = tree / '.r2b4_candidate.json'
+        if marker.is_file():
+            shutil.copy2(marker, temp_dir / '.r2b4_candidate.json')
+
+        task_state = tree / 'runtime' / 'agent_coordination' / 'current_change.json'
+        if task_state.is_file():
+            shutil.copy2(task_state, temp_dir / 'task_manifest.json')
+
+        rows = diff.get('files')
+        if not isinstance(rows, list):
+            raise RuntimeError(f'{task_id}: diff.json files mezője hibás.')
+
+        for row in rows:
+            if not isinstance(row, dict):
+                raise RuntimeError(f'{task_id}: hibás diff sor.')
+            relative = str(row.get('path', ''))
+            change = str(row.get('change', '')).upper()
+            if change not in {'ADDED', 'MODIFIED', 'DELETED'}:
+                raise RuntimeError(f'{task_id}: ismeretlen diff change: {change}')
+            changed_rows.append({'path': relative, 'change': change})
+
+            if change == 'DELETED':
+                continue
+
+            source = safe_relative(tree, relative)
+            if source.is_symlink() or not source.is_file():
+                raise RuntimeError(
+                    f'{task_id}: a candidate módosított fájlja hiányzik vagy nem regular file: {relative}'
+                )
+            target = temp_dir / 'files' / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            archived_files[relative] = {
+                'sha256': sha256_file(target),
+                'size_bytes': target.stat().st_size,
+            }
+
+        manifest = {
+            'schema': 'R2B4_GITHUB_CANDIDATE_ARCHIVE_V1',
+            'task_id': task_id,
+            'archived_at_utc': datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z'),
+            'source_workspace': str((WORKSPACE_ROOT / task_id).as_posix()),
+            'reseal_state': reseal_state,
+            'base_fingerprint': audit.get('base_fingerprint'),
+            'candidate_fingerprint': candidate_fingerprint,
+            'changed_file_count': len(changed_rows),
+            'changes': changed_rows,
+            'archived_files': archived_files,
+            'meta_sha256': archived_meta,
+            'note': (
+                'GitHub archive of one terminal candidate. Only candidate changes and compact metadata are stored; '
+                'the duplicated full workspace tree is not.'
+            ),
+        }
+        (temp_dir / 'archive_manifest.json').write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + '\n',
+            encoding='utf-8',
+        )
+
+        archive_dir.parent.mkdir(parents=True, exist_ok=True)
+        temp_dir.replace(archive_dir)
+    except Exception:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+        raise
+
+    return 'ARCHIVED'
+
+
+def archive_candidates(repo):
+    workspace_root = repo / WORKSPACE_ROOT
+    if not workspace_root.is_dir():
+        print('Candidate workspace könyvtár nincs; nincs mit archiválni.')
+        return
+
+    (repo / ARCHIVE_ROOT).mkdir(parents=True, exist_ok=True)
+    counts = {'ARCHIVED': 0, 'ALREADY_ARCHIVED': 0, 'SKIP_ACTIVE': 0, 'SKIP_FAILED': 0}
+
+    for task_dir in sorted(workspace_root.iterdir()):
+        if not task_dir.is_dir() or task_dir.is_symlink():
+            continue
+        status = archive_candidate(repo, task_dir)
+        counts[status] += 1
+        if status == 'ARCHIVED':
+            print(f'Candidate archiválva: {task_dir.name}')
+
+    print(
+        'Candidate archive: '
+        f"új={counts['ARCHIVED']}, "
+        f"már fent={counts['ALREADY_ARCHIVED']}, "
+        f"aktív/lezáratlan={counts['SKIP_ACTIVE']}, "
+        f"hibás audit={counts['SKIP_FAILED']}"
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Az aktuális R2B4 repository változásainak commitolása és GitHub-ra pusholása."
+        description='Az aktuális R2B4 repository változásainak és lezárt candidate-jeinek commitolása és GitHub-ra pusholása.'
     )
-    parser.add_argument(
-        "-m",
-        "--message",
-        default="Update R2B4 system",
-        help='Commit üzenet. Alapértelmezés: "Update R2B4 system"',
-    )
-    parser.add_argument(
-        "--repo",
-        default=str(DEFAULT_REPO),
-        help=f"Git repository útvonala. Alapértelmezés: {DEFAULT_REPO}",
-    )
+    parser.add_argument('-m', '--message', default='Update R2B4 system')
+    parser.add_argument('--repo', default=str(DEFAULT_REPO))
+    parser.add_argument('--no-candidates', action='store_true', help='Ne archiválja a lezárt candidate-eket ebben a futásban.')
     args = parser.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
-
     if not repo.is_dir():
-        print(f"HIBA: A repository könyvtár nem létezik: {repo}", file=sys.stderr)
+        print(f'HIBA: A repository könyvtár nem létezik: {repo}', file=sys.stderr)
         sys.exit(1)
 
-    inside = run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
-        repo,
-        capture=True,
-    )
-    if inside != "true":
-        print(f"HIBA: Nem Git working tree: {repo}", file=sys.stderr)
+    inside = run(['git', 'rev-parse', '--is-inside-work-tree'], repo, capture=True)
+    if inside != 'true':
+        print(f'HIBA: Nem Git working tree: {repo}', file=sys.stderr)
         sys.exit(1)
 
-    branch = run(
-        ["git", "branch", "--show-current"],
-        repo,
-        capture=True,
-    )
+    branch = run(['git', 'branch', '--show-current'], repo, capture=True)
     if not branch:
-        print("HIBA: Detached HEAD állapot; automatikus push leállítva.", file=sys.stderr)
+        print('HIBA: Detached HEAD állapot; automatikus push leállítva.', file=sys.stderr)
         sys.exit(1)
 
-    remotes = run(["git", "remote"], repo, capture=True).splitlines()
-    if "origin" not in remotes:
+    remotes = run(['git', 'remote'], repo, capture=True).splitlines()
+    if 'origin' not in remotes:
         print("HIBA: Nincs 'origin' nevű Git remote.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\nRepository: {repo}")
-    print(f"Branch:     {branch}\n")
+    print(f'\nRepository: {repo}')
+    print(f'Branch:     {branch}\n')
 
-    # Minden módosított, új és törölt fájl stagingbe kerül.
-    run(["git", "add", "-A"], repo)
-
-    # Csak akkor készít commitot, ha a staging area ténylegesen változott.
-    staged = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
-        cwd=repo,
-    ).returncode
-
-    if staged == 1:
-        run(["git", "status", "--short"], repo)
+    if not args.no_candidates:
+        archive_candidates(repo)
         print()
-        run(["git", "commit", "-m", args.message], repo)
+
+    # A runtime/agent_workspaces könyvtár a Git ignore szabályai miatt
+    # automatikusan kimarad; külön exclude pathspec nem kell, mert az
+    # ignorált könyvtár explicit pathspec-említése hibakódot adhat.
+    run(['git', 'add', '-A'], repo)
+
+    staged = subprocess.run(['git', 'diff', '--cached', '--quiet'], cwd=repo).returncode
+    if staged == 1:
+        run(['git', 'status', '--short'], repo)
+        print()
+        run(['git', 'commit', '-m', args.message], repo)
     elif staged == 0:
-        print("Nincs új commitolandó változás.")
+        print('Nincs új commitolandó változás.')
     else:
-        print("HIBA: Nem sikerült ellenőrizni a staged változásokat.", file=sys.stderr)
+        print('HIBA: Nem sikerült ellenőrizni a staged változásokat.', file=sys.stderr)
         sys.exit(staged)
 
-    # Az aktuális branch feltöltése GitHub-ra.
-    run(["git", "push", "origin", branch], repo)
-
-    print("\nKÉSZ: a repository GitHub-ra feltöltve.")
-    run(["git", "status", "--short", "--branch"], repo)
+    run(['git', 'push', 'origin', branch], repo)
+    print('\nKÉSZ: a repository és a lezárt candidate-archívumok GitHub-ra feltöltve.')
+    run(['git', 'status', '--short', '--branch'], repo)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

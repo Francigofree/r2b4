@@ -1,0 +1,137 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase9_legacy_authority_slice1_20260830/meta/audit.json",
+    "audit_sha256": "2158a3b83cba5f45c5b87e537bd01d853a192df44f81969cc16dc87909ebe454",
+    "audited_at_utc": "2026-08-30T07:55:29Z",
+    "base_fingerprint": "4fac58393bf619d8cd1b879395d2ae8318d38c10d14426731ea390e13d7ebca6",
+    "candidate_fingerprint": "3a757a4f0f2cda1a53c5fb14d9edcbfc8ec865258fe75ac4cc73fd28ebe0a11c",
+    "canonical_drift": [],
+    "canonical_fingerprint": "4fac58393bf619d8cd1b879395d2ae8318d38c10d14426731ea390e13d7ebca6",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "driver/motor.py",
+      "tests/test_v3_architecture_boundaries.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase9_legacy_authority_slice1_20260830/meta/diff.json",
+    "diff_sha256": "1424d6b02aa8b87e35ff957f6ea2a4c0743a3de5ae8f4a126bc2bef57e5513b6",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase9_legacy_authority_slice1_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d070398c626b6492506d9016d5392746d786eae27541c1dd189fa9b8a80a23de",
+        "size_bytes": 16500
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "52cd43c30bd45da0077adb8e79fdd0d1b61492ce70ab7356a81acaf86b17b055",
+        "size_bytes": 6054
+      },
+      "changed": null,
+      "path": "driver/motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "07e26d6ff87e57d5088c4005ef589318186417c79a71b997ac85167173e925da",
+        "size_bytes": 130433
+      },
+      "changed": null,
+      "path": "fastgui/backend_api.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f2d2dcf8e1937f3bec46fcf99f0dc2ef99e94a97512d35de1fa606ddecf195f7",
+        "size_bytes": 8775
+      },
+      "changed": null,
+      "path": "os.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "85d4ce01bb3693dfac0b716582419cfcece8fe0945ff5022d0119f53e4791683",
+        "size_bytes": 9567
+      },
+      "changed": null,
+      "path": "tests/test_fastgui_backend_api.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "add73e358060aa1155e8ef9c825545e39bf98a103501ae291479cc19929a42ce",
+        "size_bytes": 5933
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    }
+  ],
+  "goal": "Begin V3 phase 9 with one targeted slice: identify and retire the first concrete legacy GUI/tool/shared-state or motor-writer authority seam, while preserving fail-closed STOP, the audited IDLE-only V3 runtime, the current os.py default until its own explicit cutover, and the prohibition on live motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T07:53:48Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase9_legacy_authority_slice1_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T07:53:48Z",
+  "workflow_evidence": {
+    "audit_sha256": "2158a3b83cba5f45c5b87e537bd01d853a192df44f81969cc16dc87909ebe454",
+    "candidate_fingerprint": "3a757a4f0f2cda1a53c5fb14d9edcbfc8ec865258fe75ac4cc73fd28ebe0a11c",
+    "contract_fingerprint": "0801788067110940b38d18a8f442bbf64fb356b4b80c43c0a83c4f9e5d59aced",
+    "diff_sha256": "1424d6b02aa8b87e35ff957f6ea2a4c0743a3de5ae8f4a126bc2bef57e5513b6",
+    "path": "runtime/agent_workspaces/v3_phase9_legacy_authority_slice1_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "70525b4c1110f1c471b33170837b4658304f787eccebfec85b1bffa7037ff43f"
+  },
+  "workspace": {
+    "base_fingerprint": "4fac58393bf619d8cd1b879395d2ae8318d38c10d14426731ea390e13d7ebca6",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase9_legacy_authority_slice1_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "dee2313b946e922ee8fb2b7b2bb6d5f58d72cbf6ccbb76013bf35ca18b9487e9",
+    "path": "runtime/agent_workspaces/v3_phase9_legacy_authority_slice1_20260830/tree",
+    "reseal": {
+      "audit_sha256": "2158a3b83cba5f45c5b87e537bd01d853a192df44f81969cc16dc87909ebe454",
+      "candidate_fingerprint": "3a757a4f0f2cda1a53c5fb14d9edcbfc8ec865258fe75ac4cc73fd28ebe0a11c",
+      "diff_sha256": "1424d6b02aa8b87e35ff957f6ea2a4c0743a3de5ae8f4a126bc2bef57e5513b6",
+      "path": "runtime/agent_workspaces/v3_phase9_legacy_authority_slice1_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T07:55:29Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "f3634bb499d3f3eb87c0011a5daa7aa90742ffb14446c7561d85c6138c4a65f6",
+      "state": "READY",
+      "task_id": "v3_phase9_legacy_authority_slice1_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/agent_state_reseal_after_discard_20260901/meta/audit.json",
+    "audit_sha256": "447e7b225f6b1f4f00b12de3631a5a655633a80c6099dd2aacb9dbc74d03050b",
+    "audited_at_utc": "2026-09-01T05:00:55Z",
+    "base_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "candidate_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/agent_state_reseal_after_discard_20260901/meta/diff.json",
+    "diff_sha256": "c0c4dbe6929f081e7235c51c2b88203529c581664228d524e430ff0fb361a042",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "agent_state_reseal_after_discard_20260901",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "completed_at_utc": "2026-09-01T05:00:55Z",
+  "files": [
+    {
+      "after": {
+        "exists": true,
+        "sha256": "3dd5bda70f3a189b0a1cd01e83b40d240e0ce3f91624e8ec68fd1932609bc025",
+        "size_bytes": 39513
+      },
+      "before": {
+        "exists": true,
+        "sha256": "3dd5bda70f3a189b0a1cd01e83b40d240e0ce3f91624e8ec68fd1932609bc025",
+        "size_bytes": 39513
+      },
+      "changed": false,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    }
+  ],
+  "goal": "Re-establish a valid current machine task boundary after an explicitly discarded superseded candidate left a deleted workspace referenced as ACTIVE; make no source changes and preserve canonical state before the separately authorized encoder candidate promotion",
+  "promotion_status": "SUPERSEDED",
+  "reason": "Resealed an unchanged candidate so current machine state references an existing preserved workspace after the prior explicit discard; no canonical source or configuration changed.",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-01T05:00:51Z",
+  "status": "SUPERSEDED",
+  "task_id": "agent_state_reseal_after_discard_20260901",
+  "task_mode": "CODE_CHANGE",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "superseded task; no completion claim",
+      "status": "NOT_RUN"
+    }
+  ],
+  "updated_at_utc": "2026-09-01T05:00:55Z",
+  "workflow_evidence": {
+    "audit_sha256": "447e7b225f6b1f4f00b12de3631a5a655633a80c6099dd2aacb9dbc74d03050b",
+    "candidate_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "contract_fingerprint": "fffffca47062ca27fdb59a06406559a813fca10256b6368f7e699767decfe5ca",
+    "diff_sha256": "c0c4dbe6929f081e7235c51c2b88203529c581664228d524e430ff0fb361a042",
+    "path": "runtime/agent_workspaces/agent_state_reseal_after_discard_20260901/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "dc79fa49619e78c41148621ad80d220e1957473776d912502b74c1ed62e0b51c"
+  },
+  "workspace": {
+    "base_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+    "base_manifest_path": "runtime/agent_workspaces/agent_state_reseal_after_discard_20260901/meta/base_manifest.json",
+    "base_manifest_sha256": "c48da580c2c0f38d982550668c51dbd3cdb7cb2ef60002000a9953c2baa5c3cb",
+    "path": "runtime/agent_workspaces/agent_state_reseal_after_discard_20260901/tree",
+    "reseal": {
+      "audit_sha256": "447e7b225f6b1f4f00b12de3631a5a655633a80c6099dd2aacb9dbc74d03050b",
+      "candidate_fingerprint": "44c23812c0e66490d9aa6250ac63d1ba9566dc3409660cf42f9ec62c9d5e3d0f",
+      "diff_sha256": "c0c4dbe6929f081e7235c51c2b88203529c581664228d524e430ff0fb361a042",
+      "path": "runtime/agent_workspaces/agent_state_reseal_after_discard_20260901/meta/reseal.json",
+      "resealed_at_utc": "2026-09-01T05:00:55Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "2eb8e4a4e00c05d6a7d96ec3c771b05916f40453d64e4addc5cbf58e10a12c08",
+      "state": "SUPERSEDED",
+      "task_id": "agent_state_reseal_after_discard_20260901"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "SUPERSEDED"
+  }
+}

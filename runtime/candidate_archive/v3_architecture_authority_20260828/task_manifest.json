@@ -1,0 +1,157 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_architecture_authority_20260828/meta/audit.json",
+    "audit_sha256": "8ee49ec42ac0637efe14b32a7c1a961451cf6bde437d04a94ba1eb4d96ad686e",
+    "audited_at_utc": "2026-08-28T20:40:22Z",
+    "base_fingerprint": "13ffce4cc928845cbc407f27cd7cbd798e5238a088be871952d22abc6970a52e",
+    "candidate_fingerprint": "4cd11da4bbde98f4efe76f8c3b493f4b4e44c19fe5a73102eb77700436f65e97",
+    "canonical_drift": [],
+    "canonical_fingerprint": "13ffce4cc928845cbc407f27cd7cbd798e5238a088be871952d22abc6970a52e",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "project_rules/agent_infrastructure.json",
+      "project_rules/bootstrap_guard.py",
+      "tests/test_agentctl.py",
+      "tests/test_bootstrap_guard.py",
+      "tools/agentctl.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_architecture_authority_20260828/meta/diff.json",
+    "diff_sha256": "1a072074bc2f0b9befbbeb7916de92473ccc49b58053d3dc8dbfb44550210ecc",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "project_rules/agent_infrastructure.json",
+      "project_rules/bootstrap_guard.py",
+      "tests/test_agentctl.py",
+      "tests/test_bootstrap_guard.py",
+      "tools/agentctl.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_architecture_authority_20260828",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "94d92ca979199744a82a06fa9cf01fa5cfc610b4e351f15d42b1c70ecfd12194",
+        "size_bytes": 7434
+      },
+      "changed": null,
+      "path": "project_rules/agent_infrastructure.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "3a658584414e08bdf4ab022b72f13a47523c8c5e6979012bba66fedd71ff47af",
+        "size_bytes": 46750
+      },
+      "changed": null,
+      "path": "project_rules/bootstrap_guard.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "size_bytes": 10489
+      },
+      "changed": null,
+      "path": "project_rules/protected_baseline.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1bbf1501874df17e6057947abfc55844ae4b06fd7f91ac66c85f21bf63bcf0c7",
+        "size_bytes": 31481
+      },
+      "changed": null,
+      "path": "tests/test_agentctl.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "618e792261f9302489d2a0f700bb3120f0fcc7ef702983dca920473aacd5c217",
+        "size_bytes": 52206
+      },
+      "changed": null,
+      "path": "tests/test_bootstrap_guard.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "951eb36fb1785e64f468989eb1e42c611d43ed5999d8d3fac28ab646707d130b",
+        "size_bytes": 82731
+      },
+      "changed": null,
+      "path": "tools/agentctl.py"
+    }
+  ],
+  "goal": "Create and register the normative V3 robot architecture authority with fail-closed hash, marker, and domain-route validation; do not change robot runtime source",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-28T20:31:49Z",
+  "status": "ACTIVE",
+  "task_id": "v3_architecture_authority_20260828",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": true,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-28T20:32:35Z",
+  "workflow_evidence": {
+    "audit_sha256": "8ee49ec42ac0637efe14b32a7c1a961451cf6bde437d04a94ba1eb4d96ad686e",
+    "candidate_fingerprint": "4cd11da4bbde98f4efe76f8c3b493f4b4e44c19fe5a73102eb77700436f65e97",
+    "contract_fingerprint": "d8d22122ee8883d6ddd3eb4f3fb4f5e8b8ae0bd7b65efaca7acb5747e8a670f5",
+    "diff_sha256": "1a072074bc2f0b9befbbeb7916de92473ccc49b58053d3dc8dbfb44550210ecc",
+    "path": "runtime/agent_workspaces/v3_architecture_authority_20260828/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "3ba23cf4a556172a67f15e7de40bcb6100ad7bfddd470057bd61e3b865a24ea6"
+  },
+  "workspace": {
+    "base_fingerprint": "13ffce4cc928845cbc407f27cd7cbd798e5238a088be871952d22abc6970a52e",
+    "base_manifest_path": "runtime/agent_workspaces/v3_architecture_authority_20260828/meta/base_manifest.json",
+    "base_manifest_sha256": "b1a9adc4bbf7422ae558f5186509b985049faf1275e7ab6f8cc5d82da5e6fe72",
+    "path": "runtime/agent_workspaces/v3_architecture_authority_20260828/tree",
+    "reseal": {
+      "audit_sha256": "8ee49ec42ac0637efe14b32a7c1a961451cf6bde437d04a94ba1eb4d96ad686e",
+      "candidate_fingerprint": "4cd11da4bbde98f4efe76f8c3b493f4b4e44c19fe5a73102eb77700436f65e97",
+      "diff_sha256": "1a072074bc2f0b9befbbeb7916de92473ccc49b58053d3dc8dbfb44550210ecc",
+      "path": "runtime/agent_workspaces/v3_architecture_authority_20260828/meta/reseal.json",
+      "resealed_at_utc": "2026-08-28T20:40:22Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "3c4db55377fca3eebd66834a1857974e51c12071a3116e297a7f9d3e605dfcb3",
+      "state": "READY",
+      "task_id": "v3_architecture_authority_20260828"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_motor_writer_boundary_slice1_20260830/meta/audit.json",
+    "audit_sha256": "871611a53441d58ef9621de3269d9a06060eb937f0faea3e8be53022c096bf1d",
+    "audited_at_utc": "2026-08-30T17:50:25Z",
+    "base_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "candidate_fingerprint": "ab7e844b533de0aa7e95f1aa3e44e03bff9426e014986e2463e9e6f9db6b3199",
+    "canonical_drift": [],
+    "canonical_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_motor_writer.py",
+      "v3/adapters/motor_writer.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_motor_writer_boundary_slice1_20260830/meta/diff.json",
+    "diff_sha256": "77a4bcb05fc7544f57dece60c9983c4187a790c90dd851b25fd531854b310748",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_motor_writer_boundary_slice1_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "eb5c4f590e41181264445d1f689b626ec1844ba054270105a4bd9b00fca2af66",
+        "size_bytes": 27185
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4777958c300c7ce0ce315077d77f979d779bbf932b099a81896871330d34529a",
+        "size_bytes": 14668
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_l12_actuation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_pwm.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_writer.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+        "size_bytes": 6203
+      },
+      "changed": null,
+      "path": "v3/adapters/motor_pwm.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/motor_writer.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/layers/l12_actuation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+        "size_bytes": 1007
+      },
+      "changed": null,
+      "path": "v3/ports.py"
+    }
+  ],
+  "goal": "Begin the smallest direct phase-12 prerequisite from canonical slice 7: add a native hardware-free MotorWriter boundary that converts exactly one immutable L12 FinalActuation into exactly one validated Drv8871MotorFrame and invokes one injected frame sink once, preserving tick context, STOP/FAULT all-zero semantics, ALLOW mapping, exception propagation and no retry; characterize the existing pure frame builder through the new boundary while adding no legacy production import, GPIO implementation, device handle, owner loop, clock, thread, process, activate API, runtime cutover, live motion, alternate writer, safety relaxation, or automatic promotion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T17:47:20Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_motor_writer_boundary_slice1_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T17:47:20Z",
+  "workflow_evidence": {
+    "audit_sha256": "871611a53441d58ef9621de3269d9a06060eb937f0faea3e8be53022c096bf1d",
+    "candidate_fingerprint": "ab7e844b533de0aa7e95f1aa3e44e03bff9426e014986e2463e9e6f9db6b3199",
+    "contract_fingerprint": "a279e8fd797cf673b0361969db5468af52d5ef010e03745a0e934cc905ea69ab",
+    "diff_sha256": "77a4bcb05fc7544f57dece60c9983c4187a790c90dd851b25fd531854b310748",
+    "path": "runtime/agent_workspaces/v3_phase12_motor_writer_boundary_slice1_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "487c22fcbf92bb9569037148ac25e1f2b0aca9ddaf5bba2405ce02a58d6950ec"
+  },
+  "workspace": {
+    "base_fingerprint": "0a692a351648b9f3a877bc4b037377f60b3e5b980ef3c0482ac7da1b23b8eca3",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_motor_writer_boundary_slice1_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "e957a25101d8919d02f1f52aff07489dbc8d3ec5e9ee528186c965429447bc86",
+    "path": "runtime/agent_workspaces/v3_phase12_motor_writer_boundary_slice1_20260830/tree",
+    "reseal": {
+      "audit_sha256": "871611a53441d58ef9621de3269d9a06060eb937f0faea3e8be53022c096bf1d",
+      "candidate_fingerprint": "ab7e844b533de0aa7e95f1aa3e44e03bff9426e014986e2463e9e6f9db6b3199",
+      "diff_sha256": "77a4bcb05fc7544f57dece60c9983c4187a790c90dd851b25fd531854b310748",
+      "path": "runtime/agent_workspaces/v3_phase12_motor_writer_boundary_slice1_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T17:50:25Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "5e8af5830fc4d25d22ddbe5f9cf957618e284491e365fc65b856a5dd1ee53c50",
+      "state": "READY",
+      "task_id": "v3_phase12_motor_writer_boundary_slice1_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

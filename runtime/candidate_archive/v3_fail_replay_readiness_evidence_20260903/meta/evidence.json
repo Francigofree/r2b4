@@ -1,0 +1,152 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/audit.json",
+    "audit_sha256": "0ebfe2de2ea7771371c176dd6f91c9958a73022e295e618b004975e3c4c1c7ca",
+    "base_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "candidate_fingerprint": "920c1cd09d4c2b821bfc05e267aa3fcaa788fb4e360c4a88e7f50a5f61893002",
+    "canonical_fingerprint": "8a143777912f73795ce98dad766e1bbaf46e0b273cc25845c104df7018b7ac67",
+    "diff_path": "runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/meta/diff.json",
+    "diff_sha256": "f364516c141e2a0d3c8a199273862cbc921760b5dc97620ef1d83c9ac24935e9"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "e755747c6e0528665495ec7e21e264ab9eb5d758277ba810ae0c0eaa616afad3",
+        "canonical_sha256": "bc77bf6a71374c8945bb24cc497d5fc80898fe3dee7292174bc272256a3188fc"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "030392f01696e4ed90bacfa47f0b1097b679f8d5c0ecab26d3086f101ce92bb2",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "conf/vezerles.json",
+      "replayer/README.md",
+      "sensors/lidar_matcher_process.py",
+      "sensors/lidar_service.py",
+      "tests/test_v3_bounded_live_control_composition.py",
+      "tests/test_v3_bounded_physical_control_composition.py",
+      "tests/test_v3_bounded_physical_runtime.py",
+      "tests/test_v3_bounded_runtime_config.py",
+      "tests/test_v3_gpio_motor_sink.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_latest_lidar_backend.py",
+      "tests/test_v3_live_input_composition.py",
+      "tests/test_v3_live_lidar.py",
+      "tests/test_v3_live_lidar_edge.py",
+      "tests/test_v3_motor_output_composition.py",
+      "tests/test_v3_native_sensor_inputs.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_replay.py",
+      "tests/test_v3_resident_runtime.py",
+      "v3/adapters/gpio_motor.py",
+      "v3/adapters/latest_lidar.py",
+      "v3/adapters/live_lidar.py",
+      "v3/composition/bounded_live_control.py",
+      "v3/composition/bounded_physical_control.py",
+      "v3/composition/motor_output.py",
+      "v3/composition/native_sensor_inputs.py",
+      "v3/composition/resident_live_control.py",
+      "v3/contracts.py",
+      "v3/contracts/__init__.py",
+      "v3/contracts/base.py",
+      "v3/contracts/messages.py",
+      "v3/replay.py",
+      "v3_bounded_config.py",
+      "v3_bounded_runtime.py",
+      "v3_hardware_runtime.py",
+      "v3_runtime.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-09-03T18:11:38Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_fail_replay_readiness_evidence_20260903",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/tree python3 -m pytest -q tests/test_v3_*.py",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_fail_replay_readiness_evidence_20260903/tree python3 -m pytest -q",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

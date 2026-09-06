@@ -1,0 +1,240 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/audit.json",
+    "audit_sha256": "0c53e192fdec20f40274c2c8c9e22b1d77832008e1143162aee54bcbc8a1309a",
+    "audited_at_utc": "2026-08-30T17:04:22Z",
+    "base_fingerprint": "791a7d44360a8409c24f0a024a116bd57b306302ac76c1421f97fe1b6e2bef20",
+    "candidate_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+    "canonical_drift": [],
+    "canonical_fingerprint": "791a7d44360a8409c24f0a024a116bd57b306302ac76c1421f97fe1b6e2bef20",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_native_state_estimation.py",
+      "v3/composition/input_shadow.py",
+      "v3/composition/live_inputs.py",
+      "v3/layers/l3_state_estimation.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/diff.json",
+    "diff_sha256": "dc93300717dfcb37674168b94f83dd82afe8ebedda6371667fca381450f60326",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase11_native_l3_ekf_slice6_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1a453184664af736c38853b729bf614ca69fec7140786cd18c3552de5d04489f",
+        "size_bytes": 24870
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c7a6bfe89b35d49c17fb480cc7df0aee1b70a5c071c5e0c8e3509fa5880c02e3",
+        "size_bytes": 16945
+      },
+      "changed": null,
+      "path": "conf/vezerles.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c42239a7a32c81a35d1ab60958aae54bb134c4297de60210c39cb446a088b055",
+        "size_bytes": 56555
+      },
+      "changed": null,
+      "path": "middleware/ekf.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7f9c4384c4ee514d474196d213b8834aca13a74fc3282cc7618d36f9ef32615f",
+        "size_bytes": 18052
+      },
+      "changed": null,
+      "path": "middleware/ekf_manager.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4da0250761fa1068104fe6d01e2c9ea8d9fec99e2332b7f55c27873f3a074770",
+        "size_bytes": 14313
+      },
+      "changed": null,
+      "path": "tests/test_ekf_integrity.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4b6fb1c8f12321aec76eb696c04844deb5998b3956843cf5ccf565bf585d7d1c",
+        "size_bytes": 7671
+      },
+      "changed": null,
+      "path": "tests/test_lidar_ekf_observation_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0d876ae58291628ed537795cb39af98ddb7623be4b7a39d3274a464869d6faf4",
+        "size_bytes": 13780
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "facf138bf8290c5baf558ce6215369bfd002cc15c6aee3ebe335f756648fa6af",
+        "size_bytes": 7687
+      },
+      "changed": null,
+      "path": "tests/test_v3_l0_l4_shadow.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "31a3a7dc8c859e27e381a6fcfe168e01bccae360e059563dd3a2343d772e7b6d",
+        "size_bytes": 5576
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_state_estimation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f20ff5cd38a1b9d62dfdfb435656b47032d2ed5326d7bb79761abb8b736caf4f",
+        "size_bytes": 8195
+      },
+      "changed": null,
+      "path": "v3/composition/full_fake.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "99fa25d8bf45bac7d2e4bed79f2fccc82c905de13066a32010522164e24cff5c",
+        "size_bytes": 4774
+      },
+      "changed": null,
+      "path": "v3/composition/input_shadow.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "49ba20e27d66ec96d94bd16bf2a67072377e90b7967683382ee5bc40025b2364",
+        "size_bytes": 3250
+      },
+      "changed": null,
+      "path": "v3/composition/live_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/contracts.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b2f44a606e69feb769ade5539fb7710075af95eda67c238ae7975bb51a63a306",
+        "size_bytes": 7324
+      },
+      "changed": null,
+      "path": "v3/layers/l3_state_estimation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "076dab8792b76dd5a483d3b1e15dd8ba84f5eecb5ff26cd80ac138a3351c6970",
+        "size_bytes": 5519
+      },
+      "changed": null,
+      "path": "v3/layers/l4_world_model.py"
+    }
+  ],
+  "goal": "Continue V3 phase 11 by auditing the complete working legacy EKF algorithmic core and the V3 L3 contract, then port the minimal deterministic math and owned state into a native V3 state estimator used by LiveInputComposition so ShadowStateEstimator is no longer the live-production L3; preserve injected TickContext timing, immutable RobotEstimate output, CCW-positive pose frame, fail-closed validation, and direct algorithm characterization, while adding no production legacy middleware import, shared state, API/runtime dependency, wall clock, thread, process, hardware access, activate API, writer change, or motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T16:56:06Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase11_native_l3_ekf_slice6_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T16:56:06Z",
+  "workflow_evidence": {
+    "audit_sha256": "0c53e192fdec20f40274c2c8c9e22b1d77832008e1143162aee54bcbc8a1309a",
+    "candidate_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+    "contract_fingerprint": "54fbaec65149f24177cf0b88609ceaef8eb3d24bb4b8f71652fe64e1ed6e0bdb",
+    "diff_sha256": "dc93300717dfcb37674168b94f83dd82afe8ebedda6371667fca381450f60326",
+    "path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "126c661991816f165ff23f246b5c43ae87ba95ee0aecd1aefff8c71f485b2e28"
+  },
+  "workspace": {
+    "base_fingerprint": "791a7d44360a8409c24f0a024a116bd57b306302ac76c1421f97fe1b6e2bef20",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "e1a1de583a7ecc5444828707aecc237e25eb72095260941f7601b63033ef537d",
+    "path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/tree",
+    "reseal": {
+      "audit_sha256": "0c53e192fdec20f40274c2c8c9e22b1d77832008e1143162aee54bcbc8a1309a",
+      "candidate_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+      "diff_sha256": "dc93300717dfcb37674168b94f83dd82afe8ebedda6371667fca381450f60326",
+      "path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T17:04:22Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "fae7554b311c3e38fa8534ccee4983a8272ff0c393ee35ca4032f0d386820945",
+      "state": "READY",
+      "task_id": "v3_phase11_native_l3_ekf_slice6_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

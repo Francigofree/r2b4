@@ -1,0 +1,118 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_read_only_shadow_sidecar_20260830/meta/audit.json",
+    "audit_sha256": "33e4e4efc86c901f420b1192f500e46954cc97535da502e195a75448956fa8a5",
+    "audited_at_utc": "2026-08-30T06:20:45Z",
+    "base_fingerprint": "d5f1500fc3519c8ae84364b18347d834f22f65e68181b14e22e20af3c78e5911",
+    "candidate_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "canonical_drift": [],
+    "canonical_fingerprint": "d5f1500fc3519c8ae84364b18347d834f22f65e68181b14e22e20af3c78e5911",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_read_only_shadow.py",
+      "v3/composition/__init__.py",
+      "v3/composition/read_only_shadow.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_read_only_shadow_sidecar_20260830/meta/diff.json",
+    "diff_sha256": "1bcb6806bb4eb49c48d5de6b63b1fce4ba074091c8ec39deaead284f346a49d7",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_read_only_shadow_sidecar_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e130be22d050d86794a0412567ae0a8570eaf8572487426cf4fd43f77a008a1a",
+        "size_bytes": 14757
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_read_only_shadow.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "6013caa4ff2e48a504644019d990fe46c27950bf3ab1feb2426231f343210357",
+        "size_bytes": 749
+      },
+      "changed": null,
+      "path": "v3/composition/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/read_only_shadow.py"
+    }
+  ],
+  "goal": "Implement the V3 read-only shadow sidecar in a separate spawned process with immutable IPC, no shared mutable state, and no writer capability",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T06:17:35Z",
+  "status": "ACTIVE",
+  "task_id": "v3_read_only_shadow_sidecar_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T06:17:35Z",
+  "workflow_evidence": {
+    "audit_sha256": "33e4e4efc86c901f420b1192f500e46954cc97535da502e195a75448956fa8a5",
+    "candidate_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "contract_fingerprint": "5f6762be7b7895ef8fad5aa4eaaea10447df2e73d641c8c8d55de0db2a3a06f1",
+    "diff_sha256": "1bcb6806bb4eb49c48d5de6b63b1fce4ba074091c8ec39deaead284f346a49d7",
+    "path": "runtime/agent_workspaces/v3_read_only_shadow_sidecar_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "013f5b3a977de34a0b582a93203c62854d8ce8fcddb62481a26a261523066cda"
+  },
+  "workspace": {
+    "base_fingerprint": "d5f1500fc3519c8ae84364b18347d834f22f65e68181b14e22e20af3c78e5911",
+    "base_manifest_path": "runtime/agent_workspaces/v3_read_only_shadow_sidecar_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "6af55b4cf15cab31fbd162161d115ce2c83d1727030a013bdfcbf634d7f651c2",
+    "path": "runtime/agent_workspaces/v3_read_only_shadow_sidecar_20260830/tree",
+    "reseal": {
+      "audit_sha256": "33e4e4efc86c901f420b1192f500e46954cc97535da502e195a75448956fa8a5",
+      "candidate_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+      "diff_sha256": "1bcb6806bb4eb49c48d5de6b63b1fce4ba074091c8ec39deaead284f346a49d7",
+      "path": "runtime/agent_workspaces/v3_read_only_shadow_sidecar_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T06:20:45Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "998309bc81362ef3ae5db39d6d66c6ae6965c31651285f5a0fad737a59a1055d",
+      "state": "READY",
+      "task_id": "v3_read_only_shadow_sidecar_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

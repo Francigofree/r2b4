@@ -1,0 +1,118 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_bounded_owner_loop_slice8_20260831/meta/audit.json",
+    "audit_sha256": "47ce73f89a76ea885e2d9224d0d0d9a3b66ce595925c5d45735cc2d8388ae9ad",
+    "audited_at_utc": "2026-08-31T18:36:52Z",
+    "base_fingerprint": "2c4c87a0f7f25a1b95def7a3cb62d85b5f21dde31b809de6bbe6b19b0f2cccea",
+    "candidate_fingerprint": "fcba46d8610351661f808418bd8ee331472c1704f96f5894cf4dc1dc43e34ec7",
+    "canonical_drift": [],
+    "canonical_fingerprint": "2c4c87a0f7f25a1b95def7a3cb62d85b5f21dde31b809de6bbe6b19b0f2cccea",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_bounded_physical_runtime.py",
+      "v3_bounded_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_bounded_owner_loop_slice8_20260831/meta/diff.json",
+    "diff_sha256": "c889de337459db51bffbc8f3bcd3b4d2177f5bfb39bcd4a99ad314e149b15ef5",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_bounded_owner_loop_slice8_20260831",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "781038fdadc79f1271e0ef8b0deb62d623f36c979d1b875a1940999d85b3b550",
+        "size_bytes": 33256
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9ddade3458072c95f38eeb7f166d860fdc008661c0da3df35731c3164963770b",
+        "size_bytes": 20150
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3_bounded_runtime.py"
+    }
+  ],
+  "goal": "Continue from promoted phase-12 slice 7 with the next necessary V3 runtime boundary: add an explicit finite bounded physical owner loop that validates immutable schedule and injected callables before GPIO claim, constructs exactly one BoundedPhysicalControlComposition, owns monotonically scheduled TickContext values from tick zero through one post-window IDLE tick, requires a possible preflight tick before ACTIVE, stops immediately after a committed FAULT, always performs final zero/handle release in finally, and returns a minimal success/fault status; prove the full loop with fake sources, fake GPIO, fake clock and stop request including bounded ACTIVE, post-window zero, early stop, clock regression, source fault no-retry and close, while adding no concrete sensor driver, legacy production import, external command API, signal handler, main entrypoint, automatic start, real hardware execution, live motion, alternate writer, safety relaxation or automatic promotion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-31T18:29:06Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_bounded_owner_loop_slice8_20260831",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-31T18:29:06Z",
+  "workflow_evidence": {
+    "audit_sha256": "47ce73f89a76ea885e2d9224d0d0d9a3b66ce595925c5d45735cc2d8388ae9ad",
+    "candidate_fingerprint": "fcba46d8610351661f808418bd8ee331472c1704f96f5894cf4dc1dc43e34ec7",
+    "contract_fingerprint": "6ee3e7e44abb88511c2332c0dad9796b45b1bea0cebe4caabe02c8949af4cec0",
+    "diff_sha256": "c889de337459db51bffbc8f3bcd3b4d2177f5bfb39bcd4a99ad314e149b15ef5",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_owner_loop_slice8_20260831/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "18d1e8fe2888da9c04083ebd2b360d1456319c58a9e592cf70dfc4d0d2746a46"
+  },
+  "workspace": {
+    "base_fingerprint": "2c4c87a0f7f25a1b95def7a3cb62d85b5f21dde31b809de6bbe6b19b0f2cccea",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_bounded_owner_loop_slice8_20260831/meta/base_manifest.json",
+    "base_manifest_sha256": "105d437eb899a29a8d5b21c44c8e7508f2dbfe76cce9d5965093e58223ef9d64",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_owner_loop_slice8_20260831/tree",
+    "reseal": {
+      "audit_sha256": "47ce73f89a76ea885e2d9224d0d0d9a3b66ce595925c5d45735cc2d8388ae9ad",
+      "candidate_fingerprint": "fcba46d8610351661f808418bd8ee331472c1704f96f5894cf4dc1dc43e34ec7",
+      "diff_sha256": "c889de337459db51bffbc8f3bcd3b4d2177f5bfb39bcd4a99ad314e149b15ef5",
+      "path": "runtime/agent_workspaces/v3_phase12_bounded_owner_loop_slice8_20260831/meta/reseal.json",
+      "resealed_at_utc": "2026-08-31T18:36:52Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "b9459b0144eeaaf88df5b23cc8a88e843854690967cab9dbcd904ce214862b20",
+      "state": "READY",
+      "task_id": "v3_phase12_bounded_owner_loop_slice8_20260831"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/meta/audit.json",
+    "audit_sha256": "cca1f355b859fcd186eba31e1c5f0f9ad4623acfb0e2d839e1671616a077e652",
+    "audited_at_utc": "2026-09-02T12:38:17Z",
+    "base_fingerprint": "025c4e62a4418f7abd830489c550671312976146f70bc9cb2465fcca6f1aaed8",
+    "candidate_fingerprint": "102eabaf7cb9dd52744090ef62330de8c34182b61bd146b631cb7aec39f65239",
+    "canonical_drift": [],
+    "canonical_fingerprint": "025c4e62a4418f7abd830489c550671312976146f70bc9cb2465fcca6f1aaed8",
+    "changed_files": [
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_resident_runtime.py",
+      "v3/composition/__init__.py",
+      "v3/composition/resident_live_control.py",
+      "v3/composition/resident_physical_control.py",
+      "v3_hardware_runtime.py",
+      "v3_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/meta/diff.json",
+    "diff_sha256": "a85b0ba24a9c3b54e72bb28b02a2fe536134e839db550c0cc53956c5fbf014d9",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_resident_hardware_runtime_slice20_20260902",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0b5a2ed48b5d9330422e6ae971c117f0c78649cd0fc27314a5ce6178301bea47",
+        "size_bytes": 10549
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "194c6ea2b5b0ed78d41de254b1fd81fbbcd2ed1cfd65c8df4e0a72539787faec",
+        "size_bytes": 11322
+      },
+      "changed": null,
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "88a104b83cf37e1703a1332263c6f8348d52a14219aee84c09f6d6b680e0b51f",
+        "size_bytes": 1707
+      },
+      "changed": null,
+      "path": "v3/composition/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/resident_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/resident_physical_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "af2beacd10fd04993f614dd9575b372974c3a7a39161aee7bd59807ddea63d77",
+        "size_bytes": 9259
+      },
+      "changed": null,
+      "path": "v3_bounded_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "74add5916e69d757fef99446aca889f1b6d7ec6fcb3a2203a0bf1b6e177d5cc5",
+        "size_bytes": 14955
+      },
+      "changed": null,
+      "path": "v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3_runtime.py"
+    }
+  ],
+  "goal": "Turn the proven finite native V3 hardware composition into a production-shaped resident runtime lifecycle with one owned sensor and motor capability, signal-driven fail-closed shutdown, explicit command-source boundary, compact runtime status, and deterministic tests, without adding any alternate or legacy motor-control path.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T08:47:05Z",
+  "status": "ACTIVE",
+  "task_id": "v3_resident_hardware_runtime_slice20_20260902",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T08:49:37Z",
+  "workflow_evidence": {
+    "audit_sha256": "cca1f355b859fcd186eba31e1c5f0f9ad4623acfb0e2d839e1671616a077e652",
+    "candidate_fingerprint": "102eabaf7cb9dd52744090ef62330de8c34182b61bd146b631cb7aec39f65239",
+    "contract_fingerprint": "1ddbae1797312b9f4e7c4da30abda76ac8ce3c41b1ece5233c5cdddd4dd1d8d6",
+    "diff_sha256": "a85b0ba24a9c3b54e72bb28b02a2fe536134e839db550c0cc53956c5fbf014d9",
+    "path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "ed4082a6fe4414e31ffd1e04646a9af77e33a0cb917db6dddb4fd87874b23622"
+  },
+  "workspace": {
+    "base_fingerprint": "025c4e62a4418f7abd830489c550671312976146f70bc9cb2465fcca6f1aaed8",
+    "base_manifest_path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "924fedfc965eb5e497ffd8fd28058d274057e3f272ee34a09d69fefd5eec648d",
+    "path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/tree",
+    "reseal": {
+      "audit_sha256": "cca1f355b859fcd186eba31e1c5f0f9ad4623acfb0e2d839e1671616a077e652",
+      "candidate_fingerprint": "102eabaf7cb9dd52744090ef62330de8c34182b61bd146b631cb7aec39f65239",
+      "diff_sha256": "a85b0ba24a9c3b54e72bb28b02a2fe536134e839db550c0cc53956c5fbf014d9",
+      "path": "runtime/agent_workspaces/v3_resident_hardware_runtime_slice20_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T12:38:17Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "a65ac3c7f171e6571afbd934178ecff4a1102f0d6dbf9f14b5e229d8ad516484",
+      "state": "READY",
+      "task_id": "v3_resident_hardware_runtime_slice20_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

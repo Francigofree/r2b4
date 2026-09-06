@@ -1,0 +1,160 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/audit.json",
+    "audit_sha256": "965cce6ff33f73c573821ac33c74c16fc28a709999cb2b07c4b7791b45611047",
+    "base_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "candidate_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
+    "canonical_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "diff_path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/diff.json",
+    "diff_sha256": "0dc719ec2dfbb83dbe9da96407960788c37fd5a469bfba488fd150721ef557a9"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "71495aeb88a3c053d2113a1a9d18c9bbd1272e0b560044211c30abf2e6c94959",
+        "canonical_sha256": "2873ad232941ec0a3a06c282e0c84e984299719fd6f266a21f7beef6572f5c78"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "2ed03a674a771177b8da0da4dad604d63a9fd7c011d54c02d7035fcbbd3e7dc5",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_latest_lidar_backend.py",
+      "tests/test_v3_live_lidar.py",
+      "tests/test_v3_live_lidar_edge.py",
+      "tests/test_v3_native_lidar_port.py",
+      "tests/test_v3_native_sensor_inputs.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_replay.py",
+      "tests/test_v3_resident_runtime.py",
+      "tests/test_v3_rplidar_c1.py",
+      "tests/test_v3_sensor_measurement_tool.py",
+      "tests/test_v3_tick_engine.py",
+      "tools/v3_sensor_measurement.py",
+      "v3/adapters/latest_lidar.py",
+      "v3/adapters/legacy_donors/lidar_estimator.py",
+      "v3/adapters/live_lidar.py",
+      "v3/adapters/native_lidar_port.py",
+      "v3/adapters/rplidar_c1.py",
+      "v3/composition/native_control.py",
+      "v3/composition/native_sensor_inputs.py",
+      "v3/engine.py",
+      "v3/import_guard.py",
+      "v3/layers/l12_safety_final.py",
+      "v3/layers/l4_world_model.py",
+      "v3/lidar_matcher_process.py",
+      "v3/replay.py",
+      "v3_bounded_config.py",
+      "v3_process_runtime.py"
+    ]
+  },
+  "full_regression_reason": "SHARED_CONTRACT_CHANGE",
+  "generated_at_utc": "2026-09-05T16:22:41Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_native_lidar_integration_20260904",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m py_compile v3/adapters/rplidar_c1.py v3/adapters/native_lidar_port.py v3/adapters/latest_lidar.py v3/adapters/live_lidar.py v3/lidar_matcher_process.py v3/engine.py v3/layers/l12_safety_final.py v3/layers/l4_world_model.py v3/composition/native_control.py v3/import_guard.py v3/replay.py v3_bounded_config.py v3_process_runtime.py tools/v3_sensor_measurement.py",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m pytest -q tests/test_v3_native_lidar_port.py tests/test_v3_rplidar_c1.py tests/test_v3_replay.py",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m pytest -q tests/test_v3*.py",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m pytest -q",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONPATH=. python3 tools/v3_sensor_measurement.py --ticks 200",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

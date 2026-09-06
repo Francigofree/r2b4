@@ -1,0 +1,149 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice2_20260830/meta/audit.json",
+    "audit_sha256": "93f0752446fbf20f7eb8461616a55913bbd9bd2cd377c94ddf60d5b6893d017f",
+    "audited_at_utc": "2026-08-30T12:41:58Z",
+    "base_fingerprint": "bac16b85e0c55bbeb8beae633af9afe9915e5b3be07204e41dd9df305a14e0d3",
+    "candidate_fingerprint": "5295a9647ed857c55cebd828c51d76f4ce23274b7d1044df420f71e4a5cb456a",
+    "canonical_drift": [],
+    "canonical_fingerprint": "bac16b85e0c55bbeb8beae633af9afe9915e5b3be07204e41dd9df305a14e0d3",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_motor_pwm_contract.py",
+      "v3/adapters/live_idle.py",
+      "v3/adapters/motor_pwm.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice2_20260830/meta/diff.json",
+    "diff_sha256": "46a7d37415314f4a314d37d2d556cd634e63c62c37fec668be963382dc990920",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase10_hardware_contract_slice2_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "10f42fb6c6f2001767a55730b8b0d438fee53e37c4e2d9503a86942e9b81de34",
+        "size_bytes": 19752
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b1d5e418eed1a77d219cd7608b2afb600eb3d0ce3580d8de2c50f20ee8697203",
+        "size_bytes": 9505
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9a81d662e06060dc14ab069ee4237fa8465b71693f5b498d94b9056b9ddd1f65",
+        "size_bytes": 8080
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_idle_cutover.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_pwm_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0113edd8fe523807c2b5725e9cf190f210e62672db145899e1054b3ed55e17b4",
+        "size_bytes": 7623
+      },
+      "changed": null,
+      "path": "v3/adapters/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/motor_pwm.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "cf07df4b2558dbdef1828f57125aecd2c56f07c436848ec48e60683269a8f229",
+        "size_bytes": 2876
+      },
+      "changed": null,
+      "path": "v3/composition/live_idle.py"
+    }
+  ],
+  "goal": "Continue V3 phase 10 with exactly one evidence-backed native hardening and physical-contract-parity slice after the immutable polarity/decay and partial-claim fail-closed baseline; preserve IDLE-only zero output, no ACTIVE transition, no live motion, the canonical os.py legacy default, single L12 writer authority, and all V3 replay/import/safety contracts",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T12:38:13Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase10_hardware_contract_slice2_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T12:39:40Z",
+  "workflow_evidence": {
+    "audit_sha256": "93f0752446fbf20f7eb8461616a55913bbd9bd2cd377c94ddf60d5b6893d017f",
+    "candidate_fingerprint": "5295a9647ed857c55cebd828c51d76f4ce23274b7d1044df420f71e4a5cb456a",
+    "contract_fingerprint": "13a9d24b89576b921e2bfe2cac555c782697f8ca117852b41136c128f5f47a7d",
+    "diff_sha256": "46a7d37415314f4a314d37d2d556cd634e63c62c37fec668be963382dc990920",
+    "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice2_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "28d6f457d6e429c0ed08638dea68f784e30602c7b03b4b963842ba413e9331a0"
+  },
+  "workspace": {
+    "base_fingerprint": "bac16b85e0c55bbeb8beae633af9afe9915e5b3be07204e41dd9df305a14e0d3",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice2_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "8fef5fee63e167a26d0d80ec3e01efb98f5fb15ad15607dafc7819d6b8323345",
+    "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice2_20260830/tree",
+    "reseal": {
+      "audit_sha256": "93f0752446fbf20f7eb8461616a55913bbd9bd2cd377c94ddf60d5b6893d017f",
+      "candidate_fingerprint": "5295a9647ed857c55cebd828c51d76f4ce23274b7d1044df420f71e4a5cb456a",
+      "diff_sha256": "46a7d37415314f4a314d37d2d556cd634e63c62c37fec668be963382dc990920",
+      "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice2_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T12:41:58Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "702357cd6e5b53f9a728780dd5ce160818eda5d2c0313e9e6b743b3bffd03353",
+      "state": "READY",
+      "task_id": "v3_phase10_hardware_contract_slice2_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

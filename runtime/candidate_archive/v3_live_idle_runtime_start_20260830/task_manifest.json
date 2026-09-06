@@ -1,0 +1,143 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_live_idle_runtime_start_20260830/meta/audit.json",
+    "audit_sha256": "80ed401c5711414eee083db2733b296a1c2f67d799af49046077d3aeb2f888d5",
+    "audited_at_utc": "2026-08-30T07:26:06Z",
+    "base_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "candidate_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "canonical_drift": [],
+    "canonical_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/v3_live_idle_runtime_start_20260830/meta/diff.json",
+    "diff_sha256": "86f19b7effcb0505e3309eae24d09aa08c09b10aa3ced7982b32a231ec17cc5e",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_live_idle_runtime_start_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bcb50b392da370f5e32d4e62dbd074f3509a29a1b1ed049dda151cd48a4f5953",
+        "size_bytes": 16298
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "daef0e05546ef9b83a1104f823eb9e65b8ae0e8ca971db13e3b69f4f72f827c2",
+        "size_bytes": 1030
+      },
+      "changed": null,
+      "path": "conf/hardver.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "add73e358060aa1155e8ef9c825545e39bf98a103501ae291479cc19929a42ce",
+        "size_bytes": 5933
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d64fca7fa7ea6608ad63eac6039dbdf2d192455450945d0e96af0137f12af211",
+        "size_bytes": 6104
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_idle_cutover.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1093e28baa9a6b949cef148b50d69128f11f5ba672aa96dbca98cb735a44ac22",
+        "size_bytes": 6927
+      },
+      "changed": null,
+      "path": "v3/adapters/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "cf07df4b2558dbdef1828f57125aecd2c56f07c436848ec48e60683269a8f229",
+        "size_bytes": 2876
+      },
+      "changed": null,
+      "path": "v3/composition/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "96d9d38ae6818e5593a38fbe22bfe0dded645d6d4f2d4a009b9c5dcd46bf1d22",
+        "size_bytes": 4223
+      },
+      "changed": null,
+      "path": "v3_idle_runtime.py"
+    }
+  ],
+  "goal": "Run a fresh no-motion Test Hub preflight, then start the promoted canonical V3 live IDLE runtime as the sole GPIO owner, verify IDLE/PWM-zero without any ACTIVE or motion path, and leave it running until an explicit stop request",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T07:21:01Z",
+  "status": "ACTIVE",
+  "task_id": "v3_live_idle_runtime_start_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T07:21:01Z",
+  "workflow_evidence": {
+    "audit_sha256": "80ed401c5711414eee083db2733b296a1c2f67d799af49046077d3aeb2f888d5",
+    "candidate_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "contract_fingerprint": "1db64d215b1338670a5215e72354ff4a57c31f232d2b6c95f2eae380d1ad274a",
+    "diff_sha256": "86f19b7effcb0505e3309eae24d09aa08c09b10aa3ced7982b32a231ec17cc5e",
+    "path": "runtime/agent_workspaces/v3_live_idle_runtime_start_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "40a58f7197079b04844adf06ca113355b816e2fe68242f02531bc7f396572200"
+  },
+  "workspace": {
+    "base_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+    "base_manifest_path": "runtime/agent_workspaces/v3_live_idle_runtime_start_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "20bef0545304a1a6da365d9679cfa41bd6557e135a29536ebc5fdb2644bb3f69",
+    "path": "runtime/agent_workspaces/v3_live_idle_runtime_start_20260830/tree",
+    "reseal": {
+      "audit_sha256": "80ed401c5711414eee083db2733b296a1c2f67d799af49046077d3aeb2f888d5",
+      "candidate_fingerprint": "76ed0683420b1fb52df482e3e5f8ad0dd8619f00181af504307292ee6b36ae5b",
+      "diff_sha256": "86f19b7effcb0505e3309eae24d09aa08c09b10aa3ced7982b32a231ec17cc5e",
+      "path": "runtime/agent_workspaces/v3_live_idle_runtime_start_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T07:26:06Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "9bb7052f18bbf123b650ed1bafb2c623434135cf271a251b18bdd17afee1302e",
+      "state": "READY",
+      "task_id": "v3_live_idle_runtime_start_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

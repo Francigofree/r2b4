@@ -1,0 +1,115 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/audit.json",
+    "audit_sha256": "dfe00bc13c5cc57ad75c44e7264d6266f0b0f56dc0ee38f696a500d719ffbd2f",
+    "base_fingerprint": "30d0d952b0c80414395d944e5e0422a0dce2ad13c87ca98ddbf9ebe30820b939",
+    "candidate_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "canonical_fingerprint": "30d0d952b0c80414395d944e5e0422a0dce2ad13c87ca98ddbf9ebe30820b939",
+    "diff_path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/diff.json",
+    "diff_sha256": "0c4fbfbe1acae85afca259f15eb546305e35dad9942d4dc4f3bcb1c968ca3d44"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "63b51ea05fe7df8fabf8e2b267c2384e98bf1de77b3c0bdf9ca44c5c5fb2f3e7",
+        "canonical_sha256": "20ffb3eeba074f02d242a92033992cf7191ce5ee7705d43284ffccfb153fbdf5"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "0fe765f6f04e98b44189da68e7e3106010c59f7cab4c6f4618bff3933e7cbc3b",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_motor_output_composition.py",
+      "v3/composition/__init__.py",
+      "v3/composition/motor_output.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-08-30T18:35:40Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_phase12_motor_output_composition_slice3_20260830",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/tree R2B4_AGENT_CANDIDATE=1 pytest -q tests/test_v3_motor_output_composition.py tests/test_v3_gpio_motor.py tests/test_v3_motor_writer.py tests/test_v3_motor_pwm_contract.py tests/test_v3_live_idle_cutover.py tests/test_v3_architecture_boundaries.py",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

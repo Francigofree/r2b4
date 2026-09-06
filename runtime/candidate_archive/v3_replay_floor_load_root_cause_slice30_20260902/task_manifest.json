@@ -1,0 +1,117 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/audit.json",
+    "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
+    "audited_at_utc": "2026-09-02T19:02:42Z",
+    "base_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "canonical_drift": [],
+    "canonical_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "changed_files": [
+      "replayer/README.md",
+      "tests/test_v3_replay.py",
+      "v3/replay.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/diff.json",
+    "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_replay_floor_load_root_cause_slice30_20260902",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b1a5a9ec04b9828a5b41e16d66c843ec982b04092daf4f374d2160fe0ba13878",
+        "size_bytes": 5341
+      },
+      "changed": null,
+      "path": "replayer/README.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
+        "size_bytes": 13005
+      },
+      "changed": null,
+      "path": "v3/layers/l11_actuator_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f33453184f4600f5eb94963d1c56d531260138b77666713ee7ca560a31cfb9b9",
+        "size_bytes": 3105
+      },
+      "changed": null,
+      "path": "v3/replay.py"
+    }
+  ],
+  "goal": "Deterministically replay the existing 2.0 s V3 floor-load full-tick capture, extend Replayer V3 only as necessary, and produce source-first root-cause evidence for L10/L11 setpoint, speed-map feed-forward, PI terms, integrator growth, limits, measured wheel speeds, and bias.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T18:41:39Z",
+  "status": "ACTIVE",
+  "task_id": "v3_replay_floor_load_root_cause_slice30_20260902",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T18:44:15Z",
+  "workflow_evidence": {
+    "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
+    "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+    "contract_fingerprint": "09c4e0f114018f098d63deb3a9194569a629499985cecb8157501b60bd8dd75b",
+    "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d",
+    "path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "d9459036e2a405b30fabe933f0882f125cbb7938efb3b1f929db40534603f1b1"
+  },
+  "workspace": {
+    "base_fingerprint": "6b0d82c028a69156615d2c5b85b55c59ee1906cfc99462dcb5db3432a0ab351a",
+    "base_manifest_path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "b2e7eb92f8c7ac9615554a79f69d15f84d5c51cb4c2fe5e416621e0f99859b78",
+    "path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/tree",
+    "reseal": {
+      "audit_sha256": "517a613efc23e8171e45694c44bace384d8013ab1bdbf2a86aba822e8d550852",
+      "candidate_fingerprint": "7da2a2ceb3a9513b4f0f744773270cea4a29e12a1d4ba8309fe9e2dfc6b61486",
+      "diff_sha256": "42265ffae023f966a0ea1ff0a37ee2c4ea2ec073d7f8714c96f4328744ff7d7d",
+      "path": "runtime/agent_workspaces/v3_replay_floor_load_root_cause_slice30_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T19:02:42Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "e4f76c529f50efe6456b960ae5a40361e7d138a33a95157c7126cba235e462eb",
+      "state": "READY",
+      "task_id": "v3_replay_floor_load_root_cause_slice30_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

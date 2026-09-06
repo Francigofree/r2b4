@@ -1,0 +1,117 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase9_legacy_motor_api_slice2_20260830/meta/audit.json",
+    "audit_sha256": "8673d161196fcb610f616e9f1142339323447540a56ba0dfcefddc82cdfab2ee",
+    "audited_at_utc": "2026-08-30T08:01:02Z",
+    "base_fingerprint": "3a757a4f0f2cda1a53c5fb14d9edcbfc8ec865258fe75ac4cc73fd28ebe0a11c",
+    "candidate_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+    "canonical_drift": [],
+    "canonical_fingerprint": "3a757a4f0f2cda1a53c5fb14d9edcbfc8ec865258fe75ac4cc73fd28ebe0a11c",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "driver/motor.py",
+      "tests/test_v3_architecture_boundaries.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase9_legacy_motor_api_slice2_20260830/meta/diff.json",
+    "diff_sha256": "d69035e081a192cd0ae62bfc2e425b3a15b5cc837b8775dd28f9d5384d3c287f",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase9_legacy_motor_api_slice2_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a28d5fa605bec99a546e9e64b6df64371d9de0808e6de9fd4b4ff6a402694dc3",
+        "size_bytes": 16906
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e433a93ff79cc6caf76c31db815a1aefc35b85e3fbbfc359345262542c0c7954",
+        "size_bytes": 5432
+      },
+      "changed": null,
+      "path": "driver/motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "655f9da8215ea72081568f595c68b81cfde470b2d5fb0778580cc40ffebd7f42",
+        "size_bytes": 2053
+      },
+      "changed": null,
+      "path": "tests/test_drv8871_motor_hal.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f8e35bf99c680bc642d03a39a832b6cfb0b385375e8207921f2f6200134f0387",
+        "size_bytes": 6791
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    }
+  ],
+  "goal": "Continue V3 phase 9 by retiring the unused direct legacy AlbaMotor forward/backward write entry points after reference proof, while preserving the set_pwm path required by the current os.py legacy default, fail-closed stop/close behavior, the audited IDLE-only V3 runtime, and the prohibition on live motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T07:59:12Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase9_legacy_motor_api_slice2_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T07:59:12Z",
+  "workflow_evidence": {
+    "audit_sha256": "8673d161196fcb610f616e9f1142339323447540a56ba0dfcefddc82cdfab2ee",
+    "candidate_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+    "contract_fingerprint": "0fbf3b3541651b19afcd4a28f8a5477a1ccd4a43ae08bb5095066b00d73feaf2",
+    "diff_sha256": "d69035e081a192cd0ae62bfc2e425b3a15b5cc837b8775dd28f9d5384d3c287f",
+    "path": "runtime/agent_workspaces/v3_phase9_legacy_motor_api_slice2_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "1ca25804acbdfb24fe00fed9c6a7a3731c7161ce794c2d11a948844899253784"
+  },
+  "workspace": {
+    "base_fingerprint": "3a757a4f0f2cda1a53c5fb14d9edcbfc8ec865258fe75ac4cc73fd28ebe0a11c",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase9_legacy_motor_api_slice2_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "02a3f71cb2d7e3e165d42e5cfd38a561e8e5cd67567123b24f96edb5baac1723",
+    "path": "runtime/agent_workspaces/v3_phase9_legacy_motor_api_slice2_20260830/tree",
+    "reseal": {
+      "audit_sha256": "8673d161196fcb610f616e9f1142339323447540a56ba0dfcefddc82cdfab2ee",
+      "candidate_fingerprint": "8feb477be383c6e88ba0da7b6bf7023e8239f39820ca84ff436e573129a62bff",
+      "diff_sha256": "d69035e081a192cd0ae62bfc2e425b3a15b5cc837b8775dd28f9d5384d3c287f",
+      "path": "runtime/agent_workspaces/v3_phase9_legacy_motor_api_slice2_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T08:01:02Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "24995cbca9b68081062b4e49cfeed9d70a3a97a027112ecf33c5c44dad548eea",
+      "state": "READY",
+      "task_id": "v3_phase9_legacy_motor_api_slice2_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

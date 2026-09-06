@@ -1,0 +1,248 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_live_lidar_slice4_20260830/meta/audit.json",
+    "audit_sha256": "06ad542402ead4c3bc1febd9ae3573ff46fd5dde1e5b71b4ea00f177f3100a0d",
+    "audited_at_utc": "2026-08-30T13:39:39Z",
+    "base_fingerprint": "dd28bf7751a32862932a8bc12f7b9d20cbe6a29d33dba799d4861de420a7efa2",
+    "candidate_fingerprint": "3af3711c2ab13f59a1c42ae01cb297205e8771a8d300ddcea0a72f7b2378b3a4",
+    "canonical_drift": [],
+    "canonical_fingerprint": "dd28bf7751a32862932a8bc12f7b9d20cbe6a29d33dba799d4861de420a7efa2",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_live_lidar_edge.py",
+      "v3/adapters/live_lidar.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase11_live_lidar_slice4_20260830/meta/diff.json",
+    "diff_sha256": "fc3813d40edde26ad191f65daad77ee30ab83462210366ea7cdb500792cab8a6",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase11_live_lidar_slice4_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "48b6feaf99d16f0c11c4d3fb1f690761bd9346b1f9b7547e3d4309a9b2e9040c",
+        "size_bytes": 23343
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "daef0e05546ef9b83a1104f823eb9e65b8ae0e8ca971db13e3b69f4f72f827c2",
+        "size_bytes": 1030
+      },
+      "changed": null,
+      "path": "conf/hardver.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c7a6bfe89b35d49c17fb480cc7df0aee1b70a5c071c5e0c8e3509fa5880c02e3",
+        "size_bytes": 16945
+      },
+      "changed": null,
+      "path": "conf/vezerles.json"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a120f558a133fc185076263f5d37a4b57184fede22b9f83e954dd32f05b31caa",
+        "size_bytes": 17580
+      },
+      "changed": null,
+      "path": "driver/lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ae2d6bd77711f763b33a7a564841e6a4caf7ea14e2622086cdb37c47eeb0acad",
+        "size_bytes": 3032
+      },
+      "changed": null,
+      "path": "middleware/scan_matcher_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "1b754bf09ddbc06086a789df35c86610520c03ee9c9de40d244a86e164b61e58",
+        "size_bytes": 47587
+      },
+      "changed": null,
+      "path": "sensors/lidar_service.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0ecf94e0c776ef91dafb725bb0cc9aecb71c26195b61247aba2ea9e84f638414",
+        "size_bytes": 4025
+      },
+      "changed": null,
+      "path": "tests/test_lidar_hub_observation_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9058d37e8bb52fae2b3c722de932fce68a2b98584cb4cc6d0a72f5eed7554351",
+        "size_bytes": 12174
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "facf138bf8290c5baf558ce6215369bfd002cc15c6aee3ebe335f756648fa6af",
+        "size_bytes": 7687
+      },
+      "changed": null,
+      "path": "tests/test_v3_l0_l4_shadow.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0463eb93f066ce5b5b6b76569de7cbe4a8ee295b658d38f4ef04c0cb2b55fde5",
+        "size_bytes": 5349
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ad917176bff8e699f5c5d82fcc04410b5ce879bf759526287e785d0cbe9b908e",
+        "size_bytes": 12243
+      },
+      "changed": null,
+      "path": "v3/adapters/capture_edges.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+        "size_bytes": 3701
+      },
+      "changed": null,
+      "path": "v3/adapters/live_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/contracts.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "22bfd395018166e231fab6e53b4fdd83286ff3394ed0eb735dbf8c581bf8ef08",
+        "size_bytes": 4382
+      },
+      "changed": null,
+      "path": "v3/layers/l2_admission.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "076dab8792b76dd5a483d3b1e15dd8ba84f5eecb5ff26cd80ac138a3351c6970",
+        "size_bytes": 5519
+      },
+      "changed": null,
+      "path": "v3/layers/l4_world_model.py"
+    }
+  ],
+  "goal": "Continue V3 phase 11 with exactly one native live lidar source edge that converts one injected primitive lidar snapshot per supplied TickContext into the existing immutable L4-compatible sample contract and typed device health for NativeLiveInputReader, with explicit sequence, capture time, revision, freshness, trust, and timing validity semantics; use legacy lidar and matcher code only as source reference, add no production legacy import, shared state, wall clock, process, thread, queue, retry, concrete backend, composition wiring, activate API, physical writer, hardware access, or motion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T13:36:32Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase11_live_lidar_slice4_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T13:36:32Z",
+  "workflow_evidence": {
+    "audit_sha256": "06ad542402ead4c3bc1febd9ae3573ff46fd5dde1e5b71b4ea00f177f3100a0d",
+    "candidate_fingerprint": "3af3711c2ab13f59a1c42ae01cb297205e8771a8d300ddcea0a72f7b2378b3a4",
+    "contract_fingerprint": "a3d8e6909974ef3301f0a60aa514c9fdb1b5e917e3fc748d3784a75c8e716861",
+    "diff_sha256": "fc3813d40edde26ad191f65daad77ee30ab83462210366ea7cdb500792cab8a6",
+    "path": "runtime/agent_workspaces/v3_phase11_live_lidar_slice4_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "6c83d104754940c03b886be199f74d9cf3b490a920a66ad49e70dc1bdc06fada"
+  },
+  "workspace": {
+    "base_fingerprint": "dd28bf7751a32862932a8bc12f7b9d20cbe6a29d33dba799d4861de420a7efa2",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase11_live_lidar_slice4_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "91f69ff71afd0d0d49aa4402f1c986dec9a17f10daeba99303fa48e88f6e48b1",
+    "path": "runtime/agent_workspaces/v3_phase11_live_lidar_slice4_20260830/tree",
+    "reseal": {
+      "audit_sha256": "06ad542402ead4c3bc1febd9ae3573ff46fd5dde1e5b71b4ea00f177f3100a0d",
+      "candidate_fingerprint": "3af3711c2ab13f59a1c42ae01cb297205e8771a8d300ddcea0a72f7b2378b3a4",
+      "diff_sha256": "fc3813d40edde26ad191f65daad77ee30ab83462210366ea7cdb500792cab8a6",
+      "path": "runtime/agent_workspaces/v3_phase11_live_lidar_slice4_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T13:39:39Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "eb723ae1be5baa2bef0e7d0deaa3e5d7270a0c6df7eab0d6b659ae4be6706ca7",
+      "state": "READY",
+      "task_id": "v3_phase11_live_lidar_slice4_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

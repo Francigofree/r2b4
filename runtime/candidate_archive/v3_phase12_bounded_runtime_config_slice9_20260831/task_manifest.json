@@ -1,0 +1,118 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_bounded_runtime_config_slice9_20260831/meta/audit.json",
+    "audit_sha256": "04123ad79b5bd7c0281ba5537339c4cc0e49c09ccbc15498e5730bddbe574420",
+    "audited_at_utc": "2026-08-31T18:51:12Z",
+    "base_fingerprint": "fcba46d8610351661f808418bd8ee331472c1704f96f5894cf4dc1dc43e34ec7",
+    "candidate_fingerprint": "3bbeccb04109cf637d4f9b7202f3f74d99823422ac97ec0757722ed93aede635",
+    "canonical_drift": [],
+    "canonical_fingerprint": "fcba46d8610351661f808418bd8ee331472c1704f96f5894cf4dc1dc43e34ec7",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_bounded_runtime_config.py",
+      "v3_bounded_config.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_bounded_runtime_config_slice9_20260831/meta/diff.json",
+    "diff_sha256": "abbed9e61578349a96ac9c841da5a8f56fc4c6b2045c623784fc2678b1d9bab5",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_bounded_runtime_config_slice9_20260831",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a7ba958f116d982605537903104c27e3375dcff55873ce84a05e5a3f6399a9e7",
+        "size_bytes": 34442
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8a82eb363ee469a6271d53c9da1e066e9c080153871783a811f092b2aef29461",
+        "size_bytes": 21358
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_runtime_config.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3_bounded_config.py"
+    }
+  ],
+  "goal": "Continue from promoted phase-12 slice 8 with the next necessary V3 configuration edge: add a side-effect-free loader that validates explicit regular non-symlink hardware, physics and speed-map JSON paths, consumes only the active motor pins/polarity/decay, track width and R2B4_WHEEL_SPEED_MAP_V2 fields, combines them with an explicitly supplied typed BoundedTeleopProfile and timing bounds, and returns one fully immutable BoundedPhysicalRuntimeConfig with identical L3/L10 geometry before any GPIO claim; prove canonical active-config mapping and fail-closed invalid path/schema/map/motor/geometry cases, add an import boundary and update the V3 plan, while importing no config_manager, legacy controller/driver/runtime authority, concrete lgpio, sensor backend, CLI/signal/main entrypoint, opening no hardware, executing no loop or live motion, relaxing no safety gate and performing no automatic promotion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-31T18:46:30Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_bounded_runtime_config_slice9_20260831",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-31T18:46:30Z",
+  "workflow_evidence": {
+    "audit_sha256": "04123ad79b5bd7c0281ba5537339c4cc0e49c09ccbc15498e5730bddbe574420",
+    "candidate_fingerprint": "3bbeccb04109cf637d4f9b7202f3f74d99823422ac97ec0757722ed93aede635",
+    "contract_fingerprint": "c2afa66ec3cae1eb007d9c82eb14353802d59e57ca63d209b44304dd10387263",
+    "diff_sha256": "abbed9e61578349a96ac9c841da5a8f56fc4c6b2045c623784fc2678b1d9bab5",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_runtime_config_slice9_20260831/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "645aa2738aec9828f7a1bfbbb11ee107413b029dd70a145e77740b455f465c52"
+  },
+  "workspace": {
+    "base_fingerprint": "fcba46d8610351661f808418bd8ee331472c1704f96f5894cf4dc1dc43e34ec7",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_bounded_runtime_config_slice9_20260831/meta/base_manifest.json",
+    "base_manifest_sha256": "d4027fa104acf46fca1d4c3822941e7aa5e2848180f1d910e1e17c041ae7fa74",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_runtime_config_slice9_20260831/tree",
+    "reseal": {
+      "audit_sha256": "04123ad79b5bd7c0281ba5537339c4cc0e49c09ccbc15498e5730bddbe574420",
+      "candidate_fingerprint": "3bbeccb04109cf637d4f9b7202f3f74d99823422ac97ec0757722ed93aede635",
+      "diff_sha256": "abbed9e61578349a96ac9c841da5a8f56fc4c6b2045c623784fc2678b1d9bab5",
+      "path": "runtime/agent_workspaces/v3_phase12_bounded_runtime_config_slice9_20260831/meta/reseal.json",
+      "resealed_at_utc": "2026-08-31T18:51:12Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "e5ff2e5c0ea09951697ac4dec0bf330d2f2644636b6e4459069849db4243d588",
+      "state": "READY",
+      "task_id": "v3_phase12_bounded_runtime_config_slice9_20260831"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

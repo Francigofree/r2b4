@@ -1,0 +1,146 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice4_20260830/meta/audit.json",
+    "audit_sha256": "177a69f1f8bbea583c3d8ae625a66e06407e01587c3948c8051c83406e92c79f",
+    "audited_at_utc": "2026-08-30T12:57:07Z",
+    "base_fingerprint": "8db1447e8ebfe12d1a965070edca29867cd3b23fa23c4d7297c20c53cf2c7f3e",
+    "candidate_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "canonical_drift": [],
+    "canonical_fingerprint": "8db1447e8ebfe12d1a965070edca29867cd3b23fa23c4d7297c20c53cf2c7f3e",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_motor_pwm_legacy_parity.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice4_20260830/meta/diff.json",
+    "diff_sha256": "e358463c3b25c75c093042308a009ab76382eec9f169f4c82719174d4b270f03",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase10_hardware_contract_slice4_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0ba70c5c5b7265d58db06540efeb85d2609e8231657b90b6b015ec5307ec69d8",
+        "size_bytes": 20685
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "15a06adeba3f74d4f37b9e303356507db1c46386ef809627591731a78c7cf71e",
+        "size_bytes": 4730
+      },
+      "changed": null,
+      "path": "driver/motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "6add8487f96fe9021ef4b9888a77aff143c8da7f79e32ca884f08068ede01664",
+        "size_bytes": 2451
+      },
+      "changed": null,
+      "path": "tests/test_drv8871_motor_hal.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e7384b5fd1eab1c709f2f2f17b21585689c0e05e34b83ef20e52873b1aa7e527",
+        "size_bytes": 10142
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "48b39c669a02dd04a3fe7bba0037d816c6290d27585410a208f655d404886f08",
+        "size_bytes": 6194
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_pwm_contract.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_pwm_legacy_parity.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+        "size_bytes": 6203
+      },
+      "changed": null,
+      "path": "v3/adapters/motor_pwm.py"
+    }
+  ],
+  "goal": "Continue V3 phase 10 with exactly one offline characterization slice that directly proves the capability-free native DRV8871 planner remains physically equivalent to the canonical legacy AlbaMotor output semantics across bounded forward, reverse, zero, coast, brake, and invert cases; add no production legacy import, backend/writer capability, ACTIVE transition, live input, physical motion, runtime cutover, or legacy API port",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T12:55:39Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase10_hardware_contract_slice4_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T12:56:08Z",
+  "workflow_evidence": {
+    "audit_sha256": "177a69f1f8bbea583c3d8ae625a66e06407e01587c3948c8051c83406e92c79f",
+    "candidate_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "contract_fingerprint": "ffdac7339293112fe77bd4aa9448fc99a8c142cb1643b83b789968512d27e395",
+    "diff_sha256": "e358463c3b25c75c093042308a009ab76382eec9f169f4c82719174d4b270f03",
+    "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice4_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "bd6f21b83279a91355ce20bef2b51d476b3b6128b93b46d52d3edf1a89e9d09b"
+  },
+  "workspace": {
+    "base_fingerprint": "8db1447e8ebfe12d1a965070edca29867cd3b23fa23c4d7297c20c53cf2c7f3e",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice4_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "fb753edb3eb8a3220c5aa7d99b688d611476710bbfbb449488f88f8b1c3adb51",
+    "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice4_20260830/tree",
+    "reseal": {
+      "audit_sha256": "177a69f1f8bbea583c3d8ae625a66e06407e01587c3948c8051c83406e92c79f",
+      "candidate_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+      "diff_sha256": "e358463c3b25c75c093042308a009ab76382eec9f169f4c82719174d4b270f03",
+      "path": "runtime/agent_workspaces/v3_phase10_hardware_contract_slice4_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T12:57:07Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "20f59af167ae6b2eec998cd849373ac61d1b609ffb85969c200d64462e272f04",
+      "state": "READY",
+      "task_id": "v3_phase10_hardware_contract_slice4_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

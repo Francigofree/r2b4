@@ -1,0 +1,118 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_counter_encoder_backend_slice10_fix1_20260831/meta/audit.json",
+    "audit_sha256": "938e3be96988013ec4521b6c8b33cdf36eab500ae72742b1e3cb7d8b61716d6b",
+    "audited_at_utc": "2026-08-31T19:14:17Z",
+    "base_fingerprint": "3bbeccb04109cf637d4f9b7202f3f74d99823422ac97ec0757722ed93aede635",
+    "candidate_fingerprint": "5abb38b16d9c41202db1dc49bf1a19d3be8cb1cf8a6cf5179fc1caf27f346b25",
+    "canonical_drift": [],
+    "canonical_fingerprint": "3bbeccb04109cf637d4f9b7202f3f74d99823422ac97ec0757722ed93aede635",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_counter_encoder_backend.py",
+      "v3/adapters/counter_encoder.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_counter_encoder_backend_slice10_fix1_20260831/meta/diff.json",
+    "diff_sha256": "b3dfe0143a0dd17a7d6e3d9b35e2c3f820c1e5fe2a8172f3b731669f05b57f88",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_counter_encoder_backend_slice10_fix1_20260831",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "09e506eee5f3b617250781cb97147334d3bdd9035f603e8be5c27409d5162d17",
+        "size_bytes": 35389
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "55143612dd0648bcfa6410ae58bb80077de22aecb1b4a9b3c8a5433129c5ce42",
+        "size_bytes": 22784
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_counter_encoder_backend.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/counter_encoder.py"
+    }
+  ],
+  "goal": "Promotion-blocking narrow correction and replacement of phase-12 slice 10 only: add the same native signed-counter encoder backend but establish its complete counter/time baseline in the first read(TickContext), binding both counter snapshots and baseline monotonic time to that tick; ensure the baseline reading and every timing-invalid, stale, counter-diagnostic-failed or maximum-velocity-rejected EncoderVelocityReading has trust exactly 0.0 and both velocities exactly 0.0, while only a fresh, increasing, running, diagnostics-clear and physically bounded delta may carry trust 1.0 and non-zero velocity; add only its focused tests, import boundary and phase-12 plan text, run the existing affected regression, and make no other feature, hardware, runtime or live-motion change before explicit promotion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-31T19:08:23Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_counter_encoder_backend_slice10_fix1_20260831",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-31T19:08:23Z",
+  "workflow_evidence": {
+    "audit_sha256": "938e3be96988013ec4521b6c8b33cdf36eab500ae72742b1e3cb7d8b61716d6b",
+    "candidate_fingerprint": "5abb38b16d9c41202db1dc49bf1a19d3be8cb1cf8a6cf5179fc1caf27f346b25",
+    "contract_fingerprint": "85354ad16f4b6f7a5e091cfd799739b839e465d42ded65eead852933e96031ba",
+    "diff_sha256": "b3dfe0143a0dd17a7d6e3d9b35e2c3f820c1e5fe2a8172f3b731669f05b57f88",
+    "path": "runtime/agent_workspaces/v3_phase12_counter_encoder_backend_slice10_fix1_20260831/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "5800b3cf2219f52fce80d3649bf227d21d501d449fc0d1b00d84dd94fe1de54e"
+  },
+  "workspace": {
+    "base_fingerprint": "3bbeccb04109cf637d4f9b7202f3f74d99823422ac97ec0757722ed93aede635",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_counter_encoder_backend_slice10_fix1_20260831/meta/base_manifest.json",
+    "base_manifest_sha256": "9e933c5e6c0571f0d66f2b59c2122a87348947f755936b0b7f52bc7331394c52",
+    "path": "runtime/agent_workspaces/v3_phase12_counter_encoder_backend_slice10_fix1_20260831/tree",
+    "reseal": {
+      "audit_sha256": "938e3be96988013ec4521b6c8b33cdf36eab500ae72742b1e3cb7d8b61716d6b",
+      "candidate_fingerprint": "5abb38b16d9c41202db1dc49bf1a19d3be8cb1cf8a6cf5179fc1caf27f346b25",
+      "diff_sha256": "b3dfe0143a0dd17a7d6e3d9b35e2c3f820c1e5fe2a8172f3b731669f05b57f88",
+      "path": "runtime/agent_workspaces/v3_phase12_counter_encoder_backend_slice10_fix1_20260831/meta/reseal.json",
+      "resealed_at_utc": "2026-08-31T19:14:17Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "a548052441768f12c20b8200decb25d5e1d24293c296218cd3bbac4287ddba62",
+      "state": "READY",
+      "task_id": "v3_phase12_counter_encoder_backend_slice10_fix1_20260831"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

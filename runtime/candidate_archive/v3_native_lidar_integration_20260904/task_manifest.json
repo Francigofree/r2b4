@@ -1,0 +1,403 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/audit.json",
+    "audit_sha256": "965cce6ff33f73c573821ac33c74c16fc28a709999cb2b07c4b7791b45611047",
+    "audited_at_utc": "2026-09-05T16:22:40Z",
+    "base_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "candidate_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
+    "canonical_drift": [],
+    "canonical_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_latest_lidar_backend.py",
+      "tests/test_v3_live_lidar.py",
+      "tests/test_v3_live_lidar_edge.py",
+      "tests/test_v3_native_lidar_port.py",
+      "tests/test_v3_native_sensor_inputs.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_replay.py",
+      "tests/test_v3_resident_runtime.py",
+      "tests/test_v3_rplidar_c1.py",
+      "tests/test_v3_sensor_measurement_tool.py",
+      "tests/test_v3_tick_engine.py",
+      "tools/v3_sensor_measurement.py",
+      "v3/adapters/latest_lidar.py",
+      "v3/adapters/legacy_donors/lidar_estimator.py",
+      "v3/adapters/live_lidar.py",
+      "v3/adapters/native_lidar_port.py",
+      "v3/adapters/rplidar_c1.py",
+      "v3/composition/native_control.py",
+      "v3/engine.py",
+      "v3/import_guard.py",
+      "v3/layers/l12_safety_final.py",
+      "v3/layers/l4_world_model.py",
+      "v3/lidar_matcher_process.py",
+      "v3/replay.py",
+      "v3_bounded_config.py",
+      "v3_process_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/diff.json",
+    "diff_sha256": "0dc719ec2dfbb83dbe9da96407960788c37fd5a469bfba488fd150721ef557a9",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_native_lidar_integration_20260904",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2873ad232941ec0a3a06c282e0c84e984299719fd6f266a21f7beef6572f5c78",
+        "size_bytes": 25409
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b8197409d87739b098dd59125e53adf75ff68be014b5347cc4c6ec94a86072d8",
+        "size_bytes": 26969
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f8d4d5eaa864d32d90d3f5cd1b0b78e2e93bc3798632271fdb671c32fd796de5",
+        "size_bytes": 15153
+      },
+      "changed": null,
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ae1df3128925888449887633e57e773c345e82120539552e4d2c7e96eaaf72b0",
+        "size_bytes": 7800
+      },
+      "changed": null,
+      "path": "tests/test_v3_latest_lidar_backend.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a154b987dad724ca14785ac82ded77cda2fd66f95f8e378afa7f95b70105ebc9",
+        "size_bytes": 4158
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f45cbb30b392daa139d6b4de94a6d34a7a96f5e83f3166c0771d742b2f84f3ec",
+        "size_bytes": 5786
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_lidar_port.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "112d0ef24f893bbf679a23ca719e06ac71a8e424ff70ca3d8b95166b7836c393",
+        "size_bytes": 10986
+      },
+      "changed": null,
+      "path": "tests/test_v3_native_sensor_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "344e06e189607bcde37b60350558bc1708da4b042db0aaa1e953ef5f1add527d",
+        "size_bytes": 6408
+      },
+      "changed": null,
+      "path": "tests/test_v3_process_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b731ee5b44c4184bb6dca8ff487d19fb20161687170144977a7cdefc918d3a16",
+        "size_bytes": 10959
+      },
+      "changed": null,
+      "path": "tests/test_v3_replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a76d2e50dc13a2b6198c9b3470d15da0eb29a84a2401ea426bf1697c1c8316c8",
+        "size_bytes": 13625
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_rplidar_c1.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9d366275eb5408dec181553cc56368730b30fd50a6afa4dbb903d37b641b864c",
+        "size_bytes": 1886
+      },
+      "changed": null,
+      "path": "tests/test_v3_sensor_measurement_tool.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e328b743a1899b126434e3f444a4148901b3755d3c21b8942f2b21fe02a95702",
+        "size_bytes": 8876
+      },
+      "changed": null,
+      "path": "tests/test_v3_tick_engine.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "c05485f69d57f2189ff264973115c7d4744f489f806659f415f712a289daf519",
+        "size_bytes": 10444
+      },
+      "changed": null,
+      "path": "tools/v3_sensor_measurement.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d4212e10144ef6c8bbab496901e1df912050ee30bdcbc814c7b2eefb61936d26",
+        "size_bytes": 11926
+      },
+      "changed": null,
+      "path": "v3/adapters/latest_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/legacy_donors/lidar_estimator.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d8c070b4bdd9e02097e1abfc7ef8ca11b4fd1babd30a212ec522b098909f863d",
+        "size_bytes": 12626
+      },
+      "changed": null,
+      "path": "v3/adapters/live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/native_lidar_port.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/rplidar_c1.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f0e6ff898709751cea3416c88f4b543852aeb358dcf4cc9da9e6f5ed10818292",
+        "size_bytes": 6436
+      },
+      "changed": null,
+      "path": "v3/composition/native_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "29c00f1602cd08541f53f49b9046afe36f78060bf5b89477cff4b157de58ca0b",
+        "size_bytes": 6770
+      },
+      "changed": null,
+      "path": "v3/composition/native_sensor_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7a10cafe88c493a372d9eb0cdf213e3777fae1916695fb3a3ae57c32f3330a88",
+        "size_bytes": 10433
+      },
+      "changed": null,
+      "path": "v3/engine.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "5042fa0f52454eb8892466f9c69917e14af26a34b81bcb3bd6e56b154b76606d",
+        "size_bytes": 11480
+      },
+      "changed": null,
+      "path": "v3/import_guard.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ff0bbd73e15fc0caf5e49310cf1449072176ea236ee2088a98560b991aed6557",
+        "size_bytes": 3739
+      },
+      "changed": null,
+      "path": "v3/layers/l12_safety_final.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "076dab8792b76dd5a483d3b1e15dd8ba84f5eecb5ff26cd80ac138a3351c6970",
+        "size_bytes": 5519
+      },
+      "changed": null,
+      "path": "v3/layers/l4_world_model.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/lidar_matcher_process.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bd3649124c250f250c0de9030cbf4326c2e3c2b96c102fcfd857c150c70e7d2f",
+        "size_bytes": 49997
+      },
+      "changed": null,
+      "path": "v3/replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "016fcdf8d800c844bc7d7ca5a45c34bb569a15137ba6e5b48e4edba72d63996e",
+        "size_bytes": 15768
+      },
+      "changed": null,
+      "path": "v3_bounded_config.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "30f4e9db24016db61e64be107e1e3fedff072dc6b56b17737c5dfb39924d81ee",
+        "size_bytes": 17065
+      },
+      "changed": null,
+      "path": "v3_process_runtime.py"
+    }
+  ],
+  "goal": "Design and implement a clean, practical, simple native LiDAR integration for V3 using the existing single native sensor/matcher/estimator path; identify and close only concrete production, configuration, replay-diagnostic, documentation, and regression gaps without adding bypass or parallel control paths.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-04T18:47:25Z",
+  "status": "ACTIVE",
+  "task_id": "v3_native_lidar_integration_20260904",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 5,
+    "default": "TARGETED",
+    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-05T16:13:59Z",
+  "workflow_evidence": {
+    "audit_sha256": "965cce6ff33f73c573821ac33c74c16fc28a709999cb2b07c4b7791b45611047",
+    "candidate_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
+    "contract_fingerprint": "2ed03a674a771177b8da0da4dad604d63a9fd7c011d54c02d7035fcbbd3e7dc5",
+    "diff_sha256": "0dc719ec2dfbb83dbe9da96407960788c37fd5a469bfba488fd150721ef557a9",
+    "path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "b1705726ed0303278c69ffccb8980b7db98969677f2ec51e3e8ca8ac4174bffb"
+  },
+  "workspace": {
+    "base_fingerprint": "0ba221e62c50f94fb9fd7cf0ce2e699ddd5d0494ad4c1258a5369e57574d5848",
+    "base_manifest_path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/base_manifest.json",
+    "base_manifest_sha256": "9d66bd6075e20c411e0c63bb53f6b8774dc772b2e8278527fdbe0569fa1764ea",
+    "path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/tree",
+    "reseal": {
+      "audit_sha256": "965cce6ff33f73c573821ac33c74c16fc28a709999cb2b07c4b7791b45611047",
+      "candidate_fingerprint": "28a37b5e282f907e6a506a7fda86530775c9416037f0950e37b618e4ec6a04ce",
+      "diff_sha256": "0dc719ec2dfbb83dbe9da96407960788c37fd5a469bfba488fd150721ef557a9",
+      "path": "runtime/agent_workspaces/v3_native_lidar_integration_20260904/meta/reseal.json",
+      "resealed_at_utc": "2026-09-05T16:22:41Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "ccee499854474f688ce044e67328aa6f87b6c3b584ceb10e42358b1989008301",
+      "state": "READY",
+      "task_id": "v3_native_lidar_integration_20260904"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

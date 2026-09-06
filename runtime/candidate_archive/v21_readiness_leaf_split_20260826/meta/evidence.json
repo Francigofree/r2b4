@@ -1,0 +1,108 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/audit.json",
+    "audit_sha256": "38c659327b3131490b11b8a212a7c40c4f6acf1a0748ae78acf2fc17b0761e29",
+    "base_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "candidate_fingerprint": "5b06dd204c5874716fe7cbb62eafcc52b90bba6af5eb771e97bc75eb8ab21b04",
+    "canonical_fingerprint": "a473ff14cd107da79e33bd361d007b3efb5e3336c8a8f3bea0249549ea1d403c",
+    "diff_path": "runtime/agent_workspaces/v21_readiness_leaf_split_20260826/meta/diff.json",
+    "diff_sha256": "992c68016ec4c8e5f4e8023074d2b12695095b5cc377bf0e67c67b2632b6d80c"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V2",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "25173609fd9226b41482de9ebf79f5575f634015897310aa7d728ab51e93be4c",
+        "canonical_sha256": "25173609fd9226b41482de9ebf79f5575f634015897310aa7d728ab51e93be4c"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "199774e5a40c51dcc493becb46773a63c4cd4476faa286a62100385a2c7e99fd",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "controller/behavior_motion_interface.py",
+      "controller/components.py",
+      "controller/motion_qa_monitor.py",
+      "controller/motion_readiness.py",
+      "tests/test_motion_readiness_layer_split.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-08-26T15:57:57Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v21_readiness_leaf_split_20260826",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "pytest -q tests/test_motion_readiness_layer_split.py tests/test_motion_semantics.py tests/test_heading_pivot_primitive.py tests/test_encoder_arc_asymmetry.py tests/test_encoder_canonical_window.py",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "pytest -q",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

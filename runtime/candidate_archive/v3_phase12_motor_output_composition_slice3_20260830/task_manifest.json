@@ -1,0 +1,129 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/audit.json",
+    "audit_sha256": "dfe00bc13c5cc57ad75c44e7264d6266f0b0f56dc0ee38f696a500d719ffbd2f",
+    "audited_at_utc": "2026-08-30T18:35:40Z",
+    "base_fingerprint": "30d0d952b0c80414395d944e5e0422a0dce2ad13c87ca98ddbf9ebe30820b939",
+    "candidate_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "canonical_drift": [],
+    "canonical_fingerprint": "30d0d952b0c80414395d944e5e0422a0dce2ad13c87ca98ddbf9ebe30820b939",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_motor_output_composition.py",
+      "v3/composition/__init__.py",
+      "v3/composition/motor_output.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/diff.json",
+    "diff_sha256": "0c4fbfbe1acae85afca259f15eb546305e35dad9942d4dc4f3bcb1c968ca3d44",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_motor_output_composition_slice3_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "20ffb3eeba074f02d242a92033992cf7191ce5ee7705d43284ffccfb153fbdf5",
+        "size_bytes": 28753
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a4b53db28389b8cacfe00950abd7e95469f45b63d8110d1fedb5c616e44ba763",
+        "size_bytes": 15975
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_output_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "96caeb68fff975d7f6920c214a238cfa00b6c007a548a41cc23a3e1272b7877c",
+        "size_bytes": 1097
+      },
+      "changed": null,
+      "path": "v3/composition/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/composition/motor_output.py"
+    }
+  ],
+  "goal": "Continue from promoted canonical phase-12 slice 2 with the smallest direct integration prerequisite: add a runtime-free NativeMotorOutputComposition that owns exactly one GpioMotorFrameSink and one NativeMotorWriter built from the same immutable GpioMotorFrameSinkConfig, exposes only the V3 FinalActuation write port plus idempotent zero-before-handle-release close, preserves one command to one frame-sink call and fail-closed error propagation, and prevents planner/sink physical configuration drift; add focused fake-GPIO end-to-end and import-boundary tests and update the V3 plan, while adding no legacy production import, layer pipeline, device reader, command gateway, lifecycle, activate API, owner loop, clock, thread, process, runtime entrypoint, hardware execution, live motion, alternate normal writer, safety relaxation, or automatic promotion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T18:33:59Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_motor_output_composition_slice3_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T18:33:59Z",
+  "workflow_evidence": {
+    "audit_sha256": "dfe00bc13c5cc57ad75c44e7264d6266f0b0f56dc0ee38f696a500d719ffbd2f",
+    "candidate_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "contract_fingerprint": "0fe765f6f04e98b44189da68e7e3106010c59f7cab4c6f4618bff3933e7cbc3b",
+    "diff_sha256": "0c4fbfbe1acae85afca259f15eb546305e35dad9942d4dc4f3bcb1c968ca3d44",
+    "path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "33a43b2e4a6ebbe84b13919904d02cb92e9622ed2a0a5233c971b495c1846bed"
+  },
+  "workspace": {
+    "base_fingerprint": "30d0d952b0c80414395d944e5e0422a0dce2ad13c87ca98ddbf9ebe30820b939",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "1ce61bac530164d187499edfa3ae42a379b414efd6727cd67e0799f8146d8546",
+    "path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/tree",
+    "reseal": {
+      "audit_sha256": "dfe00bc13c5cc57ad75c44e7264d6266f0b0f56dc0ee38f696a500d719ffbd2f",
+      "candidate_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+      "diff_sha256": "0c4fbfbe1acae85afca259f15eb546305e35dad9942d4dc4f3bcb1c968ca3d44",
+      "path": "runtime/agent_workspaces/v3_phase12_motor_output_composition_slice3_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T18:35:40Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "bdb92d82300a26b68fd99700d90e0eb7f01e4ef2749766445d8cb4a413ebc008",
+      "state": "READY",
+      "task_id": "v3_phase12_motor_output_composition_slice3_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

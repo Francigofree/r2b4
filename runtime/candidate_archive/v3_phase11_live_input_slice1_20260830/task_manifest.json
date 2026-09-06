@@ -1,0 +1,218 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/audit.json",
+    "audit_sha256": "e0282335bb2ae27abc9ab08fc1bca6c0321c6597a8d92265d2a88cb20e191675",
+    "audited_at_utc": "2026-08-30T13:04:37Z",
+    "base_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "candidate_fingerprint": "a95502e9d1387906ac3a3ff2f3b6630cf754f2188671ce393c99064e5a86561a",
+    "canonical_drift": [],
+    "canonical_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_live_input_edge.py",
+      "v3/adapters/live_inputs.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/diff.json",
+    "diff_sha256": "ecbe4b8c6c6113c1a55f1ee482f1cf03b88f16c12989bc325183e6041d783f55",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase11_live_input_slice1_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "66eca24595e9551b993493976c47ed8779e87121700e48f279fbd53856163481",
+        "size_bytes": 21190
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "e7384b5fd1eab1c709f2f2f17b21585689c0e05e34b83ef20e52873b1aa7e527",
+        "size_bytes": 10142
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "facf138bf8290c5baf558ce6215369bfd002cc15c6aee3ebe335f756648fa6af",
+        "size_bytes": 7687
+      },
+      "changed": null,
+      "path": "tests/test_v3_l0_l4_shadow.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9a81d662e06060dc14ab069ee4237fa8465b71693f5b498d94b9056b9ddd1f65",
+        "size_bytes": 8080
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_idle_cutover.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ad917176bff8e699f5c5d82fcc04410b5ce879bf759526287e785d0cbe9b908e",
+        "size_bytes": 12243
+      },
+      "changed": null,
+      "path": "v3/adapters/capture_edges.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/live_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bae3cfd008e4d9867eee1c5f7e10ae69bae5a205805d140d3f279aba0519b366",
+        "size_bytes": 4022
+      },
+      "changed": null,
+      "path": "v3/composition/input_shadow.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "cf07df4b2558dbdef1828f57125aecd2c56f07c436848ec48e60683269a8f229",
+        "size_bytes": 2876
+      },
+      "changed": null,
+      "path": "v3/composition/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0555eaddf51ed8fe2c2e182688be2b6bf0819ce52b0c2a2988eb1cb0c17887b5",
+        "size_bytes": 386
+      },
+      "changed": null,
+      "path": "v3/layers/l1_acquisition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "22bfd395018166e231fab6e53b4fdd83286ff3394ed0eb735dbf8c581bf8ef08",
+        "size_bytes": 4382
+      },
+      "changed": null,
+      "path": "v3/layers/l2_admission.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b2f44a606e69feb769ade5539fb7710075af95eda67c238ae7975bb51a63a306",
+        "size_bytes": 7324
+      },
+      "changed": null,
+      "path": "v3/layers/l3_state_estimation.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "076dab8792b76dd5a483d3b1e15dd8ba84f5eecb5ff26cd80ac138a3351c6970",
+        "size_bytes": 5519
+      },
+      "changed": null,
+      "path": "v3/layers/l4_world_model.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "871a29dd95c5c21140487f3f6fe250d434465dfcc8f281730dada1e720827845",
+        "size_bytes": 1007
+      },
+      "changed": null,
+      "path": "v3/ports.py"
+    }
+  ],
+  "goal": "Analyze the canonical post-phase-10 V3 input path and implement exactly one first phase-11 live-input prerequisite: close one injected per-tick sensor acquisition boundary into immutable native V3 input without legacy shared state, device handles crossing layers, wall-clock reads, threads, or alternate authority; preserve IDLE-only runtime, no activate API, zero-only physical writer, no live hardware access or motion, and do not port high-level legacy orchestration",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T13:00:46Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase11_live_input_slice1_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T13:01:49Z",
+  "workflow_evidence": {
+    "audit_sha256": "e0282335bb2ae27abc9ab08fc1bca6c0321c6597a8d92265d2a88cb20e191675",
+    "candidate_fingerprint": "a95502e9d1387906ac3a3ff2f3b6630cf754f2188671ce393c99064e5a86561a",
+    "contract_fingerprint": "8c7a2943e9c501176bd572d8de0f34eeb58291331c9b6d6be20d18538cc1367e",
+    "diff_sha256": "ecbe4b8c6c6113c1a55f1ee482f1cf03b88f16c12989bc325183e6041d783f55",
+    "path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "abfe692b163b2b2ab8e270d8ae4f236204fd9db2a0f899011a09283c012f51bf"
+  },
+  "workspace": {
+    "base_fingerprint": "a6d9abbd34f3d236087057743ef6421aa157ea9b01d1f0defa5ab325e84138d4",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "68ddc744890afa2ea2fa7aa1baa1f5e463a8dcc74caacaac482fec5e5a7cbdbd",
+    "path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/tree",
+    "reseal": {
+      "audit_sha256": "e0282335bb2ae27abc9ab08fc1bca6c0321c6597a8d92265d2a88cb20e191675",
+      "candidate_fingerprint": "a95502e9d1387906ac3a3ff2f3b6630cf754f2188671ce393c99064e5a86561a",
+      "diff_sha256": "ecbe4b8c6c6113c1a55f1ee482f1cf03b88f16c12989bc325183e6041d783f55",
+      "path": "runtime/agent_workspaces/v3_phase11_live_input_slice1_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T13:04:37Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "48c706d178cf4ffe21b3c6e09f3c5faa06e1d060c5770ac2cde8201db80fa34e",
+      "state": "READY",
+      "task_id": "v3_phase11_live_input_slice1_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

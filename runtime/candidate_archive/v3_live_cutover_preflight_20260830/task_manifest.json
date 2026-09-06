@@ -1,0 +1,133 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_live_cutover_preflight_20260830/meta/audit.json",
+    "audit_sha256": "05ba0269e54e8b8d99c697960f33f977c1ed8a35b770409dfb375ca9b9a4fbf3",
+    "audited_at_utc": "2026-08-30T06:57:19Z",
+    "base_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "candidate_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "canonical_drift": [],
+    "canonical_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/v3_live_cutover_preflight_20260830/meta/diff.json",
+    "diff_sha256": "78fd0d1a14a4f724db253908ebefb601a7bc6e40acd87380b92644b423743e9c",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_live_cutover_preflight_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0c4243eddde80214159f0c3cfa8fb7fb87a3134c21253ffedf2483b2c6448dfa",
+        "size_bytes": 15290
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "905e77d51029262519790078cab3e2a356701ab99e42ce54ecd82e218c3db714",
+        "size_bytes": 5201
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8ed3464e2107e4cf48de7f493e3042651492a59038afeb84eb5e47d3a3a95a88",
+        "size_bytes": 5979
+      },
+      "changed": null,
+      "path": "tests/test_v3_full_fake_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f20ff5cd38a1b9d62dfdfb435656b47032d2ed5326d7bb79761abb8b736caf4f",
+        "size_bytes": 8195
+      },
+      "changed": null,
+      "path": "v3/composition/full_fake.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ad4ca25429b349b72772f87cf48772b91be74697de06044802b79640409019e0",
+        "size_bytes": 5034
+      },
+      "changed": null,
+      "path": "v3/composition/stop_only.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ff0bbd73e15fc0caf5e49310cf1449072176ea236ee2088a98560b991aed6557",
+        "size_bytes": 3739
+      },
+      "changed": null,
+      "path": "v3/layers/l12_safety_final.py"
+    }
+  ],
+  "goal": "Run the explicitly authorized phase 8 live no-motion cutover preflight through Test Hub, verify runtime health and single-writer readiness, and finish in IDLE with PWM zero; do not activate V3 motion or promote",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T06:54:23Z",
+  "status": "ACTIVE",
+  "task_id": "v3_live_cutover_preflight_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T06:54:23Z",
+  "workflow_evidence": {
+    "audit_sha256": "05ba0269e54e8b8d99c697960f33f977c1ed8a35b770409dfb375ca9b9a4fbf3",
+    "candidate_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "contract_fingerprint": "b2d25ead7c74e312d217f17b99aa151b71e246f30f8fca78ddfdb084b382058a",
+    "diff_sha256": "78fd0d1a14a4f724db253908ebefb601a7bc6e40acd87380b92644b423743e9c",
+    "path": "runtime/agent_workspaces/v3_live_cutover_preflight_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "446b760e192f9bc20b62e99723d184a72fa5f6a3184f48acaa7997a91338ce77"
+  },
+  "workspace": {
+    "base_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+    "base_manifest_path": "runtime/agent_workspaces/v3_live_cutover_preflight_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "75336383b12fc0b5828e2bcdc5fe5b418f679fa3b4c3a3c829de55ca940aac18",
+    "path": "runtime/agent_workspaces/v3_live_cutover_preflight_20260830/tree",
+    "reseal": {
+      "audit_sha256": "05ba0269e54e8b8d99c697960f33f977c1ed8a35b770409dfb375ca9b9a4fbf3",
+      "candidate_fingerprint": "fa9aab0d2fd387aeaa5289427e5c4930de8304d47866d49e3482438346884ff4",
+      "diff_sha256": "78fd0d1a14a4f724db253908ebefb601a7bc6e40acd87380b92644b423743e9c",
+      "path": "runtime/agent_workspaces/v3_live_cutover_preflight_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T06:57:19Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "882fba2aade59722064fc50e5a0457e3311755544f57db7848ba4a9b055b89e1",
+      "state": "READY",
+      "task_id": "v3_live_cutover_preflight_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

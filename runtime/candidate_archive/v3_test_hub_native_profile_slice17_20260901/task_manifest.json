@@ -1,0 +1,109 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/meta/audit.json",
+    "audit_sha256": "6c91b015f0688ef47ca740fb10109364729775d42b79e7cc754a55d6d4b33ebb",
+    "audited_at_utc": "2026-09-02T07:32:57Z",
+    "base_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
+    "candidate_fingerprint": "ce72b25716299e8165166ae424bca9b1f6b866be2b0d72eee214288a34c9123f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
+    "changed_files": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/meta/diff.json",
+    "diff_sha256": "35bb8de51a14e803f204b6190b8bdb842ae22d5b9e926730ac21dece0a26c522",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_test_hub_native_profile_slice17_20260901",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [
+    "tests/test_r2b4_test_hub.py",
+    "tools/r2b4_test_hub.py"
+  ],
+  "completed_at_utc": "2026-09-02T07:32:57Z",
+  "files": [
+    {
+      "after": {
+        "exists": true,
+        "sha256": "15df49264aa6e8280252744f1e62f2d33cb6d14ca95ea4d8d97051eb785b8b6d",
+        "size_bytes": 133672
+      },
+      "before": {
+        "exists": true,
+        "sha256": "57aab6e8ec5ceffcefe03f0ab5d0800fe567722efd9a804e540a74d873bb9e09",
+        "size_bytes": 120216
+      },
+      "changed": true,
+      "path": "tests/test_r2b4_test_hub.py"
+    },
+    {
+      "after": {
+        "exists": true,
+        "sha256": "b228aaf00c1311fcb07fa6659a0b75a0dccd1cae7e11edee0dd361d122d0bf01",
+        "size_bytes": 270041
+      },
+      "before": {
+        "exists": true,
+        "sha256": "3b686b81e4016d7e03b2f140561487c49cd333b9275135385a7b8563ce91f16c",
+        "size_bytes": 242252
+      },
+      "changed": true,
+      "path": "tools/r2b4_test_hub.py"
+    }
+  ],
+  "goal": "Add a fail-closed native V3 raised-stand Test Hub profile that invokes only the canonical bounded hardware runtime, requires explicit human motion approval and fresh sensor preflight evidence, captures run-specific structured evidence, and proves final lifecycle IDLE plus PWM-null/resource cleanup before enabling the authorized physical verification.",
+  "promotion_status": "SUPERSEDED",
+  "reason": "Human-observed safety incident: tx_pwm duty 0 plus GPIO handle close did not physically stop the raised wheels. Preserve the audited Test Hub candidate for later clone, but do not complete or promote it until the canonical V3 L12 GPIO sink has a proven hard-low shutdown contract.",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-01T16:43:13Z",
+  "status": "SUPERSEDED",
+  "task_id": "v3_test_hub_native_profile_slice17_20260901",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "superseded task; no completion claim",
+      "status": "NOT_RUN"
+    }
+  ],
+  "updated_at_utc": "2026-09-02T07:32:57Z",
+  "workflow_evidence": {
+    "audit_sha256": "6c91b015f0688ef47ca740fb10109364729775d42b79e7cc754a55d6d4b33ebb",
+    "candidate_fingerprint": "ce72b25716299e8165166ae424bca9b1f6b866be2b0d72eee214288a34c9123f",
+    "contract_fingerprint": "5d187594ddae3bbddd7ff002fb7de553ca8913207704df007a3e0b0a1856f414",
+    "diff_sha256": "35bb8de51a14e803f204b6190b8bdb842ae22d5b9e926730ac21dece0a26c522",
+    "path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "4a79533bfa30a15db6d10c265a311d0ea1c7c90985399666f4c2eecd2def770a"
+  },
+  "workspace": {
+    "base_fingerprint": "ab8c846d2e54303fa527fcd305194f22c06fd903a9ee311baff5bcd3f824176d",
+    "base_manifest_path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/meta/base_manifest.json",
+    "base_manifest_sha256": "ddc068e0fd529f479eb00dad2a1499eabdf7f38137a540aa45b3123d9508f52a",
+    "path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/tree",
+    "reseal": {
+      "audit_sha256": "6c91b015f0688ef47ca740fb10109364729775d42b79e7cc754a55d6d4b33ebb",
+      "candidate_fingerprint": "ce72b25716299e8165166ae424bca9b1f6b866be2b0d72eee214288a34c9123f",
+      "diff_sha256": "35bb8de51a14e803f204b6190b8bdb842ae22d5b9e926730ac21dece0a26c522",
+      "path": "runtime/agent_workspaces/v3_test_hub_native_profile_slice17_20260901/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T07:32:57Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "1a169967ec2715905e26344dc5a11ad76353efbc0320d4713b32fe11a8b6a8e2",
+      "state": "SUPERSEDED",
+      "task_id": "v3_test_hub_native_profile_slice17_20260901"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "SUPERSEDED"
+  }
+}

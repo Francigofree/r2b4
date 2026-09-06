@@ -1,0 +1,99 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_floor_motion_capture_slice27_20260902/meta/audit.json",
+    "audit_sha256": "caf1066f3fdb9fbdc6673986388c2a47ecfa6d9420fee8b01697c13c08579ea5",
+    "audited_at_utc": "2026-09-02T14:24:33Z",
+    "base_fingerprint": "6a43c4af7e3be7454bce35b7bdade48292f79bab2555977d981bebedd0d4f8f8",
+    "candidate_fingerprint": "9a0f3a512b169c00eaf66c525d5f67b8f0993f1460227d1591cdebd12ecf8bd8",
+    "canonical_drift": [],
+    "canonical_fingerprint": "6a43c4af7e3be7454bce35b7bdade48292f79bab2555977d981bebedd0d4f8f8",
+    "changed_files": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_floor_motion_capture_slice27_20260902/meta/diff.json",
+    "diff_sha256": "7c04fd267f1eca1e362b3fd66f096c2c1502b8f2bb8bd587c30d702824748bd2",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_floor_motion_capture_slice27_20260902",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "156c1f449def356121a0a9762a85bd44f7bb821133fd775596c71cb01f6eeea8",
+        "size_bytes": 149712
+      },
+      "changed": null,
+      "path": "tests/test_r2b4_test_hub.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "eb4ef1a51b40a3f073f3a4b480830fa92eb59805ee1ea651e771a4133b1450ac",
+        "size_bytes": 296516
+      },
+      "changed": null,
+      "path": "tools/r2b4_test_hub.py"
+    }
+  ],
+  "goal": "Add and execute a dedicated Test Hub V3 floor-motion validation: fresh exclusive native sensor and obstacle-clearance preflight, health-armed resident runtime, 1.0-1.5 seconds of low-speed straight motion, bounded automatic stop and SIGTERM SHUTDOWN, complete encoder/IMU/LiDAR/L1-L12/control/PWM tick capture, hard-low post-close proof, then evidence-based review and next-step recommendations.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T14:00:52Z",
+  "status": "ACTIVE",
+  "task_id": "v3_floor_motion_capture_slice27_20260902",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": "TEST_INFRASTRUCTURE_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T14:00:52Z",
+  "workflow_evidence": {
+    "audit_sha256": "caf1066f3fdb9fbdc6673986388c2a47ecfa6d9420fee8b01697c13c08579ea5",
+    "candidate_fingerprint": "9a0f3a512b169c00eaf66c525d5f67b8f0993f1460227d1591cdebd12ecf8bd8",
+    "contract_fingerprint": "cb132f3c96163f46e04f28c91972aaaa9da04010af6ef0f26175f094de226b0e",
+    "diff_sha256": "7c04fd267f1eca1e362b3fd66f096c2c1502b8f2bb8bd587c30d702824748bd2",
+    "path": "runtime/agent_workspaces/v3_floor_motion_capture_slice27_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "323e8346cd0e26ec49e6f78fabecaa3b5dbcccc02b07fad67c7f0401179bae4e"
+  },
+  "workspace": {
+    "base_fingerprint": "6a43c4af7e3be7454bce35b7bdade48292f79bab2555977d981bebedd0d4f8f8",
+    "base_manifest_path": "runtime/agent_workspaces/v3_floor_motion_capture_slice27_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "c95796eb648c11b2d8970994153a7c45f9908d91bee905cd3d1686bff2686744",
+    "path": "runtime/agent_workspaces/v3_floor_motion_capture_slice27_20260902/tree",
+    "reseal": {
+      "audit_sha256": "caf1066f3fdb9fbdc6673986388c2a47ecfa6d9420fee8b01697c13c08579ea5",
+      "candidate_fingerprint": "9a0f3a512b169c00eaf66c525d5f67b8f0993f1460227d1591cdebd12ecf8bd8",
+      "diff_sha256": "7c04fd267f1eca1e362b3fd66f096c2c1502b8f2bb8bd587c30d702824748bd2",
+      "path": "runtime/agent_workspaces/v3_floor_motion_capture_slice27_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T14:24:33Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "c2e1591143f6200265addb1659ee30f4e6384a783f3dc3f10edfc296b51693e6",
+      "state": "READY",
+      "task_id": "v3_floor_motion_capture_slice27_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

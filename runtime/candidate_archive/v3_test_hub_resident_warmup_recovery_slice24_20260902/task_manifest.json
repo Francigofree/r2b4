@@ -1,0 +1,99 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_test_hub_resident_warmup_recovery_slice24_20260902/meta/audit.json",
+    "audit_sha256": "e9f0c14baae8ed6d2e5f490eac3acfac685c95e504c2f393e335a300f47c73e6",
+    "audited_at_utc": "2026-09-02T13:23:16Z",
+    "base_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "canonical_drift": [],
+    "canonical_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "changed_files": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_test_hub_resident_warmup_recovery_slice24_20260902/meta/diff.json",
+    "diff_sha256": "33f48eb648950371574e4808f974797e533412505e88d264e0d7a9fe4cc4221d",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [
+      "tests/test_r2b4_test_hub.py",
+      "tools/r2b4_test_hub.py"
+    ],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_test_hub_resident_warmup_recovery_slice24_20260902",
+    "task_mode": "AGENT_INFRA_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4ea4700917733ffe7b6309710306fb88c31230881dc53e579a57708a1dfda261",
+        "size_bytes": 147373
+      },
+      "changed": null,
+      "path": "tests/test_r2b4_test_hub.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "15adf28b52d0345bbe33c8fa6b269725d9471a7cd9c125813a4cfa529c6e47b1",
+        "size_bytes": 294978
+      },
+      "changed": null,
+      "path": "tools/r2b4_test_hub.py"
+    }
+  ],
+  "goal": "Fix only the canonical resident Test Hub profile exposed by live session_20260902T131248Z: keep STOP through bounded matcher warmup, schedule the one ACTIVE tick only after the immediately prior resident tick has fully healthy encoder/IMU/LiDAR health, derive post-active IDLE and SIGTERM SHUTDOWN tick IDs from that transition, retain all fail-closed evidence gates, and add deterministic warmup/timeout regressions.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T13:17:55Z",
+  "status": "ACTIVE",
+  "task_id": "v3_test_hub_resident_warmup_recovery_slice24_20260902",
+  "task_mode": "AGENT_INFRA_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
+    "full_regression_recorded": true,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T13:17:55Z",
+  "workflow_evidence": {
+    "audit_sha256": "e9f0c14baae8ed6d2e5f490eac3acfac685c95e504c2f393e335a300f47c73e6",
+    "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+    "contract_fingerprint": "cb132f3c96163f46e04f28c91972aaaa9da04010af6ef0f26175f094de226b0e",
+    "diff_sha256": "33f48eb648950371574e4808f974797e533412505e88d264e0d7a9fe4cc4221d",
+    "path": "runtime/agent_workspaces/v3_test_hub_resident_warmup_recovery_slice24_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "6723e22d4787f47594a74dccf84214996b67bb78050c3b4f40fd8e5d9f2c2fad"
+  },
+  "workspace": {
+    "base_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "base_manifest_path": "runtime/agent_workspaces/v3_test_hub_resident_warmup_recovery_slice24_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "e18c03de1ee0c77535813515faaa70458ca65760294c9642ec17587b47a9d9ff",
+    "path": "runtime/agent_workspaces/v3_test_hub_resident_warmup_recovery_slice24_20260902/tree",
+    "reseal": {
+      "audit_sha256": "e9f0c14baae8ed6d2e5f490eac3acfac685c95e504c2f393e335a300f47c73e6",
+      "candidate_fingerprint": "63423f4612c5b8e3f2101b374da415de457805902f02c4d3297f1866bf74a7f8",
+      "diff_sha256": "33f48eb648950371574e4808f974797e533412505e88d264e0d7a9fe4cc4221d",
+      "path": "runtime/agent_workspaces/v3_test_hub_resident_warmup_recovery_slice24_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T13:23:17Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "b69632bd679e885571dff1d23077f2ab7870aedfc7c6647768609feca2dfa233",
+      "state": "READY",
+      "task_id": "v3_test_hub_resident_warmup_recovery_slice24_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

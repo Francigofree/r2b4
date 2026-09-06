@@ -1,0 +1,193 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_multirate_lidar_hold_recovery_slice23_20260902/meta/audit.json",
+    "audit_sha256": "5681d24ae869d8dc3ed74aa463ec096da94ddea0dc2a7d7df8e478e8f1d8cccc",
+    "audited_at_utc": "2026-09-02T13:17:38Z",
+    "base_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "candidate_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "canonical_drift": [],
+    "canonical_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "changed_files": [],
+    "diff_path": "runtime/agent_workspaces/v3_multirate_lidar_hold_recovery_slice23_20260902/meta/diff.json",
+    "diff_sha256": "e9f705e468459738da799bda8f4c3c5f76c0cecfce4eac0cec21db55dafdb937",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_multirate_lidar_hold_recovery_slice23_20260902",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_latest_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_latest_lidar_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f1135612ac715ff169f2bca1cbb9c02a61cdd46f5336964660631f3553b107f4",
+        "size_bytes": 7340
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_input_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9a7821c8c0b66e68fdebaf1077b95ea08151b8e8114c047a9bbfc95286d1e620",
+        "size_bytes": 2874
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f45cbb30b392daa139d6b4de94a6d34a7a96f5e83f3166c0771d742b2f84f3ec",
+        "size_bytes": 5786
+      },
+      "changed": null,
+      "path": "tests/test_v3_live_lidar_edge.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "99485f1ea458b075a359bb2e741aa21e449a00118dbff8476a459ccda9d488e2",
+        "size_bytes": 12047
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "7e3b048c1ef65c9b141eaf2774642732bf96b40136c85660c8401a2d580dfc9a",
+        "size_bytes": 8994
+      },
+      "changed": null,
+      "path": "v3/adapters/latest_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "8e8d48a5082a3e682d3e580a35d2bc46e69275883ce855243b76a9a4fb8660e3",
+        "size_bytes": 3701
+      },
+      "changed": null,
+      "path": "v3/adapters/live_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "246a9570825165e8f69a3a6a374696de4beb4d7210286d10de59d653174aba97",
+        "size_bytes": 6923
+      },
+      "changed": null,
+      "path": "v3/adapters/live_lidar.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "f43a9da2d3c01817964fff12934492246ceee37eb870efdec24c697e929b824e",
+        "size_bytes": 3324
+      },
+      "changed": null,
+      "path": "v3/composition/live_inputs.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0b2aa2b4018b3105a342e268fcb4cd391e2c8abdfbf037fca3c6da3a16784c01",
+        "size_bytes": 10222
+      },
+      "changed": null,
+      "path": "v3/composition/resident_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "2d8dd7a535ffbef3e30a3c6b889cf3142744bd86f0be78c8d1a4c51d60e0ddf6",
+        "size_bytes": 4670
+      },
+      "changed": null,
+      "path": "v3/layers/l2_admission.py"
+    }
+  ],
+  "goal": "Use live session_20260902T131248Z evidence to make the resident 50 Hz V3 input/state-estimation chain safely consume the slower latest-only LiDAR stream: distinguish a fresh held observation from invalid duplicate transport, preserve monotonic identity and freshness/contract gates, enable an evidence-bound resident preflight and active tick without relaxing fail-closed safety, add targeted regressions, then prepare a repeat live Test Hub validation.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-02T13:15:17Z",
+  "status": "ACTIVE",
+  "task_id": "v3_multirate_lidar_hold_recovery_slice23_20260902",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-02T13:15:54Z",
+  "workflow_evidence": {
+    "audit_sha256": "5681d24ae869d8dc3ed74aa463ec096da94ddea0dc2a7d7df8e478e8f1d8cccc",
+    "candidate_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "contract_fingerprint": "11c8e5ae399b420f36162a632e6c2ceed40bf30e4d312e3f255b517832fdcc51",
+    "diff_sha256": "e9f705e468459738da799bda8f4c3c5f76c0cecfce4eac0cec21db55dafdb937",
+    "path": "runtime/agent_workspaces/v3_multirate_lidar_hold_recovery_slice23_20260902/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "a27ae851407758e0f437c0651761753d0a700822960be6b9fefefd9e6df0567f"
+  },
+  "workspace": {
+    "base_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+    "base_manifest_path": "runtime/agent_workspaces/v3_multirate_lidar_hold_recovery_slice23_20260902/meta/base_manifest.json",
+    "base_manifest_sha256": "e18c03de1ee0c77535813515faaa70458ca65760294c9642ec17587b47a9d9ff",
+    "path": "runtime/agent_workspaces/v3_multirate_lidar_hold_recovery_slice23_20260902/tree",
+    "reseal": {
+      "audit_sha256": "5681d24ae869d8dc3ed74aa463ec096da94ddea0dc2a7d7df8e478e8f1d8cccc",
+      "candidate_fingerprint": "f4caf3ea937b314eff944968db92402b0d07215182f52bd3475eca382b2ad191",
+      "diff_sha256": "e9f705e468459738da799bda8f4c3c5f76c0cecfce4eac0cec21db55dafdb937",
+      "path": "runtime/agent_workspaces/v3_multirate_lidar_hold_recovery_slice23_20260902/meta/reseal.json",
+      "resealed_at_utc": "2026-09-02T13:17:38Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "9c117745c017f042f6406e8102bf2dfd68bd7dd65314c8b4f1538c7c6268bb0c",
+      "state": "READY",
+      "task_id": "v3_multirate_lidar_hold_recovery_slice23_20260902"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

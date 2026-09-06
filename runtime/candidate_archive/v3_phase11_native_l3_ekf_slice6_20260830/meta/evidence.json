@@ -1,0 +1,126 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/audit.json",
+    "audit_sha256": "0c53e192fdec20f40274c2c8c9e22b1d77832008e1143162aee54bcbc8a1309a",
+    "base_fingerprint": "791a7d44360a8409c24f0a024a116bd57b306302ac76c1421f97fe1b6e2bef20",
+    "candidate_fingerprint": "83ac1d510910fe7471233e24d6eb11926af1e5db2be3b3f4e01f468b8d7e66c2",
+    "canonical_fingerprint": "791a7d44360a8409c24f0a024a116bd57b306302ac76c1421f97fe1b6e2bef20",
+    "diff_path": "runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/meta/diff.json",
+    "diff_sha256": "dc93300717dfcb37674168b94f83dd82afe8ebedda6371667fca381450f60326"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md": {
+        "candidate_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383",
+        "canonical_sha256": "b3fa0d80cba23344ab25c9d2bf68f296159df4f1fe5846642211977926ba2383"
+      },
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "e4b0f6728bc93f554045d6ad1eb51daf33ee95c4dd4e97b120d92e0ceeea2f42",
+        "canonical_sha256": "1a453184664af736c38853b729bf614ca69fec7140786cd18c3552de5d04489f"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18",
+        "canonical_sha256": "1b24bc1c6f052526e77884870143fe7d5d688d1e29134bd2fb7dad4c1b5dec18"
+      },
+      "project_rules/protected_baseline.json": {
+        "candidate_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034",
+        "canonical_sha256": "71c09a88187e5c32eaef70f068d5cd37e23a3f387a39203e50ab88a53d7b2034"
+      }
+    },
+    "fingerprint": "54fbaec65149f24177cf0b88609ceaef8eb3d24bb4b8f71652fe64e1ed6e0bdb",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "conf/vezerles.json",
+      "middleware/ekf.py",
+      "middleware/ekf_manager.py",
+      "tests/test_ekf_integrity.py",
+      "tests/test_lidar_ekf_observation_contract.py",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_l0_l4_shadow.py",
+      "tests/test_v3_live_input_composition.py",
+      "tests/test_v3_native_state_estimation.py",
+      "v3/composition/full_fake.py",
+      "v3/composition/input_shadow.py",
+      "v3/composition/live_inputs.py",
+      "v3/contracts.py",
+      "v3/layers/l3_state_estimation.py",
+      "v3/layers/l4_world_model.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-08-30T17:04:22Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_phase11_native_l3_ekf_slice6_20260830",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/home/alba/project_r2b4/runtime/agent_workspaces/v3_phase11_native_l3_ekf_slice6_20260830/tree R2B4_AGENT_CANDIDATE=1 pytest -q tests/test_v3_*.py tests/test_lidar_ekf_observation_contract.py tests/test_bno055_driver.py tests/test_kit0085_encoder.py tests/test_encoder_canonical_window.py tests/test_lidar_driver_raw_summary.py tests/test_lidar_hub_observation_contract.py tests/test_lidar_service_atomic_reset.py tests/test_lidar_service_latest_queue.py tests/test_drv8871_motor_hal.py tests/test_bootstrap_guard.py",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
+      "domain_profiles": {
+        "robot_v3": {
+          "primary": "REPLAYER_V3",
+          "source_routes": [
+            "v3/replay/README.md"
+          ]
+        }
+      },
+      "primary": "REPLAYER_V2_1",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "replayer/README.md",
+        "replayer/contracts.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "project_rules/agent_infrastructure.json",
+        "project_rules/bootstrap_guard.py",
+        "project_rules/protected_baseline.json",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/audit.json",
+    "audit_sha256": "ee02d1afa852550247705135bc9f30a0cc480330ccc9e27cd0eef6c7888594ff",
+    "audited_at_utc": "2026-08-30T18:40:25Z",
+    "base_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "candidate_fingerprint": "389c197d294e02d882e9b2f4e0216aa4988591825b24fc912592e3ae805037e1",
+    "canonical_drift": [],
+    "canonical_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "changed_files": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "tests/test_v3_architecture_boundaries.py",
+      "tests/test_v3_bounded_command.py",
+      "v3/adapters/__init__.py",
+      "v3/adapters/bounded_command.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/diff.json",
+    "diff_sha256": "5d667058331ea732c4fa6e367cef0b538e29911f55f9dead3d039fa01fdefea1",
+    "mode_violations": [],
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_phase12_bounded_command_slice4_20260830",
+    "task_mode": "CODE_CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "63b51ea05fe7df8fabf8e2b267c2384e98bf1de77b3c0bdf9ca44c5c5fb2f3e7",
+        "size_bytes": 29526
+      },
+      "changed": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "858a6dc5fcc679ac58d4e9664ba376fc3d6fe6ff5f154cbee59f87c99e7b680c",
+        "size_bytes": 16658
+      },
+      "changed": null,
+      "path": "tests/test_v3_architecture_boundaries.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "tests/test_v3_bounded_command.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "491579bf053ec72948bb6730f83d63bce2c167b9f2125140c23535154271fe14",
+        "size_bytes": 665
+      },
+      "changed": null,
+      "path": "v3/adapters/__init__.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": false,
+        "sha256": null,
+        "size_bytes": 0
+      },
+      "changed": null,
+      "path": "v3/adapters/bounded_command.py"
+    }
+  ],
+  "goal": "Continue from promoted canonical phase-12 slice 3 with the smallest direct controlled-motion prerequisite not already owned by L5/L9: add a hardware-free BoundedTeleopCommandGateway whose immutable profile defines one explicit absolute tick window, finite v/omega targets and finite mission limits, emits typed TELEOP CommandRequest values only inside that window, and emits typed STOP before and forever after it; characterize direct L5 MissionManager acceptance and fail-closed validation while adding no duplicated navigation or operational constraint logic, legacy production import, external I/O, wall clock, state authority, activate API, lifecycle, layer pipeline, motor writer, GPIO, owner loop, thread, process, runtime entrypoint, hardware execution, live motion, safety relaxation, or automatic promotion",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-08-30T18:38:24Z",
+  "status": "ACTIVE",
+  "task_id": "v3_phase12_bounded_command_slice4_20260830",
+  "task_mode": "CODE_CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 1,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-08-30T18:38:24Z",
+  "workflow_evidence": {
+    "audit_sha256": "ee02d1afa852550247705135bc9f30a0cc480330ccc9e27cd0eef6c7888594ff",
+    "candidate_fingerprint": "389c197d294e02d882e9b2f4e0216aa4988591825b24fc912592e3ae805037e1",
+    "contract_fingerprint": "7afbdd4d9dab38ed7c15d18e3cf7d82cd9465820c3af81165a10fef93becd103",
+    "diff_sha256": "5d667058331ea732c4fa6e367cef0b538e29911f55f9dead3d039fa01fdefea1",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "d88bcbe0b17fc09946e22da272b26c9fde33b280686b1f68c0cf4550a2b4d318"
+  },
+  "workspace": {
+    "base_fingerprint": "e9d73f3d3c8de6e52567935471ee5c632f6e31b14a872a67e5117f3b8e817e2a",
+    "base_manifest_path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/base_manifest.json",
+    "base_manifest_sha256": "8c262b891b25178d96d9c58aa07cb70f7897d8aeeaee0787e48e16fe2de532ff",
+    "path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/tree",
+    "reseal": {
+      "audit_sha256": "ee02d1afa852550247705135bc9f30a0cc480330ccc9e27cd0eef6c7888594ff",
+      "candidate_fingerprint": "389c197d294e02d882e9b2f4e0216aa4988591825b24fc912592e3ae805037e1",
+      "diff_sha256": "5d667058331ea732c4fa6e367cef0b538e29911f55f9dead3d039fa01fdefea1",
+      "path": "runtime/agent_workspaces/v3_phase12_bounded_command_slice4_20260830/meta/reseal.json",
+      "resealed_at_utc": "2026-08-30T18:40:25Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "e86609a734a6b9c304613298965889b7562545ffb214a0a5637abb17da97da8e",
+      "state": "READY",
+      "task_id": "v3_phase12_bounded_command_slice4_20260830"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}
