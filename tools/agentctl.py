@@ -214,7 +214,13 @@ def _workflow(config: Dict[str, Any]) -> Dict[str, Any]:
         "diagnostics": {
             "primary": "REPLAYER_V3",
             "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
-            "source_routes": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+            "source_routes": [
+                "STRUKTURALIS_RETEGEK_V3.md",
+                "v3/execution.py",
+                "v3/capture.py",
+                "v3/replay.py",
+                "v3/test_hub.py",
+            ],
             "domain_profiles": {},
         },
         "testing": {

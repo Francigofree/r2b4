@@ -1,4 +1,4 @@
-"""Read-only L0 adapter for canonical Replayer V1 sensor-feedback captures."""
+"""Read-only, non-authoritative compatibility edge for Replayer V1 captures."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def _optional_boolean(value: object, field: str) -> bool | None:
 
 @dataclass(frozen=True, slots=True)
 class ReplayerV1CaptureConfig:
-    """Immutable edge thresholds; no layer reads live configuration."""
+    """Legacy-format edge thresholds; no layer reads live configuration."""
 
     minimum_encoder_trust: float = 0.3
     minimum_lidar_confidence: float = 0.3

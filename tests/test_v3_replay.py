@@ -24,13 +24,17 @@ from v3.layers.l11_actuator_control import WheelSpeedMap
 from v3.layers.l12_safety_final import LidarSafetyConfig
 from v3.layers.l3_state_estimation import NativeStateEstimatorConfig
 from v3.replay import (
+    ReplaySelection,
     V3ReplayError,
     _capture_value,
     inspect_floor_capture,
+    replay_capture,
     replay_floor_capture,
     verify_replay_result,
     write_replay_result,
 )
+from v3.capture import payload_sha256
+from v3_validation_helpers import create_general_capture
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -391,3 +395,66 @@ def test_nonterminal_capture_status_remains_invalid(tmp_path):
 
     with pytest.raises(V3ReplayError, match="terminal PASS/FAIL/FAULT"):
         inspect_floor_capture(capture)
+
+
+def test_general_replay_selects_tick_time_and_layers_with_prefix_warmup(tmp_path):
+    capture = create_general_capture(tmp_path)
+
+    result = replay_capture(
+        capture,
+        selection=ReplaySelection(
+            start_tick_id=2,
+            end_tick_id=3,
+            start_monotonic_ns=1_040_000_000,
+            end_monotonic_ns=1_060_000_000,
+            start_layer="L3",
+            end_layer="L10",
+        ),
+    )
+
+    assert result["status"] == "MATCH"
+    assert result["scope"]["resolved"] == {
+        "first_tick_id": 2,
+        "last_tick_id": 3,
+        "first_monotonic_ns": 1_040_000_000,
+        "last_monotonic_ns": 1_060_000_000,
+        "tick_count": 2,
+        "layers": [f"L{index}" for index in range(3, 11)],
+    }
+    assert result["scope"]["state_warmup"]["tick_count"] == 2
+    assert result["determinism"]["executed_tick_count"] == 4
+    assert set(result["diagnostics"]["layers"]) == {
+        f"L{index}" for index in range(3, 11)
+    }
+
+
+def test_general_replay_layer_range_ignores_out_of_scope_expected_difference(tmp_path):
+    capture = create_general_capture(tmp_path)
+    payload = json.loads(capture.read_text(encoding="utf-8"))
+    payload["ticks"][2]["expected"]["layers"]["L10"]["left_mps"] += 0.01
+    payload["capture_sha256"] = payload_sha256(payload)
+    capture.write_text(json.dumps(payload), encoding="utf-8")
+
+    early = replay_capture(
+        capture,
+        selection=ReplaySelection(start_layer="L1", end_layer="L9"),
+    )
+    affected = replay_capture(
+        capture,
+        selection=ReplaySelection(start_layer="L10", end_layer="L12"),
+    )
+
+    assert early["status"] == "MATCH"
+    assert affected["status"] == "MISMATCH"
+    assert affected["first_divergence"]["tick_id"] == 2
+    assert affected["first_divergence"]["layer"] == "L10"
+
+
+def test_general_replay_rejects_an_empty_tick_time_intersection(tmp_path):
+    capture = create_general_capture(tmp_path)
+
+    with pytest.raises(V3ReplayError, match="contains no capture ticks"):
+        replay_capture(
+            capture,
+            selection=ReplaySelection(start_tick_id=2, end_monotonic_ns=1),
+        )

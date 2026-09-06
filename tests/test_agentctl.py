@@ -62,7 +62,13 @@ class AgentCtlTests(unittest.TestCase):
                     "diagnostics": {
                         "primary": "REPLAYER_V3",
                         "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
-                        "source_routes": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+                        "source_routes": [
+                            "STRUKTURALIS_RETEGEK_V3.md",
+                            "v3/execution.py",
+                            "v3/capture.py",
+                            "v3/replay.py",
+                            "v3/test_hub.py",
+                        ],
                         "domain_profiles": {},
                     },
                     "testing": {
@@ -138,7 +144,13 @@ class AgentCtlTests(unittest.TestCase):
             "STRUKTURALIS_RETEGEK_V3.md",
             "**Contract:** `R2B4_ARCH_LAYER_CONTRACT_V3`\n",
         )
-        self._write("v3/replay.py", "# V3 replay authority edge\n")
+        for relative in (
+            "v3/execution.py",
+            "v3/capture.py",
+            "v3/replay.py",
+            "v3/test_hub.py",
+        ):
+            self._write(relative, "# V3 robot-validation edge\n")
         ChangeTracker(self.root).begin(
             task_id="task-one",
             goal="minimal context",
@@ -183,6 +195,14 @@ class AgentCtlTests(unittest.TestCase):
         self.assertNotIn("motion_control", capsule["domains"])
         self.assertEqual(capsule["evidence"]["primary"], "REPLAYER_V3")
         self.assertFalse(any("V2_1" in path for path in capsule["source_routes"]))
+        self.assertTrue(
+            {
+                "v3/execution.py",
+                "v3/capture.py",
+                "v3/replay.py",
+                "v3/test_hub.py",
+            }.issubset(capsule["source_routes"])
+        )
 
     def test_v3_scope_fails_closed_until_its_authority_is_registered(self):
         (self.root / "runtime" / "agent_coordination" / "current_change.json").unlink()

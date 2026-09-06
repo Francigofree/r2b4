@@ -49,7 +49,7 @@ Az authority- és fejlesztési sorrend:
 
 ```text
 V3 source + aktív config
-→ STRUKTURALIS_RETEGEK_V3.md
+→ a STRUKTURALIS_RETEGEK_V3.md szerint
 → Replayer + Test Hub V3
 → csak szükség esetén, explicit keretben live hardware
 ```
@@ -59,14 +59,26 @@ el. Az offline út alapműveletei:
 
 ```bash
 python3 -m v3.replay inspect <capture.json>
-python3 -m v3.replay replay <capture.json> --output <result.json>
+python3 -m v3.replay replay <capture.json> --output <result.json> \
+  --start-tick-id 100 --end-tick-id 140 --start-layer L3 --end-layer L10
 python3 -m v3.replay verify-result <result.json>
+python3 -m v3.test_hub validate <capture.json> \
+  --output-dir <run-id-directory>
+python3 -m v3.test_hub verify-evidence <run-id-directory/evidence_index.json>
 ```
 
+A közös, szimulátorhoz is újrahasználható határ
+`input source → production V3 → output sink`. A `v3.capture` általános, nem
+tesztprofil-specifikus sink; a `v3.replay` automatikusan lefuttatja a kijelölt
+első tick előtti state warmupot; a `v3.test_hub` egy explicit run-directoryba
+ír `inspect`, replay-result, L1–L12 diagnosis és hash-index evidence-et.
+
 A capture, replay és live külön modul és külön authority. A replay offline
-magja nem birtokol GPIO- vagy motor-capabilityt. Tartós bizonyíték kizárólag a
-futásazonos capture/result/diagnosis; `logs/latest/latest_*` csak kényelmi pointer,
-nem authority.
+magja nem importál live hardver-authorityt és nem birtokol GPIO- vagy motor-
+capabilityt. Tartós bizonyíték kizárólag a futásazonos capture/result/diagnosis;
+`logs/latest/latest_*` csak kényelmi pointer, nem authority. A Replayer V2.1 és
+a legacy Test Hub V3 fejlesztésben history/compatibility, nem diagnosztikai vagy
+evidence-authority.
 
 Live hardver csak explicit felhasználói keret, friss V3 preflight, szükséges
 lease és végső IDLE/PWM-null ellenőrzés mellett használható. Infrastruktúra-

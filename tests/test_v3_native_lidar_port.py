@@ -42,6 +42,16 @@ class FailingStartDriver(Driver):
         raise RuntimeError("driver start failed")
 
 
+class FreshOnStartDriver(Driver):
+    def start(self):
+        self.scan = RplidarScan(
+            self.scan.revision,
+            time.monotonic_ns(),
+            self.scan.points,
+        )
+        return True
+
+
 class FakeEvent:
     def __init__(self):
         self.is_set = False
@@ -239,16 +249,15 @@ def test_native_owner_cleans_matcher_process_when_driver_start_raises():
 
 
 def test_native_owner_starts_and_stops_one_real_latest_only_matcher_process():
-    captured_ns = time.monotonic_ns()
     scan = RplidarScan(
         1,
-        captured_ns,
+        0,
         tuple(
             RplidarPoint(float(angle), 1.0 + angle / 1_000.0, 20)
             for angle in range(0, 360, 20)
         ),
     )
-    driver = Driver(scan)
+    driver = FreshOnStartDriver(scan)
     port = NativeLidarPort(
         _config(),
         lambda: (0.0, 0.0, 0.0),

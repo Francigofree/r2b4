@@ -723,6 +723,47 @@ def _atomic_install(source: Path, destination: Path, mode: int) -> None:
             tmp.unlink()
 
 
+def _managed_directories(
+    project_root: Path,
+    files: Mapping[str, Mapping[str, Any]],
+) -> set[Path]:
+    directories = {project_root}
+    for relative in files:
+        path = project_root / relative
+        directories.update(
+            parent
+            for parent in path.parents
+            if parent == project_root or project_root in parent.parents
+        )
+    return directories
+
+
+def _enforce_canonical_protection(
+    project_root: Path,
+    config: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+) -> None:
+    """Reapply the existing root/read-only invariant after source replacement."""
+
+    if not bool(_workspace_config(config).get("privileged_operations", False)):
+        return
+    if os.geteuid() != 0:
+        raise WorkspaceError("Canonical protection requires root")
+    files = dict(manifest.get("files") or {})
+    for relative, row in files.items():
+        path = project_root / relative
+        protected_mode = 0o555 if int(row.get("mode", 0o644)) & 0o111 else 0o444
+        os.chown(path, 0, 0)
+        path.chmod(protected_mode)
+    for path in sorted(
+        _managed_directories(project_root, files),
+        key=lambda item: len(item.parts),
+        reverse=True,
+    ):
+        os.chown(path, 0, 0)
+        path.chmod(0o555)
+
+
 def promote_workspace(
     root: Path,
     manifest: Mapping[str, Any],
@@ -781,6 +822,7 @@ def promote_workspace(
             raise PromotionInterrupted("promotion interrupted mid replacement")
     if inject_failure == "after_source":
         raise PromotionInterrupted("promotion interrupted after source replacement")
+    _enforce_canonical_protection(project_root, config, candidate)
     promoted = scan_managed_tree(project_root, config)
     if promoted.get("fingerprint") != candidate.get("fingerprint"):
         raise WorkspaceError("Promoted canonical tree does not equal verified candidate")
@@ -815,6 +857,7 @@ def _restore_snapshot(root: Path, task_id: str, config: Mapping[str, Any], snaps
         _fsync_dir(path.parent)
     for relative, row in sorted(expected.items()):
         _atomic_install(snapshot_paths["tree"] / relative, project_root / relative, int(row.get("mode", 0o644)))
+    _enforce_canonical_protection(project_root, config, payload)
     restored = scan_managed_tree(project_root, config)
     if restored.get("fingerprint") != payload.get("managed_fingerprint"):
         raise WorkspaceError("Source restore did not reproduce the protected snapshot")
@@ -832,6 +875,7 @@ def recover_promotion(root: Path, task_id: str, config: Mapping[str, Any]) -> Di
         current = scan_managed_tree(Path(root).resolve(), config)
         if current.get("fingerprint") != journal.get("candidate_fingerprint"):
             raise WorkspaceError("Committed promotion canonical fingerprint mismatch")
+        _enforce_canonical_protection(Path(root).resolve(), config, current)
         return {"status": "PASS", "state": "COMMITTED", "fingerprint": current["fingerprint"]}
     if state == "ROLLED_BACK":
         current = scan_managed_tree(Path(root).resolve(), config)
@@ -882,12 +926,11 @@ def canonical_protection_status(root: Path, config: Mapping[str, Any]) -> Dict[s
     project_root = Path(root).resolve()
     manifest = scan_managed_tree(project_root, config)
     files = dict(manifest.get("files") or {})
-    directories = {project_root}
+    directories = _managed_directories(project_root, files)
     file_violations: List[str] = []
     for relative in files:
         path = project_root / relative
         info = path.stat()
-        directories.update(parent for parent in path.parents if parent == project_root or project_root in parent.parents)
         if info.st_uid != 0 or stat.S_IMODE(info.st_mode) & 0o222:
             file_violations.append(relative)
     directory_violations: List[str] = []
@@ -910,7 +953,7 @@ def protect_canonical_source(root: Path, config: Mapping[str, Any]) -> Dict[str,
     project_root = Path(root).resolve()
     manifest = scan_managed_tree(project_root, config)
     files = dict(manifest.get("files") or {})
-    directories = {project_root}
+    directories = _managed_directories(project_root, files)
     original_files: Dict[str, Dict[str, int]] = {}
     for relative in files:
         path = project_root / relative
@@ -920,7 +963,6 @@ def protect_canonical_source(root: Path, config: Mapping[str, Any]) -> Dict[str,
             "gid": int(info.st_gid),
             "mode": int(stat.S_IMODE(info.st_mode)),
         }
-        directories.update(parent for parent in path.parents if parent == project_root or project_root in parent.parents)
     protection_path = _protected_store(config) / "canonical_protection.json"
     record = {
         "schema": "R2B4_CANONICAL_PROTECTION_V1",
@@ -936,15 +978,7 @@ def protect_canonical_source(root: Path, config: Mapping[str, Any]) -> Dict[str,
     if protection_path.exists():
         record["previous_record_sha256"] = _sha256_file(protection_path)
     _write_json_atomic(protection_path, record, mode=0o400)
-    for relative, row in files.items():
-        path = project_root / relative
-        current_mode = int(row.get("mode", 0o644))
-        protected_mode = 0o555 if current_mode & 0o111 else 0o444
-        os.chown(path, 0, 0)
-        path.chmod(protected_mode)
-    for path in sorted(directories, key=lambda item: len(item.parts), reverse=True):
-        os.chown(path, 0, 0)
-        path.chmod(0o555)
+    _enforce_canonical_protection(project_root, config, manifest)
     status = canonical_protection_status(project_root, config)
     if status.get("status") != "PASS":
         raise WorkspaceError("Canonical source protection verification failed")

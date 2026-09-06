@@ -37,6 +37,7 @@
     "robot_validation": [
       "V3_REPLAYER_OFFLINE_NO_HARDWARE_AUTHORITY",
       "V3_CAPTURE_REPLAY_LIVE_AUTHORITY_SEPARATION",
+      "V3_INPUT_SOURCE_PRODUCTION_OUTPUT_SINK_BOUNDARY",
       "V3_RUN_SCOPED_EVIDENCE"
     ]
   },
@@ -45,7 +46,13 @@
     "diagnostics": {
       "primary": "REPLAYER_V3",
       "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
-      "source_routes": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+      "source_routes": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "v3/execution.py",
+        "v3/capture.py",
+        "v3/replay.py",
+        "v3/test_hub.py"
+      ],
       "domain_profiles": {}
     },
     "testing": {
@@ -195,8 +202,19 @@
       "required_authority": "v3_robot_architecture"
     },
     "robot_validation": {
-      "paths": ["v3/replay.py"],
-      "sources": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+      "paths": [
+        "v3/execution.py",
+        "v3/capture.py",
+        "v3/replay.py",
+        "v3/test_hub.py"
+      ],
+      "sources": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "v3/execution.py",
+        "v3/capture.py",
+        "v3/replay.py",
+        "v3/test_hub.py"
+      ],
       "required_authority": "v3_robot_architecture"
     }
   }

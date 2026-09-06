@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.agent_change_tracker import ChangeTracker, ChangeTrackerError
 from tools.agent_workspace import (
@@ -283,6 +284,23 @@ class AgentWorkspaceTests(unittest.TestCase):
         self.assertEqual(restored, repeated)
         self.assertEqual((self.root / "README.md").read_bytes(), base_readme)
         self.assertEqual((self.root / "module.py").read_bytes(), base_module)
+
+    def test_privileged_promotion_reapplies_canonical_protection(self):
+        _tracker, manifest, tree = self._open(files=["new/deep/module.py"])
+        (tree / "new/deep").mkdir(parents=True)
+        (tree / "new/deep/module.py").write_text("VALUE = 1\n", encoding="utf-8")
+        config = json.loads(json.dumps(self.config))
+        config["task_workspace"]["privileged_operations"] = True
+
+        with patch("tools.agent_workspace._enforce_canonical_protection") as protect:
+            promoted = promote_workspace(self.root, manifest, config)
+
+        self.assertEqual(promoted["status"], "PASS")
+        protect.assert_called_once()
+        protected_root, protected_config, protected_manifest = protect.call_args.args
+        self.assertEqual(protected_root, self.root.resolve())
+        self.assertIs(protected_config, config)
+        self.assertIn("new/deep/module.py", protected_manifest["files"])
 
     def test_interrupted_promotion_recovers_idempotently(self):
         for failure in ("before_first", "mid", "after_source"):

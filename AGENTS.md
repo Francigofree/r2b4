@@ -32,8 +32,9 @@ karbantartott Markdown state nem authority es nem kotelezo agentkontextus.
 - Lezaras: `python3 tools/agentctl.py close --reason <ok> --test '<cmd> :: PASS'`.
   Ez diffet, fingerprintet, evidence-indexet, auditot es receiptet automatikusan
   eloallit; canonical promotiont nem vegez.
-- Replay-first hibakereses: a Replayer V3 `inspect`, celzott replay,
-  `verify-result` es diagnosis parancsai futasazonos evidence-et adnak. Az
+- Replay-first hibakereses: a Replayer V3 `inspect`, tick/ido/reteg szerint
+  celzott replay es `verify-result`, valamint a Test Hub V3 futasazonos
+  `diagnosis.json`/evidence-indexe az authority. Az
   `agentctl` ezt nem futtatja es nem robot-validacios authority.
 - `supersede` az audit-valid candidate-et resealeli es clone-lineage szamara
   megorzi; torolni csak az explicit `discard` torol. Folytatas:
@@ -65,5 +66,6 @@ karbantartott Markdown state nem authority es nem kotelezo agentkontextus.
   fuggetlenul is futtathat indokolt diagnosztikai cellal, a gepi lease birtokaban.
 - Elo mozgas csak explicit felhasznaloi keret, friss V3 preflight es vegso
   IDLE/PWM-null ellenorzes mellett indulhat.
-- Robot-validacios SSOT a Replayer + Test Hub V3; tartos evidence csak a
-  futasazonos output, `latest_*` pointer nem authority.
+- Robot-validacios SSOT a Replayer + Test Hub V3 (`python3 -m v3.test_hub`);
+  tartos evidence csak a futasazonos output, `latest_*` pointer nem authority.
+  A Replayer V2.1 es legacy Test Hub csak history/compatibility.

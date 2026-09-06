@@ -42,6 +42,8 @@ LayerValue = (
     | FinalActuation
 )
 
+LAYER_ORDER = tuple(f"L{index}" for index in range(1, 13))
+
 
 class FinalSafety(Protocol):
     def finalize(
@@ -342,6 +344,7 @@ class TickEngine:
 
 
 __all__ = [
+    "LAYER_ORDER",
     "LayerRecord",
     "LayerValue",
     "PipelineLayers",

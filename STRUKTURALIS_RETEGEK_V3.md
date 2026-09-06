@@ -18,7 +18,7 @@ Authority sorrend:
 ```text
 source + aktív config
 → ez a canonical V3 contract
-→ futásazonos replay/capture/Test Hub evidence
+→ Replayer + Test Hub V3 futásazonos capture/replay/diagnosis evidence
 → stabil baseline
 → történeti dokumentáció vagy nyers log
 ```
@@ -77,6 +77,18 @@ Egy tick menete:
 A döntési idő kizárólag az injektált monoton idő. Randomizált algoritmus csak a
 replay inputjában rögzített seedet használhat. CPU-idős deadline helyett fix
 iteráció-, minta- vagy csomópont-budget kell, ahol ez releváns.
+
+A live, capture, replay és későbbi szimuláció ugyanarra a kis végrehajtási
+határra illeszthető:
+
+```text
+input source → production V3 → output sink
+```
+
+Az input source lezárt `TickInputs` értéket ad, a production elem a canonical
+V3 `run_tick`, az output sink pedig passzív eredményt fogyaszt. A sink nem adhat
+vissza control state-et, és nem kaphat motor-, GPIO-, lifecycle- vagy safety-
+authorityt. A boundary újrafelhasználhatósága nem jelent új végrehajtási utat.
 
 Aszinkron fizikai input, driver vagy nagyobb szenzorfeldolgozás használható, ha
 annak eredménye a tick számára egyértelműen lezárt, immutable, időbélyegzett
@@ -427,9 +439,10 @@ használja a meglévő `LidarEstimator` algoritmust. A production út nem import
 a legacy drivert, service-t vagy matcher-processzt, és nem vesz át legacy
 runtime/shared-state authorityt.
 
-A V3 Replayer a teljes zárt L1 contractot generikusan és veszteség nélkül
-rögzíti és állítja vissza, ezért az új mintákhoz nem szükséges külön replay
-schema vagy alternatív diagnosztikai út. A korábbi capture-ek régi
+A V3 capture a teljes lezárt `TickInputs` contractot generikusan és veszteség
+nélkül rögzíti, a V3 Replayer pedig ugyanazt a production V3 utat futtatja
+vissza. Ezért az új mintákhoz nem szükséges tesztprofil-specifikus replay schema
+vagy alternatív diagnosztikai út. A korábbi capture-ek régi
 `lidar_health` alakja továbbra is determinisztikusan olvasható. Natív safety
 minta jelenlétében a Replayer a capture device identityjét és a source-first
 ellenőrzött aktív `hardver.json` clearance-küszöbét zárja vissza az L12-be; ezt
@@ -487,11 +500,11 @@ state-, motion- vagy safety-authority.
 Normatív szerepe:
 
 ```text
-command source
-→ canonical V3 runtime
-→ capture
-→ V3 replay
-→ diagnosztika
+V3 source + aktív config
+→ általános V3 capture
+→ offline Replayer V3
+→ futásazonos L1–L12 diagnosis/evidence
+→ csak szükség esetén live hardware
 ```
 
 A V3 Test Hub:
@@ -503,15 +516,18 @@ A V3 Test Hub:
 * nem kerülheti meg az L12-t;
 * paraméterezett tesztszcenáriót adhat általános command source-ként;
 * a capture-t és replayt első osztályú fejlesztési eszközként használja;
+* nem tart fenn kötelező profile-, scenario-, admin- vagy latest-pointer
+  infrastruktúrát;
 * nem lehet production V3 runtime dependency.
 
 A production V3 runtime nem függhet legacy Test Hubtól. Átmeneti külső wrapper
 csak a canonical V3 runtime meghívására használható; V3-specifikus runtime-,
 motion-, safety- vagy replay-authority nem maradhat benne hosszú távon.
 
-A konkrét V3 Test Hub CLI-, profil-, UI- és artifact-struktúrája nem része ennek
-az architecture contractnak; azt az aktuális source és a következő konkrét
-fejlesztési igény határozza meg.
+A live adapter, az általános capture sink, az offline replay mag és a Test Hub
+evidence-csomag külön modul és külön authority. A Replayer V2.1 és a legacy
+Test Hub csak történeti/compatibility donor lehet; aktív V3 diagnosztikai vagy
+evidence-authority nem lehet.
 
 Élő mozgás csak explicit felhasználói keret, friss preflight, jóváhagyott Test
 Hub út és igazolt végső biztonságos motorállapot mellett indulhat.
@@ -588,6 +604,11 @@ A `TickTrace` tickenként L1–L12 typed outputokat tartalmaz. Két futás közv
 dataclass-egyenlőséggel hasonlítható össze; az első eltérő rekord megadja a
 `tick_id`-t és a layer nevet.
 
+A replay inclusive tick-, monotonidő- és összefüggő L1–L12 rétegtartományra
+szűkíthető. Stateful réteg esetén a kiválasztott első tick előtti capture-prefix
+kötelező warmupként végigfut ugyanazon production példányon; csak a kijelölt
+tickek és rétegek kapnak diagnosztikai verdictet.
+
 A capture a konkrét source-first diagnosztikához szükséges evidence-et őrizze
 meg, de nincs általános „mindent logoljunk” követelmény.
 
@@ -643,7 +664,7 @@ A rövid távú V3 fejlesztés alapfolyamata:
 ```text
 source + aktív config
 → canonical V3 contract
-→ meglévő capture/replay/hardver evidence
+→ Replayer + Test Hub V3 capture/replay/diagnosis evidence
 → legkisebb szükséges architecture-compatible változás
 → célzott teszt
 → replay
