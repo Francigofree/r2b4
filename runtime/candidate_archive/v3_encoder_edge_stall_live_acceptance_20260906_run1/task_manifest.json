@@ -2,25 +2,25 @@
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
   "candidate_audit": {
-    "audit_path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run2/meta/audit.json",
-    "audit_sha256": "24e53c05c8eb3415fad9ee75b9c32b19664fa461b4aafb15467b912fcaede662",
-    "audited_at_utc": "2026-09-06T19:00:49Z",
+    "audit_path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run1/meta/audit.json",
+    "audit_sha256": "e2bd04116af40274a898d0f79a74a70c3a070bbbe7f1a34ff2fc25ec493e50f0",
+    "audited_at_utc": "2026-09-06T18:55:39Z",
     "base_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
     "candidate_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
     "canonical_drift": [],
     "canonical_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
     "changed_files": [],
-    "diff_path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run2/meta/diff.json",
-    "diff_sha256": "1b3f63a28a2ec09d308a197ef3dc7f169870fa0a337b5fb276408b06e07c2283",
+    "diff_path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run1/meta/diff.json",
+    "diff_sha256": "00d655a46aa2af04fc495984f04c8c0a897d8265995ec070632323cb38559be9",
     "protected_infrastructure_changes": [],
     "schema": "R2B4_CANDIDATE_AUDIT_V1",
     "status": "PASS",
-    "task_id": "v3_encoder_edge_stall_live_acceptance_20260906_run2",
+    "task_id": "v3_encoder_edge_stall_live_acceptance_20260906_run1",
     "task_mode": "CHANGE",
     "unexpected_changes": []
   },
   "changed_files": [],
-  "completed_at_utc": "2026-09-06T19:00:50Z",
+  "completed_at_utc": "2026-09-06T18:55:39Z",
   "files": [
     {
       "after": {
@@ -345,72 +345,49 @@
       "path": "v3_process_runtime.py"
     }
   ],
-  "goal": "Execute the canonical production 1 m at 0.15 m/s live acceptance after the promoted edge-stall timing fix, with immediate bounded preflight-to-motion transition, full CaptureSink V3 evidence, final physical PWM-null verification, and Replayer/Test Hub V3 L1-L12 validation.",
-  "promotion_status": "READY",
-  "reason": "Canonical live acceptance PASS: 1.005994893 m at 0.15 m/s command, explicit five-tick STOP/PWM-zero confirmation, resident SHUTDOWN_SAFE_LOW, full 3175-tick CaptureSink V3 replay MATCH across L1-L12, and live tick 2440 proved GPIO edge-history recovery across a 126903536 ns processing interval.",
+  "goal": "Execute the canonical production 1 m at 0.15 m/s live acceptance after the promoted edge-stall timing fix, record full CaptureSink V3 evidence, verify final physical PWM-null, and validate the complete run through L1-L12 with Replayer V3 and Test Hub V3.",
+  "promotion_status": "SUPERSEDED",
+  "reason": "No live motion was issued. Canonical STOP preflight initially passed, then the resident process exited before the controller start and hardware close reported native RPLIDAR acquisition did not stop; motor ownership closed hard-low and no production process remains.",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-09-06T18:55:47Z",
-  "status": "COMPLETE",
-  "task_id": "v3_encoder_edge_stall_live_acceptance_20260906_run2",
+  "started_at_utc": "2026-09-06T18:48:30Z",
+  "status": "SUPERSEDED",
+  "task_id": "v3_encoder_edge_stall_live_acceptance_20260906_run1",
   "task_mode": "CHANGE",
-  "test_strategy": {
-    "authoritative_test_count": 4,
-    "default": "TARGETED",
-    "full_regression_reason": null,
-    "full_regression_recorded": false,
-    "full_regression_required": false,
-    "legacy_non_authority_count": 0
-  },
   "tests": [
     {
       "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m pytest -q tests/test_v3_*.py",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3_process_runtime --approval native-resident-v3 --command-path runtime/v3_encoder_edge_stall_live_acceptance_20260906_run2_command.json --status-path runtime/v3_encoder_edge_stall_live_acceptance_20260906_run2_status.json --capture-path runtime/v3_encoder_edge_stall_live_acceptance_20260906_run2_capture.json",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3.test_hub validate runtime/v3_encoder_edge_stall_live_acceptance_20260906_run2_capture.json --output-dir runtime/v3_encoder_edge_stall_live_acceptance_20260906_run2_evidence --start-layer L1 --end-layer L12",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3.test_hub verify-evidence runtime/v3_encoder_edge_stall_live_acceptance_20260906_run2_evidence/evidence_index.json",
-      "status": "PASS"
+      "command": "superseded task; no completion claim",
+      "status": "NOT_RUN"
     }
   ],
-  "updated_at_utc": "2026-09-06T19:00:50Z",
+  "updated_at_utc": "2026-09-06T18:55:39Z",
   "workflow_evidence": {
-    "audit_sha256": "24e53c05c8eb3415fad9ee75b9c32b19664fa461b4aafb15467b912fcaede662",
+    "audit_sha256": "e2bd04116af40274a898d0f79a74a70c3a070bbbe7f1a34ff2fc25ec493e50f0",
     "candidate_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
     "contract_fingerprint": "d7353335398f75729901f13448c9f1c573d160e7ebce6ead92481006c23ce3da",
-    "diff_sha256": "1b3f63a28a2ec09d308a197ef3dc7f169870fa0a337b5fb276408b06e07c2283",
-    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run2/meta/evidence.json",
+    "diff_sha256": "00d655a46aa2af04fc495984f04c8c0a897d8265995ec070632323cb38559be9",
+    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run1/meta/evidence.json",
     "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
-    "sha256": "e146ce8dcfe280f34681ae572a1b8d748616a07a1f701a9ed07523a85d3081d1"
+    "sha256": "3981b93dcabb4cf7e922fb83d1f1e66f7a6da5c8a4ff887070fdd401125f2345"
   },
   "workspace": {
     "base_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
-    "base_manifest_path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run2/meta/base_manifest.json",
+    "base_manifest_path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run1/meta/base_manifest.json",
     "base_manifest_sha256": "773a73325e6ec5901dff8a69f0b817c05cfe78b623c0a1dc0a6c555f6da66fa4",
-    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run2/tree",
+    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run1/tree",
     "reseal": {
-      "audit_sha256": "24e53c05c8eb3415fad9ee75b9c32b19664fa461b4aafb15467b912fcaede662",
+      "audit_sha256": "e2bd04116af40274a898d0f79a74a70c3a070bbbe7f1a34ff2fc25ec493e50f0",
       "candidate_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
-      "diff_sha256": "1b3f63a28a2ec09d308a197ef3dc7f169870fa0a337b5fb276408b06e07c2283",
-      "path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run2/meta/reseal.json",
-      "resealed_at_utc": "2026-09-06T19:00:49Z",
+      "diff_sha256": "00d655a46aa2af04fc495984f04c8c0a897d8265995ec070632323cb38559be9",
+      "path": "runtime/agent_workspaces/v3_encoder_edge_stall_live_acceptance_20260906_run1/meta/reseal.json",
+      "resealed_at_utc": "2026-09-06T18:55:39Z",
       "schema": "R2B4_CANDIDATE_RESEAL_V1",
-      "sha256": "607b104a108e6e9d1e8e44b53c460683b4302f81cb89a89581f7be9814412a9b",
-      "state": "READY",
-      "task_id": "v3_encoder_edge_stall_live_acceptance_20260906_run2"
+      "sha256": "088f6b6b82692e6ca6edd4895820968b529995b52d1560b835ef3f7d6130bebf",
+      "state": "SUPERSEDED",
+      "task_id": "v3_encoder_edge_stall_live_acceptance_20260906_run1"
     },
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "READY"
+    "state": "SUPERSEDED"
   }
 }
