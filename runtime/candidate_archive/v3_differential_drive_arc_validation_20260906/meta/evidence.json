@@ -1,0 +1,139 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_differential_drive_arc_validation_20260906/meta/audit.json",
+    "audit_sha256": "5f75cf3fb8f03715dba97f6b7f1afea43e115b3d1f4650e09c8778b1b2f02650",
+    "base_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
+    "candidate_fingerprint": "16db6696e5024c9b50dabe7788de84647c208c446be85df13745fd21dc6fe992",
+    "canonical_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
+    "diff_path": "runtime/agent_workspaces/v3_differential_drive_arc_validation_20260906/meta/diff.json",
+    "diff_sha256": "f038d5c64d245238de9c0f410b507aa3b07bcb4290a9bad49cfb927f8e3b5eea"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c",
+        "canonical_sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0",
+        "canonical_sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0"
+      }
+    },
+    "fingerprint": "5827d91f1fce95378227c71c44680444c20b883941fbd089ab2893ef4effccc6",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "STRUKTURALIS_RETEGEK_V3.md",
+      "conf/fizika.json",
+      "conf/hardver.json",
+      "conf/speed_map.json",
+      "conf/vezerles.json",
+      "tests/test_v3_bounded_runtime_config.py",
+      "tests/test_v3_differential_drive_arcs.py",
+      "tests/test_v3_l10_l11_donors.py",
+      "tests/test_v3_l5_l9_mission_navigation.py",
+      "tests/test_v3_live_lidar.py",
+      "tests/test_v3_native_control_composition.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_replay.py",
+      "tests/test_v3_resident_command.py",
+      "tests/test_v3_resident_runtime.py",
+      "tests/test_v3_test_hub.py",
+      "v3/adapters/capture_edges.py",
+      "v3/adapters/live_lidar.py",
+      "v3/adapters/native_lidar_port.py",
+      "v3/adapters/resident_command.py",
+      "v3/capture.py",
+      "v3/composition/native_control.py",
+      "v3/composition/resident_live_control.py",
+      "v3/composition/resident_physical_control.py",
+      "v3/contracts/messages.py",
+      "v3/layers/l10_chassis_control.py",
+      "v3/layers/l11_actuator_control.py",
+      "v3/layers/l12_safety_final.py",
+      "v3/layers/l3_state_estimation.py",
+      "v3/layers/l5_command_mission.py",
+      "v3/layers/l6_navigation.py",
+      "v3/layers/l7_motion_selection.py",
+      "v3/layers/l8_motion_realization.py",
+      "v3/layers/l9_operational_constraints.py",
+      "v3/replay.py",
+      "v3/test_hub.py",
+      "v3_bounded_config.py",
+      "v3_hardware_runtime.py",
+      "v3_process_runtime.py",
+      "v3_runtime.py"
+    ]
+  },
+  "full_regression_reason": "DIAGNOSTIC_INVESTIGATION",
+  "generated_at_utc": "2026-09-06T20:09:05Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_differential_drive_arc_validation_20260906",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "python3 -m pytest -q",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "domain_profiles": {},
+      "primary": "REPLAYER_V3",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "v3/execution.py",
+        "v3/capture.py",
+        "v3/replay.py",
+        "v3/test_hub.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "AGENTS.md",
+        "docs/AGENT_RUNTIME.md",
+        "project_rules/agent_infrastructure.json",
+        "project_rules/agent_system_prompt.txt",
+        "project_rules/bootstrap_guard.py",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

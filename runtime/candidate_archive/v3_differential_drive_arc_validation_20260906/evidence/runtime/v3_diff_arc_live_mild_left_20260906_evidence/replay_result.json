@@ -1,0 +1,169 @@
+{
+  "capture": {
+    "capture_id": "v3_diff_arc_live_mild_left_20260906_capture",
+    "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_differential_drive_arc_validation_20260906/tree/runtime/v3_diff_arc_live_mild_left_20260906_capture.json",
+    "payload_sha256": "a2ab18326f0c0997c8072babe5af8f78266c80ca1bf803f3def73a8f2cd853c5",
+    "schema": "R2B4_V3_CAPTURE_V1",
+    "sha256": "9af9440b5c378a2551d5739c94ad73888e32794794d31c76f906fbe42f621921",
+    "status": "FAULT",
+    "tick_count": 2591
+  },
+  "determinism": {
+    "executed_tick_count": 2021,
+    "offline_write_count_first": 2021,
+    "offline_write_count_second": 2021,
+    "production_layers": "L1-L12",
+    "repeated_trace_match": true,
+    "selected_tick_count": 73
+  },
+  "diagnostics": {
+    "first_divergence": null,
+    "layers": {
+      "L1": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L10": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L11": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L12": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L2": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L3": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L4": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L5": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L6": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L7": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L8": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L9": {
+        "actual_present_count": 73,
+        "compared_tick_count": 73,
+        "expected_present_count": 73,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      }
+    }
+  },
+  "execution": {
+    "capture_passed": false,
+    "capture_status": "FAULT",
+    "decision_counts": {
+      "ALLOW": 62,
+      "FAULT": 0,
+      "STOP": 11
+    },
+    "terminal_fault_layer": null,
+    "terminal_reason": "NOT_ACTIVE",
+    "terminal_safety_decision": "STOP",
+    "terminal_tick_id": 2020
+  },
+  "first_divergence": null,
+  "generated_at_utc": "2026-09-06T19:56:19Z",
+  "reconstruction_contract": {
+    "configuration": "CAPTURED_ONCE_BY_CONTENT",
+    "external_io": "NONE",
+    "inputs": "CAPTURED_TYPED_TICK_INPUTS",
+    "production": "NATIVE_V3_L1_L12"
+  },
+  "result_sha256": "016b45273acd724730c443da825eecfca58cc62413d87b7682e77c1a79d854f9",
+  "schema": "R2B4_REPLAYER_V3_RESULT_V3",
+  "scope": {
+    "requested": {
+      "end_layer": "L12",
+      "end_monotonic_ns": null,
+      "end_tick_id": 2020,
+      "start_layer": "L1",
+      "start_monotonic_ns": null,
+      "start_tick_id": 1948
+    },
+    "resolved": {
+      "first_monotonic_ns": 16167813253614,
+      "first_tick_id": 1948,
+      "last_monotonic_ns": 16169255543409,
+      "last_tick_id": 2020,
+      "layers": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "L8",
+        "L9",
+        "L10",
+        "L11",
+        "L12"
+      ],
+      "tick_count": 73
+    },
+    "state_warmup": {
+      "first_tick_id": 0,
+      "last_tick_id": 1947,
+      "strategy": "CAPTURE_PREFIX",
+      "tick_count": 1948
+    }
+  },
+  "status": "MATCH"
+}

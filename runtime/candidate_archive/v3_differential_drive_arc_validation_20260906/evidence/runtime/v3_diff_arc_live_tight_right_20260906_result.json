@@ -1,0 +1,107 @@
+{
+  "active_sample_count": 15,
+  "command": {
+    "left_target_mps": 0.35,
+    "omega_rad_s": -0.562271577171774,
+    "right_target_mps": 0.15,
+    "v_mps": 0.25
+  },
+  "failure": null,
+  "first_nonzero": {
+    "estimate": {
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "omega_rad_s": -0.0012107125396816553,
+      "v_mps": 0.0023237768619927645,
+      "x_m": 0.0008569776256129074,
+      "y_m": -0.001414702967040787,
+      "yaw_rad": -0.04478373013159068
+    },
+    "left_output": 0.21042053255512322,
+    "right_output": 0.19330800281303137,
+    "safety_decision": "ALLOW",
+    "safety_reason": null,
+    "state": "RUNNING",
+    "tick_id": 160
+  },
+  "last_active": {
+    "estimate": {
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "omega_rad_s": -0.4849547421190038,
+      "v_mps": 0.2437733042093249,
+      "x_m": 0.25487050117969706,
+      "y_m": -0.07997790998272367,
+      "yaw_rad": -0.5581083257041799
+    },
+    "left_output": 0.41279695770661445,
+    "right_output": 0.1881308866642552,
+    "safety_decision": "ALLOW",
+    "safety_reason": null,
+    "state": "RUNNING",
+    "tick_id": 229
+  },
+  "nonzero_seen": true,
+  "phase": "tight_right",
+  "preflight": {
+    "enabled": false,
+    "estimate": {
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "omega_rad_s": 0.0032431604759323384,
+      "v_mps": 0.0,
+      "x_m": 0.0003133269183903674,
+      "y_m": -0.0013904160708084212,
+      "yaw_rad": -0.04326730692701522
+    },
+    "fault_layer": null,
+    "left_output": 0.0,
+    "monotonic_ns": 16746459513642,
+    "ready_for_active": true,
+    "right_output": 0.0,
+    "safety_decision": "STOP",
+    "safety_reason": "NOT_ACTIVE",
+    "schema": "R2B4_V3_RESIDENT_PROCESS_STATUS_V1",
+    "source_health": [
+      {
+        "device_id": "WHEEL_ENCODERS",
+        "reason": null,
+        "state": "OK"
+      },
+      {
+        "device_id": "BNO055_IMU",
+        "reason": null,
+        "state": "OK"
+      },
+      {
+        "device_id": "RPLIDAR_C1",
+        "reason": null,
+        "state": "OK"
+      }
+    ],
+    "state": "RUNNING",
+    "tick_id": 157
+  },
+  "resident_exit_code": 0,
+  "resident_report": {
+    "exit_reason": "STOP_REQUESTED",
+    "fault_layer": null,
+    "final_lifecycle": "SHUTDOWN",
+    "final_reason": "NOT_ACTIVE",
+    "final_safety_decision": "STOP",
+    "last_tick_id": 241,
+    "normal_tick_count": 241,
+    "operator_stopped": true,
+    "run_status": 0,
+    "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
+    "status": "PASS",
+    "termination_class": "SHUTDOWN_SAFE_LOW",
+    "tick_count": 242
+  },
+  "schema": "R2B4_V3_ARC_PHASE_RESULT_V1",
+  "stop_confirmed": true,
+  "stop_zero_tick_ids": [
+    235,
+    236,
+    237,
+    238,
+    239
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "active_sample_count": 2,
+  "command": {
+    "left_target_mps": 0.22,
+    "omega_rad_s": 0.16868147315153217,
+    "right_target_mps": 0.28,
+    "v_mps": 0.25
+  },
+  "failure": "safety_FAULT:PREFLIGHT_REQUIRED",
+  "first_nonzero": null,
+  "last_active": null,
+  "nonzero_seen": false,
+  "phase": "mild_left_run2",
+  "preflight": {
+    "enabled": false,
+    "estimate": {
+      "frame_id": "R2B4_BOOT_ROBOT_MAP",
+      "omega_rad_s": -0.003252033135445752,
+      "v_mps": 0.0,
+      "x_m": 0.0,
+      "y_m": 0.0,
+      "yaw_rad": 0.0139731603909686
+    },
+    "fault_layer": null,
+    "left_output": 0.0,
+    "monotonic_ns": 16328339716085,
+    "ready_for_active": true,
+    "right_output": 0.0,
+    "safety_decision": "STOP",
+    "safety_reason": "NOT_ACTIVE",
+    "schema": "R2B4_V3_RESIDENT_PROCESS_STATUS_V1",
+    "source_health": [
+      {
+        "device_id": "WHEEL_ENCODERS",
+        "reason": null,
+        "state": "OK"
+      },
+      {
+        "device_id": "BNO055_IMU",
+        "reason": null,
+        "state": "OK"
+      },
+      {
+        "device_id": "RPLIDAR_C1",
+        "reason": null,
+        "state": "OK"
+      }
+    ],
+    "state": "RUNNING",
+    "tick_id": 109
+  },
+  "resident_exit_code": 1,
+  "resident_report": {
+    "exit_reason": "RUNTIME_FAULT",
+    "fault_layer": "ResidentLiveControl",
+    "final_lifecycle": "FAULT",
+    "final_reason": "PREFLIGHT_REQUIRED",
+    "final_safety_decision": "FAULT",
+    "last_tick_id": 110,
+    "normal_tick_count": 111,
+    "operator_stopped": false,
+    "run_status": 1,
+    "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
+    "status": "FAULT",
+    "termination_class": "FAULT_SAFE_LOW",
+    "tick_count": 111
+  },
+  "schema": "R2B4_V3_ARC_PHASE_RESULT_V1",
+  "stop_confirmed": false,
+  "stop_zero_tick_ids": []
+}
