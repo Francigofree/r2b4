@@ -1,0 +1,105 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/meta/audit.json",
+    "audit_sha256": "23f8f43864e417c574dfb9905bea2f42b892c7ce69dd5c749d6d1f003d251321",
+    "audited_at_utc": "2026-09-06T18:47:06Z",
+    "base_fingerprint": "2266dfc1b89aa10c5becaedd586394e25060171d4511fe84ca6fd8c69d61b668",
+    "candidate_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
+    "canonical_drift": [],
+    "canonical_fingerprint": "2266dfc1b89aa10c5becaedd586394e25060171d4511fe84ca6fd8c69d61b668",
+    "changed_files": [
+      "tests/test_v3_counter_encoder_backend.py",
+      "v3/adapters/counter_encoder.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/meta/diff.json",
+    "diff_sha256": "1b1bd79312241b10f9325c515add822eeb4bc37fbbbcaf70aaa494aa557a62d1",
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_encoder_edge_stall_p0_fix_20260906",
+    "task_mode": "CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "9ff360ec7ab61e710cd53b1af3701a2153f5f5fed26e0c83a8aa1598e6a2fc74",
+        "size_bytes": 24670
+      },
+      "changed": null,
+      "path": "tests/test_v3_counter_encoder_backend.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "0da5229648b14e8fbdfaf2c54214d05f12ac975ee7430920c4a8d494120e088e",
+        "size_bytes": 7133
+      },
+      "changed": null,
+      "path": "tests/test_v3_gpio_encoder_source.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "93559ea122365f00938f90ceee85f2e2fd02f4a5a5041664e04c872c8bb4708a",
+        "size_bytes": 27521
+      },
+      "changed": null,
+      "path": "v3/adapters/counter_encoder.py"
+    }
+  ],
+  "goal": "Minimally fix encoder P0 time semantics so a long Python/tick processing interval does not invalidate fresh bounded GPIO edge-history velocity evidence, preserve fail-closed stale rejection without sufficient dual-wheel edge proof, and prove with targeted regressions before repeating canonical live acceptance.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-06T17:42:10Z",
+  "status": "ACTIVE",
+  "task_id": "v3_encoder_edge_stall_p0_fix_20260906",
+  "task_mode": "CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-06T17:42:10Z",
+  "workflow_evidence": {
+    "audit_sha256": "23f8f43864e417c574dfb9905bea2f42b892c7ce69dd5c749d6d1f003d251321",
+    "candidate_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
+    "contract_fingerprint": "e91bd70974af5a3182b097fa283a9ee8d45a48cd432f0f1cbf0bee6be94c12ae",
+    "diff_sha256": "1b1bd79312241b10f9325c515add822eeb4bc37fbbbcaf70aaa494aa557a62d1",
+    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "9cba08d4efcbfac78c4dce0c09f54fb2c60f1e4ce29d02b0b69f11820a891995"
+  },
+  "workspace": {
+    "base_fingerprint": "2266dfc1b89aa10c5becaedd586394e25060171d4511fe84ca6fd8c69d61b668",
+    "base_manifest_path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "b3a4d9265c4be1b26f2af6b0aad305de39e6a45445faa3b5ff4f2fc690cc2bf5",
+    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/tree",
+    "reseal": {
+      "audit_sha256": "23f8f43864e417c574dfb9905bea2f42b892c7ce69dd5c749d6d1f003d251321",
+      "candidate_fingerprint": "5dd4a08649e58093ab18f7d29ab24d5654f328444e599820334049fd9d32e45f",
+      "diff_sha256": "1b1bd79312241b10f9325c515add822eeb4bc37fbbbcaf70aaa494aa557a62d1",
+      "path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/meta/reseal.json",
+      "resealed_at_utc": "2026-09-06T18:47:06Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "e20e8d66b21ebad62311ef7482714d3672ddb4bc926be27c068caf1fe3484234",
+      "state": "READY",
+      "task_id": "v3_encoder_edge_stall_p0_fix_20260906"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}
