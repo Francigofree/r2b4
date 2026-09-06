@@ -1,0 +1,102 @@
+{
+  "artifacts": [
+    "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+    "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_2.json",
+    "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json"
+  ],
+  "command": {
+    "return_code": -99,
+    "stderr_tail": "",
+    "stdout_tail": "",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9073,
+        "pid": 9073,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-05T16:49:42Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-05T16:49:15Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260905T164915Z/latest_human_observed_1x1m_validation.json",
+    "required": false
+  },
+  "preflight": {
+    "errors": [
+      "native_sensor_command_failed",
+      "native_sensor_measurement_not_pass",
+      "native_sensor_tick_count_incomplete",
+      "native_sensor_healthy_window_too_short",
+      "native_sensor_fault_tick_present",
+      "native_sensor_preflight_nonzero_commit",
+      "native_sensor_preflight_interrupted"
+    ],
+    "ok": false,
+    "stdout_tail": "{\n  \"error\": \"native RPLIDAR acquisition did not stop\",\n  \"error_type\": \"RuntimeError\",\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"status\": \"ERROR\",\n  \"tick_details_written\": 0\n}"
+  },
+  "preflight_pose_reset": {},
+  "primary_failure": "PREFLIGHT_FAIL",
+  "profile": "v3_native_floor_motion_capture",
+  "reason": "preflight_failed:['native_sensor_command_failed', 'native_sensor_measurement_not_pass', 'native_sensor_tick_count_incomplete', 'native_sensor_healthy_window_too_short', 'native_sensor_fault_tick_present', 'native_sensor_preflight_nonzero_commit', 'native_sensor_preflight_interrupted']",
+  "run_tag": "hub_v3_native_floor_motion_capture_20260905T164915Z",
+  "status": "FAIL",
+  "warning_summary": {},
+  "warnings": []
+}

@@ -1,0 +1,3394 @@
+{
+  "archive": {
+    "enabled": false,
+    "post_check": null,
+    "post_run": null,
+    "pre_check": null,
+    "pre_run": null,
+    "requested": true,
+    "skipped_reason": "disabled_during_live_run_for_watchdog_safety"
+  },
+  "duration_s": 17.439,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ended_at_utc": "2026-09-05T16:53:39Z",
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9776,
+        "pid": 9776,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "incident": {
+    "artifacts": [
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json"
+    ],
+    "command": {
+      "return_code": 1,
+      "stderr_tail": "",
+      "stdout_tail": "        \"ok\": true\n      },\n      {\n        \"sequence\": 45,\n        \"monotonic_ns\": 2950667683666,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 46,\n        \"monotonic_ns\": 2950667686925,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 47,\n        \"monotonic_ns\": 2950667689999,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 48,\n        \"monotonic_ns\": 2950667693110,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 49,\n        \"monotonic_ns\": 2950669757026,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 50,\n        \"monotonic_ns\": 2950669760322,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 51,\n        \"monotonic_ns\": 2950669763248,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 52,\n        \"monotonic_ns\": 2950669766100,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 53,\n        \"monotonic_ns\": 2950769966245,\n        \"operation\": \"gpiochip_close\",\n        \"handle\": 2,\n        \"result\": 0,\n        \"ok\": true\n      }\n    ]\n  },\n  \"post_close_pins\": {\n    \"status\": \"PASS\",\n    \"ok\": true,\n    \"command\": [\n      \"/usr/bin/pinctrl\",\n      \"get\",\n      \"12,13,18,19\"\n    ],\n    \"return_code\": 0,\n    \"pins\": {\n      \"12\": {\n        \"raw\": \"12: op dl pd | lo // GPIO12 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"13\": {\n        \"raw\": \"13: op dl pd | lo // GPIO13 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"18\": {\n        \"raw\": \"18: op dl pd | lo // GPIO18 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"19\": {\n        \"raw\": \"19: op dl pd | lo // GPIO19 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      }\n    },\n    \"errors\": []\n  },\n  \"final_lifecycle\": \"FAULT_OR_INTERRUPTED\",\n  \"artifact_path\": \"logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json\"\n}",
+      "timed_out": false
+    },
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 9776,
+          "pid": 9776,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-05T16:53:39Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-05T16:53:22Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/session_20260905T165322Z/latest_human_observed_1x1m_validation.json",
+      "required": false
+    },
+    "preflight": {
+      "errors": [],
+      "ok": true,
+      "stdout_tail": "      ],\n      \"left_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"left_measurement_trust\": [\n        0.0,\n        0.99999976875\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"left_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"left_velocity_uncertainty_mps\": [\n        0.004027683820920721,\n        0.10058250017684078\n      ],\n      \"maximum_abs_velocity_mps\": [\n        1.5,\n        1.5\n      ],\n      \"raw_left_distance_m\": [\n        0.0,\n        0.0\n      ],\n      \"raw_left_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"raw_right_distance_m\": [\n        0.0,\n        0.0\n      ],\n      \"raw_right_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"right_distance_delta_m\": [\n        0.0,\n        0.0\n      ],\n      \"right_estimation_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_estimation_window_ns\": [\n        6406972.0,\n        159999963.0\n      ],\n      \"right_invalid_alert_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"right_measurement_trust\": [\n        0.0,\n        0.99999976875\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"right_velocity_uncertainty_mps\": [\n        0.004027683820920721,\n        0.10058250017684078\n      ],\n      \"sample_interval_ns\": [\n        6406972.0,\n        30213482.0\n      ],\n      \"trust\": [\n        0.0,\n        0.99999976875\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"RPLIDAR_C1\": {\n      \"DEGRADED\": 109,\n      \"OK\": 191\n    },\n    \"WHEEL_ENCODERS\": {\n      \"OK\": 300\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+    },
+    "preflight_pose_reset": {},
+    "primary_failure": "TEST_FAIL",
+    "profile": "v3_native_floor_motion_capture",
+    "reason": "scenario return_code=1",
+    "run_tag": "hub_v3_native_floor_motion_capture_20260905T165322Z",
+    "status": "FAIL",
+    "warning_summary": {},
+    "warnings": []
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-05T16:53:39Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-05T16:53:22Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260905T165322Z/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "preflight": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/tools/v3_sensor_measurement.py",
+      "--ticks",
+      "300",
+      "--output",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json"
+    ],
+    "ok": true,
+    "payload": {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json",
+      "attempt_count": 1,
+      "attempts": [
+        {
+          "all_commits_zero": true,
+          "artifact_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+          "attempt": 1,
+          "errors": [],
+          "fault_tick_count": 0,
+          "healthy_tick_count": 191,
+          "l3_estimate_count": 300,
+          "return_code": 0,
+          "status": "PASS",
+          "tick_count": 300
+        }
+      ],
+      "errors": [],
+      "fault_tick_count": 0,
+      "first_estimate": {
+        "omega_rad_s": 0.001090830782496456,
+        "tick_id": 0,
+        "v_mps": 0.0,
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": -0.25416357232167425
+      },
+      "healthy_tick_count": 191,
+      "hub_gate": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "healthy_tick_count": 191,
+        "l3_estimate_count": 300,
+        "measured_tick_count": 300,
+        "minimum_healthy_tick_count": 1,
+        "required_tick_count": 300,
+        "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+      },
+      "l3_estimate_count": 300,
+      "last_estimate": {
+        "omega_rad_s": 0.0021188994764658863,
+        "tick_id": 299,
+        "v_mps": 0.0,
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": -0.25392091789136595
+      },
+      "lidar_diagnostics": {
+        "last_result": {
+          "matcher_result_id": 40,
+          "source_raw_scan_id": 40,
+          "summary": {
+            "avg_left": 1.0441495535714285,
+            "avg_right": 1.7725423728813559,
+            "blocked_back": false,
+            "blocked_front": false,
+            "bounce_dir": -1,
+            "driver_connected": true,
+            "driver_invalid_packet_count": 0,
+            "driver_last_data_age_s": 0.001090745,
+            "driver_reconnect_count": 0,
+            "driver_rx_buffer_len": null,
+            "dtheta": -0.00749999999999984,
+            "dx": 0.003629686371594407,
+            "dy": 0.0009422721707987703,
+            "final_confidence": 0.0,
+            "final_confidence_emitted": 0.0,
+            "keyframe_count": 1,
+            "last_lidar_pose": {
+              "theta": -0.25416971630990837,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "last_lidar_pose_before": {
+              "theta": -0.25416971630990837,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "latency_ms": 69.01,
+            "lidar_pose_confidence": 0.0,
+            "lidar_pose_theta": -0.26149479242092966,
+            "lidar_pose_x": 0.00375,
+            "lidar_pose_y": 0.0,
+            "local_map_enabled": true,
+            "local_map_generation": 1,
+            "local_map_keyframe_ages_s": [
+              3.6387540980003905
+            ],
+            "local_map_keyframe_ids": [
+              1
+            ],
+            "local_map_keyframes": 1,
+            "local_map_points": 44,
+            "localization_integrity_score": 0.0,
+            "localization_integrity_state": "INSUFFICIENT_SUPPORT",
+            "localization_status": "low_confidence",
+            "loop_closure_applied": false,
+            "loop_closure_delta_m": null,
+            "loop_closure_delta_rad": null,
+            "loop_closure_detected": false,
+            "loop_closure_target_id": null,
+            "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+            "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+            "matcher_budget_ms": 45.0,
+            "matcher_called": true,
+            "matcher_candidates": 227,
+            "matcher_confidence": 0.0,
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_degeneracy_reasons": [
+              "low_inlier_ratio"
+            ],
+            "matcher_degenerate": true,
+            "matcher_mode": "scan_to_map",
+            "matcher_quality": {
+              "ambiguity_margin": 1.0,
+              "ambiguity_residual_margin_m": null,
+              "basin_candidate_count": 3,
+              "basin_candidates": [
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 1,
+                  "distinct": false,
+                  "objective_cost": 0.027913775569825078,
+                  "pose": {
+                    "theta": -0.26149479242092966,
+                    "x": 0.023750000000000007,
+                    "y": 0.020000000000000004
+                  },
+                  "prior_cost": 0.0009668750000000004,
+                  "rotation_delta_rad": 0.0,
+                  "scan_cost": 0.02694690056982508,
+                  "seed_pose": {
+                    "theta": -0.26149479242092966,
+                    "x": 0.08375,
+                    "y": 0.08
+                  },
+                  "translation_delta_m": 0.02828427124746191
+                },
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 2,
+                  "distinct": false,
+                  "objective_cost": 0.02958017715534509,
+                  "pose": {
+                    "theta": -0.3214947924209297,
+                    "x": -0.02625,
+                    "y": 0.03
+                  },
+                  "prior_cost": 0.001816874999999999,
+                  "rotation_delta_rad": 0.06000000000000005,
+                  "scan_cost": 0.02776330215534509,
+                  "seed_pose": {
+                    "theta": -0.38149479242092976,
+                    "x": 0.00375,
+                    "y": 0.0
+                  },
+                  "translation_delta_m": 0.04242640687119285
+                },
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 3,
+                  "distinct": false,
+                  "objective_cost": 0.02961512212425482,
+                  "pose": {
+                    "theta": -0.26149479242092966,
+                    "x": 0.00375,
+                    "y": 0.05
+                  },
+                  "prior_cost": 0.0025168750000000004,
+                  "rotation_delta_rad": 0.0,
+                  "scan_cost": 0.027098247124254817,
+                  "seed_pose": {
+                    "theta": -0.26149479242092966,
+                    "x": 0.00375,
+                    "y": 0.08
+                  },
+                  "translation_delta_m": 0.05
+                }
+              ],
+              "combined_confidence": 0.0,
+              "competitor_barrier_rise": null,
+              "competitor_barrier_score": null,
+              "competitor_basin_id": null,
+              "competitor_objective_cost": null,
+              "competitor_pose": null,
+              "competitor_prior_cost": null,
+              "competitor_rotation_delta_rad": null,
+              "competitor_scan_cost": null,
+              "competitor_stage": null,
+              "competitor_translation_delta_m": null,
+              "confidence": 0.0,
+              "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+              "covariance_proxy": {
+                "x_variance_m2": 0.0030956523613592576,
+                "y_variance_m2": 0.00464307239192082,
+                "yaw_variance_rad2": 0.0038841812172721716
+              },
+              "coverage_score": 0.5,
+              "deadline_stage": null,
+              "degeneracy_reasons": [
+                "low_inlier_ratio"
+              ],
+              "degenerate": true,
+              "distinct_basin_count": 0,
+              "effective_max_points": 48,
+              "evaluated_candidates": 227,
+              "fit_quality": 0.0,
+              "global_multimodality_score": 0.0,
+              "inlier_count": 7,
+              "inlier_ratio": 0.14583333333333334,
+              "inlier_score": 0.0,
+              "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+              "integrity_state": "INSUFFICIENT_SUPPORT",
+              "localization_integrity_score": 0.0,
+              "measurement_confidence": 0.0,
+              "measurement_uniqueness_score": 1.0,
+              "normal_observability_score": 0.34379377772299063,
+              "objective_cost": 0.027014941081936455,
+              "observability_score": 0.3584847941442609,
+              "observability_x": 0.29073031947451056,
+              "observability_y": 0.193837167295958,
+              "observability_yaw": 0.9268362619106248,
+              "posterior_ambiguity_margin": 1.0,
+              "posterior_residual_margin_m": null,
+              "posterior_uniqueness_score": 1.0,
+              "residual_score": 0.4545632138991997,
+              "robust_rmse_m": 0.16431088242090497,
+              "scan_cost": 0.026998066081936455,
+              "search_complete": true,
+              "sector_coverage": 0.25,
+              "seed_prior_cost": 1.687499999999988e-05,
+              "stage_evaluations": {
+                "basin_barrier": 9,
+                "basin_offset_axis": 4,
+                "basin_offset_diagonal": 4,
+                "basin_offset_yaw": 2,
+                "basin_refine": 36,
+                "basin_refine_seed": 3,
+                "coarse": 27,
+                "coarse_seed": 1,
+                "fine": 27,
+                "fine_seed": 1,
+                "medium": 27,
+                "medium_seed": 1,
+                "observability": 6,
+                "winner_refine": 79
+              },
+              "timed_out": false,
+              "uniqueness_score": 1.0
+            },
+            "matcher_queue_delay_ms": 4.892632,
+            "matcher_reason": "MAP_MATCHER_ZERO",
+            "matcher_replay_evidence": null,
+            "matcher_runtime_ms": 69.07144300021173,
+            "matcher_seed_pose": {
+              "theta": -0.25399479242092987,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "matcher_seed_pose_before": {
+              "theta": -0.2540276285612122,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "matcher_source_raw_scan_id": 40,
+            "matcher_source_raw_scan_timestamp": 2943.63596719,
+            "matcher_timed_out": false,
+            "matcher_transport": "process_latest_only",
+            "measurement_confidence": 0.0,
+            "min_back": 0.712,
+            "min_dist": 1.18425,
+            "min_dist_narrow": 1.88625,
+            "pose_event_raw_delta_m": null,
+            "pose_event_raw_delta_rad": null,
+            "pose_event_step_limited": false,
+            "pose_ref_available": true,
+            "pose_ref_current": {
+              "theta": -0.25399479242092987,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "pose_reference_timestamp": 2943.640859822,
+            "pose_update_event": "none",
+            "prev_pose_ref": {
+              "theta": -0.2540276285612122,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "raw_scan_completed_mono": 2943.63596719,
+            "raw_scan_id": 40,
+            "raw_scan_mono_ts": 2943.63596719,
+            "raw_scan_started_mono": 2943.63596719,
+            "raw_scan_timestamp": 2943.63596719,
+            "relocalization_attempted": true,
+            "relocalization_reason": "low_confidence",
+            "relocalization_seed_attempts": 1,
+            "relocalization_timed_out": false,
+            "relocalized": false,
+            "scan_count_filtered": 429,
+            "scan_count_raw": 429,
+            "scan_seq": 40,
+            "scan_to_map_seed": {
+              "theta": -0.25399479242092987,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "slow_path_budget_ms": 120.0,
+            "theta_lidar_raw": -0.26149479242092966,
+            "tracking_backtrack_debt_m": 0.0,
+            "tracking_candidate_pose": null,
+            "tracking_candidate_projection_m": null,
+            "tracking_direction_backtrack_tolerance_m": 0.03,
+            "tracking_direction_checked": false,
+            "tracking_direction_consistent": true,
+            "tracking_direction_reference_source": "",
+            "tracking_direction_rejected": false,
+            "tracking_direction_rejected_total": 0,
+            "tracking_loss_latched": true,
+            "tracking_reacquire_required": 3,
+            "tracking_reacquire_streak": 0,
+            "tracking_ready": false,
+            "tracking_reference_delta_m": null,
+            "tracking_reference_linear_mps": null,
+            "x_lidar_raw": 0.00375,
+            "y_lidar_raw": 0.0,
+            "yaw_convention": "CCW_POSITIVE_LEFT"
+          }
+        },
+        "runtime_status": {
+          "driver_connected": false,
+          "health": "ERROR",
+          "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+          "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+          "matcher_transport": "process_latest_only",
+          "queue_drops": 0,
+          "running": false
+        }
+      },
+      "measurement_artifact_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "ok": true,
+      "operator_stopped": false,
+      "rejected_counts": {
+        "DUPLICATE": 399
+      },
+      "sample_ranges": {
+        "ekf_heading": {
+          "calibration": [
+            0.0,
+            0.0
+          ],
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.0
+          ],
+          "omega_calibration": [
+            3.0,
+            3.0
+          ],
+          "omega_confidence": [
+            1.0,
+            1.0
+          ],
+          "omega_rad_s": [
+            -0.004363323129985824,
+            0.004363323129985824
+          ],
+          "yaw_rad": [
+            -0.25416357232167425,
+            -0.25416357232167425
+          ]
+        },
+        "lidar_health": {
+          "age_ns": [
+            0.0,
+            108130184.0
+          ],
+          "captured_minus_tick_ns": [
+            -108130184.0,
+            0.0
+          ],
+          "point_count": [
+            0.0,
+            472.0
+          ]
+        },
+        "lidar_localization_health": {
+          "age_ns": [
+            44236671.0,
+            180906791.0
+          ],
+          "captured_minus_tick_ns": [
+            -107985165.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.5039847953389867
+          ]
+        },
+        "lidar_matcher_diagnostics": {
+          "ambiguity_margin": [
+            1.0,
+            1.0
+          ],
+          "candidate_id": [
+            1.0,
+            40.0
+          ],
+          "captured_minus_tick_ns": [
+            -107985165.0,
+            0.0
+          ],
+          "matcher_queue_delay_ms": [
+            1.66384,
+            24.031306
+          ],
+          "matcher_runtime_ms": [
+            28.71653000011065,
+            84.25354499968307
+          ],
+          "observability_score": [
+            0.20461656196510442,
+            0.6409276659977794
+          ],
+          "robust_rmse_m": [
+            3.0517111990148255e-16,
+            0.16560126562439942
+          ],
+          "sector_coverage": [
+            0.25,
+            0.25
+          ],
+          "source_raw_scan_id": [
+            1.0,
+            40.0
+          ],
+          "source_raw_scan_timestamp_ns": [
+            2939994897268.0,
+            2943635967190.0
+          ]
+        },
+        "lidar_pose": {
+          "captured_minus_tick_ns": [
+            -88215656.0,
+            -8217776.0
+          ],
+          "confidence": [
+            0.5039847953389867,
+            0.5039847953389867
+          ],
+          "r_scale": [
+            1.0,
+            1.0
+          ],
+          "x_m": [
+            0.0,
+            0.0
+          ],
+          "y_m": [
+            0.0,
+            0.0
+          ],
+          "yaw_rad": [
+            -0.2541697163099083,
+            -0.2541697163099083
+          ]
+        },
+        "lidar_safety_clearance": {
+          "age_ns": [
+            0.0,
+            108130184.0
+          ],
+          "captured_minus_tick_ns": [
+            -108130184.0,
+            0.0
+          ],
+          "front_clearance_m": [
+            1.181,
+            1.734
+          ],
+          "front_observation_count": [
+            32.0,
+            111.0
+          ],
+          "left_clearance_m": [
+            0.67,
+            1.04125
+          ],
+          "left_observation_count": [
+            12.0,
+            125.0
+          ],
+          "rear_clearance_m": [
+            0.0,
+            0.715
+          ],
+          "rear_observation_count": [
+            0.0,
+            109.0
+          ],
+          "right_clearance_m": [
+            0.0,
+            1.10525
+          ],
+          "right_observation_count": [
+            0.0,
+            129.0
+          ]
+        },
+        "wheel_velocity": {
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "computed_left_mps": [
+            0.0,
+            0.0
+          ],
+          "computed_right_mps": [
+            0.0,
+            0.0
+          ],
+          "instantaneous_left_mps": [
+            0.0,
+            0.0
+          ],
+          "instantaneous_right_mps": [
+            0.0,
+            0.0
+          ],
+          "left_distance_delta_m": [
+            0.0,
+            0.0
+          ],
+          "left_estimation_pulse_delta": [
+            0.0,
+            0.0
+          ],
+          "left_estimation_window_ns": [
+            6406972.0,
+            159999963.0
+          ],
+          "left_invalid_alert_delta": [
+            0.0,
+            0.0
+          ],
+          "left_invalid_alerts": [
+            0.0,
+            0.0
+          ],
+          "left_measurement_trust": [
+            0.0,
+            0.99999976875
+          ],
+          "left_mps": [
+            0.0,
+            0.0
+          ],
+          "left_pulse_delta": [
+            0.0,
+            0.0
+          ],
+          "left_read_error_delta": [
+            0.0,
+            0.0
+          ],
+          "left_read_errors": [
+            0.0,
+            0.0
+          ],
+          "left_velocity_uncertainty_mps": [
+            0.004027683820920721,
+            0.10058250017684078
+          ],
+          "maximum_abs_velocity_mps": [
+            1.5,
+            1.5
+          ],
+          "raw_left_distance_m": [
+            0.0,
+            0.0
+          ],
+          "raw_left_pulse_count": [
+            0.0,
+            0.0
+          ],
+          "raw_right_distance_m": [
+            0.0,
+            0.0
+          ],
+          "raw_right_pulse_count": [
+            0.0,
+            0.0
+          ],
+          "right_distance_delta_m": [
+            0.0,
+            0.0
+          ],
+          "right_estimation_pulse_delta": [
+            0.0,
+            0.0
+          ],
+          "right_estimation_window_ns": [
+            6406972.0,
+            159999963.0
+          ],
+          "right_invalid_alert_delta": [
+            0.0,
+            0.0
+          ],
+          "right_invalid_alerts": [
+            0.0,
+            0.0
+          ],
+          "right_measurement_trust": [
+            0.0,
+            0.99999976875
+          ],
+          "right_mps": [
+            0.0,
+            0.0
+          ],
+          "right_pulse_delta": [
+            0.0,
+            0.0
+          ],
+          "right_read_error_delta": [
+            0.0,
+            0.0
+          ],
+          "right_read_errors": [
+            0.0,
+            0.0
+          ],
+          "right_velocity_uncertainty_mps": [
+            0.004027683820920721,
+            0.10058250017684078
+          ],
+          "sample_interval_ns": [
+            6406972.0,
+            30213482.0
+          ],
+          "trust": [
+            0.0,
+            0.99999976875
+          ]
+        }
+      },
+      "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+      "source_state_counts": {
+        "BNO055_IMU": {
+          "OK": 300
+        },
+        "RPLIDAR_C1": {
+          "DEGRADED": 109,
+          "OK": 191
+        },
+        "WHEEL_ENCODERS": {
+          "OK": 300
+        }
+      },
+      "status": "PASS",
+      "tick_count": 300
+    },
+    "run": {
+      "duration_s": 12.733,
+      "ok": true,
+      "return_code": 0,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "first_estimate": {
+          "omega_rad_s": 0.001090830782496456,
+          "tick_id": 0,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": -0.25416357232167425
+        },
+        "healthy_tick_count": 191,
+        "l3_estimate_count": 300,
+        "last_estimate": {
+          "omega_rad_s": 0.0021188994764658863,
+          "tick_id": 299,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": -0.25392091789136595
+        },
+        "lidar_diagnostics": {
+          "last_result": {
+            "matcher_result_id": 40,
+            "source_raw_scan_id": 40,
+            "summary": {
+              "avg_left": 1.0441495535714285,
+              "avg_right": 1.7725423728813559,
+              "blocked_back": false,
+              "blocked_front": false,
+              "bounce_dir": -1,
+              "driver_connected": true,
+              "driver_invalid_packet_count": 0,
+              "driver_last_data_age_s": 0.001090745,
+              "driver_reconnect_count": 0,
+              "driver_rx_buffer_len": null,
+              "dtheta": -0.00749999999999984,
+              "dx": 0.003629686371594407,
+              "dy": 0.0009422721707987703,
+              "final_confidence": 0.0,
+              "final_confidence_emitted": 0.0,
+              "keyframe_count": 1,
+              "last_lidar_pose": {
+                "theta": -0.25416971630990837,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "last_lidar_pose_before": {
+                "theta": -0.25416971630990837,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "latency_ms": 69.01,
+              "lidar_pose_confidence": 0.0,
+              "lidar_pose_theta": -0.26149479242092966,
+              "lidar_pose_x": 0.00375,
+              "lidar_pose_y": 0.0,
+              "local_map_enabled": true,
+              "local_map_generation": 1,
+              "local_map_keyframe_ages_s": [
+                3.6387540980003905
+              ],
+              "local_map_keyframe_ids": [
+                1
+              ],
+              "local_map_keyframes": 1,
+              "local_map_points": 44,
+              "localization_integrity_score": 0.0,
+              "localization_integrity_state": "INSUFFICIENT_SUPPORT",
+              "localization_status": "low_confidence",
+              "loop_closure_applied": false,
+              "loop_closure_delta_m": null,
+              "loop_closure_delta_rad": null,
+              "loop_closure_detected": false,
+              "loop_closure_target_id": null,
+              "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+              "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+              "matcher_budget_ms": 45.0,
+              "matcher_called": true,
+              "matcher_candidates": 227,
+              "matcher_confidence": 0.0,
+              "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+              "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+              "matcher_degeneracy_reasons": [
+                "low_inlier_ratio"
+              ],
+              "matcher_degenerate": true,
+              "matcher_mode": "scan_to_map",
+              "matcher_quality": {
+                "ambiguity_margin": 1.0,
+                "ambiguity_residual_margin_m": null,
+                "basin_candidate_count": 3,
+                "basin_candidates": [
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 1,
+                    "distinct": false,
+                    "objective_cost": 0.027913775569825078,
+                    "pose": {
+                      "theta": -0.26149479242092966,
+                      "x": 0.023750000000000007,
+                      "y": 0.020000000000000004
+                    },
+                    "prior_cost": 0.0009668750000000004,
+                    "rotation_delta_rad": 0.0,
+                    "scan_cost": 0.02694690056982508,
+                    "seed_pose": {
+                      "theta": -0.26149479242092966,
+                      "x": 0.08375,
+                      "y": 0.08
+                    },
+                    "translation_delta_m": 0.02828427124746191
+                  },
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 2,
+                    "distinct": false,
+                    "objective_cost": 0.02958017715534509,
+                    "pose": {
+                      "theta": -0.3214947924209297,
+                      "x": -0.02625,
+                      "y": 0.03
+                    },
+                    "prior_cost": 0.001816874999999999,
+                    "rotation_delta_rad": 0.06000000000000005,
+                    "scan_cost": 0.02776330215534509,
+                    "seed_pose": {
+                      "theta": -0.38149479242092976,
+                      "x": 0.00375,
+                      "y": 0.0
+                    },
+                    "translation_delta_m": 0.04242640687119285
+                  },
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 3,
+                    "distinct": false,
+                    "objective_cost": 0.02961512212425482,
+                    "pose": {
+                      "theta": -0.26149479242092966,
+                      "x": 0.00375,
+                      "y": 0.05
+                    },
+                    "prior_cost": 0.0025168750000000004,
+                    "rotation_delta_rad": 0.0,
+                    "scan_cost": 0.027098247124254817,
+                    "seed_pose": {
+                      "theta": -0.26149479242092966,
+                      "x": 0.00375,
+                      "y": 0.08
+                    },
+                    "translation_delta_m": 0.05
+                  }
+                ],
+                "combined_confidence": 0.0,
+                "competitor_barrier_rise": null,
+                "competitor_barrier_score": null,
+                "competitor_basin_id": null,
+                "competitor_objective_cost": null,
+                "competitor_pose": null,
+                "competitor_prior_cost": null,
+                "competitor_rotation_delta_rad": null,
+                "competitor_scan_cost": null,
+                "competitor_stage": null,
+                "competitor_translation_delta_m": null,
+                "confidence": 0.0,
+                "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+                "covariance_proxy": {
+                  "x_variance_m2": 0.0030956523613592576,
+                  "y_variance_m2": 0.00464307239192082,
+                  "yaw_variance_rad2": 0.0038841812172721716
+                },
+                "coverage_score": 0.5,
+                "deadline_stage": null,
+                "degeneracy_reasons": [
+                  "low_inlier_ratio"
+                ],
+                "degenerate": true,
+                "distinct_basin_count": 0,
+                "effective_max_points": 48,
+                "evaluated_candidates": 227,
+                "fit_quality": 0.0,
+                "global_multimodality_score": 0.0,
+                "inlier_count": 7,
+                "inlier_ratio": 0.14583333333333334,
+                "inlier_score": 0.0,
+                "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+                "integrity_state": "INSUFFICIENT_SUPPORT",
+                "localization_integrity_score": 0.0,
+                "measurement_confidence": 0.0,
+                "measurement_uniqueness_score": 1.0,
+                "normal_observability_score": 0.34379377772299063,
+                "objective_cost": 0.027014941081936455,
+                "observability_score": 0.3584847941442609,
+                "observability_x": 0.29073031947451056,
+                "observability_y": 0.193837167295958,
+                "observability_yaw": 0.9268362619106248,
+                "posterior_ambiguity_margin": 1.0,
+                "posterior_residual_margin_m": null,
+                "posterior_uniqueness_score": 1.0,
+                "residual_score": 0.4545632138991997,
+                "robust_rmse_m": 0.16431088242090497,
+                "scan_cost": 0.026998066081936455,
+                "search_complete": true,
+                "sector_coverage": 0.25,
+                "seed_prior_cost": 1.687499999999988e-05,
+                "stage_evaluations": {
+                  "basin_barrier": 9,
+                  "basin_offset_axis": 4,
+                  "basin_offset_diagonal": 4,
+                  "basin_offset_yaw": 2,
+                  "basin_refine": 36,
+                  "basin_refine_seed": 3,
+                  "coarse": 27,
+                  "coarse_seed": 1,
+                  "fine": 27,
+                  "fine_seed": 1,
+                  "medium": 27,
+                  "medium_seed": 1,
+                  "observability": 6,
+                  "winner_refine": 79
+                },
+                "timed_out": false,
+                "uniqueness_score": 1.0
+              },
+              "matcher_queue_delay_ms": 4.892632,
+              "matcher_reason": "MAP_MATCHER_ZERO",
+              "matcher_replay_evidence": null,
+              "matcher_runtime_ms": 69.07144300021173,
+              "matcher_seed_pose": {
+                "theta": -0.25399479242092987,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "matcher_seed_pose_before": {
+                "theta": -0.2540276285612122,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "matcher_source_raw_scan_id": 40,
+              "matcher_source_raw_scan_timestamp": 2943.63596719,
+              "matcher_timed_out": false,
+              "matcher_transport": "process_latest_only",
+              "measurement_confidence": 0.0,
+              "min_back": 0.712,
+              "min_dist": 1.18425,
+              "min_dist_narrow": 1.88625,
+              "pose_event_raw_delta_m": null,
+              "pose_event_raw_delta_rad": null,
+              "pose_event_step_limited": false,
+              "pose_ref_available": true,
+              "pose_ref_current": {
+                "theta": -0.25399479242092987,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "pose_reference_timestamp": 2943.640859822,
+              "pose_update_event": "none",
+              "prev_pose_ref": {
+                "theta": -0.2540276285612122,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "raw_scan_completed_mono": 2943.63596719,
+              "raw_scan_id": 40,
+              "raw_scan_mono_ts": 2943.63596719,
+              "raw_scan_started_mono": 2943.63596719,
+              "raw_scan_timestamp": 2943.63596719,
+              "relocalization_attempted": true,
+              "relocalization_reason": "low_confidence",
+              "relocalization_seed_attempts": 1,
+              "relocalization_timed_out": false,
+              "relocalized": false,
+              "scan_count_filtered": 429,
+              "scan_count_raw": 429,
+              "scan_seq": 40,
+              "scan_to_map_seed": {
+                "theta": -0.25399479242092987,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "slow_path_budget_ms": 120.0,
+              "theta_lidar_raw": -0.26149479242092966,
+              "tracking_backtrack_debt_m": 0.0,
+              "tracking_candidate_pose": null,
+              "tracking_candidate_projection_m": null,
+              "tracking_direction_backtrack_tolerance_m": 0.03,
+              "tracking_direction_checked": false,
+              "tracking_direction_consistent": true,
+              "tracking_direction_reference_source": "",
+              "tracking_direction_rejected": false,
+              "tracking_direction_rejected_total": 0,
+              "tracking_loss_latched": true,
+              "tracking_reacquire_required": 3,
+              "tracking_reacquire_streak": 0,
+              "tracking_ready": false,
+              "tracking_reference_delta_m": null,
+              "tracking_reference_linear_mps": null,
+              "x_lidar_raw": 0.00375,
+              "y_lidar_raw": 0.0,
+              "yaw_convention": "CCW_POSITIVE_LEFT"
+            }
+          },
+          "runtime_status": {
+            "driver_connected": false,
+            "health": "ERROR",
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_transport": "process_latest_only",
+            "queue_drops": 0,
+            "running": false
+          }
+        },
+        "operator_stopped": false,
+        "rejected_counts": {
+          "DUPLICATE": 399
+        },
+        "sample_ranges": {
+          "ekf_heading": {
+            "calibration": [
+              0.0,
+              0.0
+            ],
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.0
+            ],
+            "omega_calibration": [
+              3.0,
+              3.0
+            ],
+            "omega_confidence": [
+              1.0,
+              1.0
+            ],
+            "omega_rad_s": [
+              -0.004363323129985824,
+              0.004363323129985824
+            ],
+            "yaw_rad": [
+              -0.25416357232167425,
+              -0.25416357232167425
+            ]
+          },
+          "lidar_health": {
+            "age_ns": [
+              0.0,
+              108130184.0
+            ],
+            "captured_minus_tick_ns": [
+              -108130184.0,
+              0.0
+            ],
+            "point_count": [
+              0.0,
+              472.0
+            ]
+          },
+          "lidar_localization_health": {
+            "age_ns": [
+              44236671.0,
+              180906791.0
+            ],
+            "captured_minus_tick_ns": [
+              -107985165.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.5039847953389867
+            ]
+          },
+          "lidar_matcher_diagnostics": {
+            "ambiguity_margin": [
+              1.0,
+              1.0
+            ],
+            "candidate_id": [
+              1.0,
+              40.0
+            ],
+            "captured_minus_tick_ns": [
+              -107985165.0,
+              0.0
+            ],
+            "matcher_queue_delay_ms": [
+              1.66384,
+              24.031306
+            ],
+            "matcher_runtime_ms": [
+              28.71653000011065,
+              84.25354499968307
+            ],
+            "observability_score": [
+              0.20461656196510442,
+              0.6409276659977794
+            ],
+            "robust_rmse_m": [
+              3.0517111990148255e-16,
+              0.16560126562439942
+            ],
+            "sector_coverage": [
+              0.25,
+              0.25
+            ],
+            "source_raw_scan_id": [
+              1.0,
+              40.0
+            ],
+            "source_raw_scan_timestamp_ns": [
+              2939994897268.0,
+              2943635967190.0
+            ]
+          },
+          "lidar_pose": {
+            "captured_minus_tick_ns": [
+              -88215656.0,
+              -8217776.0
+            ],
+            "confidence": [
+              0.5039847953389867,
+              0.5039847953389867
+            ],
+            "r_scale": [
+              1.0,
+              1.0
+            ],
+            "x_m": [
+              0.0,
+              0.0
+            ],
+            "y_m": [
+              0.0,
+              0.0
+            ],
+            "yaw_rad": [
+              -0.2541697163099083,
+              -0.2541697163099083
+            ]
+          },
+          "lidar_safety_clearance": {
+            "age_ns": [
+              0.0,
+              108130184.0
+            ],
+            "captured_minus_tick_ns": [
+              -108130184.0,
+              0.0
+            ],
+            "front_clearance_m": [
+              1.181,
+              1.734
+            ],
+            "front_observation_count": [
+              32.0,
+              111.0
+            ],
+            "left_clearance_m": [
+              0.67,
+              1.04125
+            ],
+            "left_observation_count": [
+              12.0,
+              125.0
+            ],
+            "rear_clearance_m": [
+              0.0,
+              0.715
+            ],
+            "rear_observation_count": [
+              0.0,
+              109.0
+            ],
+            "right_clearance_m": [
+              0.0,
+              1.10525
+            ],
+            "right_observation_count": [
+              0.0,
+              129.0
+            ]
+          },
+          "wheel_velocity": {
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "computed_left_mps": [
+              0.0,
+              0.0
+            ],
+            "computed_right_mps": [
+              0.0,
+              0.0
+            ],
+            "instantaneous_left_mps": [
+              0.0,
+              0.0
+            ],
+            "instantaneous_right_mps": [
+              0.0,
+              0.0
+            ],
+            "left_distance_delta_m": [
+              0.0,
+              0.0
+            ],
+            "left_estimation_pulse_delta": [
+              0.0,
+              0.0
+            ],
+            "left_estimation_window_ns": [
+              6406972.0,
+              159999963.0
+            ],
+            "left_invalid_alert_delta": [
+              0.0,
+              0.0
+            ],
+            "left_invalid_alerts": [
+              0.0,
+              0.0
+            ],
+            "left_measurement_trust": [
+              0.0,
+              0.99999976875
+            ],
+            "left_mps": [
+              0.0,
+              0.0
+            ],
+            "left_pulse_delta": [
+              0.0,
+              0.0
+            ],
+            "left_read_error_delta": [
+              0.0,
+              0.0
+            ],
+            "left_read_errors": [
+              0.0,
+              0.0
+            ],
+            "left_velocity_uncertainty_mps": [
+              0.004027683820920721,
+              0.10058250017684078
+            ],
+            "maximum_abs_velocity_mps": [
+              1.5,
+              1.5
+            ],
+            "raw_left_distance_m": [
+              0.0,
+              0.0
+            ],
+            "raw_left_pulse_count": [
+              0.0,
+              0.0
+            ],
+            "raw_right_distance_m": [
+              0.0,
+              0.0
+            ],
+            "raw_right_pulse_count": [
+              0.0,
+              0.0
+            ],
+            "right_distance_delta_m": [
+              0.0,
+              0.0
+            ],
+            "right_estimation_pulse_delta": [
+              0.0,
+              0.0
+            ],
+            "right_estimation_window_ns": [
+              6406972.0,
+              159999963.0
+            ],
+            "right_invalid_alert_delta": [
+              0.0,
+              0.0
+            ],
+            "right_invalid_alerts": [
+              0.0,
+              0.0
+            ],
+            "right_measurement_trust": [
+              0.0,
+              0.99999976875
+            ],
+            "right_mps": [
+              0.0,
+              0.0
+            ],
+            "right_pulse_delta": [
+              0.0,
+              0.0
+            ],
+            "right_read_error_delta": [
+              0.0,
+              0.0
+            ],
+            "right_read_errors": [
+              0.0,
+              0.0
+            ],
+            "right_velocity_uncertainty_mps": [
+              0.004027683820920721,
+              0.10058250017684078
+            ],
+            "sample_interval_ns": [
+              6406972.0,
+              30213482.0
+            ],
+            "trust": [
+              0.0,
+              0.99999976875
+            ]
+          }
+        },
+        "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+        "source_state_counts": {
+          "BNO055_IMU": {
+            "OK": 300
+          },
+          "RPLIDAR_C1": {
+            "DEGRADED": 109,
+            "OK": 191
+          },
+          "WHEEL_ENCODERS": {
+            "OK": 300
+          }
+        },
+        "status": "PASS",
+        "tick_count": 300,
+        "tick_details_written": 300
+      },
+      "stdout_tail": "      ],\n      \"left_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"left_measurement_trust\": [\n        0.0,\n        0.99999976875\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"left_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"left_velocity_uncertainty_mps\": [\n        0.004027683820920721,\n        0.10058250017684078\n      ],\n      \"maximum_abs_velocity_mps\": [\n        1.5,\n        1.5\n      ],\n      \"raw_left_distance_m\": [\n        0.0,\n        0.0\n      ],\n      \"raw_left_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"raw_right_distance_m\": [\n        0.0,\n        0.0\n      ],\n      \"raw_right_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"right_distance_delta_m\": [\n        0.0,\n        0.0\n      ],\n      \"right_estimation_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_estimation_window_ns\": [\n        6406972.0,\n        159999963.0\n      ],\n      \"right_invalid_alert_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"right_measurement_trust\": [\n        0.0,\n        0.99999976875\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"right_velocity_uncertainty_mps\": [\n        0.004027683820920721,\n        0.10058250017684078\n      ],\n      \"sample_interval_ns\": [\n        6406972.0,\n        30213482.0\n      ],\n      \"trust\": [\n        0.0,\n        0.99999976875\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"RPLIDAR_C1\": {\n      \"DEGRADED\": 109,\n      \"OK\": 191\n    },\n    \"WHEEL_ENCODERS\": {\n      \"OK\": 300\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}",
+      "timed_out": false
+    }
+  },
+  "preflight_pose_reset": null,
+  "profile": "v3_native_floor_motion_capture",
+  "run_dir": "logs/session_20260905T165322Z",
+  "runtime": {
+    "before": {
+      "action": "status",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/tools/agent_runtime_manager.py",
+        "status",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": false,
+      "payload": {
+        "gui": {
+          "error": "<urlopen error [Errno 111] Connection refused>",
+          "ok": false,
+          "payload": {},
+          "port": 7860
+        },
+        "pid_file": {
+          "alive": false,
+          "exists": false,
+          "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/runtime/agent_runtime/os.pid",
+          "payload": {},
+          "pid": null,
+          "registered_process": false,
+          "stale": false,
+          "status_pid_matches": false
+        },
+        "processes": [],
+        "ready_for_live_tests": false,
+        "running": false,
+        "runtime_identity": {
+          "ok": false,
+          "running_process_pids": [],
+          "status_pid_is_running": false,
+          "unique_os_process": false
+        },
+        "status": {
+          "age_s": null,
+          "exists": false,
+          "fresh": false,
+          "runtime_pid": null,
+          "safety_allow": true,
+          "startup_ready": false,
+          "state": "",
+          "status_version": 0,
+          "stop_type": ""
+        },
+        "timestamp": "2026-09-05T16:53:22Z"
+      },
+      "run": {
+        "duration_s": 0.405,
+        "ok": true,
+        "return_code": 1,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-05T16:53:22Z"
+        },
+        "stdout_tail": "{\n  \"timestamp\": \"2026-09-05T16:53:22Z\",\n  \"running\": false,\n  \"ready_for_live_tests\": false,\n  \"processes\": [],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": false,\n    \"pid\": null,\n    \"alive\": false,\n    \"status_pid_matches\": false,\n    \"registered_process\": false,\n    \"stale\": false,\n    \"payload\": {}\n  },\n  \"runtime_identity\": {\n    \"ok\": false,\n    \"status_pid_is_running\": false,\n    \"unique_os_process\": false,\n    \"running_process_pids\": []\n  },\n  \"status\": {\n    \"exists\": false,\n    \"age_s\": null,\n    \"fresh\": false,\n    \"state\": \"\",\n    \"status_version\": 0,\n    \"runtime_pid\": null,\n    \"startup_ready\": false,\n    \"safety_allow\": true,\n    \"stop_type\": \"\"\n  },\n  \"gui\": {\n    \"ok\": false,\n    \"port\": 7860,\n    \"error\": \"<urlopen error [Errno 111] Connection refused>\",\n    \"payload\": {}\n  }\n}",
+        "timed_out": false
+      }
+    },
+    "ready_for_live_tests_after_recovery": true,
+    "recovery": [
+      {
+        "action": "verify_managed_runtime_stopped",
+        "ok": true,
+        "payload": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_estimator_20260905/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-05T16:53:22Z"
+        },
+        "reason": "exclusive_native_hardware_ready"
+      }
+    ],
+    "start": null,
+    "started_here": false,
+    "stop": null
+  },
+  "scenario_run": {
+    "command": [
+      "/usr/bin/python3",
+      "tools/r2b4_test_hub.py",
+      "v3-native-floor-motion-capture",
+      "--approval",
+      "floor-clear-1p30m-distance-1p00m-speed-0p15-v3"
+    ],
+    "payload": {
+      "approval": "floor-clear-1p30m-distance-1p00m-speed-0p15-v3",
+      "artifact_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+      "capture_evidence": {
+        "capture_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+        "complete_l1_l12_tick_count": 0,
+        "tick_capture_count": 1,
+        "unique_raw_lidar_scan_count": 0
+      },
+      "command_window": {
+        "active_tick_count": 500,
+        "active_tick_id": null,
+        "max_v_mps": 0.15,
+        "maximum_active_tick_count": 500,
+        "maximum_warmup_tick_id": 300,
+        "nominal_duration_s": 10.0,
+        "omega_rad_s": 0.0,
+        "shutdown_tick_id": null,
+        "signal_after_tick_id": null,
+        "tick_period_ns": 20000000,
+        "v_mps": 0.15
+      },
+      "duration_s": 4.006,
+      "ended_at_utc": "2026-09-05T16:53:39Z",
+      "final_lifecycle": "FAULT_OR_INTERRUPTED",
+      "lease_gate": {
+        "errors": [],
+        "leases": {
+          "live_motion": {
+            "expires_at_utc": "2026-09-05T17:03:14Z",
+            "owner_task_id": "v3_encoder_estimator_20260905",
+            "status": "HELD"
+          },
+          "runtime_control": {
+            "expires_at_utc": "2026-09-05T17:03:14Z",
+            "owner_task_id": "v3_encoder_estimator_20260905",
+            "status": "HELD"
+          }
+        },
+        "ok": true,
+        "root": "/home/alba/project_r2b4",
+        "task_id": "v3_encoder_estimator_20260905"
+      },
+      "motion_metrics": {
+        "active_duration_s": null,
+        "active_metric_count": 0,
+        "maximum_abs_yaw_delta_rad": 0.0,
+        "maximum_displacement_m": 0.0,
+        "maximum_encoder_abs_mps": 0.0,
+        "minimum_active_front_clearance_m": null,
+        "target_distance_m": 1.0,
+        "target_reached_displacement_m": null,
+        "target_reached_tick_id": null
+      },
+      "motor_gpio": {
+        "active_pwm_pins": [],
+        "all_active_pwm_cancelled": false,
+        "all_expected_pins_claimed_low": true,
+        "all_final_verified_low": true,
+        "cancelled_pwm_pins": [],
+        "claimed_pins": [
+          12,
+          13,
+          18,
+          19
+        ],
+        "event_count": 54,
+        "event_tail": [
+          {
+            "chip": 0,
+            "handle": 2,
+            "monotonic_ns": 2950656534044,
+            "ok": true,
+            "operation": "gpiochip_open",
+            "sequence": 0
+          },
+          {
+            "handle": 2,
+            "initial_level": 0,
+            "monotonic_ns": 2950656564582,
+            "ok": true,
+            "operation": "gpio_claim_output",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950656573341,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 2
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950656581322,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 3
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950656588230,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 4
+          },
+          {
+            "handle": 2,
+            "initial_level": 0,
+            "monotonic_ns": 2950656600711,
+            "ok": true,
+            "operation": "gpio_claim_output",
+            "pin": 13,
+            "result": 0,
+            "sequence": 5
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950656604322,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 6
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950656608804,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 7
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950656613397,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 8
+          },
+          {
+            "handle": 2,
+            "initial_level": 0,
+            "monotonic_ns": 2950656625360,
+            "ok": true,
+            "operation": "gpio_claim_output",
+            "pin": 18,
+            "result": 0,
+            "sequence": 9
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950656628526,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 10
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950656631878,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 11
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950656635989,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 12
+          },
+          {
+            "handle": 2,
+            "initial_level": 0,
+            "monotonic_ns": 2950656648230,
+            "ok": true,
+            "operation": "gpio_claim_output",
+            "pin": 19,
+            "result": 0,
+            "sequence": 13
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950656651415,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 14
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950656654767,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 15
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950656659508,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 16
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950658726257,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 17
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950658735220,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 18
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950658739054,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 19
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950658745257,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 20
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950664790246,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 21
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950664794227,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 22
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950664796598,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 23
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950664802542,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 24
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950664815653,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 25
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950664820450,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 26
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950664824265,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 27
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950664830228,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 28
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950664837320,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 29
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950664841654,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 30
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950664844968,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 31
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950664848302,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 32
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950666915236,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 33
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950666918922,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 34
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950666922477,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 35
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950666925662,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 36
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950667649851,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 37
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950667653017,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 38
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950667654925,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 39
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2950667656869,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 40
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950667667684,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 41
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950667672091,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 42
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950667675314,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 43
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2950667678332,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 44
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950667683666,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 45
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950667686925,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 46
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950667689999,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 47
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950667693110,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 48
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950669757026,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 49
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950669760322,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 50
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950669763248,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 51
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950669766100,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 52
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2950769966245,
+            "ok": true,
+            "operation": "gpiochip_close",
+            "result": 0,
+            "sequence": 53
+          }
+        ],
+        "expected_pins": [
+          12,
+          13,
+          18,
+          19
+        ],
+        "failed_event_count": 0,
+        "gpio_closed_after_verified_low": true,
+        "maximum_abs_pwm_by_pin": {
+          "12": 0.0,
+          "13": 0.0,
+          "18": 0.0,
+          "19": 0.0
+        },
+        "minimum_verified_low_hold_ms": 2.073,
+        "nonzero_pwm_write_count": 0,
+        "opened_handle_count": 1,
+        "pin_evidence": {
+          "12": {
+            "active_pwm_cancelled": false,
+            "busy_true_after_nonzero_sequence": -1,
+            "cancel_sequence": -1,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 41,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": -1,
+            "nonzero_pwm_write_count": 0,
+            "verified_low_hold_ms": 2.073
+          },
+          "13": {
+            "active_pwm_cancelled": false,
+            "busy_true_after_nonzero_sequence": -1,
+            "cancel_sequence": -1,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 42,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": -1,
+            "nonzero_pwm_write_count": 0,
+            "verified_low_hold_ms": 2.073
+          },
+          "18": {
+            "active_pwm_cancelled": false,
+            "busy_true_after_nonzero_sequence": -1,
+            "cancel_sequence": -1,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 43,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": -1,
+            "nonzero_pwm_write_count": 0,
+            "verified_low_hold_ms": 2.073
+          },
+          "19": {
+            "active_pwm_cancelled": false,
+            "busy_true_after_nonzero_sequence": -1,
+            "cancel_sequence": -1,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 44,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": -1,
+            "nonzero_pwm_write_count": 0,
+            "verified_low_hold_ms": 2.073
+          }
+        }
+      },
+      "motor_power": "ON_FLOOR_BY_EXPLICIT_APPROVAL_AND_RAW_LIDAR_GATE",
+      "operator_stopped": false,
+      "post_close_pins": {
+        "command": [
+          "/usr/bin/pinctrl",
+          "get",
+          "12,13,18,19"
+        ],
+        "errors": [],
+        "ok": true,
+        "pins": {
+          "12": {
+            "drive_low": true,
+            "output": true,
+            "raw": "12: op dl pd | lo // GPIO12 = output"
+          },
+          "13": {
+            "drive_low": true,
+            "output": true,
+            "raw": "13: op dl pd | lo // GPIO13 = output"
+          },
+          "18": {
+            "drive_low": true,
+            "output": true,
+            "raw": "18: op dl pd | lo // GPIO18 = output"
+          },
+          "19": {
+            "drive_low": true,
+            "output": true,
+            "raw": "19: op dl pd | lo // GPIO19 = output"
+          }
+        },
+        "return_code": 0,
+        "status": "PASS"
+      },
+      "profile": "v3_native_floor_motion_capture",
+      "resident_report": {
+        "exit_reason": "RUNTIME_FAULT",
+        "fault_layer": "L4",
+        "final_lifecycle": "FAULT",
+        "final_reason": "L4_ERROR",
+        "final_safety_decision": "FAULT",
+        "last_tick_id": 0,
+        "normal_tick_count": 1,
+        "operator_stopped": false,
+        "run_status": 1,
+        "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
+        "status": "FAULT",
+        "termination_class": "FAULT_SAFE_LOW",
+        "tick_count": 1
+      },
+      "safety_bounds": {
+        "active_clearance_m": 0.3,
+        "maximum_abs_yaw_delta_rad": 0.35,
+        "maximum_active_duration_s": 10.5,
+        "maximum_displacement_m": 1.1,
+        "maximum_encoder_abs_mps": 0.45,
+        "preflight_clearance_m": 1.3,
+        "target_distance_m": 1.0,
+        "target_overshoot_m": 0.05
+      },
+      "schema": "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V2",
+      "started_at_utc": "2026-09-05T16:53:35Z",
+      "status": "FAIL",
+      "success": false,
+      "tick_evidence": {
+        "allow_tick_ids": [],
+        "clearance_preflight_scans": [],
+        "first_allow": null,
+        "first_fault": {
+          "enabled": false,
+          "estimate": {
+            "omega_rad_s": -0.002181661564992912,
+            "v_mps": 0.0,
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "yaw_rad": -0.25416357232167425
+          },
+          "fault_layer": "L4",
+          "left_output": 0.0,
+          "monotonic_ns": 2950658856295,
+          "right_output": 0.0,
+          "safety_decision": "FAULT",
+          "safety_reason": "L4_ERROR",
+          "source_health": [
+            {
+              "device_id": "WHEEL_ENCODERS",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "BNO055_IMU",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_TIMING_INVALID",
+              "state": "FAILED"
+            }
+          ],
+          "tick_id": 0
+        },
+        "last_allow": null,
+        "last_tick": {
+          "enabled": false,
+          "estimate": {
+            "omega_rad_s": -0.002181661564992912,
+            "v_mps": 0.0,
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "yaw_rad": -0.25416357232167425
+          },
+          "fault_layer": "L4",
+          "left_output": 0.0,
+          "monotonic_ns": 2950658856295,
+          "right_output": 0.0,
+          "safety_decision": "FAULT",
+          "safety_reason": "L4_ERROR",
+          "source_health": [
+            {
+              "device_id": "WHEEL_ENCODERS",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "BNO055_IMU",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_TIMING_INVALID",
+              "state": "FAILED"
+            }
+          ],
+          "tick_id": 0
+        },
+        "observed_tick_count": 1,
+        "post_active_idle": null,
+        "resident_preflight": null,
+        "safety_abort": null,
+        "shutdown_tick": null,
+        "signal_raised_after_tick": null,
+        "signal_reason": null,
+        "warmup_timeout_tick": null
+      }
+    },
+    "run": {
+      "duration_s": 4.291,
+      "ok": true,
+      "return_code": 1,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "approval": "floor-clear-1p30m-distance-1p00m-speed-0p15-v3",
+        "artifact_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+        "capture_evidence": {
+          "capture_path": "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+          "complete_l1_l12_tick_count": 0,
+          "tick_capture_count": 1,
+          "unique_raw_lidar_scan_count": 0
+        },
+        "command_window": {
+          "active_tick_count": 500,
+          "active_tick_id": null,
+          "max_v_mps": 0.15,
+          "maximum_active_tick_count": 500,
+          "maximum_warmup_tick_id": 300,
+          "nominal_duration_s": 10.0,
+          "omega_rad_s": 0.0,
+          "shutdown_tick_id": null,
+          "signal_after_tick_id": null,
+          "tick_period_ns": 20000000,
+          "v_mps": 0.15
+        },
+        "duration_s": 4.006,
+        "ended_at_utc": "2026-09-05T16:53:39Z",
+        "final_lifecycle": "FAULT_OR_INTERRUPTED",
+        "lease_gate": {
+          "errors": [],
+          "leases": {
+            "live_motion": {
+              "expires_at_utc": "2026-09-05T17:03:14Z",
+              "owner_task_id": "v3_encoder_estimator_20260905",
+              "status": "HELD"
+            },
+            "runtime_control": {
+              "expires_at_utc": "2026-09-05T17:03:14Z",
+              "owner_task_id": "v3_encoder_estimator_20260905",
+              "status": "HELD"
+            }
+          },
+          "ok": true,
+          "root": "/home/alba/project_r2b4",
+          "task_id": "v3_encoder_estimator_20260905"
+        },
+        "motion_metrics": {
+          "active_duration_s": null,
+          "active_metric_count": 0,
+          "maximum_abs_yaw_delta_rad": 0.0,
+          "maximum_displacement_m": 0.0,
+          "maximum_encoder_abs_mps": 0.0,
+          "minimum_active_front_clearance_m": null,
+          "target_distance_m": 1.0,
+          "target_reached_displacement_m": null,
+          "target_reached_tick_id": null
+        },
+        "motor_gpio": {
+          "active_pwm_pins": [],
+          "all_active_pwm_cancelled": false,
+          "all_expected_pins_claimed_low": true,
+          "all_final_verified_low": true,
+          "cancelled_pwm_pins": [],
+          "claimed_pins": [
+            12,
+            13,
+            18,
+            19
+          ],
+          "event_count": 54,
+          "event_tail": [
+            {
+              "chip": 0,
+              "handle": 2,
+              "monotonic_ns": 2950656534044,
+              "ok": true,
+              "operation": "gpiochip_open",
+              "sequence": 0
+            },
+            {
+              "handle": 2,
+              "initial_level": 0,
+              "monotonic_ns": 2950656564582,
+              "ok": true,
+              "operation": "gpio_claim_output",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950656573341,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 2
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950656581322,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 3
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950656588230,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 4
+            },
+            {
+              "handle": 2,
+              "initial_level": 0,
+              "monotonic_ns": 2950656600711,
+              "ok": true,
+              "operation": "gpio_claim_output",
+              "pin": 13,
+              "result": 0,
+              "sequence": 5
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950656604322,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 6
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950656608804,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 7
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950656613397,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 8
+            },
+            {
+              "handle": 2,
+              "initial_level": 0,
+              "monotonic_ns": 2950656625360,
+              "ok": true,
+              "operation": "gpio_claim_output",
+              "pin": 18,
+              "result": 0,
+              "sequence": 9
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950656628526,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 10
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950656631878,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 11
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950656635989,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 12
+            },
+            {
+              "handle": 2,
+              "initial_level": 0,
+              "monotonic_ns": 2950656648230,
+              "ok": true,
+              "operation": "gpio_claim_output",
+              "pin": 19,
+              "result": 0,
+              "sequence": 13
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950656651415,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 14
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950656654767,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 15
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950656659508,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 16
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950658726257,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 17
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950658735220,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 18
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950658739054,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 19
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950658745257,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 20
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950664790246,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 21
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950664794227,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 22
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950664796598,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 23
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950664802542,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 24
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950664815653,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 25
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950664820450,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 26
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950664824265,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 27
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950664830228,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 28
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950664837320,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 29
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950664841654,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 30
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950664844968,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 31
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950664848302,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 32
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950666915236,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 33
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950666918922,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 34
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950666922477,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 35
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950666925662,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 36
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950667649851,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 37
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950667653017,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 38
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950667654925,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 39
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2950667656869,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 40
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950667667684,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 41
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950667672091,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 42
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950667675314,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 43
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2950667678332,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 44
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950667683666,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 45
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950667686925,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 46
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950667689999,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 47
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950667693110,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 48
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950669757026,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 49
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950669760322,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 50
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950669763248,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 51
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950669766100,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 52
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2950769966245,
+              "ok": true,
+              "operation": "gpiochip_close",
+              "result": 0,
+              "sequence": 53
+            }
+          ],
+          "expected_pins": [
+            12,
+            13,
+            18,
+            19
+          ],
+          "failed_event_count": 0,
+          "gpio_closed_after_verified_low": true,
+          "maximum_abs_pwm_by_pin": {
+            "12": 0.0,
+            "13": 0.0,
+            "18": 0.0,
+            "19": 0.0
+          },
+          "minimum_verified_low_hold_ms": 2.073,
+          "nonzero_pwm_write_count": 0,
+          "opened_handle_count": 1,
+          "pin_evidence": {
+            "12": {
+              "active_pwm_cancelled": false,
+              "busy_true_after_nonzero_sequence": -1,
+              "cancel_sequence": -1,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 41,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": -1,
+              "nonzero_pwm_write_count": 0,
+              "verified_low_hold_ms": 2.073
+            },
+            "13": {
+              "active_pwm_cancelled": false,
+              "busy_true_after_nonzero_sequence": -1,
+              "cancel_sequence": -1,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 42,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": -1,
+              "nonzero_pwm_write_count": 0,
+              "verified_low_hold_ms": 2.073
+            },
+            "18": {
+              "active_pwm_cancelled": false,
+              "busy_true_after_nonzero_sequence": -1,
+              "cancel_sequence": -1,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 43,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": -1,
+              "nonzero_pwm_write_count": 0,
+              "verified_low_hold_ms": 2.073
+            },
+            "19": {
+              "active_pwm_cancelled": false,
+              "busy_true_after_nonzero_sequence": -1,
+              "cancel_sequence": -1,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 44,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": -1,
+              "nonzero_pwm_write_count": 0,
+              "verified_low_hold_ms": 2.073
+            }
+          }
+        },
+        "motor_power": "ON_FLOOR_BY_EXPLICIT_APPROVAL_AND_RAW_LIDAR_GATE",
+        "operator_stopped": false,
+        "post_close_pins": {
+          "command": [
+            "/usr/bin/pinctrl",
+            "get",
+            "12,13,18,19"
+          ],
+          "errors": [],
+          "ok": true,
+          "pins": {
+            "12": {
+              "drive_low": true,
+              "output": true,
+              "raw": "12: op dl pd | lo // GPIO12 = output"
+            },
+            "13": {
+              "drive_low": true,
+              "output": true,
+              "raw": "13: op dl pd | lo // GPIO13 = output"
+            },
+            "18": {
+              "drive_low": true,
+              "output": true,
+              "raw": "18: op dl pd | lo // GPIO18 = output"
+            },
+            "19": {
+              "drive_low": true,
+              "output": true,
+              "raw": "19: op dl pd | lo // GPIO19 = output"
+            }
+          },
+          "return_code": 0,
+          "status": "PASS"
+        },
+        "profile": "v3_native_floor_motion_capture",
+        "resident_report": {
+          "exit_reason": "RUNTIME_FAULT",
+          "fault_layer": "L4",
+          "final_lifecycle": "FAULT",
+          "final_reason": "L4_ERROR",
+          "final_safety_decision": "FAULT",
+          "last_tick_id": 0,
+          "normal_tick_count": 1,
+          "operator_stopped": false,
+          "run_status": 1,
+          "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
+          "status": "FAULT",
+          "termination_class": "FAULT_SAFE_LOW",
+          "tick_count": 1
+        },
+        "safety_bounds": {
+          "active_clearance_m": 0.3,
+          "maximum_abs_yaw_delta_rad": 0.35,
+          "maximum_active_duration_s": 10.5,
+          "maximum_displacement_m": 1.1,
+          "maximum_encoder_abs_mps": 0.45,
+          "preflight_clearance_m": 1.3,
+          "target_distance_m": 1.0,
+          "target_overshoot_m": 0.05
+        },
+        "schema": "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V2",
+        "started_at_utc": "2026-09-05T16:53:35Z",
+        "status": "FAIL",
+        "success": false,
+        "tick_evidence": {
+          "allow_tick_ids": [],
+          "clearance_preflight_scans": [],
+          "first_allow": null,
+          "first_fault": {
+            "enabled": false,
+            "estimate": {
+              "omega_rad_s": -0.002181661564992912,
+              "v_mps": 0.0,
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": -0.25416357232167425
+            },
+            "fault_layer": "L4",
+            "left_output": 0.0,
+            "monotonic_ns": 2950658856295,
+            "right_output": 0.0,
+            "safety_decision": "FAULT",
+            "safety_reason": "L4_ERROR",
+            "source_health": [
+              {
+                "device_id": "WHEEL_ENCODERS",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "BNO055_IMU",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "RPLIDAR_C1",
+                "reason": "LIDAR_TIMING_INVALID",
+                "state": "FAILED"
+              }
+            ],
+            "tick_id": 0
+          },
+          "last_allow": null,
+          "last_tick": {
+            "enabled": false,
+            "estimate": {
+              "omega_rad_s": -0.002181661564992912,
+              "v_mps": 0.0,
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": -0.25416357232167425
+            },
+            "fault_layer": "L4",
+            "left_output": 0.0,
+            "monotonic_ns": 2950658856295,
+            "right_output": 0.0,
+            "safety_decision": "FAULT",
+            "safety_reason": "L4_ERROR",
+            "source_health": [
+              {
+                "device_id": "WHEEL_ENCODERS",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "BNO055_IMU",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "RPLIDAR_C1",
+                "reason": "LIDAR_TIMING_INVALID",
+                "state": "FAILED"
+              }
+            ],
+            "tick_id": 0
+          },
+          "observed_tick_count": 1,
+          "post_active_idle": null,
+          "resident_preflight": null,
+          "safety_abort": null,
+          "shutdown_tick": null,
+          "signal_raised_after_tick": null,
+          "signal_reason": null,
+          "warmup_timeout_tick": null
+        }
+      },
+      "stdout_tail": "        \"ok\": true\n      },\n      {\n        \"sequence\": 45,\n        \"monotonic_ns\": 2950667683666,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 46,\n        \"monotonic_ns\": 2950667686925,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 47,\n        \"monotonic_ns\": 2950667689999,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 48,\n        \"monotonic_ns\": 2950667693110,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 49,\n        \"monotonic_ns\": 2950669757026,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 50,\n        \"monotonic_ns\": 2950669760322,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 51,\n        \"monotonic_ns\": 2950669763248,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 52,\n        \"monotonic_ns\": 2950669766100,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 53,\n        \"monotonic_ns\": 2950769966245,\n        \"operation\": \"gpiochip_close\",\n        \"handle\": 2,\n        \"result\": 0,\n        \"ok\": true\n      }\n    ]\n  },\n  \"post_close_pins\": {\n    \"status\": \"PASS\",\n    \"ok\": true,\n    \"command\": [\n      \"/usr/bin/pinctrl\",\n      \"get\",\n      \"12,13,18,19\"\n    ],\n    \"return_code\": 0,\n    \"pins\": {\n      \"12\": {\n        \"raw\": \"12: op dl pd | lo // GPIO12 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"13\": {\n        \"raw\": \"13: op dl pd | lo // GPIO13 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"18\": {\n        \"raw\": \"18: op dl pd | lo // GPIO18 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"19\": {\n        \"raw\": \"19: op dl pd | lo // GPIO19 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      }\n    },\n    \"errors\": []\n  },\n  \"final_lifecycle\": \"FAULT_OR_INTERRUPTED\",\n  \"artifact_path\": \"logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json\"\n}",
+      "timed_out": false
+    }
+  },
+  "started_at_utc": "2026-09-05T16:53:22Z",
+  "status": "FAIL",
+  "summary": {
+    "artifact_paths": [
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260905T165322Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json"
+    ],
+    "artifact_paths_missing": [],
+    "artifact_paths_stale_rejected": [],
+    "description": "Health-armed distance-targeted native V3 floor motion at 0.15 m/s to approximately 1.0 m with full L1-L12 capture and bounded shutdown.",
+    "duration_s": 17.439,
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "ekf_truth_gate_ok": true,
+    "ended_at_utc": "2026-09-05T16:53:39Z",
+    "family": "v3_native_hardware",
+    "goals": [
+      "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+      "current raw LiDAR front-sector clearance of at least 1.30 m before health arming",
+      "distance-targeted STOP at 1.00 m L3 displacement with a maximum 500-tick ACTIVE window",
+      "0.15 m/s nominal straight speed and at most 0.05 m accepted endpoint overshoot",
+      "immediate signal stop on raw LiDAR, encoder, L3 displacement, yaw or elapsed-time bound",
+      "complete per-tick L1-L12, control, actuation, GPIO/PWM and de-duplicated raw-scan capture",
+      "post-active IDLE, SIGTERM SHUTDOWN and verified four-pin hard-low after close"
+    ],
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 9776,
+          "pid": 9776,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "live": true,
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-05T16:53:39Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-05T16:53:22Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/session_20260905T165322Z/latest_human_observed_1x1m_validation.json",
+      "payload": {},
+      "required": false
+    },
+    "measurement_truth_gate_ok": true,
+    "preflight_ok": true,
+    "preflight_pose_reset": {},
+    "profile": "v3_native_floor_motion_capture",
+    "requires_preflight": true,
+    "run_dir": "logs/session_20260905T165322Z",
+    "run_tag": "hub_v3_native_floor_motion_capture_20260905T165322Z",
+    "started_at_utc": "2026-09-05T16:53:22Z",
+    "status": "FAIL",
+    "triage_order": [
+      "summary.json",
+      "incident_bundle.json",
+      "ownership_manifest.json",
+      "stdout_tail.txt",
+      "stderr_tail.txt"
+    ],
+    "verdict": {
+      "primary": "TEST_FAIL",
+      "reason": "scenario return_code=1",
+      "status": "FAIL"
+    },
+    "warning_summary": {},
+    "warnings": []
+  }
+}

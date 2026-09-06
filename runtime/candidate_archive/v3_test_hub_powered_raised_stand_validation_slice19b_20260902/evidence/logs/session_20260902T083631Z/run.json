@@ -1,0 +1,1424 @@
+{
+  "archive": {
+    "enabled": false,
+    "post_check": null,
+    "post_run": null,
+    "pre_check": null,
+    "pre_run": null,
+    "requested": true,
+    "skipped_reason": "disabled_during_live_run_for_watchdog_safety"
+  },
+  "duration_s": 13.221,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ended_at_utc": "2026-09-02T08:36:44Z",
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9289,
+        "pid": 9289,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "incident": {
+    "artifacts": [
+      "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json"
+    ],
+    "command": {
+      "return_code": 2,
+      "stderr_tail": "usage: r2b4_test_hub.py v3-native-raised-stand-bounded [-h] --approval\n                                                       APPROVAL\nr2b4_test_hub.py v3-native-raised-stand-bounded: error: the following arguments are required: --approval",
+      "stdout_tail": "",
+      "timed_out": false
+    },
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 9289,
+          "pid": 9289,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-02T08:36:44Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-02T08:36:31Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/latest/latest_human_observed_1x1m_validation.json",
+      "required": false
+    },
+    "preflight": {
+      "errors": [],
+      "ok": true,
+      "stdout_tail": "      \"raw_scan_latest_age_s\": 5.403856255000392,\n      \"raw_scan_rate_hz\": 9.96186369459195,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 41,\n      \"stale_result_drops\": 0\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 258\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.00545415391248228,\n        0.003272492347489368\n      ],\n      \"yaw_rad\": [\n        0.046905723647347373,\n        0.046905723647347373\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        157501658.0\n      ],\n      \"captured_minus_tick_ns\": [\n        -124699752.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.926353587875924\n      ]\n    },\n    \"lidar_pose\": {\n      \"captured_minus_tick_ns\": [\n        -124699752.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.6261758529222643,\n        0.926353587875924\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        -0.0083463753022333,\n        0.005986161320859583\n      ],\n      \"y_m\": [\n        -0.00653512632246402,\n        0.007500011740094341\n      ],\n      \"yaw_rad\": [\n        0.017057956817080555,\n        0.06388329844177543\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 109,\n      \"OK\": 191\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+    },
+    "preflight_pose_reset": {},
+    "primary_failure": "TEST_FAIL",
+    "profile": "v3_native_raised_stand_bounded",
+    "reason": "scenario return_code=2",
+    "run_tag": "hub_v3_native_raised_stand_bounded_20260902T083631Z",
+    "status": "FAIL",
+    "warning_summary": {},
+    "warnings": []
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-02T08:36:44Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-02T08:36:31Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/latest/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "preflight": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/tools/v3_sensor_measurement.py",
+      "--ticks",
+      "300",
+      "--output",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json"
+    ],
+    "ok": true,
+    "payload": {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json",
+      "attempt_count": 1,
+      "attempts": [
+        {
+          "all_commits_zero": true,
+          "artifact_path": "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+          "attempt": 1,
+          "errors": [],
+          "fault_tick_count": 0,
+          "healthy_tick_count": 191,
+          "l3_estimate_count": 300,
+          "return_code": 0,
+          "status": "PASS",
+          "tick_count": 300
+        }
+      ],
+      "errors": [],
+      "fault_tick_count": 0,
+      "first_estimate": {
+        "omega_rad_s": 0.0,
+        "tick_id": 0,
+        "v_mps": 0.0,
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.046905723647347373
+      },
+      "healthy_tick_count": 191,
+      "hub_gate": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "healthy_tick_count": 191,
+        "l3_estimate_count": 300,
+        "measured_tick_count": 300,
+        "minimum_healthy_tick_count": 1,
+        "required_tick_count": 300,
+        "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+      },
+      "l3_estimate_count": 300,
+      "last_estimate": {
+        "omega_rad_s": -0.0010044381357429857,
+        "tick_id": 299,
+        "v_mps": 2.4937748434400823e-09,
+        "x_m": 0.0011584313589577493,
+        "y_m": -0.000993277775720607,
+        "yaw_rad": 0.04652674814504265
+      },
+      "lidar_diagnostics": {
+        "last_result": {
+          "matcher_result_id": 41,
+          "source_raw_scan_id": 41,
+          "summary": {
+            "avg_left": 0.40368749999999987,
+            "avg_right": 2.2212258771929814,
+            "blocked_back": false,
+            "blocked_front": false,
+            "bounce_dir": -1,
+            "candidate_id": 41,
+            "capture_matcher_evidence": false,
+            "driver_connected": true,
+            "driver_invalid_packet_count": 0,
+            "driver_last_data_age_s": 0.0024437904357910156,
+            "driver_last_data_age_s_max": 0.0025718212127685547,
+            "driver_reconnect_count": 0,
+            "driver_rx_buffer_len": 3,
+            "dtheta": 0.007500000000000284,
+            "dx": 0.0037461345193952516,
+            "dy": -0.0001702238602408772,
+            "final_confidence": 0.6453297874512857,
+            "final_confidence_emitted": 0.6453297874512857,
+            "keyframe_count": 1,
+            "last_lidar_pose": {
+              "theta": 0.0529086327979611,
+              "x": 0.004231502215534644,
+              "y": -0.0009932881707009646
+            },
+            "last_lidar_pose_before": {
+              "theta": 0.04506687212498717,
+              "x": 0.00048151279627674085,
+              "y": -0.004052284432020338
+            },
+            "latency_ms": 27.0,
+            "lidar_pose_confidence": 0.6453297874512857,
+            "lidar_pose_theta": 0.0529086327979611,
+            "lidar_pose_x": 0.004231502215534644,
+            "lidar_pose_y": -0.0009932881707009646,
+            "local_map_enabled": true,
+            "local_map_generation": 1,
+            "local_map_keyframe_ages_s": [
+              3.7923311539998394
+            ],
+            "local_map_keyframe_ids": [
+              1
+            ],
+            "local_map_keyframes": 1,
+            "local_map_points": 96,
+            "localization_integrity_score": 0.725855612524962,
+            "localization_integrity_state": "OK",
+            "localization_status": "tracking",
+            "loop_closure_applied": false,
+            "loop_closure_delta_m": null,
+            "loop_closure_delta_rad": null,
+            "loop_closure_detected": false,
+            "loop_closure_target_id": null,
+            "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+            "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+            "matcher_budget_ms": 45.0,
+            "matcher_called": true,
+            "matcher_candidates": 227,
+            "matcher_confidence": 0.6453297874512857,
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_cpu_ms": 27.058999999999944,
+            "matcher_degeneracy_reasons": [],
+            "matcher_degenerate": false,
+            "matcher_integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+            "matcher_latency_max_ms": 51.21257900009368,
+            "matcher_latency_ms": 29.636942999786697,
+            "matcher_latency_p50_ms": 29.79538700037665,
+            "matcher_latency_p95_ms": 42.01848100001371,
+            "matcher_mode": "scan_to_map",
+            "matcher_process_peak_rss_kb": 57792,
+            "matcher_process_pid": 9296,
+            "matcher_process_rss_kb": 58592,
+            "matcher_quality": {
+              "ambiguity_margin": 1.0,
+              "ambiguity_residual_margin_m": null,
+              "basin_candidate_count": 3,
+              "basin_candidates": [
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 1,
+                  "distinct": false,
+                  "objective_cost": 0.004570097268942488,
+                  "pose": {
+                    "theta": 0.0529086327979611,
+                    "x": 0.024231502215534648,
+                    "y": 0.004006711829299042
+                  },
+                  "prior_cost": 0.0005918750000000005,
+                  "rotation_delta_rad": 0.0,
+                  "scan_cost": 0.003978222268942487,
+                  "seed_pose": {
+                    "theta": 0.0529086327979611,
+                    "x": 0.08423150221553465,
+                    "y": 0.07900671182929904
+                  },
+                  "translation_delta_m": 0.02061552812808831
+                },
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 2,
+                  "distinct": false,
+                  "objective_cost": 0.008950433360999096,
+                  "pose": {
+                    "theta": -0.007091367202038956,
+                    "x": -0.025768497784465355,
+                    "y": -0.030993288170700965
+                  },
+                  "prior_cost": 0.0017268749999999986,
+                  "rotation_delta_rad": 0.06000000000000005,
+                  "scan_cost": 0.007223558360999097,
+                  "seed_pose": {
+                    "theta": -0.06709136720203901,
+                    "x": 0.004231502215534644,
+                    "y": -0.0009932881707009646
+                  },
+                  "translation_delta_m": 0.04242640687119285
+                },
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 3,
+                  "distinct": false,
+                  "objective_cost": 0.007560582249967425,
+                  "pose": {
+                    "theta": 0.0529086327979611,
+                    "x": 0.05423150221553465,
+                    "y": -0.0009932881707009646
+                  },
+                  "prior_cost": 0.002891875,
+                  "rotation_delta_rad": 0.0,
+                  "scan_cost": 0.0046687072499674255,
+                  "seed_pose": {
+                    "theta": 0.0529086327979611,
+                    "x": 0.08423150221553465,
+                    "y": -0.0009932881707009646
+                  },
+                  "translation_delta_m": 0.05
+                }
+              ],
+              "combined_confidence": 0.6453297874512857,
+              "competitor_barrier_rise": null,
+              "competitor_barrier_score": null,
+              "competitor_basin_id": null,
+              "competitor_objective_cost": null,
+              "competitor_pose": null,
+              "competitor_prior_cost": null,
+              "competitor_rotation_delta_rad": null,
+              "competitor_scan_cost": null,
+              "competitor_stage": null,
+              "competitor_translation_delta_m": null,
+              "confidence": 0.6453297874512857,
+              "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+              "covariance_proxy": {
+                "x_variance_m2": 0.001765553431601772,
+                "y_variance_m2": 0.0011234397439183106,
+                "yaw_variance_rad2": 0.0036004057405061305
+              },
+              "coverage_score": 1.0,
+              "deadline_stage": null,
+              "degeneracy_reasons": [],
+              "degenerate": false,
+              "distinct_basin_count": 0,
+              "effective_max_points": 48,
+              "evaluated_candidates": 227,
+              "fit_quality": 0.725855612524962,
+              "global_multimodality_score": 0.0,
+              "inlier_count": 36,
+              "inlier_ratio": 0.75,
+              "inlier_score": 0.7333333333333334,
+              "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+              "integrity_state": "OK",
+              "localization_integrity_score": 0.725855612524962,
+              "measurement_confidence": 0.6453297874512857,
+              "measurement_uniqueness_score": 1.0,
+              "normal_observability_score": 1.0,
+              "objective_cost": 0.0040618910273233074,
+              "observability_score": 0.8613260273734759,
+              "observability_x": 0.5097551758507181,
+              "observability_y": 0.801111056353586,
+              "observability_yaw": 0.9998873070049951,
+              "posterior_ambiguity_margin": 1.0,
+              "posterior_residual_margin_m": null,
+              "posterior_uniqueness_score": 1.0,
+              "residual_score": 0.8476167419465976,
+              "robust_rmse_m": 0.06360044046485297,
+              "scan_cost": 0.004045016027323307,
+              "search_complete": true,
+              "sector_coverage": 0.75,
+              "seed_prior_cost": 1.6875000000000214e-05,
+              "stage_evaluations": {
+                "basin_barrier": 9,
+                "basin_offset_axis": 4,
+                "basin_offset_diagonal": 4,
+                "basin_offset_yaw": 2,
+                "basin_refine": 36,
+                "basin_refine_seed": 3,
+                "coarse": 27,
+                "coarse_seed": 1,
+                "fine": 27,
+                "fine_seed": 1,
+                "medium": 27,
+                "medium_seed": 1,
+                "observability": 6,
+                "winner_refine": 79
+              },
+              "timed_out": false,
+              "uniqueness_score": 1.0
+            },
+            "matcher_queue_delay_ms": 2.183931999752531,
+            "matcher_reason": "",
+            "matcher_replay_evidence": null,
+            "matcher_result_id": 41,
+            "matcher_result_timestamp": 4512.435374623,
+            "matcher_runtime_ms": 27.057088000219665,
+            "matcher_seed_pose": {
+              "theta": 0.0529086327979611,
+              "x": 0.004231502215534644,
+              "y": -0.0009932881707009646
+            },
+            "matcher_seed_pose_before": {
+              "theta": 0.04506687212498717,
+              "x": 0.00048151279627674085,
+              "y": -0.004052284432020338
+            },
+            "matcher_source_raw_scan_id": 41,
+            "matcher_source_raw_scan_timestamp": 4512.398048612,
+            "matcher_timed_out": false,
+            "matcher_transport": "process_latest_only",
+            "measurement_confidence": 0.6453297874512857,
+            "min_back": 0.31775,
+            "min_dist": 0.38925,
+            "min_dist_narrow": 0.7665,
+            "pose_event_raw_delta_m": null,
+            "pose_event_raw_delta_rad": null,
+            "pose_event_step_limited": false,
+            "pose_ref_available": true,
+            "pose_ref_current": {
+              "theta": 0.04540863279796096,
+              "x": 0.00048150221553464403,
+              "y": -0.0009932881707009646
+            },
+            "pose_reference_timestamp": 4512.405537403,
+            "pose_update_event": "tracking",
+            "prev_pose_ref": {
+              "theta": 0.04506687212498717,
+              "x": 0.00048151279627674085,
+              "y": -0.004052284432020338
+            },
+            "raw_scan_completed_mono": 4512.398048612,
+            "raw_scan_id": 41,
+            "raw_scan_latest_age_s": 0.037326011000004655,
+            "raw_scan_max_gap_s": 0.105702009000197,
+            "raw_scan_mono_ts": 4512.398048612,
+            "raw_scan_rate_hz": 9.96186369459195,
+            "raw_scan_started_mono": 4512.398048612,
+            "raw_scan_timestamp": 4512.398048612,
+            "relocalization_attempted": false,
+            "relocalization_reason": "not_attempted",
+            "relocalization_seed_attempts": 0,
+            "relocalization_timed_out": false,
+            "relocalized": false,
+            "scan_count_filtered": 424,
+            "scan_count_raw": 424,
+            "scan_seq": 41,
+            "scan_to_map_seed": {
+              "theta": 0.04540863279796096,
+              "x": 0.00048150221553464403,
+              "y": -0.0009932881707009646
+            },
+            "slow_path_budget_ms": 120.0,
+            "theta_lidar_raw": 0.0529086327979611,
+            "tracking_backtrack_debt_m": 0.0,
+            "tracking_candidate_pose": {
+              "theta": 0.0529086327979611,
+              "x": 0.004231502215534644,
+              "y": -0.0009932881707009646
+            },
+            "tracking_candidate_projection_m": null,
+            "tracking_direction_backtrack_tolerance_m": 0.03,
+            "tracking_direction_checked": false,
+            "tracking_direction_consistent": true,
+            "tracking_direction_reference_source": "",
+            "tracking_direction_rejected": false,
+            "tracking_direction_rejected_total": 0,
+            "tracking_loss_latched": false,
+            "tracking_reacquire_required": 3,
+            "tracking_reacquire_streak": 3,
+            "tracking_ready": true,
+            "tracking_reference_delta_m": null,
+            "tracking_reference_linear_mps": null,
+            "x_lidar_raw": 0.004231502215534644,
+            "y_lidar_raw": -0.0009932881707009646,
+            "yaw_convention": "CCW_POSITIVE_LEFT"
+          }
+        },
+        "runtime_status": {
+          "driver_connected": true,
+          "health": "OK",
+          "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+          "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+          "matcher_latency_ms_latest": 29.636942999786697,
+          "matcher_process_errors": 0,
+          "matcher_processed_scans": 41,
+          "matcher_transport": "process_latest_only",
+          "queue_drops": 0,
+          "raw_scan_latest_age_s": 5.403856255000392,
+          "raw_scan_rate_hz": 9.96186369459195,
+          "result_queue_drops": 0,
+          "running": false,
+          "scan_seq": 41,
+          "stale_result_drops": 0
+        }
+      },
+      "measurement_artifact_path": "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+      "ok": true,
+      "operator_stopped": false,
+      "rejected_counts": {
+        "DUPLICATE": 258
+      },
+      "sample_ranges": {
+        "ekf_heading": {
+          "calibration": [
+            0.0,
+            0.0
+          ],
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.0
+          ],
+          "omega_calibration": [
+            3.0,
+            3.0
+          ],
+          "omega_confidence": [
+            1.0,
+            1.0
+          ],
+          "omega_rad_s": [
+            -0.00545415391248228,
+            0.003272492347489368
+          ],
+          "yaw_rad": [
+            0.046905723647347373,
+            0.046905723647347373
+          ]
+        },
+        "lidar_health": {
+          "age_ns": [
+            0.0,
+            157501658.0
+          ],
+          "captured_minus_tick_ns": [
+            -124699752.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.926353587875924
+          ]
+        },
+        "lidar_pose": {
+          "captured_minus_tick_ns": [
+            -124699752.0,
+            0.0
+          ],
+          "confidence": [
+            0.6261758529222643,
+            0.926353587875924
+          ],
+          "r_scale": [
+            1.0,
+            1.0
+          ],
+          "x_m": [
+            -0.0083463753022333,
+            0.005986161320859583
+          ],
+          "y_m": [
+            -0.00653512632246402,
+            0.007500011740094341
+          ],
+          "yaw_rad": [
+            0.017057956817080555,
+            0.06388329844177543
+          ]
+        },
+        "wheel_velocity": {
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "left_mps": [
+            0.0,
+            0.0
+          ],
+          "right_mps": [
+            0.0,
+            0.0
+          ],
+          "trust": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+      "source_state_counts": {
+        "BNO055_IMU": {
+          "OK": 300
+        },
+        "LIDAR_LOCALIZATION": {
+          "DEGRADED": 109,
+          "OK": 191
+        },
+        "WHEEL_ENCODERS": {
+          "DEGRADED": 1,
+          "OK": 299
+        }
+      },
+      "status": "PASS",
+      "tick_count": 300
+    },
+    "run": {
+      "duration_s": 12.666,
+      "ok": true,
+      "return_code": 0,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "first_estimate": {
+          "omega_rad_s": 0.0,
+          "tick_id": 0,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": 0.046905723647347373
+        },
+        "healthy_tick_count": 191,
+        "l3_estimate_count": 300,
+        "last_estimate": {
+          "omega_rad_s": -0.0010044381357429857,
+          "tick_id": 299,
+          "v_mps": 2.4937748434400823e-09,
+          "x_m": 0.0011584313589577493,
+          "y_m": -0.000993277775720607,
+          "yaw_rad": 0.04652674814504265
+        },
+        "lidar_diagnostics": {
+          "last_result": {
+            "matcher_result_id": 41,
+            "source_raw_scan_id": 41,
+            "summary": {
+              "avg_left": 0.40368749999999987,
+              "avg_right": 2.2212258771929814,
+              "blocked_back": false,
+              "blocked_front": false,
+              "bounce_dir": -1,
+              "candidate_id": 41,
+              "capture_matcher_evidence": false,
+              "driver_connected": true,
+              "driver_invalid_packet_count": 0,
+              "driver_last_data_age_s": 0.0024437904357910156,
+              "driver_last_data_age_s_max": 0.0025718212127685547,
+              "driver_reconnect_count": 0,
+              "driver_rx_buffer_len": 3,
+              "dtheta": 0.007500000000000284,
+              "dx": 0.0037461345193952516,
+              "dy": -0.0001702238602408772,
+              "final_confidence": 0.6453297874512857,
+              "final_confidence_emitted": 0.6453297874512857,
+              "keyframe_count": 1,
+              "last_lidar_pose": {
+                "theta": 0.0529086327979611,
+                "x": 0.004231502215534644,
+                "y": -0.0009932881707009646
+              },
+              "last_lidar_pose_before": {
+                "theta": 0.04506687212498717,
+                "x": 0.00048151279627674085,
+                "y": -0.004052284432020338
+              },
+              "latency_ms": 27.0,
+              "lidar_pose_confidence": 0.6453297874512857,
+              "lidar_pose_theta": 0.0529086327979611,
+              "lidar_pose_x": 0.004231502215534644,
+              "lidar_pose_y": -0.0009932881707009646,
+              "local_map_enabled": true,
+              "local_map_generation": 1,
+              "local_map_keyframe_ages_s": [
+                3.7923311539998394
+              ],
+              "local_map_keyframe_ids": [
+                1
+              ],
+              "local_map_keyframes": 1,
+              "local_map_points": 96,
+              "localization_integrity_score": 0.725855612524962,
+              "localization_integrity_state": "OK",
+              "localization_status": "tracking",
+              "loop_closure_applied": false,
+              "loop_closure_delta_m": null,
+              "loop_closure_delta_rad": null,
+              "loop_closure_detected": false,
+              "loop_closure_target_id": null,
+              "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+              "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+              "matcher_budget_ms": 45.0,
+              "matcher_called": true,
+              "matcher_candidates": 227,
+              "matcher_confidence": 0.6453297874512857,
+              "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+              "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+              "matcher_cpu_ms": 27.058999999999944,
+              "matcher_degeneracy_reasons": [],
+              "matcher_degenerate": false,
+              "matcher_integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+              "matcher_latency_max_ms": 51.21257900009368,
+              "matcher_latency_ms": 29.636942999786697,
+              "matcher_latency_p50_ms": 29.79538700037665,
+              "matcher_latency_p95_ms": 42.01848100001371,
+              "matcher_mode": "scan_to_map",
+              "matcher_process_peak_rss_kb": 57792,
+              "matcher_process_pid": 9296,
+              "matcher_process_rss_kb": 58592,
+              "matcher_quality": {
+                "ambiguity_margin": 1.0,
+                "ambiguity_residual_margin_m": null,
+                "basin_candidate_count": 3,
+                "basin_candidates": [
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 1,
+                    "distinct": false,
+                    "objective_cost": 0.004570097268942488,
+                    "pose": {
+                      "theta": 0.0529086327979611,
+                      "x": 0.024231502215534648,
+                      "y": 0.004006711829299042
+                    },
+                    "prior_cost": 0.0005918750000000005,
+                    "rotation_delta_rad": 0.0,
+                    "scan_cost": 0.003978222268942487,
+                    "seed_pose": {
+                      "theta": 0.0529086327979611,
+                      "x": 0.08423150221553465,
+                      "y": 0.07900671182929904
+                    },
+                    "translation_delta_m": 0.02061552812808831
+                  },
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 2,
+                    "distinct": false,
+                    "objective_cost": 0.008950433360999096,
+                    "pose": {
+                      "theta": -0.007091367202038956,
+                      "x": -0.025768497784465355,
+                      "y": -0.030993288170700965
+                    },
+                    "prior_cost": 0.0017268749999999986,
+                    "rotation_delta_rad": 0.06000000000000005,
+                    "scan_cost": 0.007223558360999097,
+                    "seed_pose": {
+                      "theta": -0.06709136720203901,
+                      "x": 0.004231502215534644,
+                      "y": -0.0009932881707009646
+                    },
+                    "translation_delta_m": 0.04242640687119285
+                  },
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 3,
+                    "distinct": false,
+                    "objective_cost": 0.007560582249967425,
+                    "pose": {
+                      "theta": 0.0529086327979611,
+                      "x": 0.05423150221553465,
+                      "y": -0.0009932881707009646
+                    },
+                    "prior_cost": 0.002891875,
+                    "rotation_delta_rad": 0.0,
+                    "scan_cost": 0.0046687072499674255,
+                    "seed_pose": {
+                      "theta": 0.0529086327979611,
+                      "x": 0.08423150221553465,
+                      "y": -0.0009932881707009646
+                    },
+                    "translation_delta_m": 0.05
+                  }
+                ],
+                "combined_confidence": 0.6453297874512857,
+                "competitor_barrier_rise": null,
+                "competitor_barrier_score": null,
+                "competitor_basin_id": null,
+                "competitor_objective_cost": null,
+                "competitor_pose": null,
+                "competitor_prior_cost": null,
+                "competitor_rotation_delta_rad": null,
+                "competitor_scan_cost": null,
+                "competitor_stage": null,
+                "competitor_translation_delta_m": null,
+                "confidence": 0.6453297874512857,
+                "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+                "covariance_proxy": {
+                  "x_variance_m2": 0.001765553431601772,
+                  "y_variance_m2": 0.0011234397439183106,
+                  "yaw_variance_rad2": 0.0036004057405061305
+                },
+                "coverage_score": 1.0,
+                "deadline_stage": null,
+                "degeneracy_reasons": [],
+                "degenerate": false,
+                "distinct_basin_count": 0,
+                "effective_max_points": 48,
+                "evaluated_candidates": 227,
+                "fit_quality": 0.725855612524962,
+                "global_multimodality_score": 0.0,
+                "inlier_count": 36,
+                "inlier_ratio": 0.75,
+                "inlier_score": 0.7333333333333334,
+                "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+                "integrity_state": "OK",
+                "localization_integrity_score": 0.725855612524962,
+                "measurement_confidence": 0.6453297874512857,
+                "measurement_uniqueness_score": 1.0,
+                "normal_observability_score": 1.0,
+                "objective_cost": 0.0040618910273233074,
+                "observability_score": 0.8613260273734759,
+                "observability_x": 0.5097551758507181,
+                "observability_y": 0.801111056353586,
+                "observability_yaw": 0.9998873070049951,
+                "posterior_ambiguity_margin": 1.0,
+                "posterior_residual_margin_m": null,
+                "posterior_uniqueness_score": 1.0,
+                "residual_score": 0.8476167419465976,
+                "robust_rmse_m": 0.06360044046485297,
+                "scan_cost": 0.004045016027323307,
+                "search_complete": true,
+                "sector_coverage": 0.75,
+                "seed_prior_cost": 1.6875000000000214e-05,
+                "stage_evaluations": {
+                  "basin_barrier": 9,
+                  "basin_offset_axis": 4,
+                  "basin_offset_diagonal": 4,
+                  "basin_offset_yaw": 2,
+                  "basin_refine": 36,
+                  "basin_refine_seed": 3,
+                  "coarse": 27,
+                  "coarse_seed": 1,
+                  "fine": 27,
+                  "fine_seed": 1,
+                  "medium": 27,
+                  "medium_seed": 1,
+                  "observability": 6,
+                  "winner_refine": 79
+                },
+                "timed_out": false,
+                "uniqueness_score": 1.0
+              },
+              "matcher_queue_delay_ms": 2.183931999752531,
+              "matcher_reason": "",
+              "matcher_replay_evidence": null,
+              "matcher_result_id": 41,
+              "matcher_result_timestamp": 4512.435374623,
+              "matcher_runtime_ms": 27.057088000219665,
+              "matcher_seed_pose": {
+                "theta": 0.0529086327979611,
+                "x": 0.004231502215534644,
+                "y": -0.0009932881707009646
+              },
+              "matcher_seed_pose_before": {
+                "theta": 0.04506687212498717,
+                "x": 0.00048151279627674085,
+                "y": -0.004052284432020338
+              },
+              "matcher_source_raw_scan_id": 41,
+              "matcher_source_raw_scan_timestamp": 4512.398048612,
+              "matcher_timed_out": false,
+              "matcher_transport": "process_latest_only",
+              "measurement_confidence": 0.6453297874512857,
+              "min_back": 0.31775,
+              "min_dist": 0.38925,
+              "min_dist_narrow": 0.7665,
+              "pose_event_raw_delta_m": null,
+              "pose_event_raw_delta_rad": null,
+              "pose_event_step_limited": false,
+              "pose_ref_available": true,
+              "pose_ref_current": {
+                "theta": 0.04540863279796096,
+                "x": 0.00048150221553464403,
+                "y": -0.0009932881707009646
+              },
+              "pose_reference_timestamp": 4512.405537403,
+              "pose_update_event": "tracking",
+              "prev_pose_ref": {
+                "theta": 0.04506687212498717,
+                "x": 0.00048151279627674085,
+                "y": -0.004052284432020338
+              },
+              "raw_scan_completed_mono": 4512.398048612,
+              "raw_scan_id": 41,
+              "raw_scan_latest_age_s": 0.037326011000004655,
+              "raw_scan_max_gap_s": 0.105702009000197,
+              "raw_scan_mono_ts": 4512.398048612,
+              "raw_scan_rate_hz": 9.96186369459195,
+              "raw_scan_started_mono": 4512.398048612,
+              "raw_scan_timestamp": 4512.398048612,
+              "relocalization_attempted": false,
+              "relocalization_reason": "not_attempted",
+              "relocalization_seed_attempts": 0,
+              "relocalization_timed_out": false,
+              "relocalized": false,
+              "scan_count_filtered": 424,
+              "scan_count_raw": 424,
+              "scan_seq": 41,
+              "scan_to_map_seed": {
+                "theta": 0.04540863279796096,
+                "x": 0.00048150221553464403,
+                "y": -0.0009932881707009646
+              },
+              "slow_path_budget_ms": 120.0,
+              "theta_lidar_raw": 0.0529086327979611,
+              "tracking_backtrack_debt_m": 0.0,
+              "tracking_candidate_pose": {
+                "theta": 0.0529086327979611,
+                "x": 0.004231502215534644,
+                "y": -0.0009932881707009646
+              },
+              "tracking_candidate_projection_m": null,
+              "tracking_direction_backtrack_tolerance_m": 0.03,
+              "tracking_direction_checked": false,
+              "tracking_direction_consistent": true,
+              "tracking_direction_reference_source": "",
+              "tracking_direction_rejected": false,
+              "tracking_direction_rejected_total": 0,
+              "tracking_loss_latched": false,
+              "tracking_reacquire_required": 3,
+              "tracking_reacquire_streak": 3,
+              "tracking_ready": true,
+              "tracking_reference_delta_m": null,
+              "tracking_reference_linear_mps": null,
+              "x_lidar_raw": 0.004231502215534644,
+              "y_lidar_raw": -0.0009932881707009646,
+              "yaw_convention": "CCW_POSITIVE_LEFT"
+            }
+          },
+          "runtime_status": {
+            "driver_connected": true,
+            "health": "OK",
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_latency_ms_latest": 29.636942999786697,
+            "matcher_process_errors": 0,
+            "matcher_processed_scans": 41,
+            "matcher_transport": "process_latest_only",
+            "queue_drops": 0,
+            "raw_scan_latest_age_s": 5.403856255000392,
+            "raw_scan_rate_hz": 9.96186369459195,
+            "result_queue_drops": 0,
+            "running": false,
+            "scan_seq": 41,
+            "stale_result_drops": 0
+          }
+        },
+        "operator_stopped": false,
+        "rejected_counts": {
+          "DUPLICATE": 258
+        },
+        "sample_ranges": {
+          "ekf_heading": {
+            "calibration": [
+              0.0,
+              0.0
+            ],
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.0
+            ],
+            "omega_calibration": [
+              3.0,
+              3.0
+            ],
+            "omega_confidence": [
+              1.0,
+              1.0
+            ],
+            "omega_rad_s": [
+              -0.00545415391248228,
+              0.003272492347489368
+            ],
+            "yaw_rad": [
+              0.046905723647347373,
+              0.046905723647347373
+            ]
+          },
+          "lidar_health": {
+            "age_ns": [
+              0.0,
+              157501658.0
+            ],
+            "captured_minus_tick_ns": [
+              -124699752.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.926353587875924
+            ]
+          },
+          "lidar_pose": {
+            "captured_minus_tick_ns": [
+              -124699752.0,
+              0.0
+            ],
+            "confidence": [
+              0.6261758529222643,
+              0.926353587875924
+            ],
+            "r_scale": [
+              1.0,
+              1.0
+            ],
+            "x_m": [
+              -0.0083463753022333,
+              0.005986161320859583
+            ],
+            "y_m": [
+              -0.00653512632246402,
+              0.007500011740094341
+            ],
+            "yaw_rad": [
+              0.017057956817080555,
+              0.06388329844177543
+            ]
+          },
+          "wheel_velocity": {
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "left_mps": [
+              0.0,
+              0.0
+            ],
+            "right_mps": [
+              0.0,
+              0.0
+            ],
+            "trust": [
+              0.0,
+              1.0
+            ]
+          }
+        },
+        "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+        "source_state_counts": {
+          "BNO055_IMU": {
+            "OK": 300
+          },
+          "LIDAR_LOCALIZATION": {
+            "DEGRADED": 109,
+            "OK": 191
+          },
+          "WHEEL_ENCODERS": {
+            "DEGRADED": 1,
+            "OK": 299
+          }
+        },
+        "status": "PASS",
+        "tick_count": 300,
+        "tick_details_written": 300
+      },
+      "stdout_tail": "      \"raw_scan_latest_age_s\": 5.403856255000392,\n      \"raw_scan_rate_hz\": 9.96186369459195,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 41,\n      \"stale_result_drops\": 0\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 258\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.00545415391248228,\n        0.003272492347489368\n      ],\n      \"yaw_rad\": [\n        0.046905723647347373,\n        0.046905723647347373\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        157501658.0\n      ],\n      \"captured_minus_tick_ns\": [\n        -124699752.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.926353587875924\n      ]\n    },\n    \"lidar_pose\": {\n      \"captured_minus_tick_ns\": [\n        -124699752.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.6261758529222643,\n        0.926353587875924\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        -0.0083463753022333,\n        0.005986161320859583\n      ],\n      \"y_m\": [\n        -0.00653512632246402,\n        0.007500011740094341\n      ],\n      \"yaw_rad\": [\n        0.017057956817080555,\n        0.06388329844177543\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 109,\n      \"OK\": 191\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}",
+      "timed_out": false
+    }
+  },
+  "preflight_pose_reset": null,
+  "profile": "v3_native_raised_stand_bounded",
+  "run_dir": "logs/session_20260902T083631Z",
+  "runtime": {
+    "before": {
+      "action": "status",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/tools/agent_runtime_manager.py",
+        "status",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": false,
+      "payload": {
+        "gui": {
+          "error": "<urlopen error [Errno 111] Connection refused>",
+          "ok": false,
+          "payload": {},
+          "port": 7860
+        },
+        "pid_file": {
+          "alive": false,
+          "exists": false,
+          "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/runtime/agent_runtime/os.pid",
+          "payload": {},
+          "pid": null,
+          "registered_process": false,
+          "stale": false,
+          "status_pid_matches": false
+        },
+        "processes": [],
+        "ready_for_live_tests": false,
+        "running": false,
+        "runtime_identity": {
+          "ok": false,
+          "running_process_pids": [],
+          "status_pid_is_running": false,
+          "unique_os_process": false
+        },
+        "status": {
+          "age_s": null,
+          "exists": false,
+          "fresh": false,
+          "runtime_pid": null,
+          "safety_allow": true,
+          "startup_ready": false,
+          "state": "",
+          "status_version": 0,
+          "stop_type": ""
+        },
+        "timestamp": "2026-09-02T08:36:31Z"
+      },
+      "run": {
+        "duration_s": 0.393,
+        "ok": true,
+        "return_code": 1,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-02T08:36:31Z"
+        },
+        "stdout_tail": "{\n  \"timestamp\": \"2026-09-02T08:36:31Z\",\n  \"running\": false,\n  \"ready_for_live_tests\": false,\n  \"processes\": [],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": false,\n    \"pid\": null,\n    \"alive\": false,\n    \"status_pid_matches\": false,\n    \"registered_process\": false,\n    \"stale\": false,\n    \"payload\": {}\n  },\n  \"runtime_identity\": {\n    \"ok\": false,\n    \"status_pid_is_running\": false,\n    \"unique_os_process\": false,\n    \"running_process_pids\": []\n  },\n  \"status\": {\n    \"exists\": false,\n    \"age_s\": null,\n    \"fresh\": false,\n    \"state\": \"\",\n    \"status_version\": 0,\n    \"runtime_pid\": null,\n    \"startup_ready\": false,\n    \"safety_allow\": true,\n    \"stop_type\": \"\"\n  },\n  \"gui\": {\n    \"ok\": false,\n    \"port\": 7860,\n    \"error\": \"<urlopen error [Errno 111] Connection refused>\",\n    \"payload\": {}\n  }\n}",
+        "timed_out": false
+      }
+    },
+    "ready_for_live_tests_after_recovery": true,
+    "recovery": [
+      {
+        "action": "verify_managed_runtime_stopped",
+        "ok": true,
+        "payload": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-02T08:36:31Z"
+        },
+        "reason": "exclusive_native_hardware_ready"
+      }
+    ],
+    "start": null,
+    "started_here": false,
+    "stop": null
+  },
+  "scenario_run": {
+    "command": [
+      "/usr/bin/python3",
+      "tools/r2b4_test_hub.py",
+      "v3-native-raised-stand-bounded",
+      "--no-auto-runtime",
+      "--no-log-archive",
+      "--",
+      "--approval",
+      "powered-raised-stand-hard-low-v3"
+    ],
+    "payload": {},
+    "run": {
+      "duration_s": 0.156,
+      "ok": true,
+      "return_code": 2,
+      "stderr_json": null,
+      "stderr_tail": "usage: r2b4_test_hub.py v3-native-raised-stand-bounded [-h] --approval\n                                                       APPROVAL\nr2b4_test_hub.py v3-native-raised-stand-bounded: error: the following arguments are required: --approval",
+      "stdout_json": null,
+      "stdout_tail": "",
+      "timed_out": false
+    }
+  },
+  "started_at_utc": "2026-09-02T08:36:31Z",
+  "status": "FAIL",
+  "summary": {
+    "artifact_paths": [
+      "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260902T083631Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json"
+    ],
+    "artifact_paths_missing": [],
+    "artifact_paths_stale_rejected": [],
+    "description": "Finite native V3 powered raised-wheel validation through the canonical bounded L12 motor writer.",
+    "duration_s": 13.221,
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "ekf_truth_gate_ok": true,
+    "ended_at_utc": "2026-09-02T08:36:44Z",
+    "family": "v3_native_hardware",
+    "goals": [
+      "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+      "explicit per-run powered raised-stand approval with no approval embedded in the profile",
+      "one 20 ms 0.04 m/s command pulse with the robot immobilized on stands",
+      "active PWM busy/cancel proof followed by final IDLE and verified four-pin hard-low",
+      "post-close pinctrl proof that all four DRV8871 inputs remain output-low",
+      "exclusive native hardware ownership without starting the legacy managed runtime"
+    ],
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 9289,
+          "pid": 9289,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "live": true,
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-02T08:36:44Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-02T08:36:31Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/latest/latest_human_observed_1x1m_validation.json",
+      "payload": {},
+      "required": false
+    },
+    "measurement_truth_gate_ok": true,
+    "preflight_ok": true,
+    "preflight_pose_reset": {},
+    "profile": "v3_native_raised_stand_bounded",
+    "requires_preflight": true,
+    "run_dir": "logs/session_20260902T083631Z",
+    "run_tag": "hub_v3_native_raised_stand_bounded_20260902T083631Z",
+    "started_at_utc": "2026-09-02T08:36:31Z",
+    "status": "FAIL",
+    "triage_order": [
+      "summary.json",
+      "incident_bundle.json",
+      "ownership_manifest.json",
+      "stdout_tail.txt",
+      "stderr_tail.txt"
+    ],
+    "verdict": {
+      "primary": "TEST_FAIL",
+      "reason": "scenario return_code=2",
+      "status": "FAIL"
+    },
+    "warning_summary": {},
+    "warnings": []
+  }
+}

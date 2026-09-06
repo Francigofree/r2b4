@@ -1,0 +1,293 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_pwm_continuity_capture_live_20260906/meta/audit.json",
+    "audit_sha256": "c932721da417f8958071cd150f834f98d3a8150a8fdd53c9941939f3135120ce",
+    "audited_at_utc": "2026-09-06T16:15:09Z",
+    "base_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+    "candidate_fingerprint": "30e0a06537f654e15b0adb06acab74a2c44b90fd2bb666268449c2d5cad13534",
+    "canonical_drift": [],
+    "canonical_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+    "changed_files": [
+      "tests/test_v3_gpio_motor.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_resident_runtime.py",
+      "v3/adapters/gpio_motor.py",
+      "v3/composition/resident_live_control.py",
+      "v3/composition/resident_physical_control.py",
+      "v3_hardware_runtime.py",
+      "v3_process_runtime.py",
+      "v3_runtime.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_pwm_continuity_capture_live_20260906/meta/diff.json",
+    "diff_sha256": "8157ef917b695f8eb61852904c3abe3a8b513cbefed368e5ae6d23dbdcb5c7d4",
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_pwm_continuity_capture_live_20260906",
+    "task_mode": "CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "83df731cd7d88cda3e50f2d6a7c38e762f0003921f6301b1d79e3d8ed59e4421",
+        "size_bytes": 2300
+      },
+      "changed": null,
+      "path": "tests/test_v3_capture.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "824e055c1bafc24798339103b94eae453a03d1cd8b0d8fb4345839c5094e2810",
+        "size_bytes": 10805
+      },
+      "changed": null,
+      "path": "tests/test_v3_gpio_motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a308f54ef2361dc100068e350af2b190024f40963b24679adca1c197bc4f9887",
+        "size_bytes": 15948
+      },
+      "changed": null,
+      "path": "tests/test_v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "92c2422d53415275bb29662d84e656cb4674ff1dd6d34530c88162a00a20427f",
+        "size_bytes": 6829
+      },
+      "changed": null,
+      "path": "tests/test_v3_motor_output_composition.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
+        "size_bytes": 7753
+      },
+      "changed": null,
+      "path": "tests/test_v3_process_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "bf238974e02236d4ac0ecc21467d29291e769ce9507b34f3bb1b9ab99ea69315",
+        "size_bytes": 16498
+      },
+      "changed": null,
+      "path": "tests/test_v3_replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "88eff9abad8fa551d7f697b0bdce53a18194e8678e933b800c08a76ad81e72d5",
+        "size_bytes": 14316
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "ebb829908bbea6657173ce2aa80e620d77740164cf9236db39fa7b3e68a0c2a6",
+        "size_bytes": 3160
+      },
+      "changed": null,
+      "path": "tests/test_v3_test_hub.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "cd441841153475e9f8c95cef13f9bf5badfd0e267d0103d56b37e88dcdb38e83",
+        "size_bytes": 5733
+      },
+      "changed": null,
+      "path": "tests/v3_validation_helpers.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "deed084921c298c9ca9fdc95a54bd7bbb656692379edb3ca397aa56a9aac9823",
+        "size_bytes": 11307
+      },
+      "changed": null,
+      "path": "v3/adapters/gpio_motor.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "14ad291ec98bd718c93ec6d9873d45fc6408e4f3b7b2250daa3b4c0a057efbac",
+        "size_bytes": 6203
+      },
+      "changed": null,
+      "path": "v3/adapters/motor_pwm.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "fe0cc6c985338e17d7b5a2d3eee3850f1f5130d06da6b2cd1886313ab84e296e",
+        "size_bytes": 12202
+      },
+      "changed": null,
+      "path": "v3/capture.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d260b6c572fb6e312794187fe03f39a5f52bfdf93f482e8712d5ce3360ecb43d",
+        "size_bytes": 1815
+      },
+      "changed": null,
+      "path": "v3/composition/motor_output.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "46928f4f4a2b06ac48beff1c23ef0d4d4088363c701adbc0a17d5a85eb511a97",
+        "size_bytes": 12636
+      },
+      "changed": null,
+      "path": "v3/composition/resident_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "b2a5dad5ae1a961a5c0280d1079dbe4195a69377d5ec4137eefa0ef376d9ce5f",
+        "size_bytes": 3671
+      },
+      "changed": null,
+      "path": "v3/composition/resident_physical_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d4690cb8ddad1dbef861b5f01d9662a5a815c4702a2da34ad4359f2d9b30d895",
+        "size_bytes": 3818
+      },
+      "changed": null,
+      "path": "v3/execution.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "a3f8fcb7bdc32791fb48bbccad7612b07988317ae1b16424c7a6e4e51d2add4e",
+        "size_bytes": 72435
+      },
+      "changed": null,
+      "path": "v3/replay.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "50d45a852ee559cb622bef30f13297691a80fc6e2329c6fdd338b23906695122",
+        "size_bytes": 13294
+      },
+      "changed": null,
+      "path": "v3/test_hub.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "dc6b56e4e28a94d8092d03dc9cbbef35cf224c069e48229257340fb254f8b559",
+        "size_bytes": 18028
+      },
+      "changed": null,
+      "path": "v3_hardware_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "63444311b06d9d3fbacdfde5d9f8ce4ef1f711388195b8537a1d593e09c8ffd6",
+        "size_bytes": 18061
+      },
+      "changed": null,
+      "path": "v3_process_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d8573305ca6d02e86ae331806c18d5e1770da2f624fb41062619f05e4c65a636",
+        "size_bytes": 13883
+      },
+      "changed": null,
+      "path": "v3_runtime.py"
+    }
+  ],
+  "goal": "Preserve PWM across same-direction ALLOW frame updates while retaining mandatory hard-low boundaries, minimally expose production TickInputs plus TickResult to the existing CaptureSink, validate with Replayer/Test Hub V3, and rerun the canonical 1 m at 0.15 m/s live acceptance.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-06T16:08:35Z",
+  "status": "ACTIVE",
+  "task_id": "v3_pwm_continuity_capture_live_20260906",
+  "task_mode": "CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 3,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-06T16:11:11Z",
+  "workflow_evidence": {
+    "audit_sha256": "c932721da417f8958071cd150f834f98d3a8150a8fdd53c9941939f3135120ce",
+    "candidate_fingerprint": "30e0a06537f654e15b0adb06acab74a2c44b90fd2bb666268449c2d5cad13534",
+    "contract_fingerprint": "b6337e4b44938c23f5c3fe74f15229f85d03d2e836c97d1f4c951764aabe7205",
+    "diff_sha256": "8157ef917b695f8eb61852904c3abe3a8b513cbefed368e5ae6d23dbdcb5c7d4",
+    "path": "runtime/agent_workspaces/v3_pwm_continuity_capture_live_20260906/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "606e160c3b4cfd061190979449e897d0a472af3b92cc169633e58ca810563f78"
+  },
+  "workspace": {
+    "base_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+    "base_manifest_path": "runtime/agent_workspaces/v3_pwm_continuity_capture_live_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "42abef009663198132c6bdad156cd29c86e2b5873bc662ae42dfdedafe03c3a4",
+    "path": "runtime/agent_workspaces/v3_pwm_continuity_capture_live_20260906/tree",
+    "reseal": {
+      "audit_sha256": "c932721da417f8958071cd150f834f98d3a8150a8fdd53c9941939f3135120ce",
+      "candidate_fingerprint": "30e0a06537f654e15b0adb06acab74a2c44b90fd2bb666268449c2d5cad13534",
+      "diff_sha256": "8157ef917b695f8eb61852904c3abe3a8b513cbefed368e5ae6d23dbdcb5c7d4",
+      "path": "runtime/agent_workspaces/v3_pwm_continuity_capture_live_20260906/meta/reseal.json",
+      "resealed_at_utc": "2026-09-06T16:15:09Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "67f08f0f676ab3418c91ed0e731b447e9078ef5b1dc901a9ea97306c3ef693d2",
+      "state": "READY",
+      "task_id": "v3_pwm_continuity_capture_live_20260906"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}

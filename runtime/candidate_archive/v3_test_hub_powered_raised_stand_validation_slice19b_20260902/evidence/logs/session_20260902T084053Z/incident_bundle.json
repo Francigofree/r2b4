@@ -1,0 +1,94 @@
+{
+  "artifacts": [
+    "logs/session_20260902T084053Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json",
+    "logs/session_20260902T084053Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+    "logs/session_20260902T084053Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json"
+  ],
+  "command": {
+    "return_code": 0,
+    "stderr_tail": "",
+    "stdout_tail": "      },\n      {\n        \"sequence\": 3265,\n        \"monotonic_ns\": 4784784923496,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3266,\n        \"monotonic_ns\": 4784784927570,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3267,\n        \"monotonic_ns\": 4784784931514,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3268,\n        \"monotonic_ns\": 4784784935644,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3269,\n        \"monotonic_ns\": 4784787000347,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3270,\n        \"monotonic_ns\": 4784787004699,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3271,\n        \"monotonic_ns\": 4784787008532,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3272,\n        \"monotonic_ns\": 4784787012477,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 3273,\n        \"monotonic_ns\": 4784887348444,\n        \"operation\": \"gpiochip_close\",\n        \"handle\": 2,\n        \"result\": 0,\n        \"ok\": true\n      }\n    ]\n  },\n  \"post_close_pins\": {\n    \"status\": \"PASS\",\n    \"ok\": true,\n    \"command\": [\n      \"/usr/bin/pinctrl\",\n      \"get\",\n      \"12,13,18,19\"\n    ],\n    \"return_code\": 0,\n    \"pins\": {\n      \"12\": {\n        \"raw\": \"12: op dl pd | lo // GPIO12 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"13\": {\n        \"raw\": \"13: op dl pd | lo // GPIO13 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"18\": {\n        \"raw\": \"18: op dl pd | lo // GPIO18 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"19\": {\n        \"raw\": \"19: op dl pd | lo // GPIO19 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      }\n    },\n    \"errors\": []\n  },\n  \"final_lifecycle\": \"IDLE\",\n  \"final_lifecycle_basis\": \"canonical finite runner returned RUN_OK after the observed post-window IDLE tick; L12 cancelled active PWM, held two verified LOW readbacks for at least 2 ms, closed the GPIO handle, and pinctrl still observed all four pins output-low\",\n  \"artifact_path\": \"logs/session_20260902T084053Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json\"\n}",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9761,
+        "pid": 9761,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-02T08:41:16Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-02T08:40:53Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260902T083758Z/latest_human_observed_1x1m_validation.json",
+    "required": false
+  },
+  "preflight": {
+    "errors": [],
+    "ok": true,
+    "stdout_tail": "      \"raw_scan_latest_age_s\": 5.522995136000645,\n      \"raw_scan_rate_hz\": 9.934571014655985,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 42,\n      \"stale_result_drops\": 0\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 258\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.004363323129985824,\n        0.007635815477475192\n      ],\n      \"yaw_rad\": [\n        -0.11671889372712078,\n        -0.11671889372712078\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        155706158.0\n      ],\n      \"captured_minus_tick_ns\": [\n        -122173620.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.9320946080833049\n      ]\n    },\n    \"lidar_pose\": {\n      \"captured_minus_tick_ns\": [\n        -122173620.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.4065865566217867,\n        0.9320946080833049\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        -0.012308394798880792,\n        0.00375\n      ],\n      \"y_m\": [\n        -0.003015765142487036,\n        0.00923725774942348\n      ],\n      \"yaw_rad\": [\n        -0.13305991164841569,\n        -0.09887203265727251\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 109,\n      \"OK\": 191\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+  },
+  "preflight_pose_reset": {},
+  "primary_failure": "PASS",
+  "profile": "v3_native_raised_stand_bounded",
+  "reason": "scenario completed",
+  "run_tag": "hub_v3_native_raised_stand_bounded_20260902T084053Z",
+  "status": "PASS",
+  "warning_summary": {},
+  "warnings": []
+}

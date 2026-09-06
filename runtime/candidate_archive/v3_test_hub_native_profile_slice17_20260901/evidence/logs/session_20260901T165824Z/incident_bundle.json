@@ -1,0 +1,93 @@
+{
+  "artifacts": [
+    "logs/session_20260901T165824Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json",
+    "logs/session_20260901T165824Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight.json"
+  ],
+  "command": {
+    "return_code": 1,
+    "stderr_tail": "",
+    "stdout_tail": "        {\n          \"device_id\": \"LIDAR_LOCALIZATION\",\n          \"state\": \"OK\",\n          \"reason\": \"None\"\n        }\n      ],\n      \"estimate\": {\n        \"x_m\": 0.001032430073296266,\n        \"y_m\": 0.0021374396691138916,\n        \"yaw_rad\": -0.0005147629467745332,\n        \"v_mps\": 1.752575560391469e-09,\n        \"omega_rad_s\": -5.6538308435511106e-05\n      }\n    },\n    \"first_fault\": {\n      \"tick_id\": 201,\n      \"monotonic_ns\": 6003333791791,\n      \"fault_layer\": \"L11\",\n      \"safety_decision\": \"FAULT\",\n      \"safety_reason\": \"L11_ERROR\",\n      \"enabled\": false,\n      \"left_output\": 0.0,\n      \"right_output\": 0.0,\n      \"source_health\": [\n        {\n          \"device_id\": \"WHEEL_ENCODERS\",\n          \"state\": \"DEGRADED\",\n          \"reason\": \"ENCODER_LOW_TRUST\"\n        },\n        {\n          \"device_id\": \"BNO055_IMU\",\n          \"state\": \"OK\",\n          \"reason\": \"None\"\n        },\n        {\n          \"device_id\": \"LIDAR_LOCALIZATION\",\n          \"state\": \"OK\",\n          \"reason\": \"None\"\n        }\n      ],\n      \"estimate\": {\n        \"x_m\": 0.001032430104283594,\n        \"y_m\": 0.0021374396690421907,\n        \"yaw_rad\": -0.0005480613465812193,\n        \"v_mps\": 4.98393619922759e-10,\n        \"omega_rad_s\": -5.874506756027115e-05\n      }\n    },\n    \"last_tick\": {\n      \"tick_id\": 201,\n      \"monotonic_ns\": 6003333791791,\n      \"fault_layer\": \"L11\",\n      \"safety_decision\": \"FAULT\",\n      \"safety_reason\": \"L11_ERROR\",\n      \"enabled\": false,\n      \"left_output\": 0.0,\n      \"right_output\": 0.0,\n      \"source_health\": [\n        {\n          \"device_id\": \"WHEEL_ENCODERS\",\n          \"state\": \"DEGRADED\",\n          \"reason\": \"ENCODER_LOW_TRUST\"\n        },\n        {\n          \"device_id\": \"BNO055_IMU\",\n          \"state\": \"OK\",\n          \"reason\": \"None\"\n        },\n        {\n          \"device_id\": \"LIDAR_LOCALIZATION\",\n          \"state\": \"OK\",\n          \"reason\": \"None\"\n        }\n      ],\n      \"estimate\": {\n        \"x_m\": 0.001032430104283594,\n        \"y_m\": 0.0021374396690421907,\n        \"yaw_rad\": -0.0005480613465812193,\n        \"v_mps\": 4.98393619922759e-10,\n        \"omega_rad_s\": -5.874506756027115e-05\n      }\n    }\n  },\n  \"motor_gpio\": {\n    \"expected_pins\": [\n      12,\n      13,\n      18,\n      19\n    ],\n    \"opened_handle_count\": 1,\n    \"claimed_pins\": [\n      12,\n      13,\n      18,\n      19\n    ],\n    \"pwm_write_count\": 820,\n    \"nonzero_pwm_write_count\": 4,\n    \"final_pwm_by_pin\": {\n      \"12\": 0.0,\n      \"13\": 0.0,\n      \"18\": 0.0,\n      \"19\": 0.0\n    },\n    \"maximum_abs_pwm_by_pin\": {\n      \"12\": 100.0,\n      \"13\": 80.13160227075987,\n      \"18\": 80.48760227075987,\n      \"19\": 100.0\n    },\n    \"all_expected_pins_claimed\": true,\n    \"all_final_pwm_zero\": true,\n    \"gpio_closed_after_final_pwm_null\": true,\n    \"event_count\": 826\n  },\n  \"final_lifecycle\": \"FAULT_OR_INTERRUPTED\",\n  \"final_lifecycle_basis\": \"canonical finite runner returned RUN_OK after the observed post-window IDLE tick; L12 then wrote zero to all four pins and closed the GPIO handle\",\n  \"artifact_path\": \"logs/session_20260901T165824Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json\"\n}",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9894,
+        "pid": 9894,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-01T16:58:48Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-01T16:58:24Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260901T165824Z/latest_human_observed_1x1m_validation.json",
+    "required": false
+  },
+  "preflight": {
+    "errors": [],
+    "ok": true,
+    "stdout_tail": "      \"raw_scan_latest_age_s\": 5.637006077000478,\n      \"raw_scan_rate_hz\": 9.947130899820982,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 41,\n      \"stale_result_drops\": 2\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 260\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.00545415391248228,\n        0.004363323129985824\n      ],\n      \"yaw_rad\": [\n        -0.001090830782496456,\n        -0.001090830782496456\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        357772333.0\n      ],\n      \"captured_minus_tick_ns\": [\n        -322801510.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.8921991788340035\n      ]\n    },\n    \"lidar_pose\": {\n      \"captured_minus_tick_ns\": [\n        -202764049.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.36071473049287933,\n        0.8921991788340035\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        -0.0036210417376546723,\n        0.008055772943730234\n      ],\n      \"y_m\": [\n        -1.4853018689228636e-10,\n        1.360932360434794e-09\n      ],\n      \"yaw_rad\": [\n        -0.017182009521450325,\n        0.01578467372523651\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 115,\n      \"OK\": 185\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+  },
+  "preflight_pose_reset": {},
+  "primary_failure": "TEST_FAIL",
+  "profile": "v3_native_raised_stand_bounded",
+  "reason": "scenario return_code=1",
+  "run_tag": "hub_v3_native_raised_stand_bounded_20260901T165824Z",
+  "status": "FAIL",
+  "warning_summary": {},
+  "warnings": []
+}

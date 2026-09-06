@@ -1,0 +1,214 @@
+{
+  "blocked_legacy_pivot_path_samples": 0,
+  "direct_track_reference_samples": 0,
+  "duration_s": 61.679,
+  "emergency_stop_events": 0,
+  "endpoint_heading_metrics": {
+    "auxiliary_changes_deg": {
+      "imu_heading": -211.5
+    },
+    "changes_deg": {
+      "ekf_pose": 211.08459397240853,
+      "imu_gyro": 215.07398575099216,
+      "lidar": 212.79753753210406
+    },
+    "deduplicated_sample_count": 370,
+    "max_pair_disagreement_deg": 3.989391778583638,
+    "mode": "relative_boot_frame_heading_change"
+  },
+  "endpoint_heading_spread_deg": 3.989,
+  "fail_reasons": [
+    "motion_observed",
+    "linear_command_fidelity",
+    "angular_command_fidelity",
+    "wheel_tracking_error"
+  ],
+  "forbidden_path_samples": 0,
+  "local_navigation_samples": 490,
+  "local_segment_samples": 490,
+  "localization_contradiction_samples": 0,
+  "m3_artifact_finalize": {
+    "incident": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_minoseg_incident.json",
+    "ok": true,
+    "result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_minoseg.json",
+    "samples": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_minoseg_samples.jsonl",
+    "status": "FAIL",
+    "summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_minoseg_summary.json"
+  },
+  "m3_track_execution_samples": 115,
+  "m5_completed_waypoints": 1,
+  "m5_full_stack_samples": 502,
+  "m5_goal_event_counts": {
+    "initial_goal": 42,
+    "local_path_blocked": 410,
+    "waypoint_reached": 50
+  },
+  "m5_goal_switch_count": 3,
+  "m5_goal_switch_ratio": 0.00599,
+  "m5_local_path_segment_samples": 502,
+  "m5_replan_count": 2,
+  "m5_route_selector_samples": 502,
+  "m5_start_environment": {
+    "front_m": 1.8213,
+    "left_clearance_m": 0.902,
+    "min_clearance_m": 0.902,
+    "pose": {
+      "theta": 0.0006427141621623278,
+      "theta_deg": 0.03682480892518817,
+      "x": 0.004226541215927496,
+      "y": -0.0024424626019354514
+    },
+    "rear_clearance_m": 1.1663,
+    "right_clearance_m": 0.9475
+  },
+  "m5_uncontrolled_reverse_samples": 0,
+  "m5_unique_goal_count": 4,
+  "m5_visited_cell_count": 5,
+  "median_actual_commanded_angular_ratio": null,
+  "median_actual_commanded_linear_ratio": null,
+  "min_front_clearance_m": 0.427,
+  "motion_phase_metrics": {
+    "episodes": [
+      {
+        "duration_s": 0.1221,
+        "phase": "idle_or_unclassified",
+        "sample_count": 1,
+        "start_ts": 1787771887.157443
+      },
+      {
+        "duration_s": 1.8312,
+        "phase": "arc_entry",
+        "sample_count": 15,
+        "start_ts": 1787771887.279528
+      },
+      {
+        "duration_s": 0.489,
+        "phase": "arc_stable",
+        "sample_count": 4,
+        "start_ts": 1787771889.110697
+      },
+      {
+        "duration_s": 1.4662,
+        "phase": "straight_stable",
+        "sample_count": 12,
+        "start_ts": 1787771889.599738
+      },
+      {
+        "duration_s": 0.367,
+        "phase": "obstacle_tangent_arc",
+        "sample_count": 3,
+        "start_ts": 1787771891.065952
+      },
+      {
+        "duration_s": 0.3666,
+        "phase": "arc_stable",
+        "sample_count": 3,
+        "start_ts": 1787771891.432944
+      },
+      {
+        "duration_s": 2.8198,
+        "phase": "obstacle_tangent_arc",
+        "sample_count": 23,
+        "start_ts": 1787771891.79957
+      },
+      {
+        "duration_s": 0.3669,
+        "phase": "room_cruise_hold",
+        "sample_count": 3,
+        "start_ts": 1787771894.619392
+      },
+      {
+        "duration_s": 0.3673,
+        "phase": "room_cruise_reverse_arc",
+        "sample_count": 3,
+        "start_ts": 1787771894.986277
+      },
+      {
+        "duration_s": 2.4534,
+        "phase": "room_cruise_stuck_pivot",
+        "sample_count": 20,
+        "start_ts": 1787771895.353588
+      },
+      {
+        "duration_s": 0.7356,
+        "phase": "room_cruise_hold",
+        "sample_count": 6,
+        "start_ts": 1787771897.806983
+      },
+      {
+        "duration_s": 2.58,
+        "phase": "room_cruise_stuck_pivot",
+        "sample_count": 21,
+        "start_ts": 1787771898.54256
+      },
+      {
+        "duration_s": 0.8555,
+        "phase": "room_cruise_hold",
+        "sample_count": 7,
+        "start_ts": 1787771901.122558
+      },
+      {
+        "duration_s": 1.3553,
+        "phase": "room_cruise_stuck_pivot",
+        "sample_count": 11,
+        "start_ts": 1787771901.978094
+      },
+      {
+        "duration_s": 44.1047,
+        "phase": "room_cruise_hold",
+        "sample_count": 359,
+        "start_ts": 1787771903.333385
+      },
+      {
+        "duration_s": 1.3405,
+        "phase": "idle_or_unclassified",
+        "sample_count": 12,
+        "start_ts": 1787771947.438082
+      }
+    ],
+    "phase_max_episode_s": {
+      "arc_entry": 1.8312,
+      "arc_stable": 0.489,
+      "idle_or_unclassified": 1.3405,
+      "obstacle_tangent_arc": 2.8198,
+      "room_cruise_hold": 44.1047,
+      "room_cruise_reverse_arc": 0.3673,
+      "room_cruise_stuck_pivot": 2.58,
+      "straight_stable": 1.4662
+    },
+    "phase_sample_counts": {
+      "arc_entry": 15,
+      "arc_stable": 7,
+      "idle_or_unclassified": 13,
+      "obstacle_tangent_arc": 26,
+      "room_cruise_hold": 375,
+      "room_cruise_reverse_arc": 3,
+      "room_cruise_stuck_pivot": 52,
+      "straight_stable": 12
+    },
+    "phase_total_s": {
+      "arc_entry": 1.8312,
+      "arc_stable": 0.8556,
+      "idle_or_unclassified": 1.4626,
+      "obstacle_tangent_arc": 3.1868,
+      "room_cruise_hold": 46.0627,
+      "room_cruise_reverse_arc": 0.3673,
+      "room_cruise_stuck_pivot": 6.3887,
+      "straight_stable": 1.4662
+    }
+  },
+  "omega_step_p95_rad_s": 0.0,
+  "progress_m": 1.3733,
+  "pwm_sign_oscillations": 0,
+  "pwm_step_p95": 0.0288,
+  "rolling_local_map_samples": 502,
+  "room_cruise_idle_confirmed": true,
+  "room_cruise_idle_required_samples": 12,
+  "room_cruise_idle_samples": 12,
+  "room_cruise_v2_samples": 490,
+  "sample_count": 503,
+  "status": "FAIL",
+  "unexplained_pwm_zero_samples": 0,
+  "v_step_p95_mps": 0.0,
+  "wheel_tracking_error_p90_mps": 0.136
+}

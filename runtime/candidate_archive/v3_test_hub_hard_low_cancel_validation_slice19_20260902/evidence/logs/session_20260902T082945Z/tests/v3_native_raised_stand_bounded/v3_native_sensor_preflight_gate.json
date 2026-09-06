@@ -1,0 +1,178 @@
+{
+  "all_commits_zero": true,
+  "artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json",
+  "attempt_count": 2,
+  "attempts": [
+    {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+      "attempt": 1,
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_healthy_window_too_short"
+      ],
+      "fault_tick_count": 0,
+      "healthy_tick_count": 0,
+      "l3_estimate_count": 300,
+      "return_code": 1,
+      "status": "FAIL",
+      "tick_count": 300
+    },
+    {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json",
+      "attempt": 2,
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_healthy_window_too_short"
+      ],
+      "fault_tick_count": 0,
+      "healthy_tick_count": 0,
+      "l3_estimate_count": 300,
+      "return_code": 1,
+      "status": "FAIL",
+      "tick_count": 300
+    }
+  ],
+  "errors": [
+    "native_sensor_command_failed",
+    "native_sensor_measurement_not_pass",
+    "native_sensor_healthy_window_too_short"
+  ],
+  "fault_tick_count": 0,
+  "first_estimate": {
+    "omega_rad_s": -0.003272492347489368,
+    "tick_id": 0,
+    "v_mps": 0.0,
+    "x_m": 0.0,
+    "y_m": 0.0,
+    "yaw_rad": 0.0010908307824968552
+  },
+  "healthy_tick_count": 0,
+  "hub_gate": {
+    "all_commits_zero": true,
+    "fault_tick_count": 0,
+    "healthy_tick_count": 0,
+    "l3_estimate_count": 300,
+    "measured_tick_count": 300,
+    "minimum_healthy_tick_count": 1,
+    "required_tick_count": 300,
+    "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+  },
+  "l3_estimate_count": 300,
+  "last_estimate": {
+    "omega_rad_s": -0.0010632786149663961,
+    "tick_id": 299,
+    "v_mps": 0.0,
+    "x_m": 0.0,
+    "y_m": 0.0,
+    "yaw_rad": 0.0010943996653038142
+  },
+  "lidar_diagnostics": {
+    "last_result": null,
+    "runtime_status": {
+      "driver_connected": false,
+      "health": "STALE",
+      "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+      "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+      "matcher_latency_ms_latest": 0.0,
+      "matcher_process_errors": 0,
+      "matcher_processed_scans": 0,
+      "matcher_transport": "process_latest_only",
+      "queue_drops": 0,
+      "raw_scan_latest_age_s": Infinity,
+      "raw_scan_rate_hz": 0.0,
+      "result_queue_drops": 0,
+      "running": false,
+      "scan_seq": 0,
+      "stale_result_drops": 0
+    }
+  },
+  "measurement_artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json",
+  "ok": false,
+  "operator_stopped": false,
+  "rejected_counts": {
+    "DUPLICATE": 299
+  },
+  "sample_ranges": {
+    "ekf_heading": {
+      "calibration": [
+        0.0,
+        0.0
+      ],
+      "captured_minus_tick_ns": [
+        0.0,
+        0.0
+      ],
+      "confidence": [
+        0.0,
+        0.0
+      ],
+      "omega_calibration": [
+        3.0,
+        3.0
+      ],
+      "omega_confidence": [
+        1.0,
+        1.0
+      ],
+      "omega_rad_s": [
+        -0.004363323129985824,
+        0.004363323129985824
+      ],
+      "yaw_rad": [
+        0.0010908307824968552,
+        0.0010908307824968552
+      ]
+    },
+    "lidar_health": {
+      "age_ns": [
+        0.0,
+        0.0
+      ],
+      "captured_minus_tick_ns": [
+        0.0,
+        0.0
+      ],
+      "confidence": [
+        0.0,
+        0.0
+      ]
+    },
+    "wheel_velocity": {
+      "captured_minus_tick_ns": [
+        0.0,
+        0.0
+      ],
+      "left_mps": [
+        0.0,
+        0.0
+      ],
+      "right_mps": [
+        0.0,
+        0.0
+      ],
+      "trust": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+  "source_state_counts": {
+    "BNO055_IMU": {
+      "OK": 300
+    },
+    "LIDAR_LOCALIZATION": {
+      "DEGRADED": 300
+    },
+    "WHEEL_ENCODERS": {
+      "DEGRADED": 1,
+      "OK": 299
+    }
+  },
+  "status": "FAIL",
+  "tick_count": 300
+}

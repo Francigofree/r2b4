@@ -1,0 +1,27 @@
+[21:17:51] [INFO] === PROJECT ALBA - RPi5 OPTIMALIZÁLT VEZÉRLŐ (v2.0 Startup Pipeline) ===
+[21:17:51] [INFO] [STARTUP] BOOT
+[21:17:51] [INFO] [STARTUP] Runtime: /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime, IMU provider: BNO055 device-managed
+[21:17:51] [INFO] [STARTUP] HARDWARE_DISCOVERY
+[21:17:52] [INFO] [STARTUP] IMU: True (bno055), Motor: True, LIDAR: True, Kamera: True
+[21:17:52] [INFO] [STARTUP] PERIPHERAL_INIT
+[21:17:53] [INFO] [STARTUP] Perifériák inicializálva
+[21:17:53] [INFO] [STARTUP] SENSOR_STABILIZATION
+[21:17:56] [INFO] [STARTUP] Szenzor stabilizáció kész
+[21:17:56] [INFO] [STARTUP] CALIBRATION
+[21:17:58] [INFO] [STARTUP] BNO055 IMU device-managed kalibráció ellenőrizve
+[21:17:58] [INFO] [STARTUP] Encoder stream ready (wait=0.000s, age=1.7ms)
+[21:17:58] [INFO] [STARTUP] CALIBRATION_COMPLETE
+[21:17:58] [INFO] [STARTUP] BASELINE_CAPTURE
+[21:17:58] [INFO] [STARTUP] Baseline rögzítve
+[21:17:58] [INFO] [STARTUP] SAFETY_VALIDATION
+[21:17:58] [INFO] [STARTUP] Biztonsági ellenőrzés OK
+[21:17:58] [INFO] [STARTUP] CONTROL_ARMED
+[21:17:58] [INFO] [SpeedLimits] mode=UNIFIED v_max=0.30 w_max=1.68 source=motion_profiles.UNIFIED
+[21:17:58] [INFO] ALBA CORE (Deterministic) Initialized.
+[21:17:58] [INFO] [ODOM] LIDAR_FIRST mode enabled (config: {'enabled': True, 'max_scan_age_s': 0.25, 'min_confidence': 0.2, 'max_delta_m': 0.65, 'max_delta_rad': 0.65, 'r_scale_by_confidence': True, 'jump_gate_max_speed_mps': 1.1, 'jump_gate_max_yaw_rate_rad_s': 1.6, 'jump_gate_dt_cap_s': 1.0, 'relocalization_jump_multiplier': 3.0, 'relocalization_max_delta_m': 2.0, 'relocalization_max_delta_rad': 1.8}, encoder_pose_fusion=True)
+[21:17:58] [INFO] [stream_writer] GUI stream író szál indítva (Kamera BE → stream_frame.jpg).
+[21:17:58] [INFO] [STARTUP] Control armed – EKF, PID, watchdog aktiv
+[21:17:58] [INFO] [STARTUP] READY – rendszer indítás kész
+[21:17:59] [INFO] Pozíció atomikusan nullázva. generation=1
+[21:19:12] [ERROR] [!!!] VÉSZMEGÁLLÍTÁS AKTIVÁLVA (GUI_EMERGENCY_STOP) [!!!]
+[21:19:18] [OK] Minden hardver biztonságosan leállítva.

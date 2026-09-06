@@ -1,266 +1,56 @@
 {
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
-  "candidate_audit": {
-    "audit_path": "runtime/agent_workspaces/v3_live_1m_015_acceptance_20260906/meta/audit.json",
-    "audit_sha256": "ebb8df6aca9bb963a8b35e28bb7824b031319371a9d59760f03962f31d4a5c76",
-    "audited_at_utc": "2026-09-06T14:17:01Z",
-    "base_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
-    "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
-    "canonical_drift": [],
-    "canonical_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
-    "changed_files": [],
-    "diff_path": "runtime/agent_workspaces/v3_live_1m_015_acceptance_20260906/meta/diff.json",
-    "diff_sha256": "930d72981e833ddaf7de3c855d46d5630cfb5ce7d419b44491b3ddb85f4f2912",
-    "protected_infrastructure_changes": [],
-    "schema": "R2B4_CANDIDATE_AUDIT_V1",
-    "status": "PASS",
-    "task_id": "v3_live_1m_015_acceptance_20260906",
-    "task_mode": "CHANGE",
-    "unexpected_changes": []
-  },
   "changed_files": [],
-  "completed_at_utc": "2026-09-06T14:17:01Z",
   "files": [
     {
-      "after": {
-        "exists": true,
-        "sha256": "b1ced46d944b89d1cc868fd057791c9f0fe84891077119be9b8fee8d0cbee71a",
-        "size_bytes": 210
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "b1ced46d944b89d1cc868fd057791c9f0fe84891077119be9b8fee8d0cbee71a",
-        "size_bytes": 210
+        "sha256": "9ff360ec7ab61e710cd53b1af3701a2153f5f5fed26e0c83a8aa1598e6a2fc74",
+        "size_bytes": 24670
       },
-      "changed": false,
-      "path": "conf/fizika.json"
+      "changed": null,
+      "path": "tests/test_v3_counter_encoder_backend.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "daef0e05546ef9b83a1104f823eb9e65b8ae0e8ca971db13e3b69f4f72f827c2",
-        "size_bytes": 1030
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "daef0e05546ef9b83a1104f823eb9e65b8ae0e8ca971db13e3b69f4f72f827c2",
-        "size_bytes": 1030
+        "sha256": "0da5229648b14e8fbdfaf2c54214d05f12ac975ee7430920c4a8d494120e088e",
+        "size_bytes": 7133
       },
-      "changed": false,
-      "path": "conf/hardver.json"
+      "changed": null,
+      "path": "tests/test_v3_gpio_encoder_source.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "986eb56fc42d1906e8d6c63b1bbb567992732684085c8894ef6a2ba18fc13b25",
-        "size_bytes": 4221
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "986eb56fc42d1906e8d6c63b1bbb567992732684085c8894ef6a2ba18fc13b25",
-        "size_bytes": 4221
+        "sha256": "93559ea122365f00938f90ceee85f2e2fd02f4a5a5041664e04c872c8bb4708a",
+        "size_bytes": 27521
       },
-      "changed": false,
-      "path": "conf/speed_map.json"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "a308f54ef2361dc100068e350af2b190024f40963b24679adca1c197bc4f9887",
-        "size_bytes": 15948
-      },
-      "before": {
-        "exists": true,
-        "sha256": "a308f54ef2361dc100068e350af2b190024f40963b24679adca1c197bc4f9887",
-        "size_bytes": 15948
-      },
-      "changed": false,
-      "path": "tests/test_v3_hardware_runtime.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
-        "size_bytes": 7753
-      },
-      "before": {
-        "exists": true,
-        "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
-        "size_bytes": 7753
-      },
-      "changed": false,
-      "path": "tests/test_v3_process_runtime.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "8e3ef2048195d371503703f1ffff953713e926ac006616077959ae4441f940ac",
-        "size_bytes": 6009
-      },
-      "before": {
-        "exists": true,
-        "sha256": "8e3ef2048195d371503703f1ffff953713e926ac006616077959ae4441f940ac",
-        "size_bytes": 6009
-      },
-      "changed": false,
-      "path": "tests/test_v3_resident_command.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "88eff9abad8fa551d7f697b0bdce53a18194e8678e933b800c08a76ad81e72d5",
-        "size_bytes": 14316
-      },
-      "before": {
-        "exists": true,
-        "sha256": "88eff9abad8fa551d7f697b0bdce53a18194e8678e933b800c08a76ad81e72d5",
-        "size_bytes": 14316
-      },
-      "changed": false,
-      "path": "tests/test_v3_resident_runtime.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "deed084921c298c9ca9fdc95a54bd7bbb656692379edb3ca397aa56a9aac9823",
-        "size_bytes": 11307
-      },
-      "before": {
-        "exists": true,
-        "sha256": "deed084921c298c9ca9fdc95a54bd7bbb656692379edb3ca397aa56a9aac9823",
-        "size_bytes": 11307
-      },
-      "changed": false,
-      "path": "v3/adapters/gpio_motor.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "48c3fa425bbc3f38a26d048f594a6314ccfc0761dd80332ee0d00e1bfcac3891",
-        "size_bytes": 10150
-      },
-      "before": {
-        "exists": true,
-        "sha256": "48c3fa425bbc3f38a26d048f594a6314ccfc0761dd80332ee0d00e1bfcac3891",
-        "size_bytes": 10150
-      },
-      "changed": false,
-      "path": "v3/adapters/resident_command.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "46928f4f4a2b06ac48beff1c23ef0d4d4088363c701adbc0a17d5a85eb511a97",
-        "size_bytes": 12636
-      },
-      "before": {
-        "exists": true,
-        "sha256": "46928f4f4a2b06ac48beff1c23ef0d4d4088363c701adbc0a17d5a85eb511a97",
-        "size_bytes": 12636
-      },
-      "changed": false,
-      "path": "v3/composition/resident_live_control.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "dc6b56e4e28a94d8092d03dc9cbbef35cf224c069e48229257340fb254f8b559",
-        "size_bytes": 18028
-      },
-      "before": {
-        "exists": true,
-        "sha256": "dc6b56e4e28a94d8092d03dc9cbbef35cf224c069e48229257340fb254f8b559",
-        "size_bytes": 18028
-      },
-      "changed": false,
-      "path": "v3_hardware_runtime.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "63444311b06d9d3fbacdfde5d9f8ce4ef1f711388195b8537a1d593e09c8ffd6",
-        "size_bytes": 18061
-      },
-      "before": {
-        "exists": true,
-        "sha256": "63444311b06d9d3fbacdfde5d9f8ce4ef1f711388195b8537a1d593e09c8ffd6",
-        "size_bytes": 18061
-      },
-      "changed": false,
-      "path": "v3_process_runtime.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "d8573305ca6d02e86ae331806c18d5e1770da2f624fb41062619f05e4c65a636",
-        "size_bytes": 13883
-      },
-      "before": {
-        "exists": true,
-        "sha256": "d8573305ca6d02e86ae331806c18d5e1770da2f624fb41062619f05e4c65a636",
-        "size_bytes": 13883
-      },
-      "changed": false,
-      "path": "v3_runtime.py"
+      "changed": null,
+      "path": "v3/adapters/counter_encoder.py"
     }
   ],
-  "goal": "Execute and evaluate the 1.0 m forward live acceptance at 0.15 m/s through the canonical resident production process and AtomicResidentCommandGateway, with run-scoped status evidence and final safe-low verification.",
-  "promotion_status": "READY",
-  "reason": "Canonical production process live acceptance executed at a 0.15 m/s forward command through AtomicResidentCommandGateway. The run reached 1.0016 m projected forward displacement with no fault or unhealthy-source samples, explicitly stopped at revision 127, observed three consecutive zero STOP ticks, and terminated PASS/SHUTDOWN_SAFE_LOW. Run-scoped evidence: runtime/v3_live_1m_015_acceptance_20260906_result.json.",
+  "goal": "Minimally fix encoder P0 time semantics so a long Python/tick processing interval does not invalidate fresh bounded GPIO edge-history velocity evidence, preserve fail-closed stale rejection without sufficient dual-wheel edge proof, and prove with targeted regressions before repeating canonical live acceptance.",
+  "promotion_status": "NOT_PROMOTED",
+  "reason": "",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-09-06T14:12:02Z",
-  "status": "COMPLETE",
-  "task_id": "v3_live_1m_015_acceptance_20260906",
+  "started_at_utc": "2026-09-06T17:42:10Z",
+  "status": "ACTIVE",
+  "task_id": "v3_encoder_edge_stall_p0_fix_20260906",
   "task_mode": "CHANGE",
-  "test_strategy": {
-    "authoritative_test_count": 2,
-    "default": "TARGETED",
-    "full_regression_reason": null,
-    "full_regression_recorded": false,
-    "full_regression_required": false,
-    "legacy_non_authority_count": 0
-  },
-  "tests": [
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. pytest -q tests/test_v3_resident_command.py tests/test_v3_process_runtime.py tests/test_v3_resident_runtime.py tests/test_v3_hardware_runtime.py",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3_process_runtime --approval native-resident-v3 --command-path runtime/v3_live_1m_015_acceptance_20260906_command.json --status-path runtime/v3_live_1m_015_acceptance_20260906_status.json; AtomicResidentCommandGateway v_mps=0.15 until projected L3 distance >=1.0m; result runtime/v3_live_1m_015_acceptance_20260906_result.json",
-      "status": "PASS"
-    }
-  ],
-  "updated_at_utc": "2026-09-06T14:17:01Z",
-  "workflow_evidence": {
-    "audit_sha256": "ebb8df6aca9bb963a8b35e28bb7824b031319371a9d59760f03962f31d4a5c76",
-    "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
-    "contract_fingerprint": "9866bcdf9540f9d95a61fa869ff5d6607f7bc61493a5affe805d649ae5954b2c",
-    "diff_sha256": "930d72981e833ddaf7de3c855d46d5630cfb5ce7d419b44491b3ddb85f4f2912",
-    "path": "runtime/agent_workspaces/v3_live_1m_015_acceptance_20260906/meta/evidence.json",
-    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
-    "sha256": "a3ac8ae59e524500a09a9780864fd1db979d95dadb9ff53dbab0fb63e63fd497"
-  },
+  "tests": [],
+  "updated_at_utc": "2026-09-06T17:42:10Z",
   "workspace": {
-    "base_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
-    "base_manifest_path": "runtime/agent_workspaces/v3_live_1m_015_acceptance_20260906/meta/base_manifest.json",
-    "base_manifest_sha256": "42abef009663198132c6bdad156cd29c86e2b5873bc662ae42dfdedafe03c3a4",
-    "path": "runtime/agent_workspaces/v3_live_1m_015_acceptance_20260906/tree",
-    "reseal": {
-      "audit_sha256": "ebb8df6aca9bb963a8b35e28bb7824b031319371a9d59760f03962f31d4a5c76",
-      "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
-      "diff_sha256": "930d72981e833ddaf7de3c855d46d5630cfb5ce7d419b44491b3ddb85f4f2912",
-      "path": "runtime/agent_workspaces/v3_live_1m_015_acceptance_20260906/meta/reseal.json",
-      "resealed_at_utc": "2026-09-06T14:17:01Z",
-      "schema": "R2B4_CANDIDATE_RESEAL_V1",
-      "sha256": "df2c77c5b7ac5a3f3a4a13a7c746d5b4b8a55ac9a2f2bad710bca58931db0c5e",
-      "state": "READY",
-      "task_id": "v3_live_1m_015_acceptance_20260906"
-    },
+    "base_fingerprint": "2266dfc1b89aa10c5becaedd586394e25060171d4511fe84ca6fd8c69d61b668",
+    "base_manifest_path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "b3a4d9265c4be1b26f2af6b0aad305de39e6a45445faa3b5ff4f2fc690cc2bf5",
+    "path": "runtime/agent_workspaces/v3_encoder_edge_stall_p0_fix_20260906/tree",
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "READY"
+    "state": "ACTIVE"
   }
 }

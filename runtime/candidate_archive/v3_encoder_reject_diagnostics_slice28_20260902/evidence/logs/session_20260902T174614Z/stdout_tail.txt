@@ -1,0 +1,120 @@
+        "ok": true
+      },
+      {
+        "sequence": 2821,
+        "monotonic_ns": 3041284884681,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 12,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2822,
+        "monotonic_ns": 3041284888681,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 13,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2823,
+        "monotonic_ns": 3041284892348,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 18,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2824,
+        "monotonic_ns": 3041284896070,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 19,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2825,
+        "monotonic_ns": 3041286958244,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 12,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2826,
+        "monotonic_ns": 3041286962410,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 13,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2827,
+        "monotonic_ns": 3041286965984,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 18,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2828,
+        "monotonic_ns": 3041286969540,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 19,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 2829,
+        "monotonic_ns": 3041387524779,
+        "operation": "gpiochip_close",
+        "handle": 2,
+        "result": 0,
+        "ok": true
+      }
+    ]
+  },
+  "post_close_pins": {
+    "status": "PASS",
+    "ok": true,
+    "command": [
+      "/usr/bin/pinctrl",
+      "get",
+      "12,13,18,19"
+    ],
+    "return_code": 0,
+    "pins": {
+      "12": {
+        "raw": "12: op dl pd | lo // GPIO12 = output",
+        "output": true,
+        "drive_low": true
+      },
+      "13": {
+        "raw": "13: op dl pd | lo // GPIO13 = output",
+        "output": true,
+        "drive_low": true
+      },
+      "18": {
+        "raw": "18: op dl pd | lo // GPIO18 = output",
+        "output": true,
+        "drive_low": true
+      },
+      "19": {
+        "raw": "19: op dl pd | lo // GPIO19 = output",
+        "output": true,
+        "drive_low": true
+      }
+    },
+    "errors": []
+  },
+  "final_lifecycle": "SHUTDOWN",
+  "artifact_path": "logs/session_20260902T174614Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json"
+}

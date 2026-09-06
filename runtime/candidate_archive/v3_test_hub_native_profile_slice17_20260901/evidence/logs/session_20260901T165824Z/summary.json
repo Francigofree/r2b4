@@ -1,0 +1,113 @@
+{
+  "artifact_paths": [
+    "logs/session_20260901T165824Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json",
+    "logs/session_20260901T165824Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight.json"
+  ],
+  "artifact_paths_missing": [],
+  "artifact_paths_stale_rejected": [],
+  "description": "Finite native V3 raised-stand validation through the canonical bounded L12 motor writer.",
+  "duration_s": 23.845,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ekf_truth_gate_ok": true,
+  "ended_at_utc": "2026-09-01T16:58:48Z",
+  "family": "v3_native_hardware",
+  "goals": [
+    "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+    "explicit per-run raised-stand approval with no approval embedded in the profile",
+    "one finite 0.04 m/s straight command window through the canonical V3 bounded runtime",
+    "non-zero wheel PWM proof followed by final IDLE and four-pin PWM null",
+    "exclusive native hardware ownership without starting the legacy managed runtime"
+  ],
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9894,
+        "pid": 9894,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "live": true,
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-01T16:58:48Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-01T16:58:24Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260901T165824Z/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "measurement_truth_gate_ok": true,
+  "preflight_ok": true,
+  "preflight_pose_reset": {},
+  "profile": "v3_native_raised_stand_bounded",
+  "requires_preflight": true,
+  "run_dir": "logs/session_20260901T165824Z",
+  "run_tag": "hub_v3_native_raised_stand_bounded_20260901T165824Z",
+  "started_at_utc": "2026-09-01T16:58:24Z",
+  "status": "FAIL",
+  "triage_order": [
+    "summary.json",
+    "incident_bundle.json",
+    "ownership_manifest.json",
+    "stdout_tail.txt",
+    "stderr_tail.txt"
+  ],
+  "verdict": {
+    "primary": "TEST_FAIL",
+    "reason": "scenario return_code=1",
+    "status": "FAIL"
+  },
+  "warning_summary": {},
+  "warnings": []
+}

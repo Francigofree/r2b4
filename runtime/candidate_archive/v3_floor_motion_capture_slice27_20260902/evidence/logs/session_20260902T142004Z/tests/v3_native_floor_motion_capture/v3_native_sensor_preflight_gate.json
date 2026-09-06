@@ -1,0 +1,497 @@
+{
+  "all_commits_zero": true,
+  "artifact_path": "logs/session_20260902T142004Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json",
+  "attempt_count": 2,
+  "attempts": [
+    {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T142004Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "attempt": 1,
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_healthy_window_too_short"
+      ],
+      "fault_tick_count": 0,
+      "healthy_tick_count": 0,
+      "l3_estimate_count": 300,
+      "return_code": 1,
+      "status": "FAIL",
+      "tick_count": 300
+    },
+    {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T142004Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_2.json",
+      "attempt": 2,
+      "errors": [],
+      "fault_tick_count": 0,
+      "healthy_tick_count": 188,
+      "l3_estimate_count": 300,
+      "return_code": 0,
+      "status": "PASS",
+      "tick_count": 300
+    }
+  ],
+  "errors": [],
+  "fault_tick_count": 0,
+  "first_estimate": {
+    "omega_rad_s": 0.001090830782496456,
+    "tick_id": 0,
+    "v_mps": 0.0,
+    "x_m": 0.0,
+    "y_m": 0.0,
+    "yaw_rad": -0.45160394395353276
+  },
+  "healthy_tick_count": 188,
+  "hub_gate": {
+    "all_commits_zero": true,
+    "fault_tick_count": 0,
+    "healthy_tick_count": 188,
+    "l3_estimate_count": 300,
+    "measured_tick_count": 300,
+    "minimum_healthy_tick_count": 1,
+    "required_tick_count": 300,
+    "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+  },
+  "l3_estimate_count": 300,
+  "last_estimate": {
+    "omega_rad_s": 0.00011052947032343677,
+    "tick_id": 299,
+    "v_mps": 5.5414775779880964e-08,
+    "x_m": -0.0003909238452112423,
+    "y_m": 0.0069772576724618,
+    "yaw_rad": -0.4510132986170476
+  },
+  "lidar_diagnostics": {
+    "last_result": {
+      "matcher_result_id": 40,
+      "source_raw_scan_id": 42,
+      "summary": {
+        "avg_left": 1.2318974358974357,
+        "avg_right": 1.1075963114754097,
+        "blocked_back": false,
+        "blocked_front": false,
+        "bounce_dir": 1,
+        "candidate_id": 40,
+        "capture_matcher_evidence": false,
+        "driver_connected": true,
+        "driver_invalid_packet_count": 0,
+        "driver_last_data_age_s": 0.0010335445404052734,
+        "driver_last_data_age_s_max": 0.0026488304138183594,
+        "driver_reconnect_count": 0,
+        "driver_rx_buffer_len": 1,
+        "dtheta": 0.0,
+        "dx": 0.0034819709511417136,
+        "dy": 0.010018776287321982,
+        "final_confidence": 0.27678344060810867,
+        "final_confidence_emitted": 0.27678344060810867,
+        "keyframe_count": 1,
+        "last_lidar_pose": {
+          "theta": -0.45091251280183586,
+          "x": 0.006228872175713794,
+          "y": 0.013597243807673232
+        },
+        "last_lidar_pose_before": {
+          "theta": -0.44383381645022446,
+          "x": -0.0012711278151682527,
+          "y": 0.006097243803594152
+        },
+        "latency_ms": 27.61,
+        "lidar_pose_confidence": 0.27678344060810867,
+        "lidar_pose_theta": -0.45091251280183586,
+        "lidar_pose_x": 0.006228872175713794,
+        "lidar_pose_y": 0.013597243807673232,
+        "local_map_enabled": true,
+        "local_map_generation": 1,
+        "local_map_keyframe_ages_s": [
+          3.811856694999733
+        ],
+        "local_map_keyframe_ids": [
+          1
+        ],
+        "local_map_keyframes": 1,
+        "local_map_points": 96,
+        "localization_integrity_score": 0.35203609058102586,
+        "localization_integrity_state": "OK",
+        "localization_status": "tracking",
+        "loop_closure_applied": false,
+        "loop_closure_delta_m": null,
+        "loop_closure_delta_rad": null,
+        "loop_closure_detected": false,
+        "loop_closure_target_id": null,
+        "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+        "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+        "matcher_budget_ms": 45.0,
+        "matcher_called": true,
+        "matcher_candidates": 227,
+        "matcher_confidence": 0.27678344060810867,
+        "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+        "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+        "matcher_cpu_ms": 27.657889000000104,
+        "matcher_degeneracy_reasons": [],
+        "matcher_degenerate": false,
+        "matcher_integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+        "matcher_latency_max_ms": 51.897203999942576,
+        "matcher_latency_ms": 30.732426999747986,
+        "matcher_latency_p50_ms": 30.56637099962245,
+        "matcher_latency_p95_ms": 32.266621999951894,
+        "matcher_mode": "scan_to_map",
+        "matcher_process_peak_rss_kb": 57696,
+        "matcher_process_pid": 10858,
+        "matcher_process_rss_kb": 58608,
+        "matcher_quality": {
+          "ambiguity_margin": 1.0,
+          "ambiguity_residual_margin_m": null,
+          "basin_candidate_count": 3,
+          "basin_candidates": [
+            {
+              "barrier_rise": 0.0,
+              "barrier_score": 0.0,
+              "basin_id": 1,
+              "distinct": false,
+              "objective_cost": 0.017449263581434987,
+              "pose": {
+                "theta": -0.45091251280183586,
+                "x": 0.016228872175713782,
+                "y": 0.03359724380767323
+              },
+              "prior_cost": 0.0010624999999999996,
+              "rotation_delta_rad": 0.0,
+              "scan_cost": 0.016386763581434986,
+              "seed_pose": {
+                "theta": -0.45091251280183586,
+                "x": -0.07377112782428621,
+                "y": 0.09359724380767323
+              },
+              "translation_delta_m": 0.022360679774997894
+            },
+            {
+              "barrier_rise": 0.0,
+              "barrier_score": 0.0,
+              "basin_id": 2,
+              "distinct": false,
+              "objective_cost": 0.02037929100286781,
+              "pose": {
+                "theta": -0.3909125128018358,
+                "x": 0.006228872175713794,
+                "y": -0.016402756192326767
+              },
+              "prior_cost": 0.0007425000000000003,
+              "rotation_delta_rad": 0.06000000000000005,
+              "scan_cost": 0.01963679100286781,
+              "seed_pose": {
+                "theta": -0.33091251280183576,
+                "x": 0.006228872175713794,
+                "y": 0.013597243807673232
+              },
+              "translation_delta_m": 0.03
+            },
+            {
+              "barrier_rise": 0.0,
+              "barrier_score": 0.0,
+              "basin_id": 3,
+              "distinct": false,
+              "objective_cost": 0.020425789750161297,
+              "pose": {
+                "theta": -0.45091251280183586,
+                "x": -0.043771127824286216,
+                "y": 0.04359724380767323
+              },
+              "prior_cost": 0.0032125,
+              "rotation_delta_rad": 0.0,
+              "scan_cost": 0.017213289750161297,
+              "seed_pose": {
+                "theta": -0.45091251280183586,
+                "x": -0.07377112782428621,
+                "y": 0.013597243807673232
+              },
+              "translation_delta_m": 0.05830951894845301
+            }
+          ],
+          "combined_confidence": 0.27678344060810867,
+          "competitor_barrier_rise": null,
+          "competitor_barrier_score": null,
+          "competitor_basin_id": null,
+          "competitor_objective_cost": null,
+          "competitor_pose": null,
+          "competitor_prior_cost": null,
+          "competitor_rotation_delta_rad": null,
+          "competitor_scan_cost": null,
+          "competitor_stage": null,
+          "competitor_translation_delta_m": null,
+          "confidence": 0.27678344060810867,
+          "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+          "covariance_proxy": {
+            "x_variance_m2": 0.0038959098304957055,
+            "y_variance_m2": 0.0013418144254701162,
+            "yaw_variance_rad2": 0.003602394506914106
+          },
+          "coverage_score": 1.0,
+          "deadline_stage": null,
+          "degeneracy_reasons": [],
+          "degenerate": false,
+          "distinct_basin_count": 0,
+          "effective_max_points": 48,
+          "evaluated_candidates": 227,
+          "fit_quality": 0.35203609058102586,
+          "global_multimodality_score": 0.0,
+          "inlier_count": 23,
+          "inlier_ratio": 0.4791666666666667,
+          "inlier_score": 0.37222222222222223,
+          "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+          "integrity_state": "OK",
+          "localization_integrity_score": 0.35203609058102586,
+          "measurement_confidence": 0.27678344060810867,
+          "measurement_uniqueness_score": 1.0,
+          "normal_observability_score": 1.0,
+          "objective_cost": 0.016606382390398924,
+          "observability_score": 0.7327949747683724,
+          "observability_x": 0.23101150672306148,
+          "observability_y": 0.6707335849997866,
+          "observability_yaw": 0.9993353013087517,
+          "posterior_ambiguity_margin": 1.0,
+          "posterior_residual_margin_m": null,
+          "posterior_uniqueness_score": 1.0,
+          "residual_score": 0.5770135883043016,
+          "robust_rmse_m": 0.12842851081593573,
+          "scan_cost": 0.016493882390398923,
+          "search_complete": true,
+          "sector_coverage": 0.5833333333333334,
+          "seed_prior_cost": 0.00011249999999999998,
+          "stage_evaluations": {
+            "basin_barrier": 9,
+            "basin_offset_axis": 4,
+            "basin_offset_diagonal": 4,
+            "basin_offset_yaw": 2,
+            "basin_refine": 36,
+            "basin_refine_seed": 3,
+            "coarse": 27,
+            "coarse_seed": 1,
+            "fine": 27,
+            "fine_seed": 1,
+            "medium": 27,
+            "medium_seed": 1,
+            "observability": 6,
+            "winner_refine": 79
+          },
+          "timed_out": false,
+          "uniqueness_score": 1.0
+        },
+        "matcher_queue_delay_ms": 2.672423000149138,
+        "matcher_reason": "",
+        "matcher_replay_evidence": null,
+        "matcher_result_id": 40,
+        "matcher_result_timestamp": 7780.835609797,
+        "matcher_runtime_ms": 27.669168000102218,
+        "matcher_seed_pose": {
+          "theta": -0.45091251280183586,
+          "x": 0.006228872175713794,
+          "y": 0.013597243807673232
+        },
+        "matcher_seed_pose_before": {
+          "theta": -0.44383381645022446,
+          "x": -0.0012711278151682527,
+          "y": 0.006097243803594152
+        },
+        "matcher_source_raw_scan_id": 42,
+        "matcher_source_raw_scan_timestamp": 7780.796198094,
+        "matcher_timed_out": false,
+        "matcher_transport": "process_latest_only",
+        "measurement_confidence": 0.27678344060810867,
+        "min_back": 1.0095,
+        "min_dist": 1.3005,
+        "min_dist_narrow": 1.9955,
+        "pose_event_raw_delta_m": null,
+        "pose_event_raw_delta_rad": null,
+        "pose_event_step_limited": false,
+        "pose_ref_available": true,
+        "pose_ref_current": {
+          "theta": -0.450912512801836,
+          "x": -0.001271127824286206,
+          "y": 0.0060972438076732334
+        },
+        "pose_reference_timestamp": 7780.804660683,
+        "pose_update_event": "tracking",
+        "prev_pose_ref": {
+          "theta": -0.44383381645022446,
+          "x": -0.0012711278151682527,
+          "y": 0.006097243803594152
+        },
+        "raw_scan_completed_mono": 7780.796198094,
+        "raw_scan_id": 42,
+        "raw_scan_latest_age_s": 0.0394117030000416,
+        "raw_scan_max_gap_s": 0.10806734200014034,
+        "raw_scan_mono_ts": 7780.796198094,
+        "raw_scan_rate_hz": 9.951072170291347,
+        "raw_scan_started_mono": 7780.796198094,
+        "raw_scan_timestamp": 7780.796198094,
+        "relocalization_attempted": false,
+        "relocalization_reason": "not_attempted",
+        "relocalization_seed_attempts": 0,
+        "relocalization_timed_out": false,
+        "relocalized": false,
+        "scan_count_filtered": 429,
+        "scan_count_raw": 429,
+        "scan_seq": 42,
+        "scan_to_map_seed": {
+          "theta": -0.450912512801836,
+          "x": -0.001271127824286206,
+          "y": 0.0060972438076732334
+        },
+        "slow_path_budget_ms": 120.0,
+        "theta_lidar_raw": -0.45091251280183586,
+        "tracking_backtrack_debt_m": 0.0,
+        "tracking_candidate_pose": {
+          "theta": -0.45091251280183586,
+          "x": 0.006228872175713794,
+          "y": 0.013597243807673232
+        },
+        "tracking_candidate_projection_m": null,
+        "tracking_direction_backtrack_tolerance_m": 0.03,
+        "tracking_direction_checked": false,
+        "tracking_direction_consistent": true,
+        "tracking_direction_reference_source": "",
+        "tracking_direction_rejected": false,
+        "tracking_direction_rejected_total": 0,
+        "tracking_loss_latched": false,
+        "tracking_reacquire_required": 3,
+        "tracking_reacquire_streak": 3,
+        "tracking_ready": true,
+        "tracking_reference_delta_m": null,
+        "tracking_reference_linear_mps": null,
+        "x_lidar_raw": 0.006228872175713794,
+        "y_lidar_raw": 0.013597243807673232,
+        "yaw_convention": "CCW_POSITIVE_LEFT"
+      }
+    },
+    "runtime_status": {
+      "driver_connected": true,
+      "health": "OK",
+      "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+      "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+      "matcher_latency_ms_latest": 30.732426999747986,
+      "matcher_process_errors": 0,
+      "matcher_processed_scans": 41,
+      "matcher_transport": "process_latest_only",
+      "queue_drops": 1,
+      "raw_scan_latest_age_s": 5.36140700299984,
+      "raw_scan_rate_hz": 9.951072170291347,
+      "result_queue_drops": 0,
+      "running": false,
+      "scan_seq": 42,
+      "stale_result_drops": 1
+    }
+  },
+  "measurement_artifact_path": "logs/session_20260902T142004Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_2.json",
+  "ok": true,
+  "operator_stopped": false,
+  "rejected_counts": {
+    "DUPLICATE": 259
+  },
+  "sample_ranges": {
+    "ekf_heading": {
+      "calibration": [
+        0.0,
+        0.0
+      ],
+      "captured_minus_tick_ns": [
+        0.0,
+        0.0
+      ],
+      "confidence": [
+        0.0,
+        0.0
+      ],
+      "omega_calibration": [
+        3.0,
+        3.0
+      ],
+      "omega_confidence": [
+        1.0,
+        1.0
+      ],
+      "omega_rad_s": [
+        -0.00545415391248228,
+        0.004363323129985824
+      ],
+      "yaw_rad": [
+        -0.45160394395353276,
+        -0.45160394395353276
+      ]
+    },
+    "lidar_health": {
+      "age_ns": [
+        0.0,
+        253783616.0
+      ],
+      "captured_minus_tick_ns": [
+        -216572575.0,
+        0.0
+      ],
+      "confidence": [
+        0.0,
+        0.8968712993542723
+      ]
+    },
+    "lidar_pose": {
+      "captured_minus_tick_ns": [
+        -196572991.0,
+        0.0
+      ],
+      "confidence": [
+        0.22206168031541443,
+        0.8968712993542723
+      ],
+      "r_scale": [
+        1.0,
+        1.0
+      ],
+      "x_m": [
+        -0.011777729452810332,
+        0.006228872175713794
+      ],
+      "y_m": [
+        -0.005503870469105122,
+        0.013597243807673232
+      ],
+      "yaw_rad": [
+        -0.4676663121918856,
+        -0.43628844143389056
+      ]
+    },
+    "wheel_velocity": {
+      "captured_minus_tick_ns": [
+        0.0,
+        0.0
+      ],
+      "left_mps": [
+        0.0,
+        0.0
+      ],
+      "right_mps": [
+        0.0,
+        0.0
+      ],
+      "trust": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+  "source_state_counts": {
+    "BNO055_IMU": {
+      "OK": 300
+    },
+    "LIDAR_LOCALIZATION": {
+      "DEGRADED": 112,
+      "OK": 188
+    },
+    "WHEEL_ENCODERS": {
+      "DEGRADED": 1,
+      "OK": 299
+    }
+  },
+  "status": "PASS",
+  "tick_count": 300
+}

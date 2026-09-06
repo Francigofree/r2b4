@@ -1,0 +1,6151 @@
+{
+  "archive": {
+    "enabled": false,
+    "post_check": null,
+    "post_run": null,
+    "pre_check": null,
+    "pre_run": null,
+    "requested": true,
+    "skipped_reason": "disabled_during_live_run_for_watchdog_safety"
+  },
+  "duration_s": 22.857,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ended_at_utc": "2026-09-02T17:45:25Z",
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 6019,
+        "pid": 6019,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "incident": {
+    "artifacts": [
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json"
+    ],
+    "command": {
+      "return_code": 1,
+      "stderr_tail": "",
+      "stdout_tail": "        \"ok\": true\n      },\n      {\n        \"sequence\": 1949,\n        \"monotonic_ns\": 2968753553422,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1950,\n        \"monotonic_ns\": 2968753556737,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1951,\n        \"monotonic_ns\": 2968753559848,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1952,\n        \"monotonic_ns\": 2968753563237,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1953,\n        \"monotonic_ns\": 2968755630022,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1954,\n        \"monotonic_ns\": 2968755633818,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1955,\n        \"monotonic_ns\": 2968755637059,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1956,\n        \"monotonic_ns\": 2968755640188,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1957,\n        \"monotonic_ns\": 2968855916722,\n        \"operation\": \"gpiochip_close\",\n        \"handle\": 2,\n        \"result\": 0,\n        \"ok\": true\n      }\n    ]\n  },\n  \"post_close_pins\": {\n    \"status\": \"PASS\",\n    \"ok\": true,\n    \"command\": [\n      \"/usr/bin/pinctrl\",\n      \"get\",\n      \"12,13,18,19\"\n    ],\n    \"return_code\": 0,\n    \"pins\": {\n      \"12\": {\n        \"raw\": \"12: op dl pd | lo // GPIO12 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"13\": {\n        \"raw\": \"13: op dl pd | lo // GPIO13 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"18\": {\n        \"raw\": \"18: op dl pd | lo // GPIO18 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"19\": {\n        \"raw\": \"19: op dl pd | lo // GPIO19 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      }\n    },\n    \"errors\": []\n  },\n  \"final_lifecycle\": \"FAULT_OR_INTERRUPTED\",\n  \"artifact_path\": \"logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json\"\n}",
+      "timed_out": false
+    },
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 6019,
+          "pid": 6019,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-02T17:45:25Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-02T17:45:02Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/session_20260902T174502Z/latest_human_observed_1x1m_validation.json",
+      "required": false
+    },
+    "preflight": {
+      "errors": [],
+      "ok": true,
+      "stdout_tail": "        0.9081913565786354\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        -0.00299114935148626,\n        0.00375\n      ],\n      \"y_m\": [\n        -0.008035506687605398,\n        0.0037500000043945263\n      ],\n      \"yaw_rad\": [\n        -0.014743133104395678,\n        0.017023974045783596\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"computed_left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"computed_right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"left_invalid_alert_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"left_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"maximum_abs_velocity_mps\": [\n        1.5,\n        1.5\n      ],\n      \"raw_left_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"raw_right_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"right_invalid_alert_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"sample_interval_ns\": [\n        6347077.0,\n        38070393.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 108,\n      \"OK\": 192\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+    },
+    "preflight_pose_reset": {},
+    "primary_failure": "TEST_FAIL",
+    "profile": "v3_native_floor_motion_capture",
+    "reason": "scenario return_code=1",
+    "run_tag": "hub_v3_native_floor_motion_capture_20260902T174502Z",
+    "status": "FAIL",
+    "warning_summary": {},
+    "warnings": []
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-02T17:45:25Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-02T17:45:02Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260902T174502Z/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "preflight": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/tools/v3_sensor_measurement.py",
+      "--ticks",
+      "300",
+      "--output",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json"
+    ],
+    "ok": true,
+    "payload": {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json",
+      "attempt_count": 1,
+      "attempts": [
+        {
+          "all_commits_zero": true,
+          "artifact_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+          "attempt": 1,
+          "errors": [],
+          "fault_tick_count": 0,
+          "healthy_tick_count": 192,
+          "l3_estimate_count": 300,
+          "return_code": 0,
+          "status": "PASS",
+          "tick_count": 300
+        }
+      ],
+      "errors": [],
+      "fault_tick_count": 0,
+      "first_estimate": {
+        "omega_rad_s": 0.001090830782496456,
+        "tick_id": 0,
+        "v_mps": 0.0,
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.0010908307824968552
+      },
+      "healthy_tick_count": 192,
+      "hub_gate": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "healthy_tick_count": 192,
+        "l3_estimate_count": 300,
+        "measured_tick_count": 300,
+        "minimum_healthy_tick_count": 1,
+        "required_tick_count": 300,
+        "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+      },
+      "l3_estimate_count": 300,
+      "last_estimate": {
+        "omega_rad_s": 0.0011354171946132727,
+        "tick_id": 299,
+        "v_mps": -5.823361718273345e-14,
+        "x_m": 5.8582474998146165e-05,
+        "y_m": -0.0011164390348334364,
+        "yaw_rad": 0.0001996609124818872
+      },
+      "lidar_diagnostics": {
+        "last_result": {
+          "matcher_result_id": 43,
+          "source_raw_scan_id": 43,
+          "summary": {
+            "avg_left": 0.9281159999999999,
+            "avg_right": 1.5932521739130423,
+            "blocked_back": false,
+            "blocked_front": false,
+            "bounce_dir": -1,
+            "candidate_id": 43,
+            "capture_matcher_evidence": false,
+            "driver_connected": true,
+            "driver_invalid_packet_count": 0,
+            "driver_last_data_age_s": 0.0005266666412353516,
+            "driver_last_data_age_s_max": 0.0026350021362304688,
+            "driver_reconnect_count": 0,
+            "driver_rx_buffer_len": 0,
+            "dtheta": 0.0,
+            "dx": 0.0037499999706028715,
+            "dy": -4.695513405576469e-07,
+            "final_confidence": 0.5059615703473868,
+            "final_confidence_emitted": 0.5059615703473868,
+            "keyframe_count": 1,
+            "last_lidar_pose": {
+              "theta": 0.00012521369114271153,
+              "x": 0.0038085824750053645,
+              "y": -0.0011164390348334325
+            },
+            "last_lidar_pose_before": {
+              "theta": -0.00026781190877933625,
+              "x": 5.85824532668469e-05,
+              "y": -0.004269459310474495
+            },
+            "latency_ms": 36.16,
+            "lidar_pose_confidence": 0.5059615703473868,
+            "lidar_pose_theta": 0.00012521369114271153,
+            "lidar_pose_x": 0.0038085824750053645,
+            "lidar_pose_y": -0.0011164390348334325,
+            "local_map_enabled": true,
+            "local_map_generation": 1,
+            "local_map_keyframe_ages_s": [
+              3.8552648340000815
+            ],
+            "local_map_keyframe_ids": [
+              1
+            ],
+            "local_map_keyframes": 1,
+            "local_map_points": 96,
+            "localization_integrity_score": 0.5564166177011199,
+            "localization_integrity_state": "OK",
+            "localization_status": "tracking",
+            "loop_closure_applied": false,
+            "loop_closure_delta_m": null,
+            "loop_closure_delta_rad": null,
+            "loop_closure_detected": false,
+            "loop_closure_target_id": null,
+            "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+            "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+            "matcher_budget_ms": 45.0,
+            "matcher_called": true,
+            "matcher_candidates": 227,
+            "matcher_confidence": 0.5059615703473868,
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_cpu_ms": 36.23903700000008,
+            "matcher_degeneracy_reasons": [],
+            "matcher_degenerate": false,
+            "matcher_integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+            "matcher_latency_max_ms": 52.30144300003303,
+            "matcher_latency_ms": 39.46882300033394,
+            "matcher_latency_p50_ms": 39.589157000136765,
+            "matcher_latency_p95_ms": 43.66902400033723,
+            "matcher_mode": "scan_to_map",
+            "matcher_process_peak_rss_kb": 58800,
+            "matcher_process_pid": 6049,
+            "matcher_process_rss_kb": 59776,
+            "matcher_quality": {
+              "ambiguity_margin": 1.0,
+              "ambiguity_residual_margin_m": null,
+              "basin_candidate_count": 3,
+              "basin_candidates": [
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 1,
+                  "distinct": false,
+                  "objective_cost": 0.008251675605497796,
+                  "pose": {
+                    "theta": 0.00012521369114271153,
+                    "x": -0.006191417524994636,
+                    "y": -0.011116439034833434
+                  },
+                  "prior_cost": 0.00013906250000000005,
+                  "rotation_delta_rad": 0.0,
+                  "scan_cost": 0.008112613105497796,
+                  "seed_pose": {
+                    "theta": 0.00012521369114271153,
+                    "x": 0.08380858247500536,
+                    "y": 0.07888356096516656
+                  },
+                  "translation_delta_m": 0.014142135623730952
+                },
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 2,
+                  "distinct": false,
+                  "objective_cost": 0.012967020427137165,
+                  "pose": {
+                    "theta": 0.060125213691142765,
+                    "x": 0.033808582475005365,
+                    "y": -0.0011164390348334325
+                  },
+                  "prior_cost": 0.0013190625000000004,
+                  "rotation_delta_rad": 0.06000000000000005,
+                  "scan_cost": 0.011647957927137164,
+                  "seed_pose": {
+                    "theta": 0.12012521369114282,
+                    "x": 0.0038085824750053645,
+                    "y": -0.0011164390348334325
+                  },
+                  "translation_delta_m": 0.03
+                },
+                {
+                  "barrier_rise": 0.0,
+                  "barrier_score": 0.0,
+                  "basin_id": 3,
+                  "distinct": false,
+                  "objective_cost": 0.01161104905429803,
+                  "pose": {
+                    "theta": 0.00012521369114271153,
+                    "x": 0.0038085824750053645,
+                    "y": 0.048883560965166564
+                  },
+                  "prior_cost": 0.0025140625,
+                  "rotation_delta_rad": 0.0,
+                  "scan_cost": 0.00909698655429803,
+                  "seed_pose": {
+                    "theta": 0.00012521369114271153,
+                    "x": 0.0038085824750053645,
+                    "y": 0.07888356096516656
+                  },
+                  "translation_delta_m": 0.049999999999999996
+                }
+              ],
+              "combined_confidence": 0.5059615703473868,
+              "competitor_barrier_rise": null,
+              "competitor_barrier_score": null,
+              "competitor_basin_id": null,
+              "competitor_objective_cost": null,
+              "competitor_pose": null,
+              "competitor_prior_cost": null,
+              "competitor_rotation_delta_rad": null,
+              "competitor_scan_cost": null,
+              "competitor_stage": null,
+              "competitor_translation_delta_m": null,
+              "confidence": 0.5059615703473868,
+              "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+              "covariance_proxy": {
+                "x_variance_m2": 0.0013189700820434255,
+                "y_variance_m2": 0.001263758613376595,
+                "yaw_variance_rad2": 0.0036005577244895637
+              },
+              "coverage_score": 1.0,
+              "deadline_stage": null,
+              "degeneracy_reasons": [],
+              "degenerate": false,
+              "distinct_basin_count": 0,
+              "effective_max_points": 48,
+              "evaluated_candidates": 227,
+              "fit_quality": 0.5564166177011199,
+              "global_multimodality_score": 0.0,
+              "inlier_count": 30,
+              "inlier_ratio": 0.625,
+              "inlier_score": 0.5666666666666667,
+              "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+              "integrity_state": "OK",
+              "localization_integrity_score": 0.5564166177011199,
+              "measurement_confidence": 0.5059615703473868,
+              "measurement_uniqueness_score": 1.0,
+              "normal_observability_score": 1.0,
+              "objective_cost": 0.00795417544258696,
+              "observability_score": 0.8866518231379565,
+              "observability_x": 0.6823505796323048,
+              "observability_y": 0.7121613182087991,
+              "observability_yaw": 0.9998451005282403,
+              "posterior_ambiguity_margin": 1.0,
+              "posterior_residual_margin_m": null,
+              "posterior_uniqueness_score": 1.0,
+              "residual_score": 0.7391562587969764,
+              "robust_rmse_m": 0.08910731138681584,
+              "scan_cost": 0.007940112942586959,
+              "search_complete": true,
+              "sector_coverage": 0.6666666666666666,
+              "seed_prior_cost": 1.40625e-05,
+              "stage_evaluations": {
+                "basin_barrier": 9,
+                "basin_offset_axis": 4,
+                "basin_offset_diagonal": 4,
+                "basin_offset_yaw": 2,
+                "basin_refine": 36,
+                "basin_refine_seed": 3,
+                "coarse": 27,
+                "coarse_seed": 1,
+                "fine": 27,
+                "fine_seed": 1,
+                "medium": 27,
+                "medium_seed": 1,
+                "observability": 6,
+                "winner_refine": 79
+              },
+              "timed_out": false,
+              "uniqueness_score": 1.0
+            },
+            "matcher_queue_delay_ms": 2.759176000381558,
+            "matcher_reason": "",
+            "matcher_replay_evidence": null,
+            "matcher_result_id": 43,
+            "matcher_result_timestamp": 2959.574325416,
+            "matcher_runtime_ms": 36.23829299976933,
+            "matcher_seed_pose": {
+              "theta": 0.00012521369114271153,
+              "x": 0.0038085824750053645,
+              "y": -0.0011164390348334325
+            },
+            "matcher_seed_pose_before": {
+              "theta": -0.00026781190877933625,
+              "x": 5.85824532668469e-05,
+              "y": -0.004269459310474495
+            },
+            "matcher_source_raw_scan_id": 43,
+            "matcher_source_raw_scan_timestamp": 2959.526680675,
+            "matcher_timed_out": false,
+            "matcher_transport": "process_latest_only",
+            "measurement_confidence": 0.5059615703473868,
+            "min_back": 0.779,
+            "min_dist": 1.266,
+            "min_dist_narrow": 1.35475,
+            "pose_event_raw_delta_m": null,
+            "pose_event_raw_delta_rad": null,
+            "pose_event_step_limited": false,
+            "pose_ref_available": true,
+            "pose_ref_current": {
+              "theta": 0.00012521369114256567,
+              "x": 5.858247500536462e-05,
+              "y": -0.0011164390348334325
+            },
+            "pose_reference_timestamp": 2959.534637555,
+            "pose_update_event": "tracking",
+            "prev_pose_ref": {
+              "theta": -0.00026781190877933625,
+              "x": 5.85824532668469e-05,
+              "y": -0.004269459310474495
+            },
+            "raw_scan_completed_mono": 2959.526680675,
+            "raw_scan_id": 43,
+            "raw_scan_latest_age_s": 0.047644741000112845,
+            "raw_scan_max_gap_s": 0.10797411900011866,
+            "raw_scan_mono_ts": 2959.526680675,
+            "raw_scan_rate_hz": 9.933409304712061,
+            "raw_scan_started_mono": 2959.526680675,
+            "raw_scan_timestamp": 2959.526680675,
+            "relocalization_attempted": false,
+            "relocalization_reason": "not_attempted",
+            "relocalization_seed_attempts": 0,
+            "relocalization_timed_out": false,
+            "relocalized": false,
+            "scan_count_filtered": 454,
+            "scan_count_raw": 454,
+            "scan_seq": 43,
+            "scan_to_map_seed": {
+              "theta": 0.00012521369114256567,
+              "x": 5.858247500536462e-05,
+              "y": -0.0011164390348334325
+            },
+            "slow_path_budget_ms": 120.0,
+            "theta_lidar_raw": 0.00012521369114271153,
+            "tracking_backtrack_debt_m": 0.0,
+            "tracking_candidate_pose": {
+              "theta": 0.00012521369114271153,
+              "x": 0.0038085824750053645,
+              "y": -0.0011164390348334325
+            },
+            "tracking_candidate_projection_m": null,
+            "tracking_direction_backtrack_tolerance_m": 0.03,
+            "tracking_direction_checked": false,
+            "tracking_direction_consistent": true,
+            "tracking_direction_reference_source": "",
+            "tracking_direction_rejected": false,
+            "tracking_direction_rejected_total": 0,
+            "tracking_loss_latched": false,
+            "tracking_reacquire_required": 3,
+            "tracking_reacquire_streak": 3,
+            "tracking_ready": true,
+            "tracking_reference_delta_m": null,
+            "tracking_reference_linear_mps": null,
+            "x_lidar_raw": 0.0038085824750053645,
+            "y_lidar_raw": -0.0011164390348334325,
+            "yaw_convention": "CCW_POSITIVE_LEFT"
+          }
+        },
+        "runtime_status": {
+          "driver_connected": true,
+          "health": "OK",
+          "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+          "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+          "matcher_latency_ms_latest": 39.46882300033394,
+          "matcher_process_errors": 0,
+          "matcher_processed_scans": 43,
+          "matcher_transport": "process_latest_only",
+          "queue_drops": 0,
+          "raw_scan_latest_age_s": 5.383566083999995,
+          "raw_scan_rate_hz": 9.933409304712061,
+          "result_queue_drops": 0,
+          "running": false,
+          "scan_seq": 43,
+          "stale_result_drops": 0
+        }
+      },
+      "measurement_artifact_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "ok": true,
+      "operator_stopped": false,
+      "rejected_counts": {
+        "DUPLICATE": 257
+      },
+      "sample_ranges": {
+        "ekf_heading": {
+          "calibration": [
+            0.0,
+            0.0
+          ],
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.0
+          ],
+          "omega_calibration": [
+            3.0,
+            3.0
+          ],
+          "omega_confidence": [
+            1.0,
+            1.0
+          ],
+          "omega_rad_s": [
+            -0.00545415391248228,
+            0.004363323129985824
+          ],
+          "yaw_rad": [
+            0.0010908307824968552,
+            0.0010908307824968552
+          ]
+        },
+        "lidar_health": {
+          "age_ns": [
+            0.0,
+            147243015.0
+          ],
+          "captured_minus_tick_ns": [
+            -104590143.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.9081913565786354
+          ]
+        },
+        "lidar_pose": {
+          "captured_minus_tick_ns": [
+            -104590143.0,
+            0.0
+          ],
+          "confidence": [
+            0.44743162943834125,
+            0.9081913565786354
+          ],
+          "r_scale": [
+            1.0,
+            1.0
+          ],
+          "x_m": [
+            -0.00299114935148626,
+            0.00375
+          ],
+          "y_m": [
+            -0.008035506687605398,
+            0.0037500000043945263
+          ],
+          "yaw_rad": [
+            -0.014743133104395678,
+            0.017023974045783596
+          ]
+        },
+        "wheel_velocity": {
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "computed_left_mps": [
+            0.0,
+            0.0
+          ],
+          "computed_right_mps": [
+            0.0,
+            0.0
+          ],
+          "left_invalid_alert_delta": [
+            0.0,
+            0.0
+          ],
+          "left_invalid_alerts": [
+            0.0,
+            0.0
+          ],
+          "left_mps": [
+            0.0,
+            0.0
+          ],
+          "left_pulse_delta": [
+            0.0,
+            0.0
+          ],
+          "left_read_error_delta": [
+            0.0,
+            0.0
+          ],
+          "left_read_errors": [
+            0.0,
+            0.0
+          ],
+          "maximum_abs_velocity_mps": [
+            1.5,
+            1.5
+          ],
+          "raw_left_pulse_count": [
+            0.0,
+            0.0
+          ],
+          "raw_right_pulse_count": [
+            0.0,
+            0.0
+          ],
+          "right_invalid_alert_delta": [
+            0.0,
+            0.0
+          ],
+          "right_invalid_alerts": [
+            0.0,
+            0.0
+          ],
+          "right_mps": [
+            0.0,
+            0.0
+          ],
+          "right_pulse_delta": [
+            0.0,
+            0.0
+          ],
+          "right_read_error_delta": [
+            0.0,
+            0.0
+          ],
+          "right_read_errors": [
+            0.0,
+            0.0
+          ],
+          "sample_interval_ns": [
+            6347077.0,
+            38070393.0
+          ],
+          "trust": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+      "source_state_counts": {
+        "BNO055_IMU": {
+          "OK": 300
+        },
+        "LIDAR_LOCALIZATION": {
+          "DEGRADED": 108,
+          "OK": 192
+        },
+        "WHEEL_ENCODERS": {
+          "DEGRADED": 1,
+          "OK": 299
+        }
+      },
+      "status": "PASS",
+      "tick_count": 300
+    },
+    "run": {
+      "duration_s": 12.825,
+      "ok": true,
+      "return_code": 0,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "first_estimate": {
+          "omega_rad_s": 0.001090830782496456,
+          "tick_id": 0,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": 0.0010908307824968552
+        },
+        "healthy_tick_count": 192,
+        "l3_estimate_count": 300,
+        "last_estimate": {
+          "omega_rad_s": 0.0011354171946132727,
+          "tick_id": 299,
+          "v_mps": -5.823361718273345e-14,
+          "x_m": 5.8582474998146165e-05,
+          "y_m": -0.0011164390348334364,
+          "yaw_rad": 0.0001996609124818872
+        },
+        "lidar_diagnostics": {
+          "last_result": {
+            "matcher_result_id": 43,
+            "source_raw_scan_id": 43,
+            "summary": {
+              "avg_left": 0.9281159999999999,
+              "avg_right": 1.5932521739130423,
+              "blocked_back": false,
+              "blocked_front": false,
+              "bounce_dir": -1,
+              "candidate_id": 43,
+              "capture_matcher_evidence": false,
+              "driver_connected": true,
+              "driver_invalid_packet_count": 0,
+              "driver_last_data_age_s": 0.0005266666412353516,
+              "driver_last_data_age_s_max": 0.0026350021362304688,
+              "driver_reconnect_count": 0,
+              "driver_rx_buffer_len": 0,
+              "dtheta": 0.0,
+              "dx": 0.0037499999706028715,
+              "dy": -4.695513405576469e-07,
+              "final_confidence": 0.5059615703473868,
+              "final_confidence_emitted": 0.5059615703473868,
+              "keyframe_count": 1,
+              "last_lidar_pose": {
+                "theta": 0.00012521369114271153,
+                "x": 0.0038085824750053645,
+                "y": -0.0011164390348334325
+              },
+              "last_lidar_pose_before": {
+                "theta": -0.00026781190877933625,
+                "x": 5.85824532668469e-05,
+                "y": -0.004269459310474495
+              },
+              "latency_ms": 36.16,
+              "lidar_pose_confidence": 0.5059615703473868,
+              "lidar_pose_theta": 0.00012521369114271153,
+              "lidar_pose_x": 0.0038085824750053645,
+              "lidar_pose_y": -0.0011164390348334325,
+              "local_map_enabled": true,
+              "local_map_generation": 1,
+              "local_map_keyframe_ages_s": [
+                3.8552648340000815
+              ],
+              "local_map_keyframe_ids": [
+                1
+              ],
+              "local_map_keyframes": 1,
+              "local_map_points": 96,
+              "localization_integrity_score": 0.5564166177011199,
+              "localization_integrity_state": "OK",
+              "localization_status": "tracking",
+              "loop_closure_applied": false,
+              "loop_closure_delta_m": null,
+              "loop_closure_delta_rad": null,
+              "loop_closure_detected": false,
+              "loop_closure_target_id": null,
+              "map_frame_id": "R2B4_BOOT_ROBOT_MAP",
+              "map_frame_owner": "EKF_POSE_ODOMETRY_SSOT",
+              "matcher_budget_ms": 45.0,
+              "matcher_called": true,
+              "matcher_candidates": 227,
+              "matcher_confidence": 0.5059615703473868,
+              "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+              "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+              "matcher_cpu_ms": 36.23903700000008,
+              "matcher_degeneracy_reasons": [],
+              "matcher_degenerate": false,
+              "matcher_integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+              "matcher_latency_max_ms": 52.30144300003303,
+              "matcher_latency_ms": 39.46882300033394,
+              "matcher_latency_p50_ms": 39.589157000136765,
+              "matcher_latency_p95_ms": 43.66902400033723,
+              "matcher_mode": "scan_to_map",
+              "matcher_process_peak_rss_kb": 58800,
+              "matcher_process_pid": 6049,
+              "matcher_process_rss_kb": 59776,
+              "matcher_quality": {
+                "ambiguity_margin": 1.0,
+                "ambiguity_residual_margin_m": null,
+                "basin_candidate_count": 3,
+                "basin_candidates": [
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 1,
+                    "distinct": false,
+                    "objective_cost": 0.008251675605497796,
+                    "pose": {
+                      "theta": 0.00012521369114271153,
+                      "x": -0.006191417524994636,
+                      "y": -0.011116439034833434
+                    },
+                    "prior_cost": 0.00013906250000000005,
+                    "rotation_delta_rad": 0.0,
+                    "scan_cost": 0.008112613105497796,
+                    "seed_pose": {
+                      "theta": 0.00012521369114271153,
+                      "x": 0.08380858247500536,
+                      "y": 0.07888356096516656
+                    },
+                    "translation_delta_m": 0.014142135623730952
+                  },
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 2,
+                    "distinct": false,
+                    "objective_cost": 0.012967020427137165,
+                    "pose": {
+                      "theta": 0.060125213691142765,
+                      "x": 0.033808582475005365,
+                      "y": -0.0011164390348334325
+                    },
+                    "prior_cost": 0.0013190625000000004,
+                    "rotation_delta_rad": 0.06000000000000005,
+                    "scan_cost": 0.011647957927137164,
+                    "seed_pose": {
+                      "theta": 0.12012521369114282,
+                      "x": 0.0038085824750053645,
+                      "y": -0.0011164390348334325
+                    },
+                    "translation_delta_m": 0.03
+                  },
+                  {
+                    "barrier_rise": 0.0,
+                    "barrier_score": 0.0,
+                    "basin_id": 3,
+                    "distinct": false,
+                    "objective_cost": 0.01161104905429803,
+                    "pose": {
+                      "theta": 0.00012521369114271153,
+                      "x": 0.0038085824750053645,
+                      "y": 0.048883560965166564
+                    },
+                    "prior_cost": 0.0025140625,
+                    "rotation_delta_rad": 0.0,
+                    "scan_cost": 0.00909698655429803,
+                    "seed_pose": {
+                      "theta": 0.00012521369114271153,
+                      "x": 0.0038085824750053645,
+                      "y": 0.07888356096516656
+                    },
+                    "translation_delta_m": 0.049999999999999996
+                  }
+                ],
+                "combined_confidence": 0.5059615703473868,
+                "competitor_barrier_rise": null,
+                "competitor_barrier_score": null,
+                "competitor_basin_id": null,
+                "competitor_objective_cost": null,
+                "competitor_pose": null,
+                "competitor_prior_cost": null,
+                "competitor_rotation_delta_rad": null,
+                "competitor_scan_cost": null,
+                "competitor_stage": null,
+                "competitor_translation_delta_m": null,
+                "confidence": 0.5059615703473868,
+                "confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+                "covariance_proxy": {
+                  "x_variance_m2": 0.0013189700820434255,
+                  "y_variance_m2": 0.001263758613376595,
+                  "yaw_variance_rad2": 0.0036005577244895637
+                },
+                "coverage_score": 1.0,
+                "deadline_stage": null,
+                "degeneracy_reasons": [],
+                "degenerate": false,
+                "distinct_basin_count": 0,
+                "effective_max_points": 48,
+                "evaluated_candidates": 227,
+                "fit_quality": 0.5564166177011199,
+                "global_multimodality_score": 0.0,
+                "inlier_count": 30,
+                "inlier_ratio": 0.625,
+                "inlier_score": 0.5666666666666667,
+                "integrity_model": "R2B4_SCAN_MATCH_BASIN_INTEGRITY_V1",
+                "integrity_state": "OK",
+                "localization_integrity_score": 0.5564166177011199,
+                "measurement_confidence": 0.5059615703473868,
+                "measurement_uniqueness_score": 1.0,
+                "normal_observability_score": 1.0,
+                "objective_cost": 0.00795417544258696,
+                "observability_score": 0.8866518231379565,
+                "observability_x": 0.6823505796323048,
+                "observability_y": 0.7121613182087991,
+                "observability_yaw": 0.9998451005282403,
+                "posterior_ambiguity_margin": 1.0,
+                "posterior_residual_margin_m": null,
+                "posterior_uniqueness_score": 1.0,
+                "residual_score": 0.7391562587969764,
+                "robust_rmse_m": 0.08910731138681584,
+                "scan_cost": 0.007940112942586959,
+                "search_complete": true,
+                "sector_coverage": 0.6666666666666666,
+                "seed_prior_cost": 1.40625e-05,
+                "stage_evaluations": {
+                  "basin_barrier": 9,
+                  "basin_offset_axis": 4,
+                  "basin_offset_diagonal": 4,
+                  "basin_offset_yaw": 2,
+                  "basin_refine": 36,
+                  "basin_refine_seed": 3,
+                  "coarse": 27,
+                  "coarse_seed": 1,
+                  "fine": 27,
+                  "fine_seed": 1,
+                  "medium": 27,
+                  "medium_seed": 1,
+                  "observability": 6,
+                  "winner_refine": 79
+                },
+                "timed_out": false,
+                "uniqueness_score": 1.0
+              },
+              "matcher_queue_delay_ms": 2.759176000381558,
+              "matcher_reason": "",
+              "matcher_replay_evidence": null,
+              "matcher_result_id": 43,
+              "matcher_result_timestamp": 2959.574325416,
+              "matcher_runtime_ms": 36.23829299976933,
+              "matcher_seed_pose": {
+                "theta": 0.00012521369114271153,
+                "x": 0.0038085824750053645,
+                "y": -0.0011164390348334325
+              },
+              "matcher_seed_pose_before": {
+                "theta": -0.00026781190877933625,
+                "x": 5.85824532668469e-05,
+                "y": -0.004269459310474495
+              },
+              "matcher_source_raw_scan_id": 43,
+              "matcher_source_raw_scan_timestamp": 2959.526680675,
+              "matcher_timed_out": false,
+              "matcher_transport": "process_latest_only",
+              "measurement_confidence": 0.5059615703473868,
+              "min_back": 0.779,
+              "min_dist": 1.266,
+              "min_dist_narrow": 1.35475,
+              "pose_event_raw_delta_m": null,
+              "pose_event_raw_delta_rad": null,
+              "pose_event_step_limited": false,
+              "pose_ref_available": true,
+              "pose_ref_current": {
+                "theta": 0.00012521369114256567,
+                "x": 5.858247500536462e-05,
+                "y": -0.0011164390348334325
+              },
+              "pose_reference_timestamp": 2959.534637555,
+              "pose_update_event": "tracking",
+              "prev_pose_ref": {
+                "theta": -0.00026781190877933625,
+                "x": 5.85824532668469e-05,
+                "y": -0.004269459310474495
+              },
+              "raw_scan_completed_mono": 2959.526680675,
+              "raw_scan_id": 43,
+              "raw_scan_latest_age_s": 0.047644741000112845,
+              "raw_scan_max_gap_s": 0.10797411900011866,
+              "raw_scan_mono_ts": 2959.526680675,
+              "raw_scan_rate_hz": 9.933409304712061,
+              "raw_scan_started_mono": 2959.526680675,
+              "raw_scan_timestamp": 2959.526680675,
+              "relocalization_attempted": false,
+              "relocalization_reason": "not_attempted",
+              "relocalization_seed_attempts": 0,
+              "relocalization_timed_out": false,
+              "relocalized": false,
+              "scan_count_filtered": 454,
+              "scan_count_raw": 454,
+              "scan_seq": 43,
+              "scan_to_map_seed": {
+                "theta": 0.00012521369114256567,
+                "x": 5.858247500536462e-05,
+                "y": -0.0011164390348334325
+              },
+              "slow_path_budget_ms": 120.0,
+              "theta_lidar_raw": 0.00012521369114271153,
+              "tracking_backtrack_debt_m": 0.0,
+              "tracking_candidate_pose": {
+                "theta": 0.00012521369114271153,
+                "x": 0.0038085824750053645,
+                "y": -0.0011164390348334325
+              },
+              "tracking_candidate_projection_m": null,
+              "tracking_direction_backtrack_tolerance_m": 0.03,
+              "tracking_direction_checked": false,
+              "tracking_direction_consistent": true,
+              "tracking_direction_reference_source": "",
+              "tracking_direction_rejected": false,
+              "tracking_direction_rejected_total": 0,
+              "tracking_loss_latched": false,
+              "tracking_reacquire_required": 3,
+              "tracking_reacquire_streak": 3,
+              "tracking_ready": true,
+              "tracking_reference_delta_m": null,
+              "tracking_reference_linear_mps": null,
+              "x_lidar_raw": 0.0038085824750053645,
+              "y_lidar_raw": -0.0011164390348334325,
+              "yaw_convention": "CCW_POSITIVE_LEFT"
+            }
+          },
+          "runtime_status": {
+            "driver_connected": true,
+            "health": "OK",
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_latency_ms_latest": 39.46882300033394,
+            "matcher_process_errors": 0,
+            "matcher_processed_scans": 43,
+            "matcher_transport": "process_latest_only",
+            "queue_drops": 0,
+            "raw_scan_latest_age_s": 5.383566083999995,
+            "raw_scan_rate_hz": 9.933409304712061,
+            "result_queue_drops": 0,
+            "running": false,
+            "scan_seq": 43,
+            "stale_result_drops": 0
+          }
+        },
+        "operator_stopped": false,
+        "rejected_counts": {
+          "DUPLICATE": 257
+        },
+        "sample_ranges": {
+          "ekf_heading": {
+            "calibration": [
+              0.0,
+              0.0
+            ],
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.0
+            ],
+            "omega_calibration": [
+              3.0,
+              3.0
+            ],
+            "omega_confidence": [
+              1.0,
+              1.0
+            ],
+            "omega_rad_s": [
+              -0.00545415391248228,
+              0.004363323129985824
+            ],
+            "yaw_rad": [
+              0.0010908307824968552,
+              0.0010908307824968552
+            ]
+          },
+          "lidar_health": {
+            "age_ns": [
+              0.0,
+              147243015.0
+            ],
+            "captured_minus_tick_ns": [
+              -104590143.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.9081913565786354
+            ]
+          },
+          "lidar_pose": {
+            "captured_minus_tick_ns": [
+              -104590143.0,
+              0.0
+            ],
+            "confidence": [
+              0.44743162943834125,
+              0.9081913565786354
+            ],
+            "r_scale": [
+              1.0,
+              1.0
+            ],
+            "x_m": [
+              -0.00299114935148626,
+              0.00375
+            ],
+            "y_m": [
+              -0.008035506687605398,
+              0.0037500000043945263
+            ],
+            "yaw_rad": [
+              -0.014743133104395678,
+              0.017023974045783596
+            ]
+          },
+          "wheel_velocity": {
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "computed_left_mps": [
+              0.0,
+              0.0
+            ],
+            "computed_right_mps": [
+              0.0,
+              0.0
+            ],
+            "left_invalid_alert_delta": [
+              0.0,
+              0.0
+            ],
+            "left_invalid_alerts": [
+              0.0,
+              0.0
+            ],
+            "left_mps": [
+              0.0,
+              0.0
+            ],
+            "left_pulse_delta": [
+              0.0,
+              0.0
+            ],
+            "left_read_error_delta": [
+              0.0,
+              0.0
+            ],
+            "left_read_errors": [
+              0.0,
+              0.0
+            ],
+            "maximum_abs_velocity_mps": [
+              1.5,
+              1.5
+            ],
+            "raw_left_pulse_count": [
+              0.0,
+              0.0
+            ],
+            "raw_right_pulse_count": [
+              0.0,
+              0.0
+            ],
+            "right_invalid_alert_delta": [
+              0.0,
+              0.0
+            ],
+            "right_invalid_alerts": [
+              0.0,
+              0.0
+            ],
+            "right_mps": [
+              0.0,
+              0.0
+            ],
+            "right_pulse_delta": [
+              0.0,
+              0.0
+            ],
+            "right_read_error_delta": [
+              0.0,
+              0.0
+            ],
+            "right_read_errors": [
+              0.0,
+              0.0
+            ],
+            "sample_interval_ns": [
+              6347077.0,
+              38070393.0
+            ],
+            "trust": [
+              0.0,
+              1.0
+            ]
+          }
+        },
+        "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+        "source_state_counts": {
+          "BNO055_IMU": {
+            "OK": 300
+          },
+          "LIDAR_LOCALIZATION": {
+            "DEGRADED": 108,
+            "OK": 192
+          },
+          "WHEEL_ENCODERS": {
+            "DEGRADED": 1,
+            "OK": 299
+          }
+        },
+        "status": "PASS",
+        "tick_count": 300,
+        "tick_details_written": 300
+      },
+      "stdout_tail": "        0.9081913565786354\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        -0.00299114935148626,\n        0.00375\n      ],\n      \"y_m\": [\n        -0.008035506687605398,\n        0.0037500000043945263\n      ],\n      \"yaw_rad\": [\n        -0.014743133104395678,\n        0.017023974045783596\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"computed_left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"computed_right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"left_invalid_alert_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"left_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"left_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"maximum_abs_velocity_mps\": [\n        1.5,\n        1.5\n      ],\n      \"raw_left_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"raw_right_pulse_count\": [\n        0.0,\n        0.0\n      ],\n      \"right_invalid_alert_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_invalid_alerts\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_pulse_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_error_delta\": [\n        0.0,\n        0.0\n      ],\n      \"right_read_errors\": [\n        0.0,\n        0.0\n      ],\n      \"sample_interval_ns\": [\n        6347077.0,\n        38070393.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 108,\n      \"OK\": 192\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}",
+      "timed_out": false
+    }
+  },
+  "preflight_pose_reset": null,
+  "profile": "v3_native_floor_motion_capture",
+  "run_dir": "logs/session_20260902T174502Z",
+  "runtime": {
+    "before": {
+      "action": "status",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/tools/agent_runtime_manager.py",
+        "status",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": false,
+      "payload": {
+        "gui": {
+          "error": "<urlopen error [Errno 111] Connection refused>",
+          "ok": false,
+          "payload": {},
+          "port": 7860
+        },
+        "pid_file": {
+          "alive": false,
+          "exists": false,
+          "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/runtime/agent_runtime/os.pid",
+          "payload": {},
+          "pid": null,
+          "registered_process": false,
+          "stale": false,
+          "status_pid_matches": false
+        },
+        "processes": [],
+        "ready_for_live_tests": false,
+        "running": false,
+        "runtime_identity": {
+          "ok": false,
+          "running_process_pids": [],
+          "status_pid_is_running": false,
+          "unique_os_process": false
+        },
+        "status": {
+          "age_s": null,
+          "exists": false,
+          "fresh": false,
+          "runtime_pid": null,
+          "safety_allow": true,
+          "startup_ready": false,
+          "state": "",
+          "status_version": 0,
+          "stop_type": ""
+        },
+        "timestamp": "2026-09-02T17:45:03Z"
+      },
+      "run": {
+        "duration_s": 0.406,
+        "ok": true,
+        "return_code": 1,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-02T17:45:03Z"
+        },
+        "stdout_tail": "{\n  \"timestamp\": \"2026-09-02T17:45:03Z\",\n  \"running\": false,\n  \"ready_for_live_tests\": false,\n  \"processes\": [],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": false,\n    \"pid\": null,\n    \"alive\": false,\n    \"status_pid_matches\": false,\n    \"registered_process\": false,\n    \"stale\": false,\n    \"payload\": {}\n  },\n  \"runtime_identity\": {\n    \"ok\": false,\n    \"status_pid_is_running\": false,\n    \"unique_os_process\": false,\n    \"running_process_pids\": []\n  },\n  \"status\": {\n    \"exists\": false,\n    \"age_s\": null,\n    \"fresh\": false,\n    \"state\": \"\",\n    \"status_version\": 0,\n    \"runtime_pid\": null,\n    \"startup_ready\": false,\n    \"safety_allow\": true,\n    \"stop_type\": \"\"\n  },\n  \"gui\": {\n    \"ok\": false,\n    \"port\": 7860,\n    \"error\": \"<urlopen error [Errno 111] Connection refused>\",\n    \"payload\": {}\n  }\n}",
+        "timed_out": false
+      }
+    },
+    "ready_for_live_tests_after_recovery": true,
+    "recovery": [
+      {
+        "action": "verify_managed_runtime_stopped",
+        "ok": true,
+        "payload": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_encoder_reject_diagnostics_slice28_20260902/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-02T17:45:03Z"
+        },
+        "reason": "exclusive_native_hardware_ready"
+      }
+    ],
+    "start": null,
+    "started_here": false,
+    "stop": null
+  },
+  "scenario_run": {
+    "command": [
+      "/usr/bin/python3",
+      "tools/r2b4_test_hub.py",
+      "v3-native-floor-motion-capture",
+      "--approval",
+      "floor-clear-0p50m-speed-0p15-v3"
+    ],
+    "payload": {
+      "approval": "floor-clear-0p50m-speed-0p15-v3",
+      "artifact_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+      "capture_evidence": {
+        "capture_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+        "complete_l1_l12_tick_count": 119,
+        "tick_capture_count": 119,
+        "unique_raw_lidar_scan_count": 3
+      },
+      "command_window": {
+        "active_tick_count": 50,
+        "active_tick_id": 114,
+        "max_v_mps": 0.15,
+        "maximum_warmup_tick_id": 300,
+        "nominal_duration_s": 1.0,
+        "omega_rad_s": 0.0,
+        "shutdown_tick_id": 165,
+        "signal_after_tick_id": 164,
+        "tick_period_ns": 20000000,
+        "v_mps": 0.15
+      },
+      "duration_s": 9.222,
+      "ended_at_utc": "2026-09-02T17:45:25Z",
+      "final_lifecycle": "FAULT_OR_INTERRUPTED",
+      "lease_gate": {
+        "errors": [],
+        "leases": {
+          "live_motion": {
+            "expires_at_utc": "2026-09-02T17:49:56Z",
+            "owner_task_id": "v3_encoder_reject_diagnostics_slice28_20260902",
+            "status": "HELD"
+          },
+          "runtime_control": {
+            "expires_at_utc": "2026-09-02T17:49:56Z",
+            "owner_task_id": "v3_encoder_reject_diagnostics_slice28_20260902",
+            "status": "HELD"
+          }
+        },
+        "ok": true,
+        "root": "/home/alba/project_r2b4",
+        "task_id": "v3_encoder_reject_diagnostics_slice28_20260902"
+      },
+      "motion_metrics": {
+        "active_duration_s": null,
+        "active_metric_count": 5,
+        "maximum_abs_yaw_delta_rad": 5.148550565881038e-05,
+        "maximum_displacement_m": 0.0032431991644414145,
+        "maximum_encoder_abs_mps": 0.1288836163338594,
+        "minimum_active_front_clearance_m": 1.26575
+      },
+      "motor_gpio": {
+        "active_pwm_pins": [
+          12,
+          13,
+          18,
+          19
+        ],
+        "all_active_pwm_cancelled": true,
+        "all_expected_pins_claimed_low": true,
+        "all_final_verified_low": true,
+        "cancelled_pwm_pins": [
+          12,
+          13,
+          18,
+          19
+        ],
+        "claimed_pins": [
+          12,
+          13,
+          18,
+          19
+        ],
+        "event_count": 1958,
+        "event_tail": [
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968569097355,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1766
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968569099392,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1767
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968569101226,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1768
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968569112670,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1769
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968569117022,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1770
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968569120540,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1771
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968569124152,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1772
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968569130892,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1773
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968569134411,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1774
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968569137559,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1775
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968569141096,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1776
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968571207400,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1777
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968571211011,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1778
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968571214288,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1779
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968571217511,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1780
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968588940072,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1781
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968588943183,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1782
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968588945295,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1783
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968588947165,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1784
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968588958443,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1785
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968588962924,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1786
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968588966387,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1787
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968588969702,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1788
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968588978850,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1789
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968588982443,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1790
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968588985850,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1791
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968588988980,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1792
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968591052654,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1793
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968591056487,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1794
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968591059783,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1795
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968591067802,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1796
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968609177828,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1797
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968609181050,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1798
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968609183087,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1799
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968609184883,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1800
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968609196624,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1801
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968609201272,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1802
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968609204587,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1803
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968609207809,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1804
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968609213809,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1805
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968609217550,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1806
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968609220735,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1807
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968609223865,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1808
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968611286594,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1809
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968611290224,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1810
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968611293261,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1811
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968611296391,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1812
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968627817967,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1813
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968627820874,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1814
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968627822911,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1815
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968627824652,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1816
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968627834689,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1817
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968627838800,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1818
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968627841911,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1819
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968627844856,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1820
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968627850059,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1821
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968627853263,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1822
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968627856393,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1823
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968627859448,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1824
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968629924900,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1825
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968629928455,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1826
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968629931474,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1827
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968629934418,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1828
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968650090118,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1829
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968650093192,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1830
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968650095229,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1831
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968650097118,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1832
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968650108414,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1833
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968650113137,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1834
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968650116359,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1835
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968650119451,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1836
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968650125211,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1837
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968650128766,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1838
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968650131822,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1839
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968650134933,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1840
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968652203348,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1841
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968652208014,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1842
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968652211348,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1843
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968652214496,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1844
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968669343685,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1845
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968669347037,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1846
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968669349055,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1847
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968669350907,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1848
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968669362611,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1849
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968669366703,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1850
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968669370129,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1851
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968669373518,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1852
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968669379111,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1853
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968669382907,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1854
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968669392241,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1855
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968669395463,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1856
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968669411833,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 9,
+            "sequence": 1857
+          },
+          {
+            "duty_cycle": 80.13159018543752,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968669416278,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 9,
+            "sequence": 1858
+          },
+          {
+            "duty_cycle": 80.48759018543751,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968669419611,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 9,
+            "sequence": 1859
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968669422722,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 9,
+            "sequence": 1860
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968689183883,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 1,
+            "sequence": 1861
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968689194550,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1862
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968689198606,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 1,
+            "sequence": 1863
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968689201661,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1864
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968689204087,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 1,
+            "sequence": 1865
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968689206643,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1866
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968689208846,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 1,
+            "sequence": 1867
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968689214439,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1868
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968689225384,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1869
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968689229217,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1870
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968689232217,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1871
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968689235384,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1872
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968689241513,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1873
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968689245587,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1874
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968689249050,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1875
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968689252347,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1876
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968689261643,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 9,
+            "sequence": 1877
+          },
+          {
+            "duty_cycle": 79.82677566974857,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968689265291,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 9,
+            "sequence": 1878
+          },
+          {
+            "duty_cycle": 80.18277566974858,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968689268254,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 9,
+            "sequence": 1879
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968689272865,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 9,
+            "sequence": 1880
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968709109749,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 1,
+            "sequence": 1881
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968709116971,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1882
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968709120619,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 1,
+            "sequence": 1883
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968709123027,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1884
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968709125453,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 1,
+            "sequence": 1885
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968709127619,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1886
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968709129897,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 1,
+            "sequence": 1887
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968709132027,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1888
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968709142860,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1889
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968709146360,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1890
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968709149286,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1891
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968709152416,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1892
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968709158712,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1893
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968709162619,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1894
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968709165749,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1895
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968709168953,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1896
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968709176453,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 9,
+            "sequence": 1897
+          },
+          {
+            "duty_cycle": 81.15075959082371,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968709179694,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 9,
+            "sequence": 1898
+          },
+          {
+            "duty_cycle": 80.68756900710136,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968709182638,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 9,
+            "sequence": 1899
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968709185342,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 9,
+            "sequence": 1900
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968728243093,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 1,
+            "sequence": 1901
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968728250464,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1902
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968728254390,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 1,
+            "sequence": 1903
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968728256815,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1904
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968728259112,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 1,
+            "sequence": 1905
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968728261278,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1906
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968728263612,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 1,
+            "sequence": 1907
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968728265778,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1908
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968728275575,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1909
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968728284112,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1910
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968728287408,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1911
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968728290204,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1912
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968728296538,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1913
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968728300390,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1914
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968728303593,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1915
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968728306723,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1916
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968728313908,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 9,
+            "sequence": 1917
+          },
+          {
+            "duty_cycle": 81.66596325721432,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968728317019,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 9,
+            "sequence": 1918
+          },
+          {
+            "duty_cycle": 82.82824164779586,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968728319890,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 9,
+            "sequence": 1919
+          },
+          {
+            "duty_cycle": 100.0,
+            "frequency_hz": 8000,
+            "handle": 2,
+            "monotonic_ns": 2968728322686,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 9,
+            "sequence": 1920
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968749306703,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 1,
+            "sequence": 1921
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968749314592,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1922
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968749318240,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 1,
+            "sequence": 1923
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968749320648,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1924
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968749322926,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 1,
+            "sequence": 1925
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968749325092,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1926
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968749331944,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 1,
+            "sequence": 1927
+          },
+          {
+            "duty_cycle": 0.0,
+            "frequency_hz": 0,
+            "handle": 2,
+            "monotonic_ns": 2968749334259,
+            "ok": true,
+            "operation": "tx_pwm",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1928
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968749345407,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1929
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968749349129,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1930
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968749352481,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1931
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968749355407,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1932
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968749361852,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1933
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968749365759,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1934
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968749368926,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1935
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968749372037,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1936
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968751439137,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1937
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968751443229,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1938
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968751446303,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1939
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968751449359,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1940
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968753522848,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1941
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968753525755,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1942
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968753527607,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1943
+          },
+          {
+            "handle": 2,
+            "kind": 0,
+            "monotonic_ns": 2968753529551,
+            "ok": true,
+            "operation": "tx_busy",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1944
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968753538477,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1945
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968753542348,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1946
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968753545348,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1947
+          },
+          {
+            "handle": 2,
+            "level": 0,
+            "monotonic_ns": 2968753548311,
+            "ok": true,
+            "operation": "gpio_write",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1948
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968753553422,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1949
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968753556737,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1950
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968753559848,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1951
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968753563237,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1952
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968755630022,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 12,
+            "result": 0,
+            "sequence": 1953
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968755633818,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 13,
+            "result": 0,
+            "sequence": 1954
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968755637059,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 18,
+            "result": 0,
+            "sequence": 1955
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968755640188,
+            "ok": true,
+            "operation": "gpio_read",
+            "pin": 19,
+            "result": 0,
+            "sequence": 1956
+          },
+          {
+            "handle": 2,
+            "monotonic_ns": 2968855916722,
+            "ok": true,
+            "operation": "gpiochip_close",
+            "result": 0,
+            "sequence": 1957
+          }
+        ],
+        "expected_pins": [
+          12,
+          13,
+          18,
+          19
+        ],
+        "failed_event_count": 0,
+        "gpio_closed_after_verified_low": true,
+        "maximum_abs_pwm_by_pin": {
+          "12": 100.0,
+          "13": 81.66596325721432,
+          "18": 82.82824164779586,
+          "19": 100.0
+        },
+        "minimum_verified_low_hold_ms": 2.077,
+        "nonzero_pwm_write_count": 16,
+        "opened_handle_count": 1,
+        "pin_evidence": {
+          "12": {
+            "active_pwm_cancelled": true,
+            "busy_true_after_nonzero_sequence": 1921,
+            "cancel_sequence": 1922,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 1945,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": 1917,
+            "nonzero_pwm_write_count": 4,
+            "verified_low_hold_ms": 2.077
+          },
+          "13": {
+            "active_pwm_cancelled": true,
+            "busy_true_after_nonzero_sequence": 1923,
+            "cancel_sequence": 1924,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 1946,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": 1918,
+            "nonzero_pwm_write_count": 4,
+            "verified_low_hold_ms": 2.077
+          },
+          "18": {
+            "active_pwm_cancelled": true,
+            "busy_true_after_nonzero_sequence": 1925,
+            "cancel_sequence": 1926,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 1947,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": 1919,
+            "nonzero_pwm_write_count": 4,
+            "verified_low_hold_ms": 2.077
+          },
+          "19": {
+            "active_pwm_cancelled": true,
+            "busy_true_after_nonzero_sequence": 1927,
+            "cancel_sequence": 1928,
+            "final_low_readback_count": 2,
+            "final_low_write_sequence": 1948,
+            "final_verified_low": true,
+            "last_nonzero_pwm_sequence": 1920,
+            "nonzero_pwm_write_count": 4,
+            "verified_low_hold_ms": 2.077
+          }
+        }
+      },
+      "motor_power": "ON_FLOOR_BY_EXPLICIT_APPROVAL_AND_RAW_LIDAR_GATE",
+      "operator_stopped": false,
+      "post_close_pins": {
+        "command": [
+          "/usr/bin/pinctrl",
+          "get",
+          "12,13,18,19"
+        ],
+        "errors": [],
+        "ok": true,
+        "pins": {
+          "12": {
+            "drive_low": true,
+            "output": true,
+            "raw": "12: op dl pd | lo // GPIO12 = output"
+          },
+          "13": {
+            "drive_low": true,
+            "output": true,
+            "raw": "13: op dl pd | lo // GPIO13 = output"
+          },
+          "18": {
+            "drive_low": true,
+            "output": true,
+            "raw": "18: op dl pd | lo // GPIO18 = output"
+          },
+          "19": {
+            "drive_low": true,
+            "output": true,
+            "raw": "19: op dl pd | lo // GPIO19 = output"
+          }
+        },
+        "return_code": 0,
+        "status": "PASS"
+      },
+      "profile": "v3_native_floor_motion_capture",
+      "resident_report": {
+        "exit_reason": "RUNTIME_FAULT",
+        "fault_layer": null,
+        "final_lifecycle": "FAULT",
+        "final_reason": "CRITICAL_DEVICE_DEGRADED",
+        "final_safety_decision": "STOP",
+        "last_tick_id": 118,
+        "normal_tick_count": 119,
+        "operator_stopped": false,
+        "run_status": 1,
+        "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V1",
+        "status": "FAULT",
+        "tick_count": 119
+      },
+      "safety_bounds": {
+        "active_clearance_m": 0.3,
+        "maximum_abs_yaw_delta_rad": 0.35,
+        "maximum_active_duration_s": 1.5,
+        "maximum_displacement_m": 0.3,
+        "maximum_encoder_abs_mps": 0.45,
+        "preflight_clearance_m": 0.5
+      },
+      "schema": "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V1",
+      "started_at_utc": "2026-09-02T17:45:16Z",
+      "status": "FAIL",
+      "success": false,
+      "tick_evidence": {
+        "allow_tick_ids": [
+          114,
+          115,
+          116,
+          117
+        ],
+        "clearance_preflight_scans": [
+          {
+            "blocked_front": false,
+            "blockers": [],
+            "front_min_point": {
+              "angle_deg": 318.859375,
+              "distance_m": 1.26625,
+              "distance_mm": 1266.25,
+              "quality": 35,
+              "raw_scan_id": 1,
+              "raw_scan_timestamp": 2968.560503585
+            },
+            "health": "OK",
+            "min_front_m": 1.26625,
+            "min_front_narrow_m": 1.35525,
+            "ok": true,
+            "raw_scan_age_s": 0.001016,
+            "raw_scan_id": 1,
+            "raw_scan_timestamp": 2968.560503585,
+            "reason": "CLEAR",
+            "required_clearance_m": 0.5,
+            "valid_point_count": 114
+          },
+          {
+            "blocked_front": false,
+            "blockers": [],
+            "front_min_point": {
+              "angle_deg": 318.15625,
+              "distance_m": 1.26575,
+              "distance_mm": 1265.75,
+              "quality": 36,
+              "raw_scan_id": 2,
+              "raw_scan_timestamp": 2968.646129975
+            },
+            "health": "OK",
+            "min_front_m": 1.26575,
+            "min_front_narrow_m": 1.353,
+            "ok": true,
+            "raw_scan_age_s": 0.0,
+            "raw_scan_id": 2,
+            "raw_scan_timestamp": 2968.646129975,
+            "reason": "CLEAR",
+            "required_clearance_m": 0.5,
+            "valid_point_count": 381
+          }
+        ],
+        "first_allow": {
+          "enabled": true,
+          "estimate": {
+            "omega_rad_s": -0.0010541138523949257,
+            "v_mps": 0.0,
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "yaw_rad": -0.0001852776452911186
+          },
+          "fault_layer": null,
+          "left_output": 0.19868409814562488,
+          "monotonic_ns": 2968661519306,
+          "right_output": 0.19512409814562487,
+          "safety_decision": "ALLOW",
+          "safety_reason": "None",
+          "source_health": [
+            {
+              "device_id": "WHEEL_ENCODERS",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "BNO055_IMU",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "LIDAR_LOCALIZATION",
+              "reason": "None",
+              "state": "OK"
+            }
+          ],
+          "tick_id": 114
+        },
+        "first_fault": null,
+        "last_allow": {
+          "enabled": true,
+          "estimate": {
+            "omega_rad_s": -0.0010529260261674968,
+            "v_mps": 0.09827214575726353,
+            "x_m": 0.0011599500030963674,
+            "y_m": -1.6387605918343476e-07,
+            "yaw_rad": -0.00015413630628205734
+          },
+          "fault_layer": null,
+          "left_output": 0.18334036742785687,
+          "monotonic_ns": 2968721520366,
+          "right_output": 0.17171758352204142,
+          "safety_decision": "ALLOW",
+          "safety_reason": "None",
+          "source_health": [
+            {
+              "device_id": "WHEEL_ENCODERS",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "BNO055_IMU",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "LIDAR_LOCALIZATION",
+              "reason": "None",
+              "state": "OK"
+            }
+          ],
+          "tick_id": 117
+        },
+        "last_tick": {
+          "enabled": false,
+          "estimate": {
+            "omega_rad_s": 0.0011290707145665004,
+            "v_mps": 0.12289903896590613,
+            "x_m": 0.0032431991310521695,
+            "y_m": -4.6537720197554506e-07,
+            "yaw_rad": -0.0001237793739530078
+          },
+          "fault_layer": null,
+          "left_output": 0.0,
+          "monotonic_ns": 2968741525936,
+          "right_output": 0.0,
+          "safety_decision": "STOP",
+          "safety_reason": "CRITICAL_DEVICE_DEGRADED",
+          "source_health": [
+            {
+              "device_id": "WHEEL_ENCODERS",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "BNO055_IMU",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "LIDAR_LOCALIZATION",
+              "reason": "LIDAR_LOW_CONFIDENCE",
+              "state": "DEGRADED"
+            }
+          ],
+          "tick_id": 118
+        },
+        "observed_tick_count": 119,
+        "post_active_idle": null,
+        "resident_preflight": {
+          "enabled": false,
+          "estimate": {
+            "omega_rad_s": -0.0010556303659448206,
+            "v_mps": 0.0,
+            "x_m": 0.0,
+            "y_m": 0.0,
+            "yaw_rad": -0.00017526487961162844
+          },
+          "fault_layer": null,
+          "left_output": 0.0,
+          "lidar_raw_clearance": {
+            "blocked_front": false,
+            "blockers": [],
+            "front_min_point": {
+              "angle_deg": 318.15625,
+              "distance_m": 1.26575,
+              "distance_mm": 1265.75,
+              "quality": 36,
+              "raw_scan_id": 2,
+              "raw_scan_timestamp": 2968.646129975
+            },
+            "health": "OK",
+            "min_front_m": 1.26575,
+            "min_front_narrow_m": 1.353,
+            "ok": true,
+            "raw_scan_age_s": 0.0,
+            "raw_scan_id": 2,
+            "raw_scan_timestamp": 2968.646129975,
+            "reason": "CLEAR",
+            "required_clearance_m": 0.5,
+            "valid_point_count": 381
+          },
+          "monotonic_ns": 2968641518662,
+          "right_output": 0.0,
+          "safety_decision": "STOP",
+          "safety_reason": "NOT_ACTIVE",
+          "source_health": [
+            {
+              "device_id": "WHEEL_ENCODERS",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "BNO055_IMU",
+              "reason": "None",
+              "state": "OK"
+            },
+            {
+              "device_id": "LIDAR_LOCALIZATION",
+              "reason": "None",
+              "state": "OK"
+            }
+          ],
+          "tick_id": 113
+        },
+        "safety_abort": null,
+        "shutdown_tick": null,
+        "signal_raised_after_tick": null,
+        "signal_reason": null,
+        "warmup_timeout_tick": null
+      }
+    },
+    "run": {
+      "duration_s": 9.615,
+      "ok": true,
+      "return_code": 1,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "approval": "floor-clear-0p50m-speed-0p15-v3",
+        "artifact_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+        "capture_evidence": {
+          "capture_path": "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+          "complete_l1_l12_tick_count": 119,
+          "tick_capture_count": 119,
+          "unique_raw_lidar_scan_count": 3
+        },
+        "command_window": {
+          "active_tick_count": 50,
+          "active_tick_id": 114,
+          "max_v_mps": 0.15,
+          "maximum_warmup_tick_id": 300,
+          "nominal_duration_s": 1.0,
+          "omega_rad_s": 0.0,
+          "shutdown_tick_id": 165,
+          "signal_after_tick_id": 164,
+          "tick_period_ns": 20000000,
+          "v_mps": 0.15
+        },
+        "duration_s": 9.222,
+        "ended_at_utc": "2026-09-02T17:45:25Z",
+        "final_lifecycle": "FAULT_OR_INTERRUPTED",
+        "lease_gate": {
+          "errors": [],
+          "leases": {
+            "live_motion": {
+              "expires_at_utc": "2026-09-02T17:49:56Z",
+              "owner_task_id": "v3_encoder_reject_diagnostics_slice28_20260902",
+              "status": "HELD"
+            },
+            "runtime_control": {
+              "expires_at_utc": "2026-09-02T17:49:56Z",
+              "owner_task_id": "v3_encoder_reject_diagnostics_slice28_20260902",
+              "status": "HELD"
+            }
+          },
+          "ok": true,
+          "root": "/home/alba/project_r2b4",
+          "task_id": "v3_encoder_reject_diagnostics_slice28_20260902"
+        },
+        "motion_metrics": {
+          "active_duration_s": null,
+          "active_metric_count": 5,
+          "maximum_abs_yaw_delta_rad": 5.148550565881038e-05,
+          "maximum_displacement_m": 0.0032431991644414145,
+          "maximum_encoder_abs_mps": 0.1288836163338594,
+          "minimum_active_front_clearance_m": 1.26575
+        },
+        "motor_gpio": {
+          "active_pwm_pins": [
+            12,
+            13,
+            18,
+            19
+          ],
+          "all_active_pwm_cancelled": true,
+          "all_expected_pins_claimed_low": true,
+          "all_final_verified_low": true,
+          "cancelled_pwm_pins": [
+            12,
+            13,
+            18,
+            19
+          ],
+          "claimed_pins": [
+            12,
+            13,
+            18,
+            19
+          ],
+          "event_count": 1958,
+          "event_tail": [
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968569097355,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1766
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968569099392,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1767
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968569101226,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1768
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968569112670,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1769
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968569117022,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1770
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968569120540,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1771
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968569124152,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1772
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968569130892,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1773
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968569134411,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1774
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968569137559,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1775
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968569141096,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1776
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968571207400,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1777
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968571211011,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1778
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968571214288,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1779
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968571217511,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1780
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968588940072,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1781
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968588943183,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1782
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968588945295,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1783
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968588947165,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1784
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968588958443,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1785
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968588962924,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1786
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968588966387,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1787
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968588969702,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1788
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968588978850,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1789
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968588982443,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1790
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968588985850,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1791
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968588988980,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1792
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968591052654,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1793
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968591056487,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1794
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968591059783,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1795
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968591067802,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1796
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968609177828,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1797
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968609181050,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1798
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968609183087,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1799
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968609184883,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1800
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968609196624,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1801
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968609201272,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1802
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968609204587,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1803
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968609207809,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1804
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968609213809,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1805
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968609217550,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1806
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968609220735,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1807
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968609223865,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1808
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968611286594,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1809
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968611290224,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1810
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968611293261,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1811
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968611296391,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1812
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968627817967,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1813
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968627820874,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1814
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968627822911,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1815
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968627824652,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1816
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968627834689,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1817
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968627838800,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1818
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968627841911,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1819
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968627844856,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1820
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968627850059,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1821
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968627853263,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1822
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968627856393,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1823
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968627859448,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1824
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968629924900,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1825
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968629928455,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1826
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968629931474,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1827
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968629934418,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1828
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968650090118,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1829
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968650093192,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1830
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968650095229,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1831
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968650097118,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1832
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968650108414,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1833
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968650113137,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1834
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968650116359,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1835
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968650119451,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1836
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968650125211,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1837
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968650128766,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1838
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968650131822,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1839
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968650134933,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1840
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968652203348,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1841
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968652208014,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1842
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968652211348,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1843
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968652214496,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1844
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968669343685,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1845
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968669347037,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1846
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968669349055,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1847
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968669350907,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1848
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968669362611,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1849
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968669366703,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1850
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968669370129,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1851
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968669373518,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1852
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968669379111,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1853
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968669382907,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1854
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968669392241,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1855
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968669395463,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1856
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968669411833,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 9,
+              "sequence": 1857
+            },
+            {
+              "duty_cycle": 80.13159018543752,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968669416278,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 9,
+              "sequence": 1858
+            },
+            {
+              "duty_cycle": 80.48759018543751,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968669419611,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 9,
+              "sequence": 1859
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968669422722,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 9,
+              "sequence": 1860
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968689183883,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 1,
+              "sequence": 1861
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968689194550,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1862
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968689198606,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 1,
+              "sequence": 1863
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968689201661,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1864
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968689204087,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 1,
+              "sequence": 1865
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968689206643,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1866
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968689208846,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 1,
+              "sequence": 1867
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968689214439,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1868
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968689225384,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1869
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968689229217,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1870
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968689232217,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1871
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968689235384,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1872
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968689241513,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1873
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968689245587,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1874
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968689249050,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1875
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968689252347,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1876
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968689261643,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 9,
+              "sequence": 1877
+            },
+            {
+              "duty_cycle": 79.82677566974857,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968689265291,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 9,
+              "sequence": 1878
+            },
+            {
+              "duty_cycle": 80.18277566974858,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968689268254,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 9,
+              "sequence": 1879
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968689272865,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 9,
+              "sequence": 1880
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968709109749,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 1,
+              "sequence": 1881
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968709116971,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1882
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968709120619,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 1,
+              "sequence": 1883
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968709123027,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1884
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968709125453,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 1,
+              "sequence": 1885
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968709127619,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1886
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968709129897,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 1,
+              "sequence": 1887
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968709132027,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1888
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968709142860,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1889
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968709146360,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1890
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968709149286,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1891
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968709152416,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1892
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968709158712,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1893
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968709162619,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1894
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968709165749,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1895
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968709168953,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1896
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968709176453,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 9,
+              "sequence": 1897
+            },
+            {
+              "duty_cycle": 81.15075959082371,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968709179694,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 9,
+              "sequence": 1898
+            },
+            {
+              "duty_cycle": 80.68756900710136,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968709182638,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 9,
+              "sequence": 1899
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968709185342,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 9,
+              "sequence": 1900
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968728243093,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 1,
+              "sequence": 1901
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968728250464,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1902
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968728254390,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 1,
+              "sequence": 1903
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968728256815,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1904
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968728259112,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 1,
+              "sequence": 1905
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968728261278,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1906
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968728263612,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 1,
+              "sequence": 1907
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968728265778,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1908
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968728275575,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1909
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968728284112,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1910
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968728287408,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1911
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968728290204,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1912
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968728296538,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1913
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968728300390,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1914
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968728303593,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1915
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968728306723,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1916
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968728313908,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 9,
+              "sequence": 1917
+            },
+            {
+              "duty_cycle": 81.66596325721432,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968728317019,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 9,
+              "sequence": 1918
+            },
+            {
+              "duty_cycle": 82.82824164779586,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968728319890,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 9,
+              "sequence": 1919
+            },
+            {
+              "duty_cycle": 100.0,
+              "frequency_hz": 8000,
+              "handle": 2,
+              "monotonic_ns": 2968728322686,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 9,
+              "sequence": 1920
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968749306703,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 1,
+              "sequence": 1921
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968749314592,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1922
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968749318240,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 1,
+              "sequence": 1923
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968749320648,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1924
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968749322926,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 1,
+              "sequence": 1925
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968749325092,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1926
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968749331944,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 1,
+              "sequence": 1927
+            },
+            {
+              "duty_cycle": 0.0,
+              "frequency_hz": 0,
+              "handle": 2,
+              "monotonic_ns": 2968749334259,
+              "ok": true,
+              "operation": "tx_pwm",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1928
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968749345407,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1929
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968749349129,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1930
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968749352481,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1931
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968749355407,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1932
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968749361852,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1933
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968749365759,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1934
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968749368926,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1935
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968749372037,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1936
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968751439137,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1937
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968751443229,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1938
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968751446303,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1939
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968751449359,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1940
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968753522848,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1941
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968753525755,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1942
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968753527607,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1943
+            },
+            {
+              "handle": 2,
+              "kind": 0,
+              "monotonic_ns": 2968753529551,
+              "ok": true,
+              "operation": "tx_busy",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1944
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968753538477,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1945
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968753542348,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1946
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968753545348,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1947
+            },
+            {
+              "handle": 2,
+              "level": 0,
+              "monotonic_ns": 2968753548311,
+              "ok": true,
+              "operation": "gpio_write",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1948
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968753553422,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1949
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968753556737,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1950
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968753559848,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1951
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968753563237,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1952
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968755630022,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 12,
+              "result": 0,
+              "sequence": 1953
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968755633818,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 13,
+              "result": 0,
+              "sequence": 1954
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968755637059,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 18,
+              "result": 0,
+              "sequence": 1955
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968755640188,
+              "ok": true,
+              "operation": "gpio_read",
+              "pin": 19,
+              "result": 0,
+              "sequence": 1956
+            },
+            {
+              "handle": 2,
+              "monotonic_ns": 2968855916722,
+              "ok": true,
+              "operation": "gpiochip_close",
+              "result": 0,
+              "sequence": 1957
+            }
+          ],
+          "expected_pins": [
+            12,
+            13,
+            18,
+            19
+          ],
+          "failed_event_count": 0,
+          "gpio_closed_after_verified_low": true,
+          "maximum_abs_pwm_by_pin": {
+            "12": 100.0,
+            "13": 81.66596325721432,
+            "18": 82.82824164779586,
+            "19": 100.0
+          },
+          "minimum_verified_low_hold_ms": 2.077,
+          "nonzero_pwm_write_count": 16,
+          "opened_handle_count": 1,
+          "pin_evidence": {
+            "12": {
+              "active_pwm_cancelled": true,
+              "busy_true_after_nonzero_sequence": 1921,
+              "cancel_sequence": 1922,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 1945,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": 1917,
+              "nonzero_pwm_write_count": 4,
+              "verified_low_hold_ms": 2.077
+            },
+            "13": {
+              "active_pwm_cancelled": true,
+              "busy_true_after_nonzero_sequence": 1923,
+              "cancel_sequence": 1924,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 1946,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": 1918,
+              "nonzero_pwm_write_count": 4,
+              "verified_low_hold_ms": 2.077
+            },
+            "18": {
+              "active_pwm_cancelled": true,
+              "busy_true_after_nonzero_sequence": 1925,
+              "cancel_sequence": 1926,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 1947,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": 1919,
+              "nonzero_pwm_write_count": 4,
+              "verified_low_hold_ms": 2.077
+            },
+            "19": {
+              "active_pwm_cancelled": true,
+              "busy_true_after_nonzero_sequence": 1927,
+              "cancel_sequence": 1928,
+              "final_low_readback_count": 2,
+              "final_low_write_sequence": 1948,
+              "final_verified_low": true,
+              "last_nonzero_pwm_sequence": 1920,
+              "nonzero_pwm_write_count": 4,
+              "verified_low_hold_ms": 2.077
+            }
+          }
+        },
+        "motor_power": "ON_FLOOR_BY_EXPLICIT_APPROVAL_AND_RAW_LIDAR_GATE",
+        "operator_stopped": false,
+        "post_close_pins": {
+          "command": [
+            "/usr/bin/pinctrl",
+            "get",
+            "12,13,18,19"
+          ],
+          "errors": [],
+          "ok": true,
+          "pins": {
+            "12": {
+              "drive_low": true,
+              "output": true,
+              "raw": "12: op dl pd | lo // GPIO12 = output"
+            },
+            "13": {
+              "drive_low": true,
+              "output": true,
+              "raw": "13: op dl pd | lo // GPIO13 = output"
+            },
+            "18": {
+              "drive_low": true,
+              "output": true,
+              "raw": "18: op dl pd | lo // GPIO18 = output"
+            },
+            "19": {
+              "drive_low": true,
+              "output": true,
+              "raw": "19: op dl pd | lo // GPIO19 = output"
+            }
+          },
+          "return_code": 0,
+          "status": "PASS"
+        },
+        "profile": "v3_native_floor_motion_capture",
+        "resident_report": {
+          "exit_reason": "RUNTIME_FAULT",
+          "fault_layer": null,
+          "final_lifecycle": "FAULT",
+          "final_reason": "CRITICAL_DEVICE_DEGRADED",
+          "final_safety_decision": "STOP",
+          "last_tick_id": 118,
+          "normal_tick_count": 119,
+          "operator_stopped": false,
+          "run_status": 1,
+          "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V1",
+          "status": "FAULT",
+          "tick_count": 119
+        },
+        "safety_bounds": {
+          "active_clearance_m": 0.3,
+          "maximum_abs_yaw_delta_rad": 0.35,
+          "maximum_active_duration_s": 1.5,
+          "maximum_displacement_m": 0.3,
+          "maximum_encoder_abs_mps": 0.45,
+          "preflight_clearance_m": 0.5
+        },
+        "schema": "R2B4_V3_NATIVE_FLOOR_MOTION_CAPTURE_V1",
+        "started_at_utc": "2026-09-02T17:45:16Z",
+        "status": "FAIL",
+        "success": false,
+        "tick_evidence": {
+          "allow_tick_ids": [
+            114,
+            115,
+            116,
+            117
+          ],
+          "clearance_preflight_scans": [
+            {
+              "blocked_front": false,
+              "blockers": [],
+              "front_min_point": {
+                "angle_deg": 318.859375,
+                "distance_m": 1.26625,
+                "distance_mm": 1266.25,
+                "quality": 35,
+                "raw_scan_id": 1,
+                "raw_scan_timestamp": 2968.560503585
+              },
+              "health": "OK",
+              "min_front_m": 1.26625,
+              "min_front_narrow_m": 1.35525,
+              "ok": true,
+              "raw_scan_age_s": 0.001016,
+              "raw_scan_id": 1,
+              "raw_scan_timestamp": 2968.560503585,
+              "reason": "CLEAR",
+              "required_clearance_m": 0.5,
+              "valid_point_count": 114
+            },
+            {
+              "blocked_front": false,
+              "blockers": [],
+              "front_min_point": {
+                "angle_deg": 318.15625,
+                "distance_m": 1.26575,
+                "distance_mm": 1265.75,
+                "quality": 36,
+                "raw_scan_id": 2,
+                "raw_scan_timestamp": 2968.646129975
+              },
+              "health": "OK",
+              "min_front_m": 1.26575,
+              "min_front_narrow_m": 1.353,
+              "ok": true,
+              "raw_scan_age_s": 0.0,
+              "raw_scan_id": 2,
+              "raw_scan_timestamp": 2968.646129975,
+              "reason": "CLEAR",
+              "required_clearance_m": 0.5,
+              "valid_point_count": 381
+            }
+          ],
+          "first_allow": {
+            "enabled": true,
+            "estimate": {
+              "omega_rad_s": -0.0010541138523949257,
+              "v_mps": 0.0,
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": -0.0001852776452911186
+            },
+            "fault_layer": null,
+            "left_output": 0.19868409814562488,
+            "monotonic_ns": 2968661519306,
+            "right_output": 0.19512409814562487,
+            "safety_decision": "ALLOW",
+            "safety_reason": "None",
+            "source_health": [
+              {
+                "device_id": "WHEEL_ENCODERS",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "BNO055_IMU",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "LIDAR_LOCALIZATION",
+                "reason": "None",
+                "state": "OK"
+              }
+            ],
+            "tick_id": 114
+          },
+          "first_fault": null,
+          "last_allow": {
+            "enabled": true,
+            "estimate": {
+              "omega_rad_s": -0.0010529260261674968,
+              "v_mps": 0.09827214575726353,
+              "x_m": 0.0011599500030963674,
+              "y_m": -1.6387605918343476e-07,
+              "yaw_rad": -0.00015413630628205734
+            },
+            "fault_layer": null,
+            "left_output": 0.18334036742785687,
+            "monotonic_ns": 2968721520366,
+            "right_output": 0.17171758352204142,
+            "safety_decision": "ALLOW",
+            "safety_reason": "None",
+            "source_health": [
+              {
+                "device_id": "WHEEL_ENCODERS",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "BNO055_IMU",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "LIDAR_LOCALIZATION",
+                "reason": "None",
+                "state": "OK"
+              }
+            ],
+            "tick_id": 117
+          },
+          "last_tick": {
+            "enabled": false,
+            "estimate": {
+              "omega_rad_s": 0.0011290707145665004,
+              "v_mps": 0.12289903896590613,
+              "x_m": 0.0032431991310521695,
+              "y_m": -4.6537720197554506e-07,
+              "yaw_rad": -0.0001237793739530078
+            },
+            "fault_layer": null,
+            "left_output": 0.0,
+            "monotonic_ns": 2968741525936,
+            "right_output": 0.0,
+            "safety_decision": "STOP",
+            "safety_reason": "CRITICAL_DEVICE_DEGRADED",
+            "source_health": [
+              {
+                "device_id": "WHEEL_ENCODERS",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "BNO055_IMU",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "LIDAR_LOCALIZATION",
+                "reason": "LIDAR_LOW_CONFIDENCE",
+                "state": "DEGRADED"
+              }
+            ],
+            "tick_id": 118
+          },
+          "observed_tick_count": 119,
+          "post_active_idle": null,
+          "resident_preflight": {
+            "enabled": false,
+            "estimate": {
+              "omega_rad_s": -0.0010556303659448206,
+              "v_mps": 0.0,
+              "x_m": 0.0,
+              "y_m": 0.0,
+              "yaw_rad": -0.00017526487961162844
+            },
+            "fault_layer": null,
+            "left_output": 0.0,
+            "lidar_raw_clearance": {
+              "blocked_front": false,
+              "blockers": [],
+              "front_min_point": {
+                "angle_deg": 318.15625,
+                "distance_m": 1.26575,
+                "distance_mm": 1265.75,
+                "quality": 36,
+                "raw_scan_id": 2,
+                "raw_scan_timestamp": 2968.646129975
+              },
+              "health": "OK",
+              "min_front_m": 1.26575,
+              "min_front_narrow_m": 1.353,
+              "ok": true,
+              "raw_scan_age_s": 0.0,
+              "raw_scan_id": 2,
+              "raw_scan_timestamp": 2968.646129975,
+              "reason": "CLEAR",
+              "required_clearance_m": 0.5,
+              "valid_point_count": 381
+            },
+            "monotonic_ns": 2968641518662,
+            "right_output": 0.0,
+            "safety_decision": "STOP",
+            "safety_reason": "NOT_ACTIVE",
+            "source_health": [
+              {
+                "device_id": "WHEEL_ENCODERS",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "BNO055_IMU",
+                "reason": "None",
+                "state": "OK"
+              },
+              {
+                "device_id": "LIDAR_LOCALIZATION",
+                "reason": "None",
+                "state": "OK"
+              }
+            ],
+            "tick_id": 113
+          },
+          "safety_abort": null,
+          "shutdown_tick": null,
+          "signal_raised_after_tick": null,
+          "signal_reason": null,
+          "warmup_timeout_tick": null
+        }
+      },
+      "stdout_tail": "        \"ok\": true\n      },\n      {\n        \"sequence\": 1949,\n        \"monotonic_ns\": 2968753553422,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1950,\n        \"monotonic_ns\": 2968753556737,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1951,\n        \"monotonic_ns\": 2968753559848,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1952,\n        \"monotonic_ns\": 2968753563237,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1953,\n        \"monotonic_ns\": 2968755630022,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 12,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1954,\n        \"monotonic_ns\": 2968755633818,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 13,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1955,\n        \"monotonic_ns\": 2968755637059,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 18,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1956,\n        \"monotonic_ns\": 2968755640188,\n        \"operation\": \"gpio_read\",\n        \"handle\": 2,\n        \"pin\": 19,\n        \"result\": 0,\n        \"ok\": true\n      },\n      {\n        \"sequence\": 1957,\n        \"monotonic_ns\": 2968855916722,\n        \"operation\": \"gpiochip_close\",\n        \"handle\": 2,\n        \"result\": 0,\n        \"ok\": true\n      }\n    ]\n  },\n  \"post_close_pins\": {\n    \"status\": \"PASS\",\n    \"ok\": true,\n    \"command\": [\n      \"/usr/bin/pinctrl\",\n      \"get\",\n      \"12,13,18,19\"\n    ],\n    \"return_code\": 0,\n    \"pins\": {\n      \"12\": {\n        \"raw\": \"12: op dl pd | lo // GPIO12 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"13\": {\n        \"raw\": \"13: op dl pd | lo // GPIO13 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"18\": {\n        \"raw\": \"18: op dl pd | lo // GPIO18 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      },\n      \"19\": {\n        \"raw\": \"19: op dl pd | lo // GPIO19 = output\",\n        \"output\": true,\n        \"drive_low\": true\n      }\n    },\n    \"errors\": []\n  },\n  \"final_lifecycle\": \"FAULT_OR_INTERRUPTED\",\n  \"artifact_path\": \"logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json\"\n}",
+      "timed_out": false
+    }
+  },
+  "started_at_utc": "2026-09-02T17:45:02Z",
+  "status": "FAIL",
+  "summary": {
+    "artifact_paths": [
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260902T174502Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json"
+    ],
+    "artifact_paths_missing": [],
+    "artifact_paths_stale_rejected": [],
+    "description": "Health-armed one-second native V3 floor motion with current raw LiDAR clearance, full L1-L12 capture and bounded shutdown.",
+    "duration_s": 22.857,
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "ekf_truth_gate_ok": true,
+    "ended_at_utc": "2026-09-02T17:45:25Z",
+    "family": "v3_native_hardware",
+    "goals": [
+      "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+      "current raw LiDAR front-sector clearance of at least 0.50 m before health arming",
+      "exactly 50 resident ticks at 0.15 m/s nominal straight speed (1.0 s at 20 ms)",
+      "immediate signal stop on raw LiDAR, encoder, L3 displacement, yaw or elapsed-time bound",
+      "complete per-tick L1-L12, control, actuation, GPIO/PWM and de-duplicated raw-scan capture",
+      "post-active IDLE, SIGTERM SHUTDOWN and verified four-pin hard-low after close"
+    ],
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 6019,
+          "pid": 6019,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "live": true,
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-02T17:45:25Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-02T17:45:02Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/session_20260902T174502Z/latest_human_observed_1x1m_validation.json",
+      "payload": {},
+      "required": false
+    },
+    "measurement_truth_gate_ok": true,
+    "preflight_ok": true,
+    "preflight_pose_reset": {},
+    "profile": "v3_native_floor_motion_capture",
+    "requires_preflight": true,
+    "run_dir": "logs/session_20260902T174502Z",
+    "run_tag": "hub_v3_native_floor_motion_capture_20260902T174502Z",
+    "started_at_utc": "2026-09-02T17:45:02Z",
+    "status": "FAIL",
+    "triage_order": [
+      "summary.json",
+      "incident_bundle.json",
+      "ownership_manifest.json",
+      "stdout_tail.txt",
+      "stderr_tail.txt"
+    ],
+    "verdict": {
+      "primary": "TEST_FAIL",
+      "reason": "scenario return_code=1",
+      "status": "FAIL"
+    },
+    "warning_summary": {},
+    "warnings": []
+  }
+}

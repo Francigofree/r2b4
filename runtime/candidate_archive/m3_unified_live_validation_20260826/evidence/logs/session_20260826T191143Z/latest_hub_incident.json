@@ -1,0 +1,92 @@
+{
+  "artifacts": [],
+  "command": {
+    "return_code": -99,
+    "stderr_tail": "",
+    "stdout_tail": "",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 26374,
+        "pid": 26374,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-08-26T19:12:02Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 21,
+      "logger_updated_ts": 13337.010780884,
+      "status_version": 5,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-08-26T19:11:43Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 21,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [
+      "measurement_truth_missing"
+    ],
+    "max_age_s": 3600.0,
+    "ok": false,
+    "path": "logs/session_20260826T191143Z/latest_M0_measurement_trust_live.json",
+    "required": true
+  },
+  "preflight": {
+    "errors": null,
+    "ok": true,
+    "stdout_tail": ""
+  },
+  "preflight_pose_reset": {},
+  "primary_failure": "TRUTH_GATE_FAIL",
+  "profile": "M3_room_cruise_unified_validator",
+  "reason": "measurement_truth_gate_failed:['measurement_truth_missing']",
+  "run_tag": "hub_M3_room_cruise_unified_validator_20260826T191143Z",
+  "status": "FAIL",
+  "warning_summary": {},
+  "warnings": []
+}

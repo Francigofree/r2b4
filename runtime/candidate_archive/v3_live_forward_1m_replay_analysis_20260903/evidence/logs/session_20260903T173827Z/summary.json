@@ -1,0 +1,117 @@
+{
+  "artifact_paths": [
+    "logs/session_20260903T173827Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_capture.json",
+    "logs/session_20260903T173827Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+    "logs/session_20260903T173827Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+    "logs/session_20260903T173827Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json"
+  ],
+  "artifact_paths_missing": [],
+  "artifact_paths_stale_rejected": [],
+  "description": "Health-armed distance-targeted native V3 floor motion at 0.15 m/s to approximately 1.0 m with full L1-L12 capture and bounded shutdown.",
+  "duration_s": 22.78,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ekf_truth_gate_ok": true,
+  "ended_at_utc": "2026-09-03T17:38:50Z",
+  "family": "v3_native_hardware",
+  "goals": [
+    "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+    "current raw LiDAR front-sector clearance of at least 1.30 m before health arming",
+    "distance-targeted STOP at 1.00 m L3 displacement with a maximum 500-tick ACTIVE window",
+    "0.15 m/s nominal straight speed and at most 0.05 m accepted endpoint overshoot",
+    "immediate signal stop on raw LiDAR, encoder, L3 displacement, yaw or elapsed-time bound",
+    "complete per-tick L1-L12, control, actuation, GPIO/PWM and de-duplicated raw-scan capture",
+    "post-active IDLE, SIGTERM SHUTDOWN and verified four-pin hard-low after close"
+  ],
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 6888,
+        "pid": 6888,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "live": true,
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-03T17:38:50Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-03T17:38:27Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260903T173827Z/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "measurement_truth_gate_ok": true,
+  "preflight_ok": true,
+  "preflight_pose_reset": {},
+  "profile": "v3_native_floor_motion_capture",
+  "requires_preflight": true,
+  "run_dir": "logs/session_20260903T173827Z",
+  "run_tag": "hub_v3_native_floor_motion_capture_20260903T173827Z",
+  "started_at_utc": "2026-09-03T17:38:27Z",
+  "status": "FAIL",
+  "triage_order": [
+    "summary.json",
+    "incident_bundle.json",
+    "ownership_manifest.json",
+    "stdout_tail.txt",
+    "stderr_tail.txt"
+  ],
+  "verdict": {
+    "primary": "TEST_FAIL",
+    "reason": "scenario return_code=1",
+    "status": "FAIL"
+  },
+  "warning_summary": {},
+  "warnings": []
+}

@@ -1,0 +1,39 @@
+{
+  "approval": "powered-raised-stand-hard-low-v3",
+  "artifact_path": "logs/session_20260902T083758Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json",
+  "duration_s": 0.0,
+  "ended_at_utc": "2026-09-02T08:38:11Z",
+  "error": "native V3 motion leases failed: ['runtime_control_lease_not_held_by_active_task', 'live_motion_lease_not_held_by_active_task']",
+  "error_type": "PermissionError",
+  "final_lifecycle": "FAULT_OR_INTERRUPTED",
+  "lease_gate": {
+    "errors": [
+      "runtime_control_lease_not_held_by_active_task",
+      "live_motion_lease_not_held_by_active_task"
+    ],
+    "leases": {
+      "live_motion": {
+        "expires_at_utc": null,
+        "owner_task_id": null,
+        "status": "FREE"
+      },
+      "runtime_control": {
+        "expires_at_utc": null,
+        "owner_task_id": null,
+        "status": "FREE"
+      }
+    },
+    "ok": false,
+    "root": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree",
+    "task_id": "v3_test_hub_powered_raised_stand_validation_slice19b_20260902"
+  },
+  "motor_gpio": {},
+  "motor_power": "ON_RAISED_STAND_BY_EXPLICIT_APPROVAL",
+  "operator_stopped": false,
+  "post_close_pins": {},
+  "profile": "v3_native_raised_stand_bounded",
+  "schema": "R2B4_V3_NATIVE_RAISED_STAND_MOTION_V2",
+  "started_at_utc": "2026-09-02T08:38:11Z",
+  "status": "ERROR",
+  "success": false
+}

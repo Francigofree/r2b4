@@ -1,0 +1,782 @@
+{
+  "archive": {
+    "enabled": false,
+    "post_check": null,
+    "post_run": null,
+    "pre_check": null,
+    "pre_run": null,
+    "requested": true,
+    "skipped_reason": "disabled_during_live_run_for_watchdog_safety"
+  },
+  "duration_s": 27.057,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "reason": "scenario_not_executed",
+    "required": false,
+    "skipped": true,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ended_at_utc": "2026-09-02T08:30:13Z",
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 8421,
+        "pid": 8421,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "incident": {
+    "artifacts": [
+      "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json",
+      "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json"
+    ],
+    "command": {
+      "return_code": -99,
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "timed_out": false
+    },
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 8421,
+          "pid": 8421,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-02T08:30:13Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-02T08:29:45Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/latest/latest_human_observed_1x1m_validation.json",
+      "required": false
+    },
+    "preflight": {
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_healthy_window_too_short"
+      ],
+      "ok": false,
+      "stdout_tail": "    \"v_mps\": 0.0,\n    \"x_m\": 0.0,\n    \"y_m\": 0.0,\n    \"yaw_rad\": 0.0010908307824968552\n  },\n  \"healthy_tick_count\": 0,\n  \"l3_estimate_count\": 300,\n  \"last_estimate\": {\n    \"omega_rad_s\": -0.0010632786149663961,\n    \"tick_id\": 299,\n    \"v_mps\": 0.0,\n    \"x_m\": 0.0,\n    \"y_m\": 0.0,\n    \"yaw_rad\": 0.0010943996653038142\n  },\n  \"lidar_diagnostics\": {\n    \"last_result\": null,\n    \"runtime_status\": {\n      \"driver_connected\": false,\n      \"health\": \"STALE\",\n      \"matcher_confidence_model\": \"R2B4_SCAN_MATCH_CONFIDENCE_V2\",\n      \"matcher_contract_id\": \"R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1\",\n      \"matcher_latency_ms_latest\": 0.0,\n      \"matcher_process_errors\": 0,\n      \"matcher_processed_scans\": 0,\n      \"matcher_transport\": \"process_latest_only\",\n      \"queue_drops\": 0,\n      \"raw_scan_latest_age_s\": Infinity,\n      \"raw_scan_rate_hz\": 0.0,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 0,\n      \"stale_result_drops\": 0\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 299\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.004363323129985824,\n        0.004363323129985824\n      ],\n      \"yaw_rad\": [\n        0.0010908307824968552,\n        0.0010908307824968552\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 300\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"FAIL\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+    },
+    "preflight_pose_reset": {},
+    "primary_failure": "PREFLIGHT_FAIL",
+    "profile": "v3_native_raised_stand_bounded",
+    "reason": "preflight_failed:['native_sensor_command_failed', 'native_sensor_measurement_not_pass', 'native_sensor_healthy_window_too_short']",
+    "run_tag": "hub_v3_native_raised_stand_bounded_20260902T082945Z",
+    "status": "FAIL",
+    "warning_summary": {},
+    "warnings": []
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-02T08:30:13Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-02T08:29:45Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/latest/latest_human_observed_1x1m_validation.json",
+    "payload": {},
+    "required": false
+  },
+  "preflight": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/tools/v3_sensor_measurement.py",
+      "--ticks",
+      "300",
+      "--output",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json"
+    ],
+    "ok": false,
+    "payload": {
+      "all_commits_zero": true,
+      "artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json",
+      "attempt_count": 2,
+      "attempts": [
+        {
+          "all_commits_zero": true,
+          "artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+          "attempt": 1,
+          "errors": [
+            "native_sensor_command_failed",
+            "native_sensor_measurement_not_pass",
+            "native_sensor_healthy_window_too_short"
+          ],
+          "fault_tick_count": 0,
+          "healthy_tick_count": 0,
+          "l3_estimate_count": 300,
+          "return_code": 1,
+          "status": "FAIL",
+          "tick_count": 300
+        },
+        {
+          "all_commits_zero": true,
+          "artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json",
+          "attempt": 2,
+          "errors": [
+            "native_sensor_command_failed",
+            "native_sensor_measurement_not_pass",
+            "native_sensor_healthy_window_too_short"
+          ],
+          "fault_tick_count": 0,
+          "healthy_tick_count": 0,
+          "l3_estimate_count": 300,
+          "return_code": 1,
+          "status": "FAIL",
+          "tick_count": 300
+        }
+      ],
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_healthy_window_too_short"
+      ],
+      "fault_tick_count": 0,
+      "first_estimate": {
+        "omega_rad_s": -0.003272492347489368,
+        "tick_id": 0,
+        "v_mps": 0.0,
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.0010908307824968552
+      },
+      "healthy_tick_count": 0,
+      "hub_gate": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "healthy_tick_count": 0,
+        "l3_estimate_count": 300,
+        "measured_tick_count": 300,
+        "minimum_healthy_tick_count": 1,
+        "required_tick_count": 300,
+        "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+      },
+      "l3_estimate_count": 300,
+      "last_estimate": {
+        "omega_rad_s": -0.0010632786149663961,
+        "tick_id": 299,
+        "v_mps": 0.0,
+        "x_m": 0.0,
+        "y_m": 0.0,
+        "yaw_rad": 0.0010943996653038142
+      },
+      "lidar_diagnostics": {
+        "last_result": null,
+        "runtime_status": {
+          "driver_connected": false,
+          "health": "STALE",
+          "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+          "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+          "matcher_latency_ms_latest": 0.0,
+          "matcher_process_errors": 0,
+          "matcher_processed_scans": 0,
+          "matcher_transport": "process_latest_only",
+          "queue_drops": 0,
+          "raw_scan_latest_age_s": Infinity,
+          "raw_scan_rate_hz": 0.0,
+          "result_queue_drops": 0,
+          "running": false,
+          "scan_seq": 0,
+          "stale_result_drops": 0
+        }
+      },
+      "measurement_artifact_path": "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json",
+      "ok": false,
+      "operator_stopped": false,
+      "rejected_counts": {
+        "DUPLICATE": 299
+      },
+      "sample_ranges": {
+        "ekf_heading": {
+          "calibration": [
+            0.0,
+            0.0
+          ],
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.0
+          ],
+          "omega_calibration": [
+            3.0,
+            3.0
+          ],
+          "omega_confidence": [
+            1.0,
+            1.0
+          ],
+          "omega_rad_s": [
+            -0.004363323129985824,
+            0.004363323129985824
+          ],
+          "yaw_rad": [
+            0.0010908307824968552,
+            0.0010908307824968552
+          ]
+        },
+        "lidar_health": {
+          "age_ns": [
+            0.0,
+            0.0
+          ],
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "confidence": [
+            0.0,
+            0.0
+          ]
+        },
+        "wheel_velocity": {
+          "captured_minus_tick_ns": [
+            0.0,
+            0.0
+          ],
+          "left_mps": [
+            0.0,
+            0.0
+          ],
+          "right_mps": [
+            0.0,
+            0.0
+          ],
+          "trust": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+      "source_state_counts": {
+        "BNO055_IMU": {
+          "OK": 300
+        },
+        "LIDAR_LOCALIZATION": {
+          "DEGRADED": 300
+        },
+        "WHEEL_ENCODERS": {
+          "DEGRADED": 1,
+          "OK": 299
+        }
+      },
+      "status": "FAIL",
+      "tick_count": 300
+    },
+    "run": {
+      "duration_s": 12.807,
+      "ok": true,
+      "return_code": 1,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "all_commits_zero": true,
+        "fault_tick_count": 0,
+        "first_estimate": {
+          "omega_rad_s": -0.003272492347489368,
+          "tick_id": 0,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": 0.0010908307824968552
+        },
+        "healthy_tick_count": 0,
+        "l3_estimate_count": 300,
+        "last_estimate": {
+          "omega_rad_s": -0.0010632786149663961,
+          "tick_id": 299,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": 0.0010943996653038142
+        },
+        "lidar_diagnostics": {
+          "last_result": null,
+          "runtime_status": {
+            "driver_connected": false,
+            "health": "STALE",
+            "matcher_confidence_model": "R2B4_SCAN_MATCH_CONFIDENCE_V2",
+            "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
+            "matcher_latency_ms_latest": 0.0,
+            "matcher_process_errors": 0,
+            "matcher_processed_scans": 0,
+            "matcher_transport": "process_latest_only",
+            "queue_drops": 0,
+            "raw_scan_latest_age_s": Infinity,
+            "raw_scan_rate_hz": 0.0,
+            "result_queue_drops": 0,
+            "running": false,
+            "scan_seq": 0,
+            "stale_result_drops": 0
+          }
+        },
+        "operator_stopped": false,
+        "rejected_counts": {
+          "DUPLICATE": 299
+        },
+        "sample_ranges": {
+          "ekf_heading": {
+            "calibration": [
+              0.0,
+              0.0
+            ],
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.0
+            ],
+            "omega_calibration": [
+              3.0,
+              3.0
+            ],
+            "omega_confidence": [
+              1.0,
+              1.0
+            ],
+            "omega_rad_s": [
+              -0.004363323129985824,
+              0.004363323129985824
+            ],
+            "yaw_rad": [
+              0.0010908307824968552,
+              0.0010908307824968552
+            ]
+          },
+          "lidar_health": {
+            "age_ns": [
+              0.0,
+              0.0
+            ],
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "confidence": [
+              0.0,
+              0.0
+            ]
+          },
+          "wheel_velocity": {
+            "captured_minus_tick_ns": [
+              0.0,
+              0.0
+            ],
+            "left_mps": [
+              0.0,
+              0.0
+            ],
+            "right_mps": [
+              0.0,
+              0.0
+            ],
+            "trust": [
+              0.0,
+              1.0
+            ]
+          }
+        },
+        "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+        "source_state_counts": {
+          "BNO055_IMU": {
+            "OK": 300
+          },
+          "LIDAR_LOCALIZATION": {
+            "DEGRADED": 300
+          },
+          "WHEEL_ENCODERS": {
+            "DEGRADED": 1,
+            "OK": 299
+          }
+        },
+        "status": "FAIL",
+        "tick_count": 300,
+        "tick_details_written": 300
+      },
+      "stdout_tail": "    \"v_mps\": 0.0,\n    \"x_m\": 0.0,\n    \"y_m\": 0.0,\n    \"yaw_rad\": 0.0010908307824968552\n  },\n  \"healthy_tick_count\": 0,\n  \"l3_estimate_count\": 300,\n  \"last_estimate\": {\n    \"omega_rad_s\": -0.0010632786149663961,\n    \"tick_id\": 299,\n    \"v_mps\": 0.0,\n    \"x_m\": 0.0,\n    \"y_m\": 0.0,\n    \"yaw_rad\": 0.0010943996653038142\n  },\n  \"lidar_diagnostics\": {\n    \"last_result\": null,\n    \"runtime_status\": {\n      \"driver_connected\": false,\n      \"health\": \"STALE\",\n      \"matcher_confidence_model\": \"R2B4_SCAN_MATCH_CONFIDENCE_V2\",\n      \"matcher_contract_id\": \"R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1\",\n      \"matcher_latency_ms_latest\": 0.0,\n      \"matcher_process_errors\": 0,\n      \"matcher_processed_scans\": 0,\n      \"matcher_transport\": \"process_latest_only\",\n      \"queue_drops\": 0,\n      \"raw_scan_latest_age_s\": Infinity,\n      \"raw_scan_rate_hz\": 0.0,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 0,\n      \"stale_result_drops\": 0\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 299\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.004363323129985824,\n        0.004363323129985824\n      ],\n      \"yaw_rad\": [\n        0.0010908307824968552,\n        0.0010908307824968552\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 300\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"FAIL\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}",
+      "timed_out": false
+    }
+  },
+  "preflight_pose_reset": null,
+  "profile": "v3_native_raised_stand_bounded",
+  "run_dir": "logs/session_20260902T082945Z",
+  "runtime": {
+    "before": {
+      "action": "status",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/tools/agent_runtime_manager.py",
+        "status",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": false,
+      "payload": {
+        "gui": {
+          "error": "<urlopen error [Errno 111] Connection refused>",
+          "ok": false,
+          "payload": {},
+          "port": 7860
+        },
+        "pid_file": {
+          "alive": false,
+          "exists": false,
+          "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/runtime/agent_runtime/os.pid",
+          "payload": {},
+          "pid": null,
+          "registered_process": false,
+          "stale": false,
+          "status_pid_matches": false
+        },
+        "processes": [],
+        "ready_for_live_tests": false,
+        "running": false,
+        "runtime_identity": {
+          "ok": false,
+          "running_process_pids": [],
+          "status_pid_is_running": false,
+          "unique_os_process": false
+        },
+        "status": {
+          "age_s": null,
+          "exists": false,
+          "fresh": false,
+          "runtime_pid": null,
+          "safety_allow": true,
+          "startup_ready": false,
+          "state": "",
+          "status_version": 0,
+          "stop_type": ""
+        },
+        "timestamp": "2026-09-02T08:29:46Z"
+      },
+      "run": {
+        "duration_s": 0.405,
+        "ok": true,
+        "return_code": 1,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-02T08:29:46Z"
+        },
+        "stdout_tail": "{\n  \"timestamp\": \"2026-09-02T08:29:46Z\",\n  \"running\": false,\n  \"ready_for_live_tests\": false,\n  \"processes\": [],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": false,\n    \"pid\": null,\n    \"alive\": false,\n    \"status_pid_matches\": false,\n    \"registered_process\": false,\n    \"stale\": false,\n    \"payload\": {}\n  },\n  \"runtime_identity\": {\n    \"ok\": false,\n    \"status_pid_is_running\": false,\n    \"unique_os_process\": false,\n    \"running_process_pids\": []\n  },\n  \"status\": {\n    \"exists\": false,\n    \"age_s\": null,\n    \"fresh\": false,\n    \"state\": \"\",\n    \"status_version\": 0,\n    \"runtime_pid\": null,\n    \"startup_ready\": false,\n    \"safety_allow\": true,\n    \"stop_type\": \"\"\n  },\n  \"gui\": {\n    \"ok\": false,\n    \"port\": 7860,\n    \"error\": \"<urlopen error [Errno 111] Connection refused>\",\n    \"payload\": {}\n  }\n}",
+        "timed_out": false
+      }
+    },
+    "ready_for_live_tests_after_recovery": true,
+    "recovery": [
+      {
+        "action": "verify_managed_runtime_stopped",
+        "ok": true,
+        "payload": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_hard_low_cancel_validation_slice19_20260902/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": null,
+            "exists": false,
+            "fresh": false,
+            "runtime_pid": null,
+            "safety_allow": true,
+            "startup_ready": false,
+            "state": "",
+            "status_version": 0,
+            "stop_type": ""
+          },
+          "timestamp": "2026-09-02T08:29:46Z"
+        },
+        "reason": "exclusive_native_hardware_ready"
+      }
+    ],
+    "start": null,
+    "started_here": false,
+    "stop": null
+  },
+  "scenario_run": null,
+  "started_at_utc": "2026-09-02T08:29:45Z",
+  "status": "FAIL",
+  "summary": {
+    "artifact_paths": [
+      "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+      "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_2.json",
+      "logs/session_20260902T082945Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json"
+    ],
+    "artifact_paths_missing": [],
+    "artifact_paths_stale_rejected": [],
+    "description": "Finite native V3 motor-power-off signal validation through the canonical bounded L12 motor writer.",
+    "duration_s": 27.057,
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "reason": "scenario_not_executed",
+      "required": false,
+      "skipped": true,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "ekf_truth_gate_ok": true,
+    "ended_at_utc": "2026-09-02T08:30:13Z",
+    "family": "v3_native_hardware",
+    "goals": [
+      "fresh zero-output encoder, BNO055, LiDAR and L3 preflight in the same Hub session",
+      "explicit per-run motor-power-off approval with no approval embedded in the profile",
+      "one 20 ms 0.04 m/s command pulse with motor power physically disconnected",
+      "active PWM busy/cancel proof followed by final IDLE and verified four-pin hard-low",
+      "post-close pinctrl proof that all four DRV8871 inputs remain output-low",
+      "exclusive native hardware ownership without starting the legacy managed runtime"
+    ],
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 8421,
+          "pid": 8421,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "live": true,
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-09-02T08:30:13Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-09-02T08:29:45Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 0,
+        "logger_updated_ts": 0.0,
+        "status_version": 0,
+        "watchdog_freq_hz": 0.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": 0,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": null,
+      "errors": [],
+      "max_age_s": 21600.0,
+      "ok": true,
+      "path": "logs/latest/latest_human_observed_1x1m_validation.json",
+      "payload": {},
+      "required": false
+    },
+    "measurement_truth_gate_ok": true,
+    "preflight_ok": false,
+    "preflight_pose_reset": {},
+    "profile": "v3_native_raised_stand_bounded",
+    "requires_preflight": true,
+    "run_dir": "logs/session_20260902T082945Z",
+    "run_tag": "hub_v3_native_raised_stand_bounded_20260902T082945Z",
+    "started_at_utc": "2026-09-02T08:29:45Z",
+    "status": "FAIL",
+    "triage_order": [
+      "summary.json",
+      "incident_bundle.json",
+      "ownership_manifest.json",
+      "stdout_tail.txt",
+      "stderr_tail.txt"
+    ],
+    "verdict": {
+      "primary": "PREFLIGHT_FAIL",
+      "reason": "preflight_failed:['native_sensor_command_failed', 'native_sensor_measurement_not_pass', 'native_sensor_healthy_window_too_short']",
+      "status": "FAIL"
+    },
+    "warning_summary": {},
+    "warnings": []
+  }
+}

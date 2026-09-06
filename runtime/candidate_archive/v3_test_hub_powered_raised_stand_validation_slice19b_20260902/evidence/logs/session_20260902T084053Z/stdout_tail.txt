@@ -1,0 +1,120 @@
+      },
+      {
+        "sequence": 3265,
+        "monotonic_ns": 4784784923496,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 12,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3266,
+        "monotonic_ns": 4784784927570,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 13,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3267,
+        "monotonic_ns": 4784784931514,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 18,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3268,
+        "monotonic_ns": 4784784935644,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 19,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3269,
+        "monotonic_ns": 4784787000347,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 12,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3270,
+        "monotonic_ns": 4784787004699,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 13,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3271,
+        "monotonic_ns": 4784787008532,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 18,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3272,
+        "monotonic_ns": 4784787012477,
+        "operation": "gpio_read",
+        "handle": 2,
+        "pin": 19,
+        "result": 0,
+        "ok": true
+      },
+      {
+        "sequence": 3273,
+        "monotonic_ns": 4784887348444,
+        "operation": "gpiochip_close",
+        "handle": 2,
+        "result": 0,
+        "ok": true
+      }
+    ]
+  },
+  "post_close_pins": {
+    "status": "PASS",
+    "ok": true,
+    "command": [
+      "/usr/bin/pinctrl",
+      "get",
+      "12,13,18,19"
+    ],
+    "return_code": 0,
+    "pins": {
+      "12": {
+        "raw": "12: op dl pd | lo // GPIO12 = output",
+        "output": true,
+        "drive_low": true
+      },
+      "13": {
+        "raw": "13: op dl pd | lo // GPIO13 = output",
+        "output": true,
+        "drive_low": true
+      },
+      "18": {
+        "raw": "18: op dl pd | lo // GPIO18 = output",
+        "output": true,
+        "drive_low": true
+      },
+      "19": {
+        "raw": "19: op dl pd | lo // GPIO19 = output",
+        "output": true,
+        "drive_low": true
+      }
+    },
+    "errors": []
+  },
+  "final_lifecycle": "IDLE",
+  "final_lifecycle_basis": "canonical finite runner returned RUN_OK after the observed post-window IDLE tick; L12 cancelled active PWM, held two verified LOW readbacks for at least 2 ms, closed the GPIO handle, and pinctrl still observed all four pins output-low",
+  "artifact_path": "logs/session_20260902T084053Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json"
+}

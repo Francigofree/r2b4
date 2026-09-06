@@ -1,0 +1,162 @@
+{
+  "artifact_paths": {
+    "base_room_cruise_result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+    "base_room_cruise_summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json",
+    "incident": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+    "preflight": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+    "result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+    "samples": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+    "summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json"
+  },
+  "continuous_room_cruise": {
+    "failed_gates": [
+      "normal_command_path_and_pose",
+      "no_unjustified_stop_start",
+      "no_command_or_pwm_loss"
+    ],
+    "metrics": {
+      "active_dropout_indices": [],
+      "active_duration_s": 60.036715030670166,
+      "active_sample_count": 490,
+      "base_duration_s": 61.679,
+      "command_loss_episode_durations_s": [
+        0.24473047256469727,
+        0.3704805374145508
+      ],
+      "command_loss_indices": [
+        100,
+        101,
+        103,
+        104,
+        105
+      ],
+      "moving_sample_count": 98,
+      "path_failure_indices": [
+        107,
+        113
+      ],
+      "pose_failure_indices": [
+        141,
+        439
+      ],
+      "progress_m": 1.3733,
+      "safety_failure_indices": [],
+      "unjustified_stop_blocks": [
+        {
+          "duration_s": 1.1029117107391357,
+          "end_index": 122,
+          "start_index": 114
+        }
+      ]
+    },
+    "status": "FAIL"
+  },
+  "contract_id": "R2B4_M3_CONTINUOUS_ROOM_CRUISE_V1",
+  "failed_gates": [
+    "runtime:continuous_room_cruise"
+  ],
+  "inconclusive_gates": [],
+  "m3_room_cruise": {
+    "closure_verdict": "LOW_MID_LEVELS_NOT_CLOSED",
+    "failed_gates": [
+      "control_chain_integrity",
+      "wheel_right_forward",
+      "wheel_left_reverse",
+      "start_stop_quality",
+      "localization_sensor_consistency",
+      "base_room_cruise_v2_gate"
+    ],
+    "inconclusive_gates": [
+      "measurement_sufficiency",
+      "motion_command_fidelity",
+      "wheel_left_forward",
+      "wheel_right_reverse",
+      "straight_motion_quality",
+      "left_arc_quality",
+      "right_arc_quality",
+      "in_place_pivot_quality",
+      "obstacle_avoidance_recovery",
+      "repeatability"
+    ],
+    "status": "FAIL"
+  },
+  "plain_summary_hu": "Eredmeny: FAIL. Foundation preflight: PASS. 60s room cruise validalas: FAIL. Runtime hibak: continuous_room_cruise.",
+  "preflight": {
+    "failed_gates": [],
+    "metrics": {
+      "actual_omega_abs": {
+        "max": 0.0029425902122774,
+        "min": 7.475245186291714e-05,
+        "n": 27,
+        "p50": 0.0013359099160614998,
+        "p90": 0.0023382350521893233,
+        "p95": 0.0024965695766009967
+      },
+      "actual_v_abs": {
+        "max": 0.008414,
+        "min": 0.000326,
+        "n": 27,
+        "p50": 0.003657,
+        "p90": 0.0059926,
+        "p95": 0.006025
+      },
+      "cmd_omega_abs": {
+        "max": 0.0,
+        "min": 0.0,
+        "n": 27,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0
+      },
+      "cmd_v_abs": {
+        "max": 0.0,
+        "min": 0.0,
+        "n": 27,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0
+      },
+      "front_min_m": 1.8025,
+      "lidar_confidence": {
+        "max": 0.9618478247844942,
+        "min": 0.8475450035519256,
+        "n": 27,
+        "p50": 0.924193310523714,
+        "p90": 0.9558472961403428,
+        "p95": 0.9608633134043674
+      },
+      "pwm_abs": {
+        "max": 0.0,
+        "min": 0.0,
+        "n": 27,
+        "p50": 0.0,
+        "p90": 0.0,
+        "p95": 0.0
+      },
+      "sample_count": 27,
+      "states": [
+        "IDLE"
+      ],
+      "status_age": {
+        "max": 0.17636823654174805,
+        "min": 0.003539562225341797,
+        "n": 27,
+        "p50": 0.07400083541870117,
+        "p90": 0.14992976188659668,
+        "p95": 0.16120083332061766
+      }
+    },
+    "status": "PASS"
+  },
+  "runtime_validation": {
+    "failed_gates": [
+      "continuous_room_cruise"
+    ],
+    "inconclusive_gates": [],
+    "status": "FAIL"
+  },
+  "schema": "M3_ROOM_CRUISE_UNIFIED_VALIDATOR_V2",
+  "status": "FAIL",
+  "success": false,
+  "test_name": "hub_M3_room_cruise_unified_validator"
+}

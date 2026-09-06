@@ -1,0 +1,94 @@
+{
+  "artifacts": [
+    "logs/session_20260902T083758Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json",
+    "logs/session_20260902T083758Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_attempt_1.json",
+    "logs/session_20260902T083758Z/tests/v3_native_raised_stand_bounded/v3_native_sensor_preflight_gate.json"
+  ],
+  "command": {
+    "return_code": 1,
+    "stderr_tail": "",
+    "stdout_tail": "{\n  \"schema\": \"R2B4_V3_NATIVE_RAISED_STAND_MOTION_V2\",\n  \"status\": \"ERROR\",\n  \"success\": false,\n  \"profile\": \"v3_native_raised_stand_bounded\",\n  \"started_at_utc\": \"2026-09-02T08:38:11Z\",\n  \"ended_at_utc\": \"2026-09-02T08:38:11Z\",\n  \"duration_s\": 0.0,\n  \"approval\": \"powered-raised-stand-hard-low-v3\",\n  \"motor_power\": \"ON_RAISED_STAND_BY_EXPLICIT_APPROVAL\",\n  \"lease_gate\": {\n    \"ok\": false,\n    \"task_id\": \"v3_test_hub_powered_raised_stand_validation_slice19b_20260902\",\n    \"root\": \"/home/alba/project_r2b4/runtime/agent_workspaces/v3_test_hub_powered_raised_stand_validation_slice19b_20260902/tree\",\n    \"leases\": {\n      \"runtime_control\": {\n        \"status\": \"FREE\",\n        \"owner_task_id\": null,\n        \"expires_at_utc\": null\n      },\n      \"live_motion\": {\n        \"status\": \"FREE\",\n        \"owner_task_id\": null,\n        \"expires_at_utc\": null\n      }\n    },\n    \"errors\": [\n      \"runtime_control_lease_not_held_by_active_task\",\n      \"live_motion_lease_not_held_by_active_task\"\n    ]\n  },\n  \"operator_stopped\": false,\n  \"motor_gpio\": {},\n  \"post_close_pins\": {},\n  \"final_lifecycle\": \"FAULT_OR_INTERRUPTED\",\n  \"error_type\": \"PermissionError\",\n  \"error\": \"native V3 motion leases failed: ['runtime_control_lease_not_held_by_active_task', 'live_motion_lease_not_held_by_active_task']\",\n  \"artifact_path\": \"logs/session_20260902T083758Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json\"\n}",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 9439,
+        "pid": 9439,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-09-02T08:38:11Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-09-02T08:37:58Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 0,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260902T083631Z/latest_human_observed_1x1m_validation.json",
+    "required": false
+  },
+  "preflight": {
+    "errors": [],
+    "ok": true,
+    "stdout_tail": "      \"raw_scan_latest_age_s\": 5.436531729999842,\n      \"raw_scan_rate_hz\": 9.960439921539157,\n      \"result_queue_drops\": 0,\n      \"running\": false,\n      \"scan_seq\": 41,\n      \"stale_result_drops\": 3\n    }\n  },\n  \"operator_stopped\": false,\n  \"rejected_counts\": {\n    \"DUPLICATE\": 262\n  },\n  \"sample_ranges\": {\n    \"ekf_heading\": {\n      \"calibration\": [\n        0.0,\n        0.0\n      ],\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.0\n      ],\n      \"omega_calibration\": [\n        3.0,\n        3.0\n      ],\n      \"omega_confidence\": [\n        1.0,\n        1.0\n      ],\n      \"omega_rad_s\": [\n        -0.004363323129985824,\n        0.004363323129985824\n      ],\n      \"yaw_rad\": [\n        0.046905723647347373,\n        0.046905723647347373\n      ]\n    },\n    \"lidar_health\": {\n      \"age_ns\": [\n        0.0,\n        352571454.0\n      ],\n      \"captured_minus_tick_ns\": [\n        -316365384.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.0,\n        0.5791882690085726\n      ]\n    },\n    \"lidar_pose\": {\n      \"captured_minus_tick_ns\": [\n        -196628845.0,\n        0.0\n      ],\n      \"confidence\": [\n        0.5791882690085726,\n        0.5791882690085726\n      ],\n      \"r_scale\": [\n        1.0,\n        1.0\n      ],\n      \"x_m\": [\n        0.0,\n        0.0\n      ],\n      \"y_m\": [\n        0.0,\n        0.0\n      ],\n      \"yaw_rad\": [\n        0.04718630843332505,\n        0.04718630843332505\n      ]\n    },\n    \"wheel_velocity\": {\n      \"captured_minus_tick_ns\": [\n        0.0,\n        0.0\n      ],\n      \"left_mps\": [\n        0.0,\n        0.0\n      ],\n      \"right_mps\": [\n        0.0,\n        0.0\n      ],\n      \"trust\": [\n        0.0,\n        1.0\n      ]\n    }\n  },\n  \"schema\": \"R2B4_V3_SENSOR_MEASUREMENT_V1\",\n  \"source_state_counts\": {\n    \"BNO055_IMU\": {\n      \"OK\": 300\n    },\n    \"LIDAR_LOCALIZATION\": {\n      \"DEGRADED\": 289,\n      \"OK\": 11\n    },\n    \"WHEEL_ENCODERS\": {\n      \"DEGRADED\": 1,\n      \"OK\": 299\n    }\n  },\n  \"status\": \"PASS\",\n  \"tick_count\": 300,\n  \"tick_details_written\": 300\n}"
+  },
+  "preflight_pose_reset": {},
+  "primary_failure": "TEST_FAIL",
+  "profile": "v3_native_raised_stand_bounded",
+  "reason": "scenario return_code=1",
+  "run_tag": "hub_v3_native_raised_stand_bounded_20260902T083758Z",
+  "status": "FAIL",
+  "warning_summary": {},
+  "warnings": []
+}

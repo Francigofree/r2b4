@@ -1,0 +1,1155 @@
+{
+  "motor_gpio_events_after_last_tick": [
+    {
+      "handle": 2,
+      "kind": 0,
+      "monotonic_ns": 2950667649851,
+      "ok": true,
+      "operation": "tx_busy",
+      "pin": 12,
+      "result": 0,
+      "sequence": 37
+    },
+    {
+      "handle": 2,
+      "kind": 0,
+      "monotonic_ns": 2950667653017,
+      "ok": true,
+      "operation": "tx_busy",
+      "pin": 13,
+      "result": 0,
+      "sequence": 38
+    },
+    {
+      "handle": 2,
+      "kind": 0,
+      "monotonic_ns": 2950667654925,
+      "ok": true,
+      "operation": "tx_busy",
+      "pin": 18,
+      "result": 0,
+      "sequence": 39
+    },
+    {
+      "handle": 2,
+      "kind": 0,
+      "monotonic_ns": 2950667656869,
+      "ok": true,
+      "operation": "tx_busy",
+      "pin": 19,
+      "result": 0,
+      "sequence": 40
+    },
+    {
+      "handle": 2,
+      "level": 0,
+      "monotonic_ns": 2950667667684,
+      "ok": true,
+      "operation": "gpio_write",
+      "pin": 12,
+      "result": 0,
+      "sequence": 41
+    },
+    {
+      "handle": 2,
+      "level": 0,
+      "monotonic_ns": 2950667672091,
+      "ok": true,
+      "operation": "gpio_write",
+      "pin": 13,
+      "result": 0,
+      "sequence": 42
+    },
+    {
+      "handle": 2,
+      "level": 0,
+      "monotonic_ns": 2950667675314,
+      "ok": true,
+      "operation": "gpio_write",
+      "pin": 18,
+      "result": 0,
+      "sequence": 43
+    },
+    {
+      "handle": 2,
+      "level": 0,
+      "monotonic_ns": 2950667678332,
+      "ok": true,
+      "operation": "gpio_write",
+      "pin": 19,
+      "result": 0,
+      "sequence": 44
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950667683666,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 12,
+      "result": 0,
+      "sequence": 45
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950667686925,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 13,
+      "result": 0,
+      "sequence": 46
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950667689999,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 18,
+      "result": 0,
+      "sequence": 47
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950667693110,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 19,
+      "result": 0,
+      "sequence": 48
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950669757026,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 12,
+      "result": 0,
+      "sequence": 49
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950669760322,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 13,
+      "result": 0,
+      "sequence": 50
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950669763248,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 18,
+      "result": 0,
+      "sequence": 51
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950669766100,
+      "ok": true,
+      "operation": "gpio_read",
+      "pin": 19,
+      "result": 0,
+      "sequence": 52
+    },
+    {
+      "handle": 2,
+      "monotonic_ns": 2950769966245,
+      "ok": true,
+      "operation": "gpiochip_close",
+      "result": 0,
+      "sequence": 53
+    }
+  ],
+  "profile": "v3_native_floor_motion_capture",
+  "raw_lidar_scans": [],
+  "schema": "R2B4_V3_NATIVE_FLOOR_TICK_CAPTURE_V1",
+  "status": "FAIL",
+  "tick_count": 1,
+  "ticks": [
+    {
+      "fault_layer": "L4",
+      "final_actuation": {
+        "__type__": "FinalActuation",
+        "context": {
+          "__type__": "TickContext",
+          "monotonic_ns": 2950658856295,
+          "tick_id": 0
+        },
+        "enabled": false,
+        "latch_state": "FAULT",
+        "left_output": 0.0,
+        "reason": "L4_ERROR",
+        "right_output": 0.0,
+        "safety_decision": "FAULT"
+      },
+      "layer_count": 4,
+      "layers": {
+        "L1": {
+          "__type__": "AcquisitionFrame",
+          "context": {
+            "__type__": "TickContext",
+            "monotonic_ns": 2950658856295,
+            "tick_id": 0
+          },
+          "io_health": [
+            {
+              "__type__": "DeviceHealth",
+              "device_id": "WHEEL_ENCODERS",
+              "reason": null,
+              "state": "OK"
+            },
+            {
+              "__type__": "DeviceHealth",
+              "device_id": "BNO055_IMU",
+              "reason": null,
+              "state": "OK"
+            },
+            {
+              "__type__": "DeviceHealth",
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_TIMING_INVALID",
+              "state": "FAILED"
+            }
+          ],
+          "samples": [
+            {
+              "__type__": "DeviceSample",
+              "captured_monotonic_ns": 2950658856295,
+              "device_id": "WHEEL_ENCODERS",
+              "kind": "wheel_velocity",
+              "sequence": 0,
+              "values": [
+                {
+                  "__type__": "DataField",
+                  "key": "left_mps",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_mps",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "trust",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "measurement_stale",
+                  "value": false
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "measurement_timing_valid",
+                  "value": true
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "rejection_code",
+                  "value": "BASELINE"
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_left_pulse_count",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_right_pulse_count",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "sample_interval_ns",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_counter_running",
+                  "value": true
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_counter_running",
+                  "value": true
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_read_errors",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_read_errors",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_read_error_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_read_error_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_invalid_alerts",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_invalid_alerts",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_invalid_alert_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_invalid_alert_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "computed_left_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "computed_right_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "instantaneous_left_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "instantaneous_right_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_left_distance_m",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_right_distance_m",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_distance_delta_m",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_distance_delta_m",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_estimation_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_estimation_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_estimation_window_ns",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_estimation_window_ns",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_velocity_uncertainty_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_velocity_uncertainty_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_measurement_trust",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_measurement_trust",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "maximum_abs_velocity_mps",
+                  "value": 1.5
+                }
+              ]
+            },
+            {
+              "__type__": "DeviceSample",
+              "captured_monotonic_ns": 2950658856295,
+              "device_id": "BNO055_IMU",
+              "kind": "ekf_heading",
+              "sequence": 0,
+              "values": [
+                {
+                  "__type__": "DataField",
+                  "key": "yaw_rad",
+                  "value": -0.25416357232167425
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "omega_rad_s",
+                  "value": -0.002181661564992912
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "confidence",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "calibration",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "omega_confidence",
+                  "value": 1.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "omega_calibration",
+                  "value": 3
+                }
+              ]
+            },
+            {
+              "__type__": "DeviceSample",
+              "captured_monotonic_ns": 2950658856295,
+              "device_id": "RPLIDAR_C1",
+              "kind": "lidar_health",
+              "sequence": 0,
+              "values": [
+                {
+                  "__type__": "DataField",
+                  "key": "age_ns",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "point_count",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "L12": {
+          "__type__": "FinalActuation",
+          "context": {
+            "__type__": "TickContext",
+            "monotonic_ns": 2950658856295,
+            "tick_id": 0
+          },
+          "enabled": false,
+          "latch_state": "FAULT",
+          "left_output": 0.0,
+          "reason": "L4_ERROR",
+          "right_output": 0.0,
+          "safety_decision": "FAULT"
+        },
+        "L2": {
+          "__type__": "AdmittedFrame",
+          "accepted": [
+            {
+              "__type__": "Observation",
+              "captured_monotonic_ns": 2950658856295,
+              "kind": "wheel_velocity",
+              "source_device_id": "WHEEL_ENCODERS",
+              "source_sequence": 0,
+              "values": [
+                {
+                  "__type__": "DataField",
+                  "key": "left_mps",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_mps",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "trust",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "measurement_stale",
+                  "value": false
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "measurement_timing_valid",
+                  "value": true
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "rejection_code",
+                  "value": "BASELINE"
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_left_pulse_count",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_right_pulse_count",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "sample_interval_ns",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_counter_running",
+                  "value": true
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_counter_running",
+                  "value": true
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_read_errors",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_read_errors",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_read_error_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_read_error_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_invalid_alerts",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_invalid_alerts",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_invalid_alert_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_invalid_alert_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "computed_left_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "computed_right_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "instantaneous_left_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "instantaneous_right_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_left_distance_m",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "raw_right_distance_m",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_distance_delta_m",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_distance_delta_m",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_estimation_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_estimation_pulse_delta",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_estimation_window_ns",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_estimation_window_ns",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_velocity_uncertainty_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_velocity_uncertainty_mps",
+                  "value": null
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "left_measurement_trust",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "right_measurement_trust",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "maximum_abs_velocity_mps",
+                  "value": 1.5
+                }
+              ]
+            },
+            {
+              "__type__": "Observation",
+              "captured_monotonic_ns": 2950658856295,
+              "kind": "ekf_heading",
+              "source_device_id": "BNO055_IMU",
+              "source_sequence": 0,
+              "values": [
+                {
+                  "__type__": "DataField",
+                  "key": "yaw_rad",
+                  "value": -0.25416357232167425
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "omega_rad_s",
+                  "value": -0.002181661564992912
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "confidence",
+                  "value": 0.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "calibration",
+                  "value": 0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "omega_confidence",
+                  "value": 1.0
+                },
+                {
+                  "__type__": "DataField",
+                  "key": "omega_calibration",
+                  "value": 3
+                }
+              ]
+            }
+          ],
+          "context": {
+            "__type__": "TickContext",
+            "monotonic_ns": 2950658856295,
+            "tick_id": 0
+          },
+          "degraded_sources": [
+            "RPLIDAR_C1"
+          ],
+          "rejected": [
+            {
+              "__type__": "RejectedObservation",
+              "age_ns": 0,
+              "reason": "UNTRUSTED",
+              "source_device_id": "RPLIDAR_C1",
+              "source_sequence": 0
+            }
+          ]
+        },
+        "L3": {
+          "__type__": "RobotEstimate",
+          "context": {
+            "__type__": "TickContext",
+            "monotonic_ns": 2950658856295,
+            "tick_id": 0
+          },
+          "covariance_5x5": [
+            0.01,
+            0.0,
+            0.0,
+            0.0,
+            -0.0,
+            0.0,
+            0.01,
+            0.0,
+            0.0,
+            -0.0,
+            0.0,
+            0.0,
+            0.01,
+            0.0,
+            -0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.01,
+            -0.0,
+            -0.0,
+            -0.0,
+            -0.0,
+            -0.0,
+            0.0061
+          ],
+          "frame_id": "R2B4_BOOT_ROBOT_MAP",
+          "omega_rad_s": -0.002181661564992912,
+          "v_mps": 0.0,
+          "x_m": 0.0,
+          "y_m": 0.0,
+          "yaw_rad": -0.25416357232167425
+        }
+      },
+      "lidar_raw_evidence": {
+        "ok": false,
+        "reason": "LIDAR_SNAPSHOT_MISSING",
+        "required_clearance_m": 1.3
+      },
+      "monotonic_ns": 2950658856295,
+      "motor_gpio_events": [
+        {
+          "chip": 0,
+          "handle": 2,
+          "monotonic_ns": 2950656534044,
+          "ok": true,
+          "operation": "gpiochip_open",
+          "sequence": 0
+        },
+        {
+          "handle": 2,
+          "initial_level": 0,
+          "monotonic_ns": 2950656564582,
+          "ok": true,
+          "operation": "gpio_claim_output",
+          "pin": 12,
+          "result": 0,
+          "sequence": 1
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950656573341,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 12,
+          "result": 0,
+          "sequence": 2
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950656581322,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 12,
+          "result": 0,
+          "sequence": 3
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950656588230,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 12,
+          "result": 0,
+          "sequence": 4
+        },
+        {
+          "handle": 2,
+          "initial_level": 0,
+          "monotonic_ns": 2950656600711,
+          "ok": true,
+          "operation": "gpio_claim_output",
+          "pin": 13,
+          "result": 0,
+          "sequence": 5
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950656604322,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 13,
+          "result": 0,
+          "sequence": 6
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950656608804,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 13,
+          "result": 0,
+          "sequence": 7
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950656613397,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 13,
+          "result": 0,
+          "sequence": 8
+        },
+        {
+          "handle": 2,
+          "initial_level": 0,
+          "monotonic_ns": 2950656625360,
+          "ok": true,
+          "operation": "gpio_claim_output",
+          "pin": 18,
+          "result": 0,
+          "sequence": 9
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950656628526,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 18,
+          "result": 0,
+          "sequence": 10
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950656631878,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 18,
+          "result": 0,
+          "sequence": 11
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950656635989,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 18,
+          "result": 0,
+          "sequence": 12
+        },
+        {
+          "handle": 2,
+          "initial_level": 0,
+          "monotonic_ns": 2950656648230,
+          "ok": true,
+          "operation": "gpio_claim_output",
+          "pin": 19,
+          "result": 0,
+          "sequence": 13
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950656651415,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 19,
+          "result": 0,
+          "sequence": 14
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950656654767,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 19,
+          "result": 0,
+          "sequence": 15
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950656659508,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 19,
+          "result": 0,
+          "sequence": 16
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950658726257,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 12,
+          "result": 0,
+          "sequence": 17
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950658735220,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 13,
+          "result": 0,
+          "sequence": 18
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950658739054,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 18,
+          "result": 0,
+          "sequence": 19
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950658745257,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 19,
+          "result": 0,
+          "sequence": 20
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950664790246,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 12,
+          "result": 0,
+          "sequence": 21
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950664794227,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 13,
+          "result": 0,
+          "sequence": 22
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950664796598,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 18,
+          "result": 0,
+          "sequence": 23
+        },
+        {
+          "handle": 2,
+          "kind": 0,
+          "monotonic_ns": 2950664802542,
+          "ok": true,
+          "operation": "tx_busy",
+          "pin": 19,
+          "result": 0,
+          "sequence": 24
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950664815653,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 12,
+          "result": 0,
+          "sequence": 25
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950664820450,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 13,
+          "result": 0,
+          "sequence": 26
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950664824265,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 18,
+          "result": 0,
+          "sequence": 27
+        },
+        {
+          "handle": 2,
+          "level": 0,
+          "monotonic_ns": 2950664830228,
+          "ok": true,
+          "operation": "gpio_write",
+          "pin": 19,
+          "result": 0,
+          "sequence": 28
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950664837320,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 12,
+          "result": 0,
+          "sequence": 29
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950664841654,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 13,
+          "result": 0,
+          "sequence": 30
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950664844968,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 18,
+          "result": 0,
+          "sequence": 31
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950664848302,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 19,
+          "result": 0,
+          "sequence": 32
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950666915236,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 12,
+          "result": 0,
+          "sequence": 33
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950666918922,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 13,
+          "result": 0,
+          "sequence": 34
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950666922477,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 18,
+          "result": 0,
+          "sequence": 35
+        },
+        {
+          "handle": 2,
+          "monotonic_ns": 2950666925662,
+          "ok": true,
+          "operation": "gpio_read",
+          "pin": 19,
+          "result": 0,
+          "sequence": 36
+        }
+      ],
+      "tick_id": 0
+    }
+  ],
+  "unique_raw_lidar_scan_count": 0
+}

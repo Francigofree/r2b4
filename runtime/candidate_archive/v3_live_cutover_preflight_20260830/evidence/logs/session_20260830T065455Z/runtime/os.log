@@ -1,0 +1,64 @@
+INFO:driver.motor:Motor inicializálva (bal_oldal) - IN1: 12, IN2: 13, invert=False
+INFO:driver.motor:Motor inicializálva (jobb_oldal) - IN1: 18, IN2: 19, invert=True
+[OS] R2B4 OS indítás: GUI + robotvezérlő
+[OS] GUI: http://0.0.0.0:7860  (távolról: http://<RPi_IP>:7860)
+[OS] GUI elérhető a 7860 porton.
+[94m[08:55:00] [INFO] === PROJECT ALBA - RPi5 OPTIMALIZÁLT VEZÉRLŐ (v2.0 Startup Pipeline) ===[0m
+[94m[08:55:00] [INFO] [STARTUP] BOOT[0m
+[94m[08:55:00] [INFO] [STARTUP] Runtime: /home/alba/project_r2b4/runtime/agent_workspaces/v3_live_cutover_preflight_20260830/tree/runtime, IMU provider: BNO055 device-managed[0m
+[94m[08:55:00] [INFO] [STARTUP] HARDWARE_DISCOVERY[0m
+[94m[08:55:01] [INFO] [STARTUP] IMU: True (bno055), Motor: True, LIDAR: True, Kamera: True[0m
+[94m[08:55:01] [INFO] [STARTUP] PERIPHERAL_INIT[0m
+BNO055 inicializálva NDOF módban @ 0x28.
+Process r2b4-lidar-matcher:
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.11/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/v3_live_cutover_preflight_20260830/tree/sensors/lidar_matcher_process.py", line 105, in matcher_process_main
+    first = input_queue.get(timeout=0.05)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/multiprocessing/queues.py", line 113, in get
+    if not self._poll(timeout):
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/multiprocessing/connection.py", line 256, in poll
+    return self._poll(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/multiprocessing/connection.py", line 423, in _poll
+    r = wait([self], timeout)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/multiprocessing/connection.py", line 930, in wait
+    ready = selector.select(timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+[94m[08:55:02] [INFO] [STARTUP] Perifériák inicializálva[0m
+[94m[08:55:02] [INFO] [STARTUP] SENSOR_STABILIZATION[0m
+[94m[08:55:05] [INFO] [STARTUP] Szenzor stabilizáció kész[0m
+[94m[08:55:05] [INFO] [STARTUP] CALIBRATION[0m
+[94m[08:55:07] [INFO] [STARTUP] BNO055 IMU device-managed kalibráció ellenőrizve[0m
+[94m[08:55:07] [INFO] [STARTUP] Encoder stream ready (wait=0.000s, age=2.0ms)[0m
+[94m[08:55:07] [INFO] [STARTUP] CALIBRATION_COMPLETE[0m
+[94m[08:55:07] [INFO] [STARTUP] BASELINE_CAPTURE[0m
+[94m[08:55:07] [INFO] [STARTUP] Baseline rögzítve[0m
+[94m[08:55:07] [INFO] [STARTUP] SAFETY_VALIDATION[0m
+[94m[08:55:07] [INFO] [STARTUP] Biztonsági ellenőrzés OK[0m
+[94m[08:55:07] [INFO] [STARTUP] CONTROL_ARMED[0m
+[94m[08:55:07] [INFO] [SpeedLimits] mode=UNIFIED v_max=0.30 w_max=1.68 source=motion_profiles.UNIFIED[0m
+[94m[STATE] -> IDLE[0m
+[94m[08:55:07] [INFO] ALBA CORE (Deterministic) Initialized.[0m
+[94m[08:55:07] [INFO] [ODOM] LIDAR_FIRST mode enabled (config: {'enabled': True, 'max_scan_age_s': 0.25, 'min_confidence': 0.2, 'max_delta_m': 0.65, 'max_delta_rad': 0.65, 'r_scale_by_confidence': True, 'jump_gate_max_speed_mps': 1.1, 'jump_gate_max_yaw_rate_rad_s': 1.6, 'jump_gate_dt_cap_s': 1.0, 'relocalization_jump_multiplier': 3.0, 'relocalization_max_delta_m': 2.0, 'relocalization_max_delta_rad': 1.8}, encoder_pose_fusion=True)[0m
+[94m[08:55:07] [INFO] [stream_writer] GUI stream író szál indítva (Kamera BE → stream_frame.jpg).[0m
+[94m[08:55:07] [INFO] [STARTUP] Control armed – EKF, PID, watchdog aktiv[0m
+[94m[08:55:07] [INFO] [STARTUP] READY – rendszer indítás kész[0m
+[93m08:55:08 | IDLE     src=MANUAL mode=UNIFIED q=CRITICAL SAFE=OK ENC=ON(1.00) EST=0.00 | pose=(+0.00,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.75/1.00m[0m
+[94m08:55:09 | IDLE     src=MANUAL mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.75/1.00m[0m
+[94m08:55:10 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.76/1.00m[0m
+[94m08:55:11 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.75/1.01m[0m
+[94m08:55:12 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.75/1.00m[0m
+[94m08:55:13 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.75/1.00m[0m
+[94m[STATE] -> FAILSAFE[0m
+[92m[08:55:14] [OK] Minden hardver biztonságosan leállítva.[0m

@@ -1,0 +1,183 @@
+{
+  "ok": true,
+  "preflight": {
+    "arc_inner_track_min_mps": 0.0,
+    "arc_inner_track_positive_ratio": 0.0,
+    "arc_pivot_like_samples": 0,
+    "arc_sample_count": 0,
+    "arc_track_ratio": 0.0,
+    "blocking_issues": [],
+    "can_move_now": true,
+    "command_path_alive": true,
+    "controller_runtime_running": true,
+    "encoder_distance": {
+      "available": true,
+      "distance_m": 0.0,
+      "source": "encoder_dist_canonical"
+    },
+    "encoder_distance_available": true,
+    "encoder_pose_active_samples": 1,
+    "encoder_used_for_pose": true,
+    "execution_mode": "IDLE_EXEC",
+    "expected_determinism": "HIGH",
+    "failsafe_before_reset": false,
+    "failsafe_reset_performed": false,
+    "forward_clearance": {
+      "blocked_back_count": 0,
+      "blocked_front_count": 0,
+      "clearance_sources": {
+        "min_dist_narrow": 16
+      },
+      "invalid_raw_safety_source_count": 0,
+      "min_dist_median_m": 1.82,
+      "min_dist_min_m": 1.80375,
+      "raw_safety_sources": {
+        "PARENT_CURRENT_RAW_SCAN": 16
+      },
+      "raw_safety_unique_scan_ids": 5,
+      "samples": 16
+    },
+    "forward_clearance_mode": "front-sector",
+    "lidar_candidate_age_s": 0.016401324999606004,
+    "lidar_candidate_fresh": true,
+    "lidar_fresh": true,
+    "lidar_latest_age_s": 0.016003637998437625,
+    "lidar_odom_applied": true,
+    "lidar_odom_latest_age_s": 0.016003637998437625,
+    "lidar_odom_latest_confidence": 0.9397207908803378,
+    "lidar_odom_status_truth": {
+      "accepted": 16,
+      "applied": true,
+      "candidate_id": 59,
+      "candidate_source_raw_scan_id": 60,
+      "ekf_duplicate_measurement_rejected_total": 0,
+      "ekf_input_lidar_odometry_measurement_id": 16,
+      "ekf_last_applied_lidar_odometry_measurement_id": 16,
+      "ekf_last_processed_lidar_odometry_measurement_id": 16,
+      "ekf_missing_measurement_id_rejected_total": 0,
+      "ekf_status": "applied",
+      "latest_age_s": 0.016003637998437625,
+      "latest_confidence": 0.9397207908803378,
+      "lidar_odometry_measurement_id": 16,
+      "lineage_errors": [],
+      "matcher_result_id": 59,
+      "measurement_source_matcher_result_id": 59,
+      "measurement_source_raw_scan_id": 60,
+      "odometry_status": "accepted",
+      "raw_scan_id": 60,
+      "rejected_duplicate_matcher_result": 0,
+      "rejected_duplicate_raw_scan": 0,
+      "status": "applied",
+      "total": 19
+    },
+    "lidar_quality_gate": {
+      "candidate_fresh": true,
+      "feed_ready": true,
+      "latest_fresh": true,
+      "ok": true,
+      "signal_quality_ok": true
+    },
+    "lidar_signal_quality": {
+      "accepted_total": 16,
+      "candidate_confidence": 0.9397207908803378,
+      "confidence_ok": true,
+      "confidence_required": 0.25,
+      "latest_confidence": 0.9397207908803378,
+      "latest_fresh": true,
+      "matcher_called": true,
+      "matcher_or_fresh_accept_ok": true,
+      "matcher_reason": "applied",
+      "ok": true,
+      "scan_count_filtered": 19,
+      "scan_count_required": 10,
+      "scan_ok": true,
+      "signal_confidence": 0.9397207908803378
+    },
+    "logging_active": true,
+    "motion_actual_ssot": "EKF_POSE_ODOMETRY_SSOT",
+    "normal_stop_validation": {
+      "resolved_motion_source": "GUI_JOYSTICK",
+      "stop_type": "SOFT_STOP",
+      "success": true
+    },
+    "obstacle_recovery": {
+      "attempts": 0,
+      "events": [],
+      "max_attempts": 3
+    },
+    "odometry_mode": "LIDAR_FIRST",
+    "ready": true,
+    "recommended_mode": "LIDAR_STRICT",
+    "reset_result": {},
+    "resolved_motion_observable": true,
+    "safety_path_active": true,
+    "startup_ready": true,
+    "timestamp": "2026-08-26T19:18:01Z",
+    "truth_basis": {
+      "arc_inner_track_min_mps": 0.0,
+      "arc_inner_track_positive_ratio": 0.0,
+      "arc_pivot_like_samples": 0,
+      "arc_sample_count": 0,
+      "arc_track_ratio": 0.0,
+      "encoder_pose_active_samples": 1,
+      "lidar_observation": {
+        "candidate_id": 59,
+        "candidate_source_raw_scan_id": 60,
+        "ekf_duplicate_measurement_rejected_total": 0,
+        "ekf_input_lidar_odometry_measurement_id": 16,
+        "ekf_last_applied_lidar_odometry_measurement_id": 16,
+        "ekf_last_processed_lidar_odometry_measurement_id": 16,
+        "ekf_missing_measurement_id_rejected_total": 0,
+        "lidar_odometry_measurement_id": 16,
+        "lineage_errors": [],
+        "matcher_result_id": 59,
+        "measurement_source_matcher_result_id": 59,
+        "measurement_source_raw_scan_id": 60,
+        "raw_scan_id": 60,
+        "rejected_duplicate_matcher_result": 0,
+        "rejected_duplicate_raw_scan": 0
+      },
+      "lidar_odom_accepted_total": 16,
+      "lidar_odom_applied_samples": 16,
+      "lidar_odom_delivery_status": "available",
+      "lidar_odom_get_odometry_result": "returned",
+      "lidar_odom_latest_age_s": 0.016003637998437625,
+      "lidar_odom_latest_confidence": 0.9397207908803378,
+      "lidar_odom_total_samples": 19,
+      "motion_actual_ssot": "EKF_POSE_ODOMETRY_SSOT",
+      "odometry_mode": "LIDAR_FIRST",
+      "track_idle_transition_contract": {
+        "active_layer": "BEHAVIOR",
+        "execution_mode": "IDLE_EXEC",
+        "requested_track_reference": {
+          "left_mps": 0.0,
+          "right_mps": 0.0
+        },
+        "required": false,
+        "required_reason": "none",
+        "satisfied": true,
+        "state": "IDLE",
+        "track_targets": {
+          "left_mps": 0.0,
+          "right_mps": 0.0
+        }
+      },
+      "turn_primitive_source": {
+        "actual": "actual_measurement",
+        "executed": "executor",
+        "limited": "resolver",
+        "requested": "resolver"
+      }
+    },
+    "turn_primitive_actual": "STRAIGHT",
+    "turn_primitive_executed": "STRAIGHT",
+    "turn_primitive_limited": "STRAIGHT",
+    "turn_primitive_requested": "STRAIGHT",
+    "turn_primitives": {
+      "actual": "STRAIGHT",
+      "executed": "STRAIGHT",
+      "limited": "STRAIGHT",
+      "requested": "STRAIGHT"
+    }
+  }
+}

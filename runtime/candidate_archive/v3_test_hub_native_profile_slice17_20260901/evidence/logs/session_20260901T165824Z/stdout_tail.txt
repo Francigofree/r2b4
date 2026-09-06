@@ -1,0 +1,120 @@
+        {
+          "device_id": "LIDAR_LOCALIZATION",
+          "state": "OK",
+          "reason": "None"
+        }
+      ],
+      "estimate": {
+        "x_m": 0.001032430073296266,
+        "y_m": 0.0021374396691138916,
+        "yaw_rad": -0.0005147629467745332,
+        "v_mps": 1.752575560391469e-09,
+        "omega_rad_s": -5.6538308435511106e-05
+      }
+    },
+    "first_fault": {
+      "tick_id": 201,
+      "monotonic_ns": 6003333791791,
+      "fault_layer": "L11",
+      "safety_decision": "FAULT",
+      "safety_reason": "L11_ERROR",
+      "enabled": false,
+      "left_output": 0.0,
+      "right_output": 0.0,
+      "source_health": [
+        {
+          "device_id": "WHEEL_ENCODERS",
+          "state": "DEGRADED",
+          "reason": "ENCODER_LOW_TRUST"
+        },
+        {
+          "device_id": "BNO055_IMU",
+          "state": "OK",
+          "reason": "None"
+        },
+        {
+          "device_id": "LIDAR_LOCALIZATION",
+          "state": "OK",
+          "reason": "None"
+        }
+      ],
+      "estimate": {
+        "x_m": 0.001032430104283594,
+        "y_m": 0.0021374396690421907,
+        "yaw_rad": -0.0005480613465812193,
+        "v_mps": 4.98393619922759e-10,
+        "omega_rad_s": -5.874506756027115e-05
+      }
+    },
+    "last_tick": {
+      "tick_id": 201,
+      "monotonic_ns": 6003333791791,
+      "fault_layer": "L11",
+      "safety_decision": "FAULT",
+      "safety_reason": "L11_ERROR",
+      "enabled": false,
+      "left_output": 0.0,
+      "right_output": 0.0,
+      "source_health": [
+        {
+          "device_id": "WHEEL_ENCODERS",
+          "state": "DEGRADED",
+          "reason": "ENCODER_LOW_TRUST"
+        },
+        {
+          "device_id": "BNO055_IMU",
+          "state": "OK",
+          "reason": "None"
+        },
+        {
+          "device_id": "LIDAR_LOCALIZATION",
+          "state": "OK",
+          "reason": "None"
+        }
+      ],
+      "estimate": {
+        "x_m": 0.001032430104283594,
+        "y_m": 0.0021374396690421907,
+        "yaw_rad": -0.0005480613465812193,
+        "v_mps": 4.98393619922759e-10,
+        "omega_rad_s": -5.874506756027115e-05
+      }
+    }
+  },
+  "motor_gpio": {
+    "expected_pins": [
+      12,
+      13,
+      18,
+      19
+    ],
+    "opened_handle_count": 1,
+    "claimed_pins": [
+      12,
+      13,
+      18,
+      19
+    ],
+    "pwm_write_count": 820,
+    "nonzero_pwm_write_count": 4,
+    "final_pwm_by_pin": {
+      "12": 0.0,
+      "13": 0.0,
+      "18": 0.0,
+      "19": 0.0
+    },
+    "maximum_abs_pwm_by_pin": {
+      "12": 100.0,
+      "13": 80.13160227075987,
+      "18": 80.48760227075987,
+      "19": 100.0
+    },
+    "all_expected_pins_claimed": true,
+    "all_final_pwm_zero": true,
+    "gpio_closed_after_final_pwm_null": true,
+    "event_count": 826
+  },
+  "final_lifecycle": "FAULT_OR_INTERRUPTED",
+  "final_lifecycle_basis": "canonical finite runner returned RUN_OK after the observed post-window IDLE tick; L12 then wrote zero to all four pins and closed the GPIO handle",
+  "artifact_path": "logs/session_20260901T165824Z/tests/v3_native_raised_stand_bounded/v3_native_raised_stand_motion.json"
+}

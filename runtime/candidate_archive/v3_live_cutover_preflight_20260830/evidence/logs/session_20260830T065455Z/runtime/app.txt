@@ -1,0 +1,26 @@
+[08:55:00] [INFO] === PROJECT ALBA - RPi5 OPTIMALIZÁLT VEZÉRLŐ (v2.0 Startup Pipeline) ===
+[08:55:00] [INFO] [STARTUP] BOOT
+[08:55:00] [INFO] [STARTUP] Runtime: /home/alba/project_r2b4/runtime/agent_workspaces/v3_live_cutover_preflight_20260830/tree/runtime, IMU provider: BNO055 device-managed
+[08:55:00] [INFO] [STARTUP] HARDWARE_DISCOVERY
+[08:55:01] [INFO] [STARTUP] IMU: True (bno055), Motor: True, LIDAR: True, Kamera: True
+[08:55:01] [INFO] [STARTUP] PERIPHERAL_INIT
+[08:55:02] [INFO] [STARTUP] Perifériák inicializálva
+[08:55:02] [INFO] [STARTUP] SENSOR_STABILIZATION
+[08:55:05] [INFO] [STARTUP] Szenzor stabilizáció kész
+[08:55:05] [INFO] [STARTUP] CALIBRATION
+[08:55:07] [INFO] [STARTUP] BNO055 IMU device-managed kalibráció ellenőrizve
+[08:55:07] [INFO] [STARTUP] Encoder stream ready (wait=0.000s, age=2.0ms)
+[08:55:07] [INFO] [STARTUP] CALIBRATION_COMPLETE
+[08:55:07] [INFO] [STARTUP] BASELINE_CAPTURE
+[08:55:07] [INFO] [STARTUP] Baseline rögzítve
+[08:55:07] [INFO] [STARTUP] SAFETY_VALIDATION
+[08:55:07] [INFO] [STARTUP] Biztonsági ellenőrzés OK
+[08:55:07] [INFO] [STARTUP] CONTROL_ARMED
+[08:55:07] [INFO] [SpeedLimits] mode=UNIFIED v_max=0.30 w_max=1.68 source=motion_profiles.UNIFIED
+[08:55:07] [INFO] ALBA CORE (Deterministic) Initialized.
+[08:55:07] [INFO] [ODOM] LIDAR_FIRST mode enabled (config: {'enabled': True, 'max_scan_age_s': 0.25, 'min_confidence': 0.2, 'max_delta_m': 0.65, 'max_delta_rad': 0.65, 'r_scale_by_confidence': True, 'jump_gate_max_speed_mps': 1.1, 'jump_gate_max_yaw_rate_rad_s': 1.6, 'jump_gate_dt_cap_s': 1.0, 'relocalization_jump_multiplier': 3.0, 'relocalization_max_delta_m': 2.0, 'relocalization_max_delta_rad': 1.8}, encoder_pose_fusion=True)
+[08:55:07] [INFO] [stream_writer] GUI stream író szál indítva (Kamera BE → stream_frame.jpg).
+[08:55:07] [INFO] [STARTUP] Control armed – EKF, PID, watchdog aktiv
+[08:55:07] [INFO] [STARTUP] READY – rendszer indítás kész
+[08:55:13] [ERROR] [!!!] VÉSZMEGÁLLÍTÁS AKTIVÁLVA (GUI_EMERGENCY_STOP) [!!!]
+[08:55:14] [OK] Minden hardver biztonságosan leállítva.

@@ -1,0 +1,1328 @@
+{
+  "archive": {
+    "enabled": false,
+    "post_check": null,
+    "post_run": null,
+    "pre_check": null,
+    "pre_run": null,
+    "requested": true,
+    "skipped_reason": "disabled_during_live_run_for_watchdog_safety"
+  },
+  "duration_s": 90.425,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ended_at_utc": "2026-08-26T19:19:18Z",
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 27623,
+        "pid": 27623,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "incident": {
+    "artifacts": [
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json"
+    ],
+    "command": {
+      "return_code": 1,
+      "stderr_tail": "",
+      "stdout_tail": "{\"status\": \"FAIL\", \"plain_summary_hu\": \"Eredmeny: FAIL. Foundation preflight: PASS. 60s room cruise validalas: FAIL. Runtime hibak: continuous_room_cruise.\", \"failed_gates\": [\"runtime:continuous_room_cruise\"], \"inconclusive_gates\": [], \"artifact_paths\": {\"result\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json\", \"summary\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json\", \"preflight\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json\", \"samples\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl\", \"incident\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json\", \"base_room_cruise_summary\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json\", \"base_room_cruise_result\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json\"}}",
+      "timed_out": false
+    },
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 27623,
+          "pid": 27623,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-08-26T19:19:18Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 4,
+        "logger_updated_ts": 13773.229463707,
+        "status_version": 442,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-08-26T19:17:48Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 28,
+        "logger_updated_ts": 13643.263655037,
+        "status_version": 274,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": -24,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": 58.275,
+      "errors": [],
+      "max_age_s": 3600.0,
+      "ok": true,
+      "path": "logs/session_20260826T191748Z/latest_M0_measurement_trust_live.json",
+      "required": true
+    },
+    "preflight": {
+      "errors": null,
+      "ok": true,
+      "stdout_tail": "PREFLIGHT: READY\n  odom=LIDAR_FIRST  mode=LIDAR_STRICT  determinism=HIGH\n  lidar: fresh=True  age=0.02s  sig_ok=True  conf=0.9397207908803378\n  clearance: median=1.82m\n  encoder_distance_available=True  failsafe_reset=False\n  timestamp=2026-08-26T19:18:01Z"
+    },
+    "preflight_pose_reset": {
+      "accepted": {
+        "cmd_id": "hub_preflight_reset_1787771879499",
+        "lifecycle": "accepted",
+        "ok": true,
+        "timeout_sec": 6.0
+      },
+      "command": {
+        "cmd_id": "hub_preflight_reset_1787771879499",
+        "motion_source": "GUI",
+        "token": "GUI_DEFAULT",
+        "type": "reset_pos"
+      },
+      "error": "",
+      "lifecycle": {
+        "cmd_type": "reset_pos",
+        "details": {
+          "cmd_id": "hub_preflight_reset_1787771879499",
+          "details": {
+            "motion_command": false,
+            "physical_success_hint": "not_required_for_non_motion_command",
+            "physical_success_implied": true,
+            "truth_surface": "COMMAND_LIFECYCLE"
+          },
+          "source": "GUI",
+          "state": "effective",
+          "timeout_sec": 4.0,
+          "ts": 1787771879.5509973,
+          "type": "reset_pos"
+        },
+        "error_code": "",
+        "lifecycle_ok": true,
+        "ok": true,
+        "pending": false,
+        "physical_equivalence": false,
+        "raw_state": "effective",
+        "reason": "",
+        "runtime_motion_truth": {
+          "available": false,
+          "correlated_to_cmd": false,
+          "execution_state": "",
+          "note": "command lifecycle status is not equal to physical completion",
+          "terminal_reason": ""
+        },
+        "state": "effective",
+        "timed_out": false,
+        "truth_surface": "COMMAND_LIFECYCLE"
+      },
+      "ok": true
+    },
+    "primary_failure": "TEST_FAIL",
+    "profile": "M3_room_cruise_unified_validator",
+    "reason": "scenario return_code=1",
+    "run_tag": "hub_M3_room_cruise_unified_validator_20260826T191748Z",
+    "status": "FAIL",
+    "warning_summary": {},
+    "warnings": []
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-08-26T19:19:18Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 4,
+      "logger_updated_ts": 13773.229463707,
+      "status_version": 442,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-08-26T19:17:48Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 28,
+      "logger_updated_ts": 13643.263655037,
+      "status_version": 274,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": -24,
+      "write_errors_delta": 0
+    }
+  },
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": 58.275,
+    "errors": [],
+    "max_age_s": 3600.0,
+    "ok": true,
+    "path": "logs/session_20260826T191748Z/latest_M0_measurement_trust_live.json",
+    "payload": {
+      "case_count": 4,
+      "contract_id": "",
+      "failures": [],
+      "phase": "M0",
+      "schema": "measurement_trust",
+      "sensor_surface": {
+        "ekf_cases": 4,
+        "encoder_cases": 4,
+        "imu_cases": 4,
+        "lidar_cases": 4,
+        "motor_pwm_cases": 3
+      },
+      "success": true,
+      "test": "M0_measurement_trust_live"
+    },
+    "required": true
+  },
+  "preflight": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/tools/agent_motion_probe.py",
+      "--preflight-only",
+      "--forward-clearance-m",
+      "0.80",
+      "--forward-clearance-mode",
+      "front-sector",
+      "--stop-timeout-s",
+      "4.0",
+      "--compact"
+    ],
+    "ok": true,
+    "payload": {},
+    "run": {
+      "duration_s": 2.107,
+      "ok": true,
+      "return_code": 0,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": null,
+      "stdout_tail": "PREFLIGHT: READY\n  odom=LIDAR_FIRST  mode=LIDAR_STRICT  determinism=HIGH\n  lidar: fresh=True  age=0.02s  sig_ok=True  conf=0.9397207908803378\n  clearance: median=1.82m\n  encoder_distance_available=True  failsafe_reset=False\n  timestamp=2026-08-26T19:18:01Z",
+      "timed_out": false
+    }
+  },
+  "preflight_pose_reset": {
+    "accepted": {
+      "cmd_id": "hub_preflight_reset_1787771879499",
+      "lifecycle": "accepted",
+      "ok": true,
+      "timeout_sec": 6.0
+    },
+    "command": {
+      "cmd_id": "hub_preflight_reset_1787771879499",
+      "motion_source": "GUI",
+      "token": "GUI_DEFAULT",
+      "type": "reset_pos"
+    },
+    "error": "",
+    "lifecycle": {
+      "cmd_type": "reset_pos",
+      "details": {
+        "cmd_id": "hub_preflight_reset_1787771879499",
+        "details": {
+          "motion_command": false,
+          "physical_success_hint": "not_required_for_non_motion_command",
+          "physical_success_implied": true,
+          "truth_surface": "COMMAND_LIFECYCLE"
+        },
+        "source": "GUI",
+        "state": "effective",
+        "timeout_sec": 4.0,
+        "ts": 1787771879.5509973,
+        "type": "reset_pos"
+      },
+      "error_code": "",
+      "lifecycle_ok": true,
+      "ok": true,
+      "pending": false,
+      "physical_equivalence": false,
+      "raw_state": "effective",
+      "reason": "",
+      "runtime_motion_truth": {
+        "available": false,
+        "correlated_to_cmd": false,
+        "execution_state": "",
+        "note": "command lifecycle status is not equal to physical completion",
+        "terminal_reason": ""
+      },
+      "state": "effective",
+      "timed_out": false,
+      "truth_surface": "COMMAND_LIFECYCLE"
+    },
+    "ok": true
+  },
+  "profile": "M3_room_cruise_unified_validator",
+  "run_dir": "logs/session_20260826T191748Z",
+  "runtime": {
+    "before": {
+      "action": "status",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/tools/agent_runtime_manager.py",
+        "status",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": false,
+      "payload": {
+        "gui": {
+          "error": "<urlopen error [Errno 111] Connection refused>",
+          "ok": false,
+          "payload": {},
+          "port": 7860
+        },
+        "pid_file": {
+          "alive": false,
+          "exists": false,
+          "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+          "payload": {},
+          "pid": null,
+          "registered_process": false,
+          "stale": false,
+          "status_pid_matches": false
+        },
+        "processes": [],
+        "ready_for_live_tests": false,
+        "running": false,
+        "runtime_identity": {
+          "ok": false,
+          "running_process_pids": [],
+          "status_pid_is_running": false,
+          "unique_os_process": false
+        },
+        "status": {
+          "age_s": 46.784,
+          "exists": true,
+          "fresh": false,
+          "runtime_pid": 27165,
+          "safety_allow": true,
+          "startup_ready": true,
+          "state": "FAILSAFE",
+          "status_version": 274,
+          "stop_type": "EMERGENCY_STOP"
+        },
+        "timestamp": "2026-08-26T19:17:48Z"
+      },
+      "run": {
+        "duration_s": 0.319,
+        "ok": true,
+        "return_code": 1,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": 46.784,
+            "exists": true,
+            "fresh": false,
+            "runtime_pid": 27165,
+            "safety_allow": true,
+            "startup_ready": true,
+            "state": "FAILSAFE",
+            "status_version": 274,
+            "stop_type": "EMERGENCY_STOP"
+          },
+          "timestamp": "2026-08-26T19:17:48Z"
+        },
+        "stdout_tail": "{\n  \"timestamp\": \"2026-08-26T19:17:48Z\",\n  \"running\": false,\n  \"ready_for_live_tests\": false,\n  \"processes\": [],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": false,\n    \"pid\": null,\n    \"alive\": false,\n    \"status_pid_matches\": false,\n    \"registered_process\": false,\n    \"stale\": false,\n    \"payload\": {}\n  },\n  \"runtime_identity\": {\n    \"ok\": false,\n    \"status_pid_is_running\": false,\n    \"unique_os_process\": false,\n    \"running_process_pids\": []\n  },\n  \"status\": {\n    \"exists\": true,\n    \"age_s\": 46.784,\n    \"fresh\": false,\n    \"state\": \"FAILSAFE\",\n    \"status_version\": 274,\n    \"runtime_pid\": 27165,\n    \"startup_ready\": true,\n    \"safety_allow\": true,\n    \"stop_type\": \"EMERGENCY_STOP\"\n  },\n  \"gui\": {\n    \"ok\": false,\n    \"port\": 7860,\n    \"error\": \"<urlopen error [Errno 111] Connection refused>\",\n    \"payload\": {}\n  }\n}",
+        "timed_out": false
+      }
+    },
+    "ready_for_live_tests_after_recovery": true,
+    "recovery": [
+      {
+        "action": "start",
+        "command": [
+          "/usr/bin/python3",
+          "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/tools/agent_runtime_manager.py",
+          "start",
+          "--ready-timeout-s",
+          "70",
+          "--graceful-timeout-s",
+          "8",
+          "--hard-timeout-s",
+          "4"
+        ],
+        "ok": true,
+        "payload": {
+          "gui": {
+            "error": "",
+            "ok": true,
+            "payload": {
+              "ipc_connected": false,
+              "ok": true,
+              "uptime_sec": 9.9,
+              "ws_pose_clients": 0
+            },
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": true,
+            "exists": true,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+            "payload": {
+              "cmd": [
+                "/usr/bin/python3",
+                "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py"
+              ],
+              "cwd": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree",
+              "log_path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log",
+              "pid": 27657,
+              "replayer_capture": {
+                "enabled": false
+              },
+              "runtime_python": "/usr/bin/python3",
+              "started_at": "2026-08-26T19:17:48Z"
+            },
+            "pid": 27657,
+            "registered_process": true,
+            "stale": false,
+            "status_pid_matches": true
+          },
+          "processes": [
+            {
+              "args": "/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py",
+              "pid": 27657
+            }
+          ],
+          "ready_for_live_tests": true,
+          "running": true,
+          "runtime_identity": {
+            "ok": true,
+            "running_process_pids": [
+              27657
+            ],
+            "status_pid_is_running": true,
+            "unique_os_process": true
+          },
+          "runtime_python": "/usr/bin/python3",
+          "started_now": true,
+          "started_pid": 27657,
+          "status": {
+            "age_s": 0.026,
+            "exists": true,
+            "fresh": true,
+            "runtime_pid": 27657,
+            "safety_allow": true,
+            "startup_ready": true,
+            "state": "IDLE",
+            "status_version": 3,
+            "stop_type": "NONE"
+          },
+          "timestamp": "2026-08-26T19:17:59Z"
+        },
+        "run": {
+          "duration_s": 10.824,
+          "ok": true,
+          "return_code": 0,
+          "stderr_json": null,
+          "stderr_tail": "",
+          "stdout_json": {
+            "gui": {
+              "error": "",
+              "ok": true,
+              "payload": {
+                "ipc_connected": false,
+                "ok": true,
+                "uptime_sec": 9.9,
+                "ws_pose_clients": 0
+              },
+              "port": 7860
+            },
+            "pid_file": {
+              "alive": true,
+              "exists": true,
+              "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+              "payload": {
+                "cmd": [
+                  "/usr/bin/python3",
+                  "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py"
+                ],
+                "cwd": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree",
+                "log_path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log",
+                "pid": 27657,
+                "replayer_capture": {
+                  "enabled": false
+                },
+                "runtime_python": "/usr/bin/python3",
+                "started_at": "2026-08-26T19:17:48Z"
+              },
+              "pid": 27657,
+              "registered_process": true,
+              "stale": false,
+              "status_pid_matches": true
+            },
+            "processes": [
+              {
+                "args": "/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py",
+                "pid": 27657
+              }
+            ],
+            "ready_for_live_tests": true,
+            "running": true,
+            "runtime_identity": {
+              "ok": true,
+              "running_process_pids": [
+                27657
+              ],
+              "status_pid_is_running": true,
+              "unique_os_process": true
+            },
+            "runtime_python": "/usr/bin/python3",
+            "started_now": true,
+            "started_pid": 27657,
+            "status": {
+              "age_s": 0.026,
+              "exists": true,
+              "fresh": true,
+              "runtime_pid": 27657,
+              "safety_allow": true,
+              "startup_ready": true,
+              "state": "IDLE",
+              "status_version": 3,
+              "stop_type": "NONE"
+            },
+            "timestamp": "2026-08-26T19:17:59Z"
+          },
+          "stdout_tail": "{\n  \"timestamp\": \"2026-08-26T19:17:59Z\",\n  \"running\": true,\n  \"ready_for_live_tests\": true,\n  \"processes\": [\n    {\n      \"pid\": 27657,\n      \"args\": \"/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py\"\n    }\n  ],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": true,\n    \"pid\": 27657,\n    \"alive\": true,\n    \"status_pid_matches\": true,\n    \"registered_process\": true,\n    \"stale\": false,\n    \"payload\": {\n      \"pid\": 27657,\n      \"started_at\": \"2026-08-26T19:17:48Z\",\n      \"cwd\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree\",\n      \"cmd\": [\n        \"/usr/bin/python3\",\n        \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py\"\n      ],\n      \"runtime_python\": \"/usr/bin/python3\",\n      \"log_path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log\",\n      \"replayer_capture\": {\n        \"enabled\": false\n      }\n    }\n  },\n  \"runtime_identity\": {\n    \"ok\": true,\n    \"status_pid_is_running\": true,\n    \"unique_os_process\": true,\n    \"running_process_pids\": [\n      27657\n    ]\n  },\n  \"status\": {\n    \"exists\": true,\n    \"age_s\": 0.026,\n    \"fresh\": true,\n    \"state\": \"IDLE\",\n    \"status_version\": 3,\n    \"runtime_pid\": 27657,\n    \"startup_ready\": true,\n    \"safety_allow\": true,\n    \"stop_type\": \"NONE\"\n  },\n  \"gui\": {\n    \"ok\": true,\n    \"port\": 7860,\n    \"error\": \"\",\n    \"payload\": {\n      \"ok\": true,\n      \"uptime_sec\": 9.9,\n      \"ws_pose_clients\": 0,\n      \"ipc_connected\": false\n    }\n  },\n  \"started_now\": true,\n  \"started_pid\": 27657,\n  \"runtime_python\": \"/usr/bin/python3\"\n}",
+          "timed_out": false
+        }
+      }
+    ],
+    "start": {
+      "action": "start",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/tools/agent_runtime_manager.py",
+        "start",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": true,
+      "payload": {
+        "gui": {
+          "error": "",
+          "ok": true,
+          "payload": {
+            "ipc_connected": false,
+            "ok": true,
+            "uptime_sec": 9.9,
+            "ws_pose_clients": 0
+          },
+          "port": 7860
+        },
+        "pid_file": {
+          "alive": true,
+          "exists": true,
+          "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+          "payload": {
+            "cmd": [
+              "/usr/bin/python3",
+              "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py"
+            ],
+            "cwd": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree",
+            "log_path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log",
+            "pid": 27657,
+            "replayer_capture": {
+              "enabled": false
+            },
+            "runtime_python": "/usr/bin/python3",
+            "started_at": "2026-08-26T19:17:48Z"
+          },
+          "pid": 27657,
+          "registered_process": true,
+          "stale": false,
+          "status_pid_matches": true
+        },
+        "processes": [
+          {
+            "args": "/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py",
+            "pid": 27657
+          }
+        ],
+        "ready_for_live_tests": true,
+        "running": true,
+        "runtime_identity": {
+          "ok": true,
+          "running_process_pids": [
+            27657
+          ],
+          "status_pid_is_running": true,
+          "unique_os_process": true
+        },
+        "runtime_python": "/usr/bin/python3",
+        "started_now": true,
+        "started_pid": 27657,
+        "status": {
+          "age_s": 0.026,
+          "exists": true,
+          "fresh": true,
+          "runtime_pid": 27657,
+          "safety_allow": true,
+          "startup_ready": true,
+          "state": "IDLE",
+          "status_version": 3,
+          "stop_type": "NONE"
+        },
+        "timestamp": "2026-08-26T19:17:59Z"
+      },
+      "run": {
+        "duration_s": 10.824,
+        "ok": true,
+        "return_code": 0,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "gui": {
+            "error": "",
+            "ok": true,
+            "payload": {
+              "ipc_connected": false,
+              "ok": true,
+              "uptime_sec": 9.9,
+              "ws_pose_clients": 0
+            },
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": true,
+            "exists": true,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+            "payload": {
+              "cmd": [
+                "/usr/bin/python3",
+                "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py"
+              ],
+              "cwd": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree",
+              "log_path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log",
+              "pid": 27657,
+              "replayer_capture": {
+                "enabled": false
+              },
+              "runtime_python": "/usr/bin/python3",
+              "started_at": "2026-08-26T19:17:48Z"
+            },
+            "pid": 27657,
+            "registered_process": true,
+            "stale": false,
+            "status_pid_matches": true
+          },
+          "processes": [
+            {
+              "args": "/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py",
+              "pid": 27657
+            }
+          ],
+          "ready_for_live_tests": true,
+          "running": true,
+          "runtime_identity": {
+            "ok": true,
+            "running_process_pids": [
+              27657
+            ],
+            "status_pid_is_running": true,
+            "unique_os_process": true
+          },
+          "runtime_python": "/usr/bin/python3",
+          "started_now": true,
+          "started_pid": 27657,
+          "status": {
+            "age_s": 0.026,
+            "exists": true,
+            "fresh": true,
+            "runtime_pid": 27657,
+            "safety_allow": true,
+            "startup_ready": true,
+            "state": "IDLE",
+            "status_version": 3,
+            "stop_type": "NONE"
+          },
+          "timestamp": "2026-08-26T19:17:59Z"
+        },
+        "stdout_tail": "{\n  \"timestamp\": \"2026-08-26T19:17:59Z\",\n  \"running\": true,\n  \"ready_for_live_tests\": true,\n  \"processes\": [\n    {\n      \"pid\": 27657,\n      \"args\": \"/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py\"\n    }\n  ],\n  \"pid_file\": {\n    \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid\",\n    \"exists\": true,\n    \"pid\": 27657,\n    \"alive\": true,\n    \"status_pid_matches\": true,\n    \"registered_process\": true,\n    \"stale\": false,\n    \"payload\": {\n      \"pid\": 27657,\n      \"started_at\": \"2026-08-26T19:17:48Z\",\n      \"cwd\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree\",\n      \"cmd\": [\n        \"/usr/bin/python3\",\n        \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py\"\n      ],\n      \"runtime_python\": \"/usr/bin/python3\",\n      \"log_path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log\",\n      \"replayer_capture\": {\n        \"enabled\": false\n      }\n    }\n  },\n  \"runtime_identity\": {\n    \"ok\": true,\n    \"status_pid_is_running\": true,\n    \"unique_os_process\": true,\n    \"running_process_pids\": [\n      27657\n    ]\n  },\n  \"status\": {\n    \"exists\": true,\n    \"age_s\": 0.026,\n    \"fresh\": true,\n    \"state\": \"IDLE\",\n    \"status_version\": 3,\n    \"runtime_pid\": 27657,\n    \"startup_ready\": true,\n    \"safety_allow\": true,\n    \"stop_type\": \"NONE\"\n  },\n  \"gui\": {\n    \"ok\": true,\n    \"port\": 7860,\n    \"error\": \"\",\n    \"payload\": {\n      \"ok\": true,\n      \"uptime_sec\": 9.9,\n      \"ws_pose_clients\": 0,\n      \"ipc_connected\": false\n    }\n  },\n  \"started_now\": true,\n  \"started_pid\": 27657,\n  \"runtime_python\": \"/usr/bin/python3\"\n}",
+        "timed_out": false
+      }
+    },
+    "started_here": true,
+    "stop": {
+      "action": "stop",
+      "command": [
+        "/usr/bin/python3",
+        "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/tools/agent_runtime_manager.py",
+        "stop",
+        "--ready-timeout-s",
+        "70",
+        "--graceful-timeout-s",
+        "8",
+        "--hard-timeout-s",
+        "4"
+      ],
+      "ok": true,
+      "payload": {
+        "after": {
+          "gui": {
+            "error": "<urlopen error [Errno 111] Connection refused>",
+            "ok": false,
+            "payload": {},
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": false,
+            "exists": false,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+            "payload": {},
+            "pid": null,
+            "registered_process": false,
+            "stale": false,
+            "status_pid_matches": false
+          },
+          "processes": [],
+          "ready_for_live_tests": false,
+          "running": false,
+          "runtime_identity": {
+            "ok": false,
+            "running_process_pids": [],
+            "status_pid_is_running": false,
+            "unique_os_process": false
+          },
+          "status": {
+            "age_s": 6.118,
+            "exists": true,
+            "fresh": false,
+            "runtime_pid": 27657,
+            "safety_allow": true,
+            "startup_ready": true,
+            "state": "FAILSAFE",
+            "status_version": 442,
+            "stop_type": "EMERGENCY_STOP"
+          },
+          "timestamp": "2026-08-26T19:19:18Z"
+        },
+        "before": {
+          "gui": {
+            "error": "",
+            "ok": true,
+            "payload": {
+              "ipc_connected": false,
+              "ok": true,
+              "uptime_sec": 82.9,
+              "ws_pose_clients": 0
+            },
+            "port": 7860
+          },
+          "pid_file": {
+            "alive": true,
+            "exists": true,
+            "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+            "payload": {
+              "cmd": [
+                "/usr/bin/python3",
+                "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py"
+              ],
+              "cwd": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree",
+              "log_path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log",
+              "pid": 27657,
+              "replayer_capture": {
+                "enabled": false
+              },
+              "runtime_python": "/usr/bin/python3",
+              "started_at": "2026-08-26T19:17:48Z"
+            },
+            "pid": 27657,
+            "registered_process": true,
+            "stale": false,
+            "status_pid_matches": true
+          },
+          "processes": [
+            {
+              "args": "/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py",
+              "pid": 27657
+            }
+          ],
+          "ready_for_live_tests": true,
+          "running": true,
+          "runtime_identity": {
+            "ok": true,
+            "running_process_pids": [
+              27657
+            ],
+            "status_pid_is_running": true,
+            "unique_os_process": true
+          },
+          "status": {
+            "age_s": 0.046,
+            "exists": true,
+            "fresh": true,
+            "runtime_pid": 27657,
+            "safety_allow": true,
+            "startup_ready": true,
+            "state": "IDLE",
+            "status_version": 441,
+            "stop_type": "SOFT_STOP"
+          },
+          "timestamp": "2026-08-26T19:19:12Z"
+        },
+        "escalation": {
+          "sigkill": false,
+          "sigterm": false
+        },
+        "graceful_shutdown": {
+          "capture_after": {
+            "expected": false,
+            "status": "DISABLED",
+            "terminal": true
+          },
+          "capture_before": {
+            "expected": false,
+            "status": "DISABLED",
+            "terminal": true
+          },
+          "capture_terminal_before_process_exit": false,
+          "capture_terminal_observed_s": null,
+          "effective_timeout_s": 8.0,
+          "elapsed_s": 5.966537,
+          "requested_timeout_s": 8.0,
+          "stopped": true
+        },
+        "prestop_command": {
+          "error": "",
+          "ok": true,
+          "response": {
+            "cmd_id": "cmd_1787771952430_985dd8aa",
+            "lifecycle": "accepted",
+            "ok": true,
+            "timeout_sec": 6.0
+          }
+        },
+        "replayer_capture_shutdown": {
+          "capture_id": "",
+          "expected": false,
+          "manifest_path": "",
+          "status": "DISABLED",
+          "terminal": true,
+          "terminal_before_escalation": false,
+          "terminal_observed_s": null
+        },
+        "stopped": true,
+        "timestamp": "2026-08-26T19:19:18Z"
+      },
+      "run": {
+        "duration_s": 6.628,
+        "ok": true,
+        "return_code": 0,
+        "stderr_json": null,
+        "stderr_tail": "",
+        "stdout_json": {
+          "after": {
+            "gui": {
+              "error": "<urlopen error [Errno 111] Connection refused>",
+              "ok": false,
+              "payload": {},
+              "port": 7860
+            },
+            "pid_file": {
+              "alive": false,
+              "exists": false,
+              "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+              "payload": {},
+              "pid": null,
+              "registered_process": false,
+              "stale": false,
+              "status_pid_matches": false
+            },
+            "processes": [],
+            "ready_for_live_tests": false,
+            "running": false,
+            "runtime_identity": {
+              "ok": false,
+              "running_process_pids": [],
+              "status_pid_is_running": false,
+              "unique_os_process": false
+            },
+            "status": {
+              "age_s": 6.118,
+              "exists": true,
+              "fresh": false,
+              "runtime_pid": 27657,
+              "safety_allow": true,
+              "startup_ready": true,
+              "state": "FAILSAFE",
+              "status_version": 442,
+              "stop_type": "EMERGENCY_STOP"
+            },
+            "timestamp": "2026-08-26T19:19:18Z"
+          },
+          "before": {
+            "gui": {
+              "error": "",
+              "ok": true,
+              "payload": {
+                "ipc_connected": false,
+                "ok": true,
+                "uptime_sec": 82.9,
+                "ws_pose_clients": 0
+              },
+              "port": 7860
+            },
+            "pid_file": {
+              "alive": true,
+              "exists": true,
+              "path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid",
+              "payload": {
+                "cmd": [
+                  "/usr/bin/python3",
+                  "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py"
+                ],
+                "cwd": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree",
+                "log_path": "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log",
+                "pid": 27657,
+                "replayer_capture": {
+                  "enabled": false
+                },
+                "runtime_python": "/usr/bin/python3",
+                "started_at": "2026-08-26T19:17:48Z"
+              },
+              "pid": 27657,
+              "registered_process": true,
+              "stale": false,
+              "status_pid_matches": true
+            },
+            "processes": [
+              {
+                "args": "/usr/bin/python3 /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/os.py",
+                "pid": 27657
+              }
+            ],
+            "ready_for_live_tests": true,
+            "running": true,
+            "runtime_identity": {
+              "ok": true,
+              "running_process_pids": [
+                27657
+              ],
+              "status_pid_is_running": true,
+              "unique_os_process": true
+            },
+            "status": {
+              "age_s": 0.046,
+              "exists": true,
+              "fresh": true,
+              "runtime_pid": 27657,
+              "safety_allow": true,
+              "startup_ready": true,
+              "state": "IDLE",
+              "status_version": 441,
+              "stop_type": "SOFT_STOP"
+            },
+            "timestamp": "2026-08-26T19:19:12Z"
+          },
+          "escalation": {
+            "sigkill": false,
+            "sigterm": false
+          },
+          "graceful_shutdown": {
+            "capture_after": {
+              "expected": false,
+              "status": "DISABLED",
+              "terminal": true
+            },
+            "capture_before": {
+              "expected": false,
+              "status": "DISABLED",
+              "terminal": true
+            },
+            "capture_terminal_before_process_exit": false,
+            "capture_terminal_observed_s": null,
+            "effective_timeout_s": 8.0,
+            "elapsed_s": 5.966537,
+            "requested_timeout_s": 8.0,
+            "stopped": true
+          },
+          "prestop_command": {
+            "error": "",
+            "ok": true,
+            "response": {
+              "cmd_id": "cmd_1787771952430_985dd8aa",
+              "lifecycle": "accepted",
+              "ok": true,
+              "timeout_sec": 6.0
+            }
+          },
+          "replayer_capture_shutdown": {
+            "capture_id": "",
+            "expected": false,
+            "manifest_path": "",
+            "status": "DISABLED",
+            "terminal": true,
+            "terminal_before_escalation": false,
+            "terminal_observed_s": null
+          },
+          "stopped": true,
+          "timestamp": "2026-08-26T19:19:18Z"
+        },
+        "stdout_tail": "        ],\n        \"runtime_python\": \"/usr/bin/python3\",\n        \"log_path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/logs/session_20260826T191748Z/runtime/os.log\",\n        \"replayer_capture\": {\n          \"enabled\": false\n        }\n      }\n    },\n    \"runtime_identity\": {\n      \"ok\": true,\n      \"status_pid_is_running\": true,\n      \"unique_os_process\": true,\n      \"running_process_pids\": [\n        27657\n      ]\n    },\n    \"status\": {\n      \"exists\": true,\n      \"age_s\": 0.046,\n      \"fresh\": true,\n      \"state\": \"IDLE\",\n      \"status_version\": 441,\n      \"runtime_pid\": 27657,\n      \"startup_ready\": true,\n      \"safety_allow\": true,\n      \"stop_type\": \"SOFT_STOP\"\n    },\n    \"gui\": {\n      \"ok\": true,\n      \"port\": 7860,\n      \"error\": \"\",\n      \"payload\": {\n        \"ok\": true,\n        \"uptime_sec\": 82.9,\n        \"ws_pose_clients\": 0,\n        \"ipc_connected\": false\n      }\n    }\n  },\n  \"after\": {\n    \"timestamp\": \"2026-08-26T19:19:18Z\",\n    \"running\": false,\n    \"ready_for_live_tests\": false,\n    \"processes\": [],\n    \"pid_file\": {\n      \"path\": \"/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime/agent_runtime/os.pid\",\n      \"exists\": false,\n      \"pid\": null,\n      \"alive\": false,\n      \"status_pid_matches\": false,\n      \"registered_process\": false,\n      \"stale\": false,\n      \"payload\": {}\n    },\n    \"runtime_identity\": {\n      \"ok\": false,\n      \"status_pid_is_running\": false,\n      \"unique_os_process\": false,\n      \"running_process_pids\": []\n    },\n    \"status\": {\n      \"exists\": true,\n      \"age_s\": 6.118,\n      \"fresh\": false,\n      \"state\": \"FAILSAFE\",\n      \"status_version\": 442,\n      \"runtime_pid\": 27657,\n      \"startup_ready\": true,\n      \"safety_allow\": true,\n      \"stop_type\": \"EMERGENCY_STOP\"\n    },\n    \"gui\": {\n      \"ok\": false,\n      \"port\": 7860,\n      \"error\": \"<urlopen error [Errno 111] Connection refused>\",\n      \"payload\": {}\n    }\n  },\n  \"prestop_command\": {\n    \"ok\": true,\n    \"response\": {\n      \"ok\": true,\n      \"cmd_id\": \"cmd_1787771952430_985dd8aa\",\n      \"lifecycle\": \"accepted\",\n      \"timeout_sec\": 6.0\n    },\n    \"error\": \"\"\n  },\n  \"graceful_shutdown\": {\n    \"stopped\": true,\n    \"requested_timeout_s\": 8.0,\n    \"effective_timeout_s\": 8.0,\n    \"elapsed_s\": 5.966537,\n    \"capture_before\": {\n      \"expected\": false,\n      \"status\": \"DISABLED\",\n      \"terminal\": true\n    },\n    \"capture_after\": {\n      \"expected\": false,\n      \"status\": \"DISABLED\",\n      \"terminal\": true\n    },\n    \"capture_terminal_observed_s\": null,\n    \"capture_terminal_before_process_exit\": false\n  },\n  \"replayer_capture_shutdown\": {\n    \"expected\": false,\n    \"terminal\": true,\n    \"status\": \"DISABLED\",\n    \"capture_id\": \"\",\n    \"manifest_path\": \"\",\n    \"terminal_observed_s\": null,\n    \"terminal_before_escalation\": false\n  },\n  \"escalation\": {\n    \"sigterm\": false,\n    \"sigkill\": false\n  }\n}",
+        "timed_out": false
+      }
+    }
+  },
+  "scenario_run": {
+    "command": [
+      "/usr/bin/python3",
+      "tools/M3_room_cruise_unified_validator.py",
+      "--test-name",
+      "hub_M3_room_cruise_unified_validator",
+      "--preflight-duration-s",
+      "4.0",
+      "--duration-s",
+      "60.0",
+      "--poll-s",
+      "0.12",
+      "--v-max-mps",
+      "0.30",
+      "--omega-max-rad-s",
+      "0.60",
+      "--base-min-progress-m",
+      "0.45",
+      "--min-front-m",
+      "0.27",
+      "--token",
+      "GUI_DEFAULT",
+      "--compact"
+    ],
+    "payload": {
+      "artifact_paths": {
+        "base_room_cruise_result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+        "base_room_cruise_summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json",
+        "incident": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+        "preflight": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+        "result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+        "samples": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+        "summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json"
+      },
+      "failed_gates": [
+        "runtime:continuous_room_cruise"
+      ],
+      "inconclusive_gates": [],
+      "plain_summary_hu": "Eredmeny: FAIL. Foundation preflight: PASS. 60s room cruise validalas: FAIL. Runtime hibak: continuous_room_cruise.",
+      "status": "FAIL"
+    },
+    "run": {
+      "duration_s": 70.141,
+      "ok": true,
+      "return_code": 1,
+      "stderr_json": null,
+      "stderr_tail": "",
+      "stdout_json": {
+        "artifact_paths": {
+          "base_room_cruise_result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+          "base_room_cruise_summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json",
+          "incident": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+          "preflight": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+          "result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+          "samples": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+          "summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json"
+        },
+        "failed_gates": [
+          "runtime:continuous_room_cruise"
+        ],
+        "inconclusive_gates": [],
+        "plain_summary_hu": "Eredmeny: FAIL. Foundation preflight: PASS. 60s room cruise validalas: FAIL. Runtime hibak: continuous_room_cruise.",
+        "status": "FAIL"
+      },
+      "stdout_tail": "{\"status\": \"FAIL\", \"plain_summary_hu\": \"Eredmeny: FAIL. Foundation preflight: PASS. 60s room cruise validalas: FAIL. Runtime hibak: continuous_room_cruise.\", \"failed_gates\": [\"runtime:continuous_room_cruise\"], \"inconclusive_gates\": [], \"artifact_paths\": {\"result\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json\", \"summary\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json\", \"preflight\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json\", \"samples\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl\", \"incident\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json\", \"base_room_cruise_summary\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json\", \"base_room_cruise_result\": \"logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json\"}}",
+      "timed_out": false
+    }
+  },
+  "started_at_utc": "2026-08-26T19:17:48Z",
+  "status": "FAIL",
+  "summary": {
+    "artifact_paths": [
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+      "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json"
+    ],
+    "artifact_paths_missing": [
+      "logs/latest/M3_room_cruise_unified_validator_samples.jsonl"
+    ],
+    "artifact_paths_stale_rejected": [],
+    "description": "One uninterrupted 60s camera-off Room Cruise on the existing UNIFIED command path.",
+    "duration_s": 90.425,
+    "ekf_truth_gate": {
+      "errors": [],
+      "ok": true,
+      "required": false,
+      "surface_index": null,
+      "surface_summary": {}
+    },
+    "ekf_truth_gate_ok": true,
+    "ended_at_utc": "2026-08-26T19:19:18Z",
+    "family": "movement_quality",
+    "goals": [
+      "verify no-motion foundation readiness before movement: status, peripherals, safety, LIDAR, encoder, IMU, logger, and UNIFIED mode",
+      "run one bounded Room Cruise activation continuously for at least the requested 60s window with the camera disabled",
+      "use only the existing M3 TRACK path with one command owner and EKF pose SSOT",
+      "reject unjustified internal stop/start and settled motion-intent PWM loss while allowing obstacle-justified holds",
+      "reject emergency, failsafe, watchdog-stop, forbidden-path, or localization contradiction evidence",
+      "retain the existing runtime timing, logger, peripheral, and hardware health gates without adding a controller layer"
+    ],
+    "hub_cpu_affinity": {
+      "roles": {
+        "hub": {
+          "applied": true,
+          "effective_cpus": [
+            0,
+            1,
+            2
+          ],
+          "enabled": true,
+          "error": "",
+          "native_thread_id": 27623,
+          "pid": 27623,
+          "requested_cpus": [
+            0,
+            1,
+            2
+          ],
+          "required": true,
+          "role": "hub",
+          "scheduler_policy_changed": false,
+          "verified": true
+        }
+      },
+      "schema": "RUNTIME_CPU_AFFINITY_V1"
+    },
+    "live": true,
+    "logger_lifecycle": {
+      "after": {
+        "captured_at_utc": "2026-08-26T19:19:18Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 4,
+        "logger_updated_ts": 13773.229463707,
+        "status_version": 442,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "before": {
+        "captured_at_utc": "2026-08-26T19:17:48Z",
+        "dropped_messages": 0,
+        "logger_queue_depth": 28,
+        "logger_updated_ts": 13643.263655037,
+        "status_version": 274,
+        "watchdog_freq_hz": 50.0,
+        "write_errors": 0
+      },
+      "delta": {
+        "dropped_messages_delta": 0,
+        "queue_depth_delta": -24,
+        "write_errors_delta": 0
+      }
+    },
+    "loop_budget": {},
+    "m3_artifact_finalize": {},
+    "measurement_truth_gate": {
+      "age_s": 58.275,
+      "errors": [],
+      "max_age_s": 3600.0,
+      "ok": true,
+      "path": "logs/session_20260826T191748Z/latest_M0_measurement_trust_live.json",
+      "payload": {
+        "case_count": 4,
+        "contract_id": "",
+        "failures": [],
+        "phase": "M0",
+        "schema": "measurement_trust",
+        "sensor_surface": {
+          "ekf_cases": 4,
+          "encoder_cases": 4,
+          "imu_cases": 4,
+          "lidar_cases": 4,
+          "motor_pwm_cases": 3
+        },
+        "success": true,
+        "test": "M0_measurement_trust_live"
+      },
+      "required": true
+    },
+    "measurement_truth_gate_ok": true,
+    "preflight_ok": true,
+    "preflight_pose_reset": {
+      "accepted": {
+        "cmd_id": "hub_preflight_reset_1787771879499",
+        "lifecycle": "accepted",
+        "ok": true,
+        "timeout_sec": 6.0
+      },
+      "command": {
+        "cmd_id": "hub_preflight_reset_1787771879499",
+        "motion_source": "GUI",
+        "token": "GUI_DEFAULT",
+        "type": "reset_pos"
+      },
+      "error": "",
+      "lifecycle": {
+        "cmd_type": "reset_pos",
+        "details": {
+          "cmd_id": "hub_preflight_reset_1787771879499",
+          "details": {
+            "motion_command": false,
+            "physical_success_hint": "not_required_for_non_motion_command",
+            "physical_success_implied": true,
+            "truth_surface": "COMMAND_LIFECYCLE"
+          },
+          "source": "GUI",
+          "state": "effective",
+          "timeout_sec": 4.0,
+          "ts": 1787771879.5509973,
+          "type": "reset_pos"
+        },
+        "error_code": "",
+        "lifecycle_ok": true,
+        "ok": true,
+        "pending": false,
+        "physical_equivalence": false,
+        "raw_state": "effective",
+        "reason": "",
+        "runtime_motion_truth": {
+          "available": false,
+          "correlated_to_cmd": false,
+          "execution_state": "",
+          "note": "command lifecycle status is not equal to physical completion",
+          "terminal_reason": ""
+        },
+        "state": "effective",
+        "timed_out": false,
+        "truth_surface": "COMMAND_LIFECYCLE"
+      },
+      "ok": true
+    },
+    "profile": "M3_room_cruise_unified_validator",
+    "requires_preflight": true,
+    "run_dir": "logs/session_20260826T191748Z",
+    "run_tag": "hub_M3_room_cruise_unified_validator_20260826T191748Z",
+    "started_at_utc": "2026-08-26T19:17:48Z",
+    "status": "FAIL",
+    "triage_order": [
+      "summary.json",
+      "incident_bundle.json",
+      "ownership_manifest.json",
+      "stdout_tail.txt",
+      "stderr_tail.txt"
+    ],
+    "verdict": {
+      "primary": "TEST_FAIL",
+      "reason": "scenario return_code=1",
+      "status": "FAIL"
+    },
+    "warning_summary": {},
+    "warnings": []
+  }
+}

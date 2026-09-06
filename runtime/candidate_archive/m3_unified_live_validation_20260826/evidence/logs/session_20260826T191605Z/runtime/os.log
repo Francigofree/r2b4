@@ -1,0 +1,119 @@
+INFO:driver.motor:Motor inicializálva (bal_oldal) - IN1: 12, IN2: 13, invert=False
+INFO:driver.motor:Motor inicializálva (jobb_oldal) - IN1: 18, IN2: 19, invert=True
+[OS] R2B4 OS indítás: GUI + robotvezérlő
+[OS] GUI: http://0.0.0.0:7860  (távolról: http://<RPi_IP>:7860)
+[OS] GUI elérhető a 7860 porton.
+[94m[21:16:08] [INFO] === PROJECT ALBA - RPi5 OPTIMALIZÁLT VEZÉRLŐ (v2.0 Startup Pipeline) ===[0m
+[94m[21:16:08] [INFO] [STARTUP] BOOT[0m
+[94m[21:16:08] [INFO] [STARTUP] Runtime: /home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/runtime, IMU provider: BNO055 device-managed[0m
+[94m[21:16:08] [INFO] [STARTUP] HARDWARE_DISCOVERY[0m
+[94m[21:16:09] [INFO] [STARTUP] IMU: True (bno055), Motor: True, LIDAR: True, Kamera: True[0m
+[94m[21:16:09] [INFO] [STARTUP] PERIPHERAL_INIT[0m
+BNO055 inicializálva NDOF módban @ 0x28.
+[94m[21:16:10] [INFO] [STARTUP] Perifériák inicializálva[0m
+[94m[21:16:10] [INFO] [STARTUP] SENSOR_STABILIZATION[0m
+[94m[21:16:13] [INFO] [STARTUP] Szenzor stabilizáció kész[0m
+[94m[21:16:13] [INFO] [STARTUP] CALIBRATION[0m
+[94m[21:16:16] [INFO] [STARTUP] BNO055 IMU device-managed kalibráció ellenőrizve[0m
+[94m[21:16:16] [INFO] [STARTUP] Encoder stream ready (wait=0.000s, age=1.6ms)[0m
+[94m[21:16:16] [INFO] [STARTUP] CALIBRATION_COMPLETE[0m
+[94m[21:16:16] [INFO] [STARTUP] BASELINE_CAPTURE[0m
+[94m[21:16:16] [INFO] [STARTUP] Baseline rögzítve[0m
+[94m[21:16:16] [INFO] [STARTUP] SAFETY_VALIDATION[0m
+[94m[21:16:16] [INFO] [STARTUP] Biztonsági ellenőrzés OK[0m
+[94m[21:16:16] [INFO] [STARTUP] CONTROL_ARMED[0m
+[94m[21:16:16] [INFO] [SpeedLimits] mode=UNIFIED v_max=0.30 w_max=1.68 source=motion_profiles.UNIFIED[0m
+[94m[STATE] -> IDLE[0m
+[94m[21:16:16] [INFO] ALBA CORE (Deterministic) Initialized.[0m
+[94m[21:16:16] [INFO] [ODOM] LIDAR_FIRST mode enabled (config: {'enabled': True, 'max_scan_age_s': 0.25, 'min_confidence': 0.2, 'max_delta_m': 0.65, 'max_delta_rad': 0.65, 'r_scale_by_confidence': True, 'jump_gate_max_speed_mps': 1.1, 'jump_gate_max_yaw_rate_rad_s': 1.6, 'jump_gate_dt_cap_s': 1.0, 'relocalization_jump_multiplier': 3.0, 'relocalization_max_delta_m': 2.0, 'relocalization_max_delta_rad': 1.8}, encoder_pose_fusion=True)[0m
+[94m[21:16:16] [INFO] [stream_writer] GUI stream író szál indítva (Kamera BE → stream_frame.jpg).[0m
+[94m[21:16:16] [INFO] [STARTUP] Control armed – EKF, PID, watchdog aktiv[0m
+[94m[21:16:16] [INFO] [STARTUP] READY – rendszer indítás kész[0m
+[93m21:16:16 | IDLE     src=MANUAL mode=UNIFIED q=CRITICAL SAFE=OK ENC=ON(1.00) EST=0.00 | pose=(+0.00,+0.00,+0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:17 | IDLE     src=MANUAL mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:18 | IDLE     src=GUI_JOYSTICK mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:19 | IDLE     src=GUI_JOYSTICK mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:20 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:21 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:22 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.90/1.13m[0m
+[94m21:16:23 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:24 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:25 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:26 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.14m[0m
+[94m21:16:27 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,+0.00,-0.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:28 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,+0.00,-0.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:29 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,+0.00,-0.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.14m[0m
+[94m21:16:30 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,+0.00,-0.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[94m21:16:31 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.00,-0.00,+0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.14m[0m
+[94m[STATE] -> FORWARD[0m
+[93m21:16:32 | FORWARD  src=STATE mode=UNIFIED q=CRITICAL SAFE=OK ENC=ON(1.00) EST=0.65 | pose=(-0.00,+0.00,+0.0deg) v=+0.15/+0.15 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.91/1.13m[0m
+[96m21:16:33 | FORWARD  src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.97 | pose=(+0.06,-0.00,-0.2deg) v=+0.15/+0.15 w=+0.00 | wheel=+0.15,+0.15 pwm=+0.20,+0.20 lid=1.86/1.15m[0m
+[96m21:16:34 | FORWARD  src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.94 | pose=(+0.18,-0.00,+0.0deg) v=+0.15/+0.15 w=-0.00 | wheel=+0.00,+0.00 pwm=+0.20,+0.19 lid=1.79/1.22m[0m
+[94m[STATE] -> IDLE[0m
+[94m21:16:35 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,-0.00,+0.6deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.79/1.25m[0m
+[94m21:16:36 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,-0.00,+0.6deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.24m[0m
+[94m21:16:37 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.6deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.24m[0m
+[94m21:16:38 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.6deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.24m[0m
+[94m21:16:39 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.7deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.79/1.24m[0m
+[94m21:16:40 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.7deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.24m[0m
+[94m21:16:41 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.7deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.79/1.24m[0m
+[93m21:16:42 | IDLE     src=STATE mode=UNIFIED q=DEGRADED SAFE=OK ENC=ON(1.00) EST=0.35 | pose=(+0.22,-0.00,+0.7deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.25m[0m
+[94m21:16:43 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.7deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.24m[0m
+[94m21:16:44 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.22,-0.00,+0.7deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.25m[0m
+[94m21:16:45 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(-0.00,-0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.78/1.24m[0m
+[94m[STATE] -> FORWARD[0m
+[96m21:16:46 | FORWARD  src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.01,-0.00,-0.4deg) v=+0.23/+0.23 w=+0.20 | wheel=+0.00,+0.00 pwm=+0.24,+0.32 lid=1.78/1.24m[0m
+[94m[STATE] -> IDLE[0m
+[93m21:16:47 | IDLE     src=STATE mode=UNIFIED q=CRITICAL SAFE=OK ENC=ON(1.00) EST=0.20 | pose=(+0.16,+0.01,+9.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.64/0.99m[0m
+[94m21:16:48 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.18,+0.01,+10.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.57/1.00m[0m
+Process r2b4-lidar-matcher:
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/usr/lib/python3.11/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/sensors/lidar_matcher_process.py", line 203, in matcher_process_main
+    summary = estimator.process_scan(
+              ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/lidar_estim.py", line 1468, in process_scan
+    x_map, y_map, th_map, conf_map = self._scan_to_map_match(
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/lidar_estim.py", line 913, in _scan_to_map_match
+    return match_scan_to_map(
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/scan_matching.py", line 582, in match_scan_to_map
+    best_cost, best_x, best_y, best_t = _refine_local_pose(
+                                        ^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/scan_matching.py", line 238, in _refine_local_pose
+    cost = objective(tx, ty, tt)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/scan_matching.py", line 202, in objective
+    return float(objective_fn(float(x), float(y), float(theta)))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/scan_matching.py", line 593, in <lambda>
+    objective_fn=lambda x, y, theta: objective(
+                                     ^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/scan_matching.py", line 459, in objective
+    metrics = _robust_match_metrics(
+              ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alba/project_r2b4/runtime/agent_workspaces/m3_unified_live_validation_20260826/tree/middleware/scan_matching.py", line 121, in _robust_match_metrics
+    dists, _ = tree.query(trans, k=1, workers=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+[94m21:16:49 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.19,+0.01,+10.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.57/1.00m[0m
+[94m21:16:50 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.20,+0.01,+10.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.55/1.00m[0m
+[94m21:16:51 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.54/1.00m[0m
+[94m21:16:52 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.55/1.00m[0m
+[94m21:16:53 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.1deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.56/1.00m[0m
+[94m21:16:54 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.2deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.55/1.00m[0m
+[94m21:16:55 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.2deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.56/1.00m[0m
+[94m21:16:56 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.2deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.57/1.00m[0m
+[94m21:16:57 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.21,+0.01,+10.3deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.55/1.00m[0m
+[94m21:16:58 | IDLE     src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=1.00 | pose=(+0.01,+0.00,-0.0deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.55/1.00m[0m
+[94m[STATE] -> FORWARD[0m
+[96m21:16:59 | FORWARD  src=STATE mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.97 | pose=(+0.01,-0.00,-0.3deg) v=+0.23/+0.23 w=-0.20 | wheel=+0.26,+0.26 pwm=+0.33,+0.25 lid=1.56/1.00m[0m
+[94m[STATE] -> IDLE[0m
+[93m21:17:00 | IDLE     src=STATE mode=UNIFIED q=CRITICAL SAFE=OK ENC=ON(1.00) EST=0.20 | pose=(+0.15,-0.01,-6.5deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.26,+0.26 pwm=+0.00,+0.00 lid=1.68/1.15m[0m
+[94m[STATE] -> FAILSAFE[0m
+[91m21:17:01 | FAILSAFE src=MANUAL mode=UNIFIED q=NOMINAL SAFE=OK ENC=ON(1.00) EST=0.99 | pose=(+0.17,-0.01,-6.4deg) v=+0.00/+0.00 w=+0.00 | wheel=+0.00,+0.00 pwm=+0.00,+0.00 lid=1.67/1.17m[0m
+[92m[21:17:07] [OK] Minden hardver biztonságosan leállítva.[0m

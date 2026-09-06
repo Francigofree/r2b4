@@ -1,0 +1,36 @@
+{
+  "artifact_paths": {
+    "base_room_cruise_result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+    "base_room_cruise_summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json",
+    "incident": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+    "preflight": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+    "result": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+    "samples": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+    "summary": "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json"
+  },
+  "continuity_failed_gates": [
+    "normal_command_path_and_pose",
+    "no_unjustified_stop_start",
+    "no_command_or_pwm_loss"
+  ],
+  "contract_id": "R2B4_M3_CONTINUOUS_ROOM_CRUISE_V1",
+  "failed_gates": [
+    "runtime:continuous_room_cruise"
+  ],
+  "inconclusive_gates": [],
+  "m3_failed_gates": [
+    "control_chain_integrity",
+    "wheel_right_forward",
+    "wheel_left_reverse",
+    "start_stop_quality",
+    "localization_sensor_consistency",
+    "base_room_cruise_v2_gate"
+  ],
+  "needed": true,
+  "preflight_failed_gates": [],
+  "runtime_failed_gates": [
+    "continuous_room_cruise"
+  ],
+  "schema": "M3_ROOM_CRUISE_UNIFIED_VALIDATOR_INCIDENT_V2",
+  "status": "FAIL"
+}

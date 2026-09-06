@@ -1,0 +1,230 @@
+{
+  "analysis": {
+    "classification_gates": {
+      "l11_saturated_wheel_tick_count": 0,
+      "l12_modified_wheel_output_count": 0,
+      "maximum_mean_pi_addition_to_ff_fraction": 0.015741481430555693,
+      "minimum_steady_measured_to_target_ratio": 0.0,
+      "steady_l9_limited_tick_count": 1
+    },
+    "limits": {
+      "l11_maintenance_floor_applied_wheel_tick_count": 0,
+      "l11_max_normalized_output": 1.0,
+      "l11_saturated_wheel_tick_count": 0,
+      "l12_modified_wheel_output_count": 0,
+      "l9_constraint_tick_count": {
+        "ACCELERATION_LIMIT": 1,
+        "CURVATURE_LIMIT": 0,
+        "LOCALIZATION_DEGRADED": 0,
+        "LOCAL_CLEARANCE": 0,
+        "MISSION_LIMIT": 0,
+        "SPEED_LIMIT": 0
+      },
+      "maximum_abs_l11_output": 0.19868393858280975,
+      "maximum_abs_l11_raw_unclamped": 0.19868393858280975
+    },
+    "measured_wheel_speed": {
+      "steady_bias_right_minus_left_mean_mps": 0.0,
+      "steady_left_max_mps": 0.0,
+      "steady_left_mean_mps": 0.0,
+      "steady_left_measured_to_target_ratio": 0.0,
+      "steady_left_min_mps": 0.0,
+      "steady_left_tracking_error_mean_mps": 0.0119997582,
+      "steady_left_tracking_error_rms_mps": 0.0119997582,
+      "steady_right_max_mps": 0.0,
+      "steady_right_mean_mps": 0.0,
+      "steady_right_measured_to_target_ratio": 0.0,
+      "steady_right_min_mps": 0.0,
+      "steady_right_tracking_error_mean_mps": 0.0119997582,
+      "steady_right_tracking_error_rms_mps": 0.0119997582
+    },
+    "pi_dynamics": {
+      "integrator_clamp_count": {
+        "left": 0,
+        "right": 0
+      },
+      "integrator_limit": 0.5,
+      "integrator_reset_count": {
+        "left": 0,
+        "right": 0
+      },
+      "ki": 0.1,
+      "kp": 0.25,
+      "left_integrator_end": 0.0002399903280974454,
+      "left_integrator_max_abs": 0.0002399903280974454,
+      "right_integrator_end": 0.0002399903280974454,
+      "right_integrator_max_abs": 0.0002399903280974454,
+      "steady_left_i_mean": 2.3999032809744544e-05,
+      "steady_left_p_mean": 0.00299993955,
+      "steady_right_i_mean": 2.3999032809744544e-05,
+      "steady_right_p_mean": 0.00299993955
+    },
+    "primary_cause": "5_OTHER_REQUIRES_FURTHER_EVIDENCE",
+    "primary_cause_explanation": "The bounded automatic classifier could not isolate one primary cause.",
+    "secondary_findings": [
+      "PI_INTEGRATOR_NO_SIGN_RESET",
+      "L9_LIMIT_REQUIRES_REVIEW"
+    ],
+    "setpoint_timeline": {
+      "active_tick_count": 1,
+      "first_active_tick_id": 112,
+      "first_full_setpoint_tick_id": 112,
+      "first_l10_left_mps": 0.0119997582,
+      "first_l10_right_mps": 0.0119997582,
+      "ramp_duration_s": 0.0,
+      "ramp_tick_count": 1,
+      "requested_v_mps": 0.15,
+      "steady_tick_count": 1
+    },
+    "speed_map_feed_forward": {
+      "left_pi_addition_fraction_of_ff": 0.015455067887201005,
+      "right_pi_addition_fraction_of_ff": 0.015741481430555693,
+      "steady_left_mean": 0.19566,
+      "steady_left_output_mean": 0.19868393858280975,
+      "steady_right_mean": 0.1921,
+      "steady_right_output_mean": 0.19512393858280974
+    }
+  },
+  "capture": {
+    "path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_live_forward_1m_replay_analysis_20260903/tree/logs/session_20260903T173827Z/tests/v3_native_floor_motion_capture/v3_native_floor_motion_ticks.json",
+    "profile": "v3_native_floor_motion_capture",
+    "schema": "R2B4_V3_NATIVE_FLOOR_TICK_CAPTURE_V1",
+    "sha256": "10b9bde1a8f97cbd733014f7059f0e32e9dd934b397f77c07dfaa1364d89450b",
+    "status": "FAIL",
+    "tick_count": 114
+  },
+  "control_rows": [
+    {
+      "control_dt_s": 0.019999597,
+      "l10_left_setpoint_mps": 0.0119997582,
+      "l10_right_setpoint_mps": 0.0119997582,
+      "l12_left_output": 0.19868393858280975,
+      "l12_right_output": 0.19512393858280974,
+      "l12_safety_decision": "ALLOW",
+      "l8_requested_omega_rad_s": 0.0,
+      "l8_requested_v_mps": 0.15,
+      "l9_active_constraints": [
+        "ACCELERATION_LIMIT"
+      ],
+      "l9_allowed_omega_rad_s": 0.0,
+      "l9_allowed_v_mps": 0.0119997582,
+      "left": {
+        "__type__": "WheelReplayTerms",
+        "dt_s": 0.019999597,
+        "error_mps": 0.0119997582,
+        "feedforward": 0.19566,
+        "integral": 2.3999032809744544e-05,
+        "integrator_clamped": false,
+        "integrator_reset": false,
+        "integrator_state": 0.0002399903280974454,
+        "maintenance_floor": 0.1,
+        "maintenance_floor_applied": false,
+        "measured_mps": 0.0,
+        "output_normalized": 0.19868393858280975,
+        "proportional": 0.00299993955,
+        "raw_unclamped": 0.19868393858280975,
+        "reference_mps": 0.0119997582,
+        "saturated": false
+      },
+      "measured_bias_right_minus_left_mps": 0.0,
+      "measured_left_mps": 0.0,
+      "measured_right_mps": 0.0,
+      "monotonic_ns": 2003500831053,
+      "right": {
+        "__type__": "WheelReplayTerms",
+        "dt_s": 0.019999597,
+        "error_mps": 0.0119997582,
+        "feedforward": 0.1921,
+        "integral": 2.3999032809744544e-05,
+        "integrator_clamped": false,
+        "integrator_reset": false,
+        "integrator_state": 0.0002399903280974454,
+        "maintenance_floor": 0.1,
+        "maintenance_floor_applied": false,
+        "measured_mps": 0.0,
+        "output_normalized": 0.19512393858280974,
+        "proportional": 0.00299993955,
+        "raw_unclamped": 0.19512393858280974,
+        "reference_mps": 0.0119997582,
+        "saturated": false
+      },
+      "tick_id": 112
+    }
+  ],
+  "determinism": {
+    "first_run_tick_count": 114,
+    "offline_write_count_first": 114,
+    "offline_write_count_second": 114,
+    "production_layers": "L1-L12",
+    "repeated_trace_match": true,
+    "second_run_tick_count": 114
+  },
+  "execution": {
+    "capture_passed": false,
+    "capture_status": "FAIL",
+    "decision_counts": {
+      "ALLOW": 1,
+      "FAULT": 0,
+      "STOP": 113
+    },
+    "first_allow_tick_id": 112,
+    "first_non_allow_active_tick_id": 113,
+    "terminal_fault_layer": null,
+    "terminal_lifecycle": "ACTIVE",
+    "terminal_reason": "CRITICAL_DEVICE_DEGRADED",
+    "terminal_safety_decision": "STOP",
+    "terminal_tick_id": 113
+  },
+  "first_divergence": null,
+  "generated_at_utc": "2026-09-03T18:09:09Z",
+  "reconstruction_contract": {
+    "command": "CAPTURE_TIME_FLOOR_GATEWAY_FROM_L5",
+    "external_io": "NONE",
+    "lifecycle": "ACTIVE_IFF_CAPTURED_L5_MISSION_ACTIVE_OTHERWISE_IDLE",
+    "raw_devices": "L1_REVERSIBLE_ACQUISITION_COPY"
+  },
+  "result_sha256": "966b6b8120246ca3f5ffbb0bfde7315bc5b157cf3cd42ff4c5d5e931ff786b1a",
+  "schema": "R2B4_REPLAYER_V3_RESULT_V2",
+  "source_first": {
+    "all_capture_baseline_hashes_match": true,
+    "capture_source_manifest_path": "/home/alba/project_r2b4/runtime/agent_workspaces/v3_live_forward_1m_replay_analysis_20260903/meta/base_manifest.json",
+    "files": {
+      "conf/fizika.json": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "b1ced46d944b89d1cc868fd057791c9f0fe84891077119be9b8fee8d0cbee71a",
+        "sha256": "b1ced46d944b89d1cc868fd057791c9f0fe84891077119be9b8fee8d0cbee71a"
+      },
+      "conf/speed_map.json": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "986eb56fc42d1906e8d6c63b1bbb567992732684085c8894ef6a2ba18fc13b25",
+        "sha256": "986eb56fc42d1906e8d6c63b1bbb567992732684085c8894ef6a2ba18fc13b25"
+      },
+      "v3/composition/native_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "f0e6ff898709751cea3416c88f4b543852aeb358dcf4cc9da9e6f5ed10818292",
+        "sha256": "f0e6ff898709751cea3416c88f4b543852aeb358dcf4cc9da9e6f5ed10818292"
+      },
+      "v3/layers/l10_chassis_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "9e4938be7bf2ce8a2ef6d3925cd7c62e768396c21c7838625a168e57f1b99062",
+        "sha256": "9e4938be7bf2ce8a2ef6d3925cd7c62e768396c21c7838625a168e57f1b99062"
+      },
+      "v3/layers/l11_actuator_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
+        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8"
+      },
+      "v3/layers/l9_operational_constraints.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "08a431e8cd4699b61af4bba7441a2dd5fd59b19512f0f264185f4a2ff4305e59",
+        "sha256": "08a431e8cd4699b61af4bba7441a2dd5fd59b19512f0f264185f4a2ff4305e59"
+      }
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CAPTURE"
+    ]
+  },
+  "status": "MATCH"
+}

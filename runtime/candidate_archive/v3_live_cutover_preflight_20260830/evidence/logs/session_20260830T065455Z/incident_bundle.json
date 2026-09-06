@@ -1,0 +1,97 @@
+{
+  "artifacts": [
+    "logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator.json",
+    "logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator_summary.json",
+    "logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/M3_motion_runtime_profile_validator_samples.jsonl",
+    "logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator.json",
+    "logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator_incident.json",
+    "logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator_summary.json"
+  ],
+  "command": {
+    "return_code": 0,
+    "stderr_tail": "",
+    "stdout_tail": "{\"status\": \"PASS\", \"plain_summary_hu\": \"Runtime profil: PASS. Hibák nincsenek.\", \"failed_gates\": [], \"inconclusive_gates\": [], \"artifact_paths\": {\"result\": \"logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator.json\", \"summary\": \"logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator_summary.json\", \"samples\": \"logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/M3_motion_runtime_profile_validator_samples.jsonl\", \"incident\": \"logs/session_20260830T065455Z/tests/M3_motion_runtime_profile_no_motion_live/latest_M3_motion_runtime_profile_validator_incident.json\"}, \"reassessment\": null}",
+    "timed_out": false
+  },
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 8290,
+        "pid": 8290,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-08-30T06:55:15Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 3,
+      "logger_updated_ts": 4295.269770118,
+      "status_version": 36,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-08-30T06:54:55Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 3,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [],
+    "max_age_s": 21600.0,
+    "ok": true,
+    "path": "logs/session_20260830T065455Z/latest_human_observed_1x1m_validation.json",
+    "required": false
+  },
+  "preflight": {
+    "errors": null,
+    "ok": true,
+    "stdout_tail": ""
+  },
+  "preflight_pose_reset": {},
+  "primary_failure": "PASS",
+  "profile": "M3_motion_runtime_profile_no_motion_live",
+  "reason": "scenario completed",
+  "run_tag": "hub_M3_motion_runtime_profile_no_motion_live_20260830T065455Z",
+  "status": "PASS",
+  "warning_summary": {},
+  "warnings": []
+}

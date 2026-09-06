@@ -1,0 +1,121 @@
+{
+  "artifact_paths": [],
+  "artifact_paths_missing": [
+    "logs/latest/M3_room_cruise_unified_validator_samples.jsonl",
+    "logs/latest/latest_M3_room_cruise_unified_validator.json",
+    "logs/latest/latest_M3_room_cruise_unified_validator_incident.json",
+    "logs/latest/latest_M3_room_cruise_unified_validator_preflight.json",
+    "logs/latest/latest_M3_room_cruise_unified_validator_summary.json"
+  ],
+  "artifact_paths_stale_rejected": [],
+  "description": "One uninterrupted 60s camera-off Room Cruise on the existing UNIFIED command path.",
+  "duration_s": 18.884,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "reason": "scenario_not_executed",
+    "required": false,
+    "skipped": true,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ekf_truth_gate_ok": true,
+  "ended_at_utc": "2026-08-26T19:12:02Z",
+  "family": "movement_quality",
+  "goals": [
+    "verify no-motion foundation readiness before movement: status, peripherals, safety, LIDAR, encoder, IMU, logger, and UNIFIED mode",
+    "run one bounded Room Cruise activation continuously for at least the requested 60s window with the camera disabled",
+    "use only the existing M3 TRACK path with one command owner and EKF pose SSOT",
+    "reject unjustified internal stop/start and settled motion-intent PWM loss while allowing obstacle-justified holds",
+    "reject emergency, failsafe, watchdog-stop, forbidden-path, or localization contradiction evidence",
+    "retain the existing runtime timing, logger, peripheral, and hardware health gates without adding a controller layer"
+  ],
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 26374,
+        "pid": 26374,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "live": true,
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-08-26T19:12:02Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 21,
+      "logger_updated_ts": 13337.010780884,
+      "status_version": 5,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-08-26T19:11:43Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 0,
+      "logger_updated_ts": 0.0,
+      "status_version": 0,
+      "watchdog_freq_hz": 0.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": 21,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": null,
+    "errors": [
+      "measurement_truth_missing"
+    ],
+    "max_age_s": 3600.0,
+    "ok": false,
+    "path": "logs/session_20260826T191143Z/latest_M0_measurement_trust_live.json",
+    "payload": {},
+    "required": true
+  },
+  "measurement_truth_gate_ok": false,
+  "preflight_ok": true,
+  "preflight_pose_reset": {},
+  "profile": "M3_room_cruise_unified_validator",
+  "requires_preflight": true,
+  "run_dir": "logs/session_20260826T191143Z",
+  "run_tag": "hub_M3_room_cruise_unified_validator_20260826T191143Z",
+  "started_at_utc": "2026-08-26T19:11:43Z",
+  "status": "FAIL",
+  "triage_order": [
+    "summary.json",
+    "incident_bundle.json",
+    "ownership_manifest.json",
+    "stdout_tail.txt",
+    "stderr_tail.txt"
+  ],
+  "verdict": {
+    "primary": "TRUTH_GATE_FAIL",
+    "reason": "measurement_truth_gate_failed:['measurement_truth_missing']",
+    "status": "FAIL"
+  },
+  "warning_summary": {},
+  "warnings": []
+}

@@ -1,0 +1,71 @@
+{
+  "artifact_path": "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_gate.json",
+  "attempt_count": 2,
+  "attempts": [
+    {
+      "all_commits_zero": false,
+      "artifact_path": "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_1.json",
+      "attempt": 1,
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_tick_count_incomplete",
+        "native_sensor_healthy_window_too_short",
+        "native_sensor_fault_tick_present",
+        "native_sensor_preflight_nonzero_commit",
+        "native_sensor_preflight_interrupted"
+      ],
+      "fault_tick_count": -1,
+      "healthy_tick_count": 0,
+      "l3_estimate_count": 0,
+      "return_code": 1,
+      "status": "FAIL",
+      "tick_count": 0
+    },
+    {
+      "all_commits_zero": false,
+      "artifact_path": "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_2.json",
+      "attempt": 2,
+      "errors": [
+        "native_sensor_command_failed",
+        "native_sensor_measurement_not_pass",
+        "native_sensor_tick_count_incomplete",
+        "native_sensor_healthy_window_too_short",
+        "native_sensor_fault_tick_present",
+        "native_sensor_preflight_nonzero_commit",
+        "native_sensor_preflight_interrupted"
+      ],
+      "fault_tick_count": -1,
+      "healthy_tick_count": 0,
+      "l3_estimate_count": 0,
+      "return_code": 1,
+      "status": "FAIL",
+      "tick_count": 0
+    }
+  ],
+  "error": "native RPLIDAR acquisition did not stop",
+  "error_type": "RuntimeError",
+  "errors": [
+    "native_sensor_command_failed",
+    "native_sensor_measurement_not_pass",
+    "native_sensor_tick_count_incomplete",
+    "native_sensor_healthy_window_too_short",
+    "native_sensor_fault_tick_present",
+    "native_sensor_preflight_nonzero_commit",
+    "native_sensor_preflight_interrupted"
+  ],
+  "hub_gate": {
+    "all_commits_zero": false,
+    "fault_tick_count": -1,
+    "healthy_tick_count": 0,
+    "l3_estimate_count": 0,
+    "measured_tick_count": 0,
+    "minimum_healthy_tick_count": 1,
+    "required_tick_count": 300,
+    "schema": "R2B4_V3_NATIVE_SENSOR_PREFLIGHT_GATE_V1"
+  },
+  "measurement_artifact_path": "logs/session_20260905T164915Z/tests/v3_native_floor_motion_capture/v3_native_sensor_preflight_attempt_2.json",
+  "ok": false,
+  "schema": "R2B4_V3_SENSOR_MEASUREMENT_V1",
+  "status": "FAIL"
+}

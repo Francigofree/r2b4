@@ -1,0 +1,189 @@
+{
+  "artifact_paths": [
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/M3_room_cruise_unified_validator_samples.jsonl",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_incident.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_preflight.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_M3_room_cruise_unified_validator_summary.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_result.json",
+    "logs/session_20260826T191748Z/tests/M3_room_cruise_unified_validator/latest_room_cruise_v2_summary.json"
+  ],
+  "artifact_paths_missing": [
+    "logs/latest/M3_room_cruise_unified_validator_samples.jsonl"
+  ],
+  "artifact_paths_stale_rejected": [],
+  "description": "One uninterrupted 60s camera-off Room Cruise on the existing UNIFIED command path.",
+  "duration_s": 90.425,
+  "ekf_truth_gate": {
+    "errors": [],
+    "ok": true,
+    "required": false,
+    "surface_index": null,
+    "surface_summary": {}
+  },
+  "ekf_truth_gate_ok": true,
+  "ended_at_utc": "2026-08-26T19:19:18Z",
+  "family": "movement_quality",
+  "goals": [
+    "verify no-motion foundation readiness before movement: status, peripherals, safety, LIDAR, encoder, IMU, logger, and UNIFIED mode",
+    "run one bounded Room Cruise activation continuously for at least the requested 60s window with the camera disabled",
+    "use only the existing M3 TRACK path with one command owner and EKF pose SSOT",
+    "reject unjustified internal stop/start and settled motion-intent PWM loss while allowing obstacle-justified holds",
+    "reject emergency, failsafe, watchdog-stop, forbidden-path, or localization contradiction evidence",
+    "retain the existing runtime timing, logger, peripheral, and hardware health gates without adding a controller layer"
+  ],
+  "hub_cpu_affinity": {
+    "roles": {
+      "hub": {
+        "applied": true,
+        "effective_cpus": [
+          0,
+          1,
+          2
+        ],
+        "enabled": true,
+        "error": "",
+        "native_thread_id": 27623,
+        "pid": 27623,
+        "requested_cpus": [
+          0,
+          1,
+          2
+        ],
+        "required": true,
+        "role": "hub",
+        "scheduler_policy_changed": false,
+        "verified": true
+      }
+    },
+    "schema": "RUNTIME_CPU_AFFINITY_V1"
+  },
+  "live": true,
+  "logger_lifecycle": {
+    "after": {
+      "captured_at_utc": "2026-08-26T19:19:18Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 4,
+      "logger_updated_ts": 13773.229463707,
+      "status_version": 442,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "before": {
+      "captured_at_utc": "2026-08-26T19:17:48Z",
+      "dropped_messages": 0,
+      "logger_queue_depth": 28,
+      "logger_updated_ts": 13643.263655037,
+      "status_version": 274,
+      "watchdog_freq_hz": 50.0,
+      "write_errors": 0
+    },
+    "delta": {
+      "dropped_messages_delta": 0,
+      "queue_depth_delta": -24,
+      "write_errors_delta": 0
+    }
+  },
+  "loop_budget": {},
+  "m3_artifact_finalize": {},
+  "measurement_truth_gate": {
+    "age_s": 58.275,
+    "errors": [],
+    "max_age_s": 3600.0,
+    "ok": true,
+    "path": "logs/session_20260826T191748Z/latest_M0_measurement_trust_live.json",
+    "payload": {
+      "case_count": 4,
+      "contract_id": "",
+      "failures": [],
+      "phase": "M0",
+      "schema": "measurement_trust",
+      "sensor_surface": {
+        "ekf_cases": 4,
+        "encoder_cases": 4,
+        "imu_cases": 4,
+        "lidar_cases": 4,
+        "motor_pwm_cases": 3
+      },
+      "success": true,
+      "test": "M0_measurement_trust_live"
+    },
+    "required": true
+  },
+  "measurement_truth_gate_ok": true,
+  "preflight_ok": true,
+  "preflight_pose_reset": {
+    "accepted": {
+      "cmd_id": "hub_preflight_reset_1787771879499",
+      "lifecycle": "accepted",
+      "ok": true,
+      "timeout_sec": 6.0
+    },
+    "command": {
+      "cmd_id": "hub_preflight_reset_1787771879499",
+      "motion_source": "GUI",
+      "token": "GUI_DEFAULT",
+      "type": "reset_pos"
+    },
+    "error": "",
+    "lifecycle": {
+      "cmd_type": "reset_pos",
+      "details": {
+        "cmd_id": "hub_preflight_reset_1787771879499",
+        "details": {
+          "motion_command": false,
+          "physical_success_hint": "not_required_for_non_motion_command",
+          "physical_success_implied": true,
+          "truth_surface": "COMMAND_LIFECYCLE"
+        },
+        "source": "GUI",
+        "state": "effective",
+        "timeout_sec": 4.0,
+        "ts": 1787771879.5509973,
+        "type": "reset_pos"
+      },
+      "error_code": "",
+      "lifecycle_ok": true,
+      "ok": true,
+      "pending": false,
+      "physical_equivalence": false,
+      "raw_state": "effective",
+      "reason": "",
+      "runtime_motion_truth": {
+        "available": false,
+        "correlated_to_cmd": false,
+        "execution_state": "",
+        "note": "command lifecycle status is not equal to physical completion",
+        "terminal_reason": ""
+      },
+      "state": "effective",
+      "timed_out": false,
+      "truth_surface": "COMMAND_LIFECYCLE"
+    },
+    "ok": true
+  },
+  "profile": "M3_room_cruise_unified_validator",
+  "requires_preflight": true,
+  "run_dir": "logs/session_20260826T191748Z",
+  "run_tag": "hub_M3_room_cruise_unified_validator_20260826T191748Z",
+  "started_at_utc": "2026-08-26T19:17:48Z",
+  "status": "FAIL",
+  "triage_order": [
+    "summary.json",
+    "incident_bundle.json",
+    "ownership_manifest.json",
+    "stdout_tail.txt",
+    "stderr_tail.txt"
+  ],
+  "verdict": {
+    "primary": "TEST_FAIL",
+    "reason": "scenario return_code=1",
+    "status": "FAIL"
+  },
+  "warning_summary": {},
+  "warnings": []
+}
