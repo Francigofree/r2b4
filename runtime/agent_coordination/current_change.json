@@ -1,231 +1,176 @@
 {
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
-  "candidate_audit": {
-    "audit_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/audit.json",
-    "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
-    "audited_at_utc": "2026-09-06T09:53:17Z",
-    "base_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
-    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
-    "canonical_drift": [],
-    "canonical_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
-    "changed_files": [
-      "STRUKTURALIS_RETEGEK_V3.md",
-      "docs/AGENT_RUNTIME.md",
-      "tests/test_v3_capture.py",
-      "tests/test_v3_replay.py",
-      "tests/test_v3_test_hub.py",
-      "tests/v3_validation_helpers.py",
-      "v3/capture.py",
-      "v3/replay.py"
-    ],
-    "diff_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/diff.json",
-    "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
-    "protected_infrastructure_changes": [
-      "docs/AGENT_RUNTIME.md"
-    ],
-    "schema": "R2B4_CANDIDATE_AUDIT_V1",
-    "status": "PASS",
-    "task_id": "v3_fault_capture_partial_trace_20260906",
-    "task_mode": "CHANGE",
-    "unexpected_changes": []
-  },
-  "changed_files": [
-    "STRUKTURALIS_RETEGEK_V3.md",
-    "docs/AGENT_RUNTIME.md",
-    "tests/test_v3_capture.py",
-    "tests/test_v3_replay.py",
-    "tests/test_v3_test_hub.py",
-    "tests/v3_validation_helpers.py",
-    "v3/capture.py",
-    "v3/replay.py"
-  ],
-  "completed_at_utc": "2026-09-06T09:53:17Z",
+  "changed_files": [],
   "files": [
     {
-      "after": {
-        "exists": true,
-        "sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c",
-        "size_bytes": 30641
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "73a99bfde442c6f864f2962045364b0457eed73cb03c49d208a1fcfd20b5be81",
-        "size_bytes": 30149
+        "sha256": "b2b48c8ade1c8514bed14a515f7ab2362369b2de81a661ef9d6d276ba509e439",
+        "size_bytes": 3673
       },
-      "changed": true,
-      "path": "STRUKTURALIS_RETEGEK_V3.md"
+      "changed": null,
+      "path": "tests/test_v3_bounded_command.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "33a3735c28247f301df6d016f244115229ea4d8034efec6cf48c6b4070bac0eb",
-        "size_bytes": 4261
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "7f53d17d971f7aec91b30f5c2c29dac0926cb0e569c5e48a82367906ac99a348",
-        "size_bytes": 4024
+        "sha256": "0b5a2ed48b5d9330422e6ae971c117f0c78649cd0fc27314a5ce6178301bea47",
+        "size_bytes": 10549
       },
-      "changed": true,
-      "path": "docs/AGENT_RUNTIME.md"
+      "changed": null,
+      "path": "tests/test_v3_bounded_physical_runtime.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "83df731cd7d88cda3e50f2d6a7c38e762f0003921f6301b1d79e3d8ed59e4421",
-        "size_bytes": 2300
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "73e14b8e536eca597e2f67df6482dda11a9f21fd86d47e4f7022408738dc5a0e",
-        "size_bytes": 1252
+        "sha256": "9a81d662e06060dc14ab069ee4237fa8465b71693f5b498d94b9056b9ddd1f65",
+        "size_bytes": 8080
       },
-      "changed": true,
-      "path": "tests/test_v3_capture.py"
+      "changed": null,
+      "path": "tests/test_v3_live_idle_cutover.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "bf238974e02236d4ac0ecc21467d29291e769ce9507b34f3bb1b9ab99ea69315",
-        "size_bytes": 16498
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "63e6d8c9892bb0e203b6e537b2053e9fa13ce982f39a5bc308fd21d4e04cb69d",
-        "size_bytes": 15534
+        "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
+        "size_bytes": 7753
       },
-      "changed": true,
-      "path": "tests/test_v3_replay.py"
+      "changed": null,
+      "path": "tests/test_v3_process_runtime.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "ebb829908bbea6657173ce2aa80e620d77740164cf9236db39fa7b3e68a0c2a6",
-        "size_bytes": 3160
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "13508b4de2ab193b19adec29f57cab51db60151c951630f9598e74dc60e616b8",
-        "size_bytes": 2496
+        "sha256": "21768d653a87568c2db6a58628f01df6bffa4610f814d5f16918e8cf23f89404",
+        "size_bytes": 5443
       },
-      "changed": true,
-      "path": "tests/test_v3_test_hub.py"
+      "changed": null,
+      "path": "tests/test_v3_resident_command.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "cd441841153475e9f8c95cef13f9bf5badfd0e267d0103d56b37e88dcdb38e83",
-        "size_bytes": 5733
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "daa3639043bfba169412e00d4a42b24c1c03aacae60d30375738b0569cd161f8",
-        "size_bytes": 4584
+        "sha256": "88eff9abad8fa551d7f697b0bdce53a18194e8678e933b800c08a76ad81e72d5",
+        "size_bytes": 14316
       },
-      "changed": true,
-      "path": "tests/v3_validation_helpers.py"
+      "changed": null,
+      "path": "tests/test_v3_resident_runtime.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "fe0cc6c985338e17d7b5a2d3eee3850f1f5130d06da6b2cd1886313ab84e296e",
-        "size_bytes": 12202
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "a497de1eb68c3b5bb4ecb0dc645d91fa00f819ccf719ec32391e786a63e5339d",
-        "size_bytes": 10575
+        "sha256": "34c6d510d50e70fd9875de620eb926c18022c1244cdf4b7f2cf52d0fe814645f",
+        "size_bytes": 3920
       },
-      "changed": true,
-      "path": "v3/capture.py"
+      "changed": null,
+      "path": "v3/adapters/bounded_command.py"
     },
     {
-      "after": {
-        "exists": true,
-        "sha256": "a3f8fcb7bdc32791fb48bbccad7612b07988317ae1b16424c7a6e4e51d2add4e",
-        "size_bytes": 72435
-      },
+      "after": null,
       "before": {
         "exists": true,
-        "sha256": "e7d36692546dac2d93ace68461b5eecf08ab735ce0ad7031b237cbf87bf5ad28",
-        "size_bytes": 71158
+        "sha256": "08b99018f9c2836c64b5a1caecfe5ad53c29277ff98bec40f80d18c4b998c251",
+        "size_bytes": 6687
       },
-      "changed": true,
-      "path": "v3/replay.py"
+      "changed": null,
+      "path": "v3/adapters/live_idle.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4d7d300033e3c9fb4b94770d353ed5f4a714e3709d4beb9e7709fa7bd6f87f98",
+        "size_bytes": 10150
+      },
+      "changed": null,
+      "path": "v3/adapters/resident_command.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "24e9b37c4975f4acbc8465419e566a0fc2ee4212275f627d9c0ee7f4730b88d6",
+        "size_bytes": 8413
+      },
+      "changed": null,
+      "path": "v3/composition/bounded_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "56710f7c92ea9d4f8561411bb4bf069678c906d1dfa3599753fa3fd1f7f3778c",
+        "size_bytes": 3735
+      },
+      "changed": null,
+      "path": "v3/composition/bounded_physical_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "46928f4f4a2b06ac48beff1c23ef0d4d4088363c701adbc0a17d5a85eb511a97",
+        "size_bytes": 12636
+      },
+      "changed": null,
+      "path": "v3/composition/resident_live_control.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "28afa5e170f0f5810fd76824c9e1217706d29ce5dda46346b5c25b0764dec8a8",
+        "size_bytes": 9623
+      },
+      "changed": null,
+      "path": "v3_bounded_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "63444311b06d9d3fbacdfde5d9f8ce4ef1f711388195b8537a1d593e09c8ffd6",
+        "size_bytes": 18061
+      },
+      "changed": null,
+      "path": "v3_process_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "d8573305ca6d02e86ae331806c18d5e1770da2f624fb41062619f05e4c65a636",
+        "size_bytes": 13883
+      },
+      "changed": null,
+      "path": "v3_runtime.py"
     }
   ],
-  "goal": "Allow general V3 capture and replay to preserve structurally valid fail-closed partial traces: contiguous L1 prefix, explicit fault_layer, and mandatory terminal L12; add fault-aware L1-L12 diagnostics and regression evidence.",
-  "promotion_status": "READY",
-  "reason": "General V3 capture now preserves fail-closed partial traces as a contiguous completed L1 prefix plus explicit fault_layer and mandatory terminal L12; replay diagnostics distinguish compared, absent, and mismatched layer values without changing production behavior.",
+  "goal": "Run a 1.0 m forward live baseline at 0.15 m/s through the canonical production process and CommandGateway ingress, validate run-bound V3 evidence, verify final IDLE/PWM-null, and derive the V3 refactor development plan from measured results.",
+  "promotion_status": "NOT_PROMOTED",
+  "reason": "",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-09-06T09:49:18Z",
-  "status": "COMPLETE",
-  "task_id": "v3_fault_capture_partial_trace_20260906",
+  "started_at_utc": "2026-09-06T10:19:48Z",
+  "status": "ACTIVE",
+  "task_id": "v3_refactor_live_baseline_20260906",
   "task_mode": "CHANGE",
-  "test_strategy": {
-    "authoritative_test_count": 5,
-    "default": "TARGETED",
-    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
-    "full_regression_recorded": true,
-    "full_regression_required": true,
-    "legacy_non_authority_count": 0
-  },
-  "tests": [
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "PYTHONPATH=.:tests pytest -q tests/test_v3_capture.py tests/test_v3_replay.py tests/test_v3_test_hub.py",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "PYTHONPATH=.:tests pytest -q tests/test_v3_*.py",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m pytest -q",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3.test_hub validate <L4-fault-capture> --output-dir <run-id>",
-      "status": "PASS"
-    },
-    {
-      "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3.test_hub verify-evidence <run-id>/evidence_index.json",
-      "status": "PASS"
-    }
-  ],
-  "updated_at_utc": "2026-09-06T09:53:17Z",
-  "workflow_evidence": {
-    "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
-    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
-    "contract_fingerprint": "af59df228a4b4975d32b31cc35177ab231a7d37dbf6bb7a407abeeeb26db6c22",
-    "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
-    "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/evidence.json",
-    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
-    "sha256": "a8597c694c33eb4cfcfdab9d8bb378b566362d57dc270cf8ff967d7243a153e0"
-  },
+  "tests": [],
+  "updated_at_utc": "2026-09-06T10:20:38Z",
   "workspace": {
-    "base_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
-    "base_manifest_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/base_manifest.json",
-    "base_manifest_sha256": "3ba1032e6fc6843e2a49aad8db626bf68f177b4900bc13be69685005fcd1eec9",
-    "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/tree",
-    "reseal": {
-      "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
-      "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
-      "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
-      "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/reseal.json",
-      "resealed_at_utc": "2026-09-06T09:53:17Z",
-      "schema": "R2B4_CANDIDATE_RESEAL_V1",
-      "sha256": "765c1a923286aaed8ae0eaeec6ed56e299319fc30899ff3f331926d81bba8a55",
-      "state": "READY",
-      "task_id": "v3_fault_capture_partial_trace_20260906"
-    },
+    "base_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "base_manifest_path": "runtime/agent_workspaces/v3_refactor_live_baseline_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "683593a0ba622e723bcf6f720f73a91c151bd875d70078463bee22729747445b",
+    "path": "runtime/agent_workspaces/v3_refactor_live_baseline_20260906/tree",
     "schema": "R2B4_AGENT_WORKSPACE_V1",
-    "state": "READY"
+    "state": "ACTIVE"
   }
 }
