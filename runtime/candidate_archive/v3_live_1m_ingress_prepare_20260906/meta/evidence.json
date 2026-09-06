@@ -1,0 +1,108 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/audit.json",
+    "audit_sha256": "8f6f752cb75a15191e6be9f6f9ca4994e2ba6bcabf3b01246f73cda0886646c6",
+    "base_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+    "canonical_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "diff_path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/diff.json",
+    "diff_sha256": "f5ff38a63c170aa6289e6b07502dc17cd47627728a7d0feabe3b22aa42eb20e5"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c",
+        "canonical_sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0",
+        "canonical_sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0"
+      }
+    },
+    "fingerprint": "1a72000b6fb113d1f460e4dd6e0bc732871cec1fedbe40ee636a9b712c10c8df",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_resident_command.py",
+      "v3/adapters/resident_command.py",
+      "v3_process_runtime.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-09-06T13:53:43Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_live_1m_ingress_prepare_20260906",
+  "tests": [
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. pytest -q tests/test_v3_resident_command.py tests/test_v3_process_runtime.py",
+      "status": "PASS"
+    },
+    {
+      "authority": "CURRENT_CONTRACT",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. pytest -q tests/test_v3_resident_command.py tests/test_v3_process_runtime.py tests/test_v3_resident_runtime.py tests/test_v3_hardware_runtime.py",
+      "status": "PASS"
+    }
+  ],
+  "workflow": {
+    "diagnostics": {
+      "domain_profiles": {},
+      "primary": "REPLAYER_V3",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "v3/execution.py",
+        "v3/capture.py",
+        "v3/replay.py",
+        "v3/test_hub.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "AGENTS.md",
+        "docs/AGENT_RUNTIME.md",
+        "project_rules/agent_infrastructure.json",
+        "project_rules/agent_system_prompt.txt",
+        "project_rules/bootstrap_guard.py",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

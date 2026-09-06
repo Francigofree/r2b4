@@ -1,0 +1,114 @@
+{
+  "candidate": {
+    "audit_path": "runtime/agent_workspaces/v3_refactor_live_baseline_20260906/meta/audit.json",
+    "audit_sha256": "b455a24a161fff2bec296670289775f1a054a453f24abc0ec20153e39cd964a7",
+    "base_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "canonical_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "diff_path": "runtime/agent_workspaces/v3_refactor_live_baseline_20260906/meta/diff.json",
+    "diff_sha256": "5b45fb7135b39ab9720d8a5b5fc01be36ec02740ccfa395b447475c6018289d6"
+  },
+  "contract": {
+    "contract_id": "R2B4_AGENT_INFRA_HARDENED_V3",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "candidate_sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c",
+        "canonical_sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c"
+      },
+      "project_rules/agent_infrastructure.json": {
+        "candidate_sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0",
+        "canonical_sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0"
+      }
+    },
+    "fingerprint": "67f8aff3b93c293fed72c7ad02247de6b7f338969275b925e221a2a150c55380",
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "tracked_paths": [
+      "tests/test_v3_bounded_command.py",
+      "tests/test_v3_bounded_physical_runtime.py",
+      "tests/test_v3_gpio_motor_frame_sink.py",
+      "tests/test_v3_hardware_runtime.py",
+      "tests/test_v3_live_idle_cutover.py",
+      "tests/test_v3_motor_output_composition.py",
+      "tests/test_v3_process_runtime.py",
+      "tests/test_v3_resident_command.py",
+      "tests/test_v3_resident_runtime.py",
+      "v3/adapters/bounded_command.py",
+      "v3/adapters/gpio_motor.py",
+      "v3/adapters/live_idle.py",
+      "v3/adapters/resident_command.py",
+      "v3/composition/bounded_live_control.py",
+      "v3/composition/bounded_physical_control.py",
+      "v3/composition/motor_output.py",
+      "v3/composition/resident_live_control.py",
+      "v3_bounded_runtime.py",
+      "v3_hardware_runtime.py",
+      "v3_process_runtime.py",
+      "v3_runtime.py"
+    ]
+  },
+  "full_regression_reason": null,
+  "generated_at_utc": "2026-09-06T13:44:16Z",
+  "replay": null,
+  "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+  "task_id": "v3_refactor_live_baseline_20260906",
+  "tests": [],
+  "workflow": {
+    "diagnostics": {
+      "domain_profiles": {},
+      "primary": "REPLAYER_V3",
+      "sequence": [
+        "INSPECT",
+        "REPLAY",
+        "VERIFY_RESULT",
+        "DIAGNOSIS"
+      ],
+      "source_routes": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "v3/execution.py",
+        "v3/capture.py",
+        "v3/replay.py",
+        "v3/test_hub.py"
+      ]
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CANONICAL_CONTRACT"
+    ],
+    "testing": {
+      "default": "TARGETED",
+      "full_regression_reasons": [
+        "SHARED_CONTRACT_CHANGE",
+        "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
+        "TEST_INFRASTRUCTURE_CHANGE",
+        "EXPLICIT_USER_REQUEST",
+        "DIAGNOSTIC_INVESTIGATION"
+      ],
+      "full_regression_required_paths": [
+        "AGENTS.md",
+        "docs/AGENT_RUNTIME.md",
+        "project_rules/agent_infrastructure.json",
+        "project_rules/agent_system_prompt.txt",
+        "project_rules/bootstrap_guard.py",
+        "scripts/bootstrap_guard.sh",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "legacy_contract_conflict_authority": "NON_AUTHORITY",
+      "order": [
+        "TARGETED",
+        "REPLAY",
+        "FULL_REGRESSION_IF_JUSTIFIED"
+      ]
+    }
+  }
+}

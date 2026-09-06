@@ -1,0 +1,115 @@
+{
+  "agent_mode": "single_agent",
+  "auxiliary_agent": null,
+  "candidate_audit": {
+    "audit_path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/audit.json",
+    "audit_sha256": "8f6f752cb75a15191e6be9f6f9ca4994e2ba6bcabf3b01246f73cda0886646c6",
+    "audited_at_utc": "2026-09-06T13:53:43Z",
+    "base_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+    "canonical_drift": [],
+    "canonical_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "changed_files": [
+      "tests/test_v3_resident_command.py",
+      "v3/adapters/resident_command.py"
+    ],
+    "diff_path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/diff.json",
+    "diff_sha256": "f5ff38a63c170aa6289e6b07502dc17cd47627728a7d0feabe3b22aa42eb20e5",
+    "protected_infrastructure_changes": [],
+    "schema": "R2B4_CANDIDATE_AUDIT_V1",
+    "status": "PASS",
+    "task_id": "v3_live_1m_ingress_prepare_20260906",
+    "task_mode": "CHANGE",
+    "unexpected_changes": []
+  },
+  "changed_files": [],
+  "files": [
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "55234b38df3351a1bc26d2d2b53829dea659a613a10e07f80a5abda623d9c6a3",
+        "size_bytes": 7753
+      },
+      "changed": null,
+      "path": "tests/test_v3_process_runtime.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "21768d653a87568c2db6a58628f01df6bffa4610f814d5f16918e8cf23f89404",
+        "size_bytes": 5443
+      },
+      "changed": null,
+      "path": "tests/test_v3_resident_command.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "4d7d300033e3c9fb4b94770d353ed5f4a714e3709d4beb9e7709fa7bd6f87f98",
+        "size_bytes": 10150
+      },
+      "changed": null,
+      "path": "v3/adapters/resident_command.py"
+    },
+    {
+      "after": null,
+      "before": {
+        "exists": true,
+        "sha256": "63444311b06d9d3fbacdfde5d9f8ce4ef1f711388195b8537a1d593e09c8ffd6",
+        "size_bytes": 18061
+      },
+      "changed": null,
+      "path": "v3_process_runtime.py"
+    }
+  ],
+  "goal": "Minimally unblock and execute the 1.0 m forward live test at 0.15 m/s through the canonical resident production process and AtomicResidentCommandGateway, with a new 0.5 m/s ingress ceiling and final safe-low verification.",
+  "promotion_status": "READY",
+  "reason": "",
+  "schema": "R2B4_AGENT_CHANGE_V3",
+  "source_first": true,
+  "started_at_utc": "2026-09-06T13:52:44Z",
+  "status": "ACTIVE",
+  "task_id": "v3_live_1m_ingress_prepare_20260906",
+  "task_mode": "CHANGE",
+  "test_strategy": {
+    "authoritative_test_count": 2,
+    "default": "TARGETED",
+    "full_regression_reason": null,
+    "full_regression_recorded": false,
+    "full_regression_required": false,
+    "legacy_non_authority_count": 0
+  },
+  "tests": [],
+  "updated_at_utc": "2026-09-06T13:52:44Z",
+  "workflow_evidence": {
+    "audit_sha256": "8f6f752cb75a15191e6be9f6f9ca4994e2ba6bcabf3b01246f73cda0886646c6",
+    "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+    "contract_fingerprint": "1a72000b6fb113d1f460e4dd6e0bc732871cec1fedbe40ee636a9b712c10c8df",
+    "diff_sha256": "f5ff38a63c170aa6289e6b07502dc17cd47627728a7d0feabe3b22aa42eb20e5",
+    "path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/evidence.json",
+    "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
+    "sha256": "0dfde6c4bc93e1cd3fd02b674dc62cc2e093a52e58a4c02460bc1430b71d92b1"
+  },
+  "workspace": {
+    "base_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "base_manifest_path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "683593a0ba622e723bcf6f720f73a91c151bd875d70078463bee22729747445b",
+    "path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/tree",
+    "reseal": {
+      "audit_sha256": "8f6f752cb75a15191e6be9f6f9ca4994e2ba6bcabf3b01246f73cda0886646c6",
+      "candidate_fingerprint": "bea780e97b01135563e2736d14aaa10b47af5b9fa26f71bcf462580002c12f20",
+      "diff_sha256": "f5ff38a63c170aa6289e6b07502dc17cd47627728a7d0feabe3b22aa42eb20e5",
+      "path": "runtime/agent_workspaces/v3_live_1m_ingress_prepare_20260906/meta/reseal.json",
+      "resealed_at_utc": "2026-09-06T13:53:43Z",
+      "schema": "R2B4_CANDIDATE_RESEAL_V1",
+      "sha256": "26598b84a6974c01191f2dd4787fe851c1a77d8e17a511929bfe338e2511e4a3",
+      "state": "READY",
+      "task_id": "v3_live_1m_ingress_prepare_20260906"
+    },
+    "schema": "R2B4_AGENT_WORKSPACE_V1",
+    "state": "READY"
+  }
+}
