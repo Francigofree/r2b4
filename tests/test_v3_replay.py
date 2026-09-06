@@ -34,7 +34,7 @@ from v3.replay import (
     write_replay_result,
 )
 from v3.capture import payload_sha256
-from v3_validation_helpers import create_general_capture
+from v3_validation_helpers import create_fault_capture, create_general_capture
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -458,3 +458,29 @@ def test_general_replay_rejects_an_empty_tick_time_intersection(tmp_path):
             capture,
             selection=ReplaySelection(start_tick_id=2, end_monotonic_ns=1),
         )
+
+
+def test_general_replay_matches_partial_l4_fault_and_reports_unexecuted_layers(tmp_path):
+    capture = create_fault_capture(tmp_path)
+
+    result = replay_capture(capture)
+
+    assert result["status"] == "MATCH"
+    assert result["capture"]["status"] == "FAULT"
+    assert result["execution"]["terminal_fault_layer"] == "L4"
+    assert result["execution"]["terminal_safety_decision"] == "FAULT"
+    assert result["diagnostics"]["layers"]["L3"] == {
+        "compared_tick_count": 1,
+        "not_executed_tick_count": 0,
+        "expected_present_count": 1,
+        "actual_present_count": 1,
+        "mismatch_count": 0,
+    }
+    assert result["diagnostics"]["layers"]["L4"] == {
+        "compared_tick_count": 0,
+        "not_executed_tick_count": 1,
+        "expected_present_count": 0,
+        "actual_present_count": 0,
+        "mismatch_count": 0,
+    }
+    assert result["diagnostics"]["layers"]["L12"]["compared_tick_count"] == 1

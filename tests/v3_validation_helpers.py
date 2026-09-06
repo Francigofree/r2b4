@@ -142,3 +142,36 @@ def create_general_capture(tmp_path: Path, *, capture_id: str = "general-v3") ->
     path = tmp_path / f"{capture_id}.json"
     capture_sink.finalize("PASS", path)
     return path
+
+
+def create_fault_capture(tmp_path: Path, *, capture_id: str = "fault-v3") -> Path:
+    """Capture a real production L4 exception closed by the production L12."""
+
+    original = tick_inputs(1)[0]
+    fault_input = TickInputs(
+        original.context,
+        RawDeviceBatch(
+            original.context,
+            tuple(
+                sample
+                for sample in original.raw_devices.samples
+                if sample.kind != "lidar_health"
+            ),
+            original.raw_devices.device_health,
+        ),
+        original.command,
+        original.lifecycle,
+    )
+    motor_sink = RecordingMotorSink()
+    production = NativeControlComposition(motor_sink, control_config())
+    capture_sink = CaptureSink(
+        capture_id,
+        configuration=configuration_documents(),
+        metadata={"purpose": "fail-closed-v3-validation"},
+    )
+    ExecutionBoundary(production).run(IterableInputSource((fault_input,)), capture_sink)
+    assert len(motor_sink.commands) == 1
+    assert motor_sink.commands[0].enabled is False
+    path = tmp_path / f"{capture_id}.json"
+    capture_sink.finalize("FAULT", path)
+    return path

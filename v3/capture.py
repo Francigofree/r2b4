@@ -25,6 +25,41 @@ class V3CaptureError(RuntimeError):
     """A V3 capture is incomplete, corrupt, or not serializable."""
 
 
+def _expected_trace_layers(fault_layer: object) -> tuple[str, ...]:
+    """Return the only valid completed trace shape for one production tick."""
+
+    if fault_layer is None:
+        return LAYER_ORDER
+    if not isinstance(fault_layer, str) or not fault_layer.strip():
+        raise V3CaptureError("fault_layer must be a non-empty string or null")
+    normalized = fault_layer.strip()
+    if normalized == "L12":
+        raise V3CaptureError("a completed trace cannot report L12 as its fault layer")
+    if normalized in LAYER_ORDER[:-1]:
+        return LAYER_ORDER[: LAYER_ORDER.index(normalized)] + ("L12",)
+    return ("L12",)
+
+
+def _validate_trace_layers(
+    layer_names: Sequence[str],
+    fault_layer: object,
+    *,
+    preserve_order: bool,
+) -> tuple[str, ...]:
+    expected = _expected_trace_layers(fault_layer)
+    observed = tuple(layer_names)
+    valid = observed == expected if preserve_order else (
+        len(observed) == len(expected) and set(observed) == set(expected)
+    )
+    if not valid:
+        fault = "none" if fault_layer is None else str(fault_layer)
+        raise V3CaptureError(
+            "trace layers must be the completed L1 prefix followed by L12 "
+            f"for fault_layer={fault}; expected {','.join(expected)}"
+        )
+    return expected
+
+
 def encode_value(value: object) -> object:
     """Encode typed V3 values without turning serialization into runtime authority."""
 
@@ -85,12 +120,16 @@ class CaptureSink(OutputSink):
                 raise V3CaptureError("capture tick ids must be contiguous")
             if context.monotonic_ns <= int(previous["monotonic_ns"]):
                 raise V3CaptureError("capture monotonic time must increase")
+        layer_names = tuple(layer.layer for layer in record.result.trace.layers)
+        _validate_trace_layers(
+            layer_names,
+            record.result.trace.fault_layer,
+            preserve_order=True,
+        )
         layers = {
             layer.layer: encode_value(layer.output)
             for layer in record.result.trace.layers
         }
-        if tuple(layers) != LAYER_ORDER:
-            raise V3CaptureError("capture requires a complete ordered L1-L12 trace")
         self._ticks.append(
             {
                 "tick_id": context.tick_id,
@@ -211,12 +250,17 @@ def validate_capture(payload: Mapping[str, object]) -> tuple[Mapping[str, object
         if not isinstance(expected, Mapping):
             raise V3CaptureError(f"tick {tick_id} expected output must be an object")
         layers = expected.get("layers")
-        if (
-            not isinstance(layers, Mapping)
-            or len(layers) != len(LAYER_ORDER)
-            or set(layers) != set(LAYER_ORDER)
-        ):
-            raise V3CaptureError(f"tick {tick_id} must contain complete L1-L12 outputs")
+        if not isinstance(layers, Mapping):
+            raise V3CaptureError(f"tick {tick_id} layers must be an object")
+        _validate_trace_layers(
+            tuple(str(layer) for layer in layers),
+            expected.get("fault_layer"),
+            preserve_order=False,
+        )
+        if expected.get("final_actuation") != layers.get("L12"):
+            raise V3CaptureError(
+                f"tick {tick_id} final_actuation must equal the terminal L12 output"
+            )
         ticks.append(raw_tick)
         previous_tick_id = tick_id
         previous_ns = monotonic_ns

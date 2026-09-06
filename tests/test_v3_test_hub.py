@@ -4,7 +4,7 @@ import pytest
 
 from v3.replay import ReplaySelection, verify_replay_result
 from v3.test_hub import V3TestHubError, validate_run, verify_evidence
-from v3_validation_helpers import create_general_capture
+from v3_validation_helpers import create_fault_capture, create_general_capture
 
 
 def test_test_hub_writes_one_run_bound_replay_and_l1_l12_diagnosis(tmp_path):
@@ -63,3 +63,18 @@ def test_evidence_verifier_rejects_a_modified_diagnosis(tmp_path):
 
     assert result["status"] == "FAIL"
     assert result["artifacts"]["diagnosis.json"]["matches_index"] is False
+
+
+def test_test_hub_preserves_fault_verdict_but_passes_matching_partial_replay(tmp_path):
+    capture = create_fault_capture(tmp_path)
+    output_dir = tmp_path / "fault-run"
+
+    summary = validate_run(capture, output_dir)
+    diagnosis = json.loads((output_dir / "diagnosis.json").read_text(encoding="utf-8"))
+
+    assert summary["status"] == "PASS"
+    assert summary["capture_status"] == "FAULT"
+    assert summary["replay_status"] == "MATCH"
+    assert diagnosis["capture_execution_status"] == "FAULT"
+    assert diagnosis["layers"]["L4"]["not_executed_tick_count"] == 1
+    assert diagnosis["layers"]["L12"]["compared_tick_count"] == 1

@@ -72,6 +72,9 @@ A közös, szimulátorhoz is újrahasználható határ
 tesztprofil-specifikus sink; a `v3.replay` automatikusan lefuttatja a kijelölt
 első tick előtti state warmupot; a `v3.test_hub` egy explicit run-directoryba
 ír `inspect`, replay-result, L1–L12 diagnosis és hash-index evidence-et.
+FAULT ticknél a capture a sikeres folytonos L1-prefixet, az explicit
+`fault_layer` értéket és a kötelező utolsó L12 outputot őrzi; a hibás és az azt
+követő rétegek `not_executed` diagnosztikát kapnak, nem fiktív outputot.
 
 A capture, replay és live külön modul és külön authority. A replay offline
 magja nem importál live hardver-authorityt és nem birtokol GPIO- vagy motor-

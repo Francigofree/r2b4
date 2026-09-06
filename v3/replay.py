@@ -681,7 +681,13 @@ def _general_diagnostics(
     layers: Sequence[str],
 ) -> tuple[dict[str, object] | None, dict[str, object]]:
     layer_rows: dict[str, object] = {
-        layer: {"compared_tick_count": len(ticks), "mismatch_count": 0}
+        layer: {
+            "compared_tick_count": 0,
+            "not_executed_tick_count": 0,
+            "expected_present_count": 0,
+            "actual_present_count": 0,
+            "mismatch_count": 0,
+        }
         for layer in layers
     }
     first: dict[str, object] | None = None
@@ -703,19 +709,44 @@ def _general_diagnostics(
         }
         mismatched_layers: set[str] = set()
         for layer in layers:
-            if expected_layers.get(layer) == actual_layers.get(layer):
-                continue
-            mismatched_layers.add(layer)
+            expected_present = layer in expected_layers
+            actual_present = layer in actual_layers
             row = dict(_mapping(layer_rows[layer], f"diagnostics.{layer}"))
+            row["expected_present_count"] = int(row["expected_present_count"]) + int(
+                expected_present
+            )
+            row["actual_present_count"] = int(row["actual_present_count"]) + int(
+                actual_present
+            )
+            if not expected_present and not actual_present:
+                row["not_executed_tick_count"] = int(
+                    row["not_executed_tick_count"]
+                ) + 1
+                layer_rows[layer] = row
+                continue
+            if expected_present and actual_present:
+                row["compared_tick_count"] = int(row["compared_tick_count"]) + 1
+                if expected_layers[layer] == actual_layers[layer]:
+                    layer_rows[layer] = row
+                    continue
+            mismatched_layers.add(layer)
             row["mismatch_count"] = int(row["mismatch_count"]) + 1
             layer_rows[layer] = row
             if first is None:
                 first = {
                     "tick_id": tick["tick_id"],
                     "layer": layer,
-                    "reason": "DIRECT_VALUE_MISMATCH",
-                    "expected": expected_layers.get(layer),
-                    "actual": actual_layers.get(layer),
+                    "reason": (
+                        "DIRECT_VALUE_MISMATCH"
+                        if expected_present and actual_present
+                        else "LAYER_PRESENCE_MISMATCH"
+                    ),
+                    "expected": (
+                        expected_layers[layer] if expected_present else "NOT_EXECUTED"
+                    ),
+                    "actual": (
+                        actual_layers[layer] if actual_present else "NOT_EXECUTED"
+                    ),
                 }
         expected_fault = expected.get("fault_layer")
         actual_fault = result.trace.fault_layer

@@ -2,105 +2,56 @@
   "agent_mode": "single_agent",
   "auxiliary_agent": null,
   "candidate_audit": {
-    "audit_path": "runtime/agent_workspaces/v3_validation_unified_20260906/meta/audit.json",
-    "audit_sha256": "d0199f88ca8b724e053d9c2149274bc68c7bdb130af2125d9528be9d537f2a9a",
-    "audited_at_utc": "2026-09-06T08:54:24Z",
-    "base_fingerprint": "5b4ae3d42f1ee6808cbcab9ff1e6b858d6557f26d0192bdf44313926fea0a5dc",
-    "candidate_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
+    "audit_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/audit.json",
+    "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
+    "audited_at_utc": "2026-09-06T09:53:17Z",
+    "base_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
+    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
     "canonical_drift": [],
-    "canonical_fingerprint": "5b4ae3d42f1ee6808cbcab9ff1e6b858d6557f26d0192bdf44313926fea0a5dc",
+    "canonical_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
     "changed_files": [
-      "AGENTS.md",
       "STRUKTURALIS_RETEGEK_V3.md",
       "docs/AGENT_RUNTIME.md",
-      "project_rules/agent_infrastructure.json",
-      "project_rules/agent_system_prompt.txt",
-      "project_rules/protected_baseline.json",
-      "tests/test_agent_workspace.py",
-      "tests/test_agentctl.py",
       "tests/test_v3_capture.py",
-      "tests/test_v3_execution.py",
-      "tests/test_v3_native_lidar_port.py",
       "tests/test_v3_replay.py",
       "tests/test_v3_test_hub.py",
       "tests/v3_validation_helpers.py",
-      "tools/agent_workspace.py",
-      "tools/agentctl.py",
-      "v3/adapters/capture_edges.py",
       "v3/capture.py",
-      "v3/engine.py",
-      "v3/execution.py",
-      "v3/replay.py",
-      "v3/test_hub.py"
+      "v3/replay.py"
     ],
-    "diff_path": "runtime/agent_workspaces/v3_validation_unified_20260906/meta/diff.json",
-    "diff_sha256": "f818c5b870b861de15e3001405a527f8a8e418511fe2009af9bb03255e5cfcb2",
+    "diff_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/diff.json",
+    "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
     "protected_infrastructure_changes": [
-      "AGENTS.md",
-      "docs/AGENT_RUNTIME.md",
-      "project_rules/agent_infrastructure.json",
-      "project_rules/agent_system_prompt.txt",
-      "tests/test_agent_workspace.py",
-      "tests/test_agentctl.py",
-      "tools/agent_workspace.py",
-      "tools/agentctl.py"
+      "docs/AGENT_RUNTIME.md"
     ],
     "schema": "R2B4_CANDIDATE_AUDIT_V1",
     "status": "PASS",
-    "task_id": "v3_validation_unified_20260906",
+    "task_id": "v3_fault_capture_partial_trace_20260906",
     "task_mode": "CHANGE",
     "unexpected_changes": []
   },
   "changed_files": [
-    "AGENTS.md",
     "STRUKTURALIS_RETEGEK_V3.md",
     "docs/AGENT_RUNTIME.md",
-    "project_rules/agent_infrastructure.json",
-    "project_rules/agent_system_prompt.txt",
-    "project_rules/protected_baseline.json",
-    "tests/test_agent_workspace.py",
-    "tests/test_agentctl.py",
     "tests/test_v3_capture.py",
-    "tests/test_v3_execution.py",
-    "tests/test_v3_native_lidar_port.py",
     "tests/test_v3_replay.py",
     "tests/test_v3_test_hub.py",
     "tests/v3_validation_helpers.py",
-    "tools/agent_workspace.py",
-    "tools/agentctl.py",
-    "v3/adapters/capture_edges.py",
     "v3/capture.py",
-    "v3/engine.py",
-    "v3/execution.py",
-    "v3/replay.py",
-    "v3/test_hub.py"
+    "v3/replay.py"
   ],
-  "completed_at_utc": "2026-09-06T08:54:24Z",
+  "completed_at_utc": "2026-09-06T09:53:17Z",
   "files": [
     {
       "after": {
         "exists": true,
-        "sha256": "b09476cb2f6477adf9e2e6065f37392bf79fc758c7e6b10fd63a6ad0258d3863",
-        "size_bytes": 4221
+        "sha256": "48322837c7ee061081459638d9bd6dfa356841bf464c9fd4cc8c03049a9bc17c",
+        "size_bytes": 30641
       },
       "before": {
-        "exists": true,
-        "sha256": "e4165283538e02265e286477bbab49dbe9c16c618cc36e820c9cbd6628446daf",
-        "size_bytes": 4073
-      },
-      "changed": true,
-      "path": "AGENTS.md"
-    },
-    {
-      "after": {
         "exists": true,
         "sha256": "73a99bfde442c6f864f2962045364b0457eed73cb03c49d208a1fcfd20b5be81",
         "size_bytes": 30149
-      },
-      "before": {
-        "exists": true,
-        "sha256": "ae5a9b91829577e4d74be02fefd6b70e79b6ef742598ab76fc8d9d6024451532",
-        "size_bytes": 28981
       },
       "changed": true,
       "path": "STRUKTURALIS_RETEGEK_V3.md"
@@ -108,13 +59,13 @@
     {
       "after": {
         "exists": true,
-        "sha256": "7f53d17d971f7aec91b30f5c2c29dac0926cb0e569c5e48a82367906ac99a348",
-        "size_bytes": 4024
+        "sha256": "33a3735c28247f301df6d016f244115229ea4d8034efec6cf48c6b4070bac0eb",
+        "size_bytes": 4261
       },
       "before": {
         "exists": true,
-        "sha256": "82896835708dfddae0424f8df3dd809e748e83a2a9da9981d8aa6e50df9367ba",
-        "size_bytes": 3238
+        "sha256": "7f53d17d971f7aec91b30f5c2c29dac0926cb0e569c5e48a82367906ac99a348",
+        "size_bytes": 4024
       },
       "changed": true,
       "path": "docs/AGENT_RUNTIME.md"
@@ -122,83 +73,13 @@
     {
       "after": {
         "exists": true,
-        "sha256": "cb1ff24efa48b1c167158804dbfeb6705b3a07f3c895f525f969504c7ec366d0",
-        "size_bytes": 6782
+        "sha256": "83df731cd7d88cda3e50f2d6a7c38e762f0003921f6301b1d79e3d8ed59e4421",
+        "size_bytes": 2300
       },
       "before": {
-        "exists": true,
-        "sha256": "1bc9074903283777621b6245985121d715c0624b19255ffdb1d182e7b1fc8551",
-        "size_bytes": 6427
-      },
-      "changed": true,
-      "path": "project_rules/agent_infrastructure.json"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "7f5089cdf5046d441c24fb1453425d4239cb331d10d352773d91c057556ca38e",
-        "size_bytes": 1366
-      },
-      "before": {
-        "exists": true,
-        "sha256": "70509c9dccf9c8ee3912b21a502e08bf2c344a6c51bd82ab96365ded01f96111",
-        "size_bytes": 1171
-      },
-      "changed": true,
-      "path": "project_rules/agent_system_prompt.txt"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "09145c0c6d9740702fd1e0331773c698f260d91ccd857df03f7027f50fa46793",
-        "size_bytes": 10517
-      },
-      "before": {
-        "exists": true,
-        "sha256": "8af5016fe1571ad38cc6dff0fdc29d219e9dc2a20e8ed6137079d4f94bcba8f3",
-        "size_bytes": 10315
-      },
-      "changed": true,
-      "path": "project_rules/protected_baseline.json"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "3983f3bb4e35401393179992aefade26e08d50793fdf423dc5d333ab677f841c",
-        "size_bytes": 16274
-      },
-      "before": {
-        "exists": true,
-        "sha256": "1df6552d0f004f600be661b74a5f1e8e64f261459694edcdc8d7c1b875d3a0f4",
-        "size_bytes": 15328
-      },
-      "changed": true,
-      "path": "tests/test_agent_workspace.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "1dc62db39c196dbbac30b1143d6ca552967b06e43a061aa0c27bcfac07e4113d",
-        "size_bytes": 27730
-      },
-      "before": {
-        "exists": true,
-        "sha256": "529ffccaefade779aecd0765b99de7e5dfae81967374e160c8bf7c67ee0a6cf4",
-        "size_bytes": 27124
-      },
-      "changed": true,
-      "path": "tests/test_agentctl.py"
-    },
-    {
-      "after": {
         "exists": true,
         "sha256": "73e14b8e536eca597e2f67df6482dda11a9f21fd86d47e4f7022408738dc5a0e",
         "size_bytes": 1252
-      },
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
       },
       "changed": true,
       "path": "tests/test_v3_capture.py"
@@ -206,41 +87,13 @@
     {
       "after": {
         "exists": true,
-        "sha256": "2ee425d2680ee477845bf6dff513f9a1208b6c021f6f45ba1227bdfb7a650194",
-        "size_bytes": 2532
+        "sha256": "bf238974e02236d4ac0ecc21467d29291e769ce9507b34f3bb1b9ab99ea69315",
+        "size_bytes": 16498
       },
       "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
-      },
-      "changed": true,
-      "path": "tests/test_v3_execution.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "ad5e9bceb06303d5b90b68c43e3f37dbfc871a9e76e464102acbc2ba3e94330d",
-        "size_bytes": 7618
-      },
-      "before": {
-        "exists": true,
-        "sha256": "5cc91f98a41c673b4e3380e4dd09fc602ae3502b6132b1807ba28b27b7f127f4",
-        "size_bytes": 7439
-      },
-      "changed": true,
-      "path": "tests/test_v3_native_lidar_port.py"
-    },
-    {
-      "after": {
         "exists": true,
         "sha256": "63e6d8c9892bb0e203b6e537b2053e9fa13ce982f39a5bc308fd21d4e04cb69d",
         "size_bytes": 15534
-      },
-      "before": {
-        "exists": true,
-        "sha256": "fbf9a6f287e3f47f1f8d8679050e810a99798884d7daecfa01bbb0a68c18a583",
-        "size_bytes": 13253
       },
       "changed": true,
       "path": "tests/test_v3_replay.py"
@@ -248,13 +101,13 @@
     {
       "after": {
         "exists": true,
-        "sha256": "13508b4de2ab193b19adec29f57cab51db60151c951630f9598e74dc60e616b8",
-        "size_bytes": 2496
+        "sha256": "ebb829908bbea6657173ce2aa80e620d77740164cf9236db39fa7b3e68a0c2a6",
+        "size_bytes": 3160
       },
       "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
+        "exists": true,
+        "sha256": "13508b4de2ab193b19adec29f57cab51db60151c951630f9598e74dc60e616b8",
+        "size_bytes": 2496
       },
       "changed": true,
       "path": "tests/test_v3_test_hub.py"
@@ -262,13 +115,13 @@
     {
       "after": {
         "exists": true,
-        "sha256": "daa3639043bfba169412e00d4a42b24c1c03aacae60d30375738b0569cd161f8",
-        "size_bytes": 4584
+        "sha256": "cd441841153475e9f8c95cef13f9bf5badfd0e267d0103d56b37e88dcdb38e83",
+        "size_bytes": 5733
       },
       "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
+        "exists": true,
+        "sha256": "daa3639043bfba169412e00d4a42b24c1c03aacae60d30375738b0569cd161f8",
+        "size_bytes": 4584
       },
       "changed": true,
       "path": "tests/v3_validation_helpers.py"
@@ -276,55 +129,13 @@
     {
       "after": {
         "exists": true,
-        "sha256": "a540356e39992b14cdf7132778d283b16bc8ed839378c834b85797c7192c5f1b",
-        "size_bytes": 42483
+        "sha256": "fe0cc6c985338e17d7b5a2d3eee3850f1f5130d06da6b2cd1886313ab84e296e",
+        "size_bytes": 12202
       },
       "before": {
-        "exists": true,
-        "sha256": "f637ed92e9a8b64dab472725652a4bb6c5dc68fa7be98676ab2f87f00f053a37",
-        "size_bytes": 41518
-      },
-      "changed": true,
-      "path": "tools/agent_workspace.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "069f26c7bfbc58dc93f359ed853fdfa702645194c417438c3646a13e46feffa0",
-        "size_bytes": 72034
-      },
-      "before": {
-        "exists": true,
-        "sha256": "6853c1ab87e5dd528949a99a41109f40da2ab58f11704d350d5e3251cf6aa342",
-        "size_bytes": 71885
-      },
-      "changed": true,
-      "path": "tools/agentctl.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "50a5c1b7162be84974785618ea9c2e7508764857d52032327267a5f20c3912ee",
-        "size_bytes": 12248
-      },
-      "before": {
-        "exists": true,
-        "sha256": "ad917176bff8e699f5c5d82fcc04410b5ce879bf759526287e785d0cbe9b908e",
-        "size_bytes": 12243
-      },
-      "changed": true,
-      "path": "v3/adapters/capture_edges.py"
-    },
-    {
-      "after": {
         "exists": true,
         "sha256": "a497de1eb68c3b5bb4ecb0dc645d91fa00f819ccf719ec32391e786a63e5339d",
         "size_bytes": 10575
-      },
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
       },
       "changed": true,
       "path": "v3/capture.py"
@@ -332,87 +143,31 @@
     {
       "after": {
         "exists": true,
-        "sha256": "33fd576155a839abb4d16c613894dc87c1b51037b25faa830d4757749ae98020",
-        "size_bytes": 6738
+        "sha256": "a3f8fcb7bdc32791fb48bbccad7612b07988317ae1b16424c7a6e4e51d2add4e",
+        "size_bytes": 72435
       },
       "before": {
-        "exists": true,
-        "sha256": "33fd576155a839abb4d16c613894dc87c1b51037b25faa830d4757749ae98020",
-        "size_bytes": 6738
-      },
-      "changed": false,
-      "path": "v3/composition/native_control.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "f7fe71c498b1b2f5bd456896aa4f4f263b15a2195351d97dffb4c73ca98895b0",
-        "size_bytes": 11171
-      },
-      "before": {
-        "exists": true,
-        "sha256": "d593d39e83fafba2239f845603c98e5521abe2c2f58f7045c8b63a68ece7a94f",
-        "size_bytes": 11092
-      },
-      "changed": true,
-      "path": "v3/engine.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "d4690cb8ddad1dbef861b5f01d9662a5a815c4702a2da34ad4359f2d9b30d895",
-        "size_bytes": 3818
-      },
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
-      },
-      "changed": true,
-      "path": "v3/execution.py"
-    },
-    {
-      "after": {
         "exists": true,
         "sha256": "e7d36692546dac2d93ace68461b5eecf08ab735ce0ad7031b237cbf87bf5ad28",
         "size_bytes": 71158
       },
-      "before": {
-        "exists": true,
-        "sha256": "53e9b9d027c1dc2f55345a03c990bc267b429202093e9104895fa20a9a46704e",
-        "size_bytes": 52435
-      },
       "changed": true,
       "path": "v3/replay.py"
-    },
-    {
-      "after": {
-        "exists": true,
-        "sha256": "50d45a852ee559cb622bef30f13297691a80fc6e2329c6fdd338b23906695122",
-        "size_bytes": 13294
-      },
-      "before": {
-        "exists": false,
-        "sha256": null,
-        "size_bytes": 0
-      },
-      "changed": true,
-      "path": "v3/test_hub.py"
     }
   ],
-  "goal": "Implement unified Replayer + Test Hub V3 validation with separate live, general capture, and offline replay authorities; reusable input source -> production V3 -> output sink boundary; targeted tick/time/layer replay with warmup and L1-L12 diagnostics; remove remaining active legacy authority routing; and preserve agent workspace protections in the single mixed-scope CHANGE workflow.",
+  "goal": "Allow general V3 capture and replay to preserve structurally valid fail-closed partial traces: contiguous L1 prefix, explicit fault_layer, and mandatory terminal L12; add fault-aware L1-L12 diagnostics and regression evidence.",
   "promotion_status": "READY",
-  "reason": "Unified Replayer and Test Hub V3 now use a general capture schema and reusable offline execution boundary, support tick/time/layer selection with prefix warmup and L1-L12 run-bound evidence, route V3 as sole active robot authority, preserve single-mode mixed scopes, and reapply canonical filesystem protection after promotion.",
+  "reason": "General V3 capture now preserves fail-closed partial traces as a contiguous completed L1 prefix plus explicit fault_layer and mandatory terminal L12; replay diagnostics distinguish compared, absent, and mismatched layer values without changing production behavior.",
   "schema": "R2B4_AGENT_CHANGE_V3",
   "source_first": true,
-  "started_at_utc": "2026-09-06T08:29:07Z",
+  "started_at_utc": "2026-09-06T09:49:18Z",
   "status": "COMPLETE",
-  "task_id": "v3_validation_unified_20260906",
+  "task_id": "v3_fault_capture_partial_trace_20260906",
   "task_mode": "CHANGE",
   "test_strategy": {
     "authoritative_test_count": 5,
     "default": "TARGETED",
-    "full_regression_reason": "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
+    "full_regression_reason": "SHARED_CONTRACT_CHANGE",
     "full_regression_recorded": true,
     "full_regression_required": true,
     "legacy_non_authority_count": 0
@@ -420,7 +175,7 @@
   "tests": [
     {
       "authority": "CURRENT_CONTRACT",
-      "command": "PYTHONPATH=.:tests pytest -q tests/test_agentctl.py tests/test_bootstrap_guard.py tests/test_agent_workspace.py tests/test_v3_execution.py tests/test_v3_capture.py tests/test_v3_replay.py tests/test_v3_test_hub.py",
+      "command": "PYTHONPATH=.:tests pytest -q tests/test_v3_capture.py tests/test_v3_replay.py tests/test_v3_test_hub.py",
       "status": "PASS"
     },
     {
@@ -435,7 +190,7 @@
     },
     {
       "authority": "CURRENT_CONTRACT",
-      "command": "python3 -m v3.test_hub validate <general-capture> --output-dir <run-id> --start-tick-id 2 --end-tick-id 3 --start-layer L3 --end-layer L10",
+      "command": "python3 -m v3.test_hub validate <L4-fault-capture> --output-dir <run-id>",
       "status": "PASS"
     },
     {
@@ -444,31 +199,31 @@
       "status": "PASS"
     }
   ],
-  "updated_at_utc": "2026-09-06T08:54:24Z",
+  "updated_at_utc": "2026-09-06T09:53:17Z",
   "workflow_evidence": {
-    "audit_sha256": "d0199f88ca8b724e053d9c2149274bc68c7bdb130af2125d9528be9d537f2a9a",
-    "candidate_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
-    "contract_fingerprint": "69e6c3705c45e8f9b317162bc1a678a8d0d6e4b9697ecd0bb704369ffda758ed",
-    "diff_sha256": "f818c5b870b861de15e3001405a527f8a8e418511fe2009af9bb03255e5cfcb2",
-    "path": "runtime/agent_workspaces/v3_validation_unified_20260906/meta/evidence.json",
+    "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
+    "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+    "contract_fingerprint": "af59df228a4b4975d32b31cc35177ab231a7d37dbf6bb7a407abeeeb26db6c22",
+    "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
+    "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/evidence.json",
     "schema": "R2B4_AGENT_WORKFLOW_EVIDENCE_V1",
-    "sha256": "230b4e5236b9905bd9f9294ec2284e52f053f83d4b1f71dbf2a68e674b1a5ad3"
+    "sha256": "a8597c694c33eb4cfcfdab9d8bb378b566362d57dc270cf8ff967d7243a153e0"
   },
   "workspace": {
-    "base_fingerprint": "5b4ae3d42f1ee6808cbcab9ff1e6b858d6557f26d0192bdf44313926fea0a5dc",
-    "base_manifest_path": "runtime/agent_workspaces/v3_validation_unified_20260906/meta/base_manifest.json",
-    "base_manifest_sha256": "d8ad79af00f37bd1b64a024f13fc18fab636252cf032963028d6065ccfc9ee10",
-    "path": "runtime/agent_workspaces/v3_validation_unified_20260906/tree",
+    "base_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
+    "base_manifest_path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/base_manifest.json",
+    "base_manifest_sha256": "3ba1032e6fc6843e2a49aad8db626bf68f177b4900bc13be69685005fcd1eec9",
+    "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/tree",
     "reseal": {
-      "audit_sha256": "d0199f88ca8b724e053d9c2149274bc68c7bdb130af2125d9528be9d537f2a9a",
-      "candidate_fingerprint": "df7a4d51909a25386d821789e2e4c9f79ab8e4a641c2bd23840b574483a07171",
-      "diff_sha256": "f818c5b870b861de15e3001405a527f8a8e418511fe2009af9bb03255e5cfcb2",
-      "path": "runtime/agent_workspaces/v3_validation_unified_20260906/meta/reseal.json",
-      "resealed_at_utc": "2026-09-06T08:54:24Z",
+      "audit_sha256": "cc894dc5166e624eda84954ead08f1ccc64080f10647b77e6df40f52d9170334",
+      "candidate_fingerprint": "524bef487edc5a27899a7bd09a0a0b25239962d2f6d43bb314ea40d0f1fb83b7",
+      "diff_sha256": "9899255579496d9ca473766158d2a52615cc5e8d958b3582a7a9409c5fb7f82a",
+      "path": "runtime/agent_workspaces/v3_fault_capture_partial_trace_20260906/meta/reseal.json",
+      "resealed_at_utc": "2026-09-06T09:53:17Z",
       "schema": "R2B4_CANDIDATE_RESEAL_V1",
-      "sha256": "f7b0fd7730844979bc915fb0d3e4c9e6f6154170775c750655e7d4cc88f04895",
+      "sha256": "765c1a923286aaed8ae0eaeec6ed56e299319fc30899ff3f331926d81bba8a55",
       "state": "READY",
-      "task_id": "v3_validation_unified_20260906"
+      "task_id": "v3_fault_capture_partial_trace_20260906"
     },
     "schema": "R2B4_AGENT_WORKSPACE_V1",
     "state": "READY"

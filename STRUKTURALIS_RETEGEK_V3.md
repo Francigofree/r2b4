@@ -586,8 +586,11 @@ A minimális replay input:
 * randomizált algoritmus esetén a seed.
 
 A terminális futási verdict és a replay verdict külön fogalom.
-Strukturálisan teljes `FAIL/FAULT` capture ugyanúgy replayelendő, mint a `PASS`,
-mert a fail-closed döntési lánc elsődleges hibakeresési evidence.
+Strukturálisan érvényes `FAIL/FAULT` capture ugyanúgy replayelendő, mint a
+`PASS`, mert a fail-closed döntési lánc elsődleges hibakeresési evidence. A
+„strukturálisan érvényes” fault tick nem jelent mesterségesen teljes L1–L12
+trace-t: a hiba előtt sikeresen lezárt folytonos L1-prefixet, az explicit
+`fault_layer` értéket és a kötelező, utolsó L12 eredményt jelenti.
 
 Nem terminális vagy integritáshibás capture nem kaphat `MATCH` eredményt.
 
@@ -600,7 +603,10 @@ amelyre az adott funkció biztonságos végrehajtásához ténylegesen szükség
 Egy opcionális localization ág nem válhat pusztán architekturális megszokásból
 az egész robot globális arming feltételévé.
 
-A `TickTrace` tickenként L1–L12 typed outputokat tartalmaz. Két futás közvetlen
+Normál tick `TickTrace` értéke L1–L12 typed outputokat tartalmaz. Upstream hiba
+esetén csak a sikeresen lezárt folytonos L1-prefix és az L12 létezhet; a hibás
+és az utána következő rétegekhez tilos fiktív outputot gyártani. Például L4
+exception helyes trace-e `L1,L2,L3,L12`, `fault_layer=L4`. Két futás közvetlen
 dataclass-egyenlőséggel hasonlítható össze; az első eltérő rekord megadja a
 `tick_id`-t és a layer nevet.
 
