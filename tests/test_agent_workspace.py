@@ -53,11 +53,7 @@ class AgentWorkspaceTests(unittest.TestCase):
                     "project_rules/bootstrap_guard.py",
                     "tools/agentctl.py",
                 ],
-                "agent_infrastructure_allowed_paths": [
-                    "AGENTS.md",
-                    "project_rules/",
-                    "tools/agentctl.py",
-                ],
+                "change_mode": "CHANGE",
             }
         }
 
@@ -69,7 +65,7 @@ class AgentWorkspaceTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
-    def _open(self, task_id="task", files=None, task_mode="CODE_CHANGE"):
+    def _open(self, task_id="task", files=None):
         selected = list(files or ["README.md"])
         workspace = create_workspace(self.root, task_id, self.config)
         tracker = ChangeTracker(self.root)
@@ -77,7 +73,6 @@ class AgentWorkspaceTests(unittest.TestCase):
             task_id=task_id,
             goal="candidate test",
             files=selected,
-            task_mode=task_mode,
             workspace=workspace,
         )
         manifest = json.loads(tracker.manifest_path.read_text(encoding="utf-8"))
@@ -234,26 +229,18 @@ class AgentWorkspaceTests(unittest.TestCase):
         finally:
             outside.unlink(missing_ok=True)
 
-    def test_normal_code_task_cannot_change_agent_infrastructure(self):
-        _tracker, manifest, tree = self._open(files=["tools/agentctl.py"])
-        (tree / "tools/agentctl.py").write_text("# changed\n", encoding="utf-8")
-
-        audit = audit_workspace(self.root, manifest, self.config)
-
-        self.assertEqual(audit["status"], "FAIL")
-        self.assertEqual(audit["mode_violations"], ["tools/agentctl.py"])
-
-    def test_agent_infra_mode_can_change_only_declared_infrastructure(self):
+    def test_single_change_mode_can_change_declared_source_and_agent_infrastructure(self):
         _tracker, manifest, tree = self._open(
-            task_id="infra",
-            files=["tools/agentctl.py"],
-            task_mode="AGENT_INFRA_CHANGE",
+            task_id="mixed",
+            files=["README.md", "tools/agentctl.py"],
         )
+        (tree / "README.md").write_text("candidate source\n", encoding="utf-8")
         (tree / "tools/agentctl.py").write_text("# hardened\n", encoding="utf-8")
 
         audit = audit_workspace(self.root, manifest, self.config)
 
         self.assertEqual(audit["status"], "PASS")
+        self.assertEqual(audit["task_mode"], "CHANGE")
         self.assertEqual(audit["protected_infrastructure_changes"], ["tools/agentctl.py"])
 
     def test_base_manifest_tampering_is_rejected(self):

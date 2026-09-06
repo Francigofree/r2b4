@@ -12,54 +12,41 @@
     "auxiliary_output": 3072
   },
   "normative_authorities": {
-    "structural_motion_architecture": {
-      "authority": "NORMATIVE_SSOT",
-      "path": "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
-      "document_role": "structural_motion_architecture",
-      "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V2_1",
-      "domains": ["motion_control"]
-    },
     "v3_robot_architecture": {
       "authority": "NORMATIVE_SSOT",
       "path": "STRUKTURALIS_RETEGEK_V3.md",
       "document_role": "v3_robot_architecture",
       "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
-      "domains": ["robot_v3"]
+      "domains": ["robot_v3", "robot_validation"]
     }
   },
   "universal_invariants": [
     "SOURCE_AND_ACTIVE_CONFIG_FIRST",
     "NO_SAFETY_PASS_OR_QUALITY_GATE_RELAXATION",
     "NO_GIT_RECOVERY_ASSUMPTION",
-    "LIVE_MOTION_EXPLICIT_SCOPE_PREFLIGHT_TEST_HUB_ONLY"
+    "LIVE_MOTION_EXPLICIT_SCOPE_FAIL_CLOSED_IDLE"
   ],
   "domain_invariants": {
-    "motion_control": [
-      "UNIFIED_CONTROL_ONLY",
-      "ONE_TICK_ONE_INTENT_ONE_EKF_POSE_ONE_MOTOR_OUTPUT",
-      "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER"
-    ],
     "robot_v3": [
       "V3_ONE_TICK_ONE_INPUT_SNAPSHOT_ONE_DECISION_ONE_COMMIT",
       "V3_L12_ONLY_NORMAL_MOTOR_WRITER",
       "V3_FAIL_CLOSED_STOP",
       "V3_NO_LEGACY_SHARED_STATE_OR_AUTHORITY",
       "V3_REPLAYABLE_DECISIONS_REQUIRED"
+    ],
+    "robot_validation": [
+      "V3_REPLAYER_OFFLINE_NO_HARDWARE_AUTHORITY",
+      "V3_CAPTURE_REPLAY_LIVE_AUTHORITY_SEPARATION",
+      "V3_RUN_SCOPED_EVIDENCE"
     ]
   },
   "workflow": {
     "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
     "diagnostics": {
-      "primary": "REPLAYER_V2_1",
+      "primary": "REPLAYER_V3",
       "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
-      "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
-      "source_routes": ["replayer/README.md", "replayer/contracts.py"],
-      "domain_profiles": {
-        "robot_v3": {
-          "primary": "REPLAYER_V3",
-          "source_routes": ["v3/replay/README.md"]
-        }
-      }
+      "source_routes": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+      "domain_profiles": {}
     },
     "testing": {
       "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
@@ -67,15 +54,17 @@
       "legacy_contract_conflict_authority": "NON_AUTHORITY",
       "full_regression_reasons": [
         "SHARED_CONTRACT_CHANGE",
-        "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+        "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
         "TEST_INFRASTRUCTURE_CHANGE",
         "EXPLICIT_USER_REQUEST",
         "DIAGNOSTIC_INVESTIGATION"
       ],
       "full_regression_required_paths": [
+        "AGENTS.md",
+        "docs/AGENT_RUNTIME.md",
         "project_rules/agent_infrastructure.json",
+        "project_rules/agent_system_prompt.txt",
         "project_rules/bootstrap_guard.py",
-        "project_rules/protected_baseline.json",
         "scripts/bootstrap_guard.sh",
         "tests/test_agent_change_tracker.py",
         "tests/test_agent_workspace.py",
@@ -127,69 +116,36 @@
     ],
     "protected_infrastructure_paths": [
       "AGENTS.md",
-      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
-      "config_manager.py",
       "docs/AGENT_RUNTIME.md",
-      "log/log_paths.py",
       "project_rules/agent_infrastructure.json",
       "project_rules/agent_system_prompt.txt",
       "project_rules/bootstrap_guard.py",
-      "project_rules/protected_baseline.json",
       "scripts/bootstrap_guard.sh",
       "tests/test_agent_change_tracker.py",
       "tests/test_agent_workspace.py",
       "tests/test_agentctl.py",
       "tests/test_bootstrap_guard.py",
-      "tests/test_config_manager_paths.py",
-      "tests/test_r2b4_test_hub.py",
       "tools/agent_change_tracker.py",
       "tools/agent_workspace.py",
-      "tools/agentctl.py",
-      "tools/r2b4_test_hub.py"
+      "tools/agentctl.py"
     ],
-    "agent_infrastructure_allowed_paths": [
-      "AGENTS.md",
-      "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
-      "config_manager.py",
-      "docs/AGENT_RUNTIME.md",
-      "log/log_paths.py",
-      "project_rules/agent_infrastructure.json",
-      "project_rules/agent_system_prompt.txt",
-      "project_rules/bootstrap_guard.py",
-      "project_rules/protected_baseline.json",
-      "scripts/bootstrap_guard.sh",
-      "tests/test_agent_change_tracker.py",
-      "tests/test_agent_workspace.py",
-      "tests/test_agentctl.py",
-      "tests/test_bootstrap_guard.py",
-      "tests/test_config_manager_paths.py",
-      "tests/test_r2b4_test_hub.py",
-      "tools/agent_change_tracker.py",
-      "tools/agent_workspace.py",
-      "tools/agentctl.py",
-      "tools/r2b4_test_hub.py"
-    ]
+    "change_mode": "CHANGE"
   },
   "auxiliary_agent_policy": {
     "default": "NONE",
-    "allowed_roles": [
-      "independent_reviewer",
-      "root_cause_analyst"
-    ],
+    "allowed_roles": ["independent_reviewer", "root_cause_analyst"],
     "activation": {
       "independent_reviewer": {
         "requires_any_path": [
-          "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
+          "AGENTS.md",
+          "docs/AGENT_RUNTIME.md",
+          "project_rules/agent_infrastructure.json",
           "project_rules/bootstrap_guard.py",
-          "project_rules/protected_baseline.json",
-          "safety/",
-          "motion_executor.py",
-          "cont.py",
-          "middleware/ekf.py",
-          "middleware/scan_matching.py",
-          "sensors/lidar_service.py"
+          "tools/agent_change_tracker.py",
+          "tools/agent_workspace.py",
+          "tools/agentctl.py"
         ],
-        "evidence": "protected_contract_or_shared_guard_change"
+        "evidence": "agent_infrastructure_contract_change"
       },
       "root_cause_analyst": {
         "requires_immutable_incident": true,
@@ -201,29 +157,47 @@
   },
   "domains": {
     "agent_infrastructure": {
-      "paths": ["AGENTS.md", "STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "project_rules/", "tools/agentctl.py", "tools/agent_change_tracker.py"],
-      "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "project_rules/protected_baseline.json", "tests/test_bootstrap_guard.py", "tests/test_agent_change_tracker.py"]
-    },
-    "motion_control": {
-      "paths": ["cont.py", "motion_executor.py", "controller/", "core/", "amr/"],
-      "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md", "STRUKTURALIS_RETEGEK.md", "conf/control_mode.json", "conf/speed_map.json"]
+      "paths": [
+        "AGENTS.md",
+        "docs/AGENT_RUNTIME.md",
+        "project_rules/agent_infrastructure.json",
+        "project_rules/agent_system_prompt.txt",
+        "project_rules/bootstrap_guard.py",
+        "scripts/bootstrap_guard.sh",
+        "tools/agent_change_tracker.py",
+        "tools/agent_workspace.py",
+        "tools/agentctl.py"
+      ],
+      "sources": [
+        "AGENTS.md",
+        "docs/AGENT_RUNTIME.md",
+        "project_rules/agent_infrastructure.json",
+        "tests/test_agent_change_tracker.py",
+        "tests/test_agent_workspace.py",
+        "tests/test_agentctl.py",
+        "tests/test_bootstrap_guard.py"
+      ]
     },
     "robot_v3": {
-      "paths": ["v3/", "STRUKTURALIS_RETEGEK_V3.md"],
-      "sources": ["STRUKTURALIS_RETEGEK_V3.md"],
+      "paths": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "v3/",
+        "v3_bounded_config.py",
+        "v3_bounded_runtime.py",
+        "v3_process_runtime.py"
+      ],
+      "sources": [
+        "STRUKTURALIS_RETEGEK_V3.md",
+        "conf/hardver.json",
+        "conf/fizika.json",
+        "conf/speed_map.json"
+      ],
       "required_authority": "v3_robot_architecture"
     },
-    "localization_sensors": {
-      "paths": ["middleware/", "sensors/", "driver/"],
-      "sources": ["middleware/scan_matcher_contract.py", "conf/vezerles.json"]
-    },
-    "runtime_safety": {
-      "paths": ["safety/", "startup/", "log/", "tools/agent_runtime_manager.py"],
-      "sources": ["runtime/status.json"]
-    },
-    "test_evidence": {
-      "paths": ["tools/r2b4_test_hub.py"],
-      "sources": []
+    "robot_validation": {
+      "paths": ["v3/replay.py"],
+      "sources": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+      "required_authority": "v3_robot_architecture"
     }
   }
 }

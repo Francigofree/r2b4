@@ -24,6 +24,7 @@ class AgentChangeTrackerTests(unittest.TestCase):
         started = self.tracker.begin(task_id="task-1", goal="change module", files=["module.py"])
         self.assertEqual(started["status"], "ACTIVE")
         self.assertEqual(started["schema"], "R2B4_AGENT_CHANGE_V3")
+        self.assertEqual(started["task_mode"], "CHANGE")
         self.assertEqual(started["agent_mode"], "single_agent")
         self.assertIsNone(started["auxiliary_agent"])
         self.assertTrue(started["source_first"])

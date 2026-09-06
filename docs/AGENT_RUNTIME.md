@@ -1,121 +1,83 @@
-# R2B4 agent validacios utmutato
+# R2B4 agent- és V3 validációs útmutató
 
-Ez routing dokumentum, nem task-state es nem profil-registry. Az aktualis
-profilok es contractok SSOT-ja a forras:
+Ez routing dokumentum, nem task-state vagy tesztprofil-registry. Az aktív task,
+a deklarált fájlok, workspace, lease-ek és receipt-ek gépi authorityja az
+`agentctl`; a robotarchitektúra authorityja ettől külön a
+`STRUKTURALIS_RETEGEK_V3.md`.
 
-```bash
-python3 tools/r2b4_test_hub.py list
-```
-
-Az aktiv task, a fajlhash-ek, az agentmod es a bizonyitek-referenciak gepi
-SSOT-ja:
+## Agent workflow
 
 ```bash
+bash scripts/bootstrap_guard.sh --brief
 python3 tools/agentctl.py capsule
-python3 tools/agentctl.py status
+python3 tools/agentctl.py open --task-id <id> --goal <cel> --files <fajlok...>
+python3 tools/agentctl.py workspace
 ```
 
-Az SSOT a writable `runtime/agent_coordination/current_change.json`; nem resze
-a vedett canonical forrasnak.
+Egyetlen `CHANGE` mód van. Egy task deklarált scope-ja tartalmazhat egyszerre
+production source/config és agent-infrastruktúra fájlokat. Ez csak workflow-
+egyszerűsítés: a robot-, capture-, replay- és live authorityk nem egyesülnek.
 
-## Offline modositas
-
-1. `bash scripts/bootstrap_guard.sh --brief`
-2. `python3 tools/agentctl.py capsule`
-3. `agentctl open`, majd modositas kizarolag a kiirt task-workspace-ben;
-4. `agentctl workspace` szerinti candidate `cwd`/`PYTHONPATH` alatt celzott teszt;
-5. `agentctl audit`;
-6. kozos contract/bootstrap/test-infrastruktura eseten `full_pytest` lease es
-   teljes `python3 -m pytest -q`;
-7. `agentctl close`, amely a candidate hash-eket, auditot es teszteket vedett
-   receiptbe zarja, de nem ir canonical forrast.
-
-Canonical promotion kulon emberi kapu. A promotion ujraellenorzi a base-et,
-auditot, teszteket es receiptet; teljes vedett snapshotot, fsync-elt recovery
-journalt es atomikus fajlcseret hasznal. Megszakitas utan `agentctl recover`,
-kesobbi explicit visszaallitasra `agentctl restore` hasznalhato.
-
-Infrastruktura-validacio kedveert elo robotmozgas nem indul.
-
-## Runtime-, motion- vagy szenzormodositas
-
-1. celzott offline regresszio es a blast radius szerinti teljes pytest;
-2. runtime status es egyetlen runtime processz;
-3. a Test Hub profil sajat preflightja;
-4. szukseges friss measurement-truth/M0 vagy fail-closed M0-mini;
-5. a legszukebb bizonyito profil;
-6. futasazonos summary, FAIL eseten incident es ownership manifest;
-7. vegso IDLE es PWM `0/0`.
-
-Elo futas csak explicit felhasznaloi keretben, `live_motion` lease mellett
-indulhat. Ad-hoc mozgas helyett Test Hub profil kotelezo.
-
-## Evidence rend
-
-1. Forraskod es aktiv konfiguracio.
-2. `<run_dir>/summary.json` vagy scenario summary.
-3. FAIL eseten futasazonos incident es ownership manifest.
-4. Stabil baseline.
-5. Torteneti dokumentum; nyers log csak konkret bizonyitekhianyra, szuk
-   szeletben.
-
-`logs/latest/latest_*` csak volatilis pointer. Tartós bizonyíték a
-`logs/session_<timestamp>/` alatti futasazonos artefakt. A task lezárásának
-tartós bizonyítéka `logs/agent_tasks/<task-id>/receipt.json`.
-
-## Agentmod
-
-A default egyetlen agent. Az `agentctl capsule` csak jogosultsagot jelezhet egy
-celzott kiegeszito szerepre; aktivaciohoz `agentctl review` es gepileg
-ellenorzott evidence kell.
-
-- `independent_reviewer`: vedett vagy kozos guard contract valtozas független
-  ellenorzesere;
-- `root_cause_analyst`: legalabb ket kulon futas azonos hibasignature-je es
-  futasazonos immutable FAIL incident eseten.
-
-Egyszerre legfeljebb egy kiegeszito agent lehet. Nem irhat kodot, nem indithat
-uj agentet, runtime-ot vagy elo profilt. Parhuzamos iro tiltott.
-
-## Lease-ek
+Módosítani kizárólag a kiírt candidate workspace-ben szabad. Új fájlt írás
+előtt `agentctl claim --files ...` vesz scope-ba. A close kötelező determinisztikus
+auditot futtat, ellenőrzi a tesztevidenciát, resealeli a candidate-et és immutable
+receiptet készít:
 
 ```bash
-python3 tools/agentctl.py lease acquire full_pytest
-python3 tools/agentctl.py lease status canonical_promotion
-python3 tools/agentctl.py lease acquire runtime_control
-python3 tools/agentctl.py lease acquire live_motion
-python3 tools/agentctl.py lease acquire latest_artifact_publish
-python3 tools/agentctl.py lease release <resource>
+python3 tools/agentctl.py close --reason <ok> --test '<parancs> :: PASS'
 ```
 
-A lease gepi runtime-allapot, nem LLM-kontektszoveg. Lejar, taskhoz kotott es
-mas task altal nem oldhato fel.
+A lényegi védelmek változatlanok: egy író lease, deklarált hash-scope,
+out-of-scope audit failure, canonical drift detection, teljes pytest lease a
+megosztott agent-infra változásokhoz, valamint külön, task-azonos emberi
+promotion-kapu. Az agent nem promotál automatikusan.
 
-A Test Hub a `latest_*` pointerek publikaciojat automatikusan a
-`latest_artifact_publish` lease alatt vegzi. A pointer tovabbra sem tartos
-evidence-authority.
+Agent-infrastruktúra kizárólag:
 
-## Forrasvedelem
+- task és candidate workspace;
+- lease és egyíró-policy;
+- audit, receipt, promotion/recovery/restore;
+- context capsule és agent-policy.
 
-- Normal `CODE_CHANGE` nem claimelhet agent-infrastruktura fajlt.
-- `AGENT_INFRA_CHANGE` kulon explicit taskmod es emberi jovahagyas.
-- A candidate eldobhato, mikozben canonical hash valtozatlan marad.
-- A managed canonical forras root-owned es read-only; a runtime/log/session
-  teruletek kulon writable-ak.
-- A vedett base-seal, receipt, snapshot es promotion journal
-  `/var/lib/r2b4-agent/` alatt van. Azonos user szandekos `sudo` bypassa maradek
-  adminisztratori kockazat, nem normal fejlesztoi jogosultsag.
+A robotarchitektúra, aktív robotconfig, logging, Test Hub, capture és Replayer
+robot-validációs infrastruktúra; attól nem válik agent-infrává, hogy az agent
+használja.
 
-## Valtozatlan vedett szerzodesek
+## V3 robot-validáció
 
-- egyetlen `UNIFIED` vezerlesi ut;
-- egy tick = egy intent, egy EKF pose, egy motor output;
-- normal motoriras csak `MotionExecutor`;
-- pose owner `EKF_POSE_ODOMETRY_SSOT` a `R2B4_BOOT_ROBOT_MAP` frame-ben;
-- scan matcher `R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1`, kulon `spawn`
-  processz, `1/1` latest-only queue es V2 confidence;
-- safety-, PASS- es minosegi kapu nem lazithato.
+Az authority- és fejlesztési sorrend:
 
-A reszletes ertekeket nem ez a dokumentum duplikalja: azok a
-`project_rules/protected_baseline.json`, az aktiv config es az implementacios
-forras gepileg ellenorzott ertekei.
+```text
+V3 source + aktív config
+→ STRUKTURALIS_RETEGEK_V3.md
+→ Replayer + Test Hub V3
+→ csak szükség esetén, explicit keretben live hardware
+```
+
+A Replayer V3 a saját CLI-jével fut; az `agentctl` nem importálja és nem indítja
+el. Az offline út alapműveletei:
+
+```bash
+python3 -m v3.replay inspect <capture.json>
+python3 -m v3.replay replay <capture.json> --output <result.json>
+python3 -m v3.replay verify-result <result.json>
+```
+
+A capture, replay és live külön modul és külön authority. A replay offline
+magja nem birtokol GPIO- vagy motor-capabilityt. Tartós bizonyíték kizárólag a
+futásazonos capture/result/diagnosis; `logs/latest/latest_*` csak kényelmi pointer,
+nem authority.
+
+Live hardver csak explicit felhasználói keret, friss V3 preflight, szükséges
+lease és végső IDLE/PWM-null ellenőrzés mellett használható. Infrastruktúra-
+validáció kedvéért robotmozgás nem indul.
+
+## Kiegészítő agent és helyreállítás
+
+A default egyetlen agent. Legfeljebb egy evidence-bound reviewer vagy root-cause
+szerep aktiválható `agentctl review` paranccsal; nem írhat párhuzamosan és nem
+delegálhat rekurzívan.
+
+Megszakadt promotionhoz `agentctl recover <id>`, explicit visszaállításhoz
+`agentctl restore <id> --approve restore:<id>` használható. A managed canonical
+forrás read-only; a runtime/log/session területek külön írhatók.

@@ -202,7 +202,6 @@ class ChangeTracker:
         task_id: str,
         goal: str,
         files: Iterable[str],
-        task_mode: str = "CODE_CHANGE",
         workspace: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         task = str(task_id or "").strip()
@@ -218,15 +217,12 @@ class ChangeTracker:
                 )
             self._archive_terminal_manifest(existing)
         now = _utc_now()
-        normalized_mode = str(task_mode or "").strip().upper()
-        if normalized_mode not in {"CODE_CHANGE", "AGENT_INFRA_CHANGE", "LEGACY_DIRECT"}:
-            raise ChangeTrackerError(f"Unsupported task mode: {task_mode}")
         payload = {
             "schema": SCHEMA,
             "task_id": task,
             "goal": objective,
             "status": "ACTIVE",
-            "task_mode": normalized_mode,
+            "task_mode": "CHANGE",
             "agent_mode": "single_agent",
             "auxiliary_agent": None,
             "source_first": True,
@@ -448,7 +444,6 @@ def _build_parser() -> argparse.ArgumentParser:
     begin.add_argument("--task-id", required=True)
     begin.add_argument("--goal", required=True)
     begin.add_argument("--files", nargs="+", required=True)
-    begin.add_argument("--task-mode", choices=("CODE_CHANGE", "AGENT_INFRA_CHANGE", "LEGACY_DIRECT"), default="CODE_CHANGE")
 
     add = sub.add_parser("add-files", help="Add files to the ACTIVE task before editing them")
     add.add_argument("--files", nargs="+", required=True)
@@ -481,7 +476,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 task_id=args.task_id,
                 goal=args.goal,
                 files=args.files,
-                task_mode=args.task_mode,
             )
         elif args.command == "add-files":
             payload = tracker.add_files(args.files)

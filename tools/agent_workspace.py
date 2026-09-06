@@ -404,14 +404,13 @@ def audit_workspace(root: Path, manifest: Mapping[str, Any], config: Mapping[str
         if isinstance(row, dict) and str(row.get("path", "")).strip()
     }
     unexpected = sorted(set(changed) - declared)
-    task_mode = str(manifest.get("task_mode", "CODE_CHANGE"))
+    task_mode = str(manifest.get("task_mode", "CHANGE"))
     workspace_block = _workspace_config(config)
     protected_patterns = [str(value) for value in workspace_block.get("protected_infrastructure_paths", [])]
     protected_changes = sorted(
         path for path in changed if any(_matches_path(path, pattern) for pattern in protected_patterns)
     )
-    mode_violations = protected_changes if task_mode == "CODE_CHANGE" else []
-    status = "PASS" if not canonical_drift and not unexpected and not mode_violations else "FAIL"
+    status = "PASS" if not canonical_drift and not unexpected else "FAIL"
     paths = workspace_paths(project_root, str(manifest.get("task_id")), config)
     diff = _diff_payload(str(manifest.get("task_id", "")), base, candidate)
     _write_json_atomic(paths["diff"], diff, mode=0o444)
@@ -428,7 +427,6 @@ def audit_workspace(root: Path, manifest: Mapping[str, Any], config: Mapping[str
         "unexpected_changes": unexpected,
         "canonical_drift": canonical_drift,
         "protected_infrastructure_changes": protected_changes,
-        "mode_violations": mode_violations,
         "diff_path": paths["diff"].relative_to(project_root).as_posix(),
         "diff_sha256": _sha256_file(paths["diff"]),
     }

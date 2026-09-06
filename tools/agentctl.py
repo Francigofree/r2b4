@@ -81,9 +81,7 @@ from tools.agent_workspace import (  # noqa: E402
 
 
 CONFIG_PATH = PROJECT_ROOT / "project_rules" / "agent_infrastructure.json"
-BASELINE_PATH = PROJECT_ROOT / "project_rules" / "protected_baseline.json"
 MANIFEST_PATH = PROJECT_ROOT / RUNTIME_MANIFEST_REL
-LATEST_HUB_SUMMARY_PATH = PROJECT_ROOT / "logs" / "latest" / "latest_hub_summary.json"
 COORDINATION_DIR = PROJECT_ROOT / "runtime" / "agent_coordination"
 LEASE_DIR = COORDINATION_DIR / "leases"
 LEASE_REGISTRY_LOCK = COORDINATION_DIR / "lease_registry.lock"
@@ -94,7 +92,6 @@ EVENT_SCHEMA = "R2B4_AGENT_EVENT_V1"
 RECEIPT_SCHEMA = "R2B4_AGENT_RECEIPT_V1"
 PROMOTION_RECEIPT_SCHEMA = "R2B4_PROMOTION_RECEIPT_V1"
 WORKFLOW_EVIDENCE_SCHEMA = "R2B4_AGENT_WORKFLOW_EVIDENCE_V1"
-REPLAY_DIAGNOSIS_SCHEMA = "R2B4_AGENT_REPLAY_DIAGNOSIS_V1"
 
 
 class AgentCtlError(RuntimeError):
@@ -177,8 +174,8 @@ def load_infrastructure(root: Path = PROJECT_ROOT) -> Dict[str, Any]:
     if workflow.get("source_order") != ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"]:
         raise AgentCtlError("Agent workflow must remain source-first and contract-aware")
     diagnostics = dict(workflow.get("diagnostics") or {})
-    if diagnostics.get("primary") != "REPLAYER_V2_1":
-        raise AgentCtlError("Replayer V2.1 must remain the primary diagnostic evidence")
+    if diagnostics.get("primary") != "REPLAYER_V3":
+        raise AgentCtlError("Replayer V3 must remain the primary robot-validation evidence")
     if diagnostics.get("sequence") != ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"]:
         raise AgentCtlError("Replay diagnostic sequence contract mismatch")
     profiles = diagnostics.get("domain_profiles") or {}
@@ -203,6 +200,11 @@ def load_infrastructure(root: Path = PROJECT_ROOT) -> Dict[str, Any]:
             not isinstance(value, str) or not value.strip() for value in invariants
         ):
             raise AgentCtlError(f"Domain invariants are invalid for domain: {domain}")
+    workspace = _workspace_block(payload)
+    if workspace.get("change_mode") != "CHANGE":
+        raise AgentCtlError("Agent workspace must use the single CHANGE mode")
+    if any(str(key).endswith("_allowed_paths") for key in workspace):
+        raise AgentCtlError("Separate mode-specific path allowlists are not supported")
     return payload
 
 
@@ -210,10 +212,9 @@ def _workflow(config: Dict[str, Any]) -> Dict[str, Any]:
     fallback = {
         "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
         "diagnostics": {
-            "primary": "REPLAYER_V2_1",
+            "primary": "REPLAYER_V3",
             "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
-            "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
-            "source_routes": ["replayer/README.md", "replayer/contracts.py"],
+            "source_routes": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
             "domain_profiles": {},
         },
         "testing": {
@@ -222,7 +223,7 @@ def _workflow(config: Dict[str, Any]) -> Dict[str, Any]:
             "legacy_contract_conflict_authority": "NON_AUTHORITY",
             "full_regression_reasons": [
                 "SHARED_CONTRACT_CHANGE",
-                "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+                "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
                 "TEST_INFRASTRUCTURE_CHANGE",
                 "EXPLICIT_USER_REQUEST",
                 "DIAGNOSTIC_INVESTIGATION",
@@ -261,31 +262,6 @@ def _workspace_block(config: Dict[str, Any]) -> Dict[str, Any]:
     if block.get("enabled") is not True:
         raise AgentCtlError("Isolated task workspace is not enabled")
     return block
-
-
-def _validate_task_scope(paths: Iterable[str], task_mode: str, config: Dict[str, Any]) -> None:
-    normalized = [str(path) for path in paths]
-    block = _workspace_block(config)
-    protected = [str(value) for value in block.get("protected_infrastructure_paths", [])]
-    if str(task_mode) == "CODE_CHANGE":
-        violations = sorted(
-            path for path in normalized if any(_path_matches(path, pattern) for pattern in protected)
-        )
-        if violations:
-            raise AgentCtlError(
-                "CODE_CHANGE cannot modify agent infrastructure: " + ", ".join(violations)
-            )
-    elif str(task_mode) == "AGENT_INFRA_CHANGE":
-        allowed = [str(value) for value in block.get("agent_infrastructure_allowed_paths", [])]
-        violations = sorted(
-            path for path in normalized if not any(_path_matches(path, pattern) for pattern in allowed)
-        )
-        if violations:
-            raise AgentCtlError(
-                "AGENT_INFRA_CHANGE cannot modify robot-runtime scope: " + ", ".join(violations)
-            )
-    else:
-        raise AgentCtlError(f"Unsupported task mode: {task_mode}")
 
 
 def classify_domains(paths: Iterable[str], config: Dict[str, Any]) -> List[str]:
@@ -613,40 +589,13 @@ class LeaseManager:
         return released
 
 
-def _evidence_summary(root: Path, tracked_paths: Iterable[str]) -> Dict[str, Any]:
-    summary_path = Path(root) / "logs" / "latest" / "latest_hub_summary.json"
-    payload = _read_json(summary_path, required=False)
-    if not payload:
-        return {"status": "MISSING", "source": "logs/latest/latest_hub_summary.json"}
-    source_mtimes = []
-    for relative in tracked_paths:
-        path = Path(root) / str(relative)
-        if path.is_file() and not str(relative).startswith(("tests/", "docs/")):
-            source_mtimes.append(path.stat().st_mtime)
-    current = bool(
-        not source_mtimes or summary_path.stat().st_mtime >= max(source_mtimes)
-    )
-    if not current:
-        return {"relevance": "STALE"}
-    return {
-        "relevance": "CURRENT",
-        "status": str(payload.get("status", "")),
-        "profile": str(payload.get("profile", "")),
-        "run_dir": str(payload.get("run_dir", "")),
-        "sha256": _sha256_file(summary_path),
-    }
-
-
 def _contract_snapshot(
     root: Path,
     manifest: Dict[str, Any],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
     project_root = Path(root).resolve()
-    paths = {
-        "project_rules/agent_infrastructure.json",
-        "project_rules/protected_baseline.json",
-    }
+    paths = {"project_rules/agent_infrastructure.json"}
     for row in dict(config.get("normative_authorities") or {}).values():
         if isinstance(row, dict) and str(row.get("path", "")).strip():
             paths.add(str(row["path"]))
@@ -716,168 +665,6 @@ def write_workflow_evidence(
     }
 
 
-def _run_json_command(
-    command: Sequence[str],
-    *,
-    cwd: Path,
-    pythonpath: Path,
-) -> tuple[Dict[str, Any], int]:
-    env = dict(os.environ)
-    env["PYTHONPATH"] = str(pythonpath)
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    completed = subprocess.run(
-        list(command),
-        cwd=str(cwd),
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        detail = (completed.stderr or completed.stdout).strip()
-        raise AgentCtlError(f"Command returned invalid JSON ({' '.join(command)}): {detail}") from exc
-    if not isinstance(payload, dict):
-        raise AgentCtlError(f"Command returned non-object JSON: {' '.join(command)}")
-    return payload, int(completed.returncode)
-
-
-def run_replay_diagnosis(
-    root: Path,
-    manifest: Dict[str, Any],
-    config: Dict[str, Any],
-    *,
-    capture_id: str,
-    data_root: Optional[Path] = None,
-    result_id: Optional[str] = None,
-    start_monotonic_ns: Optional[int] = None,
-    end_monotonic_ns: Optional[int] = None,
-    layers: Optional[Iterable[str]] = None,
-) -> Dict[str, Any]:
-    project_root = Path(root).resolve()
-    tracked_paths = [
-        str(row.get("path"))
-        for row in manifest.get("files", [])
-        if isinstance(row, dict)
-    ]
-    domains = classify_domains(tracked_paths, config)
-    diagnostics = _diagnostics_for_domains(config, domains)
-    primary = str(diagnostics.get("primary", "")).strip()
-    if primary != "REPLAYER_V2_1":
-        raise AgentCtlError(f"Diagnostic backend is not implemented by agentctl: {primary}")
-    workspace = dict(manifest.get("workspace") or {})
-    workspace_path = project_root / str(workspace.get("path"))
-    if not workspace_path.is_dir():
-        raise AgentCtlError("Replay diagnosis requires the active candidate workspace")
-    selected_capture = str(capture_id or "").strip()
-    if not selected_capture or _safe_task_id(selected_capture) != selected_capture:
-        raise AgentCtlError("Replay diagnosis requires a safe capture_id")
-    replay_root = Path(data_root or (project_root / "replayer_data")).resolve()
-    selected_result = str(result_id or f"diagnosis_{_safe_task_id(manifest.get('task_id'))}_{uuid.uuid4().hex[:12]}")
-    if _safe_task_id(selected_result) != selected_result:
-        raise AgentCtlError("Replay diagnosis requires a safe result_id")
-    base = [sys.executable, "-m", "replayer", "--data-root", str(replay_root)]
-    inspect, inspect_code = _run_json_command(
-        [*base, "inspect", selected_capture],
-        cwd=workspace_path,
-        pythonpath=workspace_path,
-    )
-    if inspect_code != 0 or inspect.get("errors") or inspect.get("manifest_integrity") != "VALID":
-        raise AgentCtlError("Replayer inspect did not produce valid manifest evidence")
-    replay_command = [*base, "replay", selected_capture, "--result-id", selected_result]
-    if start_monotonic_ns is not None:
-        replay_command.extend(["--start-monotonic-ns", str(int(start_monotonic_ns))])
-    if end_monotonic_ns is not None:
-        replay_command.extend(["--end-monotonic-ns", str(int(end_monotonic_ns))])
-    selected_layers = [str(value).strip().upper() for value in (layers or [])]
-    invalid_layers = sorted(set(selected_layers) - {"L8", "L9", "SERVICE"})
-    if invalid_layers:
-        raise AgentCtlError("Unsupported replay layer: " + ", ".join(invalid_layers))
-    for layer in selected_layers:
-        replay_command.extend(["--layer", layer])
-    replay, _replay_code = _run_json_command(
-        replay_command,
-        cwd=workspace_path,
-        pythonpath=workspace_path,
-    )
-    if replay.get("capture_id") != selected_capture or replay.get("result_id") != selected_result:
-        raise AgentCtlError("Replayer result lineage mismatch")
-    expected_result_path = (replay_root / "results" / selected_capture / selected_result).resolve()
-    for field in ("evidence_path", "integrity_path"):
-        artifact = Path(str(replay.get(field, ""))).resolve()
-        if artifact.parent != expected_result_path or not artifact.is_file():
-            raise AgentCtlError(f"Replay {field} is missing or outside the result lineage")
-    verified, verify_code = _run_json_command(
-        [*base, "verify-result", selected_capture, selected_result],
-        cwd=workspace_path,
-        pythonpath=workspace_path,
-    )
-    if verify_code != 0 or verified.get("valid") is not True:
-        raise AgentCtlError("Replay result or diagnosis integrity verification failed")
-    diagnosis_path = (
-        Path(str(replay.get("diagnosis_path", ""))).resolve()
-        if replay.get("diagnosis_path")
-        else None
-    )
-    if diagnosis_path is not None and diagnosis_path.parent != expected_result_path:
-        raise AgentCtlError("Replay diagnosis_path is outside the result lineage")
-    required_schema = str(
-        diagnostics.get(
-            "diagnosis_required_for_capture_schema",
-            "R2B4_REPLAYER_CAPTURE_V2_1",
-        )
-    )
-    if inspect.get("capture_schema") == required_schema and (
-        diagnosis_path is None or not diagnosis_path.is_file()
-    ):
-        raise AgentCtlError("Replayer V2.1 diagnosis.json is required but missing")
-    diagnosis_sha = _sha256_file(diagnosis_path) if diagnosis_path is not None else None
-    evidence = {
-        "schema": REPLAY_DIAGNOSIS_SCHEMA,
-        "task_id": str(manifest.get("task_id")),
-        "generated_at_utc": _utc_now(),
-        "capture_id": selected_capture,
-        "capture_schema": inspect.get("capture_schema"),
-        "inspect": inspect,
-        "replay_scope": {
-            "start_monotonic_ns": start_monotonic_ns,
-            "end_monotonic_ns": end_monotonic_ns,
-            "layers": selected_layers,
-        },
-        "result_id": selected_result,
-        "replay_status": replay.get("status"),
-        "result_verification": verified,
-        "diagnosis_path": str(diagnosis_path) if diagnosis_path is not None else None,
-        "diagnosis_sha256": diagnosis_sha,
-        "evidence_path": replay.get("evidence_path"),
-        "evidence_sha256": _sha256_file(Path(str(replay.get("evidence_path")))),
-        "integrity_path": replay.get("integrity_path"),
-        "integrity_sha256": _sha256_file(Path(str(replay.get("integrity_path")))),
-        "status": "MATCH" if replay.get("status") == "MATCH" else "DIVERGENCE_DIAGNOSED",
-    }
-    evidence_path = (
-        project_root
-        / "logs"
-        / "agent_tasks"
-        / _safe_task_id(manifest.get("task_id"))
-        / "replay_diagnosis.json"
-    )
-    _write_json_atomic(evidence_path, evidence, mode=0o444)
-    return {
-        "schema": REPLAY_DIAGNOSIS_SCHEMA,
-        "status": evidence["status"],
-        "capture_id": selected_capture,
-        "capture_schema": inspect.get("capture_schema"),
-        "result_id": selected_result,
-        "replay_status": replay.get("status"),
-        "path": evidence_path.relative_to(project_root).as_posix(),
-        "sha256": _sha256_file(evidence_path),
-        "diagnosis_path": evidence.get("diagnosis_path"),
-        "diagnosis_sha256": diagnosis_sha,
-    }
-
-
 def build_capsule(
     root: Path = PROJECT_ROOT,
     *,
@@ -918,13 +705,10 @@ def build_capsule(
             diagnostics.get("source_routes", [])
         )
     )
-    baseline = _read_json(root / "project_rules" / "protected_baseline.json")
-    hub_evidence = _evidence_summary(root, paths)
     replay_evidence = report.get("replay_evidence")
     evidence = {
         "primary": diagnostics.get("primary"),
         "replay": replay_evidence,
-        "hub": hub_evidence,
     }
     fingerprint_input = {
         "task_id": report.get("task_id"),
@@ -939,11 +723,8 @@ def build_capsule(
             for row in report.get("files", [])
         ],
         "infrastructure_sha256": _sha256_file(root / "project_rules" / "agent_infrastructure.json"),
-        "baseline_sha256": _sha256_file(root / "project_rules" / "protected_baseline.json"),
         "current_evidence_sha256": (
-            (replay_evidence or {}).get("sha256")
-            if isinstance(replay_evidence, dict)
-            else hub_evidence.get("sha256")
+            (replay_evidence or {}).get("sha256") if isinstance(replay_evidence, dict) else None
         ),
     }
     fingerprint = _sha256_bytes(_canonical_bytes(fingerprint_input))
@@ -987,7 +768,6 @@ def build_capsule(
         "changed_files": [
             row.get("path") for row in report.get("files", []) if row.get("changed_from_before")
         ],
-        "protected_identifiers": dict(baseline.get("identifiers") or {}),
         "evidence": evidence,
         "auxiliary_agent_policy": {
             "default": "NONE",
@@ -1349,7 +1129,7 @@ def _validate_test_evidence(
         raise AgentCtlError("Changed scope requires a recorded full pytest PASS")
     if full_rows:
         if effective_reason is None and required:
-            effective_reason = "BOOTSTRAP_OR_AGENT_INFRA_CHANGE"
+            effective_reason = "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE"
         if effective_reason not in allowed_reasons:
             raise AgentCtlError(
                 "Full pytest requires an allowed scope/risk/diagnostic reason"
@@ -1375,8 +1155,6 @@ def _build_parser() -> argparse.ArgumentParser:
     open_cmd.add_argument("--task-id", required=True)
     open_cmd.add_argument("--goal", required=True)
     open_cmd.add_argument("--files", nargs="+", required=True)
-    open_cmd.add_argument("--mode", choices=("CODE_CHANGE", "AGENT_INFRA_CHANGE"), default="CODE_CHANGE")
-    open_cmd.add_argument("--approve", default=None, help=argparse.SUPPRESS)
     open_cmd.add_argument("--clone-from", default=None, help="Clone one resealed SUPERSEDED candidate")
 
     claim = sub.add_parser("claim", help="Hash-declare additional files")
@@ -1404,14 +1182,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("audit", help="Optional pre-close deterministic audit preview")
     sub.add_parser("workspace", help="Show the active candidate path and test environment")
-
-    diagnose = sub.add_parser("diagnose", help="Run inspect, replay, result verification and diagnosis indexing")
-    diagnose.add_argument("capture_id")
-    diagnose.add_argument("--data-root", type=Path, default=None)
-    diagnose.add_argument("--result-id", default=None)
-    diagnose.add_argument("--start-monotonic-ns", type=int, default=None)
-    diagnose.add_argument("--end-monotonic-ns", type=int, default=None)
-    diagnose.add_argument("--layer", action="append", default=[])
 
     promote = sub.add_parser("promote", help="Explicitly promote a verified candidate")
     promote.add_argument("task_id")
@@ -1449,10 +1219,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         if args.command == "open":
             config = load_infrastructure(root)
-            if args.mode == "AGENT_INFRA_CHANGE" and args.approve != f"agent-infra:{args.task_id}":
-                raise AgentCtlError(
-                    f"AGENT_INFRA_CHANGE requires --approve agent-infra:{args.task_id}"
-                )
             parent_manifest: Optional[Dict[str, Any]] = None
             tracked_files = list(args.files)
             if args.clone_from:
@@ -1465,7 +1231,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                     ((parent_manifest.get("candidate_audit") or {}).get("changed_files") or [])
                 )
                 tracked_files = sorted(set(tracked_files) | set(str(value) for value in parent_changed))
-            _validate_task_scope(tracked_files, args.mode, config)
             _validate_required_domain_authorities(tracked_files, config, root)
             tracker = ChangeTracker(root=root)
             manager = LeaseManager(root)
@@ -1491,7 +1256,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                     task_id=args.task_id,
                     goal=args.goal,
                     files=tracked_files,
-                    task_mode=args.mode,
                     workspace=workspace,
                 )
                 seed_workspace_task_state(root, workspace, tracker.manifest_path)
@@ -1508,7 +1272,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 {
                     "workspace_lease": lease.get("lease_id"),
                     "workspace_path": workspace.get("path") if workspace else None,
-                    "task_mode": args.mode,
+                    "task_mode": "CHANGE",
                     "parent_task_id": args.clone_from,
                 },
             )
@@ -1517,11 +1281,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             manifest = _manifest(root)
             if LeaseManager(root).inspect("workspace_write").get("owner_task_id") != manifest.get("task_id"):
                 raise AgentCtlError("Current task does not own workspace_write")
-            _validate_task_scope(
-                list(args.files) + [str(row.get("path")) for row in manifest.get("files", [])],
-                str(manifest.get("task_mode", "CODE_CHANGE")),
-                load_infrastructure(root),
-            )
             _validate_required_domain_authorities(
                 list(args.files) + [str(row.get("path")) for row in manifest.get("files", [])],
                 load_infrastructure(root),
@@ -1599,42 +1358,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 },
             )
             payload = audit
-        elif args.command == "diagnose":
-            manifest = _manifest(root)
-            task_id = str(manifest.get("task_id"))
-            _require_live_lease(root, "workspace_write", task_id)
-            replay_evidence = run_replay_diagnosis(
-                root,
-                manifest,
-                load_infrastructure(root),
-                capture_id=args.capture_id,
-                data_root=args.data_root,
-                result_id=args.result_id,
-                start_monotonic_ns=args.start_monotonic_ns,
-                end_monotonic_ns=args.end_monotonic_ns,
-                layers=args.layer,
-            )
-            manifest["replay_evidence"] = replay_evidence
-            manifest["updated_at_utc"] = _utc_now()
-            _write_json_atomic(current_manifest_path(root), manifest)
-            seed_workspace_task_state(
-                root,
-                dict(manifest["workspace"]),
-                current_manifest_path(root),
-            )
-            append_event(
-                root,
-                task_id,
-                "replay_diagnosed",
-                {
-                    "capture_id": replay_evidence.get("capture_id"),
-                    "result_id": replay_evidence.get("result_id"),
-                    "replay_status": replay_evidence.get("replay_status"),
-                    "evidence_sha256": replay_evidence.get("sha256"),
-                    "diagnosis_sha256": replay_evidence.get("diagnosis_sha256"),
-                },
-            )
-            payload = replay_evidence
         elif args.command == "lease":
             manifest = _manifest(root)
             task_id = str(manifest.get("task_id"))

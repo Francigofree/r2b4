@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
 
 from tools.agent_change_tracker import ChangeTracker
 from tools.agentctl import (
@@ -18,7 +17,6 @@ from tools.agentctl import (
     decide_auxiliary_activation,
     load_infrastructure,
     main,
-    run_replay_diagnosis,
     seal_receipt,
     verify_event_chain,
     verify_receipt_seal,
@@ -48,29 +46,31 @@ class AgentCtlTests(unittest.TestCase):
                 },
                 "universal_invariants": ["SOURCE_FIRST", "NO_GATE_RELAXATION"],
                 "domain_invariants": {
-                    "motion_control": ["MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER"],
                     "robot_v3": ["V3_L12_ONLY_NORMAL_MOTOR_WRITER"],
+                },
+                "normative_authorities": {
+                    "v3_robot_architecture": {
+                        "authority": "NORMATIVE_SSOT",
+                        "path": "STRUKTURALIS_RETEGEK_V3.md",
+                        "document_role": "v3_robot_architecture",
+                        "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
+                        "domains": ["robot_v3"],
+                    }
                 },
                 "workflow": {
                     "source_order": ["SOURCE", "ACTIVE_CONFIG", "CANONICAL_CONTRACT"],
                     "diagnostics": {
-                        "primary": "REPLAYER_V2_1",
+                        "primary": "REPLAYER_V3",
                         "sequence": ["INSPECT", "REPLAY", "VERIFY_RESULT", "DIAGNOSIS"],
-                        "diagnosis_required_for_capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
-                        "source_routes": ["replayer/README.md", "replayer/contracts.py"],
-                        "domain_profiles": {
-                            "robot_v3": {
-                                "primary": "REPLAYER_V3",
-                                "source_routes": ["v3/replay/README.md"],
-                            }
-                        },
+                        "source_routes": ["STRUKTURALIS_RETEGEK_V3.md", "v3/replay.py"],
+                        "domain_profiles": {},
                     },
                     "testing": {
                         "order": ["TARGETED", "REPLAY", "FULL_REGRESSION_IF_JUSTIFIED"],
                         "default": "TARGETED",
                         "legacy_contract_conflict_authority": "NON_AUTHORITY",
                         "full_regression_reasons": [
-                            "BOOTSTRAP_OR_AGENT_INFRA_CHANGE",
+                            "AGENT_INFRASTRUCTURE_OR_BOOTSTRAP_CHANGE",
                             "DIAGNOSTIC_INVESTIGATION",
                         ],
                         "full_regression_required_paths": ["tools/agentctl.py"],
@@ -105,10 +105,7 @@ class AgentCtlTests(unittest.TestCase):
                         "project_rules/bootstrap_guard.py",
                         "tools/agentctl.py",
                     ],
-                    "agent_infrastructure_allowed_paths": [
-                        "project_rules/bootstrap_guard.py",
-                        "tools/agentctl.py",
-                    ],
+                    "change_mode": "CHANGE",
                 },
                 "auxiliary_agent_policy": {
                     "allowed_roles": ["independent_reviewer", "root_cause_analyst"],
@@ -125,12 +122,8 @@ class AgentCtlTests(unittest.TestCase):
                 },
                 "domains": {
                     "agent_infrastructure": {
-                        "paths": ["project_rules/", "tools/agentctl.py"],
-                        "sources": ["project_rules/protected_baseline.json"],
-                    },
-                    "motion_control": {
-                        "paths": ["controller/", "amr/"],
-                        "sources": ["STRUKTURALIS_RETEGEK_V2_1_STRICT.md"],
+                        "paths": ["project_rules/bootstrap_guard.py", "tools/agentctl.py"],
+                        "sources": ["project_rules/agent_infrastructure.json"],
                     },
                     "robot_v3": {
                         "paths": ["v3/"],
@@ -140,15 +133,12 @@ class AgentCtlTests(unittest.TestCase):
                 },
             },
         )
-        self._write_json(
-            "project_rules/protected_baseline.json",
-            {"schema": "R2B4_PROTECTED_BASELINE_V1", "identifiers": {"control_mode": "UNIFIED"}},
-        )
         self._write("project_rules/bootstrap_guard.py", "# guard\n")
         self._write(
-            "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
-            "**Contract:** `R2B4_ARCH_LAYER_CONTRACT_V2_1`\n",
+            "STRUKTURALIS_RETEGEK_V3.md",
+            "**Contract:** `R2B4_ARCH_LAYER_CONTRACT_V3`\n",
         )
+        self._write("v3/replay.py", "# V3 replay authority edge\n")
         ChangeTracker(self.root).begin(
             task_id="task-one",
             goal="minimal context",
@@ -183,26 +173,23 @@ class AgentCtlTests(unittest.TestCase):
             len(json.dumps(capsule, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()),
         )
 
-    def test_motion_and_amr_scope_routes_normative_architecture_authority(self):
+    def test_legacy_robot_paths_do_not_restore_a_legacy_authority(self):
         ChangeTracker(self.root).add_files(
             ["controller/motion_controller.py", "amr/navigation.py"]
         )
 
         capsule = build_capsule(self.root)
 
-        self.assertIn("motion_control", capsule["domains"])
-        self.assertIn(
-            "STRUKTURALIS_RETEGEK_V2_1_STRICT.md",
-            capsule["source_routes"],
-        )
-        self.assertIn(
-            "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER",
-            capsule["universal_invariants"],
-        )
-        self.assertNotIn("V3_L12_ONLY_NORMAL_MOTOR_WRITER", capsule["universal_invariants"])
+        self.assertNotIn("motion_control", capsule["domains"])
+        self.assertEqual(capsule["evidence"]["primary"], "REPLAYER_V3")
+        self.assertFalse(any("V2_1" in path for path in capsule["source_routes"]))
 
     def test_v3_scope_fails_closed_until_its_authority_is_registered(self):
         (self.root / "runtime" / "agent_coordination" / "current_change.json").unlink()
+        config_path = self.root / "project_rules" / "agent_infrastructure.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["normative_authorities"] = {}
+        self._write_json("project_rules/agent_infrastructure.json", config)
 
         result = self._main(
             "open",
@@ -218,60 +205,16 @@ class AgentCtlTests(unittest.TestCase):
         self.assertEqual(LeaseManager(self.root).inspect("workspace_write")["status"], "FREE")
 
     def test_v3_scope_routes_v3_authority_and_diagnostic_profile(self):
-        config_path = self.root / "project_rules" / "agent_infrastructure.json"
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        config.setdefault("normative_authorities", {})["v3_robot_architecture"] = {
-            "authority": "NORMATIVE_SSOT",
-            "path": "STRUKTURALIS_RETEGEK_V3.md",
-            "document_role": "v3_robot_architecture",
-            "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
-            "domains": ["robot_v3"],
-        }
-        self._write_json("project_rules/agent_infrastructure.json", config)
-        self._write(
-            "STRUKTURALIS_RETEGEK_V3.md",
-            "**Contract:** `R2B4_ARCH_LAYER_CONTRACT_V3`\n",
-        )
-        self._write("v3/replay/README.md", "V3 deterministic replay\n")
         ChangeTracker(self.root).add_files(["v3/contracts.py"])
 
         capsule = build_capsule(self.root)
 
         self.assertIn("robot_v3", capsule["domains"])
         self.assertIn("STRUKTURALIS_RETEGEK_V3.md", capsule["source_routes"])
-        self.assertIn("v3/replay/README.md", capsule["source_routes"])
-        self.assertNotIn("replayer/README.md", capsule["source_routes"])
+        self.assertIn("v3/replay.py", capsule["source_routes"])
         self.assertEqual(capsule["evidence"]["primary"], "REPLAYER_V3")
         self.assertIn("V3_L12_ONLY_NORMAL_MOTOR_WRITER", capsule["universal_invariants"])
-        self.assertNotIn(
-            "MOTION_EXECUTOR_ONLY_NORMAL_MOTOR_WRITER",
-            capsule["universal_invariants"],
-        )
-
-    def test_v3_scope_cannot_run_legacy_replayer(self):
-        config_path = self.root / "project_rules" / "agent_infrastructure.json"
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        config.setdefault("normative_authorities", {})["v3_robot_architecture"] = {
-            "authority": "NORMATIVE_SSOT",
-            "path": "STRUKTURALIS_RETEGEK_V3.md",
-            "document_role": "v3_robot_architecture",
-            "contract_id": "R2B4_ARCH_LAYER_CONTRACT_V3",
-            "domains": ["robot_v3"],
-        }
-        self._write_json("project_rules/agent_infrastructure.json", config)
-        self._write("STRUKTURALIS_RETEGEK_V3.md", "V3\n")
-        ChangeTracker(self.root).add_files(["v3/contracts.py"])
-
-        with self.assertRaisesRegex(
-            AgentCtlError,
-            "Diagnostic backend is not implemented by agentctl: REPLAYER_V3",
-        ):
-            run_replay_diagnosis(
-                self.root,
-                ChangeTracker(self.root).inspect(),
-                load_infrastructure(self.root),
-                capture_id="capture-one",
-            )
+        self.assertNotIn("protected_identifiers", capsule)
 
     def test_unchanged_fingerprint_returns_tiny_delta(self):
         capsule = build_capsule(self.root)
@@ -425,22 +368,25 @@ class AgentCtlTests(unittest.TestCase):
         with self.assertRaisesRegex(AgentCtlError, "Protected receipt hash mismatch"):
             verify_receipt_seal(self.root, "task-one", load_infrastructure(self.root))
 
-    def test_code_task_cannot_open_protected_infrastructure_scope(self):
+    def test_single_change_mode_accepts_mixed_declared_scope(self):
         (self.root / "runtime" / "agent_coordination" / "current_change.json").unlink()
 
         self.assertEqual(
             self._main(
                 "open",
                 "--task-id",
-                "bad-code",
+                "mixed-change",
                 "--goal",
-                "self modify",
+                "change source and agent policy together",
                 "--files",
                 "project_rules/bootstrap_guard.py",
+                "new_file.py",
             ),
-            2,
+            0,
         )
-        self.assertEqual(LeaseManager(self.root).inspect("workspace_write")["status"], "FREE")
+        report = ChangeTracker(self.root).inspect_compact()
+        self.assertEqual(report["task_mode"], "CHANGE")
+        self.assertEqual(LeaseManager(self.root).inspect("workspace_write")["status"], "HELD")
 
     def test_open_makes_only_declared_readonly_source_writable_in_candidate(self):
         (self.root / "runtime" / "agent_coordination" / "current_change.json").unlink()
@@ -470,38 +416,23 @@ class AgentCtlTests(unittest.TestCase):
         self.assertFalse(source.stat().st_mode & 0o200)
         self.assertTrue(candidate.stat().st_mode & 0o200)
 
-    def test_agent_infra_open_requires_explicit_mode_approval(self):
+    def test_agent_infrastructure_needs_no_separate_mode_or_candidate(self):
         (self.root / "runtime" / "agent_coordination" / "current_change.json").unlink()
 
-        denied = self._main(
-            "open",
-            "--task-id",
-            "infra",
-            "--goal",
-            "harden",
-            "--files",
-            "project_rules/bootstrap_guard.py",
-            "--mode",
-            "AGENT_INFRA_CHANGE",
-        )
         accepted = self._main(
             "open",
             "--task-id",
             "infra",
             "--goal",
-            "harden",
+            "harden with production change",
             "--files",
             "project_rules/bootstrap_guard.py",
-            "--mode",
-            "AGENT_INFRA_CHANGE",
-            "--approve",
-            "agent-infra:infra",
+            "new_file.py",
         )
 
-        self.assertEqual(denied, 2)
         self.assertEqual(accepted, 0)
         report = ChangeTracker(self.root).inspect_compact()
-        self.assertEqual(report["task_mode"], "AGENT_INFRA_CHANGE")
+        self.assertEqual(report["task_mode"], "CHANGE")
         self.assertTrue(report["workspace_path"].endswith("/infra/tree"))
 
     def test_public_promotion_requires_human_gate_and_can_restore(self):
@@ -651,10 +582,6 @@ class AgentCtlTests(unittest.TestCase):
                 "change shared infra",
                 "--files",
                 "tools/agentctl.py",
-                "--mode",
-                "AGENT_INFRA_CHANGE",
-                "--approve",
-                "agent-infra:infra-full",
             ),
             0,
         )
@@ -711,71 +638,6 @@ class AgentCtlTests(unittest.TestCase):
         report = ChangeTracker(self.root).inspect()
         self.assertEqual(report["tests"][1]["authority"], "LEGACY_CONTRACT_CONFLICT:R2B4_MINIMAL_LLM_AGENT_INFRA_TEST")
         self.assertEqual(report["tests"][1]["status"], "FAIL")
-
-    def test_replay_diagnosis_indexes_verified_v21_diagnosis(self):
-        current = self.root / "runtime" / "agent_coordination" / "current_change.json"
-        current.unlink()
-        self.assertEqual(
-            self._main(
-                "open",
-                "--task-id",
-                "diagnostic",
-                "--goal",
-                "replay first",
-                "--files",
-                "new_file.py",
-            ),
-            0,
-        )
-        manifest = json.loads(current.read_text(encoding="utf-8"))
-        result_path = self.root / "replayer_data" / "results" / "capture" / "result"
-        result_path.mkdir(parents=True)
-        diagnosis = result_path / "diagnosis.json"
-        evidence = result_path / "evidence.json"
-        integrity = result_path / "integrity.json"
-        diagnosis.write_text('{"status":"MATCH"}\n', encoding="utf-8")
-        evidence.write_text('{"status":"MATCH"}\n', encoding="utf-8")
-        integrity.write_text('{"status":"VALID"}\n', encoding="utf-8")
-        responses = [
-            (
-                {
-                    "capture_id": "capture",
-                    "capture_schema": "R2B4_REPLAYER_CAPTURE_V2_1",
-                    "capture_status": "COMPLETE",
-                    "manifest_integrity": "VALID",
-                    "errors": [],
-                },
-                0,
-            ),
-            (
-                {
-                    "capture_id": "capture",
-                    "result_id": "result",
-                    "status": "MATCH",
-                    "diagnosis_path": str(diagnosis),
-                    "evidence_path": str(evidence),
-                    "integrity_path": str(integrity),
-                },
-                0,
-            ),
-            ({"valid": True, "status": "VALID", "replay_status": "MATCH"}, 0),
-        ]
-
-        with patch("tools.agentctl._run_json_command", side_effect=responses):
-            result = run_replay_diagnosis(
-                self.root,
-                manifest,
-                load_infrastructure(self.root),
-                capture_id="capture",
-                result_id="result",
-                start_monotonic_ns=10,
-                end_monotonic_ns=20,
-                layers=["L8"],
-            )
-
-        self.assertEqual(result["status"], "MATCH")
-        self.assertTrue(result["diagnosis_sha256"])
-        self.assertTrue((self.root / result["path"]).is_file())
 
     def test_supersede_requires_the_workspace_writer_lease(self):
         self.assertEqual(self._main("supersede", "--reason", "replaced"), 2)
