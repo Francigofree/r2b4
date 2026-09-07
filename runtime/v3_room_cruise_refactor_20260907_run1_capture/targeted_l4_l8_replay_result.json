@@ -1,0 +1,279 @@
+{
+  "capture": {
+    "capture_id": "v3-room-cruise-refactor-20260907-run1",
+    "path": "/home/alba/project_r2b4/runtime/v3_room_cruise_refactor_20260907_run1_capture/v3-room-cruise-refactor-20260907-run1.json",
+    "payload_sha256": "15c7f2774735f0b5f8b3b768491aafbd89efddaabf181a4798fc5fba866a2203",
+    "schema": "R2B4_V3_CAPTURE_V1",
+    "sha256": "b76f46491fded7f55c1ea0737afcfc6a43a721208f8275883a27f0e820b6cce0",
+    "status": "PASS",
+    "tick_count": 4
+  },
+  "determinism": {
+    "executed_tick_count": 3,
+    "offline_write_count_first": 3,
+    "offline_write_count_second": 3,
+    "production_layers": "L1-L12",
+    "repeated_trace_match": true,
+    "selected_tick_count": 2
+  },
+  "diagnostics": {
+    "first_divergence": null,
+    "layers": {
+      "L4": {
+        "actual_present_count": 2,
+        "compared_tick_count": 2,
+        "expected_present_count": 2,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L5": {
+        "actual_present_count": 2,
+        "compared_tick_count": 2,
+        "expected_present_count": 2,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L6": {
+        "actual_present_count": 2,
+        "compared_tick_count": 2,
+        "expected_present_count": 2,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L7": {
+        "actual_present_count": 2,
+        "compared_tick_count": 2,
+        "expected_present_count": 2,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      },
+      "L8": {
+        "actual_present_count": 2,
+        "compared_tick_count": 2,
+        "expected_present_count": 2,
+        "mismatch_count": 0,
+        "not_executed_tick_count": 0
+      }
+    }
+  },
+  "execution": {
+    "capture_passed": true,
+    "capture_status": "PASS",
+    "decision_counts": {
+      "ALLOW": 2,
+      "FAULT": 0,
+      "STOP": 0
+    },
+    "terminal_fault_layer": null,
+    "terminal_reason": null,
+    "terminal_safety_decision": "ALLOW",
+    "terminal_tick_id": 2
+  },
+  "first_divergence": null,
+  "generated_at_utc": "2026-09-07T16:33:21Z",
+  "reconstruction_contract": {
+    "configuration": "CAPTURED_ONCE_BY_CONTENT",
+    "external_io": "NONE",
+    "inputs": "CAPTURED_TYPED_TICK_INPUTS",
+    "production": "NATIVE_V3_L1_L12"
+  },
+  "result_sha256": "93e9e9464141997c506b8764a6f66bedceed9addf797922fe6f6bc625df44b3a",
+  "schema": "R2B4_REPLAYER_V3_RESULT_V3",
+  "scope": {
+    "requested": {
+      "end_layer": "L8",
+      "end_monotonic_ns": null,
+      "end_tick_id": 2,
+      "start_layer": "L4",
+      "start_monotonic_ns": null,
+      "start_tick_id": 1
+    },
+    "resolved": {
+      "first_monotonic_ns": 1020000000,
+      "first_tick_id": 1,
+      "last_monotonic_ns": 1040000000,
+      "last_tick_id": 2,
+      "layers": [
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "L8"
+      ],
+      "tick_count": 2
+    },
+    "state_warmup": {
+      "first_tick_id": 0,
+      "last_tick_id": 0,
+      "strategy": "CAPTURE_PREFIX",
+      "tick_count": 1
+    }
+  },
+  "source_first": {
+    "all_capture_baseline_hashes_match": true,
+    "capture_source_manifest_path": "/home/alba/project_r2b4/runtime/v3_room_cruise_refactor_20260907_run1_capture/source_manifest.json",
+    "files": {
+      "STRUKTURALIS_RETEGEK_V3.md": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "9ffe1bf3703e71e91beccdf053cd2fa145a815e5fdfca42d15685749c27bc58a",
+        "sha256": "9ffe1bf3703e71e91beccdf053cd2fa145a815e5fdfca42d15685749c27bc58a"
+      },
+      "conf/fizika.json": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "b1ced46d944b89d1cc868fd057791c9f0fe84891077119be9b8fee8d0cbee71a",
+        "sha256": "b1ced46d944b89d1cc868fd057791c9f0fe84891077119be9b8fee8d0cbee71a"
+      },
+      "conf/hardver.json": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "87afdab8896698ee13869ee8f5576da9aa44408ef4a0d07c719d5dadeabf7da0",
+        "sha256": "87afdab8896698ee13869ee8f5576da9aa44408ef4a0d07c719d5dadeabf7da0"
+      },
+      "conf/speed_map.json": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "986eb56fc42d1906e8d6c63b1bbb567992732684085c8894ef6a2ba18fc13b25",
+        "sha256": "986eb56fc42d1906e8d6c63b1bbb567992732684085c8894ef6a2ba18fc13b25"
+      },
+      "conf/vezerles.json": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "127770fcd976dd0dc42701c48f6ab1c64e06b726b433d0199cba78b28bbd9c84",
+        "sha256": "127770fcd976dd0dc42701c48f6ab1c64e06b726b433d0199cba78b28bbd9c84"
+      },
+      "v3/adapters/bounded_command.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "5b45043b6b97a78a2f56cb5d003ed9197809c9ca63c24cf4397b7ba3e5aa5161",
+        "sha256": "5b45043b6b97a78a2f56cb5d003ed9197809c9ca63c24cf4397b7ba3e5aa5161"
+      },
+      "v3/adapters/latest_lidar.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "a1b40fd693d81e81859cae2ef5fecc92059c25fdf1cf65db8f836505791c3ac3",
+        "sha256": "a1b40fd693d81e81859cae2ef5fecc92059c25fdf1cf65db8f836505791c3ac3"
+      },
+      "v3/adapters/live_lidar.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "ca3aed28c31b31228e38abb4cdd84765f920cbd45b8555370762f81fd59cd8fb",
+        "sha256": "ca3aed28c31b31228e38abb4cdd84765f920cbd45b8555370762f81fd59cd8fb"
+      },
+      "v3/adapters/native_lidar_port.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "2be315488800867f987aa6c580451a55f41822eed0ea93e8bcf0c29056b5fc7a",
+        "sha256": "2be315488800867f987aa6c580451a55f41822eed0ea93e8bcf0c29056b5fc7a"
+      },
+      "v3/adapters/resident_command.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "cefaede6f32900fc0f4464a0212971fd1cf428185350ef111768de343a653bf7",
+        "sha256": "cefaede6f32900fc0f4464a0212971fd1cf428185350ef111768de343a653bf7"
+      },
+      "v3/composition/bounded_live_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "08e936fa2e5dcf7fda7aeba58904950277fb6aa613d288448974c113fe763d98",
+        "sha256": "08e936fa2e5dcf7fda7aeba58904950277fb6aa613d288448974c113fe763d98"
+      },
+      "v3/composition/full_fake.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "6feb60def650734553bea081b435c8dcaceb2f12d634ee5d52e9c8c571837daf",
+        "sha256": "6feb60def650734553bea081b435c8dcaceb2f12d634ee5d52e9c8c571837daf"
+      },
+      "v3/composition/mission_navigation.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "d2664873c7729c5fb060e66b33011d0489f935b63047cfd3973fec4931e6e53c",
+        "sha256": "d2664873c7729c5fb060e66b33011d0489f935b63047cfd3973fec4931e6e53c"
+      },
+      "v3/composition/native_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "4efb4daf80403cdac38cc87301da1dc2f8cd197bb1f069da44936a1f85acbcf4",
+        "sha256": "4efb4daf80403cdac38cc87301da1dc2f8cd197bb1f069da44936a1f85acbcf4"
+      },
+      "v3/contracts/__init__.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "cf53f233c6e7ab4ad7711cdb961eb379f0d4717d4433b2f51dfab9521a54bea4",
+        "sha256": "cf53f233c6e7ab4ad7711cdb961eb379f0d4717d4433b2f51dfab9521a54bea4"
+      },
+      "v3/contracts/base.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "346cbf01a1a54fc96ba53d07aa6e8486fae8693ef88e0e1fb3fbca0493584a4f",
+        "sha256": "346cbf01a1a54fc96ba53d07aa6e8486fae8693ef88e0e1fb3fbca0493584a4f"
+      },
+      "v3/contracts/messages.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "8e43f1646fc62c6965b7357251c88c31574eafc1c5abca5a20341f1f28163c25",
+        "sha256": "8e43f1646fc62c6965b7357251c88c31574eafc1c5abca5a20341f1f28163c25"
+      },
+      "v3/engine.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "f7fe71c498b1b2f5bd456896aa4f4f263b15a2195351d97dffb4c73ca98895b0",
+        "sha256": "f7fe71c498b1b2f5bd456896aa4f4f263b15a2195351d97dffb4c73ca98895b0"
+      },
+      "v3/layers/l10_chassis_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "9e4938be7bf2ce8a2ef6d3925cd7c62e768396c21c7838625a168e57f1b99062",
+        "sha256": "9e4938be7bf2ce8a2ef6d3925cd7c62e768396c21c7838625a168e57f1b99062"
+      },
+      "v3/layers/l11_actuator_control.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8",
+        "sha256": "132b66f0ba5bd0878b29b9ca699b3b2e3d66ec1e519fe270422dd81fd1b419a8"
+      },
+      "v3/layers/l12_safety_final.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "75e2ad7c4999f6763aceb6d6ae4d47a30589301ac4aadd4ca39f86216656b18d",
+        "sha256": "75e2ad7c4999f6763aceb6d6ae4d47a30589301ac4aadd4ca39f86216656b18d"
+      },
+      "v3/layers/l4_world_model.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "4e78b46f6475f666e6c51acadb21cc41143109e809e81599bbda066348b116b4",
+        "sha256": "4e78b46f6475f666e6c51acadb21cc41143109e809e81599bbda066348b116b4"
+      },
+      "v3/layers/l5_command_mission.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "b1761037589d75ad03c461195f854ec60048a4620bcbd94a13bb2da87bf62920",
+        "sha256": "b1761037589d75ad03c461195f854ec60048a4620bcbd94a13bb2da87bf62920"
+      },
+      "v3/layers/l6_navigation.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "9ace6c5a7b549c9181110f254ce518e2cf1be58de63bb79d8d988445e3e176ca",
+        "sha256": "9ace6c5a7b549c9181110f254ce518e2cf1be58de63bb79d8d988445e3e176ca"
+      },
+      "v3/layers/l7_motion_selection.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "8ceb2eb10257b515c2b6e31a2d16d98df676e2fc31a0448e8cf12bb44946ee1d",
+        "sha256": "8ceb2eb10257b515c2b6e31a2d16d98df676e2fc31a0448e8cf12bb44946ee1d"
+      },
+      "v3/layers/l8_motion_realization.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "1470ef70797f9a28f8d20f686df60a91b8dd450063c255cbed16b7682d1ef502",
+        "sha256": "1470ef70797f9a28f8d20f686df60a91b8dd450063c255cbed16b7682d1ef502"
+      },
+      "v3/layers/l9_operational_constraints.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "08a431e8cd4699b61af4bba7441a2dd5fd59b19512f0f264185f4a2ff4305e59",
+        "sha256": "08a431e8cd4699b61af4bba7441a2dd5fd59b19512f0f264185f4a2ff4305e59"
+      },
+      "v3/replay.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "48276aacf29b4cab9f063f5418c80b5a50a57f55dd4dd30852441980abf7f358",
+        "sha256": "48276aacf29b4cab9f063f5418c80b5a50a57f55dd4dd30852441980abf7f358"
+      },
+      "v3/test_hub.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "41eedcb983c8bbabc93203f6ad6a9651b917634a9df71c677db21361ddcea2f3",
+        "sha256": "41eedcb983c8bbabc93203f6ad6a9651b917634a9df71c677db21361ddcea2f3"
+      },
+      "v3_bounded_config.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "989c0617ea940a15033509f2e25d4877226b0fb73affd3b83a6e951d5cf2148a",
+        "sha256": "989c0617ea940a15033509f2e25d4877226b0fb73affd3b83a6e951d5cf2148a"
+      },
+      "v3_process_runtime.py": {
+        "capture_baseline_match": true,
+        "capture_baseline_sha256": "2806b654c120d51db814ec43a4da80f3cd10bb40550812b36d525ea8dca9e6f0",
+        "sha256": "2806b654c120d51db814ec43a4da80f3cd10bb40550812b36d525ea8dca9e6f0"
+      }
+    },
+    "source_order": [
+      "SOURCE",
+      "ACTIVE_CONFIG",
+      "CAPTURE"
+    ]
+  },
+  "status": "MATCH"
+}
