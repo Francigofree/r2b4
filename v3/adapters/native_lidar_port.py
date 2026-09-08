@@ -274,10 +274,9 @@ class NativeMatcherResult:
     summary: Mapping[str, object]
 
 
-def _sector_summary(scan: RplidarScan, danger_zone_m: float) -> Mapping[str, object]:
+def _sector_summary(scan: RplidarScan) -> Mapping[str, object]:
     sectors: dict[str, list[RplidarPoint]] = {
         "front": [],
-        "front_narrow": [],
         "rear": [],
         "left": [],
         "right": [],
@@ -286,8 +285,6 @@ def _sector_summary(scan: RplidarScan, danger_zone_m: float) -> Mapping[str, obj
         angle = point.angle_deg
         if angle < 45.0 or angle > 315.0:
             sectors["front"].append(point)
-        if angle < 25.0 or angle > 335.0:
-            sectors["front_narrow"].append(point)
         if 135.0 < angle < 225.0:
             sectors["rear"].append(point)
         if 225.0 <= angle <= 315.0:
@@ -299,24 +296,11 @@ def _sector_summary(scan: RplidarScan, danger_zone_m: float) -> Mapping[str, obj
         values = sectors[name]
         return min((item.distance_m for item in values), default=0.0)
 
-    def average(name: str) -> float:
-        values = sectors[name]
-        return (
-            sum(item.distance_m for item in values) / len(values)
-            if values
-            else 0.0
-        )
-
     front = minimum("front")
     rear = minimum("rear")
     left = minimum("left")
     right = minimum("right")
     global_minimum = min((point.distance_m for point in scan.points), default=0.0)
-    front_point = min(
-        sectors["front"],
-        key=lambda point: point.distance_m,
-        default=None,
-    )
     return _freeze(
         {
             "safety_contract": "R2B4_V3_LIDAR_SECTOR_CLEARANCE_V1",
@@ -337,25 +321,6 @@ def _sector_summary(scan: RplidarScan, danger_zone_m: float) -> Mapping[str, obj
             "rear_observation_count": len(sectors["rear"]),
             "left_observation_count": len(sectors["left"]),
             "right_observation_count": len(sectors["right"]),
-            # Keep the existing passive Test Hub capture surface readable.
-            "min_dist": front,
-            "min_dist_narrow": minimum("front_narrow"),
-            "min_back": rear,
-            "avg_left": average("left"),
-            "avg_right": average("right"),
-            "blocked_front": not sectors["front"] or front < danger_zone_m,
-            "blocked_back": not sectors["rear"] or rear < danger_zone_m,
-            "raw_safety_min_dist_point": (
-                {
-                    "angle_deg": front_point.angle_deg,
-                    "distance_m": front_point.distance_m,
-                    "distance_mm": front_point.distance_m * 1_000.0,
-                    "quality": front_point.quality,
-                    "raw_scan_id": scan.revision,
-                }
-                if front_point is not None
-                else {}
-            ),
         }
     )  # type: ignore[return-value]
 
@@ -500,11 +465,6 @@ class NativeLidarPort:
             return None
         return replace(snapshot, health=self._physical_health())
 
-    def get_snapshot(self) -> NativeRawLidarSnapshot | None:
-        """Passive compatibility name used by the external Test Hub capture."""
-
-        return self.get_raw_scan_snapshot()
-
     def get_matcher_result(self) -> NativeMatcherResult | None:
         with self._lock:
             return self._matcher_result
@@ -589,7 +549,7 @@ class NativeLidarPort:
     def _poll_once(self) -> None:
         scan = self._driver.get_latest_scan()
         if scan is not None and scan.revision > self._last_queued_scan_revision:
-            summary = _sector_summary(scan, self._config.danger_zone_m)
+            summary = _sector_summary(scan)
             snapshot = NativeRawLidarSnapshot(
                 raw_scan_id=scan.revision,
                 raw_scan_timestamp=scan.captured_monotonic_ns / 1_000_000_000.0,

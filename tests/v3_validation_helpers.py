@@ -22,6 +22,7 @@ from v3.engine import TickInputs
 from v3.execution import ExecutionBoundary, IterableInputSource
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
+from v3.layers.l12_safety_final import LidarSafetyConfig
 from v3.layers.l3_state_estimation import NativeStateEstimatorConfig
 
 
@@ -52,9 +53,11 @@ def control_config() -> NativeControlCompositionConfig:
     documents = configuration_documents()
     physics = documents["physics"]
     speed_map = documents["speed_map"]
+    hardware = documents["hardware"]
     control = documents["control"]
     assert isinstance(physics, dict)
     assert isinstance(speed_map, dict)
+    assert isinstance(hardware, dict)
     assert isinstance(control, dict)
     navigation = v3_navigation_config_from_mapping(control)
     track_width = float(physics["nyomtav_szelesseg_m"])
@@ -65,6 +68,10 @@ def control_config() -> NativeControlCompositionConfig:
             track_width_m=track_width,
         ),
         chassis_control=ChassisControlConfig(track_width),
+        lidar_safety=LidarSafetyConfig(
+            "RPLIDAR_C1",
+            float(hardware["lidar"]["biztonsagi_zona_m"]),
+        ),
         world_model=navigation.world_model,
         navigation=navigation.navigation,
     )
@@ -99,16 +106,33 @@ def tick_inputs(count: int = 5) -> tuple[TickInputs, ...]:
                 ),
             ),
             DeviceSample(
-                "LIDAR_LOCALIZATION",
+                "RPLIDAR_C1",
                 "lidar_health",
                 tick_id,
                 context.monotonic_ns,
                 (DataField("age_ns", 0), DataField("confidence", 1.0)),
             ),
+            DeviceSample(
+                "RPLIDAR_C1",
+                "lidar_safety_clearance",
+                tick_id + 1,
+                context.monotonic_ns,
+                (
+                    DataField("age_ns", 0),
+                    DataField("front_clearance_m", 1.0),
+                    DataField("front_observation_count", 5),
+                    DataField("rear_clearance_m", 1.0),
+                    DataField("rear_observation_count", 5),
+                    DataField("left_clearance_m", 1.0),
+                    DataField("left_observation_count", 5),
+                    DataField("right_clearance_m", 1.0),
+                    DataField("right_observation_count", 5),
+                ),
+            ),
         )
         health = tuple(
             DeviceHealth(device_id, DeviceHealthState.OK)
-            for device_id in ("WHEEL_ENCODERS", "BNO055_IMU", "LIDAR_LOCALIZATION")
+            for device_id in ("WHEEL_ENCODERS", "BNO055_IMU", "RPLIDAR_C1")
         )
         command = CommandRequest(
             context,
@@ -157,7 +181,7 @@ def create_explore_capture(tmp_path: Path, *, capture_id: str = "explore-v3") ->
         context = base.context
         tick_id = context.tick_id
         local = DeviceSample(
-            "LIDAR_LOCALIZATION",
+            "RPLIDAR_C1",
             "lidar_local_points",
             tick_id,
             context.monotonic_ns,

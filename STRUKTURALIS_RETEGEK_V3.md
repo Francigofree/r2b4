@@ -46,9 +46,8 @@ kaput, amelyre az aktuális funkciónak nincs szüksége.
 * Egy fizikai szenzor több, egymástól független szemantikai adatot
   szolgáltathat. Egy felhasználási ág hibája nem teheti automatikusan
   érvénytelenné a többi, önmagában érvényes ágat.
-* Legacy komponens csak tiszta donor vagy explicit, vékony compatibility edge
-  lehet; legacy state- vagy control-authority és mutable objektumreferencia nem
-  kerülhet V3-ba.
+* A V3 production- és validációs út nem függ legacy source-tól, API-tól,
+  runtime-tól vagy compatibility rétegtől.
 * Nincs alternatív normál motorút, safety-bypass vagy tool-specifikus control
   authority.
 
@@ -394,21 +393,11 @@ zárhatja.
 A raw scan capture/replay célra külön rögzíthető, ha konkrét diagnosztikai
 értéke van.
 
-### 8.5 Natív ownership és legacy kivágás
+### 8.5 Natív ownership
 
-A production V3 LiDAR adatút nem függhet legacy LiDAR driver-, service-,
-matcher-process-, shared-state- vagy runtime-authoritytól.
-
-Legacy LiDAR kód csak:
-
-* algoritmikus referencia;
-* karakterizációs donor;
-* vagy explicit, izolált átmeneti compatibility edge
-
-lehet.
-
-Az átmeneti compatibility edge nem válhat a V3 architecture authority részévé,
-és a natív adatút elkészülésével eltávolíthatónak kell lennie.
+A production V3 LiDAR adatút kizárólag natív V3 driver-, port-, matcher- és
+typed-contract elemekből állhat. Nem függhet külső shared-state- vagy más
+runtime-authoritytól.
 
 ### 8.6 Aktív natív V3 LiDAR-zárás
 
@@ -445,14 +434,9 @@ matcher-processzt, és nem vesz át legacy runtime/shared-state authorityt.
 
 A V3 capture a teljes lezárt `TickInputs` contractot generikusan és veszteség
 nélkül rögzíti, a V3 Replayer pedig ugyanazt a production V3 utat futtatja
-vissza. Ezért az új mintákhoz nem szükséges tesztprofil-specifikus replay schema
-vagy alternatív diagnosztikai út. A korábbi capture-ek régi
-`lidar_health` alakja továbbra is determinisztikusan olvasható. Natív safety
-minta jelenlétében a Replayer a capture device identityjét és a source-first
-ellenőrzött aktív `hardver.json` clearance-küszöbét zárja vissza az L12-be; ezt
-a replay result `reconstruction_contract.lidar_safety` mezője expliciten
-diagnosztizálja. Safety mintát még nem tartalmazó régi capture esetén ez az új
-kapu compatibility módban inaktív marad.
+vissza. A replay egyetlen natív capture sémát fogad, és kötelezően visszazárja a
+capture natív `lidar_safety_clearance` device identityjét az L12 safety gate-be.
+Tesztprofil-specifikus replay schema vagy alternatív diagnosztikai út nincs.
 
 ## 9. Motion és command szabadság
 
@@ -538,14 +522,9 @@ A V3 Test Hub:
   infrastruktúrát;
 * nem lehet production V3 runtime dependency.
 
-A production V3 runtime nem függhet legacy Test Hubtól. Átmeneti külső wrapper
-csak a canonical V3 runtime meghívására használható; V3-specifikus runtime-,
-motion-, safety- vagy replay-authority nem maradhat benne hosszú távon.
-
 A live adapter, az általános capture sink, az offline replay mag és a Test Hub
-evidence-csomag külön modul és külön authority. A Replayer V2.1 és a legacy
-Test Hub csak történeti/compatibility donor lehet; aktív V3 diagnosztikai vagy
-evidence-authority nem lehet.
+evidence-csomag külön modul és külön authority. Mindegyik kizárólag natív V3
+contractot használhat.
 
 Élő mozgás csak explicit felhasználói keret, friss preflight, jóváhagyott Test
 Hub út és igazolt végső biztonságos motorállapot mellett indulhat.
@@ -566,30 +545,14 @@ szükséges.
 A runtime headless. Külső I/O kizárólag edge/device adapterben történik, és az
 adapter nem válhat state- vagy control-authorityvá.
 
-## 12. Legacy donor szabály
+## 12. V3-only source szabály
 
-Legacy import csak explicit donor/compatibility határon és pontos allowlisttel
-engedélyezett.
+A V3 modulok csak a V3 csomagot, a standard libraryt és az explicit aktív
+numerikus függőségeket importálhatják. Legacy source-import, compatibility
+adapter, donor-allowlist, shared state és alternatív runtime authority tilos.
 
-Donor akkor használható, ha:
-
-1. nincs `ctrl`, global state, GUI vagy legacy authority függése;
-2. idejét, konfigurációját és I/O-ját argumentumból/portból kapja;
-3. offline fake-kel determinisztikusan fut;
-4. bemenete és kimenete V3 contracttá alakítható legacy referencia nélkül;
-5. célzott karakterizációs teszt fedi a megtartani kívánt algoritmust;
-6. nem nyit motor- vagy safety-bypass útvonalat.
-
-Ha ehhez nagy adapter vagy legacy orchestration kellene, csak a tiszta
-algoritmikus mag emelhető át.
-
-Felső szintű legacy komponens alapértelmezés szerint nem portolandó. GUI, CLI,
-Test Hub, legacy Replayer, state machine, Core/Task/AI orchestration,
-Follow/Search orchestration és legacy command/status infrastruktúra csak egy
-konkrét következő V3 funkció közvetlen igényére kap megfelelő V3 elemet.
-
-Az új elem minimális native V3 implementáció, amely a V3 contractokból indul
-ki. Legacy API-, viselkedés- vagy struktúraparitás nem követelmény.
+Új capability minimális natív V3 implementációként, a typed V3 contractokból
+indulva készülhet.
 
 ## 13. Replay és hibakeresés
 
@@ -653,10 +616,10 @@ A trace/log/evidence hibája soha nem módosíthat control outputot.
 
 ## 14. Kötelező, célzott tesztkapuk
 
-Egy V3 source candidate minimum tesztjei:
+Egy V3 source minimum tesztjei:
 
-* import guard: nincs cross-layer implementation import, legacy shared-state,
-  GUI/tool authority vagy donor-allowlist bypass;
+* import guard: nincs cross-layer implementation import, külső shared-state,
+  GUI/tool authority vagy V3-on kívüli project-import;
 * contractteszt: immutable típusok és a közvetlen domain/safety invariánsok;
 * TickEngine teszt: lezárt snapshot, rögzített sorrend, rétegenként legfeljebb
   egy értékelés és egyetlen L12 final döntés;
@@ -664,7 +627,7 @@ Egy V3 source candidate minimum tesztjei:
   ténylegesen kritikus input és writer failure;
 * replayteszt: azonos inputra azonos trace, módosított layer-outputnál helyes
   első divergáló réteg;
-* donoronként külön offline karakterizációs teszt;
+* natív algoritmusonként célzott offline contract/karakterizációs teszt;
 * többcélú szenzorág esetén annak bizonyítása, hogy egy független magasabb
   szintű ág failure-je nem teszi érvénytelenné az önmagában használható safety
   ágat;
@@ -714,16 +677,5 @@ Meglévő safety-, PASS- vagy quality gate-et nem szabad pusztán azért lazíta
 hogy egy teszt átmenjen. Ha egy gate tévesen több független capabilityt köt
 össze, a coupling gyökerét kell kijavítani.
 
-A pillanatnyi implementációs állapotot nem ez a dokumentum tartja nyilván.
-Ennek authorityja a canonical source, az aktív config, a tesztek és a
-run-bound evidence.
-
-Korábbi részletes slice-leírások, promotion-történet és történeti evidence
-megőrizhető külön, explicit **NON-NORMATIVE** történeti dokumentumban, például:
-
-```text
-docs/V3_IMPLEMENTATION_HISTORY.md
-```
-
-A történeti dokumentum nem része a normál `robot_v3` source-route authoritynak,
-és nem írhatja felül ezt a contractot vagy a canonical source-ot.
+A pillanatnyi implementációs állapot authorityja a canonical source, az aktív
+config, a tesztek és a run-bound evidence.

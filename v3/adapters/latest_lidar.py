@@ -142,7 +142,12 @@ class NativeLatestLidarBackend:
     ) -> None:
         if not isinstance(config, LatestLidarBackendConfig):
             raise TypeError("config must be LatestLidarBackendConfig")
-        for method_name in ("get_matcher_result", "get_runtime_status", "stop"):
+        for method_name in (
+            "get_matcher_result",
+            "get_runtime_status",
+            "get_raw_scan_snapshot",
+            "stop",
+        ):
             if not callable(getattr(port, method_name, None)):
                 raise TypeError(f"port must provide a callable {method_name} method")
         self._port = port
@@ -170,10 +175,7 @@ class NativeLatestLidarBackend:
         context: TickContext,
         status: Mapping[str, object],
     ) -> LidarScanReading:
-        reader = getattr(self._port, "get_raw_scan_snapshot", None)
-        if not callable(reader):
-            reader = getattr(self._port, "get_snapshot", None)
-        snapshot = reader() if callable(reader) else None
+        snapshot = self._port.get_raw_scan_snapshot()
         physical_runtime_valid = (
             type(status.get("running")) is bool
             and status.get("running") is True
@@ -217,19 +219,16 @@ class NativeLatestLidarBackend:
         if not isinstance(summary, Mapping):
             raise TypeError("raw scan summary must be a mapping")
 
-        def clearance(primary: str, legacy: str) -> float:
-            value = _finite(summary.get(primary, summary.get(legacy)), primary)
+        def clearance(name: str) -> float:
+            value = _finite(summary.get(name), name)
             if value < 0.0:
-                raise ValueError(f"{primary} must be non-negative")
+                raise ValueError(f"{name} must be non-negative")
             return value
 
-        def count(name: str, fallback: int = 0) -> int:
-            return _nonnegative_int(summary.get(name, fallback), name)
+        def count(name: str) -> int:
+            return _nonnegative_int(summary.get(name), name)
 
-        point_count = count(
-            "raw_safety_valid_point_count",
-            len(tuple(getattr(snapshot, "raw_scan", ()) or ())),
-        )
+        point_count = count("raw_safety_valid_point_count")
         timing_valid = bool(
             physical_runtime_valid
             and measurement_age_ns >= -self._config.maximum_future_skew_ns
@@ -264,26 +263,14 @@ class NativeLatestLidarBackend:
             stale=stale,
             timing_valid=timing_valid,
             point_count=point_count,
-            front_clearance_m=clearance("front_clearance_m", "min_dist"),
-            rear_clearance_m=clearance("rear_clearance_m", "min_back"),
-            left_clearance_m=clearance("left_clearance_m", "avg_left"),
-            right_clearance_m=clearance("right_clearance_m", "avg_right"),
-            front_observation_count=count(
-                "front_observation_count",
-                point_count if summary.get("raw_safety_min_dist_point") else 0,
-            ),
-            rear_observation_count=count(
-                "rear_observation_count",
-                point_count if clearance("rear_clearance_m", "min_back") > 0.0 else 0,
-            ),
-            left_observation_count=count(
-                "left_observation_count",
-                point_count if clearance("left_clearance_m", "avg_left") > 0.0 else 0,
-            ),
-            right_observation_count=count(
-                "right_observation_count",
-                point_count if clearance("right_clearance_m", "avg_right") > 0.0 else 0,
-            ),
+            front_clearance_m=clearance("front_clearance_m"),
+            rear_clearance_m=clearance("rear_clearance_m"),
+            left_clearance_m=clearance("left_clearance_m"),
+            right_clearance_m=clearance("right_clearance_m"),
+            front_observation_count=count("front_observation_count"),
+            rear_observation_count=count("rear_observation_count"),
+            left_observation_count=count("left_observation_count"),
+            right_observation_count=count("right_observation_count"),
             local_points=local_points,
         )
 

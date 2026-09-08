@@ -11,7 +11,7 @@ import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from .capture import LAYER_ORDER, V3_CAPTURE_SCHEMA
+from .capture import LAYER_ORDER
 from .replay import (
     ReplaySelection,
     V3_REPLAY_STATUS_MATCH,
@@ -36,9 +36,6 @@ def validate_run(
     output_dir: str | Path,
     *,
     selection: ReplaySelection | None = None,
-    physics_config_path: str | Path = "conf/fizika.json",
-    speed_map_config_path: str | Path = "conf/speed_map.json",
-    hardware_config_path: str | Path = "conf/hardver.json",
     project_root: str | Path | None = None,
     capture_source_manifest_path: str | Path | None = None,
 ) -> dict[str, object]:
@@ -55,9 +52,6 @@ def validate_run(
     replay = replay_capture(
         capture_path,
         selection=selection,
-        physics_config_path=physics_config_path,
-        speed_map_config_path=speed_map_config_path,
-        hardware_config_path=hardware_config_path,
         project_root=project_root,
         capture_source_manifest_path=capture_source_manifest_path,
     )
@@ -175,13 +169,7 @@ def _diagnosis(
         if isinstance(raw_diagnostics, Mapping)
         else None
     )
-    selected_layers = set(
-        replay.get("scope", {}).get("resolved", {}).get("layers", LAYER_ORDER)
-        if isinstance(replay.get("scope"), Mapping)
-        else LAYER_ORDER
-    )
     layers: dict[str, object] = {}
-    general_capture = inspected.get("schema") == V3_CAPTURE_SCHEMA
     for layer in LAYER_ORDER:
         if isinstance(raw_layers, Mapping) and isinstance(raw_layers.get(layer), Mapping):
             layers[layer] = {
@@ -189,24 +177,12 @@ def _diagnosis(
                 "selected": True,
                 "authority": "REPLAYER_V3",
             }
-        elif general_capture:
+        else:
             layers[layer] = {
                 "selected": False,
                 "compared_tick_count": 0,
                 "mismatch_count": 0,
                 "authority": "OUT_OF_SCOPE",
-            }
-        else:
-            layers[layer] = {
-                "selected": layer in selected_layers,
-                "compared_tick_count": None,
-                "mismatch_count": (
-                    1
-                    if isinstance(replay.get("first_divergence"), Mapping)
-                    and replay["first_divergence"].get("layer") == layer
-                    else 0
-                ),
-                "authority": "LEGACY_COMPATIBILITY" if layer in selected_layers else "OUT_OF_SCOPE",
             }
     source_first = replay.get("source_first")
     source_manifest_present = bool(
@@ -303,9 +279,6 @@ def _parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--output-dir", required=True)
     _add_selection_arguments(validate_parser)
     for command_parser in (replay_parser, validate_parser):
-        command_parser.add_argument("--physics-config", default="conf/fizika.json")
-        command_parser.add_argument("--speed-map-config", default="conf/speed_map.json")
-        command_parser.add_argument("--hardware-config", default="conf/hardver.json")
         command_parser.add_argument("--project-root", default=".")
         command_parser.add_argument("--capture-source-manifest")
     verify_parser = commands.add_parser("verify-result")
@@ -328,9 +301,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = replay_capture(
                 args.capture_path,
                 selection=_selection(args),
-                physics_config_path=args.physics_config,
-                speed_map_config_path=args.speed_map_config,
-                hardware_config_path=args.hardware_config,
                 project_root=args.project_root,
                 capture_source_manifest_path=args.capture_source_manifest,
             )
@@ -347,9 +317,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.capture_path,
                 args.output_dir,
                 selection=_selection(args),
-                physics_config_path=args.physics_config,
-                speed_map_config_path=args.speed_map_config,
-                hardware_config_path=args.hardware_config,
                 project_root=args.project_root,
                 capture_source_manifest_path=args.capture_source_manifest,
             )
