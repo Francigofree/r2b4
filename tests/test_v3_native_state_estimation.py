@@ -3,7 +3,6 @@ import math
 
 import pytest
 
-from middleware.ekf import ExtendedKalmanFilter
 from v3.contracts import AdmittedFrame, DataField, Observation, TickContext
 from v3.layers.l3_state_estimation import (
     NativeStateEstimator,
@@ -101,7 +100,7 @@ def _config(**changes) -> NativeStateEstimatorConfig:
 
 
 @pytest.mark.parametrize("initial_yaw", (0.0, math.pi / 2.0))
-def test_native_predict_and_encoder_core_matches_legacy_linear_sanity(initial_yaw):
+def test_native_predict_and_encoder_core_matches_linear_motion_contract(initial_yaw):
     native = NativeStateEstimator(_config())
     native_estimate = None
     for tick_id in range(251):
@@ -114,17 +113,8 @@ def test_native_predict_and_encoder_core_matches_legacy_linear_sanity(initial_ya
             )
         )
 
-    legacy = ExtendedKalmanFilter(wheel_base=0.3557, config={})
-    legacy.reset(theta=initial_yaw)
-    for _ in range(250):
-        legacy.predict(0.0, 0.0, 0.02)
-        legacy.update_encoders(0.2, 0.2, 0.02, theta_enc_rad=initial_yaw)
-    legacy_state = legacy.get_state()
-
     assert native_estimate is not None
-    assert native_estimate.x_m == pytest.approx(legacy_state["x"], abs=0.02)
-    assert native_estimate.y_m == pytest.approx(legacy_state["y"], abs=0.02)
-    assert native_estimate.yaw_rad == pytest.approx(legacy_state["theta"], abs=0.01)
+    assert native_estimate.yaw_rad == pytest.approx(initial_yaw, abs=0.01)
     if initial_yaw == 0.0:
         assert native_estimate.x_m == pytest.approx(1.0, abs=0.02)
         assert abs(native_estimate.y_m) < 0.01
@@ -145,7 +135,7 @@ def test_native_heading_nis_gate_rejects_an_extreme_wrapped_outlier():
     assert estimate.x_m > 0.0
 
 
-def test_native_lidar_pose_update_matches_legacy_three_axis_core():
+def test_native_lidar_pose_update_has_stable_three_axis_characterization():
     native = NativeStateEstimator(_config())
     native_estimate = native(
         _frame(
@@ -157,26 +147,13 @@ def test_native_lidar_pose_update_matches_legacy_three_axis_core():
         )
     )
 
-    legacy = ExtendedKalmanFilter(
-        wheel_base=0.3557,
-        config={
-            "R_lidar": [0.08, 0.08, 0.03],
-            "innovation_gating": {"enabled": True, "lidar_nis_max": 35.0},
-        },
+    assert native_estimate.x_m == pytest.approx(0.027777777777777776)
+    assert native_estimate.y_m == pytest.approx(-0.011111111111111112)
+    assert native_estimate.yaw_rad == pytest.approx(0.05)
+    assert native_estimate.covariance_5x5[0] == pytest.approx(
+        0.008888888888888889
     )
-    legacy_result = legacy.update_lidar(
-        0.25,
-        -0.10,
-        0.20,
-        confidence=1.0,
-        r_scale=1.0,
-    )
-    legacy_state = legacy.get_state()
-
-    assert legacy_result["applied"] is True
-    assert native_estimate.x_m == pytest.approx(legacy_state["x"])
-    assert native_estimate.y_m == pytest.approx(legacy_state["y"])
-    assert native_estimate.yaw_rad == pytest.approx(legacy_state["theta"])
+    assert native_estimate.covariance_5x5[12] == pytest.approx(0.0075)
 
 
 def test_native_lidar_joint_nis_gate_rejects_extreme_position_outlier():

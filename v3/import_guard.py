@@ -8,48 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ALWAYS_FORBIDDEN_ROOTS = frozenset(
-    {
-        "ai",
-        "config_manager",
-        "cont",
-        "control_loop",
-        "fastgui",
-        "robot_state",
-        "state",
-        "tests",
-        "tools",
-    }
-)
-
-ALWAYS_FORBIDDEN_MODULES = frozenset(
-    {
-        "controller.commands",
-        "controller.components",
-        "controller.routines",
-        "controller.status",
-    }
-)
-
-# Legacy roots have no active V3 donor. The empty allowlist remains explicit so
-# any future exception would require a machine-reviewed source change.
-LEGACY_PROJECT_ROOTS = frozenset(
-    {
-        "controller",
-        "core",
-        "driver",
-        "middleware",
-        "motion_executor",
-        "safety",
-        "sensors",
-        "startup",
-    }
-)
-
-LEGACY_DONOR_ALLOWLIST: frozenset[str] = frozenset()
 APPROVED_THIRD_PARTY_ROOTS: frozenset[str] = frozenset({"numpy", "scipy"})
 STDLIB_ROOTS = frozenset(sys.stdlib_module_names) | frozenset({"__future__"})
-DONOR_ADAPTER_PREFIX = "v3.adapters.legacy_donors"
 LAYER_PREFIX = "v3.layers."
 
 
@@ -106,7 +66,6 @@ def _check_import(
     line: int,
     importer: str,
     imported: str,
-    donor_allowlist: frozenset[str],
     approved_third_party: frozenset[str],
 ) -> list[ImportViolation]:
     if not imported:
@@ -115,19 +74,6 @@ def _check_import(
         ]
     root = imported.split(".", 1)[0]
     violations: list[ImportViolation] = []
-    if root in ALWAYS_FORBIDDEN_ROOTS or any(
-        _module_matches(imported, item) for item in ALWAYS_FORBIDDEN_MODULES
-    ):
-        violations.append(
-            ImportViolation(
-                path,
-                line,
-                "FORBIDDEN_IMPORT",
-                imported,
-                "V3 production source cannot depend on legacy authority, GUI, tool, or test roots",
-            )
-        )
-        return violations
     if root == "importlib":
         violations.append(
             ImportViolation(
@@ -139,22 +85,6 @@ def _check_import(
             )
         )
         return violations
-    if root in LEGACY_PROJECT_ROOTS:
-        in_donor_adapter = _module_matches(importer, DONOR_ADAPTER_PREFIX)
-        allowlisted = any(_module_matches(imported, item) for item in donor_allowlist)
-        if not in_donor_adapter:
-            code = "LEGACY_IMPORT_OUTSIDE_DONOR_ADAPTER"
-            detail = "legacy project imports are only legal inside the donor adapter namespace"
-        elif not allowlisted:
-            code = "DONOR_IMPORT_NOT_ALLOWLISTED"
-            detail = "legacy donor module requires an explicit machine-reviewed allowlist entry"
-        else:
-            code = ""
-            detail = ""
-        if code:
-            violations.append(ImportViolation(path, line, code, imported, detail))
-        return violations
-
     source_layer = _source_layer(importer)
     target_layer = _target_layer(imported)
     if source_layer and target_layer and source_layer != target_layer:
@@ -230,9 +160,9 @@ def _check_import(
             ImportViolation(
                 path,
                 line,
-                "THIRD_PARTY_IMPORT_NOT_ALLOWLISTED",
+                "PROJECT_OR_THIRD_PARTY_IMPORT_NOT_ALLOWED",
                 imported,
-                "non-stdlib imports require an explicit deterministic dependency allowlist entry",
+                "V3 source may import only V3, the standard library, or an approved deterministic dependency",
             )
         )
     return violations
@@ -241,7 +171,6 @@ def _check_import(
 def validate_v3_imports(
     project_root: Path,
     *,
-    donor_allowlist: frozenset[str] = LEGACY_DONOR_ALLOWLIST,
     approved_third_party: frozenset[str] = APPROVED_THIRD_PARTY_ROOTS,
 ) -> tuple[ImportViolation, ...]:
     """Return every boundary violation in deterministic path/line order."""
@@ -289,7 +218,6 @@ def validate_v3_imports(
                             line=node.lineno,
                             importer=importer,
                             imported=alias.name,
-                            donor_allowlist=donor_allowlist,
                             approved_third_party=approved_third_party,
                         )
                     )
@@ -306,7 +234,6 @@ def validate_v3_imports(
                             line=node.lineno,
                             importer=importer,
                             imported=imported,
-                            donor_allowlist=donor_allowlist,
                             approved_third_party=approved_third_party,
                         )
                     )
@@ -338,14 +265,20 @@ def assert_v3_imports_clean(project_root: Path) -> None:
         raise RuntimeError(f"V3 import boundary violations:\n{details}")
 
 
+def main() -> int:
+    assert_v3_imports_clean(Path.cwd())
+    print("V3 import guard: PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+
 __all__ = [
-    "ALWAYS_FORBIDDEN_MODULES",
-    "ALWAYS_FORBIDDEN_ROOTS",
     "APPROVED_THIRD_PARTY_ROOTS",
-    "DONOR_ADAPTER_PREFIX",
     "ImportViolation",
-    "LEGACY_DONOR_ALLOWLIST",
-    "LEGACY_PROJECT_ROOTS",
     "assert_v3_imports_clean",
+    "main",
     "validate_v3_imports",
 ]

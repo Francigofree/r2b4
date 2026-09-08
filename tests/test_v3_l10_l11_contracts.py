@@ -4,9 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from controller.motion_kinematics import twist_to_track_velocity
-from core.control_strategies import WheelSpeedPILoop
-from middleware.ffp import PIDConfig, lookup_wheel_feedforward
 from v3.adapters.fake_edges import FakeHal
 from v3.contracts import (
     AdmittedFrame,
@@ -85,41 +82,38 @@ def _feedback(
     ("v_mps", "omega_rad_s"),
     ((0.2, 0.0), (0.0, 0.8), (0.25, -0.4), (-0.15, 0.3)),
 )
-def test_l10_matches_the_pure_legacy_kinematics_donor(v_mps, omega_rad_s):
+def test_l10_applies_the_differential_drive_contract(v_mps, omega_rad_s):
     context = TickContext(0, 1_000_000_000)
     controller = DifferentialDriveKinematics(ChassisControlConfig(track_width_m=0.2))
 
     actual = controller(_motion(context, v_mps, omega_rad_s))
-    expected = twist_to_track_velocity(v_mps, omega_rad_s, 0.2)
 
-    assert (actual.left_mps, actual.right_mps) == pytest.approx(expected)
+    assert actual.context == context
+    assert actual.left_mps == pytest.approx(v_mps - omega_rad_s * 0.1)
+    assert actual.right_mps == pytest.approx(v_mps + omega_rad_s * 0.1)
 
 
 @pytest.mark.parametrize(
-    ("side", "target_mps"),
+    ("side", "target_mps", "expected_output", "expected_floor"),
     (
-        ("left", 0.10),
-        ("left", 0.225),
-        ("left", 0.70),
-        ("left", -0.225),
-        ("right", 0.225),
-        ("right", -0.225),
+        ("left", 0.10, 0.19566, 0.10),
+        ("left", 0.225, 0.275425, 0.10),
+        ("left", 0.70, 0.64, 0.10),
+        ("left", -0.225, -0.273695, 0.12),
+        ("right", 0.225, 0.27126, 0.10),
+        ("right", -0.225, -0.285335, 0.12),
     ),
 )
-def test_l11_speed_map_matches_the_active_feedforward_donor(side, target_mps):
-    raw = _speed_map_raw()
-    immutable = WheelSpeedMap.from_mapping(raw)
+def test_l11_active_speed_map_characterization(
+    side,
+    target_mps,
+    expected_output,
+    expected_floor,
+):
+    output, floor = _speed_map().lookup(side, target_mps)
 
-    actual, _ = immutable.lookup(side, target_mps)
-    expected, diagnostics = lookup_wheel_feedforward(
-        raw,
-        side=side,
-        target_mps=target_mps,
-        require_active=True,
-    )
-
-    assert actual == pytest.approx(expected)
-    assert diagnostics["curve"] == f"{side}_{'forward' if target_mps >= 0.0 else 'reverse'}"
+    assert output == pytest.approx(expected_output)
+    assert floor == pytest.approx(expected_floor)
 
 
 def test_l11_speed_map_is_immutable_and_requires_all_four_active_curves():
@@ -133,55 +127,34 @@ def test_l11_speed_map_is_immutable_and_requires_all_four_active_curves():
         WheelSpeedMap.from_mapping(missing_curve)
 
 
-def test_l11_pi_sequence_matches_the_legacy_wheel_loop_donor():
+def test_l11_pi_sequence_has_stable_native_characterization():
     native = WheelActuatorController(_speed_map(), PI_CONFIG)
-    legacy = WheelSpeedPILoop(
-        PIDConfig(kp=0.25, ki=0.08, integrator_limit=0.18),
-        max_pwm=0.95,
-        dead_zone=0.0,
-        overspeed_holdoff_enabled=False,
-    )
-    raw_map = _speed_map_raw()
     sequence = (
-        (0, 1_000_000_000, 0.20, -0.20, 0.00, 0.00, 0.00),
-        (1, 1_020_000_000, 0.20, -0.20, 0.05, -0.04, 0.02),
-        (2, 1_040_000_000, 0.20, -0.20, 0.08, -0.06, 0.02),
+        (0, 1_000_000_000, 0.20, -0.20, 0.00, 0.00),
+        (1, 1_020_000_000, 0.20, -0.20, 0.05, -0.04),
+        (2, 1_040_000_000, 0.20, -0.20, 0.08, -0.06),
     )
+    observed = []
 
-    for tick_id, monotonic_ns, left_ref, right_ref, left_measured, right_measured, dt_s in sequence:
+    for tick_id, monotonic_ns, left_ref, right_ref, left_measured, right_measured in sequence:
         context = TickContext(tick_id, monotonic_ns)
         setpoint = WheelVelocitySetpoint(context, left_ref, right_ref)
         actual = native(
             setpoint,
             _feedback(context, left_mps=left_measured, right_mps=right_measured),
         )
-        left_ff, left_diag = lookup_wheel_feedforward(
-            raw_map,
-            side="left",
-            target_mps=left_ref,
-            require_active=True,
-        )
-        right_ff, right_diag = lookup_wheel_feedforward(
-            raw_map,
-            side="right",
-            target_mps=right_ref,
-            require_active=True,
-        )
-        expected_left, expected_right, _ = legacy.compute(
-            left_reference_mps=left_ref,
-            right_reference_mps=right_ref,
-            left_measured_mps=left_measured,
-            right_measured_mps=right_measured,
-            dt_s=dt_s,
-            feedforward_pwm_l=left_ff,
-            feedforward_pwm_r=right_ff,
-            maintenance_floor_pwm_l=left_diag["maintenance_pwm"],
-            maintenance_floor_pwm_r=right_diag["maintenance_pwm"],
-        )
+        observed.append((actual.left_normalized, actual.right_normalized))
 
-        assert (actual.left_normalized, actual.right_normalized) == pytest.approx(
-            (expected_left, expected_right)
+    assert tuple(value for pair in observed for value in pair) == pytest.approx(
+        (
+            0.24957857142857146,
+            -0.26150285714285715,
+            0.2873185714285715,
+            -0.3017588571428571,
+            0.28001057142857144,
+            -0.29698285714285716,
         )
+    )
 
 
 def test_l11_is_deterministic_for_identical_tick_sequences():

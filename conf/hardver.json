@@ -9,14 +9,10 @@
       "gpio_in1": 18,
       "gpio_in2": 19,
       "invert": true
-        },
-        "pwm_minimum": 0.4,
-        "pwm_maximum": 0.95,
-        "pwm_decay_mode": "brake",
-        "jobb_oldali_korrekcio_bias": 0.0
+    },
+    "pwm_decay_mode": "brake"
     },
   "encoderek": {
-    "tipus": "DFRobot KIT0085 / 28PA51G",
     "bal_a_pin": 23,
     "bal_b_pin": 24,
     "jobb_a_pin": 25,
@@ -26,7 +22,6 @@
     "forward_b_level": 1,
     "a_debounce_micros": 150,
     "input_pull_up": false,
-    "snapshot_hz": 400,
     "invert_bal": true,
     "invert_jobb": false
   },
@@ -39,7 +34,6 @@
       "bus": 1,
       "address": "0x28",
       "operation_mode": "NDOF",
-      "update_rate_hz": 50,
       "axis_order": [0, 1, 2],
       "axis_sign": [1, 1, 1],
       "use_external_crystal": false

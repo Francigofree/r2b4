@@ -3,7 +3,6 @@ from pathlib import Path
 
 from v3.import_guard import (
     APPROVED_THIRD_PARTY_ROOTS,
-    LEGACY_DONOR_ALLOWLIST,
     validate_v3_imports,
 )
 
@@ -17,42 +16,16 @@ def _write(root: Path, relative: str, source: str) -> None:
     path.write_text(source, encoding="utf-8")
 
 
-def _codes(root: Path, *, allowlist: frozenset[str] = frozenset()) -> set[str]:
-    return {item.code for item in validate_v3_imports(root, donor_allowlist=allowlist)}
+def _codes(root: Path) -> set[str]:
+    return {item.code for item in validate_v3_imports(root)}
 
 
 def test_current_v3_source_tree_has_no_import_boundary_violation():
     assert validate_v3_imports(PROJECT_ROOT) == ()
 
 
-def test_v3_has_no_active_legacy_donor_and_declares_native_math_dependencies():
-    donor_root = PROJECT_ROOT / "v3" / "adapters" / "legacy_donors"
-
-    assert LEGACY_DONOR_ALLOWLIST == frozenset()
-    assert not tuple(donor_root.glob("*.py"))
+def test_v3_only_import_policy_declares_its_math_dependencies():
     assert APPROVED_THIRD_PARTY_ROOTS == frozenset({"numpy", "scipy"})
-
-
-def test_live_idle_entrypoint_cannot_reintroduce_legacy_runtime_authority():
-    path = PROJECT_ROOT / "v3_idle_runtime.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.name)
-    imported_roots = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imported_roots.add(node.module.split(".", 1)[0])
-
-    assert not imported_roots & {
-        "config_manager",
-        "cont",
-        "controller",
-        "driver",
-        "fastgui",
-        "motion_executor",
-        "robot_state",
-        "state",
-    }
 
 
 def test_native_motor_pwm_planner_remains_io_and_writer_capability_free():
@@ -92,7 +65,7 @@ def test_native_motor_writer_boundary_has_no_hardware_or_runtime_authority():
     }
 
 
-def test_native_gpio_motor_sink_has_no_legacy_or_runtime_authority():
+def test_native_gpio_motor_sink_has_no_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "gpio_motor.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -227,7 +200,7 @@ def test_bounded_physical_control_has_no_concrete_gpio_or_runtime_authority():
     }
 
 
-def test_bounded_physical_runtime_has_no_entrypoint_or_legacy_authority():
+def test_bounded_physical_runtime_has_no_entrypoint_or_external_io_authority():
     path = PROJECT_ROOT / "v3_bounded_runtime.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -258,19 +231,10 @@ def test_bounded_physical_runtime_has_no_entrypoint_or_legacy_authority():
         "v3.engine",
     }
     assert "main" not in function_names
-    assert not imported_modules & {
-        "config_manager",
-        "cont",
-        "controller",
-        "driver",
-        "lgpio",
-        "motion_executor",
-        "signal",
-        "state",
-    }
+    assert not imported_modules & {"lgpio", "signal"}
 
 
-def test_hardware_runtime_keeps_concrete_modules_and_legacy_authority_outside():
+def test_hardware_runtime_keeps_concrete_modules_outside():
     path = PROJECT_ROOT / "v3_hardware_runtime.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -280,20 +244,10 @@ def test_hardware_runtime_keeps_concrete_modules_and_legacy_authority_outside():
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_modules.add(node.module)
 
-    assert not imported_modules & {
-        "config_manager",
-        "cont",
-        "controller",
-        "driver",
-        "lgpio",
-        "middleware",
-        "sensors",
-        "smbus2",
-        "state",
-    }
+    assert not imported_modules & {"lgpio", "smbus2"}
 
 
-def test_bounded_runtime_config_loader_has_no_hardware_or_legacy_authority():
+def test_bounded_runtime_config_loader_has_no_hardware_authority():
     path = PROJECT_ROOT / "v3_bounded_config.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -335,20 +289,10 @@ def test_bounded_runtime_config_loader_has_no_hardware_or_legacy_authority():
         "v3_bounded_runtime",
     }
     assert "main" not in function_names
-    assert not imported_modules & {
-        "config_manager",
-        "cont",
-        "controller",
-        "driver",
-        "lgpio",
-        "motion_executor",
-        "signal",
-        "state",
-        "time",
-    }
+    assert not imported_modules & {"lgpio", "signal", "time"}
 
 
-def test_native_live_input_aggregator_has_no_legacy_or_runtime_authority():
+def test_native_live_input_aggregator_has_no_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "live_inputs.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -367,7 +311,7 @@ def test_native_live_input_aggregator_has_no_legacy_or_runtime_authority():
     }
 
 
-def test_native_live_encoder_source_has_no_legacy_or_runtime_authority():
+def test_native_live_encoder_source_has_no_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "live_encoder.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -388,7 +332,7 @@ def test_native_live_encoder_source_has_no_legacy_or_runtime_authority():
     }
 
 
-def test_counter_encoder_backend_has_no_hardware_legacy_or_pwm_authority():
+def test_counter_encoder_backend_has_no_hardware_or_pwm_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "counter_encoder.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -409,19 +353,11 @@ def test_counter_encoder_backend_has_no_hardware_legacy_or_pwm_authority():
         "typing",
         "v3.contracts",
     }
-    assert not imported_modules & {
-        "config_manager",
-        "driver.encoder",
-        "lgpio",
-        "middleware.enc_estim",
-        "sensors.encoder_service",
-        "threading",
-        "time",
-    }
+    assert not imported_modules & {"lgpio", "threading", "time"}
     assert "set_last_pwm" not in attribute_names
 
 
-def test_gpio_counter_owner_has_no_concrete_hardware_legacy_or_runtime_authority():
+def test_gpio_counter_owner_has_no_concrete_hardware_or_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "gpio_counter.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -442,18 +378,11 @@ def test_gpio_counter_owner_has_no_concrete_hardware_legacy_or_runtime_authority
         "threading",
         "typing",
     }
-    assert not imported_modules & {
-        "config_manager",
-        "driver.encoder",
-        "lgpio",
-        "middleware.enc_estim",
-        "sensors.encoder_service",
-        "time",
-    }
+    assert not imported_modules & {"lgpio", "time"}
     assert "Thread" not in attribute_names
 
 
-def test_native_live_imu_source_has_no_legacy_or_runtime_authority():
+def test_native_live_imu_source_has_no_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "live_imu.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -473,7 +402,7 @@ def test_native_live_imu_source_has_no_legacy_or_runtime_authority():
     }
 
 
-def test_native_bno055_device_has_no_legacy_config_or_concrete_smbus_authority():
+def test_native_bno055_device_has_no_concrete_smbus_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "bno055_device.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -491,14 +420,10 @@ def test_native_bno055_device_has_no_legacy_config_or_concrete_smbus_authority()
         "time",
         "typing",
     }
-    assert not imported_modules & {
-        "config_manager",
-        "driver.bno055",
-        "smbus2",
-    }
+    assert "smbus2" not in imported_modules
 
 
-def test_native_live_lidar_source_has_no_legacy_or_runtime_authority():
+def test_native_live_lidar_source_has_no_runtime_authority():
     path = PROJECT_ROOT / "v3" / "adapters" / "live_lidar.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -552,7 +477,7 @@ def test_live_input_composition_has_no_hardware_clock_or_runtime_authority():
     assert "ShadowStateEstimator" not in imported_names
 
 
-def test_native_l3_ekf_has_no_legacy_numpy_or_runtime_authority():
+def test_native_l3_ekf_has_no_numpy_or_runtime_authority():
     path = PROJECT_ROOT / "v3" / "layers" / "l3_state_estimation.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
@@ -570,161 +495,39 @@ def test_native_l3_ekf_has_no_legacy_numpy_or_runtime_authority():
     }
 
 
-def test_legacy_motor_driver_is_library_only_without_standalone_motion_entrypoint():
-    path = PROJECT_ROOT / "driver" / "motor.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-
-    main_guards = []
-    for node in tree.body:
-        if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
-            continue
-        comparison = node.test
-        if (
-            isinstance(comparison.left, ast.Name)
-            and comparison.left.id == "__name__"
-            and len(comparison.ops) == 1
-            and isinstance(comparison.ops[0], ast.Eq)
-            and len(comparison.comparators) == 1
-            and isinstance(comparison.comparators[0], ast.Constant)
-            and comparison.comparators[0].value == "__main__"
-        ):
-            main_guards.append(node)
-
-    assert main_guards == []
-
-
-def test_legacy_motor_driver_has_no_directional_convenience_write_paths():
-    path = PROJECT_ROOT / "driver" / "motor.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    motor_class = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "AlbaMotor"
-    )
-    method_names = {
-        node.name for node in motor_class.body if isinstance(node, ast.FunctionDef)
-    }
-
-    assert {"set_pwm", "stop", "close"} <= method_names
-    assert {"forward", "backward"}.isdisjoint(method_names)
-
-
-def test_legacy_motor_driver_has_no_config_or_file_authority():
-    path = PROJECT_ROOT / "driver" / "motor.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    imported_roots = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imported_roots.add(node.module.split(".", 1)[0])
-
-    motor_class = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "AlbaMotor"
-    )
-    method_names = {
-        node.name for node in motor_class.body if isinstance(node, ast.FunctionDef)
-    }
-
-    assert "config_manager" not in imported_roots
-    assert "json" not in imported_roots
-    assert "_load_config" not in method_names
-    assert not any(
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "open"
-        for node in ast.walk(tree)
-    )
-
-
-def test_legacy_motion_capable_set_pwm_is_only_the_final_control_commit():
-    call_sites = []
-    excluded_roots = {".git", ".venv", "build", "dist", "logs", "runtime", "tests"}
-    for path in PROJECT_ROOT.rglob("*.py"):
-        relative = path.relative_to(PROJECT_ROOT)
-        if relative.parts and relative.parts[0] in excluded_roots:
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "set_pwm"
-            ):
-                call_sites.append(
-                    (
-                        relative.as_posix(),
-                        ast.unparse(node.func.value),
-                        tuple(ast.unparse(argument) for argument in node.args),
-                    )
-                )
-
-    assert sorted(call_sites) == [
-        ("cont.py", "self.motor_l", ("pwm_l",)),
-        ("cont.py", "self.motor_r", ("pwm_r",)),
-    ]
-
-
-def test_legacy_authority_gui_tool_and_test_imports_are_always_forbidden(tmp_path):
+def test_non_v3_project_imports_are_rejected(tmp_path):
     _write(
         tmp_path,
         "v3/contracts/bad.py",
-        "import cont\nimport fastgui\nimport tools\nimport tests\nimport config_manager\n",
+        "import obsolete_runtime\nfrom operator_gui import api\n",
     )
 
     violations = validate_v3_imports(tmp_path)
 
     assert {item.imported_module for item in violations} == {
-        "config_manager",
-        "cont",
-        "fastgui",
-        "tests",
-        "tools",
+        "obsolete_runtime",
+        "operator_gui.api",
     }
-    assert {item.code for item in violations} == {"FORBIDDEN_IMPORT"}
+    assert {item.code for item in violations} == {
+        "PROJECT_OR_THIRD_PARTY_IMPORT_NOT_ALLOWED"
+    }
 
 
-def test_legacy_project_import_is_only_allowed_in_allowlisted_donor_adapter(tmp_path):
-    _write(tmp_path, "v3/layers/l11_actuator_control/bad.py", "import driver.encoder\n")
-    assert "LEGACY_IMPORT_OUTSIDE_DONOR_ADAPTER" in _codes(tmp_path)
-
-    (tmp_path / "v3/layers/l11_actuator_control/bad.py").unlink()
-    _write(
-        tmp_path,
-        "v3/adapters/legacy_donors/encoder.py",
-        "import driver.encoder\n",
-    )
-    assert "DONOR_IMPORT_NOT_ALLOWLISTED" in _codes(tmp_path)
-    assert validate_v3_imports(
-        tmp_path,
-        donor_allowlist=frozenset({"driver.encoder"}),
-    ) == ()
-
-    _write(
-        tmp_path,
-        "v3/adapters/legacy_donors/encoder.py",
-        "from controller import commands\n",
-    )
-    violations = validate_v3_imports(
-        tmp_path,
-        donor_allowlist=frozenset({"controller.commands"}),
-    )
-    assert {item.code for item in violations} == {"FORBIDDEN_IMPORT"}
-
-
-def test_from_import_cannot_hide_legacy_dependency(tmp_path):
+def test_from_import_cannot_hide_a_non_v3_dependency(tmp_path):
     _write(
         tmp_path,
         "v3/layers/l5_command_mission/bad.py",
-        "from controller import commands\n",
+        "from obsolete_runtime import commands\n",
     )
 
     violations = validate_v3_imports(tmp_path)
 
-    assert "FORBIDDEN_IMPORT" in {item.code for item in violations}
-    assert "controller.commands" in {item.imported_module for item in violations}
+    assert "PROJECT_OR_THIRD_PARTY_IMPORT_NOT_ALLOWED" in {
+        item.code for item in violations
+    }
+    assert "obsolete_runtime.commands" in {
+        item.imported_module for item in violations
+    }
 
 
 def test_layer_cannot_import_another_layer_or_an_adapter(tmp_path):
@@ -783,9 +586,9 @@ def test_dynamic_import_is_rejected_as_static_guard_bypass(tmp_path):
         "v3/contracts/bad.py",
         "import importlib\n"
         "from importlib import import_module as load\n"
-        "first = __import__('cont')\n"
-        "second = importlib.import_module('driver.motor')\n"
-        "third = load('state')\n",
+        "first = __import__('obsolete_runtime')\n"
+        "second = importlib.import_module('external.module')\n"
+        "third = load('hidden.module')\n",
     )
 
     violations = validate_v3_imports(tmp_path)
@@ -799,7 +602,9 @@ def test_unknown_project_or_third_party_root_requires_explicit_allowlist(tmp_pat
     violations = validate_v3_imports(tmp_path)
 
     assert {item.imported_module for item in violations} == {"brain"}
-    assert {item.code for item in violations} == {"THIRD_PARTY_IMPORT_NOT_ALLOWLISTED"}
+    assert {item.code for item in violations} == {
+        "PROJECT_OR_THIRD_PARTY_IMPORT_NOT_ALLOWED"
+    }
 
     _write(tmp_path, "v3/math/solver.py", "import numpy\n")
     assert validate_v3_imports(
