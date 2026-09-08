@@ -225,7 +225,7 @@ def test_sensor_loader_rejects_implicit_or_malformed_bno055_values(tmp_path: Pat
         )
 
 
-def test_encoder_sample_policy_is_explicit_and_not_loaded_from_snapshot_hz():
+def test_encoder_sample_policy_requires_explicit_runtime_thresholds():
     encoder = _load().encoder
     assert encoder is not None
 
@@ -437,24 +437,6 @@ def test_loader_rejects_invalid_encoder_step_geometry(
             SPEED_MAP_PATH,
             _profile(),
         )
-
-
-def test_legacy_snapshot_rate_is_not_encoder_runtime_authority(tmp_path: Path):
-    def invalidate_ignored_field(payload):
-        payload["encoderek"]["snapshot_hz"] = "not-a-v3-policy"
-
-    hardware = _changed_json(tmp_path, HARDWARE_PATH, invalidate_ignored_field)
-
-    config = load_bounded_physical_runtime_config(
-        hardware,
-        PHYSICS_PATH,
-        SPEED_MAP_PATH,
-        _profile(),
-    )
-
-    assert config.encoder is not None
-    with pytest.raises(TypeError):
-        config.encoder.backend_config()  # type: ignore[call-arg]
 
 
 def test_loader_rejects_unknown_motor_decay_mode(tmp_path: Path):

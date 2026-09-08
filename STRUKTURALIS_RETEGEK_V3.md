@@ -10,7 +10,7 @@ karbantartható robot-runtime. A szerkezet a stabil fizikai működést, a
 source-first fejlesztést, a gyors hibakeresést és a determinisztikus replayt
 szolgálja.
 
-A pillanatnyi implementációs készültség, promotion-állapot és hardver-evidence
+A pillanatnyi implementációs készültség és hardver-evidence
 nem ennek a dokumentumnak a feladata.
 
 Authority sorrend:
@@ -186,7 +186,7 @@ csak a composition rootban, typed callable/port konstrukcióval történhet.
 ## 6. Final safety és motorírás
 
 Az L12 a normál motor-write capability egyetlen tulajdonosa. Nincs alternatív
-pozitív PWM-, service-, GUI-, tool- vagy donor-writer.
+pozitív PWM-, service-, GUI-, tool- vagy külső writer.
 
 Az L12 kötelező viselkedése:
 

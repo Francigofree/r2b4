@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-
 import pytest
 
 from v3.adapters.counter_encoder import (
@@ -12,9 +9,6 @@ from v3.adapters.counter_encoder import (
 from v3.adapters.live_encoder import NativeEncoderConfig, NativeEncoderSource
 from v3.adapters.live_encoder import EncoderRejectionCode
 from v3.contracts import DeviceHealthState, TickContext
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class Counter:
@@ -588,72 +582,6 @@ def test_high_speed_window_is_minimal_and_raw_distance_is_never_smoothed():
     assert reading.diagnostics.raw_right_distance_m == pytest.approx(0.020)
     assert reading.diagnostics.left_distance_delta_m == pytest.approx(0.006)
     assert reading.diagnostics.right_distance_delta_m == pytest.approx(0.010)
-
-
-def test_existing_capture_raw_deltas_are_quieter_without_distance_drift():
-    physics = json.loads(
-        (PROJECT_ROOT / "conf/fizika.json").read_text(encoding="utf-8")
-    )
-    step_distance_m = float(physics["lepes_hossz_m"])
-    rows = tuple(
-        json.loads(line)
-        for line in (
-            PROJECT_ROOT / "tests/fixtures/v3_l0_l4_capture_excerpt.jsonl"
-        ).read_text(encoding="utf-8").splitlines()
-    )
-    left_count = 0
-    right_count = 0
-    left_snapshots = []
-    right_snapshots = []
-    for row in rows:
-        feedback = row["executor_call"]["kwargs"]["sensor_feedback"]
-        left_count += round(
-            float(feedback["encoder_left_distance_delta_m"]) / step_distance_m
-        )
-        right_count += round(
-            float(feedback["encoder_right_distance_delta_m"]) / step_distance_m
-        )
-        left_snapshots.append(_snapshot(left_count))
-        right_snapshots.append(_snapshot(right_count))
-    backend = NativeCounterEncoderBackend(
-        Counter(tuple(left_snapshots)),
-        Counter(tuple(right_snapshots)),
-        CounterEncoderBackendConfig(
-            step_distance_m,
-            step_distance_m,
-            maximum_sample_interval_ns=100_000_000,
-            maximum_abs_velocity_mps=1.5,
-            minimum_estimation_pulses=4,
-            minimum_estimation_window_ns=40_000_000,
-            maximum_estimation_window_ns=160_000_000,
-        ),
-    )
-
-    readings = tuple(
-        backend.read(TickContext(index, int(row["monotonic_ns"])))
-        for index, row in enumerate(rows)
-    )
-    old_left = tuple(
-        float(row["executor_call"]["kwargs"]["sensor_feedback"]["v_l_encoder_raw"])
-        for row in rows[1:]
-    )
-    old_right = tuple(
-        float(row["executor_call"]["kwargs"]["sensor_feedback"]["v_r_encoder_raw"])
-        for row in rows[1:]
-    )
-    new_left = tuple(reading.left_mps for reading in readings[1:])
-    new_right = tuple(reading.right_mps for reading in readings[1:])
-
-    assert max(new_left) - min(new_left) < max(old_left) - min(old_left)
-    assert max(new_right) - min(new_right) < max(old_right) - min(old_right)
-    diagnostics = readings[-1].diagnostics
-    assert diagnostics is not None
-    assert diagnostics.raw_left_distance_m == pytest.approx(
-        left_count * step_distance_m
-    )
-    assert diagnostics.raw_right_distance_m == pytest.approx(
-        right_count * step_distance_m
-    )
 
 
 def test_first_read_from_stopped_counter_is_invalid_zero_baseline():

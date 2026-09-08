@@ -1,4 +1,4 @@
-"""L11 wheel feed-forward/PI control and the STOP-only compatibility path."""
+"""L11 wheel feed-forward/PI control and explicit zero-output path."""
 
 from __future__ import annotations
 
@@ -132,18 +132,18 @@ class WheelSpeedMap:
                 )
                 for row in point_rows
             )
-            first_output = points[0].normalized_output if points else 0.0
-            maintenance = curve_raw.get(
-                "maintenance_pwm",
-                curve_raw.get("dead_zone_pwm", first_output),
-            )
-            startup = curve_raw.get("startup_pwm", maintenance)
             curves.append(
                 WheelSpeedCurve(
                     name=name,
                     points=points,
-                    maintenance_output=_finite_float(maintenance, "maintenance_pwm"),
-                    startup_output=_finite_float(startup, "startup_pwm"),
+                    maintenance_output=_finite_float(
+                        curve_raw.get("maintenance_pwm"),
+                        "maintenance_pwm",
+                    ),
+                    startup_output=_finite_float(
+                        curve_raw.get("startup_pwm"),
+                        "startup_pwm",
+                    ),
                 )
             )
         return cls(

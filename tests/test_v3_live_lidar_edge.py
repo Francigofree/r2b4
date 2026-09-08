@@ -74,7 +74,7 @@ def _source(
     return source, backend
 
 
-def test_native_lidar_source_closes_one_l4_compatible_health_sample():
+def test_native_lidar_source_closes_physical_and_localization_samples():
     context = TickContext(5, 1_000)
     source, backend = _source(_reading())
 
@@ -93,11 +93,13 @@ def test_native_lidar_source_closes_one_l4_compatible_health_sample():
         990,
         (
             DataField("age_ns", 40),
-            DataField("confidence", 0.8),
+            DataField("point_count", 4),
         ),
     )
     assert tuple(sample.kind for sample in snapshot.samples) == (
         "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_local_points",
         "lidar_localization_health",
     )
 
@@ -176,8 +178,8 @@ def test_native_lidar_sample_drives_existing_l4_revision_and_freshness():
 
     world = ShadowWorldModel()(admitted, estimate)
 
-    assert world.map_revision == 1
-    assert world.freshness_ns == 50
+    assert world.map_revision == 2
+    assert world.freshness_ns == 10
     assert world.obstacle_tracks == ()
 
 

@@ -93,7 +93,7 @@ def _sources(
                     read_context.tick_id,
                     read_context.tick_id,
                 ),
-                read_context.monotonic_ns,
+                read_context.monotonic_ns - 20,
                 measurement_age_ns=20,
             ),
             pose=LidarPoseReading(

@@ -307,8 +307,7 @@ class NativeStateEstimator:
     """Minimal native five-state EKF over admitted wheel, IMU and lidar samples.
 
     Owned state is ``[x, y, yaw, velocity, gyro_bias]``. The implementation
-    ports the applicable legacy EKF math without importing NumPy, middleware or
-    runtime state: nonlinear prediction/Jacobian, covariance propagation,
+    owns its nonlinear prediction/Jacobian, covariance propagation,
     wrapped measurement innovations, NIS gates, stationary ZUPT/bias correction
     and covariance stabilization. An admitted absolute lidar pose receives one
     wrapped, joint three-axis NIS-gated correction. Inputs still absent from the
@@ -690,7 +689,7 @@ class ShadowStateEstimator:
 
     This estimator is deliberately offline-only.  The captured EKF heading is
     the heading measurement; wheel feedback advances position between closed
-    tick snapshots.  No legacy estimator object or live shared state enters V3.
+    tick snapshots. No external estimator object or live shared state enters V3.
     """
 
     __slots__ = ("_config", "_last_context", "_position_variance", "_x_m", "_y_m", "_yaw_rad")

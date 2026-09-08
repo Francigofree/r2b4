@@ -1,6 +1,6 @@
 """Native V3 latest-only scan-matcher worker.
 
-The process isolates the stateful estimator donor.  It has bounded one-slot
+The process isolates the stateful estimator component. It has bounded one-slot
 input/output queues and owns no serial device, V3 state, safety or actuation.
 """
 

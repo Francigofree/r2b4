@@ -49,7 +49,7 @@ POSE_FRAME_ID = "R2B4_BOOT_ROBOT_MAP"
 
 @dataclass(frozen=True, slots=True)
 class NativeSensorPolicyConfig:
-    """Explicit runtime thresholds that are not inherited from legacy config."""
+    """Explicit native runtime thresholds closed at the configuration edge."""
 
     encoder_maximum_sample_interval_ns: int
     encoder_maximum_abs_velocity_mps: float

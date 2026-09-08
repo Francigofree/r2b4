@@ -338,19 +338,12 @@ class NativeLidarSource:
             sequence=physical_revision,
             captured_monotonic_ns=physical_captured_ns,
             values=(
-                (
-                    DataField("age_ns", physical_age_ns),
-                    DataField("point_count", scan.point_count),
-                )
-                if scan is not None
-                else (
-                    DataField("age_ns", physical_age_ns),
-                    DataField("confidence", reading.confidence),
-                )
+                DataField("age_ns", physical_age_ns),
+                DataField("point_count", scan.point_count),
             ),
         )
         samples = [health_sample]
-        if scan is not None and scan.revision > 0:
+        if scan.revision > 0:
             samples.append(
                 DeviceSample(
                     device_id=self.device_id,

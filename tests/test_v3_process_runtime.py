@@ -285,7 +285,7 @@ def test_process_paths_cannot_escape_runtime_and_config_closes_native_sensors():
         process._runtime_owned_path("/tmp/v3-command.json", PROJECT_ROOT)
 
 
-def test_process_native_lidar_factory_closes_config_once_without_legacy_service(monkeypatch):
+def test_process_native_lidar_factory_closes_config_and_opens_one_port(monkeypatch):
     runtime = process.load_resident_runtime_config(PROJECT_ROOT)
     assert runtime.sensor_inputs is not None
     config_token = object()

@@ -119,7 +119,7 @@ class InputAdmission:
 
 
 def admit(frame: AcquisitionFrame) -> AdmittedFrame:
-    """Preserve the stateless fake-only compatibility path."""
+    """Admit a closed fake frame for the STOP-only validation composition."""
 
     accepted = tuple(
         Observation(

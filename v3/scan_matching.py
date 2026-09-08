@@ -158,7 +158,7 @@ def _cost_kdtree(
     dy: float,
     dtheta: float,
 ) -> float:
-    """Compatibility cost used only when no calibrated objective is supplied."""
+    """Default robust cost used when no calibrated objective is supplied."""
     metrics = _robust_match_metrics(
         tree,
         cur_pts,

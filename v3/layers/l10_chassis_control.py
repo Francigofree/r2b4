@@ -1,4 +1,4 @@
-"""L10 differential-drive kinematics and the STOP-only compatibility path."""
+"""L10 differential-drive kinematics and explicit zero-setpoint path."""
 
 from __future__ import annotations
 
