@@ -20,6 +20,7 @@ from v3.contracts import (
 )
 from v3.layers.l2_admission import AdmissionConfig, InputAdmission
 from v3.layers.l4_world_model import ShadowWorldModel
+from v3_validation_helpers import clear_lidar_scan
 
 
 class _FakeLidarBackend:
@@ -48,6 +49,13 @@ def _reading(
         confidence=confidence,
         stale=stale,
         timing_valid=timing_valid,
+        scan=clear_lidar_scan(
+            31,
+            990,
+            measurement_age_ns=measurement_age_ns,
+            stale=stale,
+            timing_valid=timing_valid,
+        ),
     )
 
 

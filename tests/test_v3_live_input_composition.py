@@ -20,6 +20,7 @@ from v3.composition.live_inputs import (
     LiveInputCompositionConfig,
 )
 from v3.contracts import RejectionReason, SafetyDecision, TickContext
+from v3_validation_helpers import clear_lidar_scan
 
 
 class _Backend:
@@ -87,6 +88,14 @@ def _sources(
             confidence=0.8,
             stale=False,
             timing_valid=True,
+            scan=clear_lidar_scan(
+                (lidar_revisions or {}).get(
+                    read_context.tick_id,
+                    read_context.tick_id,
+                ),
+                read_context.monotonic_ns,
+                measurement_age_ns=20,
+            ),
             pose=LidarPoseReading(
                 x_m=0.25,
                 y_m=0.0,

@@ -27,6 +27,7 @@ from v3.layers.l11_actuator_control import (
     WheelSpeedCurve,
     WheelSpeedMap,
 )
+from v3_validation_helpers import clear_lidar_scan
 
 
 class EncoderBackend:
@@ -72,6 +73,7 @@ class LidarBackend:
             confidence=1.0,
             stale=False,
             timing_valid=True,
+            scan=clear_lidar_scan(context.tick_id, context.monotonic_ns),
         )
 
 

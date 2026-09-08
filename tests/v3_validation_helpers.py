@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from v3.adapters.live_lidar import LidarScanReading
 from v3.capture import CaptureSink
 from v3.composition.native_control import (
     NativeControlComposition,
@@ -35,6 +36,33 @@ class RecordingMotorSink:
 
     def write(self, command) -> None:
         self.commands.append(command)
+
+
+def clear_lidar_scan(
+    revision: int,
+    captured_monotonic_ns: int,
+    *,
+    measurement_age_ns: int = 0,
+    stale: bool = False,
+    timing_valid: bool = True,
+) -> LidarScanReading:
+    return LidarScanReading(
+        revision=revision,
+        captured_monotonic_ns=captured_monotonic_ns,
+        measurement_age_ns=measurement_age_ns,
+        health="STALE" if stale else "OK",
+        stale=stale,
+        timing_valid=timing_valid,
+        point_count=4,
+        front_clearance_m=1.0,
+        rear_clearance_m=1.0,
+        left_clearance_m=1.0,
+        right_clearance_m=1.0,
+        front_observation_count=1,
+        rear_observation_count=1,
+        left_observation_count=1,
+        right_observation_count=1,
+    )
 
 
 def configuration_documents() -> dict[str, object]:

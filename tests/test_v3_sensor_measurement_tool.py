@@ -7,6 +7,7 @@ from v3.adapters.live_lidar import LidarHealthReading, NativeLidarConfig, Native
 from v3.composition.live_inputs import LiveInputComposition
 from v3.contracts import TickContext
 from v3_hardware_runtime import SensorMeasurementReport
+from v3_validation_helpers import clear_lidar_scan
 
 
 class Backend:
@@ -36,7 +37,19 @@ def test_summary_exposes_health_ranges_estimate_and_zero_commit():
         NativeImuConfig("imu", 0.5, 2),
     )
     lidar = NativeLidarSource(
-        Backend((LidarHealthReading(1, 1_000, 0, 1.0, False, True),)),
+        Backend(
+            (
+                LidarHealthReading(
+                    1,
+                    1_000,
+                    0,
+                    1.0,
+                    False,
+                    True,
+                    scan=clear_lidar_scan(1, 1_000),
+                ),
+            )
+        ),
         NativeLidarConfig("lidar", 0.2, 100),
     )
     result = LiveInputComposition(encoder, imu, lidar).tick(context)

@@ -30,6 +30,7 @@ from v3_bounded_runtime import (
     RUN_OK,
     run_bounded_physical_control,
 )
+from v3_validation_helpers import clear_lidar_scan
 
 
 class EncoderBackend:
@@ -75,6 +76,7 @@ class LidarBackend:
             confidence=1.0,
             stale=False,
             timing_valid=True,
+            scan=clear_lidar_scan(context.tick_id, context.monotonic_ns),
         )
 
 

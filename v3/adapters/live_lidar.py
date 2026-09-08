@@ -304,22 +304,14 @@ class NativeLidarSource:
             raise TypeError("lidar backend must return LidarHealthReading")
 
         scan = reading.scan
-        # The fallback exists only for isolated pre-native test edges. The
-        # production backend always supplies a scan reading, including startup.
         if scan is None:
-            physical_revision = reading.revision
-            physical_captured_ns = reading.captured_monotonic_ns
-            physical_age_ns = reading.measurement_age_ns
-            physical_stale = reading.stale
-            physical_timing_valid = reading.timing_valid
-            physical_health = "OK"
-        else:
-            physical_revision = scan.revision
-            physical_captured_ns = scan.captured_monotonic_ns
-            physical_age_ns = scan.measurement_age_ns
-            physical_stale = scan.stale
-            physical_timing_valid = scan.timing_valid
-            physical_health = scan.health
+            raise ValueError("native lidar reading must include a physical scan")
+        physical_revision = scan.revision
+        physical_captured_ns = scan.captured_monotonic_ns
+        physical_age_ns = scan.measurement_age_ns
+        physical_stale = scan.stale
+        physical_timing_valid = scan.timing_valid
+        physical_health = scan.health
 
         if not physical_timing_valid or physical_health == "ERROR":
             health = DeviceHealth(
