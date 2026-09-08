@@ -229,13 +229,18 @@ class CaptureSink(OutputSink):
     def write(self, record: CaptureRecord) -> None:
         self.write_encoded(encode_capture_record(record))
 
-    def write_encoded(self, tick: Mapping[str, object]) -> None:
+    def write_encoded(
+        self,
+        tick: Mapping[str, object],
+        *,
+        allow_gap: bool = False,
+    ) -> None:
         row = dict(tick)
         tick_id = _non_negative_integer(row.get("tick_id"), "tick_id")
         monotonic_ns = _non_negative_integer(row.get("monotonic_ns"), "monotonic_ns")
         if self._ticks:
             previous = self._ticks[-1]
-            if tick_id != int(previous["tick_id"]) + 1:
+            if not allow_gap and tick_id != int(previous["tick_id"]) + 1:
                 raise V3CaptureError("capture tick ids must be contiguous")
             if monotonic_ns <= int(previous["monotonic_ns"]):
                 raise V3CaptureError("capture monotonic time must increase")
@@ -285,6 +290,465 @@ class CaptureSink(OutputSink):
         **document_options: object,
     ) -> Path:
         return write_capture(self.document(status, **document_options), output_path)
+
+
+@dataclass(frozen=True, slots=True)
+class _BufferedTick:
+    row: dict[str, object]
+    size_bytes: int
+
+
+class TriggeredCaptureWorker:
+    """Bounded passive ingress with all encoding and persistence on one worker."""
+
+    __slots__ = (
+        "_capacity_evictions",
+        "_config",
+        "_dropped_ingress",
+        "_emergency_trigger",
+        "_error",
+        "_finished",
+        "_first_seen_ns",
+        "_last_seen_ns",
+        "_output_path",
+        "_post_window_complete",
+        "_queue",
+        "_raw_bytes",
+        "_raw_evictions",
+        "_raw_scans",
+        "_result_path",
+        "_ring",
+        "_ring_bytes",
+        "_sink",
+        "_started",
+        "_thread",
+        "_trigger_ns",
+        "_trigger_reason",
+    )
+
+    def __init__(
+        self,
+        sink: CaptureSink,
+        output_path: str | Path,
+        config: CaptureWindowConfig | None = None,
+    ) -> None:
+        if not isinstance(sink, CaptureSink):
+            raise TypeError("sink must be CaptureSink")
+        settings = config or CaptureWindowConfig()
+        if not isinstance(settings, CaptureWindowConfig):
+            raise TypeError("config must be CaptureWindowConfig")
+        path = Path(output_path)
+        if not path.is_absolute():
+            raise ValueError("capture output path must be absolute")
+        self._sink = sink
+        self._output_path = path
+        self._config = settings
+        self._queue: queue.Queue[tuple[str, object]] = queue.Queue(
+            maxsize=settings.ingress_queue_capacity
+        )
+        self._ring: deque[_BufferedTick] = deque()
+        self._ring_bytes = 0
+        self._raw_scans: OrderedDict[int, tuple[dict[str, object], int]] = OrderedDict()
+        self._raw_bytes = 0
+        self._dropped_ingress = 0
+        self._capacity_evictions = 0
+        self._raw_evictions = 0
+        self._trigger_ns: int | None = None
+        self._trigger_reason: str | None = None
+        self._emergency_trigger: tuple[int | None, str] | None = None
+        self._first_seen_ns: int | None = None
+        self._last_seen_ns: int | None = None
+        self._post_window_complete = False
+        self._error: BaseException | None = None
+        self._result_path: Path | None = None
+        self._started = False
+        self._finished = False
+        self._thread = threading.Thread(
+            target=self._run,
+            name="v3-capture-worker",
+            daemon=True,
+        )
+
+    @property
+    def failed(self) -> bool:
+        return self._error is not None
+
+    @property
+    def dropped_ingress_count(self) -> int:
+        return self._dropped_ingress
+
+    @property
+    def triggered(self) -> bool:
+        return self._trigger_ns is not None or self._emergency_trigger is not None
+
+    def start(self) -> None:
+        if self._started:
+            return
+        if self._finished:
+            raise RuntimeError("capture worker is already finished")
+        self._started = True
+        self._thread.start()
+
+    def observe(self, record: CaptureRecord) -> None:
+        """Return immediately; queue pressure only invalidates capture evidence."""
+
+        if not isinstance(record, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
+            raise TypeError("capture observer requires a CaptureRecord")
+        if not self._started or self._finished or self._error is not None:
+            return
+        try:
+            self._queue.put_nowait(("record", record))
+        except queue.Full:
+            self._dropped_ingress += 1
+            if _record_triggers_capture(record):
+                context = _record_context(record)
+                self._emergency_trigger = (
+                    context.monotonic_ns,
+                    _record_trigger_reason(record),
+                )
+
+    def observe_raw_lidar(self, snapshot: object | None) -> None:
+        """Keep only a reference on ingress; truncation and encoding run in the worker."""
+
+        if snapshot is None or not self._started or self._finished or self._error is not None:
+            return
+        try:
+            self._queue.put_nowait(("raw_lidar", snapshot))
+        except queue.Full:
+            self._dropped_ingress += 1
+
+    def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
+        normalized = str(reason or "").strip()
+        if not normalized:
+            raise ValueError("trigger reason must be non-empty")
+        if monotonic_ns is not None and (
+            not isinstance(monotonic_ns, int)
+            or isinstance(monotonic_ns, bool)
+            or monotonic_ns < 0
+        ):
+            raise ValueError("trigger monotonic_ns must be non-negative or None")
+        if not self._started or self._finished:
+            return
+        try:
+            self._queue.put_nowait(("trigger", (monotonic_ns, normalized)))
+        except queue.Full:
+            self._emergency_trigger = (monotonic_ns, normalized)
+
+    def finish(self, status: str, *, terminal: bool = True) -> Path | None:
+        if not self._started:
+            self.start()
+        if self._finished:
+            if self._error is not None:
+                raise RuntimeError("production V3 capture failed") from self._error
+            return self._result_path
+        self._queue.put(("finish", (status, bool(terminal))))
+        self._thread.join()
+        self._finished = True
+        if self._error is not None:
+            raise RuntimeError("production V3 capture failed") from self._error
+        return self._result_path
+
+    def _run(self) -> None:
+        try:
+            while True:
+                kind, value = self._queue.get()
+                self._consume_emergency_trigger()
+                if kind == "record":
+                    self._consume_record(value)
+                elif kind == "raw_lidar":
+                    self._consume_raw_lidar(value)
+                elif kind == "trigger":
+                    trigger_ns, reason = value
+                    self._activate_trigger(trigger_ns, str(reason))
+                elif kind == "finish":
+                    status, terminal = value
+                    self._consume_emergency_trigger()
+                    self._finalize(str(status), bool(terminal))
+                    return
+                else:
+                    raise RuntimeError(f"unknown capture work item {kind}")
+        except BaseException as exc:
+            self._error = exc
+
+    def _consume_emergency_trigger(self) -> None:
+        pending = self._emergency_trigger
+        if pending is None:
+            return
+        self._emergency_trigger = None
+        self._activate_trigger(pending[0], pending[1])
+
+    def _consume_record(self, value: object) -> None:
+        if not isinstance(value, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
+            raise TypeError("capture worker received an invalid record")
+        context = _record_context(value)
+        if self._first_seen_ns is None:
+            self._first_seen_ns = context.monotonic_ns
+        self._last_seen_ns = context.monotonic_ns
+        row = encode_capture_record(value)
+        encoded_size = _canonical_json_size(row)
+        trigger_now = _record_triggers_capture(value)
+        if self._trigger_ns is None:
+            self._append_tick(_BufferedTick(row, encoded_size))
+            self._trim_untriggered_ring(context.monotonic_ns)
+            if trigger_now:
+                self._activate_trigger(
+                    context.monotonic_ns,
+                    _record_trigger_reason(value),
+                )
+            return
+        upper = self._trigger_ns + self._config.post_event_ns
+        if context.monotonic_ns <= upper:
+            self._append_tick(_BufferedTick(row, encoded_size))
+            self._enforce_capacities()
+        if context.monotonic_ns >= upper:
+            self._post_window_complete = True
+
+    def _append_tick(self, item: _BufferedTick) -> None:
+        self._ring.append(item)
+        self._ring_bytes += item.size_bytes
+
+    def _trim_untriggered_ring(self, newest_ns: int) -> None:
+        lower = newest_ns - self._config.pre_event_ns
+        while self._ring and int(self._ring[0].row["monotonic_ns"]) < lower:
+            self._drop_oldest_tick(capacity=False)
+        self._enforce_capacities()
+
+    def _enforce_capacities(self) -> None:
+        while len(self._ring) > self._config.max_tick_count:
+            self._drop_oldest_tick(capacity=True)
+        while self._ring and self._ring_bytes + self._raw_bytes > self._config.max_byte_capacity:
+            if self._raw_scans:
+                self._drop_oldest_raw()
+            else:
+                self._drop_oldest_tick(capacity=True)
+
+    def _drop_oldest_tick(self, *, capacity: bool) -> None:
+        item = self._ring.popleft()
+        self._ring_bytes -= item.size_bytes
+        if capacity:
+            self._capacity_evictions += 1
+
+    def _activate_trigger(self, requested_ns: object, reason: str) -> None:
+        if self._trigger_ns is not None:
+            return
+        if requested_ns is None:
+            requested_ns = self._last_seen_ns
+        if requested_ns is None:
+            return
+        trigger_ns = _non_negative_integer(requested_ns, "trigger monotonic_ns")
+        self._trigger_ns = trigger_ns
+        self._trigger_reason = reason
+        lower = trigger_ns - self._config.pre_event_ns
+        while self._ring and int(self._ring[0].row["monotonic_ns"]) < lower:
+            self._drop_oldest_tick(capacity=False)
+        if self._config.post_event_ns == 0 or (
+            self._last_seen_ns is not None
+            and self._last_seen_ns >= trigger_ns + self._config.post_event_ns
+        ):
+            self._post_window_complete = True
+
+    def _consume_raw_lidar(self, snapshot: object) -> None:
+        row = _encode_raw_lidar_snapshot(
+            snapshot,
+            self._config.max_raw_lidar_points_per_scan,
+        )
+        revision = int(row["revision"])
+        if revision in self._raw_scans:
+            return
+        size = _canonical_json_size(row)
+        self._raw_scans[revision] = (row, size)
+        self._raw_bytes += size
+        while len(self._raw_scans) > self._config.max_raw_lidar_scans:
+            self._drop_oldest_raw()
+        self._enforce_capacities()
+
+    def _drop_oldest_raw(self) -> None:
+        _revision, (_row, size) = self._raw_scans.popitem(last=False)
+        self._raw_bytes -= size
+        self._raw_evictions += 1
+
+    def _finalize(self, status: str, terminal: bool) -> None:
+        if self._trigger_ns is None:
+            return
+        lower = self._trigger_ns - self._config.pre_event_ns
+        upper = self._trigger_ns + self._config.post_event_ns
+        selected = tuple(
+            item
+            for item in self._ring
+            if lower <= int(item.row["monotonic_ns"]) <= upper
+        )
+        if not selected:
+            raise V3CaptureError("triggered capture contains no ticks")
+        sequence_gaps = _sequence_gaps(tuple(item.row for item in selected))
+        for item in selected:
+            self._sink.write_encoded(item.row, allow_gap=True)
+        referenced = _referenced_lidar_revisions(tuple(item.row for item in selected))
+        retained = tuple(
+            self._raw_scans[revision][0]
+            for revision in sorted(referenced)
+            if revision in self._raw_scans
+        )
+        available = {int(row["revision"]) for row in retained}
+        missing = sorted(referenced - available)
+        ingress_complete = self._dropped_ingress == 0 and not sequence_gaps
+        post_complete = self._post_window_complete
+        if terminal and self._last_seen_ns is not None and self._last_seen_ns < upper:
+            post_complete = False
+        self._result_path = self._sink.finalize(
+            status,
+            self._output_path,
+            capture_window={
+                "strategy": "TRIGGERED_RING",
+                "trigger_reason": self._trigger_reason,
+                "trigger_monotonic_ns": self._trigger_ns,
+                "requested_pre_event_ns": self._config.pre_event_ns,
+                "requested_post_event_ns": self._config.post_event_ns,
+                "captured_first_monotonic_ns": selected[0].row["monotonic_ns"],
+                "captured_last_monotonic_ns": selected[-1].row["monotonic_ns"],
+                "post_window_complete": post_complete,
+                "terminal_short_post_window": bool(terminal and not post_complete),
+            },
+            capture_integrity={
+                "complete": ingress_complete,
+                "replay_match_eligible": ingress_complete,
+                "dropped_ingress_count": self._dropped_ingress,
+                "sequence_gaps": sequence_gaps,
+                "tick_capacity_evictions": self._capacity_evictions,
+            },
+            raw_lidar_scans=retained,
+            raw_lidar_evidence={
+                "referenced_revisions": sorted(referenced),
+                "retained_revisions": sorted(available),
+                "missing_revisions": missing,
+                "raw_ring_evictions": self._raw_evictions,
+                "physical_diagnosis": (
+                    "NOT_PROVEN" if missing else "INDICATED" if referenced else "NOT_PROVEN"
+                ),
+            },
+        )
+        self._result_path.chmod(0o600)
+
+
+def _record_context(record: CaptureRecord):
+    return record.inputs.context if isinstance(record, ExecutionRecord) else record.context
+
+
+def _record_triggers_capture(record: CaptureRecord) -> bool:
+    if isinstance(record, (EdgeFaultRecord, WriterFailureRecord)):
+        return True
+    return bool(
+        record.result.trace.fault_layer is not None
+        or record.result.final_actuation.safety_decision.value == "FAULT"
+    )
+
+
+def _record_trigger_reason(record: CaptureRecord) -> str:
+    if isinstance(record, (EdgeFaultRecord, WriterFailureRecord)):
+        return record.reason
+    return record.result.final_actuation.reason or record.result.trace.fault_layer or "FAULT"
+
+
+def _canonical_json_size(value: Mapping[str, object]) -> int:
+    return len(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+
+
+def _encode_raw_lidar_snapshot(
+    snapshot: object,
+    point_limit: int,
+) -> dict[str, object]:
+    revision = getattr(snapshot, "raw_scan_id", None)
+    timestamp = getattr(snapshot, "raw_scan_timestamp", None)
+    health = getattr(snapshot, "health", None)
+    points = getattr(snapshot, "raw_scan", None)
+    summary = getattr(snapshot, "summary", None)
+    if (
+        not isinstance(revision, int)
+        or isinstance(revision, bool)
+        or revision <= 0
+        or isinstance(timestamp, bool)
+        or not isinstance(timestamp, (int, float))
+        or not math.isfinite(timestamp)
+        or timestamp < 0.0
+        or not isinstance(health, str)
+        or not health
+        or not isinstance(points, tuple)
+        or not isinstance(summary, Mapping)
+    ):
+        raise V3CaptureError("raw lidar snapshot has an invalid native contract")
+    selected_points = points[:point_limit]
+    return {
+        "revision": revision,
+        "captured_monotonic_ns": int(float(timestamp) * 1_000_000_000),
+        "health": health,
+        "source_point_count": len(points),
+        "points_truncated": len(selected_points) != len(points),
+        "points": encode_value(selected_points),
+        "summary": encode_value(summary),
+    }
+
+
+def _sequence_gaps(ticks: Sequence[Mapping[str, object]]) -> list[dict[str, int]]:
+    gaps: list[dict[str, int]] = []
+    for previous, current in zip(ticks, ticks[1:]):
+        previous_id = int(previous["tick_id"])
+        current_id = int(current["tick_id"])
+        if current_id != previous_id + 1:
+            gaps.append({"after_tick_id": previous_id, "before_tick_id": current_id})
+    return gaps
+
+
+def _referenced_lidar_revisions(
+    ticks: Sequence[Mapping[str, object]],
+) -> set[int]:
+    revisions: set[int] = set()
+    physical_kinds = {
+        "lidar_health",
+        "lidar_safety_clearance",
+        "lidar_local_points",
+    }
+    for tick in ticks:
+        raw: object | None = None
+        inputs = tick.get("inputs")
+        if isinstance(inputs, Mapping):
+            raw = inputs.get("raw_devices")
+        else:
+            edge = tick.get("edge_fault")
+            if isinstance(edge, Mapping):
+                raw = edge.get("raw_devices")
+        if not isinstance(raw, Mapping):
+            continue
+        samples = raw.get("samples")
+        if isinstance(samples, (str, bytes)) or not isinstance(samples, Sequence):
+            continue
+        for sample in samples:
+            if not isinstance(sample, Mapping):
+                continue
+            kind = sample.get("kind")
+            sequence = sample.get("sequence")
+            if kind in physical_kinds and isinstance(sequence, int) and sequence > 0:
+                revisions.add(sequence)
+            if kind != "lidar_matcher_diagnostics":
+                continue
+            values = sample.get("values")
+            if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
+                continue
+            for field in values:
+                if (
+                    isinstance(field, Mapping)
+                    and field.get("key") == "source_raw_scan_id"
+                    and isinstance(field.get("value"), int)
+                    and int(field["value"]) > 0
+                ):
+                    revisions.add(int(field["value"]))
+    return revisions
 
 
 def payload_sha256(payload: Mapping[str, object]) -> str:
