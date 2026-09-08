@@ -111,6 +111,18 @@ class TickResult:
 class TickExecutionError(RuntimeError):
     """The L12 stage could not safely finish its single commit."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        context: TickContext | None = None,
+        attempted_actuation: FinalActuation | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.context = context
+        self.attempted_actuation = attempted_actuation
+        self.capture_record: object | None = None
+
 
 _T = TypeVar("_T", bound=LayerValue)
 
@@ -298,9 +310,19 @@ class TickEngine:
                 wheel_setpoint,
             )
         except Exception as exc:
-            raise TickExecutionError("L12 final safety could not complete") from exc
+            attempted = getattr(exc, "attempted_actuation", None)
+            if not isinstance(attempted, FinalActuation):
+                attempted = None
+            raise TickExecutionError(
+                "L12 final safety could not complete",
+                context=context,
+                attempted_actuation=attempted,
+            ) from exc
         if not isinstance(final, FinalActuation) or final.context != context:
-            raise TickExecutionError("L12 returned an invalid final contract")
+            raise TickExecutionError(
+                "L12 returned an invalid final contract",
+                context=context,
+            )
         records.append(LayerRecord("L12", final))
         self._last_context = context
         return TickResult(

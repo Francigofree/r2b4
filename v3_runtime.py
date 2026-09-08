@@ -20,8 +20,8 @@ from v3.composition.resident_physical_control import (
     ResidentPhysicalControlConfig,
 )
 from v3.contracts import LifecycleState, SafetyDecision, TickContext
-from v3.engine import TickResult
-from v3.execution import ExecutionRecord
+from v3.engine import TickExecutionError, TickResult
+from v3.execution import CaptureRecord
 from v3.ports import CommandGateway
 from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, RUN_FAULT, RUN_OK
 
@@ -228,7 +228,7 @@ def run_resident_physical_control(
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
     tick_observer: Callable[[TickResult], None] | None = None,
-    record_observer: Callable[[ExecutionRecord], None] | None = None,
+    record_observer: Callable[[CaptureRecord], None] | None = None,
 ) -> ResidentRuntimeReport:
     """Run until signal/stop or fault, then release every physical capability."""
 
@@ -289,8 +289,13 @@ def run_resident_physical_control(
                 raise RuntimeError("monotonic clock did not advance between ticks")
             context = TickContext(tick_id, now_ns)
             if shutdown_requested:
-                last_result, record = runtime.shutdown_execution(context)
-                if record_observer is not None and record is not None:
+                try:
+                    last_result, record = runtime.shutdown_execution(context)
+                except TickExecutionError as exc:
+                    if record_observer is not None and exc.capture_record is not None:
+                        record_observer(exc.capture_record)
+                    raise
+                if record_observer is not None:
                     record_observer(record)
                 if tick_observer is not None:
                     tick_observer(last_result)
@@ -310,8 +315,13 @@ def run_resident_physical_control(
                     operator_stopped=True,
                 )
 
-            last_result, record = runtime.tick_execution(context)
-            if record_observer is not None and record is not None:
+            try:
+                last_result, record = runtime.tick_execution(context)
+            except TickExecutionError as exc:
+                if record_observer is not None and exc.capture_record is not None:
+                    record_observer(exc.capture_record)
+                raise
+            if record_observer is not None:
                 record_observer(record)
             if tick_observer is not None:
                 tick_observer(last_result)
@@ -345,7 +355,7 @@ def run_owned_resident_physical_control(
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
     tick_observer: Callable[[TickResult], None] | None = None,
-    record_observer: Callable[[ExecutionRecord], None] | None = None,
+    record_observer: Callable[[CaptureRecord], None] | None = None,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
 

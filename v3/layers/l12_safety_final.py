@@ -22,6 +22,10 @@ from v3.ports import MotorWriter
 class MotorWriteError(RuntimeError):
     """Raised after the single atomic writer call failed."""
 
+    def __init__(self, message: str, attempted_actuation: FinalActuation) -> None:
+        super().__init__(message)
+        self.attempted_actuation = attempted_actuation
+
 
 @dataclass(frozen=True, slots=True)
 class LidarSafetyConfig:
@@ -143,7 +147,10 @@ class FinalSafetyGate:
             self._writer.write(command)
         except Exception as exc:
             self._fault_latched = True
-            raise MotorWriteError("the single final motor write failed") from exc
+            raise MotorWriteError(
+                "the single final motor write failed",
+                command,
+            ) from exc
         return command
 
     def _lidar_stop(

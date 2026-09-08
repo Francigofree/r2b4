@@ -6,6 +6,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Protocol
 
+from .contracts import DeviceHealth, LifecycleState, RawDeviceBatch, TickContext
 from .engine import TickInputs, TickResult
 
 
@@ -23,8 +24,66 @@ class ProductionV3(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ExecutionRecord:
+    """A normal tick whose complete inputs were closed before L1."""
+
     inputs: TickInputs
     result: TickResult
+
+
+@dataclass(frozen=True, slots=True)
+class EdgeFaultRecord:
+    """A completed L12 fail-closed tick for a fault before input closure."""
+
+    context: TickContext
+    lifecycle: LifecycleState
+    reason: str
+    fault_layer: str
+    critical_health: tuple[DeviceHealth, ...]
+    result: TickResult
+    raw_devices: RawDeviceBatch | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.context, TickContext):
+            raise TypeError("context must be TickContext")
+        if not isinstance(self.lifecycle, LifecycleState):
+            raise TypeError("lifecycle must be LifecycleState")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise ValueError("reason must be non-empty")
+        if not isinstance(self.fault_layer, str) or not self.fault_layer.strip():
+            raise ValueError("fault_layer must be non-empty")
+        if any(not isinstance(item, DeviceHealth) for item in self.critical_health):
+            raise TypeError("critical_health must contain DeviceHealth values")
+        if self.raw_devices is not None and self.raw_devices.context != self.context:
+            raise ValueError("raw_devices must use the fault context")
+        if self.result.trace.context != self.context:
+            raise ValueError("fault result must use the fault context")
+
+
+@dataclass(frozen=True, slots=True)
+class WriterFailureRecord:
+    """A terminal edge record when L12 could not complete its sole motor write."""
+
+    context: TickContext
+    lifecycle: LifecycleState
+    reason: str
+    attempted_actuation: object | None
+    inputs: TickInputs | None = None
+    raw_devices: RawDeviceBatch | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.context, TickContext):
+            raise TypeError("context must be TickContext")
+        if not isinstance(self.lifecycle, LifecycleState):
+            raise TypeError("lifecycle must be LifecycleState")
+        if not isinstance(self.reason, str) or not self.reason.strip():
+            raise ValueError("reason must be non-empty")
+        if self.inputs is not None and self.inputs.context != self.context:
+            raise ValueError("inputs must use the failure context")
+        if self.raw_devices is not None and self.raw_devices.context != self.context:
+            raise ValueError("raw_devices must use the failure context")
+
+
+CaptureRecord = ExecutionRecord | EdgeFaultRecord | WriterFailureRecord
 
 
 class OutputSink(Protocol):
@@ -109,6 +168,8 @@ class ExecutionBoundary:
 
 __all__ = [
     "ExecutionBoundary",
+    "CaptureRecord",
+    "EdgeFaultRecord",
     "ExecutionRecord",
     "ExecutionSummary",
     "InputSource",
@@ -116,4 +177,5 @@ __all__ = [
     "MemoryOutputSink",
     "OutputSink",
     "ProductionV3",
+    "WriterFailureRecord",
 ]

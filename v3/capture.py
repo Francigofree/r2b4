@@ -6,19 +6,57 @@ import hashlib
 import json
 import math
 import os
+import queue
+import threading
+from collections import OrderedDict, deque
 from collections.abc import Mapping, Sequence
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from .engine import LAYER_ORDER
-from .execution import ExecutionRecord, OutputSink
+from .execution import (
+    CaptureRecord,
+    EdgeFaultRecord,
+    ExecutionRecord,
+    OutputSink,
+    WriterFailureRecord,
+)
 
 
 V3_CAPTURE_SCHEMA = "R2B4_V3_CAPTURE_V1"
 V3_CAPTURE_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureWindowConfig:
+    """Hard RAM bounds for the passive triggered capture path."""
+
+    pre_event_ns: int = 5_000_000_000
+    post_event_ns: int = 2_000_000_000
+    ingress_queue_capacity: int = 256
+    max_tick_count: int = 512
+    max_byte_capacity: int = 16 * 1024 * 1024
+    max_raw_lidar_scans: int = 64
+    max_raw_lidar_points_per_scan: int = 4_096
+
+    def __post_init__(self) -> None:
+        for name in ("pre_event_ns", "post_event_ns"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        for name in (
+            "ingress_queue_capacity",
+            "max_tick_count",
+            "max_byte_capacity",
+            "max_raw_lidar_scans",
+            "max_raw_lidar_points_per_scan",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
 
 
 class V3CaptureError(RuntimeError):
@@ -86,6 +124,84 @@ def encode_value(value: object) -> object:
     raise V3CaptureError(f"cannot serialize capture value {type(value).__name__}")
 
 
+def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
+    """Encode one immutable observer record outside the production tick loop."""
+
+    if isinstance(record, ExecutionRecord):
+        context = record.inputs.context
+        return {
+            "record_type": "closed_input_tick",
+            "tick_id": context.tick_id,
+            "monotonic_ns": context.monotonic_ns,
+            "inputs": encode_value(record.inputs),
+            "expected": _encode_completed_result(record.result),
+        }
+    if isinstance(record, EdgeFaultRecord):
+        return {
+            "record_type": "edge_fault_tick",
+            "tick_id": record.context.tick_id,
+            "monotonic_ns": record.context.monotonic_ns,
+            "edge_fault": {
+                "context": encode_value(record.context),
+                "lifecycle": record.lifecycle.value,
+                "reason": record.reason,
+                "fault_layer": record.fault_layer,
+                "critical_health": encode_value(record.critical_health),
+                "raw_devices": encode_value(record.raw_devices),
+            },
+            "expected": _encode_completed_result(record.result),
+        }
+    if isinstance(record, WriterFailureRecord):
+        row: dict[str, object] = {
+            "record_type": (
+                "closed_input_tick" if record.inputs is not None else "edge_fault_tick"
+            ),
+            "tick_id": record.context.tick_id,
+            "monotonic_ns": record.context.monotonic_ns,
+            "expected": {
+                "fault_layer": "L12",
+                "layers": {},
+                "writer_failure": {
+                    "reason": record.reason,
+                    "attempted_actuation": encode_value(record.attempted_actuation),
+                },
+            },
+        }
+        if record.inputs is not None:
+            row["inputs"] = encode_value(record.inputs)
+        else:
+            row["edge_fault"] = {
+                "context": encode_value(record.context),
+                "lifecycle": record.lifecycle.value,
+                "reason": record.reason,
+                "fault_layer": "L12",
+                "critical_health": [],
+                "raw_devices": encode_value(record.raw_devices),
+            }
+        return row
+    raise TypeError("capture record must be a supported immutable capture record")
+
+
+def _encode_completed_result(result: object) -> dict[str, object]:
+    from .engine import TickResult
+
+    if not isinstance(result, TickResult):
+        raise TypeError("capture result must be TickResult")
+    layer_names = tuple(layer.layer for layer in result.trace.layers)
+    _validate_trace_layers(
+        layer_names,
+        result.trace.fault_layer,
+        preserve_order=True,
+    )
+    return {
+        "fault_layer": result.trace.fault_layer,
+        "layers": {
+            layer.layer: encode_value(layer.output)
+            for layer in result.trace.layers
+        },
+    }
+
+
 class CaptureSink(OutputSink):
     """Passively capture closed inputs and their production L1-L12 outputs."""
 
@@ -110,40 +226,30 @@ class CaptureSink(OutputSink):
         self._metadata = encoded_metadata
         self._ticks: list[dict[str, object]] = []
 
-    def write(self, record: ExecutionRecord) -> None:
-        if not isinstance(record, ExecutionRecord):
-            raise TypeError("capture sink requires ExecutionRecord")
-        context = record.inputs.context
+    def write(self, record: CaptureRecord) -> None:
+        self.write_encoded(encode_capture_record(record))
+
+    def write_encoded(self, tick: Mapping[str, object]) -> None:
+        row = dict(tick)
+        tick_id = _non_negative_integer(row.get("tick_id"), "tick_id")
+        monotonic_ns = _non_negative_integer(row.get("monotonic_ns"), "monotonic_ns")
         if self._ticks:
             previous = self._ticks[-1]
-            if context.tick_id != int(previous["tick_id"]) + 1:
+            if tick_id != int(previous["tick_id"]) + 1:
                 raise V3CaptureError("capture tick ids must be contiguous")
-            if context.monotonic_ns <= int(previous["monotonic_ns"]):
+            if monotonic_ns <= int(previous["monotonic_ns"]):
                 raise V3CaptureError("capture monotonic time must increase")
-        layer_names = tuple(layer.layer for layer in record.result.trace.layers)
-        _validate_trace_layers(
-            layer_names,
-            record.result.trace.fault_layer,
-            preserve_order=True,
-        )
-        layers = {
-            layer.layer: encode_value(layer.output)
-            for layer in record.result.trace.layers
-        }
-        self._ticks.append(
-            {
-                "tick_id": context.tick_id,
-                "monotonic_ns": context.monotonic_ns,
-                "inputs": encode_value(record.inputs),
-                "expected": {
-                    "fault_layer": record.result.trace.fault_layer,
-                    "layers": layers,
-                    "final_actuation": encode_value(record.result.final_actuation),
-                },
-            }
-        )
+        self._ticks.append(row)
 
-    def document(self, status: str) -> dict[str, object]:
+    def document(
+        self,
+        status: str,
+        *,
+        capture_window: Mapping[str, object] | None = None,
+        capture_integrity: Mapping[str, object] | None = None,
+        raw_lidar_scans: Sequence[Mapping[str, object]] = (),
+        raw_lidar_evidence: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
         terminal_status = str(status or "").upper()
         if terminal_status not in V3_CAPTURE_STATUSES:
             raise V3CaptureError("capture status must be terminal PASS/FAIL/FAULT")
@@ -161,11 +267,24 @@ class CaptureSink(OutputSink):
             "tick_count": len(self._ticks),
             "ticks": list(self._ticks),
         }
+        if capture_window is not None:
+            payload["capture_window"] = encode_value(capture_window)
+        if capture_integrity is not None:
+            payload["capture_integrity"] = encode_value(capture_integrity)
+        if raw_lidar_scans:
+            payload["raw_lidar_scans"] = encode_value(raw_lidar_scans)
+        if raw_lidar_evidence is not None:
+            payload["raw_lidar_evidence"] = encode_value(raw_lidar_evidence)
         payload["capture_sha256"] = payload_sha256(payload)
         return payload
 
-    def finalize(self, status: str, output_path: str | Path) -> Path:
-        return write_capture(self.document(status), output_path)
+    def finalize(
+        self,
+        status: str,
+        output_path: str | Path,
+        **document_options: object,
+    ) -> Path:
+        return write_capture(self.document(status, **document_options), output_path)
 
 
 def payload_sha256(payload: Mapping[str, object]) -> str:

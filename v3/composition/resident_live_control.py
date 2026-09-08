@@ -19,7 +19,12 @@ from v3.contracts import (
     TickContext,
 )
 from v3.engine import TickExecutionError, TickInputs, TickResult
-from v3.execution import ExecutionRecord
+from v3.execution import (
+    CaptureRecord,
+    EdgeFaultRecord,
+    ExecutionRecord,
+    WriterFailureRecord,
+)
 from v3.ports import CommandGateway
 
 from .native_control import NativeControlComposition, NativeControlCompositionConfig
@@ -198,7 +203,8 @@ class ResidentLiveControlComposition:
         reason: str,
         fault_layer: str,
         critical_health: tuple[DeviceHealth, ...] = (),
-    ) -> TickResult:
+        raw_devices: RawDeviceBatch | None = None,
+    ) -> tuple[TickResult, EdgeFaultRecord]:
         try:
             result = self._control.run_fault_tick(
                 context,
@@ -207,14 +213,29 @@ class ResidentLiveControlComposition:
                 fault_layer,
                 critical_health,
             )
-        except TickExecutionError:
+        except TickExecutionError as exc:
             self._write_failed = True
             self._lifecycle = LifecycleState.FAULT
+            exc.capture_record = WriterFailureRecord(
+                context=context,
+                lifecycle=LifecycleState.FAULT,
+                reason="MOTOR_WRITER_FAILURE",
+                attempted_actuation=exc.attempted_actuation,
+                raw_devices=raw_devices,
+            )
             raise
         self._active = False
         self._faulted = True
         self._lifecycle = LifecycleState.FAULT
-        return result
+        return result, EdgeFaultRecord(
+            context=context,
+            lifecycle=LifecycleState.FAULT,
+            reason=reason,
+            fault_layer=fault_layer,
+            critical_health=critical_health,
+            result=result,
+            raw_devices=raw_devices,
+        )
 
     def tick(self, context: TickContext) -> TickResult:
         """Close one resident input/command snapshot and one L12 decision."""
@@ -225,8 +246,8 @@ class ResidentLiveControlComposition:
     def tick_execution(
         self,
         context: TickContext,
-    ) -> tuple[TickResult, ExecutionRecord | None]:
-        """Return the passive closed-input record when a normal tick was formed."""
+    ) -> tuple[TickResult, CaptureRecord]:
+        """Return one passive normal or pre-input-closure fault record."""
 
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
@@ -235,52 +256,43 @@ class ResidentLiveControlComposition:
         if self._write_failed:
             raise RuntimeError("motor writer previously failed; retry is forbidden")
         if self._faulted:
-            return (
-                self._run_fault_tick(
-                    context,
-                    "SESSION_FAULT_LATCHED",
-                    "ResidentLiveControl",
-                ),
-                None,
+            return self._run_fault_tick(
+                context,
+                "SESSION_FAULT_LATCHED",
+                "ResidentLiveControl",
             )
 
         try:
             batch = self._reader.read(context)
         except Exception:
-            return self._run_fault_tick(context, "L0_ERROR", "L0"), None
+            return self._run_fault_tick(context, "L0_ERROR", "L0")
         try:
             command = self._command_gateway.snapshot(context)
         except Exception:
-            return (
-                self._run_fault_tick(
-                    context,
-                    "COMMAND_GATEWAY_ERROR",
-                    "CommandGateway",
-                    batch.device_health,
-                ),
-                None,
+            return self._run_fault_tick(
+                context,
+                "COMMAND_GATEWAY_ERROR",
+                "CommandGateway",
+                batch.device_health,
+                batch,
             )
         if not isinstance(command, CommandRequest) or command.context != context:
-            return (
-                self._run_fault_tick(
-                    context,
-                    "COMMAND_GATEWAY_INVALID",
-                    "CommandGateway",
-                    batch.device_health,
-                ),
-                None,
+            return self._run_fault_tick(
+                context,
+                "COMMAND_GATEWAY_INVALID",
+                "CommandGateway",
+                batch.device_health,
+                batch,
             )
 
         active = command.mode is not CommandMode.STOP
         if active and not self._active and not self._preflight_is_fresh_for(context):
-            return (
-                self._run_fault_tick(
-                    context,
-                    "PREFLIGHT_REQUIRED",
-                    "ResidentLiveControl",
-                    batch.device_health,
-                ),
-                None,
+            return self._run_fault_tick(
+                context,
+                "PREFLIGHT_REQUIRED",
+                "ResidentLiveControl",
+                batch.device_health,
+                batch,
             )
         scheduled_lifecycle = (
             LifecycleState.ACTIVE if active else LifecycleState.IDLE
@@ -293,9 +305,17 @@ class ResidentLiveControlComposition:
         )
         try:
             result = self._control.run_tick(inputs)
-        except TickExecutionError:
+        except TickExecutionError as exc:
             self._write_failed = True
             self._lifecycle = LifecycleState.FAULT
+            exc.capture_record = WriterFailureRecord(
+                context=context,
+                lifecycle=scheduled_lifecycle,
+                reason="MOTOR_WRITER_FAILURE",
+                attempted_actuation=exc.attempted_actuation,
+                inputs=inputs,
+                raw_devices=batch,
+            )
             raise
 
         final = result.final_actuation
@@ -327,8 +347,8 @@ class ResidentLiveControlComposition:
     def shutdown_execution(
         self,
         context: TickContext,
-    ) -> tuple[TickResult, ExecutionRecord | None]:
-        """Return the passive closed-input record for a normal shutdown tick."""
+    ) -> tuple[TickResult, CaptureRecord]:
+        """Return the passive normal or edge-fault shutdown record."""
 
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
@@ -339,13 +359,13 @@ class ResidentLiveControlComposition:
         try:
             batch = self._reader.read(context)
         except Exception:
-            result = self._run_fault_tick(
+            result, record = self._run_fault_tick(
                 context,
                 "SHUTDOWN_INPUT_ERROR",
                 "L0",
             )
             self._shutdown = True
-            return result, None
+            return result, record
 
         stop = CommandRequest(
             context=context,
@@ -362,9 +382,17 @@ class ResidentLiveControlComposition:
         )
         try:
             result = self._control.run_tick(inputs)
-        except TickExecutionError:
+        except TickExecutionError as exc:
             self._write_failed = True
             self._lifecycle = LifecycleState.FAULT
+            exc.capture_record = WriterFailureRecord(
+                context=context,
+                lifecycle=LifecycleState.SHUTDOWN,
+                reason="MOTOR_WRITER_FAILURE",
+                attempted_actuation=exc.attempted_actuation,
+                inputs=inputs,
+                raw_devices=batch,
+            )
             raise
         self._active = False
         self._shutdown = True
