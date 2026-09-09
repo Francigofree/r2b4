@@ -28,6 +28,7 @@ class ExecutionRecord:
 
     inputs: TickInputs
     result: TickResult
+    evidence: tuple[object, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +159,10 @@ class ExecutionBoundary:
                 raise TypeError("production returned a non-TickResult value")
             if result.trace.context != inputs.context or result.final_actuation.context != inputs.context:
                 raise ValueError("production result context differs from closed input")
-            sink.write(ExecutionRecord(inputs, result))
+            evidence = getattr(self._production, "tick_evidence", ())
+            if not isinstance(evidence, tuple):
+                raise TypeError("production tick_evidence must be a tuple")
+            sink.write(ExecutionRecord(inputs, result, evidence))
             count += 1
             if first_tick_id is None:
                 first_tick_id = inputs.context.tick_id

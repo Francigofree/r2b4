@@ -240,7 +240,7 @@ def test_capture_failure_is_reported_only_after_hardware_returns_safe(tmp_path):
         hardware_returned = True
         return _report()
 
-    with mock.patch.object(CaptureSink, "write", side_effect=OSError("capture failed")):
+    with mock.patch.object(CaptureSink, "finalize", side_effect=OSError("capture failed")):
         with pytest.raises(RuntimeError, match="production V3 capture failed"):
             process.run_v3_resident_process(
                 object(),
@@ -265,6 +265,10 @@ def test_signal_latch_and_cli_approval_fail_before_hardware_import(capsys):
     stop.handle(signal.SIGTERM, None)
     assert stop() is True
     assert stop.signum == signal.SIGTERM
+    capture_trigger = process.SignalCaptureTrigger()
+    capture_trigger.handle(signal.SIGUSR1, None)
+    assert capture_trigger.consume() is True
+    assert capture_trigger.consume() is False
 
     assert process.main(["--approval", "wrong"]) == 2
     payload = json.loads(capsys.readouterr().out)

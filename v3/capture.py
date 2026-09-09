@@ -129,13 +129,16 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
 
     if isinstance(record, ExecutionRecord):
         context = record.inputs.context
-        return {
+        row: dict[str, object] = {
             "record_type": "closed_input_tick",
             "tick_id": context.tick_id,
             "monotonic_ns": context.monotonic_ns,
             "inputs": encode_value(record.inputs),
             "expected": _encode_completed_result(record.result),
         }
+        if record.evidence:
+            row["tick_evidence"] = encode_value(record.evidence)
+        return row
     if isinstance(record, EdgeFaultRecord):
         return {
             "record_type": "edge_fault_tick",
@@ -310,6 +313,7 @@ class TriggeredCaptureWorker:
         "_finished",
         "_first_seen_ns",
         "_last_seen_ns",
+        "_latest_capacity_eviction_ns",
         "_output_path",
         "_post_window_complete",
         "_queue",
@@ -358,6 +362,7 @@ class TriggeredCaptureWorker:
         self._emergency_trigger: tuple[int | None, str] | None = None
         self._first_seen_ns: int | None = None
         self._last_seen_ns: int | None = None
+        self._latest_capacity_eviction_ns: int | None = None
         self._post_window_complete = False
         self._error: BaseException | None = None
         self._result_path: Path | None = None
@@ -441,7 +446,15 @@ class TriggeredCaptureWorker:
             if self._error is not None:
                 raise RuntimeError("production V3 capture failed") from self._error
             return self._result_path
-        self._queue.put(("finish", (status, bool(terminal))))
+        while self._thread.is_alive():
+            try:
+                self._queue.put(
+                    ("finish", (status, bool(terminal))),
+                    timeout=0.05,
+                )
+                break
+            except queue.Full:
+                continue
         self._thread.join()
         self._finished = True
         if self._error is not None:
@@ -451,7 +464,12 @@ class TriggeredCaptureWorker:
     def _run(self) -> None:
         try:
             while True:
-                kind, value = self._queue.get()
+                try:
+                    kind, value = self._queue.get(timeout=0.01)
+                except queue.Empty:
+                    if self._post_window_complete and self._result_path is None:
+                        self._finalize(self._trigger_capture_status(), False)
+                    continue
                 self._consume_emergency_trigger()
                 if kind == "record":
                     self._consume_record(value)
@@ -484,6 +502,8 @@ class TriggeredCaptureWorker:
         if self._first_seen_ns is None:
             self._first_seen_ns = context.monotonic_ns
         self._last_seen_ns = context.monotonic_ns
+        if self._emergency_trigger is not None:
+            self._consume_emergency_trigger()
         row = encode_capture_record(value)
         encoded_size = _canonical_json_size(row)
         trigger_now = _record_triggers_capture(value)
@@ -516,17 +536,20 @@ class TriggeredCaptureWorker:
     def _enforce_capacities(self) -> None:
         while len(self._ring) > self._config.max_tick_count:
             self._drop_oldest_tick(capacity=True)
-        while self._ring and self._ring_bytes + self._raw_bytes > self._config.max_byte_capacity:
+        while self._ring_bytes + self._raw_bytes > self._config.max_byte_capacity:
             if self._raw_scans:
                 self._drop_oldest_raw()
-            else:
+            elif self._ring:
                 self._drop_oldest_tick(capacity=True)
+            else:
+                break
 
     def _drop_oldest_tick(self, *, capacity: bool) -> None:
         item = self._ring.popleft()
         self._ring_bytes -= item.size_bytes
         if capacity:
             self._capacity_evictions += 1
+            self._latest_capacity_eviction_ns = int(item.row["monotonic_ns"])
 
     def _activate_trigger(self, requested_ns: object, reason: str) -> None:
         if self._trigger_ns is not None:
@@ -534,6 +557,7 @@ class TriggeredCaptureWorker:
         if requested_ns is None:
             requested_ns = self._last_seen_ns
         if requested_ns is None:
+            self._emergency_trigger = (None, reason)
             return
         trigger_ns = _non_negative_integer(requested_ns, "trigger monotonic_ns")
         self._trigger_ns = trigger_ns
@@ -568,6 +592,8 @@ class TriggeredCaptureWorker:
         self._raw_evictions += 1
 
     def _finalize(self, status: str, terminal: bool) -> None:
+        if self._result_path is not None:
+            return
         if self._trigger_ns is None:
             return
         lower = self._trigger_ns - self._config.pre_event_ns
@@ -590,7 +616,15 @@ class TriggeredCaptureWorker:
         )
         available = {int(row["revision"]) for row in retained}
         missing = sorted(referenced - available)
-        ingress_complete = self._dropped_ingress == 0 and not sequence_gaps
+        capacity_missing = bool(
+            self._latest_capacity_eviction_ns is not None
+            and self._latest_capacity_eviction_ns >= lower
+        )
+        ingress_complete = (
+            self._dropped_ingress == 0
+            and not sequence_gaps
+            and not capacity_missing
+        )
         post_complete = self._post_window_complete
         if terminal and self._last_seen_ns is not None and self._last_seen_ns < upper:
             post_complete = False
@@ -605,6 +639,14 @@ class TriggeredCaptureWorker:
                 "requested_post_event_ns": self._config.post_event_ns,
                 "captured_first_monotonic_ns": selected[0].row["monotonic_ns"],
                 "captured_last_monotonic_ns": selected[-1].row["monotonic_ns"],
+                "pre_window_complete": bool(
+                    self._config.pre_event_ns == 0
+                    or (
+                        self._first_seen_ns is not None
+                        and self._first_seen_ns <= lower
+                        and not capacity_missing
+                    )
+                ),
                 "post_window_complete": post_complete,
                 "terminal_short_post_window": bool(terminal and not post_complete),
             },
@@ -627,6 +669,13 @@ class TriggeredCaptureWorker:
             },
         )
         self._result_path.chmod(0o600)
+
+    def _trigger_capture_status(self) -> str:
+        return (
+            "PASS"
+            if self._trigger_reason in {"MANUAL", "SIGUSR1", "COMPATIBILITY_FULL_SESSION"}
+            else "FAULT"
+        )
 
 
 def _record_context(record: CaptureRecord):
@@ -815,6 +864,16 @@ def validate_capture(payload: Mapping[str, object]) -> tuple[Mapping[str, object
     if isinstance(raw_ticks, (str, bytes)) or not isinstance(raw_ticks, Sequence):
         raise V3CaptureError("capture ticks must be an array")
     ticks: list[Mapping[str, object]] = []
+    integrity = payload.get("capture_integrity")
+    integrity_complete = True
+    if integrity is not None:
+        if not isinstance(integrity, Mapping):
+            raise V3CaptureError("capture_integrity must be an object")
+        if type(integrity.get("complete")) is not bool:
+            raise V3CaptureError("capture_integrity.complete must be bool")
+        if type(integrity.get("replay_match_eligible")) is not bool:
+            raise V3CaptureError("capture_integrity.replay_match_eligible must be bool")
+        integrity_complete = bool(integrity["complete"])
     previous_tick_id: int | None = None
     previous_ns: int | None = None
     for raw_tick in raw_ticks:
@@ -822,25 +881,49 @@ def validate_capture(payload: Mapping[str, object]) -> tuple[Mapping[str, object
             raise V3CaptureError("capture tick must be an object")
         tick_id = _non_negative_integer(raw_tick.get("tick_id"), "tick_id")
         monotonic_ns = _non_negative_integer(raw_tick.get("monotonic_ns"), "monotonic_ns")
-        if previous_tick_id is not None and tick_id != previous_tick_id + 1:
-            raise V3CaptureError("capture tick ids must be contiguous")
+        if (
+            previous_tick_id is not None
+            and tick_id != previous_tick_id + 1
+            and integrity_complete
+        ):
+            raise V3CaptureError("complete capture tick ids must be contiguous")
         if previous_ns is not None and monotonic_ns <= previous_ns:
             raise V3CaptureError("capture monotonic time must increase")
+        record_type = raw_tick.get("record_type", "closed_input_tick")
+        if record_type not in {"closed_input_tick", "edge_fault_tick"}:
+            raise V3CaptureError(f"tick {tick_id} record_type is invalid")
         inputs = raw_tick.get("inputs")
         expected = raw_tick.get("expected")
-        if not isinstance(inputs, Mapping) or inputs.get("__type__") != "TickInputs":
-            raise V3CaptureError(f"tick {tick_id} lacks typed TickInputs")
+        if record_type == "closed_input_tick":
+            if not isinstance(inputs, Mapping) or inputs.get("__type__") != "TickInputs":
+                raise V3CaptureError(f"tick {tick_id} lacks typed TickInputs")
+        else:
+            edge_fault = raw_tick.get("edge_fault")
+            if not isinstance(edge_fault, Mapping):
+                raise V3CaptureError(f"tick {tick_id} lacks edge_fault evidence")
+            context = edge_fault.get("context")
+            if not isinstance(context, Mapping) or context.get("__type__") != "TickContext":
+                raise V3CaptureError(f"tick {tick_id} edge fault lacks TickContext")
+            if context.get("tick_id") != tick_id or context.get("monotonic_ns") != monotonic_ns:
+                raise V3CaptureError(f"tick {tick_id} edge fault context mismatch")
         if not isinstance(expected, Mapping):
             raise V3CaptureError(f"tick {tick_id} expected output must be an object")
         layers = expected.get("layers")
         if not isinstance(layers, Mapping):
             raise V3CaptureError(f"tick {tick_id} layers must be an object")
-        _validate_trace_layers(
-            tuple(str(layer) for layer in layers),
-            expected.get("fault_layer"),
-            preserve_order=False,
-        )
-        if expected.get("final_actuation") != layers.get("L12"):
+        writer_failure = expected.get("writer_failure")
+        if writer_failure is None:
+            _validate_trace_layers(
+                tuple(str(layer) for layer in layers),
+                expected.get("fault_layer"),
+                preserve_order=False,
+            )
+        elif not isinstance(writer_failure, Mapping) or expected.get("fault_layer") != "L12":
+            raise V3CaptureError(f"tick {tick_id} writer failure is invalid")
+        if (
+            "final_actuation" in expected
+            and expected.get("final_actuation") != layers.get("L12")
+        ):
             raise V3CaptureError(
                 f"tick {tick_id} final_actuation must equal the terminal L12 output"
             )
@@ -851,6 +934,17 @@ def validate_capture(payload: Mapping[str, object]) -> tuple[Mapping[str, object
         raise V3CaptureError("capture contains no ticks")
     if payload.get("tick_count") != len(ticks):
         raise V3CaptureError("capture tick count mismatch")
+    raw_scans = payload.get("raw_lidar_scans", ())
+    if isinstance(raw_scans, (str, bytes)) or not isinstance(raw_scans, Sequence):
+        raise V3CaptureError("raw_lidar_scans must be an array")
+    revisions: set[int] = set()
+    for raw_scan in raw_scans:
+        if not isinstance(raw_scan, Mapping):
+            raise V3CaptureError("raw lidar scan must be an object")
+        revision = _non_negative_integer(raw_scan.get("revision"), "raw lidar revision")
+        if revision == 0 or revision in revisions:
+            raise V3CaptureError("raw lidar revisions must be positive and unique")
+        revisions.add(revision)
     return tuple(ticks)
 
 
@@ -870,6 +964,10 @@ def inspect_capture(path_value: str | Path) -> dict[str, object]:
         "first_monotonic_ns": ticks[0]["monotonic_ns"],
         "last_monotonic_ns": ticks[-1]["monotonic_ns"],
         "capture_sha256": payload["capture_sha256"],
+        "capture_window": payload.get("capture_window"),
+        "capture_integrity": payload.get("capture_integrity"),
+        "raw_lidar_scan_count": len(payload.get("raw_lidar_scans", ())),
+        "raw_lidar_evidence": payload.get("raw_lidar_evidence"),
         "path": str(path.resolve()),
     }
 
@@ -882,9 +980,12 @@ def _non_negative_integer(value: Any, name: str) -> int:
 
 __all__ = [
     "CaptureSink",
+    "CaptureWindowConfig",
     "LAYER_ORDER",
     "V3_CAPTURE_SCHEMA",
     "V3CaptureError",
+    "TriggeredCaptureWorker",
+    "encode_capture_record",
     "encode_value",
     "inspect_capture",
     "load_capture",

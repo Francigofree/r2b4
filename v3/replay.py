@@ -10,7 +10,7 @@ import os
 import sys
 import time
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 from .capture import (
@@ -35,14 +35,26 @@ from .contracts import (
     DeviceHealthState,
     DeviceSample,
     LifecycleState,
+    MissionConstraints,
     RawDeviceBatch,
     SafetyDecision,
     TickContext,
 )
 from .engine import LayerValue, TickEngine, TickInputs, TickResult, TickTrace
 from .execution import ExecutionBoundary, IterableInputSource, MemoryOutputSink
+from .layers.l2_admission import AdmissionConfig
+from .layers.l4_world_model import WorldModelConfig
+from .layers.l5_command_mission import MissionConfig
+from .layers.l6_navigation import NavigationConfig
+from .layers.l8_motion_realization import MotionRealizationConfig
+from .layers.l9_operational_constraints import OperationalConstraintsConfig
 from .layers.l10_chassis_control import ChassisControlConfig
-from .layers.l11_actuator_control import WheelSpeedMap
+from .layers.l11_actuator_control import (
+    SpeedMapPoint,
+    WheelPiConfig,
+    WheelSpeedCurve,
+    WheelSpeedMap,
+)
 from .layers.l3_state_estimation import NativeStateEstimatorConfig
 from .layers.l12_safety_final import LidarSafetyConfig
 
@@ -94,6 +106,24 @@ class ReplayDivergence:
     layer: str
     expected: LayerValue | TickTrace | None
     actual: LayerValue | TickTrace | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ReplayEntry:
+    context: TickContext
+    inputs: TickInputs | None
+    lifecycle: LifecycleState
+    reason: str | None = None
+    fault_layer: str | None = None
+    critical_health: tuple[DeviceHealth, ...] = ()
+    writer_failure: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _ReplayOutcome:
+    result: TickResult | None
+    writer_failure: bool
+    attempted_actuation: object | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,12 +188,18 @@ class ReplaySelection:
 
 
 class _RecordingWriter:
-    __slots__ = ("commands",)
+    __slots__ = ("attempts", "commands", "failure_write_indices")
 
-    def __init__(self) -> None:
+    def __init__(self, failure_write_indices: frozenset[int] = frozenset()) -> None:
         self.commands: list[object] = []
+        self.attempts: list[object] = []
+        self.failure_write_indices = failure_write_indices
 
     def write(self, command: object) -> None:
+        write_index = len(self.attempts)
+        self.attempts.append(command)
+        if write_index in self.failure_write_indices:
+            raise OSError("captured motor writer failure")
         self.commands.append(command)
 
 
@@ -256,27 +292,43 @@ def replay_capture(
         ticks = validate_general_capture(general_payload)
     except V3CaptureError as exc:
         raise V3ReplayError(str(exc)) from exc
-    inputs = tuple(_reconstruct_general_inputs(tick) for tick in ticks)
+    entries = tuple(_reconstruct_general_entry(tick) for tick in ticks)
     indices = _selection_indices(ticks, selected)
-    execution_inputs = inputs[: indices[-1] + 1]
-    config = _embedded_control_config(general_payload, execution_inputs)
-    first_results, first_writes = _run_native_replay(execution_inputs, config)
-    second_results, second_writes = _run_native_replay(execution_inputs, config)
+    execution_entries = entries[: indices[-1] + 1]
+    closed_inputs = tuple(
+        entry.inputs for entry in execution_entries if entry.inputs is not None
+    )
+    config = _embedded_control_config(general_payload, closed_inputs)
+    first_results, first_writes = _run_native_replay(execution_entries, config)
+    second_results, second_writes = _run_native_replay(execution_entries, config)
     repeated = first_results == second_results and first_writes == second_writes
     selected_ticks = tuple(ticks[index] for index in indices)
     selected_results = tuple(first_results[index] for index in indices)
-    selected_writes = tuple(first_writes[index] for index in indices)
     divergence, layer_rows = _general_diagnostics(
         selected_ticks,
         selected_results,
-        selected_writes,
         selected.layers,
+    )
+    integrity = general_payload.get("capture_integrity")
+    replay_eligible = not isinstance(integrity, Mapping) or (
+        integrity.get("complete") is True
+        and integrity.get("replay_match_eligible") is True
     )
     status = (
         V3_REPLAY_STATUS_MATCH
-        if divergence is None and repeated
+        if divergence is None and repeated and replay_eligible
         else V3_REPLAY_STATUS_MISMATCH
     )
+    if divergence is None and not replay_eligible:
+        divergence = {
+            "tick_id": None,
+            "layer": "Capture",
+            "field_path": "capture_integrity",
+            "reason": "CAPTURE_INCOMPLETE",
+            "expected": {"complete": True, "replay_match_eligible": True},
+            "actual": integrity,
+            "evidence": {"capture_integrity": integrity},
+        }
     if divergence is None and not repeated:
         divergence = {
             "tick_id": None,
@@ -287,6 +339,12 @@ def replay_capture(
         }
     root = Path(project_root).resolve() if project_root is not None else Path.cwd()
     source_first = _source_first_evidence(root, capture_source_manifest_path)
+    first_live_incident = _first_live_incident(selected_ticks)
+    physical_root_cause = _physical_root_cause(
+        general_payload,
+        first_live_incident,
+        divergence,
+    )
     result: dict[str, object] = {
         "schema": V3_REPLAY_RESULT_SCHEMA,
         "status": status,
@@ -319,9 +377,13 @@ def replay_capture(
         "diagnostics": {
             "layers": layer_rows,
             "first_divergence": divergence,
+            "first_live_incident": first_live_incident,
+            "physical_root_cause": physical_root_cause,
         },
         "source_first": source_first,
         "first_divergence": divergence,
+        "first_live_incident": first_live_incident,
+        "physical_root_cause": physical_root_cause,
     }
     result["result_sha256"] = _payload_sha256(result)
     return result
@@ -374,15 +436,42 @@ def write_replay_result(result: Mapping[str, object], output_path: str | Path) -
 
 
 def _run_native_replay(
-    inputs: tuple[TickInputs, ...],
+    entries: tuple[_ReplayEntry, ...],
     config: NativeControlCompositionConfig,
-) -> tuple[tuple[TickResult, ...], tuple[object, ...]]:
-    writer = _RecordingWriter()
+) -> tuple[tuple[_ReplayOutcome, ...], tuple[object, ...]]:
+    failure_indices = frozenset(
+        index for index, entry in enumerate(entries) if entry.writer_failure
+    )
+    writer = _RecordingWriter(failure_indices)
     composition = NativeControlComposition(writer, config)
-    sink = MemoryOutputSink()
-    ExecutionBoundary(composition).run(IterableInputSource(inputs), sink)
-    results = tuple(record.result for record in sink.records)
-    return results, tuple(writer.commands)
+    outcomes: list[_ReplayOutcome] = []
+    for entry in entries:
+        try:
+            if entry.inputs is not None:
+                result = composition.run_tick(entry.inputs)
+            else:
+                if entry.reason is None or entry.fault_layer is None:
+                    raise V3ReplayError("edge fault replay entry is incomplete")
+                result = composition.run_fault_tick(
+                    entry.context,
+                    entry.lifecycle,
+                    entry.reason,
+                    entry.fault_layer,
+                    entry.critical_health,
+                )
+        except Exception as exc:
+            from .engine import TickExecutionError
+
+            if not isinstance(exc, TickExecutionError):
+                raise
+            outcomes.append(
+                _ReplayOutcome(None, True, exc.attempted_actuation)
+            )
+            if not entry.writer_failure:
+                break
+        else:
+            outcomes.append(_ReplayOutcome(result, False, None))
+    return tuple(outcomes), tuple(writer.attempts)
 
 
 def _layer_index(layer: str) -> int:
@@ -440,6 +529,42 @@ def _selection_summary(
             "last_tick_id": ticks[indices[0] - 1]["tick_id"] if indices[0] else None,
         },
     }
+
+
+def _reconstruct_general_entry(tick: Mapping[str, object]) -> _ReplayEntry:
+    record_type = tick.get("record_type", "closed_input_tick")
+    expected = _mapping(tick.get("expected"), "tick.expected")
+    writer_failure = isinstance(expected.get("writer_failure"), Mapping)
+    if record_type == "closed_input_tick":
+        inputs = _reconstruct_general_inputs(tick)
+        return _ReplayEntry(
+            context=inputs.context,
+            inputs=inputs,
+            lifecycle=inputs.lifecycle,
+            writer_failure=writer_failure,
+        )
+    if record_type != "edge_fault_tick":
+        raise V3ReplayError("capture tick has an unsupported record_type")
+    edge = _mapping(tick.get("edge_fault"), "tick.edge_fault")
+    context = _context(edge.get("context"), "tick.edge_fault.context")
+    raw_health = edge.get("critical_health", ())
+    health = tuple(
+        DeviceHealth(
+            device_id=str(row.get("device_id", "")),
+            state=DeviceHealthState(str(row.get("state", ""))),
+            reason=None if row.get("reason") is None else str(row.get("reason")),
+        )
+        for row in _mapping_sequence(raw_health, "tick.edge_fault.critical_health")
+    )
+    return _ReplayEntry(
+        context=context,
+        inputs=None,
+        lifecycle=LifecycleState(str(edge.get("lifecycle", ""))),
+        reason=str(edge.get("reason", "")),
+        fault_layer=str(edge.get("fault_layer", "")),
+        critical_health=health,
+        writer_failure=writer_failure,
+    )
 
 
 def _reconstruct_general_inputs(tick: Mapping[str, object]) -> TickInputs:
@@ -500,16 +625,23 @@ def _embedded_control_config(
     inputs: Sequence[TickInputs],
 ) -> NativeControlCompositionConfig:
     configuration = _mapping(payload.get("configuration"), "capture.configuration")
-    physics = _mapping(configuration.get("physics"), "capture.configuration.physics")
+    resolved = configuration.get("resolved_control")
+    if resolved is not None:
+        return _decode_native_control_config(
+            _mapping(resolved, "capture.configuration.resolved_control")
+        )
+    legacy_value = configuration.get("legacy_documents", configuration)
+    legacy = _mapping(legacy_value, "capture.configuration.legacy_documents")
+    physics = _mapping(legacy.get("physics"), "capture.configuration.physics")
     speed_map = _mapping(
-        configuration.get("speed_map"),
+        legacy.get("speed_map"),
         "capture.configuration.speed_map",
     )
     hardware = _mapping(
-        configuration.get("hardware"),
+        legacy.get("hardware"),
         "capture.configuration.hardware",
     )
-    control_value = configuration.get("control")
+    control_value = legacy.get("control")
     control = (
         _mapping(control_value, "capture.configuration.control")
         if control_value is not None
@@ -524,10 +656,167 @@ def _embedded_control_config(
     )
 
 
+def _decode_native_control_config(
+    row: Mapping[str, object],
+) -> NativeControlCompositionConfig:
+    _require_type(row, "NativeControlCompositionConfig", "resolved_control")
+    expected = {field.name for field in fields(NativeControlCompositionConfig)}
+    missing = sorted(expected - set(row))
+    if missing:
+        raise V3ReplayError(
+            "resolved_control lacks fields: " + ", ".join(missing)
+        )
+    return NativeControlCompositionConfig(
+        speed_map=_decode_speed_map(
+            _mapping(row.get("speed_map"), "resolved_control.speed_map")
+        ),
+        admission=_decode_flat_config(
+            AdmissionConfig,
+            row.get("admission"),
+            "resolved_control.admission",
+        ),
+        estimation=_decode_flat_config(
+            NativeStateEstimatorConfig,
+            row.get("estimation"),
+            "resolved_control.estimation",
+            tuple_fields={
+                "process_noise",
+                "initial_covariance",
+                "lidar_measurement_variance",
+            },
+        ),
+        world_model=_decode_flat_config(
+            WorldModelConfig,
+            row.get("world_model"),
+            "resolved_control.world_model",
+        ),
+        mission=_decode_mission_config(
+            _mapping(row.get("mission"), "resolved_control.mission")
+        ),
+        navigation=_decode_flat_config(
+            NavigationConfig,
+            row.get("navigation"),
+            "resolved_control.navigation",
+        ),
+        motion_realization=_decode_flat_config(
+            MotionRealizationConfig,
+            row.get("motion_realization"),
+            "resolved_control.motion_realization",
+        ),
+        operational_constraints=_decode_flat_config(
+            OperationalConstraintsConfig,
+            row.get("operational_constraints"),
+            "resolved_control.operational_constraints",
+        ),
+        chassis_control=_decode_flat_config(
+            ChassisControlConfig,
+            row.get("chassis_control"),
+            "resolved_control.chassis_control",
+        ),
+        wheel_pi=_decode_flat_config(
+            WheelPiConfig,
+            row.get("wheel_pi"),
+            "resolved_control.wheel_pi",
+        ),
+        lidar_safety=(
+            None
+            if row.get("lidar_safety") is None
+            else _decode_flat_config(
+                LidarSafetyConfig,
+                row.get("lidar_safety"),
+                "resolved_control.lidar_safety",
+            )
+        ),
+    )
+
+
+def _decode_flat_config(
+    cls: type,
+    value: object,
+    name: str,
+    *,
+    tuple_fields: set[str] | None = None,
+):
+    row = _mapping(value, name)
+    _require_type(row, cls.__name__, name)
+    names = tuple(field.name for field in fields(cls))
+    missing = [field_name for field_name in names if field_name not in row]
+    if missing:
+        raise V3ReplayError(f"{name} lacks fields: {', '.join(missing)}")
+    converted = {
+        field_name: (
+            tuple(_sequence(row[field_name], f"{name}.{field_name}"))
+            if tuple_fields and field_name in tuple_fields
+            else row[field_name]
+        )
+        for field_name in names
+    }
+    try:
+        return cls(**converted)
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"{name} is invalid: {exc}") from exc
+
+
+def _decode_speed_map(row: Mapping[str, object]) -> WheelSpeedMap:
+    _require_type(row, "WheelSpeedMap", "resolved_control.speed_map")
+    curves = tuple(
+        WheelSpeedCurve(
+            name=str(curve.get("name", "")),
+            points=tuple(
+                SpeedMapPoint(
+                    speed_mps=_number(point.get("speed_mps"), "speed_map.speed_mps"),
+                    normalized_output=_number(
+                        point.get("normalized_output"),
+                        "speed_map.normalized_output",
+                    ),
+                )
+                for point in _mapping_sequence(curve.get("points"), "speed_map.points")
+                if _required_encoded_type(point, "SpeedMapPoint", "speed_map.point")
+            ),
+            maintenance_output=_number(
+                curve.get("maintenance_output"),
+                "speed_map.maintenance_output",
+            ),
+            startup_output=_number(
+                curve.get("startup_output"),
+                "speed_map.startup_output",
+            ),
+        )
+        for curve in _mapping_sequence(row.get("curves"), "resolved_control.speed_map.curves")
+        if _required_encoded_type(curve, "WheelSpeedCurve", "speed_map.curve")
+    )
+    try:
+        return WheelSpeedMap(
+            schema=str(row.get("schema", "")),
+            map_state=str(row.get("map_state", "")),
+            curves=curves,
+        )
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_control.speed_map is invalid: {exc}") from exc
+
+
+def _decode_mission_config(row: Mapping[str, object]) -> MissionConfig:
+    _require_type(row, "MissionConfig", "resolved_control.mission")
+    constraints = _decode_flat_config(
+        MissionConstraints,
+        row.get("default_constraints"),
+        "resolved_control.mission.default_constraints",
+    )
+    return MissionConfig(default_constraints=constraints)
+
+
+def _required_encoded_type(
+    row: Mapping[str, object],
+    expected: str,
+    name: str,
+) -> bool:
+    _require_type(row, expected, name)
+    return True
+
+
 def _general_diagnostics(
     ticks: Sequence[Mapping[str, object]],
-    results: Sequence[TickResult],
-    writes: Sequence[object],
+    outcomes: Sequence[_ReplayOutcome],
     layers: Sequence[str],
 ) -> tuple[dict[str, object] | None, dict[str, object]]:
     layer_rows: dict[str, object] = {
@@ -541,17 +830,58 @@ def _general_diagnostics(
         for layer in layers
     }
     first: dict[str, object] | None = None
-    if len(ticks) != len(results):
+    if len(ticks) != len(outcomes):
         first = {
             "tick_id": None,
             "layer": "TickEngine",
+            "field_path": "ticks",
             "reason": "TICK_COUNT_MISMATCH",
             "expected": len(ticks),
-            "actual": len(results),
+            "actual": len(outcomes),
+            "evidence": {"capture_tick_count": len(ticks)},
         }
         return first, layer_rows
-    for index, (tick, result) in enumerate(zip(ticks, results)):
+    for tick, outcome in zip(ticks, outcomes):
         expected = _mapping(tick.get("expected"), "tick.expected")
+        expected_writer_failure = expected.get("writer_failure")
+        if isinstance(expected_writer_failure, Mapping):
+            expected_attempt = expected_writer_failure.get("attempted_actuation")
+            actual_attempt = _capture_value(outcome.attempted_actuation)
+            if not outcome.writer_failure or expected_attempt != actual_attempt:
+                difference = _first_value_difference(expected_attempt, actual_attempt)
+                path, expected_leaf, actual_leaf = difference or (
+                    "writer_failure",
+                    True,
+                    outcome.writer_failure,
+                )
+                if first is None:
+                    first = _divergence_row(
+                        tick,
+                        "L12",
+                        f"L12.writer_failure.{path}",
+                        "WRITER_FAILURE_MISMATCH",
+                        expected_leaf,
+                        actual_leaf,
+                    )
+            row = dict(_mapping(layer_rows.get("L12", {}), "diagnostics.L12"))
+            if row:
+                row["compared_tick_count"] = int(row["compared_tick_count"]) + 1
+                if first is not None and first.get("tick_id") == tick.get("tick_id"):
+                    row["mismatch_count"] = int(row["mismatch_count"]) + 1
+                layer_rows["L12"] = row
+            continue
+        result = outcome.result
+        if result is None:
+            if first is None:
+                first = _divergence_row(
+                    tick,
+                    "L12",
+                    "L12.writer",
+                    "UNEXPECTED_WRITER_FAILURE",
+                    "completed L12",
+                    "writer failure",
+                )
+            continue
         expected_layers = _mapping(expected.get("layers"), "tick.expected.layers")
         actual_layers = {
             record.layer: _capture_value(record.output)
@@ -583,21 +913,28 @@ def _general_diagnostics(
             row["mismatch_count"] = int(row["mismatch_count"]) + 1
             layer_rows[layer] = row
             if first is None:
-                first = {
-                    "tick_id": tick["tick_id"],
-                    "layer": layer,
-                    "reason": (
+                expected_value = (
+                    expected_layers[layer] if expected_present else "NOT_EXECUTED"
+                )
+                actual_value = actual_layers[layer] if actual_present else "NOT_EXECUTED"
+                difference = _first_value_difference(expected_value, actual_value)
+                path, expected_leaf, actual_leaf = difference or (
+                    "",
+                    expected_value,
+                    actual_value,
+                )
+                first = _divergence_row(
+                    tick,
+                    layer,
+                    layer if not path else f"{layer}.{path}",
+                    (
                         "DIRECT_VALUE_MISMATCH"
                         if expected_present and actual_present
                         else "LAYER_PRESENCE_MISMATCH"
                     ),
-                    "expected": (
-                        expected_layers[layer] if expected_present else "NOT_EXECUTED"
-                    ),
-                    "actual": (
-                        actual_layers[layer] if actual_present else "NOT_EXECUTED"
-                    ),
-                }
+                    expected_leaf,
+                    actual_leaf,
+                )
         expected_fault = expected.get("fault_layer")
         actual_fault = result.trace.fault_layer
         if (
@@ -609,58 +946,249 @@ def _general_diagnostics(
             )
             and first is None
         ):
-            first = {
-                "tick_id": tick["tick_id"],
-                "layer": "TickEngine",
-                "reason": "FAULT_LAYER_MISMATCH",
-                "expected": expected_fault,
-                "actual": actual_fault,
-            }
-        if "L12" in layers:
-            expected_final = expected.get("final_actuation")
-            actual_final = _capture_value(result.final_actuation)
-            final_mismatch = expected_final != actual_final
-            write_mismatch = index >= len(writes) or writes[index] != result.final_actuation
-            if final_mismatch or write_mismatch:
-                if "L12" not in mismatched_layers:
-                    row = dict(_mapping(layer_rows["L12"], "diagnostics.L12"))
-                    row["mismatch_count"] = int(row["mismatch_count"]) + 1
-                    layer_rows["L12"] = row
-                if first is None and final_mismatch:
-                    first = {
-                        "tick_id": tick["tick_id"],
-                        "layer": "L12",
-                        "reason": "FINAL_ACTUATION_MISMATCH",
-                        "expected": expected_final,
-                        "actual": actual_final,
-                    }
-                if first is None and write_mismatch:
-                    first = {
-                        "tick_id": tick["tick_id"],
-                        "layer": "L12",
-                        "reason": "OFFLINE_WRITE_VALUE_MISMATCH",
-                        "expected": actual_final,
-                        "actual": None if index >= len(writes) else _capture_value(writes[index]),
-                    }
+            first = _divergence_row(
+                tick,
+                "TickEngine",
+                "TickEngine.fault_layer",
+                "FAULT_LAYER_MISMATCH",
+                expected_fault,
+                actual_fault,
+            )
     return first, layer_rows
 
 
+def _divergence_row(
+    tick: Mapping[str, object],
+    layer: str,
+    field_path: str,
+    reason: str,
+    expected: object,
+    actual: object,
+) -> dict[str, object]:
+    return {
+        "tick_id": tick.get("tick_id"),
+        "layer": layer,
+        "field_path": field_path,
+        "reason": reason,
+        "expected": expected,
+        "actual": actual,
+        "evidence": _tick_evidence(tick),
+    }
+
+
+def _first_value_difference(
+    expected: object,
+    actual: object,
+    prefix: str = "",
+) -> tuple[str, object, object] | None:
+    if isinstance(expected, Mapping) and isinstance(actual, Mapping):
+        keys = list(expected)
+        keys.extend(sorted(str(key) for key in actual if key not in expected))
+        for key in keys:
+            path = str(key) if not prefix else f"{prefix}.{key}"
+            if key not in expected:
+                return path, "MISSING", actual[key]
+            if key not in actual:
+                return path, expected[key], "MISSING"
+            difference = _first_value_difference(expected[key], actual[key], path)
+            if difference is not None:
+                return difference
+        return None
+    if (
+        isinstance(expected, Sequence)
+        and not isinstance(expected, (str, bytes))
+        and isinstance(actual, Sequence)
+        and not isinstance(actual, (str, bytes))
+    ):
+        for index in range(max(len(expected), len(actual))):
+            path = f"[{index}]" if not prefix else f"{prefix}[{index}]"
+            if index >= len(expected):
+                return path, "MISSING", actual[index]
+            if index >= len(actual):
+                return path, expected[index], "MISSING"
+            difference = _first_value_difference(expected[index], actual[index], path)
+            if difference is not None:
+                return difference
+        return None
+    if expected != actual:
+        return prefix, expected, actual
+    return None
+
+
+def _tick_evidence(tick: Mapping[str, object]) -> dict[str, object]:
+    evidence: dict[str, object] = {
+        "record_type": tick.get("record_type", "closed_input_tick"),
+        "input_reference": f"ticks[{tick.get('tick_id')}].inputs",
+    }
+    if "tick_evidence" in tick:
+        evidence["ekf_updates"] = tick.get("tick_evidence")
+    raw: object | None = None
+    inputs = tick.get("inputs")
+    if isinstance(inputs, Mapping):
+        raw = inputs.get("raw_devices")
+    else:
+        edge = tick.get("edge_fault")
+        if isinstance(edge, Mapping):
+            raw = edge.get("raw_devices")
+            evidence["edge_fault"] = {
+                "reason": edge.get("reason"),
+                "fault_layer": edge.get("fault_layer"),
+            }
+    if isinstance(raw, Mapping):
+        evidence["device_health"] = raw.get("device_health", ())
+        samples = raw.get("samples", ())
+        if isinstance(samples, Sequence) and not isinstance(samples, (str, bytes)):
+            evidence["sensor_samples"] = [
+                sample
+                for sample in samples
+                if isinstance(sample, Mapping)
+                and str(sample.get("kind", "")).startswith(
+                    ("wheel_velocity", "imu_", "lidar_")
+                )
+            ]
+    return evidence
+
+
+def _first_live_incident(
+    ticks: Sequence[Mapping[str, object]],
+) -> dict[str, object] | None:
+    for tick in ticks:
+        expected = _mapping(tick.get("expected"), "tick.expected")
+        edge = tick.get("edge_fault")
+        if isinstance(edge, Mapping):
+            return {
+                "tick_id": tick.get("tick_id"),
+                "layer": edge.get("fault_layer"),
+                "reason": edge.get("reason"),
+                "evidence": _tick_evidence(tick),
+            }
+        writer_failure = expected.get("writer_failure")
+        if isinstance(writer_failure, Mapping):
+            return {
+                "tick_id": tick.get("tick_id"),
+                "layer": "L12",
+                "reason": writer_failure.get("reason"),
+                "evidence": _tick_evidence(tick),
+            }
+        raw = tick.get("inputs")
+        if isinstance(raw, Mapping):
+            devices = raw.get("raw_devices")
+            health = devices.get("device_health") if isinstance(devices, Mapping) else None
+            if isinstance(health, Sequence) and not isinstance(health, (str, bytes)):
+                degraded = next(
+                    (
+                        row
+                        for row in health
+                        if isinstance(row, Mapping) and row.get("state") != "OK"
+                    ),
+                    None,
+                )
+                if degraded is not None:
+                    return {
+                        "tick_id": tick.get("tick_id"),
+                        "layer": "L0",
+                        "reason": degraded.get("reason") or degraded.get("state"),
+                        "device_id": degraded.get("device_id"),
+                        "evidence": _tick_evidence(tick),
+                    }
+        fault_layer = expected.get("fault_layer")
+        layers = expected.get("layers")
+        l12 = layers.get("L12") if isinstance(layers, Mapping) else None
+        decision = l12.get("safety_decision") if isinstance(l12, Mapping) else None
+        if fault_layer is not None or decision == "FAULT":
+            return {
+                "tick_id": tick.get("tick_id"),
+                "layer": fault_layer or "L12",
+                "reason": l12.get("reason") if isinstance(l12, Mapping) else None,
+                "evidence": _tick_evidence(tick),
+            }
+    return None
+
+
+def _physical_root_cause(
+    payload: Mapping[str, object],
+    incident: Mapping[str, object] | None,
+    divergence: Mapping[str, object] | None,
+) -> dict[str, object]:
+    raw = payload.get("raw_lidar_evidence")
+    missing = raw.get("missing_revisions") if isinstance(raw, Mapping) else ()
+    if isinstance(missing, Sequence) and not isinstance(missing, (str, bytes)) and missing:
+        return {
+            "status": "NOT_PROVEN",
+            "cause": None,
+            "reason": "REFERENCED_RAW_LIDAR_MISSING",
+            "evidence": {"missing_raw_lidar_revisions": list(missing)},
+        }
+    if incident is None:
+        return {
+            "status": "NOT_PROVEN",
+            "cause": None,
+            "reason": "NO_LIVE_INCIDENT_IN_SCOPE",
+            "evidence": None,
+        }
+    reason = str(incident.get("reason") or "")
+    if reason == "MOTOR_WRITER_FAILURE":
+        return {
+            "status": "PROVEN",
+            "cause": "MOTOR_WRITER_FAILURE",
+            "reason": "THE_CANONICAL_L12_WRITE_RAISED",
+            "evidence": incident.get("evidence"),
+        }
+    evidence = incident.get("evidence")
+    device_health = evidence.get("device_health") if isinstance(evidence, Mapping) else None
+    has_degraded_health = bool(
+        isinstance(device_health, Sequence)
+        and not isinstance(device_health, (str, bytes))
+        and any(
+            isinstance(row, Mapping) and row.get("state") != "OK"
+            for row in device_health
+        )
+    )
+    if has_degraded_health:
+        return {
+            "status": "INDICATED",
+            "cause": reason or "DEVICE_HEALTH_DEGRADATION",
+            "reason": "EDGE_HEALTH_AND_TICK_EVIDENCE_AGREE",
+            "evidence": evidence,
+        }
+    return {
+        "status": "NOT_PROVEN",
+        "cause": None,
+        "reason": (
+            "REPLAY_DIVERGENCE_IS_NOT_PHYSICAL_PROOF"
+            if divergence is not None
+            else "INSUFFICIENT_PHYSICAL_EDGE_EVIDENCE"
+        ),
+        "evidence": evidence,
+    }
+
+
 def _general_execution_summary(
-    results: Sequence[TickResult],
+    outcomes: Sequence[_ReplayOutcome],
     capture_status: str,
 ) -> dict[str, object]:
     decision_counts = {item.value: 0 for item in SafetyDecision}
+    results = tuple(
+        outcome.result for outcome in outcomes if outcome.result is not None
+    )
     for result in results:
         decision_counts[result.final_actuation.safety_decision.value] += 1
-    terminal = results[-1]
+    terminal = results[-1] if results else None
     return {
         "capture_status": capture_status,
         "capture_passed": capture_status == "PASS",
         "decision_counts": decision_counts,
-        "terminal_tick_id": terminal.trace.context.tick_id,
-        "terminal_safety_decision": terminal.final_actuation.safety_decision.value,
-        "terminal_reason": terminal.final_actuation.reason,
-        "terminal_fault_layer": terminal.trace.fault_layer,
+        "writer_failure_count": sum(
+            int(outcome.writer_failure) for outcome in outcomes
+        ),
+        "terminal_tick_id": terminal.trace.context.tick_id if terminal is not None else None,
+        "terminal_safety_decision": (
+            terminal.final_actuation.safety_decision.value
+            if terminal is not None
+            else None
+        ),
+        "terminal_reason": terminal.final_actuation.reason if terminal is not None else None,
+        "terminal_fault_layer": terminal.trace.fault_layer if terminal is not None else "L12",
     }
 
 
@@ -819,6 +1347,12 @@ def _mapping_sequence(
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise V3ReplayError(f"{name} must be an array")
     return tuple(_mapping(item, name) for item in value)
+
+
+def _sequence(value: object, name: str) -> Sequence[object]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise V3ReplayError(f"{name} must be an array")
+    return value
 
 
 def _integer(value: object, name: str) -> int:

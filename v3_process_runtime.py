@@ -19,7 +19,7 @@ from v3.adapters.resident_command import (
     AtomicResidentCommandGateway,
     ResidentCommandMailboxConfig,
 )
-from v3.capture import CaptureSink
+from v3.capture import CaptureSink, CaptureWindowConfig, TriggeredCaptureWorker
 from v3.adapters.native_lidar_port import (
     load_native_lidar_port_config,
     open_native_lidar_port,
@@ -27,7 +27,7 @@ from v3.adapters.native_lidar_port import (
 from v3.contracts import AcquisitionFrame, RobotEstimate
 from v3.composition.native_sensor_inputs import NativeSensorHardwareConfig
 from v3.engine import TickResult
-from v3.execution import ExecutionRecord
+from v3.execution import CaptureRecord
 from v3_bounded_config import (
     NativeSensorPolicyConfig,
     load_bounded_physical_runtime_config,
@@ -81,40 +81,109 @@ class SignalStop:
         return self.requested
 
 
-class _PassiveCaptureSession:
-    """Feed the existing CaptureSink without gaining control authority."""
+class SignalCaptureTrigger:
+    """Passive SIGUSR1 latch; it grants no command or runtime authority."""
 
-    __slots__ = ("_error", "_output_path", "_sink")
+    __slots__ = ("requested",)
+
+    def __init__(self) -> None:
+        self.requested = False
+
+    def handle(self, _signum: int, _frame: Any) -> None:
+        self.requested = True
+
+    def consume(self) -> bool:
+        value = self.requested
+        self.requested = False
+        return value
+
+
+class _PassiveCaptureSession:
+    """Compatibility wrapper for explicit whole-session capture in older callers."""
+
+    __slots__ = ("_triggered", "_worker")
 
     def __init__(self, sink: CaptureSink, output_path: Path) -> None:
         if not isinstance(sink, CaptureSink):
             raise TypeError("sink must be CaptureSink")
-        path = Path(output_path)
-        if not path.is_absolute():
-            raise ValueError("capture output path must be absolute")
-        self._sink = sink
-        self._output_path = path
-        self._error: BaseException | None = None
+        self._worker = TriggeredCaptureWorker(
+            sink,
+            output_path,
+            CaptureWindowConfig(
+                pre_event_ns=0,
+                post_event_ns=2**63 - 1,
+            ),
+        )
+        self._triggered = False
+        self._worker.start()
 
     @property
     def failed(self) -> bool:
-        return self._error is not None
+        return self._worker.failed
 
-    def observe(self, record: ExecutionRecord) -> None:
-        if self._error is not None:
-            return
-        try:
-            self._sink.write(record)
-        except BaseException as exc:
-            self._error = exc
+    def start(self) -> None:
+        self._worker.start()
 
-    def finalize(self, report: ResidentRuntimeReport) -> Path:
-        if self._error is not None:
-            raise RuntimeError("production V3 capture failed") from self._error
-        status = "PASS" if report.status == 0 else "FAULT"
-        path = self._sink.finalize(status, self._output_path)
-        path.chmod(0o600)
-        return path
+    def observe(self, record: CaptureRecord) -> None:
+        if not self._triggered:
+            context = record.inputs.context if hasattr(record, "inputs") and record.inputs is not None else record.context
+            self._worker.trigger("EXPLICIT_WHOLE_SESSION", context.monotonic_ns)
+            self._triggered = True
+        self._worker.observe(record)
+
+    def observe_raw_lidar(self, snapshot: object | None) -> None:
+        self._worker.observe_raw_lidar(snapshot)
+
+    def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
+        self._worker.trigger(reason, monotonic_ns)
+
+    def finalize(
+        self,
+        report: ResidentRuntimeReport | None,
+        *,
+        error: BaseException | None = None,
+    ) -> Path | None:
+        status = "PASS" if error is None and report is not None and report.status == 0 else "FAULT"
+        return self._worker.finish(status, terminal=True)
+
+
+class TriggeredCaptureSession:
+    """Default process capture: bounded pre/post ring with fault/manual trigger."""
+
+    __slots__ = ("_worker",)
+
+    def __init__(
+        self,
+        sink: CaptureSink,
+        output_path: Path,
+        config: CaptureWindowConfig | None = None,
+    ) -> None:
+        self._worker = TriggeredCaptureWorker(sink, output_path, config)
+
+    @property
+    def failed(self) -> bool:
+        return self._worker.failed
+
+    def start(self) -> None:
+        self._worker.start()
+
+    def observe(self, record: CaptureRecord) -> None:
+        self._worker.observe(record)
+
+    def observe_raw_lidar(self, snapshot: object | None) -> None:
+        self._worker.observe_raw_lidar(snapshot)
+
+    def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
+        self._worker.trigger(reason, monotonic_ns)
+
+    def finalize(
+        self,
+        report: ResidentRuntimeReport | None,
+        *,
+        error: BaseException | None = None,
+    ) -> Path | None:
+        status = "PASS" if error is None and report is not None and report.status == 0 else "FAULT"
+        return self._worker.finish(status, terminal=True)
 
 
 def _atomic_private_json(path: Path, payload: Mapping[str, object], mode: int) -> None:
@@ -335,7 +404,8 @@ def run_v3_resident_process(
     *,
     approval: str,
     stop_requested: Callable[[], bool],
-    capture_session: _PassiveCaptureSession | None = None,
+    capture_session: _PassiveCaptureSession | TriggeredCaptureSession | None = None,
+    capture_trigger_requested: Callable[[], bool] | None = None,
     run_hardware: Callable[..., ResidentRuntimeReport] = run_native_hardware_resident_control,
 ) -> ResidentRuntimeReport:
     """Run one process ownership session and stop if status publication fails."""
@@ -352,15 +422,26 @@ def run_v3_resident_process(
         raise TypeError("run_hardware must be callable")
     if capture_session is not None and not isinstance(
         capture_session,
-        _PassiveCaptureSession,
+        (_PassiveCaptureSession, TriggeredCaptureSession),
     ):
-        raise TypeError("capture_session must be _PassiveCaptureSession or None")
+        raise TypeError("capture_session must be a process capture session or None")
+    if capture_trigger_requested is not None and not callable(capture_trigger_requested):
+        raise TypeError("capture_trigger_requested must be callable or None")
 
+    if capture_session is not None:
+        capture_session.start()
     status_publisher.start()
     report: ResidentRuntimeReport | None = None
     caught: BaseException | None = None
+    capture_error: BaseException | None = None
 
     def combined_stop() -> bool:
+        if (
+            capture_session is not None
+            and capture_trigger_requested is not None
+            and capture_trigger_requested()
+        ):
+            capture_session.trigger("SIGUSR1")
         value = stop_requested()
         if type(value) is not bool:
             raise TypeError("stop_requested must return bool")
@@ -374,6 +455,7 @@ def run_v3_resident_process(
         }
         if capture_session is not None:
             hardware_kwargs["record_observer"] = capture_session.observe
+            hardware_kwargs["raw_lidar_observer"] = capture_session.observe_raw_lidar
         report = run_hardware(
             counter_gpio_backend,
             open_imu_bus,
@@ -385,15 +467,22 @@ def run_v3_resident_process(
         )
     except BaseException as exc:
         caught = exc
-        raise
     finally:
         status_publisher.finish(report=report, error=caught)
+        if capture_session is not None:
+            try:
+                capture_session.finalize(report, error=caught)
+            except BaseException as exc:
+                capture_error = exc
 
     status_error = status_publisher.error
     if status_error is not None:
         raise RuntimeError("resident status publication failed") from status_error
-    if capture_session is not None:
-        capture_session.finalize(report)
+    if capture_error is not None:
+        raise RuntimeError("production V3 capture failed") from capture_error
+    if caught is not None:
+        raise caught
+    assert report is not None
     return report
 
 
@@ -482,7 +571,10 @@ def _runtime_owned_path(value: str, project_root: Path) -> Path:
     return path
 
 
-def _capture_configuration(project_root: Path) -> dict[str, object]:
+def _capture_configuration(
+    project_root: Path,
+    runtime_config: ResidentPhysicalRuntimeConfig | None = None,
+) -> dict[str, object]:
     documents: dict[str, object] = {}
     for name, relative in (
         ("physics", "conf/fizika.json"),
@@ -494,7 +586,22 @@ def _capture_configuration(project_root: Path) -> dict[str, object]:
         if not isinstance(payload, dict):
             raise ValueError(f"{relative} must contain a JSON object")
         documents[name] = payload
-    return documents
+    if runtime_config is None:
+        return documents
+    live = runtime_config.composition.live_control
+    return {
+        "resolved_control": live.control,
+        "resolved_sensor_inputs": runtime_config.sensor_inputs,
+        "resolved_resident_policy": {
+            "max_preflight_age_ns": live.max_preflight_age_ns,
+            "required_lidar_preflight_revisions": (
+                live.required_lidar_preflight_revisions
+            ),
+            "tick_period_ns": runtime_config.tick_period_ns,
+        },
+        "resolved_motor_edge": runtime_config.composition.motor_output,
+        "legacy_documents": documents,
+    }
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -503,6 +610,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--command-path", default="runtime/v3_command.json")
     parser.add_argument("--status-path", default="runtime/v3_status.json")
     parser.add_argument("--capture-path")
+    parser.add_argument("--capture-pre-event-ns", type=int, default=5_000_000_000)
+    parser.add_argument("--capture-post-event-ns", type=int, default=2_000_000_000)
+    parser.add_argument("--capture-ingress-capacity", type=int, default=256)
+    parser.add_argument("--capture-max-ticks", type=int, default=512)
+    parser.add_argument("--capture-max-bytes", type=int, default=16 * 1024 * 1024)
+    parser.add_argument("--capture-max-raw-scans", type=int, default=64)
+    parser.add_argument("--capture-max-raw-points", type=int, default=4_096)
     return parser
 
 
@@ -522,10 +636,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     stop = SignalStop()
+    capture_trigger = SignalCaptureTrigger()
     old_handlers = {
         signum: signal.signal(signum, stop.handle)
         for signum in (signal.SIGINT, signal.SIGTERM)
     }
+    if args.capture_path is not None:
+        old_handlers[signal.SIGUSR1] = signal.signal(
+            signal.SIGUSR1,
+            capture_trigger.handle,
+        )
     try:
         command_path = _runtime_owned_path(args.command_path, PROJECT_ROOT)
         status_path = _runtime_owned_path(args.status_path, PROJECT_ROOT)
@@ -547,17 +667,25 @@ def main(argv: list[str] | None = None) -> int:
             ResidentStatusConfig(path=status_path)
         )
         capture_session = (
-            _PassiveCaptureSession(
+            TriggeredCaptureSession(
                 CaptureSink(
                     capture_path.stem,
-                    configuration=_capture_configuration(PROJECT_ROOT),
+                    configuration=_capture_configuration(PROJECT_ROOT, runtime_config),
                     metadata={
                         "runtime": "v3_process_runtime",
                         "command_gateway": "AtomicResidentCommandGateway",
-                        "tick_period_ns": runtime_config.tick_period_ns,
                     },
                 ),
                 capture_path,
+                CaptureWindowConfig(
+                    pre_event_ns=args.capture_pre_event_ns,
+                    post_event_ns=args.capture_post_event_ns,
+                    ingress_queue_capacity=args.capture_ingress_capacity,
+                    max_tick_count=args.capture_max_ticks,
+                    max_byte_capacity=args.capture_max_bytes,
+                    max_raw_lidar_scans=args.capture_max_raw_scans,
+                    max_raw_lidar_points_per_scan=args.capture_max_raw_points,
+                ),
             )
             if capture_path is not None
             else None
@@ -585,6 +713,9 @@ def main(argv: list[str] | None = None) -> int:
             approval=args.approval,
             stop_requested=stop,
             capture_session=capture_session,
+            capture_trigger_requested=(
+                capture_trigger.consume if capture_session is not None else None
+            ),
         )
         print(json.dumps(report.as_dict(), sort_keys=True))
         return report.status
@@ -615,7 +746,9 @@ __all__ = [
     "PROJECT_ROOT",
     "RESIDENT_PROCESS_STATUS_SCHEMA",
     "ResidentStatusConfig",
+    "SignalCaptureTrigger",
     "SignalStop",
+    "TriggeredCaptureSession",
     "_PassiveCaptureSession",
     "_capture_configuration",
     "load_resident_runtime_config",

@@ -10,7 +10,7 @@ from v3.adapters.live_imu import NativeImuSource
 from v3.adapters.live_lidar import NativeLidarSource
 from v3.contracts import LifecycleState, TickContext
 from v3.engine import TickResult
-from v3.execution import ExecutionRecord
+from v3.execution import CaptureRecord
 from v3.ports import CommandGateway
 
 from .motor_output import NativeMotorOutputComposition
@@ -88,7 +88,7 @@ class ResidentPhysicalControlComposition:
     def tick_execution(
         self,
         context: TickContext,
-    ) -> tuple[TickResult, ExecutionRecord | None]:
+    ) -> tuple[TickResult, CaptureRecord]:
         if self._shutdown:
             raise RuntimeError("the resident physical control composition is shut down")
         return self._live_control.tick_execution(context)
@@ -103,7 +103,7 @@ class ResidentPhysicalControlComposition:
     def shutdown_execution(
         self,
         context: TickContext,
-    ) -> tuple[TickResult, ExecutionRecord | None]:
+    ) -> tuple[TickResult, CaptureRecord]:
         if self._shutdown:
             raise RuntimeError("the resident physical control composition is shut down")
         result, record = self._live_control.shutdown_execution(context)

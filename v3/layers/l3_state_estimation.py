@@ -303,6 +303,31 @@ class NativeStateEstimatorConfig:
             raise ValueError("minimum_measurement_quality must be within (0, 1]")
 
 
+@dataclass(frozen=True, slots=True)
+class EkfUpdateEvidence:
+    """Small capture-only evidence for one actual EKF acceptance gate."""
+
+    update_type: str
+    innovation: tuple[float, ...]
+    nis: float
+    threshold: float | None
+    accepted: bool
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.update_type, str) or not self.update_type:
+            raise ValueError("update_type must be non-empty")
+        if not self.innovation or any(not math.isfinite(value) for value in self.innovation):
+            raise ValueError("innovation must contain finite values")
+        if not math.isfinite(self.nis) or self.nis < 0.0:
+            raise ValueError("nis must be finite and non-negative")
+        if self.threshold is not None and (
+            not math.isfinite(self.threshold) or self.threshold <= 0.0
+        ):
+            raise ValueError("threshold must be positive or None")
+        if type(self.accepted) is not bool:
+            raise TypeError("accepted must be bool")
+
+
 class NativeStateEstimator:
     """Minimal native five-state EKF over admitted wheel, IMU and lidar samples.
 
@@ -321,7 +346,14 @@ class NativeStateEstimator:
     _GYRO_BIAS = 4
     _SIZE = 5
 
-    __slots__ = ("_config", "_covariance", "_last_context", "_last_omega", "_state")
+    __slots__ = (
+        "_config",
+        "_covariance",
+        "_last_context",
+        "_last_omega",
+        "_last_update_evidence",
+        "_state",
+    )
 
     def __init__(self, config: NativeStateEstimatorConfig) -> None:
         if not isinstance(config, NativeStateEstimatorConfig):
@@ -337,8 +369,14 @@ class NativeStateEstimator:
         ]
         self._last_context = None
         self._last_omega = 0.0
+        self._last_update_evidence: list[EkfUpdateEvidence] = []
+
+    @property
+    def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
+        return tuple(self._last_update_evidence)
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
+        self._last_update_evidence = []
         wheel = _single_observation(frame, "wheel_velocity")
         heading = _single_observation(frame, "ekf_heading")
         lidar_pose = _optional_observation(frame, "lidar_pose")
@@ -395,6 +433,7 @@ class NativeStateEstimator:
                 self._config.velocity_measurement_variance
                 / max(quality_floor, encoder_trust),
                 nis_max=self._config.velocity_nis_max,
+                update_type="VELOCITY",
             )
             if still:
                 self._update_scalar(
@@ -402,6 +441,7 @@ class NativeStateEstimator:
                     0.0,
                     self._config.zupt_variance,
                     nis_max=None,
+                    update_type="ZUPT",
                 )
             self._update_scalar(
                 self._YAW,
@@ -410,6 +450,7 @@ class NativeStateEstimator:
                 / max(quality_floor, heading_confidence),
                 nis_max=self._config.yaw_nis_max,
                 angular=True,
+                update_type="YAW",
             )
         if lidar_pose is not None:
             self._update_lidar(lidar_pose)
@@ -513,6 +554,7 @@ class NativeStateEstimator:
         *,
         nis_max: float | None,
         angular: bool = False,
+        update_type: str,
     ) -> bool:
         innovation = measurement - self._state[state_index]
         if angular:
@@ -522,6 +564,9 @@ class NativeStateEstimator:
             raise ValueError("EKF innovation covariance is invalid")
         nis = innovation * innovation / innovation_covariance
         if nis_max is not None and nis > nis_max:
+            self._last_update_evidence.append(
+                EkfUpdateEvidence(update_type, (innovation,), nis, nis_max, False)
+            )
             return False
 
         previous = [row[:] for row in self._covariance]
@@ -541,6 +586,9 @@ class NativeStateEstimator:
             for row in range(self._SIZE)
         ]
         self._stabilize_covariance()
+        self._last_update_evidence.append(
+            EkfUpdateEvidence(update_type, (innovation,), nis, nis_max, True)
+        )
         return True
 
     def _update_lidar(self, observation: Observation) -> bool:
@@ -591,6 +639,15 @@ class NativeStateEstimator:
         if not math.isfinite(nis) or nis < -1e-12:
             raise ValueError("EKF lidar NIS is invalid")
         if nis > self._config.lidar_nis_max:
+            self._last_update_evidence.append(
+                EkfUpdateEvidence(
+                    "LIDAR_POSE",
+                    tuple(innovation),
+                    nis,
+                    self._config.lidar_nis_max,
+                    False,
+                )
+            )
             return False
 
         previous = [row[:] for row in self._covariance]
@@ -622,6 +679,15 @@ class NativeStateEstimator:
             for row in range(self._SIZE)
         ]
         self._stabilize_covariance()
+        self._last_update_evidence.append(
+            EkfUpdateEvidence(
+                "LIDAR_POSE",
+                tuple(innovation),
+                nis,
+                self._config.lidar_nis_max,
+                True,
+            )
+        )
         return True
 
     def _stabilize_covariance(self) -> None:
@@ -806,6 +872,7 @@ class ZeroStateEstimator:
 
 
 __all__ = [
+    "EkfUpdateEvidence",
     "NativeStateEstimator",
     "NativeStateEstimatorConfig",
     "ShadowStateEstimator",

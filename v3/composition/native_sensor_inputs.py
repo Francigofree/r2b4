@@ -163,6 +163,14 @@ class NativeSensorInputOwner:
     ) -> tuple[NativeEncoderSource, NativeImuSource, NativeLidarSource]:
         return (self.encoder_source, self.imu_source, self.lidar_source)
 
+    def raw_lidar_snapshot(self) -> object | None:
+        """Return the latest immutable raw revision for passive capture only."""
+
+        if self._closed:
+            return None
+        getter = getattr(self._lidar_port, "get_raw_scan_snapshot", None)
+        return getter() if callable(getter) else None
+
     def close(self) -> None:
         """Release every transferred source capability exactly once."""
 

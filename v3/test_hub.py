@@ -99,6 +99,8 @@ def validate_run(
         "capture_status": inspected.get("execution_status"),
         "replay_status": replay.get("status"),
         "first_divergence": replay.get("first_divergence"),
+        "first_live_incident": replay.get("first_live_incident"),
+        "physical_root_cause": replay.get("physical_root_cause"),
         "scope": replay.get("scope"),
         "evidence_index": str(index_path.resolve()),
         "evidence_sha256": index["evidence_sha256"],
@@ -209,6 +211,8 @@ def _diagnosis(
         "source_first": source_first,
         "layers": layers,
         "first_divergence": replay.get("first_divergence"),
+        "first_live_incident": replay.get("first_live_incident"),
+        "physical_root_cause": replay.get("physical_root_cause"),
     }
 
 

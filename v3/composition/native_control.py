@@ -290,7 +290,7 @@ class NativeControlComposition:
     owns only stateful layer instances and never exposes the injected writer.
     """
 
-    __slots__ = ("_engine",)
+    __slots__ = ("_engine", "_estimator")
 
     def __init__(
         self,
@@ -302,11 +302,13 @@ class NativeControlComposition:
         if not isinstance(config, NativeControlCompositionConfig):
             raise TypeError("config must be NativeControlCompositionConfig")
 
+        estimator = NativeStateEstimator(config.estimation)
+        self._estimator = estimator
         self._engine = TickEngine(
             PipelineLayers(
                 acquisition=acquire,
                 admission=InputAdmission(config.admission),
-                estimation=NativeStateEstimator(config.estimation),
+                estimation=estimator,
                 world_model=ShadowWorldModel(config.world_model),
                 command_mission=MissionManager(config.mission).evaluate,
                 navigation=TrajectoryNavigator(config.navigation).evaluate,
@@ -323,6 +325,12 @@ class NativeControlComposition:
                 final_safety=FinalSafetyGate(motor_writer, config.lidar_safety),
             )
         )
+
+    @property
+    def tick_evidence(self) -> tuple[object, ...]:
+        """Expose only bounded diagnostic facts produced by the last L3 call."""
+
+        return self._estimator.last_update_evidence
 
     def run_tick(self, inputs: TickInputs) -> TickResult:
         if not isinstance(inputs, TickInputs):

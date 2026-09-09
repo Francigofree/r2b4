@@ -50,7 +50,8 @@ def test_fault_capture_accepts_completed_prefix_fault_layer_and_terminal_l12(tmp
     assert inspected["execution_passed"] is False
     assert tick["expected"]["fault_layer"] == "L4"
     assert set(tick["expected"]["layers"]) == {"L1", "L2", "L3", "L12"}
-    assert tick["expected"]["final_actuation"] == tick["expected"]["layers"]["L12"]
+    assert "final_actuation" not in tick["expected"]
+    assert tick["expected"]["layers"]["L12"]["__type__"] == "FinalActuation"
 
 
 def test_fault_capture_rejects_a_noncontiguous_prefix_even_with_valid_checksum(tmp_path):

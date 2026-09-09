@@ -559,12 +559,27 @@ indulva készülhet.
 A replay célja reprodukálni a döntést és gyorsan megtalálni az első hibás
 réteget.
 
+Az alapértelmezett live capture-stratégia konfigurálható, bounded RAM ring
+buffer. Fault vagy passzív process-szintű manuális trigger esetén a kijelölt
+pre-event és post-event időablak kerül tartós fájlba. A teljes futás append-only
+streamelése csak explicit opcionális mód lehet, és nem lehet Test Hub
+függőség. A capture observer kizárólag nem blokkoló enqueue boundary: encoding,
+szerializálás és fájl-I/O nem futhat a production tick loopban. Queue overflow
+vagy capture-worker hiba nem módosíthat motor-outputot.
+
 A minimális replay input:
 
 * tickenként a lezárt `RawDeviceBatch`, `CommandRequest`, lifecycle és
   `TickContext`;
 * a futáshoz ténylegesen használt konfiguráció egyszer, tartalom szerint;
 * randomizált algoritmus esetén a seed.
+
+A capture két tickalakot különböztet meg. A `closed_input_tick` a lezárt
+`TickInputs` értéket és a production eredményt hordozza. Az inputlezárás előtti
+L0-, command-, preflight- vagy shutdown-hiba `edge_fault_tick`: `TickContext`,
+lifecycle, fault reason/layer, rendelkezésre álló health/raw input evidence és
+az ugyanazon production L12 által lezárt eredmény. L12 writer-failure esetén a
+megkísérelt final actuation és a sikertelen edge commit explicit evidence.
 
 A terminális futási verdict és a replay verdict külön fogalom.
 Strukturálisan érvényes `FAIL/FAULT` capture ugyanúgy replayelendő, mint a
@@ -573,7 +588,11 @@ Strukturálisan érvényes `FAIL/FAULT` capture ugyanúgy replayelendő, mint a
 trace-t: a hiba előtt sikeresen lezárt folytonos L1-prefixet, az explicit
 `fault_layer` értéket és a kötelező, utolsó L12 eredményt jelenti.
 
-Nem terminális vagy integritáshibás capture nem kaphat `MATCH` eredményt.
+Nem terminális, hiányos, ingress dropot vagy tickrést tartalmazó capture nem
+kaphat `MATCH` eredményt. Terminális futásnál a post-event ablak szabályosan
+lehet rövidebb; ezt `post_window_complete=false` és
+`terminal_short_post_window=true` értékkel explicit jelölni kell, és ez önmagában
+nem hamisítja meg a rendelkezésre álló tickek replay-verdictjét.
 
 Readiness vagy arming kapu csak egymástól valóban független, friss
 forrásevidence-t számolhat új bizonyítéknak. Ugyanazon latest-only source
@@ -589,7 +608,10 @@ esetén csak a sikeresen lezárt folytonos L1-prefix és az L12 létezhet; a hib
 és az utána következő rétegekhez tilos fiktív outputot gyártani. Például L4
 exception helyes trace-e `L1,L2,L3,L12`, `fault_layer=L4`. Két futás közvetlen
 dataclass-egyenlőséggel hasonlítható össze; az első eltérő rekord megadja a
-`tick_id`-t és a layer nevet.
+`tick_id`-t, a layer nevet, az első eltérő mezőútvonalat, valamint az expected és
+actual értéket. A replay számítás első eltérése (`first_divergence`), az eredeti
+live futás első fault/degradation eseménye (`first_live_incident`) és a fizikai
+root cause evidence-verdictje (`PROVEN`, `INDICATED`, `NOT_PROVEN`) külön adat.
 
 A replay inclusive tick-, monotonidő- és összefüggő L1–L12 rétegtartományra
 szűkíthető. Stateful réteg esetén a kiválasztott első tick előtti capture-prefix
@@ -598,6 +620,14 @@ tickek és rétegek kapnak diagnosztikai verdictet.
 
 A capture a konkrét source-first diagnosztikához szükséges evidence-et őrizze
 meg, de nincs általános „mindent logoljunk” követelmény.
+
+A raw LiDAR scan trigger előtt csak a bounded RAM ringben élhet. Mentéskor csak
+a kiválasztott tickablak által hivatkozott fizikai scan revisionök és a matcher
+lineage által közvetlenül hivatkozott source scanek kerülhetnek a capture-be,
+revisionönként egyszer. Hiányzó vagy kapacitás miatt kiesett hivatkozott scan
+explicit `missing_revisions` evidence, és a fizikai verdict legalább
+`NOT_PROVEN`. Capture-local általános objektumtábla vagy provenance-gráf csak
+valós capture-mérés által igazolt igényre vezethető be.
 
 Nem kötelező:
 
@@ -612,7 +642,10 @@ Nem kötelező:
 Capture-fájl checksum használható egyszerű fájlsérülés-ellenőrzésre, de nem
 válik runtime identityvé vagy döntési inputtá.
 
-A trace/log/evidence hibája soha nem módosíthat control outputot.
+A trace/log/evidence hibája soha nem módosíthat control outputot. A Test Hub
+csak inspectet, a canonical Replayer API-t, diagnózis-generálást és
+evidence-indexelést orchestrálhat; saját decoder, layer-futtatás vagy
+szenzorspecifikus replay tilos.
 
 ## 14. Kötelező, célzott tesztkapuk
 

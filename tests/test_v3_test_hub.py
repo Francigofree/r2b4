@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+import v3.test_hub as test_hub_module
 
 from v3.replay import ReplaySelection, replay_capture, verify_replay_result
 from v3.test_hub import V3TestHubError, validate_run, verify_evidence
@@ -9,6 +10,23 @@ from v3_validation_helpers import create_explore_capture, create_fault_capture, 
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_test_hub_delegates_to_the_canonical_replay_api(tmp_path, monkeypatch):
+    capture = create_general_capture(tmp_path)
+    calls = []
+    canonical = test_hub_module.replay_capture
+
+    def recording_replay(*args, **kwargs):
+        calls.append((args, kwargs))
+        return canonical(*args, **kwargs)
+
+    monkeypatch.setattr(test_hub_module, "replay_capture", recording_replay)
+
+    summary = validate_run(capture, tmp_path / "canonical-api")
+
+    assert summary["replay_status"] == "MATCH"
+    assert len(calls) == 1
 
 
 def test_test_hub_writes_one_run_bound_replay_and_l1_l12_diagnosis(tmp_path):

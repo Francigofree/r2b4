@@ -336,7 +336,7 @@ class ResidentLiveControlComposition:
                 self._reset_preflight()
             else:
                 self._reset_preflight()
-        return result, ExecutionRecord(inputs, result)
+        return result, ExecutionRecord(inputs, result, self._control.tick_evidence)
 
     def shutdown(self, context: TickContext) -> TickResult:
         """Commit one command-source-independent zero tick and latch SHUTDOWN."""
@@ -401,7 +401,7 @@ class ResidentLiveControlComposition:
             if result.final_actuation.safety_decision is SafetyDecision.FAULT
             else LifecycleState.SHUTDOWN
         )
-        return result, ExecutionRecord(inputs, result)
+        return result, ExecutionRecord(inputs, result, self._control.tick_evidence)
 
 
 __all__ = ["ResidentLiveControlComposition", "ResidentLiveControlConfig"]

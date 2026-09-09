@@ -137,6 +137,9 @@ def test_general_replay_layer_range_ignores_out_of_scope_expected_difference(tmp
     assert affected["status"] == "MISMATCH"
     assert affected["first_divergence"]["tick_id"] == 2
     assert affected["first_divergence"]["layer"] == "L10"
+    assert affected["first_divergence"]["field_path"] == "L10.left_mps"
+    assert affected["first_divergence"]["expected"] != affected["first_divergence"]["actual"]
+    assert affected["first_divergence"]["evidence"]["record_type"] == "closed_input_tick"
 
 
 def test_general_replay_rejects_an_empty_tick_time_intersection(tmp_path):
@@ -156,6 +159,9 @@ def test_general_replay_matches_partial_l4_fault_and_reports_unexecuted_layers(t
 
     assert result["status"] == "MATCH"
     assert result["capture"]["status"] == "FAULT"
+    assert result["first_divergence"] is None
+    assert result["first_live_incident"]["layer"] == "L4"
+    assert result["physical_root_cause"]["status"] == "NOT_PROVEN"
     assert result["execution"]["terminal_fault_layer"] == "L4"
     assert result["execution"]["terminal_safety_decision"] == "FAULT"
     assert result["diagnostics"]["layers"]["L3"] == {

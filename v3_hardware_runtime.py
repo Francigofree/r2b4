@@ -31,7 +31,7 @@ from v3.contracts import (
     TickContext,
 )
 from v3.engine import TickResult
-from v3.execution import ExecutionRecord
+from v3.execution import CaptureRecord
 from v3.ports import CommandGateway
 from v3_bounded_runtime import (
     BoundedPhysicalRuntimeConfig,
@@ -451,7 +451,8 @@ def run_native_hardware_resident_control(
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
     tick_observer: Callable[[TickResult], None] | None = None,
-    record_observer: Callable[[ExecutionRecord], None] | None = None,
+    record_observer: Callable[[CaptureRecord], None] | None = None,
+    raw_lidar_observer: Callable[[object | None], None] | None = None,
 ) -> ResidentRuntimeReport:
     """Own all hardware for one resident session behind an explicit cutover gate."""
 
@@ -474,6 +475,8 @@ def run_native_hardware_resident_control(
         raise TypeError("tick_observer must be callable or None")
     if record_observer is not None and not callable(record_observer):
         raise TypeError("record_observer must be callable or None")
+    if raw_lidar_observer is not None and not callable(raw_lidar_observer):
+        raise TypeError("raw_lidar_observer must be callable or None")
     if _stop_value(stop_requested):
         return ResidentRuntimeReport(
             status=RUN_OK,
@@ -499,6 +502,8 @@ def run_native_hardware_resident_control(
     try:
         def observe(result: TickResult) -> None:
             owner.publish_tick_result(result)
+            if raw_lidar_observer is not None:
+                raw_lidar_observer(owner.inputs.raw_lidar_snapshot())
             if tick_observer is not None:
                 tick_observer(result)
 
