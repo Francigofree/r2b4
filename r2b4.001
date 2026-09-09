@@ -47,14 +47,12 @@ Usage:
   r2b4 capture status
 
   r2b4 forward start [speed_mps] [nocapture]
-  r2b4 mozog start <left_mps> <right_mps> [nocapture]
   r2b4 roomcruise start [nocapture]
 
   r2b4 stop
 
 Defaults:
   forward speed: 0.15 m/s
-  mozog wheel speeds: signed m/s, each within [-0.50, 0.50]
   movement capture: ON
 
 Capture uses the existing native bounded triggered ring:
@@ -66,10 +64,6 @@ Capture uses the existing native bounded triggered ring:
 The native worker is one-shot per runtime. If a new captured movement needs
 a fresh slot, the launcher re-arms it by the existing safe runtime restart
 (STOP -> 5 s -> new runtime).
-
-"mozog" accepts left/right wheel-speed targets and converts them to the
-canonical TELEOP body target using conf/fizika.json track width. Existing
-L5-L12 motion, operational and safety constraints remain authoritative.
 
 "nocapture" skips movement capture arming. Native automatic FAULT capture
 remains part of the runtime's existing fail evidence.
@@ -632,98 +626,6 @@ _forward() {
         --max-v-mps "$speed" --max-omega-rad-s 0.60
 }
 
-_wheel_targets_to_twist() {
-    python3 - "$ROOT/conf/fizika.json" "$1" "$2" <<'PY'
-import json
-import math
-import sys
-from pathlib import Path
-
-physics_path = Path(sys.argv[1])
-try:
-    left_mps = float(sys.argv[2])
-    right_mps = float(sys.argv[3])
-except ValueError:
-    print("ERROR: left_mps and right_mps must be numeric.", file=sys.stderr)
-    raise SystemExit(1)
-
-if not math.isfinite(left_mps) or not math.isfinite(right_mps):
-    print("ERROR: wheel speeds must be finite.", file=sys.stderr)
-    raise SystemExit(1)
-if abs(left_mps) > 0.50 or abs(right_mps) > 0.50:
-    print("ERROR: each wheel speed must be within [-0.50, 0.50] m/s.", file=sys.stderr)
-    raise SystemExit(1)
-if abs(left_mps) <= 1e-12 and abs(right_mps) <= 1e-12:
-    print("ERROR: both wheel targets are zero; use ./r2b4 stop.", file=sys.stderr)
-    raise SystemExit(1)
-
-try:
-    physics = json.loads(physics_path.read_text(encoding="utf-8"))
-    track_width_m = float(physics["nyomtav_szelesseg_m"])
-except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-    print(f"ERROR: cannot read valid track width from {physics_path}: {exc}", file=sys.stderr)
-    raise SystemExit(1)
-if not math.isfinite(track_width_m) or track_width_m <= 0.0:
-    print("ERROR: nyomtav_szelesseg_m must be finite and positive.", file=sys.stderr)
-    raise SystemExit(1)
-
-# Exact inverse of V3 L10 differential-drive kinematics:
-# left = v - omega * track/2
-# right = v + omega * track/2
-v_mps = 0.5 * (left_mps + right_mps)
-omega_rad_s = (right_mps - left_mps) / track_width_m
-
-# The resident command gateway is still the ingress authority. Reject only a
-# target that it cannot represent at all; lower L5-L12 constraints may further
-# reduce the executed motion and remain authoritative.
-if abs(v_mps) > 0.50 + 1e-12:
-    print(f"ERROR: wheel pair requires v={v_mps:.6f} m/s above the resident 0.50 m/s limit.", file=sys.stderr)
-    raise SystemExit(1)
-if abs(omega_rad_s) > 1.20 + 1e-12:
-    print(
-        f"ERROR: wheel pair requires omega={omega_rad_s:.6f} rad/s "
-        "above the resident 1.20 rad/s limit.",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
-
-# TELEOP declares positive limits even when one target component is exactly 0.
-max_v_mps = max(abs(v_mps), 1e-6)
-max_omega_rad_s = max(abs(omega_rad_s), 1e-6)
-print(
-    f"{v_mps:.12g} {omega_rad_s:.12g} "
-    f"{max_v_mps:.12g} {max_omega_rad_s:.12g} {track_width_m:.12g}"
-)
-PY
-}
-
-_mozog() {
-    local capture="yes" left right converted v omega max_v max_omega track
-    shift 2
-    [[ $# -ge 2 && $# -le 3 ]] || {
-        echo "ERROR: usage: ./r2b4 mozog start <left_mps> <right_mps> [nocapture]" >&2
-        return 2
-    }
-    left="$1"
-    right="$2"
-    if [[ $# -eq 3 ]]; then
-        [[ "$3" == "nocapture" ]] || { echo "ERROR: unknown option: $3" >&2; return 2; }
-        capture="no"
-    fi
-
-    converted="$(_wheel_targets_to_twist "$left" "$right")" || return 1
-    read -r v omega max_v max_omega track <<<"$converted"
-
-    echo "mozog wheel target: left=$left m/s, right=$right m/s"
-    echo "canonical target: v=$v m/s, omega=$omega rad/s (track=$track m)"
-
-    _start_motion "mozog L=$left R=$right m/s" "$capture" \
-        python3 -m v3.control_cli teleop \
-        --command-id "launcher-mozog-$(date +%s%N)-$$" \
-        --v-mps "$v" --omega-rad-s "$omega" \
-        --max-v-mps "$max_v" --max-omega-rad-s "$max_omega"
-}
-
 _roomcruise() {
     local capture="yes"
     shift 2
@@ -769,9 +671,6 @@ main() {
             ;;
         "forward start")
             _forward "$@"
-            ;;
-        "mozog start")
-            _mozog "$@"
             ;;
         "roomcruise start")
             _roomcruise "$@"
