@@ -609,6 +609,9 @@ szabályosan ACTIVE session rövid command-kimaradása viszont STOP-pal rearm
 production L1–L12 úton zéró IDLE tickként záródnak, és nem válhatnak motor-
 authorityvá vagy önmagukban terminális faulttá. Input-, gateway-, layer- vagy
 writer-hiba ettől függetlenül továbbra is faultot latch-el.
+Az edge status `ready_for_active` mezője ezt a resident preflight-authorityt
+jelenti; a status publisher nem következtetheti újra egyetlen tick health vagy
+L12 eredményéből.
 
 A readiness feltétel csak azt a szenzor- vagy capability-ágat teheti kötelezővé,
 amelyre az adott funkció biztonságos végrehajtásához ténylegesen szükség van.

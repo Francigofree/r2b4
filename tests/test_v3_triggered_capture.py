@@ -139,7 +139,11 @@ def test_short_ring_restores_checkpoint_before_duplicate_l2_input(tmp_path):
             raw_devices=replace(inputs.raw_devices, samples=repeated_samples),
         )
         result = composition.run_tick(inputs)
-        checkpoint = composition.checkpoint() if inputs.context.tick_id % 50 == 0 else None
+        checkpoint = (
+            composition.checkpoint()
+            if inputs.context.tick_id % 50 == 0
+            else None
+        )
         records.append(
             ExecutionRecord(
                 inputs,

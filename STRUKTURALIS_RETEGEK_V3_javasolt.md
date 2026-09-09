@@ -284,6 +284,12 @@ függhet legacy runtime/shared-state authoritytól.
 
 ## 8. Motion és command szabadság
 
+Az L7→L12→MotorWriter lánc a stabil canonical motion core. Új command-, mission- vagy behavior capability nem kerülheti meg és nem duplikálhatja; ha a meglévő motion contract elegendő, az új funkció a CommandGateway/L5/L6 oldalán kapcsolódjon be.
+
+Production motion live teszt csak a teljes CommandGateway→L5→L6→L7→L8→L9→L10→L11→L12→MotorWriter láncon keresztül végezhető. Célzott actuator-, motor-edge- vagy hardvervalidáció használhat szűkebb utat, de nem tekinthető production motion tesztnek és nem bizonyítja a teljes motion láncot.
+
+Az L7–L12 mag stabil by default: csak akkor változzon, ha a konkrét funkció vagy igazolt source/replay/live evidence ténylegesen ezt igényli; pusztán új command, mission vagy behavior hozzáadása nem indok az átépítésére.
+
 A robot normál mozgatásának egyetlen canonical V3 útja van:
 
 ```text
