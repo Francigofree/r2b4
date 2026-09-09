@@ -498,16 +498,33 @@ class NativeCounterEncoderBackend:
             for edge in latest_edges
         )
 
-    @staticmethod
-    def _physical_edge_warming_up(current: _CounterPair) -> bool:
+    def _physical_edge_warming_up(
+        self,
+        current: _CounterPair,
+        *,
+        captured_monotonic_ns: int,
+    ) -> bool:
         """Identify the initial dual-wheel history fill after first motion."""
 
         history_counts = (
             len(current.left.edge_history),
             len(current.right.edge_history),
         )
-        return all(count > 0 for count in history_counts) and any(
-            count < 2 for count in history_counts
+        filling = (
+            history_counts in ((1, 0), (0, 1))
+            or all(count > 0 for count in history_counts)
+            and any(count < 2 for count in history_counts)
+        )
+        latest_edges = (
+            current.left.edge_history[-1] if current.left.edge_history else None,
+            current.right.edge_history[-1] if current.right.edge_history else None,
+        )
+        return filling and all(
+            edge is None
+            or 0
+            <= captured_monotonic_ns - edge.timestamp_ns
+            <= self._config.maximum_sample_interval_ns
+            for edge in latest_edges
         )
 
     @staticmethod
@@ -626,8 +643,13 @@ class NativeCounterEncoderBackend:
             current,
             captured_monotonic_ns=context.monotonic_ns,
         )
+        physical_edge_warming_up = self._physical_edge_warming_up(
+            current,
+            captured_monotonic_ns=context.monotonic_ns,
+        )
         stale = (
             timing_valid
+            and not physical_edge_warming_up
             and (
                 physical_edge_stale
                 if physical_edge_stale is not None
@@ -683,7 +705,7 @@ class NativeCounterEncoderBackend:
                     step_distance_m=self._config.right_step_distance_m,
                 )
             if left_estimate is None or right_estimate is None:
-                if self._physical_edge_warming_up(current):
+                if physical_edge_warming_up:
                     rejection_code = EncoderRejectionCode.BASELINE
                 else:
                     stale = True
