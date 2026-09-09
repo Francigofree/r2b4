@@ -320,9 +320,9 @@ def test_native_counter_backend_consumes_the_two_owned_snapshot_views():
     )
 
     baseline = backend.read(TickContext(0, 1_000_000_000))
-    for timestamp_ns in range(10_000_000, 100_000_001, 10_000_000):
+    for timestamp_ns in range(1_010_000_000, 1_100_000_001, 10_000_000):
         gpio.emit(17, 1, tick=timestamp_ns)
-    for timestamp_ns in range(20_000_000, 100_000_001, 20_000_000):
+    for timestamp_ns in range(1_020_000_000, 1_100_000_001, 20_000_000):
         gpio.emit(22, 1, tick=timestamp_ns)
     reading = backend.read(TickContext(1, 1_100_000_000))
 

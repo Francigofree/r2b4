@@ -86,7 +86,7 @@ class GpioBackend:
         return 0
 
     def fire(self, pin: int, level: int) -> None:
-        self.callbacks[pin].function(0, pin, level, 123)
+        self.callbacks[pin].function(0, pin, level, 1_050_000_000)
 
 
 def _counter_config() -> GpioCounterPairConfig:
@@ -143,10 +143,13 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
         field.key: field.value
         for field in current.samples[0].values
     }
-    assert (values["left_mps"], values["right_mps"], values["trust"]) == pytest.approx(
-        (0.1, 0.2, 0.4)
+    assert (values["left_mps"], values["right_mps"], values["trust"]) == (
+        0.0,
+        0.0,
+        0.0,
     )
-    assert values["rejection_code"] == "NONE"
+    assert values["measurement_stale"] is True
+    assert values["rejection_code"] == "SAMPLE_INTERVAL_EXCEEDED"
     assert values["raw_left_pulse_count"] == 1
     assert values["raw_right_pulse_count"] == 1
     assert values["left_pulse_delta"] == 1

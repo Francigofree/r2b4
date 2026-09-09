@@ -164,9 +164,9 @@ def test_delayed_multi_pulse_batch_uses_physical_edge_window_not_tick_window():
         (_snapshot(0), _snapshot(5, edge_history=edges)),
         (_snapshot(0), _snapshot(5, edge_history=edges)),
     )
-    backend.read(TickContext(0, 1_000_000_000))
+    backend.read(TickContext(0, 50_000_000))
 
-    reading = backend.read(TickContext(1, 1_020_000_000))
+    reading = backend.read(TickContext(1, 70_000_000))
 
     assert reading.left_mps == pytest.approx(4 * 0.001 / 0.040)
     assert reading.right_mps == pytest.approx(4 * 0.002 / 0.040)
@@ -195,9 +195,9 @@ def test_edge_window_prevents_delayed_batch_from_false_velocity_rejection():
         (_snapshot(0), _snapshot(50, edge_history=edges)),
         (_snapshot(0), _snapshot(50, edge_history=edges)),
     )
-    backend.read(TickContext(0, 1_000_000_000))
+    backend.read(TickContext(0, 100_000_000))
 
-    reading = backend.read(TickContext(1, 1_020_000_000))
+    reading = backend.read(TickContext(1, 120_000_000))
 
     assert reading.diagnostics is not None
     assert reading.diagnostics.instantaneous_left_mps == pytest.approx(2.5)
@@ -205,6 +205,53 @@ def test_edge_window_prevents_delayed_batch_from_false_velocity_rejection():
     assert reading.diagnostics.rejection_code is EncoderRejectionCode.NONE
     assert reading.left_mps == pytest.approx(0.5)
     assert reading.right_mps == pytest.approx(1.0)
+
+
+def test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch():
+    initial_edges = tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            range(910_000_000, 1_000_000_001, 10_000_000),
+            start=1,
+        )
+    )
+    delayed_edges = initial_edges + tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            range(1_010_000_000, 1_050_000_001, 10_000_000),
+            start=11,
+        )
+    )
+    snapshots = (
+        _snapshot(5, edge_history=initial_edges[:5]),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(15, edge_history=delayed_edges),
+    )
+    backend, _, _ = _backend(snapshots, snapshots)
+
+    readings = [
+        backend.read(TickContext(tick_id, 1_000_000_000 + tick_id * 40_000_000))
+        for tick_id in range(len(snapshots))
+    ]
+
+    for reading in readings[1:]:
+        assert reading.left_mps == pytest.approx(0.1)
+        assert reading.right_mps == pytest.approx(0.2)
+        assert reading.trust == 1.0
+        assert reading.stale is False
+        assert reading.diagnostics is not None
+        assert reading.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+        assert reading.diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
+
+    assert readings[4].diagnostics is not None
+    assert readings[4].diagnostics.raw_left_pulse_count == 10
+    assert readings[4].diagnostics.raw_left_distance_m == pytest.approx(0.01)
+    assert readings[5].diagnostics is not None
+    assert readings[5].diagnostics.raw_left_pulse_count == 15
+    assert readings[5].diagnostics.raw_left_distance_m == pytest.approx(0.015)
 
 
 def test_processing_gap_uses_fresh_dual_wheel_physical_edge_windows():
@@ -288,7 +335,7 @@ def test_processing_gap_with_old_dual_wheel_edge_windows_remains_stale():
         (_snapshot(0), _snapshot(5, edge_history=old_edges)),
         (_snapshot(0), _snapshot(5, edge_history=old_edges)),
     )
-    backend.read(TickContext(0, 1_000_000_000))
+    backend.read(TickContext(0, 1_260_000_000))
 
     reading = backend.read(TickContext(1, 1_300_000_000))
 
@@ -296,6 +343,7 @@ def test_processing_gap_with_old_dual_wheel_edge_windows_remains_stale():
     assert reading.stale is True
     assert reading.timing_valid is True
     assert reading.diagnostics is not None
+    assert reading.diagnostics.sample_interval_ns == 40_000_000
     assert (
         reading.diagnostics.rejection_code
         is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED

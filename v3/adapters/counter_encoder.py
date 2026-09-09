@@ -366,18 +366,20 @@ class NativeCounterEncoderBackend:
         side: str,
         step_distance_m: float,
     ) -> _WheelVelocityEstimate | None:
-        if len(self._history) < 2:
+        if not self._history:
             return None
         current = self._history[-1]
         current_snapshot = getattr(current.counters, side)
-        previous_snapshot = getattr(self._history[-2].counters, side)
-        if current_snapshot.pulse_count != previous_snapshot.pulse_count:
+        if current_snapshot.edge_history:
             edge_estimate = self._estimate_wheel_from_edges(
                 current_snapshot,
                 step_distance_m=step_distance_m,
             )
             if edge_estimate is not None:
                 return edge_estimate
+            return None
+        if len(self._history) < 2:
+            return None
         selected: _TimedCounterPair | None = None
         for candidate in reversed(self._history[:-1]):
             elapsed_ns = current.monotonic_ns - candidate.monotonic_ns
@@ -500,6 +502,26 @@ class NativeCounterEncoderBackend:
             step_distance_m=step_distance_m,
         )
 
+    def _physical_edge_stale(
+        self,
+        current: _CounterPair,
+        *,
+        captured_monotonic_ns: int,
+    ) -> bool | None:
+        latest_edges = (
+            current.left.edge_history[-1] if current.left.edge_history else None,
+            current.right.edge_history[-1] if current.right.edge_history else None,
+        )
+        if latest_edges == (None, None):
+            return None
+        return any(
+            edge is None
+            or captured_monotonic_ns - edge.timestamp_ns < 0
+            or captured_monotonic_ns - edge.timestamp_ns
+            > self._config.maximum_sample_interval_ns
+            for edge in latest_edges
+        )
+
     @staticmethod
     def _instantaneous_interval_ns(
         current: SignedPulseCounterSnapshot,
@@ -612,9 +634,17 @@ class NativeCounterEncoderBackend:
 
         elapsed_ns = context.monotonic_ns - previous_monotonic_ns
         timing_valid = elapsed_ns > 0 and current.running
+        physical_edge_stale = self._physical_edge_stale(
+            current,
+            captured_monotonic_ns=context.monotonic_ns,
+        )
         stale = (
             timing_valid
-            and elapsed_ns > self._config.maximum_sample_interval_ns
+            and (
+                physical_edge_stale
+                if physical_edge_stale is not None
+                else elapsed_ns > self._config.maximum_sample_interval_ns
+            )
         )
         instantaneous_left_mps: float | None = None
         instantaneous_right_mps: float | None = None
@@ -690,11 +720,14 @@ class NativeCounterEncoderBackend:
                     side="right",
                     step_distance_m=self._config.right_step_distance_m,
                 )
-            assert left_estimate is not None and right_estimate is not None
-            rejection_code = self._velocity_rejection_code(
-                left_estimate.velocity_mps,
-                right_estimate.velocity_mps,
-            )
+            if left_estimate is None or right_estimate is None:
+                stale = True
+                rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+            else:
+                rejection_code = self._velocity_rejection_code(
+                    left_estimate.velocity_mps,
+                    right_estimate.velocity_mps,
+                )
 
         computed_left_mps = (
             instantaneous_left_mps
