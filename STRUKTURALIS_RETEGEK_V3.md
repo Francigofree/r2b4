@@ -31,8 +31,7 @@ indokolatlan jövőbeli frameworköt vagy konkrét algoritmust.
 * Nincs legacy shared state, rejtett singleton vagy kerülő authority.
 * A réteghatárok immutable, konkrét Python típusok; `dict[str, Any]` nem
   réteghatár-contract.
-* Egyetlen, szekvenciális `TickEngine` zárja az input snapshotot, majd rögzített
-  sorrendben legfeljebb egyszer hívja a szükséges rétegeket.
+* Egyetlen, szekvenciális TickEngine egy már lezárt TickInputs snapshotból, rögzített   sorrendben legfeljebb egyszer hívja a szükséges rétegeket.
 * Egy tickből pontosan egy L12 final döntés és legfeljebb egy normál motor-write
   születik.
 * Az L12 hiányzó, hibás vagy bizonytalan, az adott mozgáshoz ténylegesen
