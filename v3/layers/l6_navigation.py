@@ -496,6 +496,13 @@ class TrajectoryNavigator:
         max_v_mps: float,
         max_omega_rad_s: float,
     ) -> tuple[TrajectoryEvaluation, ...]:
+        start_clearance_m = _footprint_clearance(
+            estimate.x_m,
+            estimate.y_m,
+            estimate.yaw_rad,
+            world,
+            self._config,
+        )
         evaluations: list[TrajectoryEvaluation] = []
         for linear_index in range(self._config.rollout_linear_samples):
             v_mps = max_v_mps * linear_index / (self._config.rollout_linear_samples - 1)
@@ -515,6 +522,7 @@ class TrajectoryNavigator:
                         goal,
                         max_v_mps,
                         max_omega_rad_s,
+                        start_clearance_m,
                     )
                 )
         return tuple(evaluations)
@@ -530,12 +538,14 @@ class TrajectoryNavigator:
         goal: Waypoint,
         max_v_mps: float,
         max_omega_rad_s: float,
+        start_clearance_m: float,
     ) -> TrajectoryEvaluation:
         step_ns = self._config.rollout_horizon_ns // self._config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
-        min_clearance = _footprint_clearance(x_m, y_m, yaw_rad, world, self._config)
-        collision = min_clearance <= self._config.footprint_safety_margin_m
+        min_clearance = start_clearance_m
+        start_collision = min_clearance <= self._config.footprint_safety_margin_m
+        collision = start_collision
         for step in range(1, self._config.rollout_step_count + 1):
             offset_ns = (
                 self._config.rollout_horizon_ns
@@ -553,9 +563,10 @@ class TrajectoryNavigator:
             )
             sample = TrajectoryPose(x_m, y_m, yaw_rad, offset_ns)
             samples.append(sample)
-            clearance = _footprint_clearance(x_m, y_m, yaw_rad, world, self._config)
-            min_clearance = min(min_clearance, clearance)
-            collision = collision or clearance <= self._config.footprint_safety_margin_m
+            if not start_collision:
+                clearance = _footprint_clearance(x_m, y_m, yaw_rad, world, self._config)
+                min_clearance = min(min_clearance, clearance)
+                collision = collision or clearance <= self._config.footprint_safety_margin_m
 
         start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
         final_distance = math.hypot(goal.x_m - x_m, goal.y_m - y_m)

@@ -14,6 +14,7 @@ from v3.contracts import (
     TickContext,
     WorldSnapshot,
 )
+from v3.layers import l6_navigation as navigation_module
 from v3.layers.l5_command_mission import MissionManager
 from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
 from v3.layers.l7_motion_selection import select_motion
@@ -70,8 +71,17 @@ def _mission(context: TickContext, mode: CommandMode):
     )
 
 
-@pytest.mark.parametrize("mode", (CommandMode.EXPLORE, CommandMode.NAVIGATE))
-def test_explore_and_navigate_share_the_same_generic_trajectory_contract(mode):
+@pytest.mark.parametrize(
+    ("mode", "expected_candidate_id"),
+    (
+        (CommandMode.EXPLORE, "trajectory-05-03"),
+        (CommandMode.NAVIGATE, "trajectory-05-04"),
+    ),
+)
+def test_explore_and_navigate_share_the_same_generic_trajectory_contract(
+    mode,
+    expected_candidate_id,
+):
     context = TickContext(0, 1_000_000_000)
     estimate = _estimate(context)
     world = _world(context)
@@ -104,6 +114,7 @@ def test_explore_and_navigate_share_the_same_generic_trajectory_contract(mode):
         ),
     )
     assert objective.trajectory == expected
+    assert objective.trajectory.candidate_id == expected_candidate_id
 
     realized = MotionRealizer().evaluate(objective, estimate, world)
     assert realized.requested_v_mps == expected.v_mps
@@ -132,15 +143,33 @@ def test_footprint_collision_is_scored_in_l6_and_excluded_only_by_l7():
     assert objective.trajectory in viable
 
 
-def test_l7_fails_closed_when_every_footprint_rollout_collides():
+def test_start_collision_short_circuits_clearance_checks_and_l7_fails_closed(
+    monkeypatch,
+):
     context = TickContext(0, 1_000_000_000)
+    clearance_calls = 0
+    footprint_clearance = navigation_module._footprint_clearance
+
+    def counting_footprint_clearance(*args, **kwargs):
+        nonlocal clearance_calls
+        clearance_calls += 1
+        return footprint_clearance(*args, **kwargs)
+
+    monkeypatch.setattr(
+        navigation_module,
+        "_footprint_clearance",
+        counting_footprint_clearance,
+    )
     plan = TrajectoryNavigator().evaluate(
         _mission(context, CommandMode.EXPLORE),
         _estimate(context),
         _world(context, (CostmapCell(0, 0, 1),)),
     )
 
+    assert len(plan.trajectory_candidates) == 54
+    assert all(len(item.samples) == 8 for item in plan.trajectory_candidates)
     assert all(item.collision for item in plan.trajectory_candidates)
+    assert clearance_calls == 1
     objective = select_motion(plan)
     assert objective.kind is MotionObjectiveKind.STOP
     assert objective.selection_reason == "NO_COLLISION_FREE_TRAJECTORY"
