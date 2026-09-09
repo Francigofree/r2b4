@@ -248,10 +248,14 @@ def test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch():
 
     assert readings[4].diagnostics is not None
     assert readings[4].diagnostics.raw_left_pulse_count == 10
+    assert readings[4].diagnostics.left_pulse_delta == 0
     assert readings[4].diagnostics.raw_left_distance_m == pytest.approx(0.01)
+    assert readings[4].diagnostics.left_distance_delta_m == pytest.approx(0.0)
     assert readings[5].diagnostics is not None
     assert readings[5].diagnostics.raw_left_pulse_count == 15
+    assert readings[5].diagnostics.left_pulse_delta == 5
     assert readings[5].diagnostics.raw_left_distance_m == pytest.approx(0.015)
+    assert readings[5].diagnostics.left_distance_delta_m == pytest.approx(0.005)
 
 
 def test_processing_gap_uses_fresh_dual_wheel_physical_edge_windows():

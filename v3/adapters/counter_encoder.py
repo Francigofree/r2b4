@@ -476,38 +476,14 @@ class NativeCounterEncoderBackend:
             end_edge_timestamp_ns=current.timestamp_ns,
         )
 
-    def _estimate_fresh_wheel_edges(
-        self,
-        current: SignedPulseCounterSnapshot,
-        previous: SignedPulseCounterSnapshot,
-        *,
-        captured_monotonic_ns: int,
-        step_distance_m: float,
-    ) -> _WheelVelocityEstimate | None:
-        """Return physical-time evidence only when this snapshot advanced it."""
-
-        if current.pulse_count == previous.pulse_count or not current.edge_history:
-            return None
-        current_edge = current.edge_history[-1]
-        if (
-            previous.edge_history
-            and current_edge.timestamp_ns <= previous.edge_history[-1].timestamp_ns
-        ):
-            return None
-        edge_age_ns = captured_monotonic_ns - current_edge.timestamp_ns
-        if edge_age_ns < 0 or edge_age_ns > self._config.maximum_sample_interval_ns:
-            return None
-        return self._estimate_wheel_from_edges(
-            current,
-            step_distance_m=step_distance_m,
-        )
-
     def _physical_edge_stale(
         self,
         current: _CounterPair,
         *,
         captured_monotonic_ns: int,
     ) -> bool | None:
+        """Use dual-wheel physical edge age when that timebase is available."""
+
         latest_edges = (
             current.left.edge_history[-1] if current.left.edge_history else None,
             current.right.edge_history[-1] if current.right.edge_history else None,
@@ -679,33 +655,7 @@ class NativeCounterEncoderBackend:
         elif not current.running:
             rejection_code = EncoderRejectionCode.COUNTER_NOT_RUNNING
         elif stale:
-            left_estimate = self._estimate_fresh_wheel_edges(
-                current.left,
-                previous.left,
-                captured_monotonic_ns=context.monotonic_ns,
-                step_distance_m=self._config.left_step_distance_m,
-            )
-            right_estimate = self._estimate_fresh_wheel_edges(
-                current.right,
-                previous.right,
-                captured_monotonic_ns=context.monotonic_ns,
-                step_distance_m=self._config.right_step_distance_m,
-            )
-            has_dual_wheel_edge_proof = (
-                self._diagnostic_rejection_code(previous, current)
-                is EncoderRejectionCode.NONE
-                and left_estimate is not None
-                and right_estimate is not None
-            )
-            if has_dual_wheel_edge_proof:
-                stale = False
-                self._append_history(context, current)
-                rejection_code = self._velocity_rejection_code(
-                    left_estimate.velocity_mps,
-                    right_estimate.velocity_mps,
-                )
-            else:
-                rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+            rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
         else:
             rejection_code = self._diagnostic_rejection_code(previous, current)
 
