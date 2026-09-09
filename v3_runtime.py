@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from v3.adapters.gpio_motor import PwmGpioBackend
 from v3.adapters.live_encoder import NativeEncoderSource
@@ -21,7 +21,11 @@ from v3.composition.resident_physical_control import (
 )
 from v3.contracts import LifecycleState, SafetyDecision, TickContext
 from v3.engine import TickExecutionError, TickResult
-from v3.execution import CaptureRecord
+from v3.execution import (
+    CaptureRecord,
+    ExecutionRecord,
+    REPLAY_STATE_CHECKPOINT_INTERVAL_NS,
+)
 from v3.ports import CommandGateway
 from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, RUN_FAULT, RUN_OK
 
@@ -271,6 +275,7 @@ def run_resident_physical_control(
     next_deadline_ns = first_deadline_ns
     tick_id = 0
     normal_tick_count = 0
+    last_checkpoint_ns: int | None = None
     last_result: TickResult | None = None
     try:
         while True:
@@ -322,6 +327,20 @@ def run_resident_physical_control(
                     record_observer(exc.capture_record)
                 raise
             if record_observer is not None:
+                if (
+                    isinstance(record, ExecutionRecord)
+                    and record.result.trace.fault_layer is None
+                    and (
+                        last_checkpoint_ns is None
+                        or context.monotonic_ns - last_checkpoint_ns
+                        >= REPLAY_STATE_CHECKPOINT_INTERVAL_NS
+                    )
+                ):
+                    record = replace(
+                        record,
+                        state_checkpoint_after=runtime.checkpoint(),
+                    )
+                    last_checkpoint_ns = context.monotonic_ns
                 record_observer(record)
             if tick_observer is not None:
                 tick_observer(last_result)

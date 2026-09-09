@@ -10,6 +10,9 @@ from .contracts import DeviceHealth, LifecycleState, RawDeviceBatch, TickContext
 from .engine import TickInputs, TickResult
 
 
+REPLAY_STATE_CHECKPOINT_INTERVAL_NS = 1_000_000_000
+
+
 class InputSource(Protocol):
     """Provide already closed V3 tick inputs."""
 
@@ -29,6 +32,7 @@ class ExecutionRecord:
     inputs: TickInputs
     result: TickResult
     evidence: tuple[object, ...] = ()
+    state_checkpoint_after: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,5 +185,6 @@ __all__ = [
     "MemoryOutputSink",
     "OutputSink",
     "ProductionV3",
+    "REPLAY_STATE_CHECKPOINT_INTERVAL_NS",
     "WriterFailureRecord",
 ]

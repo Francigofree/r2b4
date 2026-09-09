@@ -52,19 +52,6 @@ class WorldModelConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-
-
-@dataclass(frozen=True, slots=True)
-class WorldModelStateCheckpoint:
-    last_lidar_measurement_ns: int | None
-    last_lidar_sequence: int | None
-    map_revision: int
-    tracks: tuple[tuple[ObstacleTrack, int], ...]
-    last_local_measurement_ns: int | None
-    last_local_sequence: int | None
-    last_local_values: tuple[DataField, ...] | None
-    costmap_revision: int
-    cells: tuple[tuple[int, int, int, int], ...]
         for name in ("local_costmap_resolution_m", "local_costmap_radius_m"):
             value = getattr(self, name)
             if (
@@ -78,6 +65,19 @@ class WorldModelStateCheckpoint:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+
+
+@dataclass(frozen=True, slots=True)
+class WorldModelStateCheckpoint:
+    last_lidar_measurement_ns: int | None
+    last_lidar_sequence: int | None
+    map_revision: int
+    tracks: tuple[tuple[ObstacleTrack, int], ...]
+    last_local_measurement_ns: int | None
+    last_local_sequence: int | None
+    last_local_values: tuple[DataField, ...] | None
+    costmap_revision: int
+    cells: tuple[tuple[int, int, int, int], ...]
 
 
 class ShadowWorldModel:

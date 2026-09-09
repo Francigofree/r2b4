@@ -58,6 +58,11 @@ class LidarSafetyConfig:
             raise ValueError("maximum_sample_age_ns must be a positive integer")
 
 
+@dataclass(frozen=True, slots=True)
+class FinalSafetyStateCheckpoint:
+    fault_latched: bool
+
+
 class FinalSafetyGate:
     """Own the fault latch, final decision, and only normal motor writer."""
 
@@ -75,6 +80,14 @@ class FinalSafetyGate:
     @property
     def fault_latched(self) -> bool:
         return self._fault_latched
+
+    def checkpoint(self) -> FinalSafetyStateCheckpoint:
+        return FinalSafetyStateCheckpoint(self._fault_latched)
+
+    def restore(self, checkpoint: FinalSafetyStateCheckpoint) -> None:
+        if not isinstance(checkpoint, FinalSafetyStateCheckpoint):
+            raise TypeError("checkpoint must be FinalSafetyStateCheckpoint")
+        self._fault_latched = checkpoint.fault_latched
 
     def finalize(
         self,
@@ -242,4 +255,9 @@ class FinalSafetyGate:
         )
 
 
-__all__ = ["FinalSafetyGate", "LidarSafetyConfig", "MotorWriteError"]
+__all__ = [
+    "FinalSafetyGate",
+    "FinalSafetyStateCheckpoint",
+    "LidarSafetyConfig",
+    "MotorWriteError",
+]

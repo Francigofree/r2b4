@@ -7,19 +7,37 @@ from dataclasses import dataclass
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
 from v3.engine import PipelineLayers, TickEngine, TickInputs, TickResult
 from v3.layers.l1_acquisition import acquire
-from v3.layers.l2_admission import AdmissionConfig, InputAdmission
+from v3.layers.l2_admission import (
+    AdmissionConfig,
+    AdmissionStateCheckpoint,
+    InputAdmission,
+)
 from v3.layers.l3_state_estimation import (
+    NativeEstimatorStateCheckpoint,
     NativeStateEstimator,
     NativeStateEstimatorConfig,
 )
-from v3.layers.l4_world_model import ShadowWorldModel, WorldModelConfig
-from v3.layers.l5_command_mission import MissionConfig, MissionManager
-from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
+from v3.layers.l4_world_model import (
+    ShadowWorldModel,
+    WorldModelConfig,
+    WorldModelStateCheckpoint,
+)
+from v3.layers.l5_command_mission import (
+    MissionConfig,
+    MissionManager,
+    MissionStateCheckpoint,
+)
+from v3.layers.l6_navigation import (
+    NavigationConfig,
+    NavigationStateCheckpoint,
+    TrajectoryNavigator,
+)
 from v3.layers.l7_motion_selection import select_motion
 from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
 from v3.layers.l9_operational_constraints import (
     OperationalConstraintLayer,
     OperationalConstraintsConfig,
+    OperationalConstraintsStateCheckpoint,
 )
 from v3.layers.l10_chassis_control import (
     ChassisControlConfig,
@@ -27,10 +45,15 @@ from v3.layers.l10_chassis_control import (
 )
 from v3.layers.l11_actuator_control import (
     WheelActuatorController,
+    WheelActuatorStateCheckpoint,
     WheelPiConfig,
     WheelSpeedMap,
 )
-from v3.layers.l12_safety_final import FinalSafetyGate, LidarSafetyConfig
+from v3.layers.l12_safety_final import (
+    FinalSafetyGate,
+    FinalSafetyStateCheckpoint,
+    LidarSafetyConfig,
+)
 
 
 V3_NAVIGATION_CONTRACT = "R2B4_V3_NAVIGATION_V1"
@@ -283,6 +306,21 @@ class NativeControlCompositionConfig:
             raise TypeError("lidar_safety must be LidarSafetyConfig or None")
 
 
+@dataclass(frozen=True, slots=True)
+class NativeControlStateCheckpoint:
+    """Bounded post-tick state needed to start a short canonical replay."""
+
+    engine_last_context: TickContext
+    admission: AdmissionStateCheckpoint
+    estimation: NativeEstimatorStateCheckpoint
+    world_model: WorldModelStateCheckpoint
+    mission: MissionStateCheckpoint
+    navigation: NavigationStateCheckpoint
+    operational_constraints: OperationalConstraintsStateCheckpoint
+    actuator_control: WheelActuatorStateCheckpoint
+    final_safety: FinalSafetyStateCheckpoint
+
+
 class NativeControlComposition:
     """Run the canonical control layers over already closed tick inputs.
 
@@ -290,7 +328,17 @@ class NativeControlComposition:
     owns only stateful layer instances and never exposes the injected writer.
     """
 
-    __slots__ = ("_engine", "_estimator")
+    __slots__ = (
+        "_actuator_control",
+        "_admission",
+        "_engine",
+        "_estimator",
+        "_final_safety",
+        "_mission",
+        "_navigation",
+        "_operational_constraints",
+        "_world_model",
+    )
 
     def __init__(
         self,
@@ -302,27 +350,41 @@ class NativeControlComposition:
         if not isinstance(config, NativeControlCompositionConfig):
             raise TypeError("config must be NativeControlCompositionConfig")
 
+        admission = InputAdmission(config.admission)
         estimator = NativeStateEstimator(config.estimation)
+        world_model = ShadowWorldModel(config.world_model)
+        mission = MissionManager(config.mission)
+        navigation = TrajectoryNavigator(config.navigation)
+        operational_constraints = OperationalConstraintLayer(
+            config.operational_constraints
+        )
+        actuator_control = WheelActuatorController(
+            config.speed_map,
+            config.wheel_pi,
+        )
+        final_safety = FinalSafetyGate(motor_writer, config.lidar_safety)
+        self._admission = admission
         self._estimator = estimator
+        self._world_model = world_model
+        self._mission = mission
+        self._navigation = navigation
+        self._operational_constraints = operational_constraints
+        self._actuator_control = actuator_control
+        self._final_safety = final_safety
         self._engine = TickEngine(
             PipelineLayers(
                 acquisition=acquire,
-                admission=InputAdmission(config.admission),
+                admission=admission,
                 estimation=estimator,
-                world_model=ShadowWorldModel(config.world_model),
-                command_mission=MissionManager(config.mission).evaluate,
-                navigation=TrajectoryNavigator(config.navigation).evaluate,
+                world_model=world_model,
+                command_mission=mission.evaluate,
+                navigation=navigation.evaluate,
                 motion_selection=select_motion,
                 motion_realization=MotionRealizer(config.motion_realization).evaluate,
-                constraints=OperationalConstraintLayer(
-                    config.operational_constraints
-                ).evaluate,
+                constraints=operational_constraints.evaluate,
                 chassis_control=DifferentialDriveKinematics(config.chassis_control),
-                actuator_control=WheelActuatorController(
-                    config.speed_map,
-                    config.wheel_pi,
-                ),
-                final_safety=FinalSafetyGate(motor_writer, config.lidar_safety),
+                actuator_control=actuator_control,
+                final_safety=final_safety,
             )
         )
 
@@ -331,6 +393,37 @@ class NativeControlComposition:
         """Expose only bounded diagnostic facts produced by the last L3 call."""
 
         return self._estimator.last_update_evidence
+
+    def checkpoint(self) -> NativeControlStateCheckpoint:
+        context = self._engine.checkpoint()
+        if context is None:
+            raise RuntimeError("a state checkpoint requires one completed tick")
+        return NativeControlStateCheckpoint(
+            context,
+            self._admission.checkpoint(),
+            self._estimator.checkpoint(),
+            self._world_model.checkpoint(),
+            self._mission.checkpoint(),
+            self._navigation.checkpoint(),
+            self._operational_constraints.checkpoint(),
+            self._actuator_control.checkpoint(),
+            self._final_safety.checkpoint(),
+        )
+
+    def restore(self, checkpoint: NativeControlStateCheckpoint) -> None:
+        if not isinstance(checkpoint, NativeControlStateCheckpoint):
+            raise TypeError("checkpoint must be NativeControlStateCheckpoint")
+        if checkpoint.estimation.last_context != checkpoint.engine_last_context:
+            raise ValueError("estimator checkpoint is not aligned to the engine")
+        self._admission.restore(checkpoint.admission)
+        self._estimator.restore(checkpoint.estimation)
+        self._world_model.restore(checkpoint.world_model)
+        self._mission.restore(checkpoint.mission)
+        self._navigation.restore(checkpoint.navigation)
+        self._operational_constraints.restore(checkpoint.operational_constraints)
+        self._actuator_control.restore(checkpoint.actuator_control)
+        self._final_safety.restore(checkpoint.final_safety)
+        self._engine.restore(checkpoint.engine_last_context)
 
     def run_tick(self, inputs: TickInputs) -> TickResult:
         if not isinstance(inputs, TickInputs):
@@ -367,6 +460,7 @@ class NativeControlComposition:
 __all__ = [
     "NativeControlComposition",
     "NativeControlCompositionConfig",
+    "NativeControlStateCheckpoint",
     "V3_NAVIGATION_CONTRACT",
     "V3NavigationConfig",
     "v3_navigation_config_from_mapping",

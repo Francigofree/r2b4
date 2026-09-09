@@ -134,6 +134,14 @@ class TickEngine:
         self._layers = layers
         self._last_context: TickContext | None = None
 
+    def checkpoint(self) -> TickContext | None:
+        return self._last_context
+
+    def restore(self, last_context: TickContext | None) -> None:
+        if last_context is not None and not isinstance(last_context, TickContext):
+            raise TypeError("last_context must be TickContext or None")
+        self._last_context = last_context
+
     def run_tick(self, inputs: TickInputs) -> TickResult:
         records: list[LayerRecord] = []
         request: ActuatorRequest | None = None

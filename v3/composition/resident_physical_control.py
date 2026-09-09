@@ -18,6 +18,7 @@ from .resident_live_control import (
     ResidentLiveControlComposition,
     ResidentLiveControlConfig,
 )
+from .native_control import NativeControlStateCheckpoint
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +80,9 @@ class ResidentPhysicalControlComposition:
     @property
     def closed(self) -> bool:
         return self._motor_output.closed
+
+    def checkpoint(self) -> NativeControlStateCheckpoint:
+        return self._live_control.checkpoint()
 
     def tick(self, context: TickContext) -> TickResult:
         if self._shutdown:

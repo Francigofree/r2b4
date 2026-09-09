@@ -35,6 +35,7 @@ from .adapters.motor_pwm import MotorChannelPhysicalConfig, PwmDecayMode
 from .composition.native_control import (
     NativeControlComposition,
     NativeControlCompositionConfig,
+    NativeControlStateCheckpoint,
     v3_navigation_config_from_mapping,
 )
 from .composition.native_sensor_inputs import (
@@ -52,27 +53,38 @@ from .contracts import (
     DeviceSample,
     LifecycleState,
     MissionConstraints,
+    ObstacleTrack,
     RawDeviceBatch,
     SafetyDecision,
     TickContext,
+    TrajectoryEvaluation,
+    TrajectoryPose,
+    Waypoint,
 )
 from .engine import LayerValue, TickEngine, TickInputs, TickResult, TickTrace
 from .execution import ExecutionBoundary, IterableInputSource, MemoryOutputSink
-from .layers.l2_admission import AdmissionConfig
-from .layers.l4_world_model import WorldModelConfig
-from .layers.l5_command_mission import MissionConfig
-from .layers.l6_navigation import NavigationConfig
+from .layers.l2_admission import AdmissionConfig, AdmissionStateCheckpoint
+from .layers.l4_world_model import WorldModelConfig, WorldModelStateCheckpoint
+from .layers.l5_command_mission import MissionConfig, MissionStateCheckpoint
+from .layers.l6_navigation import NavigationConfig, NavigationStateCheckpoint
 from .layers.l8_motion_realization import MotionRealizationConfig
-from .layers.l9_operational_constraints import OperationalConstraintsConfig
+from .layers.l9_operational_constraints import (
+    OperationalConstraintsConfig,
+    OperationalConstraintsStateCheckpoint,
+)
 from .layers.l10_chassis_control import ChassisControlConfig
 from .layers.l11_actuator_control import (
     SpeedMapPoint,
     WheelPiConfig,
+    WheelActuatorStateCheckpoint,
     WheelSpeedCurve,
     WheelSpeedMap,
 )
-from .layers.l3_state_estimation import NativeStateEstimatorConfig
-from .layers.l12_safety_final import LidarSafetyConfig
+from .layers.l3_state_estimation import (
+    NativeEstimatorStateCheckpoint,
+    NativeStateEstimatorConfig,
+)
+from .layers.l12_safety_final import FinalSafetyStateCheckpoint, LidarSafetyConfig
 
 
 V3_REPLAY_RESULT_SCHEMA = "R2B4_REPLAYER_V3_RESULT_V3"
@@ -329,8 +341,17 @@ def replay_capture(
         entry.inputs for entry in execution_entries if entry.inputs is not None
     )
     config = _embedded_control_config(general_payload, closed_inputs)
-    first_results, first_writes = _run_native_replay(execution_entries, config)
-    second_results, second_writes = _run_native_replay(execution_entries, config)
+    checkpoint = _decode_state_checkpoint(general_payload)
+    first_results, first_writes = _run_native_replay(
+        execution_entries,
+        config,
+        checkpoint,
+    )
+    second_results, second_writes = _run_native_replay(
+        execution_entries,
+        config,
+        checkpoint,
+    )
     repeated = first_results == second_results and first_writes == second_writes
     selected_ticks = tuple(ticks[index] for index in indices)
     selected_results = tuple(first_results[index] for index in indices)
@@ -468,12 +489,15 @@ def write_replay_result(result: Mapping[str, object], output_path: str | Path) -
 def _run_native_replay(
     entries: tuple[_ReplayEntry, ...],
     config: NativeControlCompositionConfig,
+    checkpoint: NativeControlStateCheckpoint | None = None,
 ) -> tuple[tuple[_ReplayOutcome, ...], tuple[object, ...]]:
     failure_indices = frozenset(
         index for index, entry in enumerate(entries) if entry.writer_failure
     )
     writer = _RecordingWriter(failure_indices)
     composition = NativeControlComposition(writer, config)
+    if checkpoint is not None:
+        composition.restore(checkpoint)
     outcomes: list[_ReplayOutcome] = []
     for entry in entries:
         try:
@@ -941,6 +965,219 @@ def _decode_native_control_config(
             )
         ),
     )
+
+
+def _decode_state_checkpoint(
+    payload: Mapping[str, object],
+) -> NativeControlStateCheckpoint | None:
+    value = payload.get("initial_state_checkpoint")
+    if value is None:
+        return None
+    root = _mapping(value, "initial_state_checkpoint")
+    _require_type(root, "NativeControlStateCheckpoint", "initial_state_checkpoint")
+    admission = _typed_mapping(
+        root.get("admission"),
+        "AdmissionStateCheckpoint",
+        "initial_state_checkpoint.admission",
+    )
+    estimator = _typed_mapping(
+        root.get("estimation"),
+        "NativeEstimatorStateCheckpoint",
+        "initial_state_checkpoint.estimation",
+    )
+    world = _typed_mapping(
+        root.get("world_model"),
+        "WorldModelStateCheckpoint",
+        "initial_state_checkpoint.world_model",
+    )
+    mission = _typed_mapping(
+        root.get("mission"),
+        "MissionStateCheckpoint",
+        "initial_state_checkpoint.mission",
+    )
+    navigation = _typed_mapping(
+        root.get("navigation"),
+        "NavigationStateCheckpoint",
+        "initial_state_checkpoint.navigation",
+    )
+    constraints = _typed_mapping(
+        root.get("operational_constraints"),
+        "OperationalConstraintsStateCheckpoint",
+        "initial_state_checkpoint.operational_constraints",
+    )
+    actuator = _typed_mapping(
+        root.get("actuator_control"),
+        "WheelActuatorStateCheckpoint",
+        "initial_state_checkpoint.actuator_control",
+    )
+    final_safety = _typed_mapping(
+        root.get("final_safety"),
+        "FinalSafetyStateCheckpoint",
+        "initial_state_checkpoint.final_safety",
+    )
+    try:
+        return NativeControlStateCheckpoint(
+            engine_last_context=_context(
+                root.get("engine_last_context"),
+                "initial_state_checkpoint.engine_last_context",
+            ),
+            admission=AdmissionStateCheckpoint(
+                tuple(
+                    _decode_admission_sequence(row)
+                    for row in _sequence(
+                        admission.get("last_sequences"),
+                        "admission.last_sequences",
+                    )
+                )
+            ),
+            estimation=NativeEstimatorStateCheckpoint(
+                tuple(
+                    _number(item, "estimation.state[]")
+                    for item in _sequence(estimator.get("state"), "estimation.state")
+                ),
+                tuple(
+                    tuple(
+                        _number(item, "estimation.covariance[][]")
+                        for item in _sequence(row, "estimation.covariance[]")
+                    )
+                    for row in _sequence(
+                        estimator.get("covariance"),
+                        "estimation.covariance",
+                    )
+                ),
+                _optional_context(estimator.get("last_context"), "estimation.last_context"),
+                _number(estimator.get("last_omega"), "estimation.last_omega"),
+            ),
+            world_model=WorldModelStateCheckpoint(
+                _optional_integer(
+                    world.get("last_lidar_measurement_ns"),
+                    "world_model.last_lidar_measurement_ns",
+                ),
+                _optional_integer(
+                    world.get("last_lidar_sequence"),
+                    "world_model.last_lidar_sequence",
+                ),
+                _integer(world.get("map_revision"), "world_model.map_revision"),
+                tuple(
+                    _decode_world_track_state(row)
+                    for row in _sequence(world.get("tracks"), "world_model.tracks")
+                ),
+                _optional_integer(
+                    world.get("last_local_measurement_ns"),
+                    "world_model.last_local_measurement_ns",
+                ),
+                _optional_integer(
+                    world.get("last_local_sequence"),
+                    "world_model.last_local_sequence",
+                ),
+                (
+                    None
+                    if world.get("last_local_values") is None
+                    else _data_fields(
+                        world.get("last_local_values"),
+                        "world_model.last_local_values",
+                    )
+                ),
+                _integer(
+                    world.get("costmap_revision"),
+                    "world_model.costmap_revision",
+                ),
+                tuple(
+                    _decode_grid_state(row, "world_model.cells[]")
+                    for row in _sequence(world.get("cells"), "world_model.cells")
+                ),
+            ),
+            mission=MissionStateCheckpoint(
+                (
+                    None
+                    if mission.get("command_id") is None
+                    else str(mission.get("command_id"))
+                ),
+                (
+                    None
+                    if mission.get("mode") is None
+                    else CommandMode(str(mission.get("mode")))
+                ),
+                _data_fields(mission.get("goal"), "mission.goal"),
+            ),
+            navigation=NavigationStateCheckpoint(
+                (
+                    None
+                    if navigation.get("mission_id") is None
+                    else str(navigation.get("mission_id"))
+                ),
+                _number(
+                    navigation.get("initial_distance_m"),
+                    "navigation.initial_distance_m",
+                ),
+                _number(navigation.get("progress"), "navigation.progress"),
+                _required_bool(navigation.get("completed"), "navigation.completed"),
+                tuple(
+                    _decode_grid_state(row, "navigation.coverage[]")
+                    for row in _sequence(
+                        navigation.get("coverage"),
+                        "navigation.coverage",
+                    )
+                ),
+                _optional_waypoint(
+                    navigation.get("local_goal"),
+                    "navigation.local_goal",
+                ),
+                _integer(
+                    navigation.get("goal_selected_ns"),
+                    "navigation.goal_selected_ns",
+                ),
+                _optional_integer(
+                    navigation.get("last_replan_ns"),
+                    "navigation.last_replan_ns",
+                ),
+                tuple(
+                    _trajectory_evaluation(row, "navigation.trajectory_candidates[]")
+                    for row in _mapping_sequence(
+                        navigation.get("trajectory_candidates"),
+                        "navigation.trajectory_candidates",
+                    )
+                ),
+            ),
+            operational_constraints=OperationalConstraintsStateCheckpoint(
+                _optional_context(
+                    constraints.get("last_context"),
+                    "operational_constraints.last_context",
+                ),
+                _number(
+                    constraints.get("last_v_mps"),
+                    "operational_constraints.last_v_mps",
+                ),
+                _number(
+                    constraints.get("last_omega_rad_s"),
+                    "operational_constraints.last_omega_rad_s",
+                ),
+            ),
+            actuator_control=WheelActuatorStateCheckpoint(
+                _optional_context(
+                    actuator.get("last_context"),
+                    "actuator_control.last_context",
+                ),
+                _number(
+                    actuator.get("left_integral"),
+                    "actuator_control.left_integral",
+                ),
+                _number(
+                    actuator.get("right_integral"),
+                    "actuator_control.right_integral",
+                ),
+            ),
+            final_safety=FinalSafetyStateCheckpoint(
+                _required_bool(
+                    final_safety.get("fault_latched"),
+                    "final_safety.fault_latched",
+                )
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        if isinstance(exc, V3ReplayError):
+            raise
+        raise V3ReplayError(f"initial_state_checkpoint is invalid: {exc}") from exc
 
 
 def _decode_flat_config(
@@ -1596,6 +1833,131 @@ def _context(value: object, name: str) -> TickContext:
     return TickContext(
         _integer(row.get("tick_id"), f"{name}.tick_id"),
         _integer(row.get("monotonic_ns"), f"{name}.monotonic_ns"),
+    )
+
+
+def _typed_mapping(value: object, expected: str, name: str) -> Mapping[str, object]:
+    row = _mapping(value, name)
+    _require_type(row, expected, name)
+    return row
+
+
+def _optional_context(value: object, name: str) -> TickContext | None:
+    return None if value is None else _context(value, name)
+
+
+def _optional_integer(value: object, name: str) -> int | None:
+    return None if value is None else _integer(value, name)
+
+
+def _signed_integer(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise V3ReplayError(f"{name} must be an integer")
+    return value
+
+
+def _decode_grid_state(value: object, name: str) -> tuple[int, int, int, int]:
+    row = _sequence(value, name)
+    if len(row) != 4:
+        raise V3ReplayError(f"{name} must contain four integers")
+    return (
+        _signed_integer(row[0], f"{name}[0]"),
+        _signed_integer(row[1], f"{name}[1]"),
+        _integer(row[2], f"{name}[2]"),
+        _integer(row[3], f"{name}[3]"),
+    )
+
+
+def _decode_admission_sequence(value: object) -> tuple[str, str, int]:
+    row = _sequence(value, "admission.last_sequences[]")
+    if len(row) != 3:
+        raise V3ReplayError("admission.last_sequences[] must contain three values")
+    return (
+        str(row[0]),
+        str(row[1]),
+        _integer(row[2], "admission.last_sequences[].sequence"),
+    )
+
+
+def _decode_world_track_state(value: object) -> tuple[ObstacleTrack, int]:
+    row = _sequence(value, "world_model.tracks[]")
+    if len(row) != 2:
+        raise V3ReplayError("world_model.tracks[] must contain track and timestamp")
+    track = _typed_mapping(row[0], "ObstacleTrack", "world_model.tracks[].track")
+    return (
+        ObstacleTrack(
+            track_id=str(track.get("track_id", "")),
+            x_m=_number(track.get("x_m"), "world_model.track.x_m"),
+            y_m=_number(track.get("y_m"), "world_model.track.y_m"),
+            radius_m=_number(track.get("radius_m"), "world_model.track.radius_m"),
+            vx_mps=_number(track.get("vx_mps"), "world_model.track.vx_mps"),
+            vy_mps=_number(track.get("vy_mps"), "world_model.track.vy_mps"),
+            confidence=_number(
+                track.get("confidence"),
+                "world_model.track.confidence",
+            ),
+        ),
+        _integer(row[1], "world_model.tracks[].captured_monotonic_ns"),
+    )
+
+
+def _optional_waypoint(value: object, name: str) -> Waypoint | None:
+    if value is None:
+        return None
+    row = _typed_mapping(value, "Waypoint", name)
+    return Waypoint(
+        _number(row.get("x_m"), f"{name}.x_m"),
+        _number(row.get("y_m"), f"{name}.y_m"),
+        (
+            None
+            if row.get("yaw_rad") is None
+            else _number(row.get("yaw_rad"), f"{name}.yaw_rad")
+        ),
+    )
+
+
+def _trajectory_evaluation(
+    value: Mapping[str, object],
+    name: str,
+) -> TrajectoryEvaluation:
+    _require_type(value, "TrajectoryEvaluation", name)
+    samples = tuple(
+        TrajectoryPose(
+            _number(row.get("x_m"), f"{name}.samples[].x_m"),
+            _number(row.get("y_m"), f"{name}.samples[].y_m"),
+            _number(row.get("yaw_rad"), f"{name}.samples[].yaw_rad"),
+            _integer(
+                row.get("time_offset_ns"),
+                f"{name}.samples[].time_offset_ns",
+            ),
+        )
+        for row in _mapping_sequence(value.get("samples"), f"{name}.samples")
+        if _required_encoded_type(row, "TrajectoryPose", f"{name}.samples[]")
+    )
+    return TrajectoryEvaluation(
+        candidate_id=str(value.get("candidate_id", "")),
+        v_mps=_number(value.get("v_mps"), f"{name}.v_mps"),
+        omega_rad_s=_number(value.get("omega_rad_s"), f"{name}.omega_rad_s"),
+        horizon_ns=_integer(value.get("horizon_ns"), f"{name}.horizon_ns"),
+        samples=samples,
+        collision=_required_bool(value.get("collision"), f"{name}.collision"),
+        min_clearance_m=_number(
+            value.get("min_clearance_m"),
+            f"{name}.min_clearance_m",
+        ),
+        progress_score=_number(
+            value.get("progress_score"),
+            f"{name}.progress_score",
+        ),
+        smoothness_score=_number(
+            value.get("smoothness_score"),
+            f"{name}.smoothness_score",
+        ),
+        novelty_score=_number(
+            value.get("novelty_score"),
+            f"{name}.novelty_score",
+        ),
+        total_score=_number(value.get("total_score"), f"{name}.total_score"),
     )
 
 

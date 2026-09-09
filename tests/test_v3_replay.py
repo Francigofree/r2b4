@@ -11,6 +11,7 @@ from v3.replay import (
     replay_capture,
     verify_replay_result,
     write_replay_result,
+    _expanded_expected_layers,
 )
 from v3_validation_helpers import (
     create_explore_capture,
@@ -42,6 +43,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def test_replay_reports_the_first_field_path_for_every_layer(tmp_path, layer, path):
     capture = create_general_capture(tmp_path, capture_id=f"field-{layer}")
     payload = json.loads(capture.read_text(encoding="utf-8"))
+    if layer in {"L1", "L2"}:
+        expanded = _expanded_expected_layers(
+            payload["ticks"][1],
+            payload["ticks"][1]["expected"]["layers"],
+        )
+        payload["ticks"][1]["expected"]["layers"][layer] = expanded[layer]
     value = payload["ticks"][1]["expected"]["layers"][layer]
     for key in path[:-1]:
         value = value[key]

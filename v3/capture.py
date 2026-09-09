@@ -23,6 +23,7 @@ from .execution import (
     EdgeFaultRecord,
     ExecutionRecord,
     OutputSink,
+    REPLAY_STATE_CHECKPOINT_INTERVAL_NS,
     WriterFailureRecord,
 )
 
@@ -328,6 +329,7 @@ class CaptureSink(OutputSink):
         capture_integrity: Mapping[str, object] | None = None,
         raw_lidar_scans: Sequence[Mapping[str, object]] = (),
         raw_lidar_evidence: Mapping[str, object] | None = None,
+        initial_state_checkpoint: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         terminal_status = str(status or "").upper()
         if terminal_status not in V3_CAPTURE_STATUSES:
@@ -354,6 +356,10 @@ class CaptureSink(OutputSink):
             payload["raw_lidar_scans"] = encode_value(raw_lidar_scans)
         if raw_lidar_evidence is not None:
             payload["raw_lidar_evidence"] = encode_value(raw_lidar_evidence)
+        if initial_state_checkpoint is not None:
+            payload["initial_state_checkpoint"] = encode_value(
+                initial_state_checkpoint
+            )
         payload["capture_sha256"] = payload_sha256(payload)
         return payload
 
@@ -370,6 +376,7 @@ class CaptureSink(OutputSink):
 class _BufferedTick:
     row: dict[str, object]
     size_bytes: int
+    checkpoint_after: dict[str, object] | None = None
 
 
 class TriggeredCaptureWorker:
@@ -603,7 +610,17 @@ class TriggeredCaptureWorker:
         if self._emergency_trigger is not None:
             self._consume_emergency_trigger()
         row = encode_capture_record(value)
-        encoded_size = _canonical_json_size(row)
+        checkpoint_after: dict[str, object] | None = None
+        if isinstance(value, ExecutionRecord) and value.state_checkpoint_after is not None:
+            encoded_checkpoint = encode_value(value.state_checkpoint_after)
+            if not isinstance(encoded_checkpoint, dict):
+                raise V3CaptureError("state checkpoint must encode as an object")
+            checkpoint_after = encoded_checkpoint
+        encoded_size = _canonical_json_size(row) + (
+            _canonical_json_size(checkpoint_after)
+            if checkpoint_after is not None
+            else 0
+        )
         if self._config.mode == "append_only":
             assert self._stream_handle is not None
             self._stream_handle.write(
@@ -621,7 +638,7 @@ class TriggeredCaptureWorker:
             return
         trigger_now = _record_triggers_capture(value)
         if self._trigger_ns is None:
-            self._append_tick(_BufferedTick(row, encoded_size))
+            self._append_tick(_BufferedTick(row, encoded_size, checkpoint_after))
             self._trim_untriggered_ring(context.monotonic_ns)
             if trigger_now:
                 self._activate_trigger(
@@ -631,7 +648,7 @@ class TriggeredCaptureWorker:
             return
         upper = self._trigger_ns + self._config.post_event_ns
         if context.monotonic_ns <= upper:
-            self._append_tick(_BufferedTick(row, encoded_size))
+            self._append_tick(_BufferedTick(row, encoded_size, checkpoint_after))
             self._enforce_capacities()
         if context.monotonic_ns >= upper:
             self._post_window_complete = True
@@ -641,7 +658,11 @@ class TriggeredCaptureWorker:
         self._ring_bytes += item.size_bytes
 
     def _trim_untriggered_ring(self, newest_ns: int) -> None:
-        lower = newest_ns - self._config.pre_event_ns
+        lower = (
+            newest_ns
+            - self._config.pre_event_ns
+            - REPLAY_STATE_CHECKPOINT_INTERVAL_NS
+        )
         while self._ring and int(self._ring[0].row["monotonic_ns"]) < lower:
             self._drop_oldest_tick(capacity=False)
         self._enforce_capacities()
@@ -675,7 +696,11 @@ class TriggeredCaptureWorker:
         trigger_ns = _non_negative_integer(requested_ns, "trigger monotonic_ns")
         self._trigger_ns = trigger_ns
         self._trigger_reason = reason
-        lower = trigger_ns - self._config.pre_event_ns
+        lower = (
+            trigger_ns
+            - self._config.pre_event_ns
+            - REPLAY_STATE_CHECKPOINT_INTERVAL_NS
+        )
         while self._ring and int(self._ring[0].row["monotonic_ns"]) < lower:
             self._drop_oldest_tick(capacity=False)
         if self._config.post_event_ns == 0 or (
@@ -714,10 +739,29 @@ class TriggeredCaptureWorker:
             return
         lower = self._trigger_ns - self._config.pre_event_ns
         upper = self._trigger_ns + self._config.post_event_ns
+        retained = tuple(self._ring)
+        checkpoint_index: int | None = None
+        for index, item in enumerate(retained):
+            if (
+                int(item.row["monotonic_ns"]) < lower
+                and item.checkpoint_after is not None
+            ):
+                checkpoint_index = index
+        initial_checkpoint = (
+            retained[checkpoint_index].checkpoint_after
+            if checkpoint_index is not None
+            else None
+        )
         selected = tuple(
             item
-            for item in self._ring
-            if lower <= int(item.row["monotonic_ns"]) <= upper
+            for index, item in enumerate(retained)
+            if (checkpoint_index is None or index > checkpoint_index)
+            and (
+                (lower <= int(item.row["monotonic_ns"]))
+                if checkpoint_index is None
+                else True
+            )
+            and int(item.row["monotonic_ns"]) <= upper
         )
         if not selected:
             raise V3CaptureError("triggered capture contains no ticks")
@@ -725,12 +769,12 @@ class TriggeredCaptureWorker:
         for item in selected:
             self._sink.write_encoded(item.row, allow_gap=True)
         referenced = _referenced_lidar_revisions(tuple(item.row for item in selected))
-        retained = tuple(
+        retained_scans = tuple(
             self._raw_scans[revision][0]
             for revision in sorted(referenced)
             if revision in self._raw_scans
         )
-        available = {int(row["revision"]) for row in retained}
+        available = {int(row["revision"]) for row in retained_scans}
         missing = sorted(referenced - available)
         capacity_missing = bool(
             self._latest_capacity_eviction_ns is not None
@@ -740,6 +784,10 @@ class TriggeredCaptureWorker:
             self._dropped_ingress == 0
             and not sequence_gaps
             and not capacity_missing
+        )
+        state_available = bool(
+            initial_checkpoint is not None
+            or int(selected[0].row["tick_id"]) == 0
         )
         post_complete = self._post_window_complete
         if terminal and self._last_seen_ns is not None and self._last_seen_ns < upper:
@@ -755,6 +803,14 @@ class TriggeredCaptureWorker:
                 "requested_post_event_ns": self._config.post_event_ns,
                 "captured_first_monotonic_ns": selected[0].row["monotonic_ns"],
                 "captured_last_monotonic_ns": selected[-1].row["monotonic_ns"],
+                "state_checkpoint_tick_id": (
+                    retained[checkpoint_index].row["tick_id"]
+                    if checkpoint_index is not None
+                    else None
+                ),
+                "state_warmup_tick_count": sum(
+                    int(item.row["monotonic_ns"]) < lower for item in selected
+                ),
                 "pre_window_complete": bool(
                     self._config.pre_event_ns == 0
                     or (
@@ -768,12 +824,13 @@ class TriggeredCaptureWorker:
             },
             capture_integrity={
                 "complete": ingress_complete,
-                "replay_match_eligible": ingress_complete,
+                "replay_match_eligible": ingress_complete and state_available,
                 "dropped_ingress_count": self._dropped_ingress,
                 "sequence_gaps": sequence_gaps,
                 "tick_capacity_evictions": self._capacity_evictions,
+                "state_checkpoint_complete": state_available,
             },
-            raw_lidar_scans=retained,
+            raw_lidar_scans=retained_scans,
             raw_lidar_evidence={
                 "referenced_revisions": sorted(referenced),
                 "retained_revisions": sorted(available),
@@ -783,6 +840,7 @@ class TriggeredCaptureWorker:
                     "NOT_PROVEN" if missing else "INDICATED" if referenced else "NOT_PROVEN"
                 ),
             },
+            initial_state_checkpoint=initial_checkpoint,
         )
         self._result_path.chmod(0o600)
 
@@ -1057,6 +1115,12 @@ def validate_capture(payload: Mapping[str, object]) -> tuple[Mapping[str, object
         raise V3CaptureError("capture configuration must be an object")
     if not isinstance(payload.get("metadata"), Mapping):
         raise V3CaptureError("capture metadata must be an object")
+    checkpoint = payload.get("initial_state_checkpoint")
+    if checkpoint is not None and (
+        not isinstance(checkpoint, Mapping)
+        or checkpoint.get("__type__") != "NativeControlStateCheckpoint"
+    ):
+        raise V3CaptureError("initial_state_checkpoint must be typed native state")
     raw_ticks = payload.get("ticks")
     if isinstance(raw_ticks, (str, bytes)) or not isinstance(raw_ticks, Sequence):
         raise V3CaptureError("capture ticks must be an array")

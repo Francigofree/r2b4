@@ -14,7 +14,13 @@ from v3.capture import (
 )
 from v3.composition.native_control import NativeControlComposition
 from v3.contracts import DataField, DeviceSample, LifecycleState, TickContext
-from v3.execution import EdgeFaultRecord, ExecutionBoundary, IterableInputSource, MemoryOutputSink
+from v3.execution import (
+    EdgeFaultRecord,
+    ExecutionBoundary,
+    ExecutionRecord,
+    IterableInputSource,
+    MemoryOutputSink,
+)
 from v3.layers.l2_admission import AdmissionConfig
 from v3.replay import replay_capture
 from v3_validation_helpers import RecordingMotorSink, control_config, tick_inputs
@@ -114,6 +120,53 @@ def test_terminal_fault_auto_triggers_and_marks_short_post_window(tmp_path):
         "MATCH",
         "MISMATCH",
     }
+
+
+def test_short_ring_restores_checkpoint_before_duplicate_l2_input(tmp_path):
+    config = control_config()
+    composition = NativeControlComposition(RecordingMotorSink(), config)
+    records = []
+    for inputs in tick_inputs(80):
+        repeated_samples = tuple(
+            replace(sample, sequence=1)
+            if sample.kind in {"lidar_health", "lidar_safety_clearance"}
+            else sample
+            for sample in inputs.raw_devices.samples
+        )
+        inputs = replace(
+            inputs,
+            raw_devices=replace(inputs.raw_devices, samples=repeated_samples),
+        )
+        result = composition.run_tick(inputs)
+        checkpoint = composition.checkpoint() if inputs.context.tick_id % 50 == 0 else None
+        records.append(
+            ExecutionRecord(
+                inputs,
+                result,
+                composition.tick_evidence,
+                checkpoint,
+            )
+        )
+    worker, path = _worker(
+        tmp_path,
+        config=config,
+        capture_config=CaptureWindowConfig(
+            pre_event_ns=200_000_000,
+            post_event_ns=0,
+            max_tick_count=128,
+        ),
+    )
+    for record in records[:71]:
+        worker.observe(record)
+    worker.trigger("MANUAL", records[70].inputs.context.monotonic_ns)
+    worker.finish("PASS")
+
+    payload = load_capture(path)
+    assert payload["capture_window"]["state_checkpoint_tick_id"] == 50
+    assert payload["capture_window"]["state_warmup_tick_count"] == 9
+    assert payload["ticks"][0]["tick_id"] == 51
+    assert payload["capture_integrity"]["state_checkpoint_complete"] is True
+    assert replay_capture(path, project_root=PROJECT_ROOT)["status"] == "MATCH"
 
 
 def test_fault_during_manual_post_window_sets_fault_capture_status(tmp_path):

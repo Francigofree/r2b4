@@ -27,7 +27,11 @@ from v3.execution import (
 )
 from v3.ports import CommandGateway
 
-from .native_control import NativeControlComposition, NativeControlCompositionConfig
+from .native_control import (
+    NativeControlComposition,
+    NativeControlCompositionConfig,
+    NativeControlStateCheckpoint,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +148,9 @@ class ResidentLiveControlComposition:
     @property
     def last_lidar_preflight_revision(self) -> int | None:
         return self._last_lidar_preflight_revision
+
+    def checkpoint(self) -> NativeControlStateCheckpoint:
+        return self._control.checkpoint()
 
     def _preflight_is_fresh_for(self, context: TickContext) -> bool:
         previous = self._preflight_context
