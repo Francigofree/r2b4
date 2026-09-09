@@ -199,6 +199,7 @@ def test_active_json_closes_to_protected_native_port_config(tmp_path):
     assert config.input_queue_capacity == config.result_queue_capacity == 1
     assert config.maximum_input_age_ns == config.maximum_result_age_ns == 250_000_000
     assert config.driver.baudrate == 460_800
+    assert config.driver.stop_join_timeout_s == 2.0
     assert config.danger_zone_m == 0.1
 
     hardware = tmp_path / "hardver.json"
