@@ -81,6 +81,10 @@ class ResidentPhysicalControlComposition:
     def closed(self) -> bool:
         return self._motor_output.closed
 
+    @property
+    def ready_for_active(self) -> bool:
+        return self._live_control.ready_for_active
+
     def checkpoint(self) -> NativeControlStateCheckpoint:
         return self._live_control.checkpoint()
 

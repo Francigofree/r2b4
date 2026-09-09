@@ -231,7 +231,12 @@ def _layer(result: TickResult, name: str) -> object | None:
     return None
 
 
-def _tick_status(result: TickResult) -> dict[str, object]:
+def _tick_status(
+    result: TickResult,
+    ready_for_active: bool = False,
+) -> dict[str, object]:
+    if type(ready_for_active) is not bool:
+        raise TypeError("ready_for_active must be bool")
     acquisition = _layer(result, "L1")
     estimate = _layer(result, "L3")
     health: list[dict[str, object]] = []
@@ -255,17 +260,6 @@ def _tick_status(result: TickResult) -> dict[str, object]:
             "omega_rad_s": estimate.omega_rad_s,
         }
     final = result.final_actuation
-    ready_for_active = bool(
-        result.trace.fault_layer is None
-        and final.safety_decision.value == "STOP"
-        and final.reason == "NOT_ACTIVE"
-        and not final.enabled
-        and final.left_output == 0.0
-        and final.right_output == 0.0
-        and len(health) == 3
-        and len({str(item["device_id"]) for item in health}) == 3
-        and all(item["state"] == "OK" for item in health)
-    )
     return {
         "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
         "state": "RUNNING",
@@ -331,10 +325,14 @@ class AsyncResidentStatusPublisher:
         )
         self._thread.start()
 
-    def publish_tick(self, result: TickResult) -> None:
+    def publish_tick(
+        self,
+        result: TickResult,
+        ready_for_active: bool = False,
+    ) -> None:
         if not isinstance(result, TickResult):
             raise TypeError("result must be TickResult")
-        payload = _tick_status(result)
+        payload = _tick_status(result, ready_for_active)
         with self._condition:
             if self._finished:
                 if self._error is not None:
@@ -451,7 +449,7 @@ def run_v3_resident_process(
         hardware_kwargs: dict[str, object] = {
             "approval": approval,
             "stop_requested": combined_stop,
-            "tick_observer": status_publisher.publish_tick,
+            "readiness_observer": status_publisher.publish_tick,
         }
         if capture_session is not None:
             hardware_kwargs["record_observer"] = capture_session.observe

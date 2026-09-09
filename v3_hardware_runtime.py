@@ -451,6 +451,7 @@ def run_native_hardware_resident_control(
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
     tick_observer: Callable[[TickResult], None] | None = None,
+    readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
     raw_lidar_observer: Callable[[object | None], None] | None = None,
 ) -> ResidentRuntimeReport:
@@ -473,6 +474,8 @@ def run_native_hardware_resident_control(
         raise TypeError("command_gateway must provide a callable snapshot method")
     if tick_observer is not None and not callable(tick_observer):
         raise TypeError("tick_observer must be callable or None")
+    if readiness_observer is not None and not callable(readiness_observer):
+        raise TypeError("readiness_observer must be callable or None")
     if record_observer is not None and not callable(record_observer):
         raise TypeError("record_observer must be callable or None")
     if raw_lidar_observer is not None and not callable(raw_lidar_observer):
@@ -516,6 +519,7 @@ def run_native_hardware_resident_control(
             monotonic_ns=monotonic_ns,
             sleep=sleep,
             tick_observer=observe,
+            readiness_observer=readiness_observer,
             record_observer=record_observer,
         )
     finally:

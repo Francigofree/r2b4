@@ -232,6 +232,7 @@ def run_resident_physical_control(
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
     tick_observer: Callable[[TickResult], None] | None = None,
+    readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
 ) -> ResidentRuntimeReport:
     """Run until signal/stop or fault, then release every physical capability."""
@@ -249,6 +250,8 @@ def run_resident_physical_control(
         raise TypeError("command_gateway must provide a callable snapshot method")
     if tick_observer is not None and not callable(tick_observer):
         raise TypeError("tick_observer must be callable or None")
+    if readiness_observer is not None and not callable(readiness_observer):
+        raise TypeError("readiness_observer must be callable or None")
     if record_observer is not None and not callable(record_observer):
         raise TypeError("record_observer must be callable or None")
     if _stop_is_requested(stop_requested):
@@ -304,6 +307,8 @@ def run_resident_physical_control(
                     record_observer(record)
                 if tick_observer is not None:
                     tick_observer(last_result)
+                if readiness_observer is not None:
+                    readiness_observer(last_result, False)
                 shutdown_fault = bool(
                     last_result.trace.fault_layer is not None
                     or last_result.final_actuation.safety_decision
@@ -344,6 +349,8 @@ def run_resident_physical_control(
                 record_observer(record)
             if tick_observer is not None:
                 tick_observer(last_result)
+            if readiness_observer is not None:
+                readiness_observer(last_result, runtime.ready_for_active)
             normal_tick_count += 1
             previous_tick_ns = now_ns
             if runtime.lifecycle is LifecycleState.FAULT:
@@ -374,6 +381,7 @@ def run_owned_resident_physical_control(
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
     tick_observer: Callable[[TickResult], None] | None = None,
+    readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
@@ -390,6 +398,7 @@ def run_owned_resident_physical_control(
             monotonic_ns=monotonic_ns,
             sleep=sleep,
             tick_observer=tick_observer,
+            readiness_observer=readiness_observer,
             record_observer=record_observer,
         )
     finally:

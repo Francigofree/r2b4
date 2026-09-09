@@ -537,6 +537,7 @@ def test_initial_stop_and_invalid_gateway_claim_no_motor_capability():
 
 
 def test_resident_activation_requires_three_distinct_healthy_lidar_revisions():
+    readiness = []
     successful = run_resident_physical_control(
         *_sources(EncoderBackend()),
         SequenceGateway(active_ticks=(3,)),
@@ -545,6 +546,9 @@ def test_resident_activation_requires_three_distinct_healthy_lidar_revisions():
         stop_requested=StopAfterCall(6),
         monotonic_ns=StepClock(),
         sleep=lambda _seconds: None,
+        readiness_observer=lambda result, ready: readiness.append(
+            (result.trace.context.tick_id, ready)
+        ),
     )
 
     repeated_revision = run_resident_physical_control(
@@ -561,6 +565,7 @@ def test_resident_activation_requires_three_distinct_healthy_lidar_revisions():
     )
 
     assert successful.status == RUN_OK
+    assert readiness[:4] == [(0, False), (1, False), (2, True), (3, False)]
     assert repeated_revision.status == RUN_FAULT
     assert repeated_revision.final_reason == "PREFLIGHT_REQUIRED"
     assert repeated_revision.fault_layer == "ResidentLiveControl"

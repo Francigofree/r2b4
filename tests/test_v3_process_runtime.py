@@ -82,7 +82,7 @@ def test_process_uses_one_canonical_hardware_runner_and_publishes_final_status(t
         assert args[5] is runtime_config
         assert kwargs["approval"] == "native-resident-v3"
         assert kwargs["stop_requested"]() is False
-        kwargs["tick_observer"](_tick_result())
+        kwargs["readiness_observer"](_tick_result(), False)
         return _report()
 
     report = process.run_v3_resident_process(
@@ -161,7 +161,7 @@ def test_status_failure_requests_shutdown_and_is_reported_after_hardware_close(t
         real_writer(path, payload, mode)
 
     def fake_run(*_args, **kwargs):
-        kwargs["tick_observer"](_tick_result())
+        kwargs["readiness_observer"](_tick_result(), False)
         deadline = time.monotonic() + 1.0
         while not kwargs["stop_requested"]() and time.monotonic() < deadline:
             time.sleep(0.001)
@@ -198,7 +198,7 @@ def test_process_passively_finalizes_existing_v3_capture_sink(tmp_path):
 
     def fake_run(*_args, **kwargs):
         kwargs["record_observer"](record)
-        kwargs["tick_observer"](record.result)
+        kwargs["readiness_observer"](record.result, False)
         return _report()
 
     process.run_v3_resident_process(
@@ -338,6 +338,10 @@ def test_signal_latch_and_cli_approval_fail_before_hardware_import(capsys):
     assert payload["status"] == "ERROR"
     assert "approval" in payload["error"]
     assert process._tick_status(_tick_result())["ready_for_active"] is False
+    assert process._tick_status(
+        _tick_result(),
+        ready_for_active=True,
+    )["ready_for_active"] is True
 
 
 def test_process_paths_cannot_escape_runtime_and_config_closes_native_sensors():

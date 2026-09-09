@@ -465,6 +465,7 @@ def test_default_byte_budget_holds_five_second_pre_and_two_second_post_window(tm
     assert payload["capture_window"]["post_window_complete"] is True
     assert payload["capture_integrity"]["tick_capacity_evictions"] == 0
     assert compact_size < 16 * 1024 * 1024
+    assert path.stat().st_size < 16 * 1024 * 1024
     assert replay_capture(path, project_root=PROJECT_ROOT)["status"] == "MATCH"
 
 

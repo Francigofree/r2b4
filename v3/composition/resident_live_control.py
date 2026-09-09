@@ -142,6 +142,16 @@ class ResidentLiveControlComposition:
         )
 
     @property
+    def ready_for_active(self) -> bool:
+        return bool(
+            self.preflight_complete
+            and not self._active
+            and not self._faulted
+            and not self._shutdown
+            and not self._write_failed
+        )
+
+    @property
     def lidar_preflight_revision_count(self) -> int:
         return self._lidar_preflight_revision_count
 
