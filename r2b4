@@ -316,7 +316,7 @@ _capture_used() {
 }
 
 _runtime_start() {
-    local old="" fresh left=""
+    local old="" fresh left="" status_baseline=""
     old="$(_runtime_pid 2>/dev/null || true)"
 
     if [[ -n "$old" ]]; then
@@ -333,6 +333,8 @@ _runtime_start() {
     else
         _stop_heartbeat || true
     fi
+
+    status_baseline="$(_status_json 2>/dev/null || true)"
 
     fresh="$(_new_capture_path)"
     echo "$fresh" >"$CAPTURE_PATH_FILE"
@@ -354,6 +356,11 @@ _runtime_start() {
         rm -f "$RUNTIME_PID_FILE"
         echo "ERROR: runtime failed to start." >&2
         [[ -s "$RUNTIME_LOG" ]] && tail -n 30 "$RUNTIME_LOG" >&2
+        return 1
+    fi
+    if ! _wait_fresh_ready "$pid" "$status_baseline"; then
+        echo "ERROR: runtime did not publish a fresh ready status." >&2
+        _show_diag >&2
         return 1
     fi
 
@@ -382,6 +389,21 @@ _wait_ready() {
     for i in {1..160}; do
         [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 1
         _status_ready && return 0
+        sleep 0.05
+    done
+    return 1
+}
+
+_wait_fresh_ready() {
+    local pid="$1" baseline="$2" s="" i
+    for i in {1..160}; do
+        _pid_has_arg "$pid" "v3_process_runtime.py" || return 1
+        s="$(_status_json)" || { sleep 0.05; continue; }
+        if [[ "$s" != "$baseline" &&
+              "$s" == *'"state": "RUNNING"'* &&
+              "$s" == *'"ready_for_active": true'* ]]; then
+            return 0
+        fi
         sleep 0.05
     done
     return 1
