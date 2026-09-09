@@ -135,6 +135,7 @@ def test_native_port_publishes_raw_safety_before_optional_matcher_result():
     assert snapshot is not None
     assert snapshot.raw_scan_id == 7
     assert snapshot.health == "OK"
+    assert snapshot.observed_monotonic_ns == 1_010_000_000
     assert snapshot.summary["front_clearance_m"] == 1.0
     assert snapshot.summary["rear_clearance_m"] == 1.2
     assert snapshot.summary["left_clearance_m"] == 1.3

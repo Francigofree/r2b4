@@ -262,6 +262,7 @@ class NativeRawLidarSnapshot:
     health: str
     raw_scan: tuple[RplidarPoint, ...]
     summary: Mapping[str, object]
+    observed_monotonic_ns: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -463,7 +464,13 @@ class NativeLidarPort:
             snapshot = self._raw_snapshot
         if snapshot is None:
             return None
-        return replace(snapshot, health=self._physical_health())
+        health = self._physical_health()
+        observed_monotonic_ns = self._checked_clock()
+        return replace(
+            snapshot,
+            health=health,
+            observed_monotonic_ns=observed_monotonic_ns,
+        )
 
     def get_matcher_result(self) -> NativeMatcherResult | None:
         with self._lock:

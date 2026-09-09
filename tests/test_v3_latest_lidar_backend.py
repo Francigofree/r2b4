@@ -34,6 +34,7 @@ class RawSnapshot:
     health: str = "OK"
     raw_scan: tuple = (RawPoint(0.0, 1.0, 12), RawPoint(90.0, 0.5, 9))
     summary: dict | None = None
+    observed_monotonic_ns: int | None = None
 
     def __post_init__(self):
         if self.summary is None:
@@ -286,6 +287,62 @@ def test_result_beyond_explicit_same_tick_skew_remains_failed():
     )
 
     assert backend.read(TickContext(7, 1_000_000_000)).timing_valid is False
+
+
+def test_same_tick_async_raw_scan_uses_observation_horizon_and_remains_healthy():
+    port = Port(
+        raw=RawSnapshot(
+            raw_scan_timestamp=1.011_227_336,
+            observed_monotonic_ns=1_012_000_000,
+        )
+    )
+    backend = NativeLatestLidarBackend(
+        port,
+        LatestLidarBackendConfig(
+            maximum_result_age_ns=20_000_000,
+            maximum_future_skew_ns=10_000_000,
+        ),
+    )
+    context = TickContext(7, 1_000_000_000)
+
+    reading = backend.read(context)
+    physical = NativeLidarSource(
+        backend,
+        NativeLidarConfig("lidar", 0.3, 250_000_000),
+    ).read(context)
+
+    assert reading.scan is not None
+    assert reading.scan.timing_valid is True
+    assert reading.scan.measurement_age_ns == 0
+    assert physical.health.state is DeviceHealthState.OK
+
+
+def test_raw_scan_beyond_observation_future_skew_remains_failed_closed():
+    port = Port(
+        raw=RawSnapshot(
+            raw_scan_timestamp=1.023_000_001,
+            observed_monotonic_ns=1_012_000_000,
+        )
+    )
+    backend = NativeLatestLidarBackend(
+        port,
+        LatestLidarBackendConfig(
+            maximum_result_age_ns=20_000_000,
+            maximum_future_skew_ns=10_000_000,
+        ),
+    )
+    context = TickContext(7, 1_000_000_000)
+
+    reading = backend.read(context)
+    physical = NativeLidarSource(
+        backend,
+        NativeLidarConfig("lidar", 0.3, 250_000_000),
+    ).read(context)
+
+    assert reading.scan is not None
+    assert reading.scan.timing_valid is False
+    assert physical.health.state is DeviceHealthState.FAILED
+    assert physical.health.reason == "LIDAR_TIMING_INVALID"
 
 
 def test_protected_config_identifiers_cannot_be_overridden():

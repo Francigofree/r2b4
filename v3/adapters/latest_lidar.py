@@ -212,6 +212,12 @@ class NativeLatestLidarBackend:
         )
         captured_ns = int(round(captured_s * 1_000_000_000.0))
         measurement_age_ns = context.monotonic_ns - captured_ns
+        observed_ns_value = getattr(snapshot, "observed_monotonic_ns", None)
+        observed_ns = (
+            context.monotonic_ns
+            if observed_ns_value is None
+            else _nonnegative_int(observed_ns_value, "observed_monotonic_ns")
+        )
         snapshot_health = getattr(snapshot, "health", None)
         if snapshot_health not in {"OK", "STALE", "ERROR"}:
             raise ValueError("raw scan health must be OK, STALE or ERROR")
@@ -231,7 +237,8 @@ class NativeLatestLidarBackend:
         point_count = count("raw_safety_valid_point_count")
         timing_valid = bool(
             physical_runtime_valid
-            and measurement_age_ns >= -self._config.maximum_future_skew_ns
+            and captured_ns >= 0
+            and captured_ns - observed_ns <= self._config.maximum_future_skew_ns
         )
         stale = bool(
             timing_valid
