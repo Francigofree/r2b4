@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -1430,9 +1431,9 @@ def _expanded_expected_layers(
         if reference == "RAW_DEVICE_BATCH":
             expanded[layer] = {
                 "__type__": "AcquisitionFrame",
-                "context": inputs.get("context"),
-                "samples": raw.get("samples"),
-                "io_health": raw.get("device_health"),
+                "context": copy.deepcopy(inputs.get("context")),
+                "samples": copy.deepcopy(raw.get("samples")),
+                "io_health": copy.deepcopy(raw.get("device_health")),
             }
             continue
         if reference != "ADMITTED_FRAME":
@@ -1458,15 +1459,15 @@ def _expanded_expected_layers(
                     "source_device_id": sample.get("device_id"),
                     "source_sequence": sample.get("sequence"),
                     "captured_monotonic_ns": sample.get("captured_monotonic_ns"),
-                    "values": sample.get("values"),
+                    "values": copy.deepcopy(sample.get("values")),
                 }
             )
         expanded[layer] = {
             "__type__": "AdmittedFrame",
-            "context": inputs.get("context"),
+            "context": copy.deepcopy(inputs.get("context")),
             "accepted": accepted,
-            "rejected": value.get("rejected"),
-            "degraded_sources": value.get("degraded_sources"),
+            "rejected": copy.deepcopy(value.get("rejected")),
+            "degraded_sources": copy.deepcopy(value.get("degraded_sources")),
         }
     return expanded
 

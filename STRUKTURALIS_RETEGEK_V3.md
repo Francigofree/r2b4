@@ -542,6 +542,11 @@ GUI, CLI, LLM és tool csak a `CommandGateway` kliensén keresztül adhat typed
 ezek teljes provenance-ének minden belső üzenetben való ismétlése nem
 szükséges.
 
+A TTL-es resident command mailbox ephemerális, atomikusan cserélt edge-adat,
+nem tartós napló. Heartbeat ütemezése abszolút monotonic határidőhöz igazodik,
+így az előző publish késleltetése nem adódhat hozzá minden periódushoz; a
+biztonságot változatlanul a gateway TTL-ellenőrzése és a fail-closed STOP adja.
+
 A runtime headless. Külső I/O kizárólag edge/device adapterben történik, és az
 adapter nem válhat state- vagy control-authorityvá.
 
@@ -598,6 +603,13 @@ Readiness vagy arming kapu csak egymástól valóban független, friss
 forrásevidence-t számolhat új bizonyítéknak. Ugyanazon latest-only source
 revízió ismételt tickes kiolvasása nem számíthat több független mérésnek.
 
+Preflight nélküli első ACTIVE kérés fail-closed terminális fault. Egy már
+szabályosan ACTIVE session rövid command-kimaradása viszont STOP-pal rearm
+állapotot nyit: a preflight teljességéig érkező ACTIVE heartbeat-ek ugyanazon
+production L1–L12 úton zéró IDLE tickként záródnak, és nem válhatnak motor-
+authorityvá vagy önmagukban terminális faulttá. Input-, gateway-, layer- vagy
+writer-hiba ettől függetlenül továbbra is faultot latch-el.
+
 A readiness feltétel csak azt a szenzor- vagy capability-ágat teheti kötelezővé,
 amelyre az adott funkció biztonságos végrehajtásához ténylegesen szükség van.
 Egy opcionális localization ág nem válhat pusztán architekturális megszokásból
@@ -616,7 +628,13 @@ root cause evidence-verdictje (`PROVEN`, `INDICATED`, `NOT_PROVEN`) külön adat
 A replay inclusive tick-, monotonidő- és összefüggő L1–L12 rétegtartományra
 szűkíthető. Stateful réteg esetén a kiválasztott első tick előtti capture-prefix
 kötelező warmupként végigfut ugyanazon production példányon; csak a kijelölt
-tickek és rétegek kapnak diagnosztikai verdictet.
+tickek és rétegek kapnak diagnosztikai verdictet. Bounded ring capture esetén a
+prefixet a production composition ritka, bounded, post-tick typed state
+checkpointja indíthatja: a Replayer ugyanazon `NativeControlComposition`
+példányba restore-olja, majd a checkpoint utáni rögzített tickeket futtatja.
+Checkpoint nélkül csak a tényleges kezdeti state-ből, első ticktől induló
+capture lehet `MATCH`-eligible; a checkpoint nem helyettesíthet inputot vagy
+layer-outputot, és nem válhat live control authorityvá.
 
 A capture a konkrét source-first diagnosztikához szükséges evidence-et őrizze
 meg, de nincs általános „mindent logoljunk” követelmény.
@@ -628,6 +646,12 @@ revisionönként egyszer. Hiányzó vagy kapacitás miatt kiesett hivatkozott sc
 explicit `missing_revisions` evidence, és a fizikai verdict legalább
 `NOT_PROVEN`. Capture-local általános objektumtábla vagy provenance-gráf csak
 valós capture-mérés által igazolt igényre vezethető be.
+
+A live capture-mérés által igazolt, pontos L0→L1 és L0→L2 payload-duplikáció
+szűk input-reference reprezentációval elhagyható. Ez kizárólag akkor érvényes,
+ha az L1/L2 érték mezőre pontosan levezethető ugyanazon lezárt `TickInputs`
+értékből; a Replayer összehasonlítás előtt a teljes typed értéket visszaállítja.
+Ez nem általános capture-local objektumtábla.
 
 Nem kötelező:
 

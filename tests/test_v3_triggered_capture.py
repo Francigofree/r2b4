@@ -1,4 +1,5 @@
 import json
+import math
 import threading
 import time
 from dataclasses import replace
@@ -321,6 +322,58 @@ def _raw_snapshot(revision):
     )
 
 
+def _large_raw_snapshot(revision, point_count=720):
+    return NativeRawLidarSnapshot(
+        raw_scan_id=revision,
+        raw_scan_timestamp=1.0 + revision * 0.02,
+        health="OK",
+        raw_scan=tuple(
+            RplidarPoint(
+                index * 360.0 / point_count,
+                1.0 + (index % 20) * 0.01,
+                20 + index % 20,
+            )
+            for index in range(point_count)
+        ),
+        summary={"revision": revision, "point_count": point_count},
+    )
+
+
+def _production_sized_inputs(count):
+    local_values = [
+        DataField("frame_id", "ROBOT_BASE"),
+        DataField("point_count", 96),
+    ]
+    for index in range(96):
+        angle = index * 2.0 * math.pi / 96
+        local_values.extend(
+            (
+                DataField(f"point_{index:03d}_x_m", math.cos(angle)),
+                DataField(f"point_{index:03d}_y_m", math.sin(angle)),
+                DataField(f"point_{index:03d}_quality", 30),
+            )
+        )
+    result = []
+    for inputs in tick_inputs(count):
+        local = DeviceSample(
+            "RPLIDAR_C1",
+            "lidar_local_points",
+            inputs.context.tick_id + 1,
+            inputs.context.monotonic_ns,
+            tuple(local_values),
+        )
+        result.append(
+            replace(
+                inputs,
+                raw_devices=replace(
+                    inputs.raw_devices,
+                    samples=inputs.raw_devices.samples + (local,),
+                ),
+            )
+        )
+    return tuple(result)
+
+
 def test_raw_lidar_is_persisted_once_and_only_when_selected_ticks_reference_it(tmp_path):
     inputs = list(tick_inputs(4))
     matcher = DeviceSample(
@@ -369,6 +422,50 @@ def test_raw_lidar_is_persisted_once_and_only_when_selected_ticks_reference_it(t
     )
     assert all(len(scan["points"][0]) == 3 for scan in payload["raw_lidar_scans"])
     assert payload["raw_lidar_evidence"]["missing_revisions"] == []
+
+
+def test_default_byte_budget_holds_five_second_pre_and_two_second_post_window(tmp_path):
+    config = control_config()
+    composition = NativeControlComposition(RecordingMotorSink(), config)
+    records = []
+    for inputs in _production_sized_inputs(401):
+        result = composition.run_tick(inputs)
+        checkpoint = (
+            composition.checkpoint()
+            if inputs.context.tick_id % 50 == 0
+            else None
+        )
+        records.append(
+            ExecutionRecord(
+                inputs,
+                result,
+                composition.tick_evidence,
+                checkpoint,
+            )
+        )
+    worker, path = _worker(
+        tmp_path,
+        config=config,
+        capture_config=CaptureWindowConfig(ingress_queue_capacity=1_024),
+    )
+    for revision in range(250, 314):
+        worker.observe_raw_lidar(_large_raw_snapshot(revision))
+    for record in records[:301]:
+        worker.observe(record)
+    worker.trigger("MANUAL", records[300].inputs.context.monotonic_ns)
+    for record in records[301:]:
+        worker.observe(record)
+    worker.finish("PASS", terminal=False)
+
+    payload = load_capture(path)
+    compact_size = len(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+    assert payload["capture_window"]["pre_window_complete"] is True
+    assert payload["capture_window"]["post_window_complete"] is True
+    assert payload["capture_integrity"]["tick_capacity_evictions"] == 0
+    assert compact_size < 16 * 1024 * 1024
+    assert replay_capture(path, project_root=PROJECT_ROOT)["status"] == "MATCH"
 
 
 def test_missing_referenced_raw_lidar_is_explicit_and_not_proven(tmp_path):

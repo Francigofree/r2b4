@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from v3.contracts import AdmittedFrame, Observation, RobotEstimate
+from v3.contracts import AdmittedFrame, Observation, RobotEstimate, TickContext
 
 
 _ZERO_COVARIANCE = (0.0,) * 25
