@@ -258,6 +258,82 @@ def test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch():
     assert readings[5].diagnostics.left_distance_delta_m == pytest.approx(0.005)
 
 
+def test_initial_two_by_one_edge_fill_is_untrusted_without_becoming_stale():
+    left_edges = (
+        SignedPulseEdge(1_010_000_000, 1),
+        SignedPulseEdge(1_020_000_000, 2),
+    )
+    right_edges = (
+        SignedPulseEdge(1_015_000_000, 1),
+        SignedPulseEdge(1_025_000_000, 2),
+    )
+    backend, _, _ = _backend(
+        (
+            _snapshot(0),
+            _snapshot(2, edge_history=left_edges),
+            _snapshot(2, edge_history=left_edges),
+        ),
+        (
+            _snapshot(0),
+            _snapshot(1, edge_history=right_edges[:1]),
+            _snapshot(2, edge_history=right_edges),
+        ),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    filling = backend.read(TickContext(1, 1_030_000_000))
+    ready = backend.read(TickContext(2, 1_040_000_000))
+
+    _assert_rejected(filling)
+    assert filling.stale is False
+    assert filling.timing_valid is True
+    assert filling.diagnostics is not None
+    assert filling.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert filling.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert filling.diagnostics.right_estimation_timebase is None
+    assert ready.stale is False
+    assert ready.trust > 0.0
+    assert ready.diagnostics is not None
+    assert ready.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert ready.diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
+
+
+def test_initial_edge_fill_expires_by_physical_edge_age():
+    left_edges = (
+        SignedPulseEdge(1_010_000_000, 1),
+        SignedPulseEdge(1_020_000_000, 2),
+    )
+    right_edge = (SignedPulseEdge(1_015_000_000, 1),)
+    backend, _, _ = _backend(
+        (
+            _snapshot(0),
+            _snapshot(2, edge_history=left_edges),
+            _snapshot(2, edge_history=left_edges),
+        ),
+        (
+            _snapshot(0),
+            _snapshot(1, edge_history=right_edge),
+            _snapshot(1, edge_history=right_edge),
+        ),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    filling = backend.read(TickContext(1, 1_030_000_000))
+    expired = backend.read(TickContext(2, 1_230_000_000))
+
+    assert filling.stale is False
+    assert filling.diagnostics is not None
+    assert filling.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    _assert_rejected(expired)
+    assert expired.stale is True
+    assert expired.diagnostics is not None
+    assert expired.diagnostics.sample_interval_ns == 200_000_000
+    assert (
+        expired.diagnostics.rejection_code
+        is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+    )
+
+
 def test_processing_gap_uses_fresh_dual_wheel_physical_edge_windows():
     edges = tuple(
         SignedPulseEdge(timestamp_ns, pulse_count)

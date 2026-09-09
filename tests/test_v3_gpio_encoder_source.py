@@ -9,7 +9,8 @@ from v3.adapters.gpio_counter import (
 )
 from v3.adapters.gpio_encoder import NativeGpioEncoderSource
 from v3.adapters.live_encoder import NativeEncoderConfig, NativeEncoderSource
-from v3.contracts import DeviceHealthState, TickContext
+from v3.contracts import AcquisitionFrame, DeviceHealthState, TickContext
+from v3.layers.l2_admission import AdmissionConfig, InputAdmission
 
 
 class Callback:
@@ -85,8 +86,8 @@ class GpioBackend:
         self.close_calls += 1
         return 0
 
-    def fire(self, pin: int, level: int) -> None:
-        self.callbacks[pin].function(0, pin, level, 1_050_000_000)
+    def fire(self, pin: int, level: int, *, tick: int) -> None:
+        self.callbacks[pin].function(0, pin, level, tick)
 
 
 def _counter_config() -> GpioCounterPairConfig:
@@ -130,8 +131,9 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
 
     assert isinstance(source, NativeEncoderSource)
     baseline = source.read(TickContext(0, 1_000_000_000))
-    gpio.fire(10, 1)
-    gpio.fire(12, 1)
+    gpio.fire(10, 1, tick=1_040_000_000)
+    gpio.fire(10, 1, tick=1_050_000_000)
+    gpio.fire(12, 1, tick=1_050_000_000)
     current = source.read(TickContext(1, 1_100_000_000))
 
     assert gpio.open_calls == 1
@@ -148,24 +150,29 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
         0.0,
         0.0,
     )
-    assert values["measurement_stale"] is True
-    assert values["rejection_code"] == "SAMPLE_INTERVAL_EXCEEDED"
-    assert values["raw_left_pulse_count"] == 1
+    assert values["measurement_stale"] is False
+    assert values["rejection_code"] == "BASELINE"
+    assert values["raw_left_pulse_count"] == 2
     assert values["raw_right_pulse_count"] == 1
-    assert values["left_pulse_delta"] == 1
+    assert values["left_pulse_delta"] == 2
     assert values["right_pulse_delta"] == 1
     assert values["sample_interval_ns"] == 100_000_000
     assert values["left_read_error_delta"] == 0
     assert values["right_read_error_delta"] == 0
     assert values["left_invalid_alert_delta"] == 0
     assert values["right_invalid_alert_delta"] == 0
-    assert values["computed_left_mps"] == pytest.approx(0.1)
+    assert values["computed_left_mps"] == pytest.approx(0.2)
     assert values["computed_right_mps"] == pytest.approx(0.2)
-    assert values["raw_left_distance_m"] == pytest.approx(0.01)
+    assert values["raw_left_distance_m"] == pytest.approx(0.02)
     assert values["raw_right_distance_m"] == pytest.approx(0.02)
-    assert values["left_distance_delta_m"] == pytest.approx(0.01)
+    assert values["left_distance_delta_m"] == pytest.approx(0.02)
     assert values["right_distance_delta_m"] == pytest.approx(0.02)
     assert values["maximum_abs_velocity_mps"] == pytest.approx(1.0)
+    admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100_000_000))(
+        AcquisitionFrame(current.context, current.samples, (current.health,))
+    )
+    assert tuple(item.kind for item in admitted.accepted) == ("wheel_velocity",)
+    assert admitted.degraded_sources == ()
 
     callbacks = tuple(gpio.callbacks.values())
     source.close()

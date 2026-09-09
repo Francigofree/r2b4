@@ -499,6 +499,18 @@ class NativeCounterEncoderBackend:
         )
 
     @staticmethod
+    def _physical_edge_warming_up(current: _CounterPair) -> bool:
+        """Identify the initial dual-wheel history fill after first motion."""
+
+        history_counts = (
+            len(current.left.edge_history),
+            len(current.right.edge_history),
+        )
+        return all(count > 0 for count in history_counts) and any(
+            count < 2 for count in history_counts
+        )
+
+    @staticmethod
     def _instantaneous_interval_ns(
         current: SignedPulseCounterSnapshot,
         previous: SignedPulseCounterSnapshot,
@@ -671,8 +683,11 @@ class NativeCounterEncoderBackend:
                     step_distance_m=self._config.right_step_distance_m,
                 )
             if left_estimate is None or right_estimate is None:
-                stale = True
-                rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+                if self._physical_edge_warming_up(current):
+                    rejection_code = EncoderRejectionCode.BASELINE
+                else:
+                    stale = True
+                    rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
             else:
                 rejection_code = self._velocity_rejection_code(
                     left_estimate.velocity_mps,
