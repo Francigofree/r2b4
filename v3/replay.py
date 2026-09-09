@@ -79,6 +79,7 @@ V3_REPLAY_RESULT_SCHEMA = "R2B4_REPLAYER_V3_RESULT_V3"
 V3_REPLAY_STATUS_MATCH = "MATCH"
 V3_REPLAY_STATUS_MISMATCH = "MISMATCH"
 _LAYER_ORDER = LAYER_ORDER
+_INPUT_REFERENCE_KEY = "__capture_input_reference__"
 _SOURCE_FIRST_PATHS = (
     "STRUKTURALIS_RETEGEK_V3.md",
     "conf/hardver.json",
@@ -1094,7 +1095,10 @@ def _general_diagnostics(
                     "writer failure",
                 )
             continue
-        expected_layers = _mapping(expected.get("layers"), "tick.expected.layers")
+        expected_layers = _expanded_expected_layers(
+            tick,
+            _mapping(expected.get("layers"), "tick.expected.layers"),
+        )
         actual_layers = {
             record.layer: _capture_value(record.output)
             for record in result.trace.layers
@@ -1167,6 +1171,67 @@ def _general_diagnostics(
                 actual_fault,
             )
     return first, layer_rows
+
+
+def _expanded_expected_layers(
+    tick: Mapping[str, object],
+    layers: Mapping[str, object],
+) -> dict[str, object]:
+    """Expand the two measured input duplications before field diagnostics."""
+
+    expanded = dict(layers)
+    inputs = tick.get("inputs")
+    if not isinstance(inputs, Mapping):
+        return expanded
+    raw = inputs.get("raw_devices")
+    if not isinstance(raw, Mapping):
+        return expanded
+    for layer, value in tuple(expanded.items()):
+        if not isinstance(value, Mapping):
+            continue
+        reference = value.get(_INPUT_REFERENCE_KEY)
+        if reference == "RAW_DEVICE_BATCH":
+            expanded[layer] = {
+                "__type__": "AcquisitionFrame",
+                "context": inputs.get("context"),
+                "samples": raw.get("samples"),
+                "io_health": raw.get("device_health"),
+            }
+            continue
+        if reference != "ADMITTED_FRAME":
+            continue
+        samples = _sequence(raw.get("samples"), "tick.inputs.raw_devices.samples")
+        indices = _sequence(
+            value.get("accepted_sample_indices"),
+            "tick.expected.layers.L2.accepted_sample_indices",
+        )
+        accepted: list[dict[str, object]] = []
+        for encoded_index in indices:
+            index = _integer(
+                encoded_index,
+                "tick.expected.layers.L2.accepted_sample_indices[]",
+            )
+            if index < 0 or index >= len(samples):
+                raise V3ReplayError("captured L2 input reference is out of range")
+            sample = _mapping(samples[index], "tick.inputs.raw_devices.samples[]")
+            accepted.append(
+                {
+                    "__type__": "Observation",
+                    "kind": sample.get("kind"),
+                    "source_device_id": sample.get("device_id"),
+                    "source_sequence": sample.get("sequence"),
+                    "captured_monotonic_ns": sample.get("captured_monotonic_ns"),
+                    "values": sample.get("values"),
+                }
+            )
+        expanded[layer] = {
+            "__type__": "AdmittedFrame",
+            "context": inputs.get("context"),
+            "accepted": accepted,
+            "rejected": value.get("rejected"),
+            "degraded_sources": value.get("degraded_sources"),
+        }
+    return expanded
 
 
 def _divergence_row(

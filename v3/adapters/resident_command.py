@@ -463,7 +463,10 @@ class ResidentCommandClient:
                 if written <= 0:
                     raise OSError("command mailbox write made no progress")
                 view = view[written:]
-            os.fsync(descriptor)
+            # This is an ephemeral, TTL-guarded mailbox rather than durable
+            # storage. Atomic replacement provides the required reader
+            # boundary; waiting for media durability here can make a command
+            # stale before the resident process can observe it.
             os.close(descriptor)
             descriptor = None
             os.replace(temporary, path)

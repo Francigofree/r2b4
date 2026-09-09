@@ -459,6 +459,38 @@ def test_resident_runtime_requires_a_new_idle_preflight_after_each_stop():
     ] == [1, 3]
 
 
+def test_short_command_dropout_rearms_fail_closed_without_terminal_fault():
+    gateway = SequenceGateway(active_ticks=(3, 4, 6, 7, 8))
+    observed = []
+    records = []
+
+    report = run_resident_physical_control(
+        *_sources(EncoderBackend()),
+        gateway,
+        MotorGpio(),
+        _runtime_config(required_lidar_preflight_revisions=3),
+        stop_requested=StopAfterCall(11),
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+        tick_observer=observed.append,
+        record_observer=records.append,
+    )
+
+    assert report.status == RUN_OK
+    assert [
+        item.trace.context.tick_id
+        for item in observed
+        if item.final_actuation.safety_decision is SafetyDecision.ALLOW
+    ] == [3, 4, 8]
+    assert [records[index].inputs.command.mode for index in (5, 6, 7)] == [
+        CommandMode.STOP,
+        CommandMode.STOP,
+        CommandMode.STOP,
+    ]
+    assert records[6].inputs.command.command_id.startswith("resident.rearm.")
+    assert records[7].inputs.command.command_id.startswith("resident.rearm.")
+
+
 def test_resident_command_context_mismatch_faults_before_any_nonzero_commit():
     motor = MotorGpio()
 

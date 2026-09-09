@@ -96,10 +96,12 @@ def _run_active(
     ttl_ns: int,
     heartbeat_ns: int,
     sleep: Callable[[float], None] = time.sleep,
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
 ) -> int:
     if heartbeat_ns <= 0 or heartbeat_ns >= ttl_ns:
         raise ValueError("heartbeat interval must be positive and shorter than TTL")
     try:
+        next_heartbeat_ns = monotonic_ns() + heartbeat_ns
         revision = publish(command_id)
         print(
             json.dumps(
@@ -113,8 +115,15 @@ def _run_active(
             flush=True,
         )
         while True:
-            sleep(heartbeat_ns / 1e9)
+            remaining_ns = next_heartbeat_ns - monotonic_ns()
+            if remaining_ns > 0:
+                sleep(remaining_ns / 1e9)
             publish(command_id)
+            next_heartbeat_ns += heartbeat_ns
+            now_ns = monotonic_ns()
+            if next_heartbeat_ns <= now_ns:
+                missed = ((now_ns - next_heartbeat_ns) // heartbeat_ns) + 1
+                next_heartbeat_ns += missed * heartbeat_ns
     except KeyboardInterrupt:
         stop_id = _logical_id("stop")
         revision = client.publish_stop(stop_id, ttl_ns=ttl_ns)

@@ -310,6 +310,11 @@ def test_raw_lidar_is_persisted_once_and_only_when_selected_ticks_reference_it(t
     assert revisions == [1, 2, 3, 99]
     assert all(scan["points_truncated"] is True for scan in payload["raw_lidar_scans"])
     assert all(len(scan["points"]) == 1 for scan in payload["raw_lidar_scans"])
+    assert all(
+        scan["point_encoding"] == "ANGLE_DEG_DISTANCE_M_QUALITY"
+        for scan in payload["raw_lidar_scans"]
+    )
+    assert all(len(scan["points"][0]) == 3 for scan in payload["raw_lidar_scans"])
     assert payload["raw_lidar_evidence"]["missing_revisions"] == []
 
 

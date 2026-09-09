@@ -29,6 +29,7 @@ from .execution import (
 
 V3_CAPTURE_SCHEMA = "R2B4_V3_CAPTURE_V1"
 V3_CAPTURE_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
+_INPUT_REFERENCE_KEY = "__capture_input_reference__"
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +139,7 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
             "tick_id": context.tick_id,
             "monotonic_ns": context.monotonic_ns,
             "inputs": encode_value(record.inputs),
-            "expected": _encode_completed_result(record.result),
+            "expected": _encode_completed_result(record.result, record.inputs),
         }
         if record.evidence:
             row["tick_evidence"] = encode_value(record.evidence)
@@ -189,8 +190,12 @@ def encode_capture_record(record: CaptureRecord) -> dict[str, object]:
     raise TypeError("capture record must be a supported immutable capture record")
 
 
-def _encode_completed_result(result: object) -> dict[str, object]:
-    from .engine import TickResult
+def _encode_completed_result(
+    result: object,
+    inputs: object | None = None,
+) -> dict[str, object]:
+    from .contracts import AcquisitionFrame, AdmittedFrame
+    from .engine import TickInputs, TickResult
 
     if not isinstance(result, TickResult):
         raise TypeError("capture result must be TickResult")
@@ -200,12 +205,74 @@ def _encode_completed_result(result: object) -> dict[str, object]:
         result.trace.fault_layer,
         preserve_order=True,
     )
+    encoded_layers: dict[str, object] = {}
+    for layer in result.trace.layers:
+        output = layer.output
+        if (
+            layer.layer == "L1"
+            and isinstance(inputs, TickInputs)
+            and isinstance(output, AcquisitionFrame)
+            and output.context == inputs.context
+            and output.samples == inputs.raw_devices.samples
+            and output.io_health == inputs.raw_devices.device_health
+        ):
+            encoded_layers[layer.layer] = {
+                _INPUT_REFERENCE_KEY: "RAW_DEVICE_BATCH",
+            }
+            continue
+        if (
+            layer.layer == "L2"
+            and isinstance(inputs, TickInputs)
+            and isinstance(output, AdmittedFrame)
+        ):
+            compact = _compact_admitted_frame(output, inputs)
+            if compact is not None:
+                encoded_layers[layer.layer] = compact
+                continue
+        encoded_layers[layer.layer] = encode_value(output)
     return {
         "fault_layer": result.trace.fault_layer,
-        "layers": {
-            layer.layer: encode_value(layer.output)
-            for layer in result.trace.layers
-        },
+        "layers": encoded_layers,
+    }
+
+
+def _compact_admitted_frame(output: object, inputs: object) -> dict[str, object] | None:
+    """Reference immutable L0 samples only where the L2 value is exactly derivable."""
+
+    from .contracts import AdmittedFrame
+    from .engine import TickInputs
+
+    if not isinstance(output, AdmittedFrame) or not isinstance(inputs, TickInputs):
+        return None
+    if output.context != inputs.context:
+        return None
+    sample_indices: dict[tuple[str, str, int], int] = {
+        (sample.device_id, sample.kind, sample.sequence): index
+        for index, sample in enumerate(inputs.raw_devices.samples)
+    }
+    accepted_indices: list[int] = []
+    for observation in output.accepted:
+        index = sample_indices.get(
+            (
+                observation.source_device_id,
+                observation.kind,
+                observation.source_sequence,
+            )
+        )
+        if index is None:
+            return None
+        sample = inputs.raw_devices.samples[index]
+        if (
+            observation.captured_monotonic_ns != sample.captured_monotonic_ns
+            or observation.values != sample.values
+        ):
+            return None
+        accepted_indices.append(index)
+    return {
+        _INPUT_REFERENCE_KEY: "ADMITTED_FRAME",
+        "accepted_sample_indices": accepted_indices,
+        "rejected": encode_value(output.rejected),
+        "degraded_sources": encode_value(output.degraded_sources),
     }
 
 
@@ -845,13 +912,31 @@ def _encode_raw_lidar_snapshot(
     ):
         raise V3CaptureError("raw lidar snapshot has an invalid native contract")
     selected_points = points[:point_limit]
+    compact_points: list[list[float | int]] = []
+    for point in selected_points:
+        angle_deg = getattr(point, "angle_deg", None)
+        distance_m = getattr(point, "distance_m", None)
+        quality = getattr(point, "quality", None)
+        if (
+            isinstance(angle_deg, bool)
+            or not isinstance(angle_deg, (int, float))
+            or not math.isfinite(angle_deg)
+            or isinstance(distance_m, bool)
+            or not isinstance(distance_m, (int, float))
+            or not math.isfinite(distance_m)
+            or not isinstance(quality, int)
+            or isinstance(quality, bool)
+        ):
+            raise V3CaptureError("raw lidar point has an invalid native contract")
+        compact_points.append([float(angle_deg), float(distance_m), quality])
     return {
         "revision": revision,
         "captured_monotonic_ns": int(float(timestamp) * 1_000_000_000),
         "health": health,
         "source_point_count": len(points),
         "points_truncated": len(selected_points) != len(points),
-        "points": encode_value(selected_points),
+        "point_encoding": "ANGLE_DEG_DISTANCE_M_QUALITY",
+        "points": compact_points,
         "summary": encode_value(summary),
     }
 

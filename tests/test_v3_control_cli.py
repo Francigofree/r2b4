@@ -116,6 +116,49 @@ def test_active_heartbeat_keeps_identity_and_ctrl_c_publishes_stop(tmp_path):
     assert stopped["mode"] == "STOP"
 
 
+def test_active_heartbeat_period_includes_publish_latency():
+    class Clock:
+        now_ns = 0
+
+        def monotonic_ns(self):
+            return self.now_ns
+
+        def sleep(self, seconds):
+            self.now_ns += round(seconds * 1e9)
+            if len(starts) == 2:
+                raise KeyboardInterrupt
+
+    class Client:
+        stopped = False
+
+        def publish_stop(self, _command_id, *, ttl_ns):
+            assert ttl_ns == 200_000_000
+            self.stopped = True
+            return 3
+
+    clock = Clock()
+    client = Client()
+    starts = []
+
+    def publish(_command_id):
+        starts.append(clock.now_ns)
+        clock.now_ns += 80_000_000
+        return len(starts)
+
+    assert control_cli._run_active(
+        client,
+        publish,
+        command_id="timed-session",
+        ttl_ns=200_000_000,
+        heartbeat_ns=100_000_000,
+        sleep=clock.sleep,
+        monotonic_ns=clock.monotonic_ns,
+    ) == 130
+
+    assert starts == [0, 100_000_000]
+    assert client.stopped
+
+
 def test_active_cli_requires_fresh_resident_preflight(tmp_path, monkeypatch, capsys):
     runtime = tmp_path / "runtime"
     runtime.mkdir()

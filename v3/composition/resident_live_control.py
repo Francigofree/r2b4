@@ -63,10 +63,14 @@ class ResidentLiveControlComposition:
     Every transition from IDLE to ACTIVE requires the configured number of
     distinct, monotonically newer healthy lidar matcher revisions and an
     immediately preceding healthy STOP/IDLE tick. Re-reading one revision does
-    not advance readiness. Any input, command, layer, or writer fault latches
-    the composition in FAULT. Shutdown bypasses the external command source but
-    still closes one explicit zero decision through the canonical L0-L12 engine
-    before the physical owner is released.
+    not advance readiness. After an established ACTIVE session, an interrupted
+    command heartbeat starts a fail-closed re-arm: premature ACTIVE revisions
+    remain STOP until the same preflight is complete instead of turning that
+    safe interruption into a terminal fault. An unsafe initial activation and
+    any input, command, layer, or writer fault still latch FAULT. Shutdown
+    bypasses the external command source but still closes one explicit zero
+    decision through the canonical L0-L12 engine before the physical owner is
+    released.
     """
 
     __slots__ = (
@@ -80,6 +84,7 @@ class ResidentLiveControlComposition:
         "_last_lidar_preflight_revision",
         "_preflight_context",
         "_reader",
+        "_rearm_pending",
         "_shutdown",
         "_write_failed",
     )
@@ -115,6 +120,7 @@ class ResidentLiveControlComposition:
         self._last_lidar_preflight_revision: int | None = None
         self._lidar_preflight_revision_count = 0
         self._active = False
+        self._rearm_pending = False
         self._faulted = False
         self._write_failed = False
         self._shutdown = False
@@ -287,13 +293,22 @@ class ResidentLiveControlComposition:
 
         active = command.mode is not CommandMode.STOP
         if active and not self._active and not self._preflight_is_fresh_for(context):
-            return self._run_fault_tick(
-                context,
-                "PREFLIGHT_REQUIRED",
-                "ResidentLiveControl",
-                batch.device_health,
-                batch,
+            if not self._rearm_pending:
+                return self._run_fault_tick(
+                    context,
+                    "PREFLIGHT_REQUIRED",
+                    "ResidentLiveControl",
+                    batch.device_health,
+                    batch,
+                )
+            command = CommandRequest(
+                context=context,
+                command_id=f"resident.rearm.{command.command_id}",
+                mode=CommandMode.STOP,
+                goal=(),
+                expiry_tick=context.tick_id,
             )
+            active = False
         scheduled_lifecycle = (
             LifecycleState.ACTIVE if active else LifecycleState.IDLE
         )
@@ -319,6 +334,7 @@ class ResidentLiveControlComposition:
             raise
 
         final = result.final_actuation
+        was_active = self._active
         if final.safety_decision is SafetyDecision.FAULT:
             self._faulted = True
             self._active = False
@@ -330,6 +346,10 @@ class ResidentLiveControlComposition:
         else:
             self._active = active
             self._lifecycle = scheduled_lifecycle
+            if active:
+                self._rearm_pending = False
+            elif was_active:
+                self._rearm_pending = True
             if not active and self._is_healthy_idle(batch.device_health, result):
                 self._record_healthy_idle(batch, context)
             elif not active:
