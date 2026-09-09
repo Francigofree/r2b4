@@ -116,6 +116,44 @@ def test_terminal_fault_auto_triggers_and_marks_short_post_window(tmp_path):
     }
 
 
+def test_fault_during_manual_post_window_sets_fault_capture_status(tmp_path):
+    config = control_config()
+    records, _writer = _records(2, config=config)
+    worker, path = _worker(
+        tmp_path,
+        config=config,
+        capture_config=CaptureWindowConfig(pre_event_ns=0, post_event_ns=20_000_000),
+    )
+    worker.observe(records[0])
+    worker.trigger("MANUAL", records[0].inputs.context.monotonic_ns)
+    fault_context = records[1].inputs.context
+    result = NativeControlComposition(RecordingMotorSink(), config).run_fault_tick(
+        fault_context,
+        LifecycleState.FAULT,
+        "POST_TRIGGER_L0_ERROR",
+        "L0",
+    )
+    worker.observe(
+        EdgeFaultRecord(
+            fault_context,
+            LifecycleState.FAULT,
+            "POST_TRIGGER_L0_ERROR",
+            "L0",
+            (),
+            result,
+        )
+    )
+    deadline = time.monotonic() + 1.0
+    while not path.exists() and time.monotonic() < deadline:
+        time.sleep(0.001)
+    worker.finish("PASS", terminal=False)
+
+    payload = load_capture(path)
+    assert payload["status"] == "FAULT"
+    assert payload["capture_window"]["trigger_reason"] == "MANUAL"
+    assert payload["ticks"][-1]["record_type"] == "edge_fault_tick"
+
+
 def test_blocked_encoder_never_blocks_production_observer(tmp_path, monkeypatch):
     records, _writer = _records(3)
     worker, _path = _worker(tmp_path)
@@ -141,6 +179,38 @@ def test_blocked_encoder_never_blocks_production_observer(tmp_path, monkeypatch)
     worker.finish("PASS")
 
     assert elapsed < 0.05
+
+
+def test_blocked_file_writer_never_blocks_production_observer(tmp_path, monkeypatch):
+    records, _writer = _records(2)
+    worker, path = _worker(
+        tmp_path,
+        capture_config=CaptureWindowConfig(pre_event_ns=0, post_event_ns=0),
+    )
+    entered = threading.Event()
+    release = threading.Event()
+    from v3 import capture as capture_module
+
+    real_write = capture_module.write_capture
+
+    def blocked_write(payload, output_path):
+        entered.set()
+        assert release.wait(timeout=2.0)
+        return real_write(payload, output_path)
+
+    monkeypatch.setattr(capture_module, "write_capture", blocked_write)
+    worker.observe(records[0])
+    worker.trigger("MANUAL", records[0].inputs.context.monotonic_ns)
+    assert entered.wait(timeout=1.0)
+
+    started = time.monotonic()
+    worker.observe(records[1])
+    elapsed = time.monotonic() - started
+    release.set()
+    worker.finish("PASS")
+
+    assert elapsed < 0.05
+    assert path.is_file()
 
 
 def test_queue_overflow_preserves_motor_output_and_invalidates_match(tmp_path, monkeypatch):
@@ -315,3 +385,29 @@ def test_complete_nondefault_resolved_config_round_trips_without_legacy_authorit
     encoded = json.loads(path.read_text())["configuration"]["resolved_control"]
     assert encoded["admission"]["max_sample_age_ns"] == 333_000_000
     assert encoded["wheel_pi"]["kp"] == 0.33
+    captured = load_capture(path)
+    update = captured["ticks"][1]["tick_evidence"][0]
+    assert update["__type__"] == "EkfUpdateEvidence"
+    assert update["update_type"] == "VELOCITY"
+    assert update["threshold"] == 12.5
+    assert update["accepted"] is True
+    assert len(update["innovation"]) == 1
+    assert update["nis"] >= 0.0
+
+
+def test_optional_append_only_mode_uses_same_records_and_is_not_triggered(tmp_path):
+    records, _writer = _records(4)
+    worker, path = _worker(
+        tmp_path,
+        capture_config=CaptureWindowConfig(mode="append_only"),
+    )
+
+    for record in records:
+        worker.observe(record)
+    worker.finish("PASS")
+
+    payload = load_capture(path)
+    assert payload["capture_window"]["strategy"] == "APPEND_ONLY"
+    assert payload["tick_count"] == 4
+    assert all(tick["record_type"] == "closed_input_tick" for tick in payload["ticks"])
+    assert replay_capture(path, project_root=PROJECT_ROOT)["status"] == "MATCH"

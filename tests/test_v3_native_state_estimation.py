@@ -133,6 +133,10 @@ def test_native_heading_nis_gate_rejects_an_extreme_wrapped_outlier():
 
     assert abs(estimate.yaw_rad) < 0.1
     assert estimate.x_m > 0.0
+    yaw = next(item for item in estimator.last_update_evidence if item.update_type == "YAW")
+    assert yaw.accepted is False
+    assert yaw.nis > yaw.threshold
+    assert len(yaw.innovation) == 1
 
 
 def test_native_lidar_pose_update_has_stable_three_axis_characterization():
@@ -172,6 +176,14 @@ def test_native_lidar_joint_nis_gate_rejects_extreme_position_outlier():
 
     assert 0.0 < estimate.x_m < 0.01
     assert abs(estimate.y_m) < 0.01
+    lidar = next(
+        item
+        for item in estimator.last_update_evidence
+        if item.update_type == "LIDAR_POSE"
+    )
+    assert lidar.accepted is False
+    assert lidar.nis > lidar.threshold
+    assert len(lidar.innovation) == 3
 
 
 def test_native_lidar_yaw_innovation_wraps_across_pi():

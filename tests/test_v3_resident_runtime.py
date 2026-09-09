@@ -23,6 +23,9 @@ from v3.contracts import (
     SafetyDecision,
     TickContext,
 )
+from v3.composition.resident_live_control import ResidentLiveControlComposition
+from v3.engine import TickExecutionError
+from v3.execution import EdgeFaultRecord, ExecutionRecord, WriterFailureRecord
 from v3_bounded_config import (
     NativeSensorPolicyConfig,
     load_bounded_physical_runtime_config,
@@ -35,11 +38,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class EncoderBackend:
-    def __init__(self) -> None:
+    def __init__(self, fail_tick=None) -> None:
         self.calls = []
+        self.fail_tick = fail_tick
 
     def read(self, context):
         self.calls.append(context)
+        if context.tick_id == self.fail_tick:
+            raise OSError("injected encoder input failure")
         return EncoderVelocityReading(
             context.tick_id,
             context.monotonic_ns,
@@ -112,7 +118,6 @@ class MotorGpio:
         self.calls.append(("claim", pin, initial_level))
         self.levels[pin] = initial_level
         return 0
-
     def gpio_write(self, handle, pin, level):
         self.calls.append(("write", pin, level))
         self.levels[pin] = level
@@ -142,6 +147,11 @@ class MotorGpio:
     def gpiochip_close(self, handle):
         self.calls.append(("close", handle))
         return 0
+
+
+class FailingWriter:
+    def write(self, _command):
+        raise OSError("injected canonical writer failure")
 
 
 class StepClock:
@@ -320,6 +330,7 @@ def test_resident_runtime_rearms_then_runs_active_and_signal_shutdown_tick():
 
 def test_resident_runtime_rejects_active_first_tick_and_latches_fault_zero():
     motor = MotorGpio()
+    records = []
 
     report = run_resident_physical_control(
         *_sources(EncoderBackend()),
@@ -329,6 +340,7 @@ def test_resident_runtime_rejects_active_first_tick_and_latches_fault_zero():
         stop_requested=lambda: False,
         monotonic_ns=StepClock(),
         sleep=lambda _seconds: None,
+        record_observer=records.append,
     )
 
     assert report.status == RUN_FAULT
@@ -342,10 +354,14 @@ def test_resident_runtime_rejects_active_first_tick_and_latches_fault_zero():
     assert report.as_dict()["termination_class"] == "FAULT_SAFE_LOW"
     assert not any(call[0] == "pwm" and call[-1] != 0.0 for call in motor.calls)
     assert motor.calls[-1] == ("close", 4)
+    assert len(records) == 1
+    assert isinstance(records[0], EdgeFaultRecord)
+    assert records[0].reason == "PREFLIGHT_REQUIRED"
 
 
 def test_resident_command_edge_exception_is_one_fault_commit_and_close():
     motor = MotorGpio()
+    records = []
 
     report = run_resident_physical_control(
         *_sources(EncoderBackend()),
@@ -355,6 +371,7 @@ def test_resident_command_edge_exception_is_one_fault_commit_and_close():
         stop_requested=lambda: False,
         monotonic_ns=StepClock(),
         sleep=lambda _seconds: None,
+        record_observer=records.append,
     )
 
     assert report.status == RUN_FAULT
@@ -362,6 +379,59 @@ def test_resident_command_edge_exception_is_one_fault_commit_and_close():
     assert report.fault_layer == "CommandGateway"
     assert not any(call[0] == "pwm" and call[-1] != 0.0 for call in motor.calls)
     assert motor.calls[-1] == ("close", 4)
+    assert len(records) == 1
+    assert isinstance(records[0], EdgeFaultRecord)
+    assert records[0].fault_layer == "CommandGateway"
+
+
+def test_resident_l0_and_shutdown_input_faults_emit_edge_fault_records():
+    l0_records = []
+    l0_report = run_resident_physical_control(
+        *_sources(EncoderBackend(fail_tick=0)),
+        SequenceGateway(),
+        MotorGpio(),
+        _runtime_config(),
+        stop_requested=lambda: False,
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+        record_observer=l0_records.append,
+    )
+    shutdown_records = []
+    shutdown_report = run_resident_physical_control(
+        *_sources(EncoderBackend(fail_tick=0)),
+        SequenceGateway(),
+        MotorGpio(),
+        _runtime_config(),
+        stop_requested=StopAfterCall(2),
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+        record_observer=shutdown_records.append,
+    )
+
+    assert l0_report.status == RUN_FAULT
+    assert isinstance(l0_records[0], EdgeFaultRecord)
+    assert l0_records[0].reason == "L0_ERROR"
+    assert shutdown_report.status == RUN_FAULT
+    assert isinstance(shutdown_records[0], EdgeFaultRecord)
+    assert shutdown_records[0].reason == "SHUTDOWN_INPUT_ERROR"
+
+
+def test_resident_writer_failure_exposes_a_terminal_capture_record():
+    runtime = ResidentLiveControlComposition(
+        *_sources(EncoderBackend()),
+        SequenceGateway(),
+        FailingWriter(),
+        _runtime_config().composition.live_control,
+    )
+
+    with pytest.raises(TickExecutionError) as raised:
+        runtime.tick_execution(TickContext(0, 1_000_000_000))
+
+    record = raised.value.capture_record
+    assert isinstance(record, WriterFailureRecord)
+    assert record.reason == "MOTOR_WRITER_FAILURE"
+    assert record.inputs is not None
+    assert record.attempted_actuation is not None
 
 
 def test_resident_runtime_requires_a_new_idle_preflight_after_each_stop():

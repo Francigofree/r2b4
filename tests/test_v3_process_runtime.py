@@ -2,6 +2,7 @@ import json
 import signal
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -18,6 +19,7 @@ from v3.capture import CaptureSink, inspect_capture
 from v3.contracts import LifecycleState, SafetyDecision
 from v3.execution import ExecutionBoundary, IterableInputSource, MemoryOutputSink
 from v3.composition.native_control import NativeControlComposition
+from v3.replay import replay_capture
 from v3.test_hub import validate_run, verify_evidence
 from v3_bounded_runtime import RUN_OK
 from v3_runtime import ResidentRuntimeReport
@@ -258,6 +260,67 @@ def test_capture_failure_is_reported_only_after_hardware_returns_safe(tmp_path):
 
     assert hardware_returned is True
     assert json.loads(status.read_text())["state"] == "STOPPED"
+
+
+def test_process_capture_round_trips_complete_resolved_runtime_config(tmp_path):
+    runtime = process.load_resident_runtime_config(PROJECT_ROOT)
+    live = replace(
+        runtime.composition.live_control,
+        max_preflight_age_ns=333_000_000,
+        required_lidar_preflight_revisions=5,
+    )
+    motor = replace(
+        runtime.composition.motor_output,
+        left=replace(runtime.composition.motor_output.left, invert=True),
+        pwm_frequency_hz=9_500,
+    )
+    sensors = replace(
+        runtime.sensor_inputs,
+        imu_device=replace(
+            runtime.sensor_inputs.imu_device,
+            axis_order=(1, 0, 2),
+            axis_sign=(-1, 1, 1),
+            use_external_crystal=True,
+        ),
+        inputs=replace(
+            runtime.sensor_inputs.inputs,
+            lidar_source=replace(
+                runtime.sensor_inputs.inputs.lidar_source,
+                local_perception_max_points=73,
+            ),
+        ),
+        lidar_danger_zone_m=0.37,
+    )
+    resolved = replace(
+        runtime,
+        composition=replace(runtime.composition, live_control=live, motor_output=motor),
+        sensor_inputs=sensors,
+        tick_period_ns=17_000_000,
+    )
+    output = MemoryOutputSink()
+    ExecutionBoundary(
+        NativeControlComposition(RecordingMotorSink(), live.control)
+    ).run(IterableInputSource(tick_inputs(2)), output)
+    path = tmp_path / "resolved-runtime.json"
+    sink = CaptureSink(
+        "resolved-runtime",
+        configuration=process._capture_configuration(PROJECT_ROOT, resolved),
+    )
+    for record in output.records:
+        sink.write(record)
+    sink.finalize("PASS", path)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert set(payload["configuration"]) == {"resolved_runtime"}
+    captured = payload["configuration"]["resolved_runtime"]
+    assert captured["composition"]["live_control"]["max_preflight_age_ns"] == 333_000_000
+    assert captured["composition"]["motor_output"]["left"]["invert"] is True
+    assert captured["sensor_inputs"]["imu_device"]["axis_order"] == [1, 0, 2]
+    assert captured["sensor_inputs"]["inputs"]["lidar_source"][
+        "local_perception_max_points"
+    ] == 73
+    assert captured["tick_period_ns"] == 17_000_000
+    assert replay_capture(path, project_root=PROJECT_ROOT)["status"] == "MATCH"
 
 
 def test_signal_latch_and_cli_approval_fail_before_hardware_import(capsys):

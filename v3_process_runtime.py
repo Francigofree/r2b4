@@ -575,6 +575,8 @@ def _capture_configuration(
     project_root: Path,
     runtime_config: ResidentPhysicalRuntimeConfig | None = None,
 ) -> dict[str, object]:
+    if runtime_config is not None:
+        return {"resolved_runtime": runtime_config}
     documents: dict[str, object] = {}
     for name, relative in (
         ("physics", "conf/fizika.json"),
@@ -586,22 +588,7 @@ def _capture_configuration(
         if not isinstance(payload, dict):
             raise ValueError(f"{relative} must contain a JSON object")
         documents[name] = payload
-    if runtime_config is None:
-        return documents
-    live = runtime_config.composition.live_control
-    return {
-        "resolved_control": live.control,
-        "resolved_sensor_inputs": runtime_config.sensor_inputs,
-        "resolved_resident_policy": {
-            "max_preflight_age_ns": live.max_preflight_age_ns,
-            "required_lidar_preflight_revisions": (
-                live.required_lidar_preflight_revisions
-            ),
-            "tick_period_ns": runtime_config.tick_period_ns,
-        },
-        "resolved_motor_edge": runtime_config.composition.motor_output,
-        "legacy_documents": documents,
-    }
+    return documents
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -617,6 +604,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--capture-max-bytes", type=int, default=16 * 1024 * 1024)
     parser.add_argument("--capture-max-raw-scans", type=int, default=64)
     parser.add_argument("--capture-max-raw-points", type=int, default=4_096)
+    parser.add_argument(
+        "--capture-mode",
+        choices=("triggered", "append_only"),
+        default="triggered",
+    )
     return parser
 
 
@@ -685,6 +677,7 @@ def main(argv: list[str] | None = None) -> int:
                     max_byte_capacity=args.capture_max_bytes,
                     max_raw_lidar_scans=args.capture_max_raw_scans,
                     max_raw_lidar_points_per_scan=args.capture_max_raw_points,
+                    mode=args.capture_mode,
                 ),
             )
             if capture_path is not None

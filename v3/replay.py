@@ -22,11 +22,27 @@ from .capture import (
     load_capture,
     validate_capture as validate_general_capture,
 )
+from .adapters.bno055_device import NativeBno055DeviceConfig
+from .adapters.bno055_imu import Bno055ImuBackendConfig
+from .adapters.counter_encoder import CounterEncoderBackendConfig
+from .adapters.gpio_counter import GpioCounterChannelConfig, GpioCounterPairConfig
+from .adapters.gpio_motor import GpioMotorFrameSinkConfig
+from .adapters.latest_lidar import LatestLidarBackendConfig
+from .adapters.live_encoder import NativeEncoderConfig
+from .adapters.live_imu import NativeImuConfig
+from .adapters.live_lidar import NativeLidarConfig
+from .adapters.motor_pwm import MotorChannelPhysicalConfig, PwmDecayMode
 from .composition.native_control import (
     NativeControlComposition,
     NativeControlCompositionConfig,
     v3_navigation_config_from_mapping,
 )
+from .composition.native_sensor_inputs import (
+    NativeSensorHardwareConfig,
+    NativeSensorInputConfig,
+)
+from .composition.resident_live_control import ResidentLiveControlConfig
+from .composition.resident_physical_control import ResidentPhysicalControlConfig
 from .contracts import (
     CommandMode,
     CommandRequest,
@@ -124,6 +140,19 @@ class _ReplayOutcome:
     result: TickResult | None
     writer_failure: bool
     attempted_actuation: object | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ResolvedReplayRuntime:
+    composition: ResidentPhysicalControlConfig
+    sensor_inputs: NativeSensorHardwareConfig
+    tick_period_ns: int
+
+    def __post_init__(self) -> None:
+        if self.tick_period_ns <= 0:
+            raise ValueError("tick_period_ns must be positive")
+        if self.tick_period_ns > self.composition.live_control.max_preflight_age_ns:
+            raise ValueError("tick_period_ns exceeds resident preflight policy")
 
 
 @dataclass(frozen=True, slots=True)
@@ -625,6 +654,11 @@ def _embedded_control_config(
     inputs: Sequence[TickInputs],
 ) -> NativeControlCompositionConfig:
     configuration = _mapping(payload.get("configuration"), "capture.configuration")
+    resolved_runtime = configuration.get("resolved_runtime")
+    if resolved_runtime is not None:
+        return _decode_resolved_runtime(
+            _mapping(resolved_runtime, "capture.configuration.resolved_runtime")
+        ).composition.live_control.control
     resolved = configuration.get("resolved_control")
     if resolved is not None:
         return _decode_native_control_config(
@@ -654,6 +688,184 @@ def _embedded_control_config(
         inputs,
         control,
     )
+
+
+def _decode_resolved_runtime(
+    row: Mapping[str, object],
+) -> _ResolvedReplayRuntime:
+    _require_type(row, "ResidentPhysicalRuntimeConfig", "resolved_runtime")
+    composition_row = _mapping(
+        row.get("composition"),
+        "resolved_runtime.composition",
+    )
+    _require_type(
+        composition_row,
+        "ResidentPhysicalControlConfig",
+        "resolved_runtime.composition",
+    )
+    live_row = _mapping(
+        composition_row.get("live_control"),
+        "resolved_runtime.composition.live_control",
+    )
+    _require_type(
+        live_row,
+        "ResidentLiveControlConfig",
+        "resolved_runtime.composition.live_control",
+    )
+    control = _decode_native_control_config(
+        _mapping(
+            live_row.get("control"),
+            "resolved_runtime.composition.live_control.control",
+        )
+    )
+    try:
+        live = ResidentLiveControlConfig(
+            control=control,
+            max_preflight_age_ns=_integer(
+                live_row.get("max_preflight_age_ns"),
+                "resolved_runtime.max_preflight_age_ns",
+            ),
+            required_lidar_preflight_revisions=_integer(
+                live_row.get("required_lidar_preflight_revisions"),
+                "resolved_runtime.required_lidar_preflight_revisions",
+            ),
+        )
+        motor = _decode_motor_edge(
+            _mapping(
+                composition_row.get("motor_output"),
+                "resolved_runtime.composition.motor_output",
+            )
+        )
+        composition = ResidentPhysicalControlConfig(live, motor)
+        sensors = _decode_sensor_hardware(
+            _mapping(row.get("sensor_inputs"), "resolved_runtime.sensor_inputs")
+        )
+        tick_period_ns = _integer(
+            row.get("tick_period_ns"),
+            "resolved_runtime.tick_period_ns",
+        )
+        resolved = _ResolvedReplayRuntime(composition, sensors, tick_period_ns)
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_runtime is invalid: {exc}") from exc
+    return resolved
+
+
+def _decode_motor_edge(row: Mapping[str, object]) -> GpioMotorFrameSinkConfig:
+    _require_type(row, "GpioMotorFrameSinkConfig", "resolved_runtime.motor_output")
+
+    def channel(value: object, name: str) -> MotorChannelPhysicalConfig:
+        item = _mapping(value, name)
+        _require_type(item, "MotorChannelPhysicalConfig", name)
+        try:
+            return MotorChannelPhysicalConfig(
+                in1=_integer(item.get("in1"), f"{name}.in1"),
+                in2=_integer(item.get("in2"), f"{name}.in2"),
+                invert=_required_bool(item.get("invert"), f"{name}.invert"),
+                pwm_decay_mode=PwmDecayMode(str(item.get("pwm_decay_mode", ""))),
+            )
+        except (TypeError, ValueError) as exc:
+            raise V3ReplayError(f"{name} is invalid: {exc}") from exc
+
+    try:
+        return GpioMotorFrameSinkConfig(
+            left=channel(row.get("left"), "resolved_runtime.motor_output.left"),
+            right=channel(row.get("right"), "resolved_runtime.motor_output.right"),
+            gpio_chip=_integer(row.get("gpio_chip"), "resolved_runtime.motor_output.gpio_chip"),
+            pwm_frequency_hz=_integer(
+                row.get("pwm_frequency_hz"),
+                "resolved_runtime.motor_output.pwm_frequency_hz",
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_runtime.motor_output is invalid: {exc}") from exc
+
+
+def _decode_sensor_hardware(row: Mapping[str, object]) -> NativeSensorHardwareConfig:
+    _require_type(row, "NativeSensorHardwareConfig", "resolved_runtime.sensor_inputs")
+    imu_device = _decode_flat_config(
+        NativeBno055DeviceConfig,
+        row.get("imu_device"),
+        "resolved_runtime.sensor_inputs.imu_device",
+        tuple_fields={"axis_order", "axis_sign"},
+    )
+    inputs_row = _mapping(
+        row.get("inputs"),
+        "resolved_runtime.sensor_inputs.inputs",
+    )
+    _require_type(inputs_row, "NativeSensorInputConfig", "resolved_runtime.sensor_inputs.inputs")
+    counter_row = _mapping(
+        inputs_row.get("encoder_counter"),
+        "resolved_runtime.sensor_inputs.inputs.encoder_counter",
+    )
+    _require_type(
+        counter_row,
+        "GpioCounterPairConfig",
+        "resolved_runtime.sensor_inputs.inputs.encoder_counter",
+    )
+    try:
+        counter = GpioCounterPairConfig(
+            left=_decode_flat_config(
+                GpioCounterChannelConfig,
+                counter_row.get("left"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.left",
+            ),
+            right=_decode_flat_config(
+                GpioCounterChannelConfig,
+                counter_row.get("right"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.right",
+            ),
+            gpio_chip=_integer(
+                counter_row.get("gpio_chip"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.gpio_chip",
+            ),
+            edge_history_capacity=_integer(
+                counter_row.get("edge_history_capacity"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.edge_history_capacity",
+            ),
+        )
+        inputs = NativeSensorInputConfig(
+            encoder_counter=counter,
+            encoder_backend=_decode_flat_config(
+                CounterEncoderBackendConfig,
+                inputs_row.get("encoder_backend"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_backend",
+            ),
+            encoder_source=_decode_flat_config(
+                NativeEncoderConfig,
+                inputs_row.get("encoder_source"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_source",
+            ),
+            imu_backend=_decode_flat_config(
+                Bno055ImuBackendConfig,
+                inputs_row.get("imu_backend"),
+                "resolved_runtime.sensor_inputs.inputs.imu_backend",
+            ),
+            imu_source=_decode_flat_config(
+                NativeImuConfig,
+                inputs_row.get("imu_source"),
+                "resolved_runtime.sensor_inputs.inputs.imu_source",
+            ),
+            lidar_backend=_decode_flat_config(
+                LatestLidarBackendConfig,
+                inputs_row.get("lidar_backend"),
+                "resolved_runtime.sensor_inputs.inputs.lidar_backend",
+            ),
+            lidar_source=_decode_flat_config(
+                NativeLidarConfig,
+                inputs_row.get("lidar_source"),
+                "resolved_runtime.sensor_inputs.inputs.lidar_source",
+            ),
+        )
+        return NativeSensorHardwareConfig(
+            imu_device=imu_device,
+            inputs=inputs,
+            lidar_danger_zone_m=_number(
+                row.get("lidar_danger_zone_m"),
+                "resolved_runtime.sensor_inputs.lidar_danger_zone_m",
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_runtime.sensor_inputs is invalid: {exc}") from exc
 
 
 def _decode_native_control_config(
@@ -1110,6 +1322,14 @@ def _physical_root_cause(
     incident: Mapping[str, object] | None,
     divergence: Mapping[str, object] | None,
 ) -> dict[str, object]:
+    reason = str(incident.get("reason") or "") if incident is not None else ""
+    if reason == "MOTOR_WRITER_FAILURE":
+        return {
+            "status": "PROVEN",
+            "cause": "MOTOR_WRITER_FAILURE",
+            "reason": "THE_CANONICAL_L12_WRITE_RAISED",
+            "evidence": incident.get("evidence"),
+        }
     raw = payload.get("raw_lidar_evidence")
     missing = raw.get("missing_revisions") if isinstance(raw, Mapping) else ()
     if isinstance(missing, Sequence) and not isinstance(missing, (str, bytes)) and missing:
@@ -1125,14 +1345,6 @@ def _physical_root_cause(
             "cause": None,
             "reason": "NO_LIVE_INCIDENT_IN_SCOPE",
             "evidence": None,
-        }
-    reason = str(incident.get("reason") or "")
-    if reason == "MOTOR_WRITER_FAILURE":
-        return {
-            "status": "PROVEN",
-            "cause": "MOTOR_WRITER_FAILURE",
-            "reason": "THE_CANONICAL_L12_WRITE_RAISED",
-            "evidence": incident.get("evidence"),
         }
     evidence = incident.get("evidence")
     device_health = evidence.get("device_health") if isinstance(evidence, Mapping) else None
@@ -1358,6 +1570,12 @@ def _sequence(value: object, name: str) -> Sequence[object]:
 def _integer(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise V3ReplayError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _required_bool(value: object, name: str) -> bool:
+    if type(value) is not bool:
+        raise V3ReplayError(f"{name} must be bool")
     return value
 
 

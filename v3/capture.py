@@ -8,6 +8,7 @@ import math
 import os
 import queue
 import threading
+import time
 from collections import OrderedDict, deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass
@@ -41,6 +42,7 @@ class CaptureWindowConfig:
     max_byte_capacity: int = 16 * 1024 * 1024
     max_raw_lidar_scans: int = 64
     max_raw_lidar_points_per_scan: int = 4_096
+    mode: str = "triggered"
 
     def __post_init__(self) -> None:
         for name in ("pre_event_ns", "post_event_ns"):
@@ -57,6 +59,8 @@ class CaptureWindowConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if self.mode not in {"triggered", "append_only"}:
+            raise ValueError("mode must be triggered or append_only")
 
 
 class V3CaptureError(RuntimeError):
@@ -310,6 +314,7 @@ class TriggeredCaptureWorker:
         "_dropped_ingress",
         "_emergency_trigger",
         "_error",
+        "_fault_observed",
         "_finished",
         "_first_seen_ns",
         "_last_seen_ns",
@@ -325,6 +330,9 @@ class TriggeredCaptureWorker:
         "_ring_bytes",
         "_sink",
         "_started",
+        "_stream_handle",
+        "_stream_path",
+        "_stream_tick_count",
         "_thread",
         "_trigger_ns",
         "_trigger_reason",
@@ -365,9 +373,15 @@ class TriggeredCaptureWorker:
         self._latest_capacity_eviction_ns: int | None = None
         self._post_window_complete = False
         self._error: BaseException | None = None
+        self._fault_observed = False
         self._result_path: Path | None = None
         self._started = False
         self._finished = False
+        self._stream_path = path.with_name(
+            f".{path.name}.{os.getpid()}.{time.monotonic_ns()}.stream"
+        )
+        self._stream_handle: Any | None = None
+        self._stream_tick_count = 0
         self._thread = threading.Thread(
             target=self._run,
             name="v3-capture-worker",
@@ -401,6 +415,8 @@ class TriggeredCaptureWorker:
             raise TypeError("capture observer requires a CaptureRecord")
         if not self._started or self._finished or self._error is not None:
             return
+        if _record_triggers_capture(record):
+            self._fault_observed = True
         try:
             self._queue.put_nowait(("record", record))
         except queue.Full:
@@ -463,11 +479,19 @@ class TriggeredCaptureWorker:
 
     def _run(self) -> None:
         try:
+            if self._config.mode == "append_only":
+                self._stream_path.parent.mkdir(parents=True, exist_ok=True)
+                self._stream_handle = self._stream_path.open("x", encoding="utf-8")
+                self._stream_path.chmod(0o600)
             while True:
                 try:
                     kind, value = self._queue.get(timeout=0.01)
                 except queue.Empty:
-                    if self._post_window_complete and self._result_path is None:
+                    if (
+                        self._config.mode == "triggered"
+                        and self._post_window_complete
+                        and self._result_path is None
+                    ):
                         self._finalize(self._trigger_capture_status(), False)
                     continue
                 self._consume_emergency_trigger()
@@ -486,6 +510,13 @@ class TriggeredCaptureWorker:
                 else:
                     raise RuntimeError(f"unknown capture work item {kind}")
         except BaseException as exc:
+            handle = self._stream_handle
+            if handle is not None:
+                try:
+                    handle.close()
+                except Exception:
+                    pass
+                self._stream_handle = None
             self._error = exc
 
     def _consume_emergency_trigger(self) -> None:
@@ -506,6 +537,21 @@ class TriggeredCaptureWorker:
             self._consume_emergency_trigger()
         row = encode_capture_record(value)
         encoded_size = _canonical_json_size(row)
+        if self._config.mode == "append_only":
+            assert self._stream_handle is not None
+            self._stream_handle.write(
+                json.dumps(
+                    row,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+                + "\n"
+            )
+            self._stream_handle.flush()
+            self._stream_tick_count += 1
+            return
         trigger_now = _record_triggers_capture(value)
         if self._trigger_ns is None:
             self._append_tick(_BufferedTick(row, encoded_size))
@@ -594,6 +640,9 @@ class TriggeredCaptureWorker:
     def _finalize(self, status: str, terminal: bool) -> None:
         if self._result_path is not None:
             return
+        if self._config.mode == "append_only":
+            self._finalize_append_only(status)
+            return
         if self._trigger_ns is None:
             return
         lower = self._trigger_ns - self._config.pre_event_ns
@@ -670,10 +719,73 @@ class TriggeredCaptureWorker:
         )
         self._result_path.chmod(0o600)
 
+    def _finalize_append_only(self, status: str) -> None:
+        handle = self._stream_handle
+        if handle is not None:
+            handle.close()
+            self._stream_handle = None
+        rows: list[dict[str, object]] = []
+        with self._stream_path.open("r", encoding="utf-8") as stream:
+            for line in stream:
+                value = json.loads(line)
+                if not isinstance(value, dict):
+                    raise V3CaptureError("append-only stream row must be an object")
+                rows.append(value)
+        if not rows:
+            raise V3CaptureError("append-only capture contains no ticks")
+        gaps = _sequence_gaps(rows)
+        for row in rows:
+            self._sink.write_encoded(row, allow_gap=True)
+        referenced = _referenced_lidar_revisions(rows)
+        retained = tuple(
+            self._raw_scans[revision][0]
+            for revision in sorted(referenced)
+            if revision in self._raw_scans
+        )
+        available = {int(row["revision"]) for row in retained}
+        missing = sorted(referenced - available)
+        complete = self._dropped_ingress == 0 and not gaps
+        self._result_path = self._sink.finalize(
+            status,
+            self._output_path,
+            capture_window={
+                "strategy": "APPEND_ONLY",
+                "trigger_reason": None,
+                "trigger_monotonic_ns": None,
+                "requested_pre_event_ns": None,
+                "requested_post_event_ns": None,
+                "captured_first_monotonic_ns": rows[0]["monotonic_ns"],
+                "captured_last_monotonic_ns": rows[-1]["monotonic_ns"],
+                "pre_window_complete": True,
+                "post_window_complete": True,
+                "terminal_short_post_window": False,
+            },
+            capture_integrity={
+                "complete": complete,
+                "replay_match_eligible": complete,
+                "dropped_ingress_count": self._dropped_ingress,
+                "sequence_gaps": gaps,
+                "tick_capacity_evictions": 0,
+            },
+            raw_lidar_scans=retained,
+            raw_lidar_evidence={
+                "referenced_revisions": sorted(referenced),
+                "retained_revisions": sorted(available),
+                "missing_revisions": missing,
+                "raw_ring_evictions": self._raw_evictions,
+                "physical_diagnosis": (
+                    "NOT_PROVEN" if missing else "INDICATED" if referenced else "NOT_PROVEN"
+                ),
+            },
+        )
+        self._result_path.chmod(0o600)
+        self._stream_path.unlink()
+
     def _trigger_capture_status(self) -> str:
         return (
             "PASS"
-            if self._trigger_reason in {"MANUAL", "SIGUSR1", "COMPATIBILITY_FULL_SESSION"}
+            if not self._fault_observed
+            and self._trigger_reason in {"MANUAL", "SIGUSR1", "EXPLICIT_WHOLE_SESSION"}
             else "FAULT"
         )
 

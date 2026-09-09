@@ -22,6 +22,49 @@ from v3_validation_helpers import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize(
+    ("layer", "path"),
+    (
+        ("L1", ("io_health", 0, "device_id")),
+        ("L2", ("accepted", 0, "source_device_id")),
+        ("L3", ("x_m",)),
+        ("L4", ("freshness_ns",)),
+        ("L5", ("mission_id",)),
+        ("L6", ("progress",)),
+        ("L7", ("priority",)),
+        ("L8", ("requested_v_mps",)),
+        ("L9", ("allowed_v_mps",)),
+        ("L10", ("left_mps",)),
+        ("L11", ("left_normalized",)),
+        ("L12", ("left_output",)),
+    ),
+)
+def test_replay_reports_the_first_field_path_for_every_layer(tmp_path, layer, path):
+    capture = create_general_capture(tmp_path, capture_id=f"field-{layer}")
+    payload = json.loads(capture.read_text(encoding="utf-8"))
+    value = payload["ticks"][1]["expected"]["layers"][layer]
+    for key in path[:-1]:
+        value = value[key]
+    leaf = path[-1]
+    value[leaf] = (
+        value[leaf] + 0.125
+        if isinstance(value[leaf], (int, float)) and not isinstance(value[leaf], bool)
+        else f"{value[leaf]}.changed"
+    )
+    payload["capture_sha256"] = payload_sha256(payload)
+    capture.write_text(json.dumps(payload), encoding="utf-8")
+
+    replay = replay_capture(capture, project_root=PROJECT_ROOT)
+
+    expected_suffix = "".join(
+        f"[{part}]" if isinstance(part, int) else f".{part}"
+        for part in path
+    )
+    assert replay["status"] == "MISMATCH"
+    assert replay["first_divergence"]["layer"] == layer
+    assert replay["first_divergence"]["field_path"] == f"{layer}{expected_suffix}"
+
+
 def test_native_capture_inspect_replay_and_result_verification(tmp_path):
     capture = create_general_capture(tmp_path)
 
