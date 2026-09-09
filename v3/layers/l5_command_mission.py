@@ -27,6 +27,13 @@ class MissionConfig:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class MissionStateCheckpoint:
+    command_id: str | None
+    mode: CommandMode | None
+    goal: tuple[DataField, ...]
+
+
 class MissionManager:
     """Validate gateway values and own the active command identity."""
 
@@ -35,6 +42,27 @@ class MissionManager:
     def __init__(self, config: MissionConfig = MissionConfig()) -> None:
         self._config = config
         self._active_command: tuple[str, CommandMode, tuple[DataField, ...]] | None = None
+
+    def checkpoint(self) -> MissionStateCheckpoint:
+        if self._active_command is None:
+            return MissionStateCheckpoint(None, None, ())
+        return MissionStateCheckpoint(*self._active_command)
+
+    def restore(self, checkpoint: MissionStateCheckpoint) -> None:
+        if not isinstance(checkpoint, MissionStateCheckpoint):
+            raise TypeError("checkpoint must be MissionStateCheckpoint")
+        if checkpoint.command_id is None:
+            if checkpoint.mode is not None or checkpoint.goal:
+                raise ValueError("inactive mission checkpoint contains active state")
+            self._active_command = None
+            return
+        if checkpoint.mode is None:
+            raise ValueError("active mission checkpoint lacks its command mode")
+        self._active_command = (
+            checkpoint.command_id,
+            checkpoint.mode,
+            checkpoint.goal,
+        )
 
     def evaluate(self, command: CommandRequest) -> MissionIntent:
         if command.mode is CommandMode.STOP:
@@ -210,4 +238,9 @@ def _constraints(
     )
 
 
-__all__ = ["MissionConfig", "MissionManager", "force_stop_mission"]
+__all__ = [
+    "MissionConfig",
+    "MissionManager",
+    "MissionStateCheckpoint",
+    "force_stop_mission",
+]

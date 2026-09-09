@@ -38,6 +38,13 @@ class OperationalConstraintsConfig:
             raise ValueError("operational limits must be finite and positive")
 
 
+@dataclass(frozen=True, slots=True)
+class OperationalConstraintsStateCheckpoint:
+    last_context: TickContext | None
+    last_v_mps: float
+    last_omega_rad_s: float
+
+
 class OperationalConstraintLayer:
     """Own previous allowed velocity for deterministic acceleration limiting."""
 
@@ -51,6 +58,22 @@ class OperationalConstraintLayer:
         self._last_context: TickContext | None = None
         self._last_v_mps = 0.0
         self._last_omega_rad_s = 0.0
+
+    def checkpoint(self) -> OperationalConstraintsStateCheckpoint:
+        return OperationalConstraintsStateCheckpoint(
+            self._last_context,
+            self._last_v_mps,
+            self._last_omega_rad_s,
+        )
+
+    def restore(self, checkpoint: OperationalConstraintsStateCheckpoint) -> None:
+        if not isinstance(checkpoint, OperationalConstraintsStateCheckpoint):
+            raise TypeError(
+                "checkpoint must be OperationalConstraintsStateCheckpoint"
+            )
+        self._last_context = checkpoint.last_context
+        self._last_v_mps = checkpoint.last_v_mps
+        self._last_omega_rad_s = checkpoint.last_omega_rad_s
 
     def evaluate(
         self,
@@ -194,5 +217,6 @@ def _stop_constraint(reason: str) -> ConstraintCode | None:
 __all__ = [
     "OperationalConstraintLayer",
     "OperationalConstraintsConfig",
+    "OperationalConstraintsStateCheckpoint",
     "constrain_stop",
 ]

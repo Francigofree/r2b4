@@ -121,6 +121,19 @@ class NavigationConfig:
             raise ValueError("at least one trajectory score weight must be positive")
 
 
+@dataclass(frozen=True, slots=True)
+class NavigationStateCheckpoint:
+    mission_id: str | None
+    initial_distance_m: float
+    progress: float
+    completed: bool
+    coverage: tuple[tuple[int, int, int, int], ...]
+    local_goal: Waypoint | None
+    goal_selected_ns: int
+    last_replan_ns: int | None
+    trajectory_candidates: tuple[TrajectoryEvaluation, ...]
+
+
 class TrajectoryNavigator:
     """Own reusable trajectory evaluation plus deterministic exploration state."""
 
@@ -148,6 +161,40 @@ class TrajectoryNavigator:
         self._goal_selected_ns = 0
         self._last_replan_ns: int | None = None
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
+
+    def checkpoint(self) -> NavigationStateCheckpoint:
+        return NavigationStateCheckpoint(
+            self._mission_id,
+            self._initial_distance_m,
+            self._progress,
+            self._completed,
+            tuple(
+                (x_index, y_index, visits, tick_id)
+                for (x_index, y_index), (visits, tick_id) in sorted(
+                    self._coverage.items()
+                )
+            ),
+            self._local_goal,
+            self._goal_selected_ns,
+            self._last_replan_ns,
+            self._trajectory_candidates,
+        )
+
+    def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
+        if not isinstance(checkpoint, NavigationStateCheckpoint):
+            raise TypeError("checkpoint must be NavigationStateCheckpoint")
+        self._mission_id = checkpoint.mission_id
+        self._initial_distance_m = checkpoint.initial_distance_m
+        self._progress = checkpoint.progress
+        self._completed = checkpoint.completed
+        self._coverage = {
+            (x_index, y_index): (visits, tick_id)
+            for x_index, y_index, visits, tick_id in checkpoint.coverage
+        }
+        self._local_goal = checkpoint.local_goal
+        self._goal_selected_ns = checkpoint.goal_selected_ns
+        self._last_replan_ns = checkpoint.last_replan_ns
+        self._trajectory_candidates = checkpoint.trajectory_candidates
 
     def evaluate(
         self,
@@ -689,6 +736,7 @@ def _footprint_clearance(
 
 __all__ = [
     "NavigationConfig",
+    "NavigationStateCheckpoint",
     "TrajectoryNavigator",
     "hold_position",
 ]

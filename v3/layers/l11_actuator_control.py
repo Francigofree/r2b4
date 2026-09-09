@@ -183,6 +183,13 @@ class WheelPiConfig:
             raise ValueError("max_normalized_output must be in (0, 1]")
 
 
+@dataclass(frozen=True, slots=True)
+class WheelActuatorStateCheckpoint:
+    last_context: TickContext | None
+    left_integral: float
+    right_integral: float
+
+
 class _PIState:
     __slots__ = ("_integral", "_config")
 
@@ -224,6 +231,23 @@ class WheelActuatorController:
         self._left_pi.reset()
         self._right_pi.reset()
         self._last_context = None
+
+    def checkpoint(self) -> WheelActuatorStateCheckpoint:
+        return WheelActuatorStateCheckpoint(
+            self._last_context,
+            self._left_pi._integral,
+            self._right_pi._integral,
+        )
+
+    def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
+        if not isinstance(checkpoint, WheelActuatorStateCheckpoint):
+            raise TypeError("checkpoint must be WheelActuatorStateCheckpoint")
+        for value in (checkpoint.left_integral, checkpoint.right_integral):
+            if not math.isfinite(value):
+                raise ValueError("wheel actuator checkpoint integral must be finite")
+        self._last_context = checkpoint.last_context
+        self._left_pi._integral = checkpoint.left_integral
+        self._right_pi._integral = checkpoint.right_integral
 
     def __call__(
         self,
@@ -339,6 +363,7 @@ __all__ = [
     "WHEEL_FEEDBACK_KIND",
     "WHEEL_SPEED_MAP_SCHEMA",
     "WheelActuatorController",
+    "WheelActuatorStateCheckpoint",
     "WheelPiConfig",
     "WheelSpeedCurve",
     "WheelSpeedMap",

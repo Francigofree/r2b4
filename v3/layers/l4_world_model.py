@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from v3.contracts import (
     AdmittedFrame,
     CostmapCell,
+    DataField,
     ObstacleTrack,
     Observation,
     RobotEstimate,
@@ -51,6 +52,19 @@ class WorldModelConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+
+
+@dataclass(frozen=True, slots=True)
+class WorldModelStateCheckpoint:
+    last_lidar_measurement_ns: int | None
+    last_lidar_sequence: int | None
+    map_revision: int
+    tracks: tuple[tuple[ObstacleTrack, int], ...]
+    last_local_measurement_ns: int | None
+    last_local_sequence: int | None
+    last_local_values: tuple[DataField, ...] | None
+    costmap_revision: int
+    cells: tuple[tuple[int, int, int, int], ...]
         for name in ("local_costmap_resolution_m", "local_costmap_radius_m"):
             value = getattr(self, name)
             if (
@@ -93,6 +107,43 @@ class ShadowWorldModel:
         self._last_local_values: tuple[object, ...] | None = None
         self._costmap_revision = 0
         self._cells: dict[tuple[int, int], tuple[int, int]] = {}
+
+    def checkpoint(self) -> WorldModelStateCheckpoint:
+        return WorldModelStateCheckpoint(
+            self._last_lidar_measurement_ns,
+            self._last_lidar_sequence,
+            self._map_revision,
+            tuple(self._tracks[key] for key in sorted(self._tracks)),
+            self._last_local_measurement_ns,
+            self._last_local_sequence,
+            self._last_local_values,
+            self._costmap_revision,
+            tuple(
+                (x_index, y_index, count, captured_ns)
+                for (x_index, y_index), (count, captured_ns) in sorted(
+                    self._cells.items()
+                )
+            ),
+        )
+
+    def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
+        if not isinstance(checkpoint, WorldModelStateCheckpoint):
+            raise TypeError("checkpoint must be WorldModelStateCheckpoint")
+        self._last_lidar_measurement_ns = checkpoint.last_lidar_measurement_ns
+        self._last_lidar_sequence = checkpoint.last_lidar_sequence
+        self._map_revision = checkpoint.map_revision
+        self._tracks = {
+            track.track_id: (track, captured_ns)
+            for track, captured_ns in checkpoint.tracks
+        }
+        self._last_local_measurement_ns = checkpoint.last_local_measurement_ns
+        self._last_local_sequence = checkpoint.last_local_sequence
+        self._last_local_values = checkpoint.last_local_values
+        self._costmap_revision = checkpoint.costmap_revision
+        self._cells = {
+            (x_index, y_index): (count, captured_ns)
+            for x_index, y_index, count, captured_ns in checkpoint.cells
+        }
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
         if frame.context != estimate.context:
@@ -318,4 +369,9 @@ def build_empty_world(frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSna
     )
 
 
-__all__ = ["ShadowWorldModel", "WorldModelConfig", "build_empty_world"]
+__all__ = [
+    "ShadowWorldModel",
+    "WorldModelConfig",
+    "WorldModelStateCheckpoint",
+    "build_empty_world",
+]

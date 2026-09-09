@@ -328,6 +328,29 @@ class EkfUpdateEvidence:
             raise TypeError("accepted must be bool")
 
 
+@dataclass(frozen=True, slots=True)
+class NativeEstimatorStateCheckpoint:
+    state: tuple[float, ...]
+    covariance: tuple[tuple[float, ...], ...]
+    last_context: TickContext | None
+    last_omega: float
+
+    def __post_init__(self) -> None:
+        if len(self.state) != 5 or any(not math.isfinite(value) for value in self.state):
+            raise ValueError("state must contain five finite values")
+        if len(self.covariance) != 5:
+            raise ValueError("covariance must contain five rows")
+        for row in self.covariance:
+            if len(row) != 5 or any(not math.isfinite(value) for value in row):
+                raise ValueError("covariance rows must contain five finite values")
+        if self.last_context is not None and not isinstance(
+            self.last_context, TickContext
+        ):
+            raise TypeError("last_context must be TickContext or None")
+        if not math.isfinite(self.last_omega):
+            raise ValueError("last_omega must be finite")
+
+
 class NativeStateEstimator:
     """Minimal native five-state EKF over admitted wheel, IMU and lidar samples.
 
@@ -374,6 +397,23 @@ class NativeStateEstimator:
     @property
     def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
         return tuple(self._last_update_evidence)
+
+    def checkpoint(self) -> NativeEstimatorStateCheckpoint:
+        return NativeEstimatorStateCheckpoint(
+            tuple(self._state),
+            tuple(tuple(row) for row in self._covariance),
+            self._last_context,
+            self._last_omega,
+        )
+
+    def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
+        if not isinstance(checkpoint, NativeEstimatorStateCheckpoint):
+            raise TypeError("checkpoint must be NativeEstimatorStateCheckpoint")
+        self._state = list(checkpoint.state)
+        self._covariance = [list(row) for row in checkpoint.covariance]
+        self._last_context = checkpoint.last_context
+        self._last_omega = checkpoint.last_omega
+        self._last_update_evidence = []
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
         self._last_update_evidence = []
@@ -873,6 +913,7 @@ class ZeroStateEstimator:
 
 __all__ = [
     "EkfUpdateEvidence",
+    "NativeEstimatorStateCheckpoint",
     "NativeStateEstimator",
     "NativeStateEstimatorConfig",
     "ShadowStateEstimator",

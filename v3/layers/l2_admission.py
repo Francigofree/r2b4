@@ -28,6 +28,16 @@ class AdmissionConfig:
                 raise ValueError(f"{name} must be a non-negative integer")
 
 
+@dataclass(frozen=True, slots=True)
+class AdmissionStateCheckpoint:
+    last_sequences: tuple[tuple[str, str, int], ...]
+
+    def __post_init__(self) -> None:
+        for device_id, kind, sequence in self.last_sequences:
+            if not device_id or not kind or sequence < 0:
+                raise ValueError("admission checkpoint contains an invalid sequence")
+
+
 class InputAdmission:
     """Own per-source sequence history and close L2 admission deterministically."""
 
@@ -36,6 +46,22 @@ class InputAdmission:
     def __init__(self, config: AdmissionConfig) -> None:
         self._config = config
         self._last_sequences: dict[tuple[str, str], int] = {}
+
+    def checkpoint(self) -> AdmissionStateCheckpoint:
+        return AdmissionStateCheckpoint(
+            tuple(
+                (device_id, kind, sequence)
+                for (device_id, kind), sequence in sorted(self._last_sequences.items())
+            )
+        )
+
+    def restore(self, checkpoint: AdmissionStateCheckpoint) -> None:
+        if not isinstance(checkpoint, AdmissionStateCheckpoint):
+            raise TypeError("checkpoint must be AdmissionStateCheckpoint")
+        self._last_sequences = {
+            (device_id, kind): sequence
+            for device_id, kind, sequence in checkpoint.last_sequences
+        }
 
     def __call__(self, frame: AcquisitionFrame) -> AdmittedFrame:
         health_by_device = {item.device_id: item.state for item in frame.io_health}
@@ -139,4 +165,4 @@ def admit(frame: AcquisitionFrame) -> AdmittedFrame:
     return AdmittedFrame(frame.context, accepted, (), degraded)
 
 
-__all__ = ["AdmissionConfig", "InputAdmission", "admit"]
+__all__ = ["AdmissionConfig", "AdmissionStateCheckpoint", "InputAdmission", "admit"]
