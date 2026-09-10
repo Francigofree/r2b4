@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from bisect import bisect_left
 import math
-import time
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
@@ -208,7 +208,11 @@ class NativePoseFeedback:
     ) -> None:
         if not isinstance(frame_id, str) or not frame_id:
             raise ValueError("frame_id must be non-empty")
-        if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity < 2:
+        if (
+            not isinstance(capacity, int)
+            or isinstance(capacity, bool)
+            or capacity < 2
+        ):
             raise ValueError("capacity must be an integer of at least two")
         self._frame_id = frame_id
         self._capacity = capacity
@@ -298,7 +302,10 @@ class NativePoseFeedback:
         ):
             raise ValueError("pose feedback checkpoint contains invalid poses")
         timestamps = tuple(item.monotonic_ns for item in checkpoint.poses)
-        if any(current <= previous for previous, current in zip(timestamps, timestamps[1:])):
+        if any(
+            current <= previous
+            for previous, current in zip(timestamps, timestamps[1:])
+        ):
             raise ValueError("pose feedback checkpoint timestamps must increase")
         with self._lock:
             self._poses = list(checkpoint.poses)

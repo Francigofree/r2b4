@@ -114,7 +114,13 @@ def matcher_process_main(
                 packet.get("maximum_input_age_ns", 250_000_000) or 0
             )
             input_age_ns = now_ns - measurement_ns
-            if measurement_ns <= 0 or input_age_ns < 0 or input_age_ns > maximum_input_age_ns:
+            queue_delay_ns = now_ns - captured_ns
+            if (
+                measurement_ns <= 0
+                or queue_delay_ns < 0
+                or input_age_ns < 0
+                or input_age_ns > maximum_input_age_ns
+            ):
                 output_drops += put_latest(
                     result_queue,
                     {
@@ -172,7 +178,7 @@ def matcher_process_main(
                     "raw_scan_mono_ts": raw_timestamp_s,
                     "matcher_source_raw_scan_id": scan_revision,
                     "matcher_source_raw_scan_timestamp": raw_timestamp_s,
-                    "matcher_queue_delay_ms": input_age_ns / 1_000_000.0,
+                    "matcher_queue_delay_ms": queue_delay_ns / 1_000_000.0,
                     "matcher_input_age_ns": input_age_ns,
                     "source_scan_revision": scan_revision,
                     "scan_start_monotonic_ns": scan_start_ns,
@@ -204,7 +210,7 @@ def matcher_process_main(
                     "published_monotonic_ns": time.monotonic_ns(),
                     "summary": dict(summary or {}),
                     "matcher_runtime_ms": runtime_ms,
-                    "matcher_queue_delay_ms": input_age_ns / 1_000_000.0,
+                    "matcher_queue_delay_ms": queue_delay_ns / 1_000_000.0,
                     "processed_scans": processed,
                     "input_drops": input_drops,
                     "output_drops": output_drops,
