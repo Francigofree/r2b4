@@ -190,7 +190,7 @@ class FinalSafetyGate:
         sample = matches[0]
         fields = {field.key: field.value for field in sample.values}
         try:
-            age_ns = context.monotonic_ns - sample.captured_monotonic_ns
+            age_ns = max(0, context.monotonic_ns - sample.captured_monotonic_ns)
             declared_age_ns = fields["age_ns"]
             if (
                 not isinstance(declared_age_ns, int)
@@ -198,7 +198,7 @@ class FinalSafetyGate:
                 or declared_age_ns != age_ns
             ):
                 raise ValueError("invalid age lineage")
-            if sample.sequence <= 0 or age_ns < 0:
+            if sample.sequence <= 0:
                 raise ValueError("invalid scan lineage")
             if age_ns > config.maximum_sample_age_ns:
                 return SafetyDecision.STOP, "LIDAR_SAFETY_STALE"

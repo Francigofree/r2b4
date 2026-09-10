@@ -295,6 +295,8 @@ def test_successful_fail_closed_tick_still_advances_tick_order():
 def _safety_sample(
     context: TickContext,
     *,
+    captured_monotonic_ns: int | None = None,
+    age_ns: int = 0,
     front: float = 1.0,
     rear: float = 1.0,
     left: float = 1.0,
@@ -304,9 +306,11 @@ def _safety_sample(
         "RPLIDAR_C1",
         "lidar_safety_clearance",
         context.tick_id + 1,
-        context.monotonic_ns,
+        context.monotonic_ns
+        if captured_monotonic_ns is None
+        else captured_monotonic_ns,
         (
-            DataField("age_ns", 0),
+            DataField("age_ns", age_ns),
             DataField("front_clearance_m", front),
             DataField("rear_clearance_m", rear),
             DataField("left_clearance_m", left),
@@ -340,6 +344,71 @@ def test_l12_uses_direct_l1_lidar_clearance_without_changing_device_health():
     assert blocked.safety_decision is SafetyDecision.STOP
     assert blocked.reason == "LIDAR_CLEARANCE_LOW"
     assert blocked.left_output == blocked.right_output == 0.0
+
+
+def test_l12_allows_safe_scan_completed_after_tick_start_with_zero_age():
+    context = TickContext(0, 1_000_000_000)
+    writer = RecordingWriter([])
+    gate = FinalSafetyGate(
+        writer,
+        LidarSafetyConfig("RPLIDAR_C1", minimum_clearance_m=0.4),
+    )
+
+    allowed = gate.finalize(
+        context,
+        ActuatorRequest(context, 0.2, 0.2),
+        (DeviceHealth("RPLIDAR_C1", DeviceHealthState.OK),),
+        LifecycleState.ACTIVE,
+        None,
+        (
+            _safety_sample(
+                context,
+                captured_monotonic_ns=context.monotonic_ns + 5_000_000,
+                age_ns=0,
+            ),
+        ),
+    )
+
+    assert allowed.safety_decision is SafetyDecision.ALLOW
+    assert allowed.reason is None
+
+
+def test_l12_stale_scan_stops_and_malformed_sample_faults():
+    context = TickContext(0, 1_000_000_000)
+    config = LidarSafetyConfig(
+        "RPLIDAR_C1",
+        minimum_clearance_m=0.4,
+        maximum_sample_age_ns=250_000_000,
+    )
+    request = ActuatorRequest(context, 0.2, 0.2)
+    stale = _safety_sample(
+        context,
+        captured_monotonic_ns=context.monotonic_ns - 250_000_001,
+        age_ns=250_000_001,
+    )
+    malformed = _safety_sample(context, age_ns=1)
+
+    stopped = FinalSafetyGate(RecordingWriter([]), config).finalize(
+        context,
+        request,
+        (),
+        LifecycleState.ACTIVE,
+        None,
+        (stale,),
+    )
+    faulted = FinalSafetyGate(RecordingWriter([]), config).finalize(
+        context,
+        request,
+        (),
+        LifecycleState.ACTIVE,
+        None,
+        (malformed,),
+    )
+
+    assert stopped.safety_decision is SafetyDecision.STOP
+    assert stopped.reason == "LIDAR_SAFETY_STALE"
+    assert faulted.safety_decision is SafetyDecision.FAULT
+    assert faulted.reason == "LIDAR_SAFETY_INVALID"
 
 
 def test_l12_directional_lidar_gate_fails_closed_for_missing_or_unseen_sector():
