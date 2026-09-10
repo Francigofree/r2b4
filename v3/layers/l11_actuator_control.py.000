@@ -256,22 +256,14 @@ class WheelActuatorController:
     ) -> ActuatorRequest:
         if frame.context != wheels.context:
             raise ValueError("L11 inputs must use the same tick context")
-        restarting_from_zero = self._last_context is None
         dt_s = self._control_dt_s(wheels.context)
         if abs(wheels.left_mps) <= 1e-12 and abs(wheels.right_mps) <= 1e-12:
             self._left_pi.reset()
             self._right_pi.reset()
-            # Zero output is an explicit control-epoch boundary.  Re-anchoring
-            # the next non-zero tick prevents STOP dwell time from becoming PI
-            # time and also gives that first tick a bounded encoder reacquisition
-            # opportunity without changing the encoder/L2 safety thresholds.
-            self._last_context = None
+            self._last_context = wheels.context
             return ActuatorRequest(wheels.context, 0.0, 0.0)
 
-        left_measured, right_measured = self._wheel_feedback(
-            frame,
-            allow_restart_stale=restarting_from_zero,
-        )
+        left_measured, right_measured = self._wheel_feedback(frame)
         left_output, left_saturated = self._wheel_output(
             side="left",
             reference_mps=wheels.left_mps,
@@ -308,28 +300,7 @@ class WheelActuatorController:
         return float(context.monotonic_ns - previous.monotonic_ns) / 1_000_000_000.0
 
     @staticmethod
-    def _restart_stale_feedback_is_bounded(values: Mapping[str, object]) -> bool:
-        """Match only a healthy-counter stale sample during encoder reacquisition."""
-
-        return (
-            values.get("measurement_stale") is True
-            and values.get("measurement_timing_valid") is True
-            and values.get("rejection_code") == "SAMPLE_INTERVAL_EXCEEDED"
-            and values.get("trust") == 0.0
-            and values.get("left_counter_running") is True
-            and values.get("right_counter_running") is True
-            and values.get("left_read_error_delta") == 0
-            and values.get("right_read_error_delta") == 0
-            and values.get("left_invalid_alert_delta") == 0
-            and values.get("right_invalid_alert_delta") == 0
-        )
-
-    @staticmethod
-    def _wheel_feedback(
-        frame: AdmittedFrame,
-        *,
-        allow_restart_stale: bool = False,
-    ) -> tuple[float, float]:
+    def _wheel_feedback(frame: AdmittedFrame) -> tuple[float, float]:
         matches = tuple(
             observation
             for observation in frame.accepted
@@ -338,17 +309,11 @@ class WheelActuatorController:
         if len(matches) != 1:
             raise ValueError("L11 requires exactly one admitted wheel_velocity observation")
         observation = matches[0]
+        if observation.source_device_id in frame.degraded_sources:
+            raise ValueError("L11 wheel feedback source is degraded")
         if observation.captured_monotonic_ns > frame.context.monotonic_ns:
             raise ValueError("L11 wheel feedback cannot be captured in the future")
         values = {field.key: field.value for field in observation.values}
-        if (
-            observation.source_device_id in frame.degraded_sources
-            and not (
-                allow_restart_stale
-                and WheelActuatorController._restart_stale_feedback_is_bounded(values)
-            )
-        ):
-            raise ValueError("L11 wheel feedback source is degraded")
         return (
             _finite_float(values.get("left_mps"), "left_mps"),
             _finite_float(values.get("right_mps"), "right_mps"),
