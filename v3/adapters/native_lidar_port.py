@@ -67,6 +67,12 @@ def _positive_int(value: object, name: str) -> int:
     return value
 
 
+def _nonnegative_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return value
+
+
 def _mapping(value: object, name: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{name} must be an object")
@@ -257,12 +263,82 @@ def _freeze(value: object) -> object:
 
 @dataclass(frozen=True, slots=True)
 class NativeRawLidarSnapshot:
+    """Latest physical scan; ``raw_scan_timestamp`` is completion time."""
+
     raw_scan_id: int
     raw_scan_timestamp: float
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
     health: str
     raw_scan: tuple[RplidarPoint, ...]
     summary: Mapping[str, object]
     observed_monotonic_ns: int | None = None
+
+    def __post_init__(self) -> None:
+        _positive_int(self.raw_scan_id, "raw_scan_id")
+        if (
+            isinstance(self.raw_scan_timestamp, bool)
+            or not isinstance(self.raw_scan_timestamp, (int, float))
+            or not math.isfinite(self.raw_scan_timestamp)
+            or self.raw_scan_timestamp < 0.0
+        ):
+            raise ValueError("raw_scan_timestamp must be finite and non-negative")
+        completion_ns = int(round(float(self.raw_scan_timestamp) * 1e9))
+        for value, name in (
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
+        ):
+            _nonnegative_int(value, name)
+        if completion_ns != self.scan_end_monotonic_ns:
+            raise ValueError("raw_scan_timestamp must equal scan completion")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if (
+            self.scan_start_monotonic_ns > self.scan_end_monotonic_ns
+            or self.measurement_monotonic_ns != midpoint_ns
+        ):
+            raise ValueError("raw scan timing must contain its exact midpoint")
+        if self.health not in {"OK", "STALE", "ERROR"}:
+            raise ValueError("health must be OK, STALE or ERROR")
+        if not isinstance(self.raw_scan, tuple) or any(
+            not isinstance(point, RplidarPoint) for point in self.raw_scan
+        ):
+            raise ValueError("raw_scan must be a tuple of RplidarPoint")
+        if not isinstance(self.summary, Mapping):
+            raise ValueError("summary must be a mapping")
+        if self.observed_monotonic_ns is not None:
+            _nonnegative_int(self.observed_monotonic_ns, "observed_monotonic_ns")
+
+
+@dataclass(frozen=True, slots=True)
+class TimedPoseReference:
+    """One immutable pose at an exact monotonic measurement timestamp."""
+
+    monotonic_ns: int
+    x_m: float
+    y_m: float
+    yaw_rad: float
+
+    def __post_init__(self) -> None:
+        _nonnegative_int(self.monotonic_ns, "monotonic_ns")
+        for value, name in (
+            (self.x_m, "x_m"),
+            (self.y_m, "y_m"),
+            (self.yaw_rad, "yaw_rad"),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"{name} must be finite numeric")
+
+    @property
+    def pose(self) -> tuple[float, float, float]:
+        return (float(self.x_m), float(self.y_m), float(self.yaw_rad))
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,6 +347,10 @@ class NativeMatcherResult:
     candidate_id: int
     source_raw_scan_id: int
     source_raw_scan_timestamp: float
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    pose_reference_monotonic_ns: int
     timestamp: float
     summary: Mapping[str, object]
 
@@ -306,7 +386,11 @@ def _sector_summary(scan: RplidarScan) -> Mapping[str, object]:
         {
             "safety_contract": "R2B4_V3_LIDAR_SECTOR_CLEARANCE_V1",
             "raw_scan_id": scan.revision,
+            # Compatibility timestamp: this is scan completion, not measurement.
             "raw_scan_timestamp": scan.captured_monotonic_ns / 1_000_000_000.0,
+            "scan_start_monotonic_ns": scan.scan_start_monotonic_ns,
+            "scan_end_monotonic_ns": scan.scan_end_monotonic_ns,
+            "measurement_monotonic_ns": scan.measurement_monotonic_ns,
             "raw_safety_raw_scan_id": scan.revision,
             "raw_safety_raw_scan_timestamp": (
                 scan.captured_monotonic_ns / 1_000_000_000.0
@@ -332,7 +416,7 @@ class NativeLidarPort:
     def __init__(
         self,
         config: NativeLidarPortConfig,
-        pose_provider: Callable[[], tuple[float, float, float]],
+        pose_provider: Callable[[int], TimedPoseReference | None],
         *,
         driver: NativeScanDriver,
         process_context: Any | None = None,
@@ -560,49 +644,59 @@ class NativeLidarPort:
             snapshot = NativeRawLidarSnapshot(
                 raw_scan_id=scan.revision,
                 raw_scan_timestamp=scan.captured_monotonic_ns / 1_000_000_000.0,
+                scan_start_monotonic_ns=scan.scan_start_monotonic_ns,
+                scan_end_monotonic_ns=scan.scan_end_monotonic_ns,
+                measurement_monotonic_ns=scan.measurement_monotonic_ns,
                 health="OK",
                 raw_scan=scan.points,
                 summary=summary,
             )
             with self._lock:
                 self._raw_snapshot = snapshot
-            pose = self._pose_provider()
-            if (
-                not isinstance(pose, tuple)
-                or len(pose) != 3
-                or any(
-                    isinstance(item, bool)
-                    or not isinstance(item, (int, float))
-                    or not math.isfinite(item)
-                    for item in pose
+            pose_reference = self._pose_provider(scan.measurement_monotonic_ns)
+            if pose_reference is None:
+                self._last_matcher_reason = "POSE_REFERENCE_UNAVAILABLE"
+            else:
+                if not isinstance(pose_reference, TimedPoseReference):
+                    raise TypeError("pose_provider must return TimedPoseReference or None")
+                if pose_reference.monotonic_ns != scan.measurement_monotonic_ns:
+                    raise ValueError("pose reference must align exactly to scan measurement")
+                alignment_delta_ns = (
+                    pose_reference.monotonic_ns - scan.measurement_monotonic_ns
                 )
-            ):
-                raise ValueError("pose_provider must return three finite numbers")
-            packet: dict[str, object] = {
-                "kind": "scan",
-                "matcher_contract_id": MATCHER_CONTRACT_ID,
-                "scan_revision": scan.revision,
-                "captured_monotonic_ns": scan.captured_monotonic_ns,
-                "maximum_input_age_ns": self._config.maximum_input_age_ns,
-                "danger_zone_m": self._config.danger_zone_m,
-                "matcher_config": self._config.matcher_config,
-                "pose_reference": tuple(float(item) for item in pose),
-                "scan": [
-                    {
-                        "angle": point.angle_deg,
-                        "angle_rad": math.radians(point.angle_deg),
-                        "dist": point.distance_m * 1_000.0,
-                        "quality": point.quality,
-                    }
-                    for point in scan.points
-                ],
-                "driver_status": dict(self._driver.get_runtime_status()),
-            }
-            input_queue = self._input_queue
-            if input_queue is None:
-                raise RuntimeError("native LiDAR input queue is unavailable")
-            self._queue_drops += put_latest(input_queue, packet)
-            self._last_queued_scan_revision = scan.revision
+                packet: dict[str, object] = {
+                    "kind": "scan",
+                    "matcher_contract_id": MATCHER_CONTRACT_ID,
+                    "source_scan_revision": scan.revision,
+                    "scan_revision": scan.revision,
+                    # Compatibility timestamp: scan completion only.
+                    "captured_monotonic_ns": scan.captured_monotonic_ns,
+                    "scan_start_monotonic_ns": scan.scan_start_monotonic_ns,
+                    "scan_end_monotonic_ns": scan.scan_end_monotonic_ns,
+                    "measurement_monotonic_ns": scan.measurement_monotonic_ns,
+                    "maximum_input_age_ns": self._config.maximum_input_age_ns,
+                    "danger_zone_m": self._config.danger_zone_m,
+                    "matcher_config": self._config.matcher_config,
+                    "pose_reference": pose_reference.pose,
+                    "pose_reference_monotonic_ns": pose_reference.monotonic_ns,
+                    "scan_pose_alignment_delta_ns": alignment_delta_ns,
+                    "scan": [
+                        {
+                            "angle": point.angle_deg,
+                            "angle_rad": math.radians(point.angle_deg),
+                            "dist": point.distance_m * 1_000.0,
+                            "quality": point.quality,
+                        }
+                        for point in scan.points
+                    ],
+                    "driver_status": dict(self._driver.get_runtime_status()),
+                }
+                input_queue = self._input_queue
+                if input_queue is None:
+                    raise RuntimeError("native LiDAR input queue is unavailable")
+                self._queue_drops += put_latest(input_queue, packet)
+                self._last_queued_scan_revision = scan.revision
+                self._last_matcher_reason = ""
 
         result_queue = self._result_queue
         if result_queue is None:
@@ -638,15 +732,28 @@ class NativeLidarPort:
             return
         scan_revision = int(packet.get("scan_revision", 0) or 0)
         captured_ns = int(packet.get("captured_monotonic_ns", 0) or 0)
+        scan_start_ns = int(packet.get("scan_start_monotonic_ns", -1))
+        scan_end_ns = int(packet.get("scan_end_monotonic_ns", -1))
+        measurement_ns = int(packet.get("measurement_monotonic_ns", -1))
+        pose_reference_ns = int(packet.get("pose_reference_monotonic_ns", -1))
         now_ns = self._checked_clock()
         with self._lock:
             current_scan = self._raw_snapshot.raw_scan_id if self._raw_snapshot else 0
         if (
             scan_revision <= self._last_matched_scan_revision
             or scan_revision > current_scan
+            or int(packet.get("source_scan_revision", 0) or 0) != scan_revision
             or captured_ns <= 0
-            or now_ns - captured_ns < 0
-            or now_ns - captured_ns > self._config.maximum_result_age_ns
+            or captured_ns != scan_end_ns
+            or scan_start_ns < 0
+            or measurement_ns
+            != scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+            or not scan_start_ns <= measurement_ns <= scan_end_ns
+            or pose_reference_ns != measurement_ns
+            or int(packet.get("scan_pose_alignment_delta_ns", 1))
+            != pose_reference_ns - measurement_ns
+            or now_ns - measurement_ns < 0
+            or now_ns - measurement_ns > self._config.maximum_result_age_ns
         ):
             self._result_drops += 1
             self._last_matcher_reason = "STALE_OR_INCONSISTENT_RESULT"
@@ -673,6 +780,12 @@ class NativeLidarPort:
                 "matcher_queue_delay_ms": float(
                     packet.get("matcher_queue_delay_ms", 0.0) or 0.0
                 ),
+                "source_scan_revision": scan_revision,
+                "scan_start_monotonic_ns": scan_start_ns,
+                "scan_end_monotonic_ns": scan_end_ns,
+                "measurement_monotonic_ns": measurement_ns,
+                "pose_reference_monotonic_ns": pose_reference_ns,
+                "scan_pose_alignment_delta_ns": pose_reference_ns - measurement_ns,
             }
         )
         published_ns = int(packet.get("published_monotonic_ns", now_ns) or now_ns)
@@ -681,6 +794,10 @@ class NativeLidarPort:
             candidate_id=result_revision,
             source_raw_scan_id=scan_revision,
             source_raw_scan_timestamp=captured_ns / 1_000_000_000.0,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=measurement_ns,
+            pose_reference_monotonic_ns=pose_reference_ns,
             timestamp=published_ns / 1_000_000_000.0,
             summary=_freeze(summary),  # type: ignore[arg-type]
         )
@@ -715,7 +832,7 @@ class NativeLidarPort:
 
 def open_native_lidar_port(
     config: NativeLidarPortConfig,
-    pose_provider: Callable[[], tuple[float, float, float]],
+    pose_provider: Callable[[int], TimedPoseReference | None],
     serial_factory: RplidarSerialFactory,
 ) -> NativeLidarPort:
     """Create and start the production native owner or fail closed."""
@@ -742,6 +859,7 @@ __all__ = [
     "NativeLidarPortConfig",
     "NativeMatcherResult",
     "NativeRawLidarSnapshot",
+    "TimedPoseReference",
     "load_native_lidar_port_config",
     "open_native_lidar_port",
 ]

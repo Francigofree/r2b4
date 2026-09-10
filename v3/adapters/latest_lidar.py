@@ -67,6 +67,18 @@ def _string_tuple(value: object, name: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _optional_pose(value: object, name: str) -> tuple[float, float, float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a pose object or None")
+    return (
+        _finite(value.get("x"), f"{name}.x"),
+        _finite(value.get("y"), f"{name}.y"),
+        _wrapped_yaw(_finite(value.get("theta"), f"{name}.theta")),
+    )
+
+
 def _wrapped_yaw(value: float) -> float:
     return math.atan2(math.sin(value), math.cos(value))
 
@@ -186,6 +198,9 @@ class NativeLatestLidarBackend:
             return LidarScanReading(
                 revision=0,
                 captured_monotonic_ns=context.monotonic_ns,
+                scan_start_monotonic_ns=context.monotonic_ns,
+                scan_end_monotonic_ns=context.monotonic_ns,
+                measurement_monotonic_ns=context.monotonic_ns,
                 measurement_age_ns=0,
                 health="STALE" if physical_runtime_valid else "ERROR",
                 stale=physical_runtime_valid,
@@ -211,6 +226,25 @@ class NativeLatestLidarBackend:
             "raw_scan_timestamp",
         )
         captured_ns = int(round(captured_s * 1_000_000_000.0))
+        scan_start_ns = _nonnegative_int(
+            getattr(snapshot, "scan_start_monotonic_ns", None),
+            "scan_start_monotonic_ns",
+        )
+        scan_end_ns = _nonnegative_int(
+            getattr(snapshot, "scan_end_monotonic_ns", None),
+            "scan_end_monotonic_ns",
+        )
+        measurement_ns = _nonnegative_int(
+            getattr(snapshot, "measurement_monotonic_ns", None),
+            "measurement_monotonic_ns",
+        )
+        midpoint_ns = scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+        if (
+            captured_ns != scan_end_ns
+            or scan_start_ns > scan_end_ns
+            or measurement_ns != midpoint_ns
+        ):
+            raise ValueError("raw scan timing contract is invalid")
         measurement_age_ns = context.monotonic_ns - captured_ns
         observed_ns_value = getattr(snapshot, "observed_monotonic_ns", None)
         observed_ns = (
@@ -264,7 +298,10 @@ class NativeLatestLidarBackend:
         )
         return LidarScanReading(
             revision=revision,
-            captured_monotonic_ns=min(captured_ns, context.monotonic_ns),
+            captured_monotonic_ns=captured_ns,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=measurement_ns,
             measurement_age_ns=max(0, measurement_age_ns),
             health=str(snapshot_health),
             stale=stale,
@@ -328,8 +365,32 @@ class NativeLatestLidarBackend:
             raise ValueError("matcher timestamps must be non-negative")
         captured_ns = int(round(captured_s * 1_000_000_000.0))
         source_ns = int(round(source_s * 1_000_000_000.0))
+        scan_start_ns = _nonnegative_int(
+            getattr(result, "scan_start_monotonic_ns", None),
+            "scan_start_monotonic_ns",
+        )
+        scan_end_ns = _nonnegative_int(
+            getattr(result, "scan_end_monotonic_ns", None),
+            "scan_end_monotonic_ns",
+        )
+        measurement_ns = _nonnegative_int(
+            getattr(result, "measurement_monotonic_ns", None),
+            "measurement_monotonic_ns",
+        )
+        pose_reference_ns = _nonnegative_int(
+            getattr(result, "pose_reference_monotonic_ns", None),
+            "pose_reference_monotonic_ns",
+        )
+        midpoint_ns = scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+        if (
+            source_ns != scan_end_ns
+            or scan_start_ns > scan_end_ns
+            or measurement_ns != midpoint_ns
+            or pose_reference_ns != measurement_ns
+        ):
+            raise ValueError("matcher result scan/pose timing contract is invalid")
         result_age_ns = context.monotonic_ns - captured_ns
-        measurement_age_ns = context.monotonic_ns - source_ns
+        measurement_age_ns = context.monotonic_ns - measurement_ns
 
         summary = getattr(result, "summary", None)
         if not isinstance(summary, Mapping):
@@ -386,6 +447,11 @@ class NativeLatestLidarBackend:
             candidate_id=candidate_id,
             source_raw_scan_id=source_scan_id,
             source_raw_scan_timestamp_ns=source_ns,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=measurement_ns,
+            pose_reference_monotonic_ns=pose_reference_ns,
+            scan_pose_alignment_delta_ns=pose_reference_ns - measurement_ns,
             matcher_reason=reason,
             tracking_ready=_optional_bool(
                 summary.get("tracking_ready"),
@@ -411,6 +477,22 @@ class NativeLatestLidarBackend:
                 summary.get("matcher_queue_delay_ms"),
                 "matcher_queue_delay_ms",
             ),
+            matcher_input_age_ns=(
+                None
+                if summary.get("matcher_input_age_ns") is None
+                else _nonnegative_int(
+                    summary.get("matcher_input_age_ns"),
+                    "matcher_input_age_ns",
+                )
+            ),
+            matcher_confidence=_optional_finite(
+                summary.get("matcher_confidence"),
+                "matcher_confidence",
+            ),
+            inlier_ratio=_optional_finite(
+                quality.get("inlier_ratio"),
+                "inlier_ratio",
+            ),
             robust_rmse_m=_optional_finite(
                 quality.get("robust_rmse_m"),
                 "robust_rmse_m",
@@ -426,6 +508,10 @@ class NativeLatestLidarBackend:
             ambiguity_margin=_optional_finite(
                 quality.get("ambiguity_margin"),
                 "ambiguity_margin",
+            ),
+            scan_to_map_seed=_optional_pose(
+                summary.get("scan_to_map_seed"),
+                "scan_to_map_seed",
             ),
         )
         return LidarHealthReading(

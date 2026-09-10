@@ -85,15 +85,36 @@ def matcher_process_main(
             continue
         scan_revision = int(packet.get("scan_revision", 0) or 0)
         captured_ns = int(packet.get("captured_monotonic_ns", 0) or 0)
+        scan_start_ns = int(packet.get("scan_start_monotonic_ns", -1))
+        scan_end_ns = int(packet.get("scan_end_monotonic_ns", -1))
+        measurement_ns = int(packet.get("measurement_monotonic_ns", -1))
+        pose_reference_ns = int(packet.get("pose_reference_monotonic_ns", -1))
         try:
             if packet.get("matcher_contract_id") != MATCHER_CONTRACT_ID:
                 raise ValueError("matcher_ipc_contract_mismatch")
+            if int(packet.get("source_scan_revision", 0) or 0) != scan_revision:
+                raise ValueError("matcher_source_scan_revision_mismatch")
+            midpoint_ns = scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+            if (
+                captured_ns != scan_end_ns
+                or scan_start_ns < 0
+                or scan_start_ns > scan_end_ns
+                or measurement_ns != midpoint_ns
+            ):
+                raise ValueError("matcher_scan_timing_invalid")
+            alignment_delta_ns = pose_reference_ns - measurement_ns
+            if (
+                pose_reference_ns != measurement_ns
+                or int(packet.get("scan_pose_alignment_delta_ns", 1))
+                != alignment_delta_ns
+            ):
+                raise ValueError("matcher_pose_reference_misaligned")
             now_ns = time.monotonic_ns()
             maximum_input_age_ns = int(
                 packet.get("maximum_input_age_ns", 250_000_000) or 0
             )
-            input_age_ns = max(0, now_ns - captured_ns)
-            if captured_ns <= 0 or input_age_ns > maximum_input_age_ns:
+            input_age_ns = now_ns - measurement_ns
+            if measurement_ns <= 0 or input_age_ns < 0 or input_age_ns > maximum_input_age_ns:
                 output_drops += put_latest(
                     result_queue,
                     {
@@ -101,6 +122,11 @@ def matcher_process_main(
                         "reason": "stale_input",
                         "scan_revision": scan_revision,
                         "captured_monotonic_ns": captured_ns,
+                        "scan_start_monotonic_ns": scan_start_ns,
+                        "scan_end_monotonic_ns": scan_end_ns,
+                        "measurement_monotonic_ns": measurement_ns,
+                        "pose_reference_monotonic_ns": pose_reference_ns,
+                        "scan_pose_alignment_delta_ns": alignment_delta_ns,
                         "input_drops": input_drops,
                         "output_drops": output_drops,
                     },
@@ -124,6 +150,8 @@ def matcher_process_main(
             if not isinstance(raw_scan, list):
                 raise TypeError("scan must be a list")
             raw_timestamp_s = captured_ns / 1_000_000_000.0
+            measurement_timestamp_s = measurement_ns / 1_000_000_000.0
+            pose_reference_timestamp_s = pose_reference_ns / 1_000_000_000.0
             started = time.perf_counter()
             summary = estimator.process_scan(
                 raw_scan,
@@ -136,8 +164,16 @@ def matcher_process_main(
                     "matcher_source_raw_scan_id": scan_revision,
                     "matcher_source_raw_scan_timestamp": raw_timestamp_s,
                     "matcher_queue_delay_ms": input_age_ns / 1_000_000.0,
-                    "pose_reference_timestamp": now_ns / 1_000_000_000.0,
-                    "raw_scan_started_mono": raw_timestamp_s,
+                    "matcher_input_age_ns": input_age_ns,
+                    "source_scan_revision": scan_revision,
+                    "scan_start_monotonic_ns": scan_start_ns,
+                    "scan_end_monotonic_ns": scan_end_ns,
+                    "measurement_monotonic_ns": measurement_ns,
+                    "pose_reference_monotonic_ns": pose_reference_ns,
+                    "scan_pose_alignment_delta_ns": alignment_delta_ns,
+                    "scan_measurement_timestamp": measurement_timestamp_s,
+                    "pose_reference_timestamp": pose_reference_timestamp_s,
+                    "raw_scan_started_mono": scan_start_ns / 1_000_000_000.0,
                     "raw_scan_completed_mono": raw_timestamp_s,
                 },
             )
@@ -150,6 +186,12 @@ def matcher_process_main(
                     "matcher_contract_id": MATCHER_CONTRACT_ID,
                     "scan_revision": scan_revision,
                     "captured_monotonic_ns": captured_ns,
+                    "source_scan_revision": scan_revision,
+                    "scan_start_monotonic_ns": scan_start_ns,
+                    "scan_end_monotonic_ns": scan_end_ns,
+                    "measurement_monotonic_ns": measurement_ns,
+                    "pose_reference_monotonic_ns": pose_reference_ns,
+                    "scan_pose_alignment_delta_ns": alignment_delta_ns,
                     "published_monotonic_ns": time.monotonic_ns(),
                     "summary": dict(summary or {}),
                     "matcher_runtime_ms": runtime_ms,
@@ -167,6 +209,11 @@ def matcher_process_main(
                     "reason": f"{type(exc).__name__}:{exc}",
                     "scan_revision": scan_revision,
                     "captured_monotonic_ns": captured_ns,
+                    "source_scan_revision": scan_revision,
+                    "scan_start_monotonic_ns": scan_start_ns,
+                    "scan_end_monotonic_ns": scan_end_ns,
+                    "measurement_monotonic_ns": measurement_ns,
+                    "pose_reference_monotonic_ns": pose_reference_ns,
                     "input_drops": input_drops,
                     "output_drops": output_drops,
                 },

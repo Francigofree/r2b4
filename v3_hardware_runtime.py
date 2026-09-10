@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left
+import math
 import time
 import threading
 from collections.abc import Callable
@@ -15,6 +17,7 @@ from v3.adapters.bno055_device import (
 from v3.adapters.gpio_counter import GpioCounterBackend
 from v3.adapters.gpio_motor import PwmGpioBackend
 from v3.adapters.latest_lidar import LatestMatcherResultPort
+from v3.adapters.native_lidar_port import TimedPoseReference
 from v3.composition.live_inputs import (
     LiveInputComposition,
     LiveInputCompositionConfig,
@@ -47,6 +50,7 @@ from v3_runtime import (
 
 PHYSICAL_RUN_APPROVAL = "raised-stand-bounded-v3"
 RESIDENT_PHYSICAL_RUN_APPROVAL = "native-resident-v3"
+POSE_HISTORY_CAPACITY = 64
 
 
 class ImuBusFactory(Protocol):
@@ -56,7 +60,7 @@ class ImuBusFactory(Protocol):
 class LidarPortFactory(Protocol):
     def __call__(
         self,
-        pose_provider: Callable[[], tuple[float, float, float]],
+        pose_provider: Callable[[int], TimedPoseReference | None],
     ) -> LatestMatcherResultPort: ...
 
 
@@ -183,30 +187,121 @@ class SensorMeasurementReport:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class NativePoseFeedbackCheckpoint:
+    """Complete bounded hardware-edge pose history for deterministic restore."""
+
+    frame_id: str
+    capacity: int
+    poses: tuple[TimedPoseReference, ...]
+
+
 class NativePoseFeedback:
-    """Publish only the previous completed L3 pose to the matcher thread."""
+    """Own a bounded history of completed L3 poses for scan-time lookup."""
 
-    __slots__ = ("_frame_id", "_lock", "_pose")
+    __slots__ = ("_capacity", "_frame_id", "_lock", "_poses")
 
-    def __init__(self, frame_id: str) -> None:
+    def __init__(
+        self,
+        frame_id: str,
+        capacity: int = POSE_HISTORY_CAPACITY,
+    ) -> None:
         if not isinstance(frame_id, str) or not frame_id:
             raise ValueError("frame_id must be non-empty")
+        if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity < 2:
+            raise ValueError("capacity must be an integer of at least two")
         self._frame_id = frame_id
+        self._capacity = capacity
         self._lock = threading.Lock()
-        self._pose = (0.0, 0.0, 0.0)
+        self._poses: list[TimedPoseReference] = []
 
-    def __call__(self) -> tuple[float, float, float]:
+    @property
+    def capacity(self) -> int:
+        return self._capacity
+
+    def __call__(self, monotonic_ns: int) -> TimedPoseReference | None:
+        return self.lookup(monotonic_ns)
+
+    def lookup(self, monotonic_ns: int) -> TimedPoseReference | None:
+        if (
+            not isinstance(monotonic_ns, int)
+            or isinstance(monotonic_ns, bool)
+            or monotonic_ns < 0
+        ):
+            raise ValueError("monotonic_ns must be a non-negative integer")
         with self._lock:
-            return self._pose
+            poses = tuple(self._poses)
+        if (
+            not poses
+            or monotonic_ns < poses[0].monotonic_ns
+            or monotonic_ns > poses[-1].monotonic_ns
+        ):
+            return None
+        index = bisect_left(
+            tuple(item.monotonic_ns for item in poses),
+            monotonic_ns,
+        )
+        if index < len(poses) and poses[index].monotonic_ns == monotonic_ns:
+            return poses[index]
+        before = poses[index - 1]
+        after = poses[index]
+        fraction = (monotonic_ns - before.monotonic_ns) / (
+            after.monotonic_ns - before.monotonic_ns
+        )
+        yaw_delta = math.atan2(
+            math.sin(after.yaw_rad - before.yaw_rad),
+            math.cos(after.yaw_rad - before.yaw_rad),
+        )
+        yaw = before.yaw_rad + fraction * yaw_delta
+        return TimedPoseReference(
+            monotonic_ns=monotonic_ns,
+            x_m=before.x_m + fraction * (after.x_m - before.x_m),
+            y_m=before.y_m + fraction * (after.y_m - before.y_m),
+            yaw_rad=math.atan2(math.sin(yaw), math.cos(yaw)),
+        )
 
     def publish(self, estimate: RobotEstimate) -> None:
         if not isinstance(estimate, RobotEstimate):
             raise TypeError("estimate must be RobotEstimate")
         if estimate.frame_id != self._frame_id:
             raise ValueError("estimate pose frame does not match matcher feedback frame")
-        pose = (estimate.x_m, estimate.y_m, estimate.yaw_rad)
+        pose = TimedPoseReference(
+            estimate.context.monotonic_ns,
+            estimate.x_m,
+            estimate.y_m,
+            estimate.yaw_rad,
+        )
         with self._lock:
-            self._pose = pose
+            if self._poses and pose.monotonic_ns <= self._poses[-1].monotonic_ns:
+                raise ValueError("pose feedback timestamps must increase monotonically")
+            self._poses.append(pose)
+            if len(self._poses) > self._capacity:
+                del self._poses[: len(self._poses) - self._capacity]
+
+    def checkpoint(self) -> NativePoseFeedbackCheckpoint:
+        with self._lock:
+            return NativePoseFeedbackCheckpoint(
+                self._frame_id,
+                self._capacity,
+                tuple(self._poses),
+            )
+
+    def restore(self, checkpoint: NativePoseFeedbackCheckpoint) -> None:
+        if not isinstance(checkpoint, NativePoseFeedbackCheckpoint):
+            raise TypeError("checkpoint must be NativePoseFeedbackCheckpoint")
+        if checkpoint.frame_id != self._frame_id:
+            raise ValueError("pose feedback checkpoint frame does not match owner")
+        if checkpoint.capacity != self._capacity:
+            raise ValueError("pose feedback checkpoint capacity does not match owner")
+        if len(checkpoint.poses) > self._capacity or any(
+            not isinstance(item, TimedPoseReference) for item in checkpoint.poses
+        ):
+            raise ValueError("pose feedback checkpoint contains invalid poses")
+        timestamps = tuple(item.monotonic_ns for item in checkpoint.poses)
+        if any(current <= previous for previous, current in zip(timestamps, timestamps[1:])):
+            raise ValueError("pose feedback checkpoint timestamps must increase")
+        with self._lock:
+            self._poses = list(checkpoint.poses)
 
 
 class NativeHardwareSensorOwner:
@@ -530,6 +625,8 @@ __all__ = [
     "FiniteSensorMeasurementConfig",
     "NativeHardwareSensorOwner",
     "NativePoseFeedback",
+    "NativePoseFeedbackCheckpoint",
+    "POSE_HISTORY_CAPACITY",
     "PHYSICAL_RUN_APPROVAL",
     "RESIDENT_PHYSICAL_RUN_APPROVAL",
     "ResidentPhysicalRuntimeConfig",

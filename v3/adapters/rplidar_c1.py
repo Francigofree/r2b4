@@ -121,18 +121,42 @@ class RplidarPoint:
 
 @dataclass(frozen=True, slots=True)
 class RplidarScan:
+    """One complete scan with measured scan-level timing.
+
+    ``captured_monotonic_ns`` is retained as the scan-completion timestamp.
+    Matcher alignment must use ``measurement_monotonic_ns`` instead.
+    """
+
     revision: int
     captured_monotonic_ns: int
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
     points: tuple[RplidarPoint, ...]
 
     def __post_init__(self) -> None:
         _positive_int(self.revision, "revision")
-        if (
-            not isinstance(self.captured_monotonic_ns, int)
-            or isinstance(self.captured_monotonic_ns, bool)
-            or self.captured_monotonic_ns < 0
+        for value, name in (
+            (self.captured_monotonic_ns, "captured_monotonic_ns"),
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
         ):
-            raise ValueError("captured_monotonic_ns must be non-negative")
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if self.captured_monotonic_ns != self.scan_end_monotonic_ns:
+            raise ValueError("captured_monotonic_ns must equal scan completion")
+        if not (
+            self.scan_start_monotonic_ns
+            <= self.measurement_monotonic_ns
+            <= self.scan_end_monotonic_ns
+        ):
+            raise ValueError("scan measurement timestamp must be within the scan")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if self.measurement_monotonic_ns != midpoint_ns:
+            raise ValueError("measurement_monotonic_ns must be the scan midpoint")
         if not isinstance(self.points, tuple) or any(
             not isinstance(point, RplidarPoint) for point in self.points
         ):
@@ -205,6 +229,7 @@ class NativeRplidarC1:
         self._running = False
         self._latest_scan: RplidarScan | None = None
         self._building: list[RplidarPoint] = []
+        self._building_start_ns: int | None = None
         self._rx_buffer = bytearray()
         self._revision = 0
         self._last_byte_ns = 0
@@ -290,6 +315,15 @@ class NativeRplidarC1:
                     if latest is not None
                     else float("inf")
                 ),
+                "scan_measurement_age_s": (
+                    max(
+                        0.0,
+                        (now_ns - latest.measurement_monotonic_ns)
+                        / 1_000_000_000.0,
+                    )
+                    if latest is not None
+                    else float("inf")
+                ),
                 "invalid_packet_count": self._invalid_packet_count,
                 "reconnect_count": self._reconnect_count,
                 "stream_seen": self._stream_seen,
@@ -337,6 +371,7 @@ class NativeRplidarC1:
             self._last_byte_ns = now_ns
             self._rx_buffer.clear()
             self._building.clear()
+            self._building_start_ns = None
             self._last_error = ""
 
     def _close_serial(self, *, send_stop: bool = False) -> None:
@@ -428,6 +463,7 @@ class NativeRplidarC1:
             if len(self._rx_buffer) > self._config.read_chunk_size * 16:
                 self._rx_buffer.clear()
                 self._building.clear()
+                self._building_start_ns = None
                 self._invalid_packet_count += 1
                 return
             while len(self._rx_buffer) >= 5:
@@ -437,14 +473,28 @@ class NativeRplidarC1:
                     self._invalid_packet_count += 1
                     continue
                 del self._rx_buffer[:5]
-                if decoded.new_scan_start and self._building:
-                    self._revision += 1
-                    self._latest_scan = RplidarScan(
-                        self._revision,
-                        self._checked_clock(),
-                        tuple(self._building),
-                    )
+                packet_ns = self._checked_clock()
+                if decoded.new_scan_start:
+                    if self._building and self._building_start_ns is not None:
+                        scan_start_ns = self._building_start_ns
+                        scan_end_ns = packet_ns
+                        measurement_ns = scan_start_ns + (
+                            scan_end_ns - scan_start_ns
+                        ) // 2
+                        self._revision += 1
+                        self._latest_scan = RplidarScan(
+                            revision=self._revision,
+                            captured_monotonic_ns=scan_end_ns,
+                            scan_start_monotonic_ns=scan_start_ns,
+                            scan_end_monotonic_ns=scan_end_ns,
+                            measurement_monotonic_ns=measurement_ns,
+                            points=tuple(self._building),
+                        )
                     self._building = []
+                    self._building_start_ns = packet_ns
+                elif self._building_start_ns is None:
+                    # Recover a bounded start for a stream joined mid-revolution.
+                    self._building_start_ns = packet_ns
                 point = decoded.point
                 if (
                     self._config.minimum_distance_m

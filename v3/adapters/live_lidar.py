@@ -105,7 +105,13 @@ class LidarMatcherDiagnostics:
 
     candidate_id: int
     source_raw_scan_id: int
+    # Compatibility field: the source raw scan's completion timestamp.
     source_raw_scan_timestamp_ns: int
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    pose_reference_monotonic_ns: int
+    scan_pose_alignment_delta_ns: int
     matcher_reason: str = ""
     tracking_ready: bool | None = None
     matcher_timed_out: bool | None = None
@@ -113,10 +119,14 @@ class LidarMatcherDiagnostics:
     degeneracy_reasons: tuple[str, ...] = ()
     matcher_runtime_ms: float | None = None
     matcher_queue_delay_ms: float | None = None
+    matcher_input_age_ns: int | None = None
+    matcher_confidence: float | None = None
+    inlier_ratio: float | None = None
     robust_rmse_m: float | None = None
     sector_coverage: float | None = None
     observability_score: float | None = None
     ambiguity_margin: float | None = None
+    scan_to_map_seed: tuple[float, float, float] | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.candidate_id, "candidate_id")
@@ -129,6 +139,31 @@ class LidarMatcherDiagnostics:
             self.source_raw_scan_timestamp_ns,
             "source_raw_scan_timestamp_ns",
         )
+        for value, name in (
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
+            (self.pose_reference_monotonic_ns, "pose_reference_monotonic_ns"),
+        ):
+            _nonnegative_integer(value, name)
+        if self.source_raw_scan_timestamp_ns != self.scan_end_monotonic_ns:
+            raise ValueError("source raw scan timestamp must equal scan completion")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if (
+            self.scan_start_monotonic_ns > self.scan_end_monotonic_ns
+            or self.measurement_monotonic_ns != midpoint_ns
+        ):
+            raise ValueError("matcher scan timing must contain its exact midpoint")
+        if (
+            not isinstance(self.scan_pose_alignment_delta_ns, int)
+            or isinstance(self.scan_pose_alignment_delta_ns, bool)
+            or self.scan_pose_alignment_delta_ns
+            != self.pose_reference_monotonic_ns - self.measurement_monotonic_ns
+            or self.pose_reference_monotonic_ns != self.measurement_monotonic_ns
+        ):
+            raise ValueError("matcher pose reference must align to scan measurement")
         if not isinstance(self.matcher_reason, str):
             raise ValueError("matcher_reason must be a string")
         for value, name in (
@@ -150,7 +185,11 @@ class LidarMatcherDiagnostics:
             parsed = _optional_finite(value, name)
             if parsed is not None and parsed < 0.0:
                 raise ValueError(f"{name} must be non-negative or None")
+        if self.matcher_input_age_ns is not None:
+            _nonnegative_integer(self.matcher_input_age_ns, "matcher_input_age_ns")
         for value, name in (
+            (self.matcher_confidence, "matcher_confidence"),
+            (self.inlier_ratio, "inlier_ratio"),
             (self.sector_coverage, "sector_coverage"),
             (self.observability_score, "observability_score"),
             (self.ambiguity_margin, "ambiguity_margin"),
@@ -158,6 +197,14 @@ class LidarMatcherDiagnostics:
             parsed = _optional_finite(value, name)
             if parsed is not None and not 0.0 <= parsed <= 1.0:
                 raise ValueError(f"{name} must be within [0, 1] or None")
+        if self.scan_to_map_seed is not None:
+            if (
+                not isinstance(self.scan_to_map_seed, tuple)
+                or len(self.scan_to_map_seed) != 3
+            ):
+                raise ValueError("scan_to_map_seed must be a three-value tuple or None")
+            for index, value in enumerate(self.scan_to_map_seed):
+                _finite(value, f"scan_to_map_seed[{index}]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,10 +227,16 @@ class LidarPointReading:
 
 @dataclass(frozen=True, slots=True)
 class LidarScanReading:
-    """One physical scan and its matcher-independent sector safety result."""
+    """One physical scan and its matcher-independent sector safety result.
+
+    ``captured_monotonic_ns`` remains the scan-completion timestamp.
+    """
 
     revision: int
     captured_monotonic_ns: int
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
     measurement_age_ns: int
     health: str
     stale: bool
@@ -202,6 +255,22 @@ class LidarScanReading:
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
         _nonnegative_integer(self.captured_monotonic_ns, "captured_monotonic_ns")
+        for value, name in (
+            (self.scan_start_monotonic_ns, "scan_start_monotonic_ns"),
+            (self.scan_end_monotonic_ns, "scan_end_monotonic_ns"),
+            (self.measurement_monotonic_ns, "measurement_monotonic_ns"),
+        ):
+            _nonnegative_integer(value, name)
+        if self.captured_monotonic_ns != self.scan_end_monotonic_ns:
+            raise ValueError("captured_monotonic_ns must equal scan completion")
+        midpoint_ns = self.scan_start_monotonic_ns + (
+            self.scan_end_monotonic_ns - self.scan_start_monotonic_ns
+        ) // 2
+        if (
+            self.scan_start_monotonic_ns > self.scan_end_monotonic_ns
+            or self.measurement_monotonic_ns != midpoint_ns
+        ):
+            raise ValueError("scan timing must contain its exact midpoint")
         _nonnegative_integer(self.measurement_age_ns, "measurement_age_ns")
         if self.health not in {"OK", "STALE", "ERROR"}:
             raise ValueError("health must be OK, STALE or ERROR")
@@ -340,6 +409,15 @@ class NativeLidarSource:
             values=(
                 DataField("age_ns", physical_age_ns),
                 DataField("point_count", scan.point_count),
+                DataField(
+                    "scan_start_monotonic_ns",
+                    scan.scan_start_monotonic_ns,
+                ),
+                DataField("scan_end_monotonic_ns", scan.scan_end_monotonic_ns),
+                DataField(
+                    "measurement_monotonic_ns",
+                    scan.measurement_monotonic_ns,
+                ),
             ),
         )
         samples = [health_sample]
@@ -452,6 +530,30 @@ class NativeLidarSource:
                             "source_raw_scan_timestamp_ns",
                             diagnostics.source_raw_scan_timestamp_ns,
                         ),
+                        DataField(
+                            "source_scan_revision",
+                            diagnostics.source_raw_scan_id,
+                        ),
+                        DataField(
+                            "scan_start_monotonic_ns",
+                            diagnostics.scan_start_monotonic_ns,
+                        ),
+                        DataField(
+                            "scan_end_monotonic_ns",
+                            diagnostics.scan_end_monotonic_ns,
+                        ),
+                        DataField(
+                            "measurement_monotonic_ns",
+                            diagnostics.measurement_monotonic_ns,
+                        ),
+                        DataField(
+                            "pose_reference_monotonic_ns",
+                            diagnostics.pose_reference_monotonic_ns,
+                        ),
+                        DataField(
+                            "scan_pose_alignment_delta_ns",
+                            diagnostics.scan_pose_alignment_delta_ns,
+                        ),
                         DataField("matcher_reason", diagnostics.matcher_reason),
                         DataField("tracking_ready", diagnostics.tracking_ready),
                         DataField(
@@ -474,6 +576,18 @@ class NativeLidarSource:
                             "matcher_queue_delay_ms",
                             diagnostics.matcher_queue_delay_ms,
                         ),
+                        DataField(
+                            "matcher_input_age_ns",
+                            diagnostics.matcher_input_age_ns,
+                        ),
+                        DataField(
+                            "matcher_confidence",
+                            diagnostics.matcher_confidence,
+                        ),
+                        DataField(
+                            "inlier_ratio",
+                            diagnostics.inlier_ratio,
+                        ),
                         DataField("robust_rmse_m", diagnostics.robust_rmse_m),
                         DataField("sector_coverage", diagnostics.sector_coverage),
                         DataField(
@@ -481,6 +595,30 @@ class NativeLidarSource:
                             diagnostics.observability_score,
                         ),
                         DataField("ambiguity_margin", diagnostics.ambiguity_margin),
+                        DataField(
+                            "seed_pose_x_m",
+                            (
+                                diagnostics.scan_to_map_seed[0]
+                                if diagnostics.scan_to_map_seed is not None
+                                else None
+                            ),
+                        ),
+                        DataField(
+                            "seed_pose_y_m",
+                            (
+                                diagnostics.scan_to_map_seed[1]
+                                if diagnostics.scan_to_map_seed is not None
+                                else None
+                            ),
+                        ),
+                        DataField(
+                            "seed_pose_yaw_rad",
+                            (
+                                diagnostics.scan_to_map_seed[2]
+                                if diagnostics.scan_to_map_seed is not None
+                                else None
+                            ),
+                        ),
                     ),
                 )
             )
