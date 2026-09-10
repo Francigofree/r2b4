@@ -952,6 +952,9 @@ def _encode_raw_lidar_snapshot(
 ) -> dict[str, object]:
     revision = getattr(snapshot, "raw_scan_id", None)
     timestamp = getattr(snapshot, "raw_scan_timestamp", None)
+    scan_start_ns = getattr(snapshot, "scan_start_monotonic_ns", None)
+    scan_end_ns = getattr(snapshot, "scan_end_monotonic_ns", None)
+    measurement_ns = getattr(snapshot, "measurement_monotonic_ns", None)
     health = getattr(snapshot, "health", None)
     points = getattr(snapshot, "raw_scan", None)
     summary = getattr(snapshot, "summary", None)
@@ -963,6 +966,17 @@ def _encode_raw_lidar_snapshot(
         or not isinstance(timestamp, (int, float))
         or not math.isfinite(timestamp)
         or timestamp < 0.0
+        or not isinstance(scan_start_ns, int)
+        or isinstance(scan_start_ns, bool)
+        or scan_start_ns < 0
+        or not isinstance(scan_end_ns, int)
+        or isinstance(scan_end_ns, bool)
+        or scan_end_ns < scan_start_ns
+        or not isinstance(measurement_ns, int)
+        or isinstance(measurement_ns, bool)
+        or measurement_ns
+        != scan_start_ns + (scan_end_ns - scan_start_ns) // 2
+        or int(round(float(timestamp) * 1_000_000_000)) != scan_end_ns
         or not isinstance(health, str)
         or not health
         or not isinstance(points, tuple)
@@ -989,7 +1003,11 @@ def _encode_raw_lidar_snapshot(
         compact_points.append([float(angle_deg), float(distance_m), quality])
     return {
         "revision": revision,
-        "captured_monotonic_ns": int(float(timestamp) * 1_000_000_000),
+        # Compatibility field: scan completion, not measurement time.
+        "captured_monotonic_ns": int(round(float(timestamp) * 1_000_000_000)),
+        "scan_start_monotonic_ns": scan_start_ns,
+        "scan_end_monotonic_ns": scan_end_ns,
+        "measurement_monotonic_ns": measurement_ns,
         "health": health,
         "source_point_count": len(points),
         "points_truncated": len(selected_points) != len(points),

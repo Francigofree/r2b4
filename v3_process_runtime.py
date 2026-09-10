@@ -21,6 +21,7 @@ from v3.adapters.resident_command import (
 )
 from v3.capture import CaptureSink, CaptureWindowConfig, TriggeredCaptureWorker
 from v3.adapters.native_lidar_port import (
+    TimedPoseReference,
     load_native_lidar_port_config,
     open_native_lidar_port,
 )
@@ -394,7 +395,10 @@ class AsyncResidentStatusPublisher:
 def run_v3_resident_process(
     counter_gpio_backend: object,
     open_imu_bus: Callable[[int], object],
-    open_lidar_port: Callable[[Callable[[], tuple[float, float, float]]], object],
+    open_lidar_port: Callable[
+        [Callable[[int], TimedPoseReference | None]],
+        object,
+    ],
     motor_gpio_backend: object,
     command_gateway: AtomicResidentCommandGateway,
     runtime_config: ResidentPhysicalRuntimeConfig,
@@ -536,7 +540,7 @@ def native_lidar_factory(
     sensors: NativeSensorHardwareConfig,
     serial_factory: Callable[..., object],
     project_root: Path = PROJECT_ROOT,
-) -> Callable[[Callable[[], tuple[float, float, float]]], object]:
+) -> Callable[[Callable[[int], TimedPoseReference | None]], object]:
     """Close active LiDAR config once and return the sole production opener."""
 
     if not isinstance(sensors, NativeSensorHardwareConfig):
@@ -550,7 +554,7 @@ def native_lidar_factory(
     )
 
     def open_lidar(
-        pose_provider: Callable[[], tuple[float, float, float]],
+        pose_provider: Callable[[int], TimedPoseReference | None],
     ) -> object:
         return open_native_lidar_port(lidar_config, pose_provider, serial_factory)
 

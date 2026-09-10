@@ -278,6 +278,21 @@ befejezési ideje külön diagnosztikai adat lehet. Raw scan csak akkor kerül
 magasabb szintű vagy capture adatba, ha annak konkrét funkcionális vagy
 diagnosztikai értéke van.
 
+Egy teljes LiDAR scan scan-szintű időcontractja a mért
+`scan_start_monotonic_ns`, `scan_end_monotonic_ns` és az ezekből kizárólag
+`start + (end - start) // 2` képlettel képzett `measurement_monotonic_ns`.
+A megtartott `captured_monotonic_ns` mező scan-completion timestamp; matcher
+pose-illesztésre nem használható. Ez a contract nem pontonkénti deskew.
+
+A matcher packet source scan revisiont, measurement timestampet és pontosan
+arra az időre vonatkozó pose reference-et visz; a pose-reference és measurement
+monoton időbélyege kötelezően azonos. A már elkészült `RobotEstimate` értékek
+scan-időre illesztéséhez a production hardware feedback edge egyetlen ownere
+bounded, monoton rendezett pose-historyt tarthat fenn exact lookupkal,
+lineáris x/y és wrap-safe yaw interpolációval. Túl régi, jövőbeli vagy nem
+interpolálható kérés fail-closed. Ez a hardware-edge state nem része a
+`NativeControlComposition` state-authorityjának.
+
 A production szenzorút natív V3 adapterekből és typed contractokból áll; nem
 függhet legacy runtime/shared-state authoritytól.
 
@@ -400,6 +415,11 @@ A capture csak a konkrét diagnosztikához szükséges evidence-et őrizze meg.
 Nincs általános „mindent logoljunk” követelmény. Raw szenzoradat csak indokolt
 esetben szükséges, és hiánya esetén a fizikai root cause nem állítható
 bizonyítottnak.
+
+Scan-matcher temporal diagnosztikánál a capture közvetlenül őrzi a source scan
+revisiont, scan start/end/measurement időt, pose-reference időt és azok tényleges
+időkülönbségét. A processing latency külön mező; nem helyettesítheti a
+pose-reference timestampet.
 
 Nem kötelező:
 
