@@ -37,12 +37,12 @@ _INPUT_REFERENCE_KEY = "__capture_input_reference__"
 class CaptureWindowConfig:
     """Hard RAM bounds for the passive triggered capture path."""
 
-    pre_event_ns: int = 5_000_000_000
+    pre_event_ns: int = 8_000_000_000
     post_event_ns: int = 2_000_000_000
     ingress_queue_capacity: int = 256
-    max_tick_count: int = 512
+    max_tick_count: int = 768
     max_byte_capacity: int = 64 * 1024 * 1024
-    max_raw_lidar_scans: int = 64
+    max_raw_lidar_scans: int = 128
     max_raw_lidar_points_per_scan: int = 4_096
     mode: str = "triggered"
 
