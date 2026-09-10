@@ -640,19 +640,27 @@ class NativeLidarPort:
     def _poll_once(self) -> None:
         scan = self._driver.get_latest_scan()
         if scan is not None and scan.revision > self._last_queued_scan_revision:
-            summary = _sector_summary(scan)
-            snapshot = NativeRawLidarSnapshot(
-                raw_scan_id=scan.revision,
-                raw_scan_timestamp=scan.captured_monotonic_ns / 1_000_000_000.0,
-                scan_start_monotonic_ns=scan.scan_start_monotonic_ns,
-                scan_end_monotonic_ns=scan.scan_end_monotonic_ns,
-                measurement_monotonic_ns=scan.measurement_monotonic_ns,
-                health="OK",
-                raw_scan=scan.points,
-                summary=summary,
-            )
             with self._lock:
-                self._raw_snapshot = snapshot
+                observed_revision = (
+                    self._raw_snapshot.raw_scan_id
+                    if self._raw_snapshot is not None
+                    else 0
+                )
+            if scan.revision > observed_revision:
+                snapshot = NativeRawLidarSnapshot(
+                    raw_scan_id=scan.revision,
+                    raw_scan_timestamp=(
+                        scan.captured_monotonic_ns / 1_000_000_000.0
+                    ),
+                    scan_start_monotonic_ns=scan.scan_start_monotonic_ns,
+                    scan_end_monotonic_ns=scan.scan_end_monotonic_ns,
+                    measurement_monotonic_ns=scan.measurement_monotonic_ns,
+                    health="OK",
+                    raw_scan=scan.points,
+                    summary=_sector_summary(scan),
+                )
+                with self._lock:
+                    self._raw_snapshot = snapshot
             pose_reference = self._pose_provider(scan.measurement_monotonic_ns)
             if pose_reference is None:
                 self._last_matcher_reason = "POSE_REFERENCE_UNAVAILABLE"

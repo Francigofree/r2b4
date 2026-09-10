@@ -10,11 +10,14 @@ from v3.contracts import (
     CommandRequest,
     DataField,
     LifecycleState,
+    RobotEstimate,
     SafetyDecision,
+    TickContext,
 )
 from v3_bounded_config import NativeSensorPolicyConfig, load_bounded_physical_runtime_config
 from v3_hardware_runtime import (
     FiniteSensorMeasurementConfig,
+    NativePoseFeedback,
     PHYSICAL_RUN_APPROVAL,
     RESIDENT_PHYSICAL_RUN_APPROVAL,
     run_finite_sensor_measurement,
@@ -103,10 +106,15 @@ class ImuBus:
 
 class MatcherResult:
     def __init__(self, revision, timestamp) -> None:
+        completion_ns = int(round(timestamp * 1_000_000_000))
         self.matcher_result_id = revision
         self.candidate_id = revision
         self.source_raw_scan_id = revision
         self.source_raw_scan_timestamp = timestamp
+        self.scan_start_monotonic_ns = completion_ns - 20_000_000
+        self.scan_end_monotonic_ns = completion_ns
+        self.measurement_monotonic_ns = completion_ns - 10_000_000
+        self.pose_reference_monotonic_ns = completion_ns - 10_000_000
         self.timestamp = timestamp
         self.summary = {
             "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
@@ -150,9 +158,13 @@ class LidarPort:
         }
 
     def get_raw_scan_snapshot(self):
+        completion_ns = int(round(self.current_timestamp * 1_000_000_000))
         return SimpleNamespace(
             raw_scan_id=self.revision,
             raw_scan_timestamp=self.current_timestamp,
+            scan_start_monotonic_ns=completion_ns - 20_000_000,
+            scan_end_monotonic_ns=completion_ns,
+            measurement_monotonic_ns=completion_ns - 10_000_000,
             health="OK",
             raw_scan=(),
             summary={
@@ -364,11 +376,60 @@ def test_finite_measurement_runs_real_l1_l3_path_and_closes_every_owner():
     assert counter.close_calls == 1
     assert all(item.cancel_calls == 1 for item in counter.callbacks)
     assert len(pose_providers) == 1
-    assert pose_providers[0]() == (
-        report.l3_estimates[-1].x_m,
-        report.l3_estimates[-1].y_m,
-        report.l3_estimates[-1].yaw_rad,
+    last_estimate = report.l3_estimates[-1]
+    pose_reference = pose_providers[0](last_estimate.context.monotonic_ns)
+    assert pose_reference is not None
+    assert pose_reference.pose == (
+        last_estimate.x_m,
+        last_estimate.y_m,
+        last_estimate.yaw_rad,
     )
+
+
+def _estimate(monotonic_ns, x_m, y_m, yaw_rad):
+    return RobotEstimate(
+        TickContext(monotonic_ns // 10, monotonic_ns),
+        "R2B4_BOOT_ROBOT_MAP",
+        x_m,
+        y_m,
+        yaw_rad,
+        0.0,
+        0.0,
+        tuple(0.0 for _ in range(25)),
+    )
+
+
+def test_pose_feedback_exact_interpolation_wrap_fail_closed_and_checkpoint_restore():
+    feedback = NativePoseFeedback("R2B4_BOOT_ROBOT_MAP", capacity=3)
+    feedback.publish(_estimate(100, 0.0, 2.0, 3.0))
+    feedback.publish(_estimate(200, 2.0, 4.0, -3.0))
+
+    exact = feedback.lookup(100)
+    interpolated = feedback.lookup(150)
+    assert exact is not None and exact.pose == (0.0, 2.0, 3.0)
+    assert interpolated is not None
+    assert interpolated.monotonic_ns == 150
+    assert interpolated.x_m == 1.0
+    assert interpolated.y_m == 3.0
+    assert abs(interpolated.yaw_rad) > 3.0
+    assert feedback.lookup(99) is None
+    assert feedback.lookup(201) is None
+
+    checkpoint = feedback.checkpoint()
+    restored = NativePoseFeedback("R2B4_BOOT_ROBOT_MAP", capacity=3)
+    restored.restore(checkpoint)
+    assert restored.checkpoint() == checkpoint
+    assert restored.lookup(150) == interpolated
+
+    feedback.publish(_estimate(300, 3.0, 5.0, -2.5))
+    feedback.publish(_estimate(400, 4.0, 6.0, -2.0))
+    assert len(feedback.checkpoint().poses) == 3
+    assert feedback.lookup(100) is None
+
+    with pytest.raises(TypeError, match="NativePoseFeedbackCheckpoint"):
+        restored.restore(object())
+    with pytest.raises(ValueError, match="timestamps must increase"):
+        feedback.publish(_estimate(400, 5.0, 7.0, -1.5))
 
 
 def test_initial_stop_and_missing_approval_open_no_hardware():

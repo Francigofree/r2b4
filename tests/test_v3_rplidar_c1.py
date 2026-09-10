@@ -1,10 +1,12 @@
 from dataclasses import FrozenInstanceError
+from itertools import chain, repeat
 
 import pytest
 
 from v3.adapters.rplidar_c1 import (
     NativeRplidarC1,
     RplidarC1Config,
+    RplidarScan,
     decode_standard_packet,
 )
 
@@ -32,7 +34,10 @@ def test_standard_packet_decode_preserves_framing_angle_distance_and_quality():
 
 
 def test_native_driver_recovers_alignment_and_publishes_only_complete_scan():
-    timestamps = iter((900_000_000, 930_000_000, 970_000_000, 1_000_000_000))
+    timestamps = chain(
+        (900_000_000, 930_000_000, 970_000_000),
+        repeat(1_000_000_000),
+    )
     driver = NativeRplidarC1(
         RplidarC1Config(minimum_distance_m=0.05, maximum_distance_m=3.0),
         serial_factory=lambda *_args, **_kwargs: None,
@@ -92,3 +97,12 @@ def test_driver_config_is_immutable_and_rejects_unbounded_distance_contract():
         config.baudrate = 115_200
     with pytest.raises(ValueError, match="exceed"):
         RplidarC1Config(minimum_distance_m=2.0, maximum_distance_m=1.0)
+    with pytest.raises(ValueError, match="midpoint"):
+        RplidarScan(
+            revision=1,
+            captured_monotonic_ns=30,
+            scan_start_monotonic_ns=10,
+            scan_end_monotonic_ns=30,
+            measurement_monotonic_ns=21,
+            points=(),
+        )

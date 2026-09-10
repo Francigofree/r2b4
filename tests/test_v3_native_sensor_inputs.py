@@ -111,6 +111,10 @@ class MatcherResult:
     candidate_id = 1
     source_raw_scan_id = 1
     source_raw_scan_timestamp = 1.0
+    scan_start_monotonic_ns = 900_000_000
+    scan_end_monotonic_ns = 1_000_000_000
+    measurement_monotonic_ns = 950_000_000
+    pose_reference_monotonic_ns = 950_000_000
     timestamp = 1.0
     summary = {
         "matcher_contract_id": "R2B4_SCAN_MATCHER_PROCESS_LATEST_ONLY_V1",
@@ -152,6 +156,9 @@ class LidarPort:
         return SimpleNamespace(
             raw_scan_id=1,
             raw_scan_timestamp=1.0,
+            scan_start_monotonic_ns=900_000_000,
+            scan_end_monotonic_ns=1_000_000_000,
+            measurement_monotonic_ns=950_000_000,
             health="OK",
             raw_scan=(),
             summary={

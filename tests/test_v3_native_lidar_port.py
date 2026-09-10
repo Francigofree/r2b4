@@ -9,9 +9,12 @@ from v3.adapters.latest_lidar import MATCHER_CONTRACT_ID
 from v3.adapters.native_lidar_port import (
     NativeLidarPort,
     NativeLidarPortConfig,
+    TimedPoseReference,
     load_native_lidar_port_config,
 )
 from v3.adapters.rplidar_c1 import RplidarC1Config, RplidarPoint, RplidarScan
+from v3.contracts import RobotEstimate, TickContext
+from v3_hardware_runtime import NativePoseFeedback
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -44,10 +47,15 @@ class FailingStartDriver(Driver):
 
 class FreshOnStartDriver(Driver):
     def start(self):
+        scan_end_ns = time.monotonic_ns()
+        scan_start_ns = scan_end_ns - 100_000_000
         self.scan = RplidarScan(
-            self.scan.revision,
-            time.monotonic_ns(),
-            self.scan.points,
+            revision=self.scan.revision,
+            captured_monotonic_ns=scan_end_ns,
+            scan_start_monotonic_ns=scan_start_ns,
+            scan_end_monotonic_ns=scan_end_ns,
+            measurement_monotonic_ns=scan_start_ns + 50_000_000,
+            points=self.scan.points,
         )
         return True
 
@@ -98,9 +106,12 @@ class FakeProcessContext:
 
 def _scan():
     return RplidarScan(
-        7,
-        1_000_000_000,
-        (
+        revision=7,
+        captured_monotonic_ns=1_000_000_000,
+        scan_start_monotonic_ns=900_000_000,
+        scan_end_monotonic_ns=1_000_000_000,
+        measurement_monotonic_ns=950_000_000,
+        points=(
             RplidarPoint(0.0, 1.0, 20),
             RplidarPoint(90.0, 1.1, 20),
             RplidarPoint(180.0, 1.2, 20),
@@ -121,7 +132,7 @@ def test_native_port_publishes_raw_safety_before_optional_matcher_result():
     driver = Driver(_scan())
     port = NativeLidarPort(
         _config(),
-        lambda: (0.0, 0.0, 0.0),
+        lambda timestamp: TimedPoseReference(timestamp, 0.0, 0.0, 0.0),
         driver=driver,
         monotonic_ns=lambda: 1_010_000_000,
     )
@@ -142,6 +153,13 @@ def test_native_port_publishes_raw_safety_before_optional_matcher_result():
     assert snapshot.summary["right_clearance_m"] == 1.1
     packet = port._input_queue.get_nowait()
     assert packet["scan_revision"] == 7
+    assert packet["source_scan_revision"] == 7
+    assert packet["captured_monotonic_ns"] == 1_000_000_000
+    assert packet["scan_start_monotonic_ns"] == 900_000_000
+    assert packet["scan_end_monotonic_ns"] == 1_000_000_000
+    assert packet["measurement_monotonic_ns"] == 950_000_000
+    assert packet["pose_reference_monotonic_ns"] == 950_000_000
+    assert packet["scan_pose_alignment_delta_ns"] == 0
     assert packet["matcher_contract_id"] == MATCHER_CONTRACT_ID
     assert port.get_matcher_result() is None
     with pytest.raises(TypeError):
@@ -152,7 +170,7 @@ def test_native_port_accepts_fresh_matcher_lineage_as_independent_result():
     driver = Driver(_scan())
     port = NativeLidarPort(
         _config(),
-        lambda: (0.0, 0.0, 0.0),
+        lambda timestamp: TimedPoseReference(timestamp, 0.0, 0.0, 0.0),
         driver=driver,
         monotonic_ns=lambda: 1_010_000_000,
     )
@@ -167,6 +185,12 @@ def test_native_port_accepts_fresh_matcher_lineage_as_independent_result():
             "matcher_contract_id": MATCHER_CONTRACT_ID,
             "scan_revision": 7,
             "captured_monotonic_ns": 1_000_000_000,
+            "source_scan_revision": 7,
+            "scan_start_monotonic_ns": 900_000_000,
+            "scan_end_monotonic_ns": 1_000_000_000,
+            "measurement_monotonic_ns": 950_000_000,
+            "pose_reference_monotonic_ns": 950_000_000,
+            "scan_pose_alignment_delta_ns": 0,
             "published_monotonic_ns": 1_005_000_000,
             "matcher_runtime_ms": 3.0,
             "matcher_queue_delay_ms": 1.0,
@@ -186,6 +210,54 @@ def test_native_port_accepts_fresh_matcher_lineage_as_independent_result():
     assert result.source_raw_scan_id == 7
     assert result.summary["matcher_transport"] == "process_latest_only"
     assert result.summary["lidar_pose_confidence"] == 0.8
+
+
+def test_delayed_scan_packet_uses_scan_time_pose_not_latest_pose():
+    scan = RplidarScan(
+        revision=8,
+        captured_monotonic_ns=1_100_000_000,
+        scan_start_monotonic_ns=900_000_000,
+        scan_end_monotonic_ns=1_100_000_000,
+        measurement_monotonic_ns=1_000_000_000,
+        points=_scan().points,
+    )
+    feedback = NativePoseFeedback("R2B4_BOOT_ROBOT_MAP")
+    covariance = tuple(0.0 for _ in range(25))
+    for tick_id, timestamp, x_m in (
+        (1, 900_000_000, 0.0),
+        (2, 1_100_000_000, 2.0),
+        (3, 1_200_000_000, 3.0),
+    ):
+        feedback.publish(
+            RobotEstimate(
+                TickContext(tick_id, timestamp),
+                "R2B4_BOOT_ROBOT_MAP",
+                x_m,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                covariance,
+            )
+        )
+    port = NativeLidarPort(
+        _config(),
+        feedback,
+        driver=Driver(scan),
+        monotonic_ns=lambda: 1_200_000_000,
+    )
+    port._input_queue = queue.Queue(maxsize=1)
+    port._result_queue = queue.Queue(maxsize=1)
+    port._running = True
+
+    port.poll_once_for_test()
+
+    packet = port._input_queue.get_nowait()
+    assert packet["pose_reference"] == (1.0, 0.0, 0.0)
+    assert packet["pose_reference"] != feedback.lookup(1_200_000_000).pose
+    assert packet["measurement_monotonic_ns"] == 1_000_000_000
+    assert packet["pose_reference_monotonic_ns"] == 1_000_000_000
+    assert packet["scan_pose_alignment_delta_ns"] == 0
 
 
 def test_active_json_closes_to_protected_native_port_config(tmp_path):
@@ -237,7 +309,7 @@ def test_native_owner_cleans_matcher_process_when_driver_start_raises():
     process_context = FakeProcessContext()
     port = NativeLidarPort(
         _config(),
-        lambda: (0.0, 0.0, 0.0),
+        lambda timestamp: TimedPoseReference(timestamp, 0.0, 0.0, 0.0),
         driver=driver,
         process_context=process_context,
     )
@@ -252,9 +324,12 @@ def test_native_owner_cleans_matcher_process_when_driver_start_raises():
 
 def test_native_owner_starts_and_stops_one_real_latest_only_matcher_process():
     scan = RplidarScan(
-        1,
-        0,
-        tuple(
+        revision=1,
+        captured_monotonic_ns=0,
+        scan_start_monotonic_ns=0,
+        scan_end_monotonic_ns=0,
+        measurement_monotonic_ns=0,
+        points=tuple(
             RplidarPoint(float(angle), 1.0 + angle / 1_000.0, 20)
             for angle in range(0, 360, 20)
         ),
@@ -262,7 +337,7 @@ def test_native_owner_starts_and_stops_one_real_latest_only_matcher_process():
     driver = FreshOnStartDriver(scan)
     port = NativeLidarPort(
         _config(),
-        lambda: (0.0, 0.0, 0.0),
+        lambda timestamp: TimedPoseReference(timestamp, 0.0, 0.0, 0.0),
         driver=driver,
     )
 
@@ -274,6 +349,16 @@ def test_native_owner_starts_and_stops_one_real_latest_only_matcher_process():
         result = port.get_matcher_result()
         assert result is not None
         assert result.source_raw_scan_id == 1
+        assert result.scan_start_monotonic_ns < result.measurement_monotonic_ns
+        assert result.measurement_monotonic_ns < result.scan_end_monotonic_ns
+        assert (
+            result.pose_reference_monotonic_ns
+            == result.measurement_monotonic_ns
+        )
+        assert result.summary["scan_pose_alignment_delta_ns"] == 0
+        assert result.summary["pose_reference_timestamp"] == pytest.approx(
+            result.measurement_monotonic_ns / 1_000_000_000.0
+        )
         assert port.get_runtime_status()["matcher_process_alive"] is True
     finally:
         port.stop()

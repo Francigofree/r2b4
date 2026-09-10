@@ -87,6 +87,9 @@ class LidarBackend:
             scan=LidarScanReading(
                 revision=revision,
                 captured_monotonic_ns=context.monotonic_ns,
+                scan_start_monotonic_ns=context.monotonic_ns,
+                scan_end_monotonic_ns=context.monotonic_ns,
+                measurement_monotonic_ns=context.monotonic_ns,
                 measurement_age_ns=0,
                 health="OK",
                 stale=False,

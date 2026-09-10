@@ -16,6 +16,10 @@ class Result:
     candidate_id: int
     source_raw_scan_id: int
     source_raw_scan_timestamp: float
+    scan_start_monotonic_ns: int
+    scan_end_monotonic_ns: int
+    measurement_monotonic_ns: int
+    pose_reference_monotonic_ns: int
     timestamp: float
     summary: dict
 
@@ -31,12 +35,30 @@ class RawPoint:
 class RawSnapshot:
     raw_scan_id: int = 31
     raw_scan_timestamp: float = 0.980
+    scan_start_monotonic_ns: int | None = None
+    scan_end_monotonic_ns: int | None = None
+    measurement_monotonic_ns: int | None = None
     health: str = "OK"
     raw_scan: tuple = (RawPoint(0.0, 1.0, 12), RawPoint(90.0, 0.5, 9))
     summary: dict | None = None
     observed_monotonic_ns: int | None = None
 
     def __post_init__(self):
+        scan_end_ns = int(round(self.raw_scan_timestamp * 1_000_000_000))
+        if self.scan_end_monotonic_ns is None:
+            object.__setattr__(self, "scan_end_monotonic_ns", scan_end_ns)
+        if self.scan_start_monotonic_ns is None:
+            object.__setattr__(
+                self,
+                "scan_start_monotonic_ns",
+                scan_end_ns - 100_000_000,
+            )
+        if self.measurement_monotonic_ns is None:
+            object.__setattr__(
+                self,
+                "measurement_monotonic_ns",
+                scan_end_ns - 50_000_000,
+            )
         if self.summary is None:
             object.__setattr__(
                 self,
@@ -74,7 +96,11 @@ def _summary(**changes):
         "matcher_degeneracy_reasons": [],
         "matcher_runtime_ms": 28.5,
         "matcher_queue_delay_ms": 1.25,
+        "matcher_input_age_ns": 51_250_000,
+        "matcher_confidence": 0.82,
+        "scan_to_map_seed": {"x": 0.20, "y": -0.05, "theta": 0.10},
         "matcher_quality": {
+            "inlier_ratio": 0.75,
             "robust_rmse_m": 0.012,
             "sector_coverage": 0.5,
             "observability_score": 0.8,
@@ -86,11 +112,17 @@ def _summary(**changes):
 
 
 def _result(**changes) -> Result:
+    source_timestamp = changes.get("source_raw_scan_timestamp", 0.980)
+    scan_end_ns = int(round(source_timestamp * 1_000_000_000))
     values = {
         "matcher_result_id": 17,
         "candidate_id": 17,
         "source_raw_scan_id": 31,
-        "source_raw_scan_timestamp": 0.980,
+        "source_raw_scan_timestamp": source_timestamp,
+        "scan_start_monotonic_ns": scan_end_ns - 100_000_000,
+        "scan_end_monotonic_ns": scan_end_ns,
+        "measurement_monotonic_ns": scan_end_ns - 50_000_000,
+        "pose_reference_monotonic_ns": scan_end_ns - 50_000_000,
         "timestamp": 0.995,
         "summary": _summary(),
     }
@@ -155,7 +187,7 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
     assert port.raw_calls == 1
     assert reading.revision == 17
     assert reading.captured_monotonic_ns == 995_000_000
-    assert reading.measurement_age_ns == 20_000_000
+    assert reading.measurement_age_ns == 70_000_000
     assert reading.confidence == 0.8
     assert reading.pose is not None
     assert reading.pose.x_m == 0.25
@@ -168,15 +200,27 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
     assert reading.diagnostics.candidate_id == 17
     assert reading.diagnostics.source_raw_scan_id == 31
     assert reading.diagnostics.source_raw_scan_timestamp_ns == 980_000_000
+    assert reading.diagnostics.scan_start_monotonic_ns == 880_000_000
+    assert reading.diagnostics.scan_end_monotonic_ns == 980_000_000
+    assert reading.diagnostics.measurement_monotonic_ns == 930_000_000
+    assert reading.diagnostics.pose_reference_monotonic_ns == 930_000_000
+    assert reading.diagnostics.scan_pose_alignment_delta_ns == 0
     assert reading.diagnostics.tracking_ready is True
     assert reading.diagnostics.matcher_runtime_ms == 28.5
     assert reading.diagnostics.matcher_queue_delay_ms == 1.25
+    assert reading.diagnostics.matcher_input_age_ns == 51_250_000
+    assert reading.diagnostics.matcher_confidence == 0.82
+    assert reading.diagnostics.inlier_ratio == 0.75
     assert reading.diagnostics.robust_rmse_m == 0.012
     assert reading.diagnostics.sector_coverage == 0.5
     assert reading.diagnostics.observability_score == 0.8
     assert reading.diagnostics.ambiguity_margin == 0.9
+    assert reading.diagnostics.scan_to_map_seed == pytest.approx((0.20, -0.05, 0.10))
     assert reading.scan is not None
     assert reading.scan.revision == 31
+    assert reading.scan.scan_start_monotonic_ns == 880_000_000
+    assert reading.scan.scan_end_monotonic_ns == 980_000_000
+    assert reading.scan.measurement_monotonic_ns == 930_000_000
     assert reading.scan.front_clearance_m == 1.2
     assert tuple(
         (point.angle_deg, point.distance_m, point.quality)
@@ -267,7 +311,7 @@ def test_explicit_same_tick_acquisition_skew_is_bounded_and_clamped():
     assert reading.timing_valid is True
     assert reading.stale is False
     assert reading.captured_monotonic_ns == 1_000_000_000
-    assert reading.measurement_age_ns == 0
+    assert reading.measurement_age_ns == 46_000_000
 
 
 def test_result_beyond_explicit_same_tick_skew_remains_failed():
@@ -314,6 +358,7 @@ def test_same_tick_async_raw_scan_uses_observation_horizon_and_remains_healthy()
     assert reading.scan is not None
     assert reading.scan.timing_valid is True
     assert reading.scan.measurement_age_ns == 0
+    assert reading.scan.captured_monotonic_ns == 1_011_227_336
     assert physical.health.state is DeviceHealthState.OK
 
 

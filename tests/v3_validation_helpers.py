@@ -49,6 +49,9 @@ def clear_lidar_scan(
     return LidarScanReading(
         revision=revision,
         captured_monotonic_ns=captured_monotonic_ns,
+        scan_start_monotonic_ns=captured_monotonic_ns,
+        scan_end_monotonic_ns=captured_monotonic_ns,
+        measurement_monotonic_ns=captured_monotonic_ns,
         measurement_age_ns=measurement_age_ns,
         health="STALE" if stale else "OK",
         stale=stale,

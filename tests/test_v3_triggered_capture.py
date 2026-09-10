@@ -314,9 +314,13 @@ def test_queue_overflow_preserves_motor_output_and_invalidates_match(tmp_path, m
 
 
 def _raw_snapshot(revision):
+    scan_end_ns = int(round((1.0 + revision * 0.02) * 1_000_000_000))
     return NativeRawLidarSnapshot(
         raw_scan_id=revision,
         raw_scan_timestamp=1.0 + revision * 0.02,
+        scan_start_monotonic_ns=scan_end_ns - 20_000_000,
+        scan_end_monotonic_ns=scan_end_ns,
+        measurement_monotonic_ns=scan_end_ns - 10_000_000,
         health="OK",
         raw_scan=(
             RplidarPoint(0.0, 1.0, 20),
@@ -327,9 +331,13 @@ def _raw_snapshot(revision):
 
 
 def _large_raw_snapshot(revision, point_count=720):
+    scan_end_ns = int(round((1.0 + revision * 0.02) * 1_000_000_000))
     return NativeRawLidarSnapshot(
         raw_scan_id=revision,
         raw_scan_timestamp=1.0 + revision * 0.02,
+        scan_start_monotonic_ns=scan_end_ns - 20_000_000,
+        scan_end_monotonic_ns=scan_end_ns,
+        measurement_monotonic_ns=scan_end_ns - 10_000_000,
         health="OK",
         raw_scan=tuple(
             RplidarPoint(
@@ -422,6 +430,12 @@ def test_raw_lidar_is_persisted_once_and_only_when_selected_ticks_reference_it(t
     assert all(len(scan["points"]) == 1 for scan in payload["raw_lidar_scans"])
     assert all(
         scan["point_encoding"] == "ANGLE_DEG_DISTANCE_M_QUALITY"
+        for scan in payload["raw_lidar_scans"]
+    )
+    assert all(
+        scan["measurement_monotonic_ns"]
+        == scan["scan_start_monotonic_ns"]
+        + (scan["scan_end_monotonic_ns"] - scan["scan_start_monotonic_ns"]) // 2
         for scan in payload["raw_lidar_scans"]
     )
     assert all(len(scan["points"][0]) == 3 for scan in payload["raw_lidar_scans"])

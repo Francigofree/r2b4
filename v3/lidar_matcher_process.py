@@ -141,10 +141,19 @@ def matcher_process_main(
                     scan_match_cfg=dict(matcher_config),
                 )
             pose_reference = packet.get("pose_reference")
+            if (
+                not isinstance(pose_reference, (tuple, list))
+                or len(pose_reference) != 3
+                or any(
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not math.isfinite(value)
+                    for value in pose_reference
+                )
+            ):
+                raise ValueError("matcher_pose_reference_invalid")
             estimator.set_pose_provider(
-                (lambda value=pose_reference: value)
-                if pose_reference is not None
-                else None
+                lambda value=tuple(float(item) for item in pose_reference): value
             )
             raw_scan = packet.get("scan")
             if not isinstance(raw_scan, list):

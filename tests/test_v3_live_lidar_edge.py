@@ -94,6 +94,9 @@ def test_native_lidar_source_closes_physical_and_localization_samples():
         (
             DataField("age_ns", 40),
             DataField("point_count", 4),
+            DataField("scan_start_monotonic_ns", 990),
+            DataField("scan_end_monotonic_ns", 990),
+            DataField("measurement_monotonic_ns", 990),
         ),
     )
     assert tuple(sample.kind for sample in snapshot.samples) == (
