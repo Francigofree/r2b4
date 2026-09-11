@@ -1,16 +1,8 @@
-"""Source-following deterministic replay for native V3 captures.
-
-The replayer intentionally does not own copies of production checkpoint,
-resolved-config, or TickInputs construction rules. Typed capture values are
-reconstructed from the current production dataclass/enum type annotations, so
-production contract evolution is followed by source rather than by parallel
-hand-written replay decoders.
-"""
+"""Direct-value deterministic replay for native V3 captures."""
 
 from __future__ import annotations
 
 import argparse
-import ast
 import copy
 import hashlib
 import json
@@ -18,13 +10,9 @@ import math
 import os
 import sys
 import time
-import types
-import typing
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import MISSING, dataclass, fields, is_dataclass
-from enum import Enum
+from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, get_args, get_origin, get_type_hints
 
 from .capture import (
     LAYER_ORDER,
@@ -35,18 +23,69 @@ from .capture import (
     load_capture,
     validate_capture as validate_general_capture,
 )
+from .adapters.bno055_device import NativeBno055DeviceConfig
+from .adapters.bno055_imu import Bno055ImuBackendConfig
+from .adapters.counter_encoder import CounterEncoderBackendConfig
+from .adapters.gpio_counter import GpioCounterChannelConfig, GpioCounterPairConfig
+from .adapters.gpio_motor import GpioMotorFrameSinkConfig
+from .adapters.latest_lidar import LatestLidarBackendConfig
+from .adapters.live_encoder import NativeEncoderConfig
+from .adapters.live_imu import NativeImuConfig
+from .adapters.live_lidar import NativeLidarConfig
+from .adapters.motor_pwm import MotorChannelPhysicalConfig, PwmDecayMode
 from .composition.native_control import (
     NativeControlComposition,
     NativeControlCompositionConfig,
     NativeControlStateCheckpoint,
     v3_navigation_config_from_mapping,
 )
-from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext
+from .composition.native_sensor_inputs import (
+    NativeSensorHardwareConfig,
+    NativeSensorInputConfig,
+)
+from .composition.resident_live_control import ResidentLiveControlConfig
+from .composition.resident_physical_control import ResidentPhysicalControlConfig
+from .contracts import (
+    CommandMode,
+    CommandRequest,
+    DataField,
+    DeviceHealth,
+    DeviceHealthState,
+    DeviceSample,
+    LifecycleState,
+    MissionConstraints,
+    ObstacleTrack,
+    RawDeviceBatch,
+    SafetyDecision,
+    TickContext,
+    TrajectoryEvaluation,
+    TrajectoryPose,
+    Waypoint,
+)
 from .engine import LayerValue, TickEngine, TickInputs, TickResult, TickTrace
+from .execution import ExecutionBoundary, IterableInputSource, MemoryOutputSink
+from .layers.l2_admission import AdmissionConfig, AdmissionStateCheckpoint
+from .layers.l4_world_model import WorldModelConfig, WorldModelStateCheckpoint
+from .layers.l5_command_mission import MissionConfig, MissionStateCheckpoint
+from .layers.l6_navigation import NavigationConfig, NavigationStateCheckpoint
+from .layers.l8_motion_realization import MotionRealizationConfig
+from .layers.l9_operational_constraints import (
+    OperationalConstraintsConfig,
+    OperationalConstraintsStateCheckpoint,
+)
 from .layers.l10_chassis_control import ChassisControlConfig
-from .layers.l11_actuator_control import WheelSpeedMap
-from .layers.l12_safety_final import LidarSafetyConfig
-from .layers.l3_state_estimation import NativeStateEstimatorConfig
+from .layers.l11_actuator_control import (
+    SpeedMapPoint,
+    WheelPiConfig,
+    WheelActuatorStateCheckpoint,
+    WheelSpeedCurve,
+    WheelSpeedMap,
+)
+from .layers.l3_state_estimation import (
+    NativeEstimatorStateCheckpoint,
+    NativeStateEstimatorConfig,
+)
+from .layers.l12_safety_final import FinalSafetyStateCheckpoint, LidarSafetyConfig
 
 
 V3_REPLAY_RESULT_SCHEMA = "R2B4_REPLAYER_V3_RESULT_V3"
@@ -54,19 +93,36 @@ V3_REPLAY_STATUS_MATCH = "MATCH"
 V3_REPLAY_STATUS_MISMATCH = "MISMATCH"
 _LAYER_ORDER = LAYER_ORDER
 _INPUT_REFERENCE_KEY = "__capture_input_reference__"
-_SOURCE_FIRST_ROOTS = (
-    "v3_process_runtime.py",
-    "v3_runtime.py",
-    "v3_hardware_runtime.py",
-    "v3/replay.py",
-    "v3/test_hub.py",
-)
-_SOURCE_FIRST_STATIC_PATHS = (
+_SOURCE_FIRST_PATHS = (
     "STRUKTURALIS_RETEGEK_V3.md",
     "conf/hardver.json",
     "conf/fizika.json",
     "conf/speed_map.json",
     "conf/vezerles.json",
+    "v3/adapters/bounded_command.py",
+    "v3/adapters/latest_lidar.py",
+    "v3/adapters/live_lidar.py",
+    "v3/adapters/native_lidar_port.py",
+    "v3/adapters/resident_command.py",
+    "v3/composition/bounded_live_control.py",
+    "v3/composition/native_control.py",
+    "v3/contracts/base.py",
+    "v3/contracts/__init__.py",
+    "v3/contracts/messages.py",
+    "v3/engine.py",
+    "v3/layers/l4_world_model.py",
+    "v3/layers/l5_command_mission.py",
+    "v3/layers/l6_navigation.py",
+    "v3/layers/l7_motion_selection.py",
+    "v3/layers/l8_motion_realization.py",
+    "v3/layers/l12_safety_final.py",
+    "v3/layers/l9_operational_constraints.py",
+    "v3/layers/l10_chassis_control.py",
+    "v3/layers/l11_actuator_control.py",
+    "v3/replay.py",
+    "v3/test_hub.py",
+    "v3_bounded_config.py",
+    "v3_process_runtime.py",
 )
 
 
@@ -98,6 +154,19 @@ class _ReplayOutcome:
     result: TickResult | None
     writer_failure: bool
     attempted_actuation: object | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ResolvedReplayRuntime:
+    composition: ResidentPhysicalControlConfig
+    sensor_inputs: NativeSensorHardwareConfig
+    tick_period_ns: int
+
+    def __post_init__(self) -> None:
+        if self.tick_period_ns <= 0:
+            raise ValueError("tick_period_ns must be positive")
+        if self.tick_period_ns > self.composition.live_control.max_preflight_age_ns:
+            raise ValueError("tick_period_ns exceeds resident preflight policy")
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +273,7 @@ def first_divergence(
                 expected_trace,
                 actual_trace,
             )
+
         layer_count = max(len(expected_trace.layers), len(actual_trace.layers))
         for layer_index in range(layer_count):
             expected_layer = (
@@ -256,7 +326,7 @@ def replay_capture(
     project_root: str | Path | None = None,
     capture_source_manifest_path: str | Path | None = None,
 ) -> dict[str, object]:
-    """Replay a V3 capture through current production source without live I/O."""
+    """Replay a V3 capture through production code without live hardware imports."""
 
     path = _regular_file(capture_path, "capture")
     selected = selection or ReplaySelection()
@@ -265,19 +335,14 @@ def replay_capture(
         ticks = validate_general_capture(general_payload)
     except V3CaptureError as exc:
         raise V3ReplayError(str(exc)) from exc
-
-    entries = tuple(_production_entry(tick) for tick in ticks)
+    entries = tuple(_reconstruct_general_entry(tick) for tick in ticks)
     indices = _selection_indices(ticks, selected)
     execution_entries = entries[: indices[-1] + 1]
     closed_inputs = tuple(
         entry.inputs for entry in execution_entries if entry.inputs is not None
     )
-    config, config_authority = _production_control_config(
-        general_payload,
-        closed_inputs,
-    )
-    checkpoint = _production_checkpoint(general_payload)
-
+    config = _embedded_control_config(general_payload, closed_inputs)
+    checkpoint = _decode_state_checkpoint(general_payload)
     first_results, first_writes = _run_native_replay(
         execution_entries,
         config,
@@ -296,7 +361,6 @@ def replay_capture(
         selected_results,
         selected.layers,
     )
-
     integrity = general_payload.get("capture_integrity")
     replay_eligible = not isinstance(integrity, Mapping) or (
         integrity.get("complete") is True
@@ -325,7 +389,6 @@ def replay_capture(
             "expected": "identical production traces and sink values",
             "actual": "different repeated replay result",
         }
-
     root = Path(project_root).resolve() if project_root is not None else Path.cwd()
     source_first = _source_first_evidence(root, capture_source_manifest_path)
     first_live_incident = _first_live_incident(selected_ticks)
@@ -348,14 +411,10 @@ def replay_capture(
             "status": general_payload.get("status"),
         },
         "scope": _selection_summary(ticks, indices, selected),
-        "execution": _general_execution_summary(
-            selected_results,
-            str(general_payload["status"]),
-        ),
+        "execution": _general_execution_summary(selected_results, str(general_payload["status"])),
         "reconstruction_contract": {
-            "inputs": "CURRENT_SOURCE_TYPED_TICK_INPUTS",
-            "configuration": config_authority,
-            "checkpoint": "CURRENT_SOURCE_TYPED_CHECKPOINT",
+            "inputs": "CAPTURED_TYPED_TICK_INPUTS",
+            "configuration": "CAPTURED_ONCE_BY_CONTENT",
             "production": "NATIVE_V3_L1_L12",
             "external_io": "NONE",
         },
@@ -428,448 +487,6 @@ def write_replay_result(result: Mapping[str, object], output_path: str | Path) -
     return path
 
 
-# ---------------------------------------------------------------------------
-# Source-following reconstruction
-# ---------------------------------------------------------------------------
-
-
-def _decode_production_value(value: object, expected_type: object, name: str) -> object:
-    """Decode capture data from the current production type definition.
-
-    This is deliberately generic. It contains no L2/L3/L4/L11 checkpoint field
-    list, no NativeControlCompositionConfig field list, and no TickInputs field
-    list. Those shapes are owned by the current source dataclasses/type hints.
-    """
-
-    if expected_type in (Any, object):
-        return value
-
-    origin = get_origin(expected_type)
-    args = get_args(expected_type)
-
-    if origin in (typing.Union, types.UnionType):
-        if value is None and type(None) in args:
-            return None
-        failures: list[str] = []
-        for member in args:
-            if member is type(None):
-                continue
-            try:
-                return _decode_production_value(value, member, name)
-            except V3ReplayError as exc:
-                failures.append(str(exc))
-        raise V3ReplayError(
-            f"{name} does not match the current production union contract"
-            + (f": {'; '.join(failures)}" if failures else "")
-        )
-
-    if origin is typing.Annotated:
-        if not args:
-            return value
-        return _decode_production_value(value, args[0], name)
-
-    if origin is typing.Literal:
-        if value not in args:
-            raise V3ReplayError(f"{name} is not one of the current literal values")
-        return value
-
-    if origin is tuple:
-        values = _sequence(value, name)
-        if len(args) == 2 and args[1] is Ellipsis:
-            return tuple(
-                _decode_production_value(item, args[0], f"{name}[]")
-                for item in values
-            )
-        if args and len(values) != len(args):
-            raise V3ReplayError(
-                f"{name} must contain {len(args)} values for the current source contract"
-            )
-        if not args:
-            return tuple(values)
-        return tuple(
-            _decode_production_value(item, item_type, f"{name}[{index}]")
-            for index, (item, item_type) in enumerate(zip(values, args))
-        )
-
-    if origin is Sequence:
-        values = _sequence(value, name)
-        item_type = args[0] if args else Any
-        return tuple(
-            _decode_production_value(item, item_type, f"{name}[]")
-            for item in values
-        )
-
-    if origin is list:
-        values = _sequence(value, name)
-        item_type = args[0] if args else Any
-        return [
-            _decode_production_value(item, item_type, f"{name}[]")
-            for item in values
-        ]
-
-    if origin in (set, frozenset):
-        values = _sequence(value, name)
-        item_type = args[0] if args else Any
-        converted = (
-            _decode_production_value(item, item_type, f"{name}[]")
-            for item in values
-        )
-        return set(converted) if origin is set else frozenset(converted)
-
-    if origin in (dict, Mapping, typing.Mapping):
-        row = _mapping(value, name)
-        key_type = args[0] if len(args) > 0 else Any
-        value_type = args[1] if len(args) > 1 else Any
-        return {
-            _decode_production_value(key, key_type, f"{name}.<key>"): _decode_production_value(
-                item,
-                value_type,
-                f"{name}[{key!r}]",
-            )
-            for key, item in row.items()
-        }
-
-    if expected_type is type(None):
-        if value is not None:
-            raise V3ReplayError(f"{name} must be null")
-        return None
-
-    if isinstance(expected_type, type) and issubclass(expected_type, Enum):
-        try:
-            return expected_type(value)
-        except (TypeError, ValueError) as exc:
-            raise V3ReplayError(
-                f"{name} is not valid for current {expected_type.__name__}"
-            ) from exc
-
-    if isinstance(expected_type, type) and is_dataclass(expected_type):
-        row = _mapping(value, name)
-        _require_type(row, expected_type.__name__, name)
-        try:
-            hints = get_type_hints(expected_type)
-        except (NameError, TypeError) as exc:
-            raise V3ReplayError(
-                f"cannot resolve current source type hints for {expected_type.__name__}: {exc}"
-            ) from exc
-
-        source_fields = {field.name: field for field in fields(expected_type)}
-        unknown = sorted(set(row) - {"__type__"} - set(source_fields))
-        if unknown:
-            raise V3ReplayError(
-                f"{name} contains fields absent from current source {expected_type.__name__}: "
-                + ", ".join(unknown)
-            )
-
-        kwargs: dict[str, object] = {}
-        deferred: dict[str, object] = {}
-        for field_name, field in source_fields.items():
-            if field_name not in row:
-                if (
-                    not field.init
-                    or field.default is not MISSING
-                    or field.default_factory is not MISSING
-                ):
-                    continue
-                raise V3ReplayError(
-                    f"{name} lacks current source field {expected_type.__name__}.{field_name}"
-                )
-            field_type = hints.get(field_name, Any)
-            decoded_field = _decode_production_value(
-                row[field_name],
-                field_type,
-                f"{name}.{field_name}",
-            )
-            if field.init:
-                kwargs[field_name] = decoded_field
-            else:
-                deferred[field_name] = decoded_field
-        try:
-            instance = expected_type(**kwargs)
-        except (TypeError, ValueError) as exc:
-            raise V3ReplayError(
-                f"{name} violates current production {expected_type.__name__}: {exc}"
-            ) from exc
-        for field_name, captured_value in deferred.items():
-            if getattr(instance, field_name) != captured_value:
-                raise V3ReplayError(
-                    f"{name}.{field_name} differs from the current production computed field"
-                )
-        return instance
-
-    if expected_type is bool:
-        if type(value) is not bool:
-            raise V3ReplayError(f"{name} must be bool")
-        return value
-    if expected_type is int:
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise V3ReplayError(f"{name} must be integer")
-        return value
-    if expected_type is float:
-        if (
-            isinstance(value, bool)
-            or not isinstance(value, (int, float))
-            or not math.isfinite(value)
-        ):
-            raise V3ReplayError(f"{name} must be finite numeric")
-        return float(value)
-    if expected_type is str:
-        if not isinstance(value, str):
-            raise V3ReplayError(f"{name} must be string")
-        return value
-
-    if isinstance(expected_type, type):
-        if not isinstance(value, expected_type):
-            raise V3ReplayError(
-                f"{name} must satisfy current source type {expected_type.__name__}"
-            )
-        return value
-
-    raise V3ReplayError(
-        f"{name} uses unsupported current source annotation {expected_type!r}"
-    )
-
-
-def _find_unique_typed_value(value: object, type_name: str) -> Mapping[str, object] | None:
-    matches: list[Mapping[str, object]] = []
-
-    def visit(node: object) -> None:
-        if isinstance(node, Mapping):
-            if node.get("__type__") == type_name:
-                matches.append(node)
-            for child in node.values():
-                visit(child)
-        elif isinstance(node, Sequence) and not isinstance(node, (str, bytes)):
-            for child in node:
-                visit(child)
-
-    visit(value)
-    if len(matches) > 1:
-        raise V3ReplayError(
-            f"capture configuration contains multiple {type_name} values"
-        )
-    return matches[0] if matches else None
-
-
-def _production_inputs(tick: Mapping[str, object]) -> TickInputs:
-    encoded = tick.get("inputs")
-    decoded = _decode_production_value(encoded, TickInputs, "tick.inputs")
-    if not isinstance(decoded, TickInputs):
-        raise V3ReplayError("current source did not decode TickInputs")
-    if decoded.context.tick_id != _integer(tick.get("tick_id"), "tick.tick_id"):
-        raise V3ReplayError("captured TickInputs tick_id mismatch")
-    if decoded.context.monotonic_ns != _integer(
-        tick.get("monotonic_ns"),
-        "tick.monotonic_ns",
-    ):
-        raise V3ReplayError("captured TickInputs monotonic_ns mismatch")
-    return decoded
-
-
-def _production_checkpoint(
-    payload: Mapping[str, object],
-) -> NativeControlStateCheckpoint | None:
-    value = payload.get("initial_state_checkpoint")
-    if value is None:
-        return None
-    decoded = _decode_production_value(
-        value,
-        NativeControlStateCheckpoint,
-        "initial_state_checkpoint",
-    )
-    if not isinstance(decoded, NativeControlStateCheckpoint):
-        raise V3ReplayError("current source did not decode NativeControlStateCheckpoint")
-    return decoded
-
-
-def _production_entry(tick: Mapping[str, object]) -> _ReplayEntry:
-    record_type = tick.get("record_type", "closed_input_tick")
-    expected = _mapping(tick.get("expected"), "tick.expected")
-    writer_failure = isinstance(expected.get("writer_failure"), Mapping)
-    if record_type == "closed_input_tick":
-        inputs = _production_inputs(tick)
-        return _ReplayEntry(
-            context=inputs.context,
-            inputs=inputs,
-            lifecycle=inputs.lifecycle,
-            writer_failure=writer_failure,
-        )
-    if record_type != "edge_fault_tick":
-        raise V3ReplayError("capture tick has an unsupported record_type")
-    edge = _mapping(tick.get("edge_fault"), "tick.edge_fault")
-    context = _decode_production_value(
-        edge.get("context"),
-        TickContext,
-        "tick.edge_fault.context",
-    )
-    lifecycle = _decode_production_value(
-        edge.get("lifecycle"),
-        LifecycleState,
-        "tick.edge_fault.lifecycle",
-    )
-    health = _decode_production_value(
-        edge.get("critical_health", ()),
-        tuple[DeviceHealth, ...],
-        "tick.edge_fault.critical_health",
-    )
-    if not isinstance(context, TickContext):
-        raise V3ReplayError("edge fault context did not decode to TickContext")
-    if not isinstance(lifecycle, LifecycleState):
-        raise V3ReplayError("edge fault lifecycle did not decode to LifecycleState")
-    if not isinstance(health, tuple) or any(
-        not isinstance(item, DeviceHealth) for item in health
-    ):
-        raise V3ReplayError("edge fault health did not decode to DeviceHealth values")
-    reason = edge.get("reason")
-    fault_layer = edge.get("fault_layer")
-    if not isinstance(reason, str) or not reason:
-        raise V3ReplayError("edge fault reason must be non-empty")
-    if not isinstance(fault_layer, str) or not fault_layer:
-        raise V3ReplayError("edge fault layer must be non-empty")
-    return _ReplayEntry(
-        context=context,
-        inputs=None,
-        lifecycle=lifecycle,
-        reason=reason,
-        fault_layer=fault_layer,
-        critical_health=health,
-        writer_failure=writer_failure,
-    )
-
-
-def _production_control_config(
-    payload: Mapping[str, object],
-    inputs: Sequence[TickInputs],
-) -> tuple[NativeControlCompositionConfig, str]:
-    """Use the current production config type whenever capture stored a typed config.
-
-    Modern production captures contain resolved runtime/config dataclasses. We do
-    not reconstruct their nested fields here: the current
-    NativeControlCompositionConfig annotations are the authority. The document
-    branch only preserves compatibility with older/test captures that predate a
-    typed resolved config.
-    """
-
-    configuration = _mapping(payload.get("configuration"), "capture.configuration")
-    encoded = _find_unique_typed_value(
-        configuration,
-        NativeControlCompositionConfig.__name__,
-    )
-    if encoded is not None:
-        decoded = _decode_production_value(
-            encoded,
-            NativeControlCompositionConfig,
-            "capture.configuration.production_control",
-        )
-        if not isinstance(decoded, NativeControlCompositionConfig):
-            raise V3ReplayError("current source did not decode production control config")
-        return decoded, "CURRENT_SOURCE_TYPED_CONFIG"
-
-    # Compatibility only: older validation captures store the four source JSON
-    # documents rather than a typed resolved config. This path intentionally
-    # stays isolated from the modern runtime-following path.
-    documents_value = configuration.get("legacy_documents", configuration)
-    documents = _mapping(documents_value, "capture.configuration.documents")
-    physics = _mapping(documents.get("physics"), "capture.configuration.physics")
-    speed_map = _mapping(
-        documents.get("speed_map"),
-        "capture.configuration.speed_map",
-    )
-    hardware = _mapping(
-        documents.get("hardware"),
-        "capture.configuration.hardware",
-    )
-    control_value = documents.get("control")
-    control = (
-        _mapping(control_value, "capture.configuration.control")
-        if control_value is not None
-        else None
-    )
-    return (
-        _compat_control_config_from_documents(
-            physics,
-            speed_map,
-            hardware,
-            inputs,
-            control,
-        ),
-        "DOCUMENT_COMPATIBILITY",
-    )
-
-
-def _compat_control_config_from_documents(
-    physics: Mapping[str, object],
-    speed_map_raw: Mapping[str, object],
-    hardware: Mapping[str, object],
-    inputs: Sequence[TickInputs],
-    control: Mapping[str, object] | None = None,
-) -> NativeControlCompositionConfig:
-    track_width = _number(
-        physics.get("nyomtav_szelesseg_m"),
-        "physics.nyomtav_szelesseg_m",
-    )
-    if track_width <= 0.0:
-        raise V3ReplayError("physics.nyomtav_szelesseg_m must be positive")
-    lidar_safety = _compat_lidar_safety_config(hardware, inputs)
-    navigation = (
-        v3_navigation_config_from_mapping(dict(control))
-        if control is not None and "v3_navigation" in control
-        else None
-    )
-    navigation_kwargs = (
-        {
-            "world_model": navigation.world_model,
-            "navigation": navigation.navigation,
-        }
-        if navigation is not None
-        else {}
-    )
-    return NativeControlCompositionConfig(
-        speed_map=WheelSpeedMap.from_mapping(speed_map_raw),
-        estimation=NativeStateEstimatorConfig(
-            frame_id="R2B4_BOOT_ROBOT_MAP",
-            track_width_m=track_width,
-        ),
-        chassis_control=ChassisControlConfig(track_width),
-        lidar_safety=lidar_safety,
-        **navigation_kwargs,
-    )
-
-
-def _compat_lidar_safety_config(
-    hardware: Mapping[str, object],
-    inputs: Sequence[TickInputs],
-) -> LidarSafetyConfig:
-    device_ids = {
-        sample.device_id
-        for tick_input in inputs
-        for sample in tick_input.raw_devices.samples
-        if sample.kind == "lidar_safety_clearance"
-    }
-    if not device_ids:
-        raise V3ReplayError("capture lacks native lidar safety samples")
-    if len(device_ids) != 1:
-        raise V3ReplayError(
-            "capture contains lidar safety samples from multiple device IDs"
-        )
-    lidar = _mapping(hardware.get("lidar"), "hardware config lidar")
-    minimum_clearance_m = _number(
-        lidar.get("biztonsagi_zona_m"),
-        "hardware.lidar.biztonsagi_zona_m",
-    )
-    if minimum_clearance_m <= 0.0:
-        raise V3ReplayError("hardware.lidar.biztonsagi_zona_m must be positive")
-    return LidarSafetyConfig(
-        device_id=next(iter(device_ids)),
-        minimum_clearance_m=minimum_clearance_m,
-        maximum_sample_age_ns=250_000_000,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Execution and diagnostics
-# ---------------------------------------------------------------------------
-
-
 def _run_native_replay(
     entries: tuple[_ReplayEntry, ...],
     config: NativeControlCompositionConfig,
@@ -902,7 +519,9 @@ def _run_native_replay(
 
             if not isinstance(exc, TickExecutionError):
                 raise
-            outcomes.append(_ReplayOutcome(None, True, exc.attempted_actuation))
+            outcomes.append(
+                _ReplayOutcome(None, True, exc.attempted_actuation)
+            )
             if not entry.writer_failure:
                 break
         else:
@@ -967,6 +586,685 @@ def _selection_summary(
     }
 
 
+def _reconstruct_general_entry(tick: Mapping[str, object]) -> _ReplayEntry:
+    record_type = tick.get("record_type", "closed_input_tick")
+    expected = _mapping(tick.get("expected"), "tick.expected")
+    writer_failure = isinstance(expected.get("writer_failure"), Mapping)
+    if record_type == "closed_input_tick":
+        inputs = _reconstruct_general_inputs(tick)
+        return _ReplayEntry(
+            context=inputs.context,
+            inputs=inputs,
+            lifecycle=inputs.lifecycle,
+            writer_failure=writer_failure,
+        )
+    if record_type != "edge_fault_tick":
+        raise V3ReplayError("capture tick has an unsupported record_type")
+    edge = _mapping(tick.get("edge_fault"), "tick.edge_fault")
+    context = _context(edge.get("context"), "tick.edge_fault.context")
+    raw_health = edge.get("critical_health", ())
+    health = tuple(
+        DeviceHealth(
+            device_id=str(row.get("device_id", "")),
+            state=DeviceHealthState(str(row.get("state", ""))),
+            reason=None if row.get("reason") is None else str(row.get("reason")),
+        )
+        for row in _mapping_sequence(raw_health, "tick.edge_fault.critical_health")
+    )
+    return _ReplayEntry(
+        context=context,
+        inputs=None,
+        lifecycle=LifecycleState(str(edge.get("lifecycle", ""))),
+        reason=str(edge.get("reason", "")),
+        fault_layer=str(edge.get("fault_layer", "")),
+        critical_health=health,
+        writer_failure=writer_failure,
+    )
+
+
+def _reconstruct_general_inputs(tick: Mapping[str, object]) -> TickInputs:
+    encoded = _mapping(tick.get("inputs"), "tick.inputs")
+    _require_type(encoded, "TickInputs", "tick.inputs")
+    context = _context(encoded.get("context"), "tick.inputs.context")
+    if context.tick_id != _integer(tick.get("tick_id"), "tick.tick_id"):
+        raise V3ReplayError("captured TickInputs tick_id mismatch")
+    if context.monotonic_ns != _integer(tick.get("monotonic_ns"), "tick.monotonic_ns"):
+        raise V3ReplayError("captured TickInputs monotonic_ns mismatch")
+    raw_row = _mapping(encoded.get("raw_devices"), "tick.inputs.raw_devices")
+    _require_type(raw_row, "RawDeviceBatch", "tick.inputs.raw_devices")
+    raw_context = _context(raw_row.get("context"), "RawDeviceBatch.context")
+    samples = tuple(
+        DeviceSample(
+            device_id=str(row.get("device_id", "")),
+            kind=str(row.get("kind", "")),
+            sequence=_integer(row.get("sequence"), "DeviceSample.sequence"),
+            captured_monotonic_ns=_integer(
+                row.get("captured_monotonic_ns"),
+                "DeviceSample.captured_monotonic_ns",
+            ),
+            values=_data_fields(row.get("values"), "DeviceSample.values"),
+        )
+        for row in _mapping_sequence(raw_row.get("samples"), "RawDeviceBatch.samples")
+    )
+    health = tuple(
+        DeviceHealth(
+            device_id=str(row.get("device_id", "")),
+            state=DeviceHealthState(str(row.get("state", ""))),
+            reason=None if row.get("reason") is None else str(row.get("reason")),
+        )
+        for row in _mapping_sequence(
+            raw_row.get("device_health"),
+            "RawDeviceBatch.device_health",
+        )
+    )
+    raw = RawDeviceBatch(raw_context, samples, health)
+    command_row = _mapping(encoded.get("command"), "tick.inputs.command")
+    _require_type(command_row, "CommandRequest", "tick.inputs.command")
+    command = CommandRequest(
+        context=_context(command_row.get("context"), "CommandRequest.context"),
+        command_id=str(command_row.get("command_id", "")),
+        mode=CommandMode(str(command_row.get("mode", ""))),
+        goal=_data_fields(command_row.get("goal"), "CommandRequest.goal"),
+        expiry_tick=_integer(command_row.get("expiry_tick"), "CommandRequest.expiry_tick"),
+    )
+    return TickInputs(
+        context,
+        raw,
+        command,
+        LifecycleState(str(encoded.get("lifecycle", ""))),
+    )
+
+
+def _embedded_control_config(
+    payload: Mapping[str, object],
+    inputs: Sequence[TickInputs],
+) -> NativeControlCompositionConfig:
+    configuration = _mapping(payload.get("configuration"), "capture.configuration")
+    resolved_runtime = configuration.get("resolved_runtime")
+    if resolved_runtime is not None:
+        return _decode_resolved_runtime(
+            _mapping(resolved_runtime, "capture.configuration.resolved_runtime")
+        ).composition.live_control.control
+    resolved = configuration.get("resolved_control")
+    if resolved is not None:
+        return _decode_native_control_config(
+            _mapping(resolved, "capture.configuration.resolved_control")
+        )
+    legacy_value = configuration.get("legacy_documents", configuration)
+    legacy = _mapping(legacy_value, "capture.configuration.legacy_documents")
+    physics = _mapping(legacy.get("physics"), "capture.configuration.physics")
+    speed_map = _mapping(
+        legacy.get("speed_map"),
+        "capture.configuration.speed_map",
+    )
+    hardware = _mapping(
+        legacy.get("hardware"),
+        "capture.configuration.hardware",
+    )
+    control_value = legacy.get("control")
+    control = (
+        _mapping(control_value, "capture.configuration.control")
+        if control_value is not None
+        else None
+    )
+    return _control_config_from_mappings(
+        physics,
+        speed_map,
+        hardware,
+        inputs,
+        control,
+    )
+
+
+def _decode_resolved_runtime(
+    row: Mapping[str, object],
+) -> _ResolvedReplayRuntime:
+    _require_type(row, "ResidentPhysicalRuntimeConfig", "resolved_runtime")
+    composition_row = _mapping(
+        row.get("composition"),
+        "resolved_runtime.composition",
+    )
+    _require_type(
+        composition_row,
+        "ResidentPhysicalControlConfig",
+        "resolved_runtime.composition",
+    )
+    live_row = _mapping(
+        composition_row.get("live_control"),
+        "resolved_runtime.composition.live_control",
+    )
+    _require_type(
+        live_row,
+        "ResidentLiveControlConfig",
+        "resolved_runtime.composition.live_control",
+    )
+    control = _decode_native_control_config(
+        _mapping(
+            live_row.get("control"),
+            "resolved_runtime.composition.live_control.control",
+        )
+    )
+    try:
+        live = ResidentLiveControlConfig(
+            control=control,
+            max_preflight_age_ns=_integer(
+                live_row.get("max_preflight_age_ns"),
+                "resolved_runtime.max_preflight_age_ns",
+            ),
+            required_lidar_preflight_revisions=_integer(
+                live_row.get("required_lidar_preflight_revisions"),
+                "resolved_runtime.required_lidar_preflight_revisions",
+            ),
+        )
+        motor = _decode_motor_edge(
+            _mapping(
+                composition_row.get("motor_output"),
+                "resolved_runtime.composition.motor_output",
+            )
+        )
+        composition = ResidentPhysicalControlConfig(live, motor)
+        sensors = _decode_sensor_hardware(
+            _mapping(row.get("sensor_inputs"), "resolved_runtime.sensor_inputs")
+        )
+        tick_period_ns = _integer(
+            row.get("tick_period_ns"),
+            "resolved_runtime.tick_period_ns",
+        )
+        resolved = _ResolvedReplayRuntime(composition, sensors, tick_period_ns)
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_runtime is invalid: {exc}") from exc
+    return resolved
+
+
+def _decode_motor_edge(row: Mapping[str, object]) -> GpioMotorFrameSinkConfig:
+    _require_type(row, "GpioMotorFrameSinkConfig", "resolved_runtime.motor_output")
+
+    def channel(value: object, name: str) -> MotorChannelPhysicalConfig:
+        item = _mapping(value, name)
+        _require_type(item, "MotorChannelPhysicalConfig", name)
+        try:
+            return MotorChannelPhysicalConfig(
+                in1=_integer(item.get("in1"), f"{name}.in1"),
+                in2=_integer(item.get("in2"), f"{name}.in2"),
+                invert=_required_bool(item.get("invert"), f"{name}.invert"),
+                pwm_decay_mode=PwmDecayMode(str(item.get("pwm_decay_mode", ""))),
+            )
+        except (TypeError, ValueError) as exc:
+            raise V3ReplayError(f"{name} is invalid: {exc}") from exc
+
+    try:
+        return GpioMotorFrameSinkConfig(
+            left=channel(row.get("left"), "resolved_runtime.motor_output.left"),
+            right=channel(row.get("right"), "resolved_runtime.motor_output.right"),
+            gpio_chip=_integer(row.get("gpio_chip"), "resolved_runtime.motor_output.gpio_chip"),
+            pwm_frequency_hz=_integer(
+                row.get("pwm_frequency_hz"),
+                "resolved_runtime.motor_output.pwm_frequency_hz",
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_runtime.motor_output is invalid: {exc}") from exc
+
+
+def _decode_sensor_hardware(row: Mapping[str, object]) -> NativeSensorHardwareConfig:
+    _require_type(row, "NativeSensorHardwareConfig", "resolved_runtime.sensor_inputs")
+    imu_device = _decode_flat_config(
+        NativeBno055DeviceConfig,
+        row.get("imu_device"),
+        "resolved_runtime.sensor_inputs.imu_device",
+        tuple_fields={"axis_order", "axis_sign"},
+    )
+    inputs_row = _mapping(
+        row.get("inputs"),
+        "resolved_runtime.sensor_inputs.inputs",
+    )
+    _require_type(inputs_row, "NativeSensorInputConfig", "resolved_runtime.sensor_inputs.inputs")
+    counter_row = _mapping(
+        inputs_row.get("encoder_counter"),
+        "resolved_runtime.sensor_inputs.inputs.encoder_counter",
+    )
+    _require_type(
+        counter_row,
+        "GpioCounterPairConfig",
+        "resolved_runtime.sensor_inputs.inputs.encoder_counter",
+    )
+    try:
+        counter = GpioCounterPairConfig(
+            left=_decode_flat_config(
+                GpioCounterChannelConfig,
+                counter_row.get("left"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.left",
+            ),
+            right=_decode_flat_config(
+                GpioCounterChannelConfig,
+                counter_row.get("right"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.right",
+            ),
+            gpio_chip=_integer(
+                counter_row.get("gpio_chip"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.gpio_chip",
+            ),
+            edge_history_capacity=_integer(
+                counter_row.get("edge_history_capacity"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_counter.edge_history_capacity",
+            ),
+        )
+        inputs = NativeSensorInputConfig(
+            encoder_counter=counter,
+            encoder_backend=_decode_flat_config(
+                CounterEncoderBackendConfig,
+                inputs_row.get("encoder_backend"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_backend",
+            ),
+            encoder_source=_decode_flat_config(
+                NativeEncoderConfig,
+                inputs_row.get("encoder_source"),
+                "resolved_runtime.sensor_inputs.inputs.encoder_source",
+            ),
+            imu_backend=_decode_flat_config(
+                Bno055ImuBackendConfig,
+                inputs_row.get("imu_backend"),
+                "resolved_runtime.sensor_inputs.inputs.imu_backend",
+            ),
+            imu_source=_decode_flat_config(
+                NativeImuConfig,
+                inputs_row.get("imu_source"),
+                "resolved_runtime.sensor_inputs.inputs.imu_source",
+            ),
+            lidar_backend=_decode_flat_config(
+                LatestLidarBackendConfig,
+                inputs_row.get("lidar_backend"),
+                "resolved_runtime.sensor_inputs.inputs.lidar_backend",
+            ),
+            lidar_source=_decode_flat_config(
+                NativeLidarConfig,
+                inputs_row.get("lidar_source"),
+                "resolved_runtime.sensor_inputs.inputs.lidar_source",
+            ),
+        )
+        return NativeSensorHardwareConfig(
+            imu_device=imu_device,
+            inputs=inputs,
+            lidar_danger_zone_m=_number(
+                row.get("lidar_danger_zone_m"),
+                "resolved_runtime.sensor_inputs.lidar_danger_zone_m",
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_runtime.sensor_inputs is invalid: {exc}") from exc
+
+
+def _decode_native_control_config(
+    row: Mapping[str, object],
+) -> NativeControlCompositionConfig:
+    _require_type(row, "NativeControlCompositionConfig", "resolved_control")
+    expected = {field.name for field in fields(NativeControlCompositionConfig)}
+    missing = sorted(expected - set(row))
+    if missing:
+        raise V3ReplayError(
+            "resolved_control lacks fields: " + ", ".join(missing)
+        )
+    return NativeControlCompositionConfig(
+        speed_map=_decode_speed_map(
+            _mapping(row.get("speed_map"), "resolved_control.speed_map")
+        ),
+        admission=_decode_flat_config(
+            AdmissionConfig,
+            row.get("admission"),
+            "resolved_control.admission",
+        ),
+        estimation=_decode_flat_config(
+            NativeStateEstimatorConfig,
+            row.get("estimation"),
+            "resolved_control.estimation",
+            tuple_fields={
+                "process_noise",
+                "initial_covariance",
+                "lidar_measurement_variance",
+            },
+        ),
+        world_model=_decode_flat_config(
+            WorldModelConfig,
+            row.get("world_model"),
+            "resolved_control.world_model",
+        ),
+        mission=_decode_mission_config(
+            _mapping(row.get("mission"), "resolved_control.mission")
+        ),
+        navigation=_decode_flat_config(
+            NavigationConfig,
+            row.get("navigation"),
+            "resolved_control.navigation",
+        ),
+        motion_realization=_decode_flat_config(
+            MotionRealizationConfig,
+            row.get("motion_realization"),
+            "resolved_control.motion_realization",
+        ),
+        operational_constraints=_decode_flat_config(
+            OperationalConstraintsConfig,
+            row.get("operational_constraints"),
+            "resolved_control.operational_constraints",
+        ),
+        chassis_control=_decode_flat_config(
+            ChassisControlConfig,
+            row.get("chassis_control"),
+            "resolved_control.chassis_control",
+        ),
+        wheel_pi=_decode_flat_config(
+            WheelPiConfig,
+            row.get("wheel_pi"),
+            "resolved_control.wheel_pi",
+        ),
+        lidar_safety=(
+            None
+            if row.get("lidar_safety") is None
+            else _decode_flat_config(
+                LidarSafetyConfig,
+                row.get("lidar_safety"),
+                "resolved_control.lidar_safety",
+            )
+        ),
+    )
+
+
+def _decode_state_checkpoint(
+    payload: Mapping[str, object],
+) -> NativeControlStateCheckpoint | None:
+    value = payload.get("initial_state_checkpoint")
+    if value is None:
+        return None
+    root = _mapping(value, "initial_state_checkpoint")
+    _require_type(root, "NativeControlStateCheckpoint", "initial_state_checkpoint")
+    admission = _typed_mapping(
+        root.get("admission"),
+        "AdmissionStateCheckpoint",
+        "initial_state_checkpoint.admission",
+    )
+    estimator = _typed_mapping(
+        root.get("estimation"),
+        "NativeEstimatorStateCheckpoint",
+        "initial_state_checkpoint.estimation",
+    )
+    world = _typed_mapping(
+        root.get("world_model"),
+        "WorldModelStateCheckpoint",
+        "initial_state_checkpoint.world_model",
+    )
+    mission = _typed_mapping(
+        root.get("mission"),
+        "MissionStateCheckpoint",
+        "initial_state_checkpoint.mission",
+    )
+    navigation = _typed_mapping(
+        root.get("navigation"),
+        "NavigationStateCheckpoint",
+        "initial_state_checkpoint.navigation",
+    )
+    constraints = _typed_mapping(
+        root.get("operational_constraints"),
+        "OperationalConstraintsStateCheckpoint",
+        "initial_state_checkpoint.operational_constraints",
+    )
+    actuator = _typed_mapping(
+        root.get("actuator_control"),
+        "WheelActuatorStateCheckpoint",
+        "initial_state_checkpoint.actuator_control",
+    )
+    final_safety = _typed_mapping(
+        root.get("final_safety"),
+        "FinalSafetyStateCheckpoint",
+        "initial_state_checkpoint.final_safety",
+    )
+    try:
+        return NativeControlStateCheckpoint(
+            engine_last_context=_context(
+                root.get("engine_last_context"),
+                "initial_state_checkpoint.engine_last_context",
+            ),
+            admission=AdmissionStateCheckpoint(
+                tuple(
+                    _decode_admission_sequence(row)
+                    for row in _sequence(
+                        admission.get("last_sequences"),
+                        "admission.last_sequences",
+                    )
+                )
+            ),
+            estimation=NativeEstimatorStateCheckpoint(
+                tuple(
+                    _number(item, "estimation.state[]")
+                    for item in _sequence(estimator.get("state"), "estimation.state")
+                ),
+                tuple(
+                    tuple(
+                        _number(item, "estimation.covariance[][]")
+                        for item in _sequence(row, "estimation.covariance[]")
+                    )
+                    for row in _sequence(
+                        estimator.get("covariance"),
+                        "estimation.covariance",
+                    )
+                ),
+                _optional_context(estimator.get("last_context"), "estimation.last_context"),
+                _number(estimator.get("last_omega"), "estimation.last_omega"),
+            ),
+            world_model=WorldModelStateCheckpoint(
+                _optional_integer(
+                    world.get("last_lidar_measurement_ns"),
+                    "world_model.last_lidar_measurement_ns",
+                ),
+                _optional_integer(
+                    world.get("last_lidar_sequence"),
+                    "world_model.last_lidar_sequence",
+                ),
+                _integer(world.get("map_revision"), "world_model.map_revision"),
+                tuple(
+                    _decode_world_track_state(row)
+                    for row in _sequence(world.get("tracks"), "world_model.tracks")
+                ),
+                _optional_integer(
+                    world.get("last_local_measurement_ns"),
+                    "world_model.last_local_measurement_ns",
+                ),
+                _optional_integer(
+                    world.get("last_local_sequence"),
+                    "world_model.last_local_sequence",
+                ),
+                (
+                    None
+                    if world.get("last_local_values") is None
+                    else _data_fields(
+                        world.get("last_local_values"),
+                        "world_model.last_local_values",
+                    )
+                ),
+                _integer(
+                    world.get("costmap_revision"),
+                    "world_model.costmap_revision",
+                ),
+                tuple(
+                    _decode_grid_state(row, "world_model.cells[]")
+                    for row in _sequence(world.get("cells"), "world_model.cells")
+                ),
+            ),
+            mission=MissionStateCheckpoint(
+                (
+                    None
+                    if mission.get("command_id") is None
+                    else str(mission.get("command_id"))
+                ),
+                (
+                    None
+                    if mission.get("mode") is None
+                    else CommandMode(str(mission.get("mode")))
+                ),
+                _data_fields(mission.get("goal"), "mission.goal"),
+            ),
+            navigation=NavigationStateCheckpoint(
+                (
+                    None
+                    if navigation.get("mission_id") is None
+                    else str(navigation.get("mission_id"))
+                ),
+                _number(
+                    navigation.get("initial_distance_m"),
+                    "navigation.initial_distance_m",
+                ),
+                _number(navigation.get("progress"), "navigation.progress"),
+                _required_bool(navigation.get("completed"), "navigation.completed"),
+                tuple(
+                    _decode_grid_state(row, "navigation.coverage[]")
+                    for row in _sequence(
+                        navigation.get("coverage"),
+                        "navigation.coverage",
+                    )
+                ),
+                _optional_waypoint(
+                    navigation.get("local_goal"),
+                    "navigation.local_goal",
+                ),
+                _integer(
+                    navigation.get("goal_selected_ns"),
+                    "navigation.goal_selected_ns",
+                ),
+                _optional_integer(
+                    navigation.get("last_replan_ns"),
+                    "navigation.last_replan_ns",
+                ),
+                tuple(
+                    _trajectory_evaluation(row, "navigation.trajectory_candidates[]")
+                    for row in _mapping_sequence(
+                        navigation.get("trajectory_candidates"),
+                        "navigation.trajectory_candidates",
+                    )
+                ),
+            ),
+            operational_constraints=OperationalConstraintsStateCheckpoint(
+                _optional_context(
+                    constraints.get("last_context"),
+                    "operational_constraints.last_context",
+                ),
+                _number(
+                    constraints.get("last_v_mps"),
+                    "operational_constraints.last_v_mps",
+                ),
+                _number(
+                    constraints.get("last_omega_rad_s"),
+                    "operational_constraints.last_omega_rad_s",
+                ),
+            ),
+            actuator_control=WheelActuatorStateCheckpoint(
+                _optional_context(
+                    actuator.get("last_context"),
+                    "actuator_control.last_context",
+                ),
+                _number(
+                    actuator.get("left_integral"),
+                    "actuator_control.left_integral",
+                ),
+                _number(
+                    actuator.get("right_integral"),
+                    "actuator_control.right_integral",
+                ),
+            ),
+            final_safety=FinalSafetyStateCheckpoint(
+                _required_bool(
+                    final_safety.get("fault_latched"),
+                    "final_safety.fault_latched",
+                )
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        if isinstance(exc, V3ReplayError):
+            raise
+        raise V3ReplayError(f"initial_state_checkpoint is invalid: {exc}") from exc
+
+
+def _decode_flat_config(
+    cls: type,
+    value: object,
+    name: str,
+    *,
+    tuple_fields: set[str] | None = None,
+):
+    row = _mapping(value, name)
+    _require_type(row, cls.__name__, name)
+    names = tuple(field.name for field in fields(cls))
+    missing = [field_name for field_name in names if field_name not in row]
+    if missing:
+        raise V3ReplayError(f"{name} lacks fields: {', '.join(missing)}")
+    converted = {
+        field_name: (
+            tuple(_sequence(row[field_name], f"{name}.{field_name}"))
+            if tuple_fields and field_name in tuple_fields
+            else row[field_name]
+        )
+        for field_name in names
+    }
+    try:
+        return cls(**converted)
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"{name} is invalid: {exc}") from exc
+
+
+def _decode_speed_map(row: Mapping[str, object]) -> WheelSpeedMap:
+    _require_type(row, "WheelSpeedMap", "resolved_control.speed_map")
+    curves = tuple(
+        WheelSpeedCurve(
+            name=str(curve.get("name", "")),
+            points=tuple(
+                SpeedMapPoint(
+                    speed_mps=_number(point.get("speed_mps"), "speed_map.speed_mps"),
+                    normalized_output=_number(
+                        point.get("normalized_output"),
+                        "speed_map.normalized_output",
+                    ),
+                )
+                for point in _mapping_sequence(curve.get("points"), "speed_map.points")
+                if _required_encoded_type(point, "SpeedMapPoint", "speed_map.point")
+            ),
+            maintenance_output=_number(
+                curve.get("maintenance_output"),
+                "speed_map.maintenance_output",
+            ),
+            startup_output=_number(
+                curve.get("startup_output"),
+                "speed_map.startup_output",
+            ),
+        )
+        for curve in _mapping_sequence(row.get("curves"), "resolved_control.speed_map.curves")
+        if _required_encoded_type(curve, "WheelSpeedCurve", "speed_map.curve")
+    )
+    try:
+        return WheelSpeedMap(
+            schema=str(row.get("schema", "")),
+            map_state=str(row.get("map_state", "")),
+            curves=curves,
+        )
+    except (TypeError, ValueError) as exc:
+        raise V3ReplayError(f"resolved_control.speed_map is invalid: {exc}") from exc
+
+
+def _decode_mission_config(row: Mapping[str, object]) -> MissionConfig:
+    _require_type(row, "MissionConfig", "resolved_control.mission")
+    constraints = _decode_flat_config(
+        MissionConstraints,
+        row.get("default_constraints"),
+        "resolved_control.mission.default_constraints",
+    )
+    return MissionConfig(default_constraints=constraints)
+
+
+def _required_encoded_type(
+    row: Mapping[str, object],
+    expected: str,
+    name: str,
+) -> bool:
+    _require_type(row, expected, name)
+    return True
+
+
 def _general_diagnostics(
     ticks: Sequence[Mapping[str, object]],
     outcomes: Sequence[_ReplayOutcome],
@@ -994,7 +1292,6 @@ def _general_diagnostics(
             "evidence": {"capture_tick_count": len(ticks)},
         }
         return first, layer_rows
-
     for tick, outcome in zip(ticks, outcomes):
         expected = _mapping(tick.get("expected"), "tick.expected")
         expected_writer_failure = expected.get("writer_failure")
@@ -1024,7 +1321,6 @@ def _general_diagnostics(
                     row["mismatch_count"] = int(row["mismatch_count"]) + 1
                 layer_rows["L12"] = row
             continue
-
         result = outcome.result
         if result is None:
             if first is None:
@@ -1037,7 +1333,6 @@ def _general_diagnostics(
                     "writer failure",
                 )
             continue
-
         expected_layers = _expanded_expected_layers(
             tick,
             _mapping(expected.get("layers"), "tick.expected.layers"),
@@ -1046,6 +1341,7 @@ def _general_diagnostics(
             record.layer: _capture_value(record.output)
             for record in result.trace.layers
         }
+        mismatched_layers: set[str] = set()
         for layer in layers:
             expected_present = layer in expected_layers
             actual_present = layer in actual_layers
@@ -1067,15 +1363,14 @@ def _general_diagnostics(
                 if expected_layers[layer] == actual_layers[layer]:
                     layer_rows[layer] = row
                     continue
+            mismatched_layers.add(layer)
             row["mismatch_count"] = int(row["mismatch_count"]) + 1
             layer_rows[layer] = row
             if first is None:
                 expected_value = (
                     expected_layers[layer] if expected_present else "NOT_EXECUTED"
                 )
-                actual_value = (
-                    actual_layers[layer] if actual_present else "NOT_EXECUTED"
-                )
+                actual_value = actual_layers[layer] if actual_present else "NOT_EXECUTED"
                 difference = _first_value_difference(expected_value, actual_value)
                 path, expected_leaf, actual_leaf = difference or (
                     "",
@@ -1094,7 +1389,6 @@ def _general_diagnostics(
                     expected_leaf,
                     actual_leaf,
                 )
-
         expected_fault = expected.get("fault_layer")
         actual_fault = result.trace.fault_layer
         if (
@@ -1341,11 +1635,7 @@ def _physical_root_cause(
         }
     raw = payload.get("raw_lidar_evidence")
     missing = raw.get("missing_revisions") if isinstance(raw, Mapping) else ()
-    if (
-        isinstance(missing, Sequence)
-        and not isinstance(missing, (str, bytes))
-        and missing
-    ):
+    if isinstance(missing, Sequence) and not isinstance(missing, (str, bytes)) and missing:
         return {
             "status": "NOT_PROVEN",
             "cause": None,
@@ -1417,98 +1707,77 @@ def _general_execution_summary(
     }
 
 
-def _module_name_for_source(relative: Path) -> tuple[str, bool]:
-    parts = list(relative.with_suffix("").parts)
-    is_package = bool(parts and parts[-1] == "__init__")
-    if is_package:
-        parts.pop()
-    return ".".join(parts), is_package
+def _control_config_from_mappings(
+    physics: Mapping[str, object],
+    speed_map_raw: Mapping[str, object],
+    hardware: Mapping[str, object],
+    inputs: Sequence[TickInputs],
+    control: Mapping[str, object] | None = None,
+) -> NativeControlCompositionConfig:
+    track_width = _number(
+        physics.get("nyomtav_szelesseg_m"),
+        "physics.nyomtav_szelesseg_m",
+    )
+    if track_width <= 0.0:
+        raise V3ReplayError("physics.nyomtav_szelesseg_m must be positive")
+    lidar_safety = _load_lidar_safety_config(hardware, inputs)
+    navigation = (
+        v3_navigation_config_from_mapping(control)
+        if control is not None and "v3_navigation" in control
+        else None
+    )
+    navigation_kwargs = (
+        {
+            "world_model": navigation.world_model,
+            "navigation": navigation.navigation,
+        }
+        if navigation is not None
+        else {}
+    )
+    return NativeControlCompositionConfig(
+        speed_map=WheelSpeedMap.from_mapping(speed_map_raw),
+        estimation=NativeStateEstimatorConfig(
+            frame_id="R2B4_BOOT_ROBOT_MAP",
+            track_width_m=track_width,
+        ),
+        chassis_control=ChassisControlConfig(track_width),
+        lidar_safety=lidar_safety,
+        **navigation_kwargs,
+    )
 
 
-def _local_module_path(root: Path, module_name: str) -> Path | None:
-    if not module_name:
-        return None
-    parts = module_name.split(".")
-    file_path = root.joinpath(*parts).with_suffix(".py")
-    package_path = root.joinpath(*parts, "__init__.py")
-    if file_path.is_file() and not file_path.is_symlink():
-        return file_path
-    if package_path.is_file() and not package_path.is_symlink():
-        return package_path
-    return None
+def _load_lidar_safety_config(
+    hardware: Mapping[str, object],
+    inputs: Sequence[TickInputs],
+) -> LidarSafetyConfig:
+    """Reconstruct the native gate from the captured native LiDAR stream."""
 
-
-def _resolved_import_modules(
-    node: ast.Import | ast.ImportFrom,
-    *,
-    importer: str,
-    is_package: bool,
-) -> tuple[str, ...]:
-    if isinstance(node, ast.Import):
-        return tuple(alias.name for alias in node.names)
-
-    if node.level == 0:
-        base = node.module or ""
-    else:
-        package = importer.split(".") if is_package else importer.split(".")[:-1]
-        keep = len(package) - (node.level - 1)
-        if keep < 0:
-            return ()
-        prefix = package[:keep]
-        if node.module:
-            prefix.extend(node.module.split("."))
-        base = ".".join(prefix)
-
-    candidates: list[str] = []
-    if base:
-        candidates.append(base)
-    for alias in node.names:
-        if alias.name == "*":
-            continue
-        candidates.append(f"{base}.{alias.name}" if base else alias.name)
-    return tuple(dict.fromkeys(candidates))
-
-
-def _source_first_paths(root: Path) -> tuple[str, ...]:
-    """Derive the current local runtime/replay dependency closure from source imports."""
-
-    root = root.resolve()
-    pending: list[Path] = [
-        _regular_file(root / relative, relative)
-        for relative in _SOURCE_FIRST_ROOTS
-    ]
-    discovered: set[Path] = set()
-    while pending:
-        path = pending.pop().resolve()
-        if path in discovered:
-            continue
-        try:
-            relative = path.relative_to(root)
-        except ValueError as exc:
-            raise V3ReplayError("source-first dependency escaped project root") from exc
-        discovered.add(path)
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=relative.as_posix())
-        except (OSError, UnicodeError, SyntaxError) as exc:
-            raise V3ReplayError(
-                f"cannot inspect source dependency {relative.as_posix()}: {exc}"
-            ) from exc
-        importer, is_package = _module_name_for_source(relative)
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.Import, ast.ImportFrom)):
-                continue
-            for module_name in _resolved_import_modules(
-                node, importer=importer, is_package=is_package
-            ):
-                dependency = _local_module_path(root, module_name)
-                if dependency is not None and dependency.resolve() not in discovered:
-                    pending.append(dependency)
-
-    paths = {path.relative_to(root).as_posix() for path in discovered}
-    for relative in _SOURCE_FIRST_STATIC_PATHS:
-        _regular_file(root / relative, relative)
-        paths.add(relative)
-    return tuple(sorted(paths))
+    device_ids = {
+        sample.device_id
+        for tick_input in inputs
+        for sample in tick_input.raw_devices.samples
+        if sample.kind == "lidar_safety_clearance"
+    }
+    if not device_ids:
+        raise V3ReplayError("capture lacks native lidar safety samples")
+    if len(device_ids) != 1:
+        raise V3ReplayError(
+            "capture contains lidar safety samples from multiple device IDs"
+        )
+    lidar = _mapping(hardware.get("lidar"), "hardware config lidar")
+    minimum_clearance_m = _number(
+        lidar.get("biztonsagi_zona_m"),
+        "hardware.lidar.biztonsagi_zona_m",
+    )
+    if minimum_clearance_m <= 0.0:
+        raise V3ReplayError(
+            "hardware.lidar.biztonsagi_zona_m must be positive"
+        )
+    return LidarSafetyConfig(
+        device_id=next(iter(device_ids)),
+        minimum_clearance_m=minimum_clearance_m,
+        maximum_sample_age_ns=250_000_000,
+    )
 
 
 def _source_first_evidence(
@@ -1525,14 +1794,13 @@ def _source_first_evidence(
             "capture source manifest.files",
         )
     all_match = manifest is not None
-    for relative in _source_first_paths(root):
+    for relative in _SOURCE_FIRST_PATHS:
         path = _regular_file(root / relative, relative)
         actual_hash = _sha256_file(path)
         expected_row = expected_files.get(relative)
         expected_hash = (
             str(expected_row.get("sha256"))
-            if isinstance(expected_row, Mapping)
-            and expected_row.get("sha256") is not None
+            if isinstance(expected_row, Mapping) and expected_row.get("sha256") is not None
             else None
         )
         matches = expected_hash == actual_hash if expected_hash is not None else None
@@ -1545,7 +1813,6 @@ def _source_first_evidence(
         }
     return {
         "source_order": ["SOURCE", "ACTIVE_CONFIG", "CAPTURE"],
-        "source_discovery": "CURRENT_LOCAL_IMPORT_CLOSURE",
         "capture_source_manifest_path": (
             None if manifest is None else str(manifest.resolve())
         ),
@@ -1561,6 +1828,147 @@ def _capture_value(value: object) -> object:
         raise V3ReplayError(str(exc)) from exc
 
 
+def _context(value: object, name: str) -> TickContext:
+    row = _mapping(value, name)
+    _require_type(row, "TickContext", name)
+    return TickContext(
+        _integer(row.get("tick_id"), f"{name}.tick_id"),
+        _integer(row.get("monotonic_ns"), f"{name}.monotonic_ns"),
+    )
+
+
+def _typed_mapping(value: object, expected: str, name: str) -> Mapping[str, object]:
+    row = _mapping(value, name)
+    _require_type(row, expected, name)
+    return row
+
+
+def _optional_context(value: object, name: str) -> TickContext | None:
+    return None if value is None else _context(value, name)
+
+
+def _optional_integer(value: object, name: str) -> int | None:
+    return None if value is None else _integer(value, name)
+
+
+def _signed_integer(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise V3ReplayError(f"{name} must be an integer")
+    return value
+
+
+def _decode_grid_state(value: object, name: str) -> tuple[int, int, int, int]:
+    row = _sequence(value, name)
+    if len(row) != 4:
+        raise V3ReplayError(f"{name} must contain four integers")
+    return (
+        _signed_integer(row[0], f"{name}[0]"),
+        _signed_integer(row[1], f"{name}[1]"),
+        _integer(row[2], f"{name}[2]"),
+        _integer(row[3], f"{name}[3]"),
+    )
+
+
+def _decode_admission_sequence(value: object) -> tuple[str, str, int]:
+    row = _sequence(value, "admission.last_sequences[]")
+    if len(row) != 3:
+        raise V3ReplayError("admission.last_sequences[] must contain three values")
+    return (
+        str(row[0]),
+        str(row[1]),
+        _integer(row[2], "admission.last_sequences[].sequence"),
+    )
+
+
+def _decode_world_track_state(value: object) -> tuple[ObstacleTrack, int]:
+    row = _sequence(value, "world_model.tracks[]")
+    if len(row) != 2:
+        raise V3ReplayError("world_model.tracks[] must contain track and timestamp")
+    track = _typed_mapping(row[0], "ObstacleTrack", "world_model.tracks[].track")
+    return (
+        ObstacleTrack(
+            track_id=str(track.get("track_id", "")),
+            x_m=_number(track.get("x_m"), "world_model.track.x_m"),
+            y_m=_number(track.get("y_m"), "world_model.track.y_m"),
+            radius_m=_number(track.get("radius_m"), "world_model.track.radius_m"),
+            vx_mps=_number(track.get("vx_mps"), "world_model.track.vx_mps"),
+            vy_mps=_number(track.get("vy_mps"), "world_model.track.vy_mps"),
+            confidence=_number(
+                track.get("confidence"),
+                "world_model.track.confidence",
+            ),
+        ),
+        _integer(row[1], "world_model.tracks[].captured_monotonic_ns"),
+    )
+
+
+def _optional_waypoint(value: object, name: str) -> Waypoint | None:
+    if value is None:
+        return None
+    row = _typed_mapping(value, "Waypoint", name)
+    return Waypoint(
+        _number(row.get("x_m"), f"{name}.x_m"),
+        _number(row.get("y_m"), f"{name}.y_m"),
+        (
+            None
+            if row.get("yaw_rad") is None
+            else _number(row.get("yaw_rad"), f"{name}.yaw_rad")
+        ),
+    )
+
+
+def _trajectory_evaluation(
+    value: Mapping[str, object],
+    name: str,
+) -> TrajectoryEvaluation:
+    _require_type(value, "TrajectoryEvaluation", name)
+    samples = tuple(
+        TrajectoryPose(
+            _number(row.get("x_m"), f"{name}.samples[].x_m"),
+            _number(row.get("y_m"), f"{name}.samples[].y_m"),
+            _number(row.get("yaw_rad"), f"{name}.samples[].yaw_rad"),
+            _integer(
+                row.get("time_offset_ns"),
+                f"{name}.samples[].time_offset_ns",
+            ),
+        )
+        for row in _mapping_sequence(value.get("samples"), f"{name}.samples")
+        if _required_encoded_type(row, "TrajectoryPose", f"{name}.samples[]")
+    )
+    return TrajectoryEvaluation(
+        candidate_id=str(value.get("candidate_id", "")),
+        v_mps=_number(value.get("v_mps"), f"{name}.v_mps"),
+        omega_rad_s=_number(value.get("omega_rad_s"), f"{name}.omega_rad_s"),
+        horizon_ns=_integer(value.get("horizon_ns"), f"{name}.horizon_ns"),
+        samples=samples,
+        collision=_required_bool(value.get("collision"), f"{name}.collision"),
+        min_clearance_m=_number(
+            value.get("min_clearance_m"),
+            f"{name}.min_clearance_m",
+        ),
+        progress_score=_number(
+            value.get("progress_score"),
+            f"{name}.progress_score",
+        ),
+        smoothness_score=_number(
+            value.get("smoothness_score"),
+            f"{name}.smoothness_score",
+        ),
+        novelty_score=_number(
+            value.get("novelty_score"),
+            f"{name}.novelty_score",
+        ),
+        total_score=_number(value.get("total_score"), f"{name}.total_score"),
+    )
+
+
+def _data_fields(value: object, name: str) -> tuple[DataField, ...]:
+    return tuple(
+        DataField(str(row.get("key", "")), row.get("value"))
+        for row in _mapping_sequence(value, name)
+    )
+
+
 def _require_type(value: Mapping[str, object], expected: str, name: str) -> None:
     if value.get("__type__") != expected:
         raise V3ReplayError(f"{name} must contain {expected}")
@@ -1572,6 +1980,15 @@ def _mapping(value: object, name: str) -> Mapping[str, object]:
     return value
 
 
+def _mapping_sequence(
+    value: object,
+    name: str,
+) -> tuple[Mapping[str, object], ...]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise V3ReplayError(f"{name} must be an array")
+    return tuple(_mapping(item, name) for item in value)
+
+
 def _sequence(value: object, name: str) -> Sequence[object]:
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise V3ReplayError(f"{name} must be an array")
@@ -1581,6 +1998,12 @@ def _sequence(value: object, name: str) -> Sequence[object]:
 def _integer(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise V3ReplayError(f"{name} must be a non-negative integer")
+    return value
+
+
+def _required_bool(value: object, name: str) -> bool:
+    if type(value) is not bool:
+        raise V3ReplayError(f"{name} must be bool")
     return value
 
 
