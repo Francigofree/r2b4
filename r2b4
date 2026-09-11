@@ -23,8 +23,11 @@ cd "$ROOT" || exit 1
 RUNTIME_DIR="$ROOT/runtime"
 CAPTURE_DIR="$RUNTIME_DIR/captures"
 STATUS_FILE="$RUNTIME_DIR/v3_status.json"
+COMMAND_FILE="$RUNTIME_DIR/v3_command.json"
 RUNTIME_LOG="/tmp/r2b4-runtime-current.log"
 COMMAND_LOG="/tmp/r2b4-command-current.log"
+[[ -r "$RUNTIME_DIR/.r2b4_runtime_log" ]] && read -r RUNTIME_LOG <"$RUNTIME_DIR/.r2b4_runtime_log"
+[[ -r "$RUNTIME_DIR/.r2b4_command_log" ]] && read -r COMMAND_LOG <"$RUNTIME_DIR/.r2b4_command_log"
 
 RUNTIME_PID_FILE="$RUNTIME_DIR/.r2b4_runtime_pid"
 COMMAND_PID_FILE="$RUNTIME_DIR/.r2b4_command_pid"
@@ -51,6 +54,8 @@ Usage:
   r2b4 roomcruise start [nocapture]
 
   r2b4 stop
+  r2b4 shutdown
+  r2b4 proba
 
 Defaults:
   forward speed: 0.15 m/s
@@ -58,7 +63,23 @@ Defaults:
   movement capture: ON
 
 Capture uses the existing native bounded triggered ring:
-  pre-event 5 s, post-event 2 s, max 512 ticks / 16 MiB.
+  pre-event 5 s, post-event 2 s, max 512 ticks / 64 MiB.
+
+Starting a movement or capture automatically starts the runtime if needed.
+"stop" cancels the command producer (including proba) and returns to IDLE.
+"shutdown", "runtime stop" and Ctrl+C stop the runtime as well.
+After each launcher-managed runtime exits, Test Hub validates its new capture.
+Results and logs use unique paths under /tmp; see the runtime log path.
+
+"proba" runs ten slow phases in the foreground, with 5 s in IDLE between them:
+  forward/reverse: 5 s each, ramping from 0.15 to 0.25 m/s;
+  right-forward/right-reverse/left-forward/left-reverse arcs: 5 s each,
+    radius decreasing from 2.0 to 0.6 m at 0.15 m/s;
+  right/left in-place turns: 90 degrees each;
+  right/left turns about the stationary right wheel: 180 degrees each.
+Angles use runtime yaw feedback; safety or feedback failure aborts the test.
+The final left turn moves the left wheel backwards, with the right target zero.
+Capture remains the native bounded event window, not a full proba recording.
 
 "capture start" triggers one bounded event capture.
 "capture stop" waits for its automatic finalization and reports the file.
@@ -123,12 +144,17 @@ _get_pid() {
 }
 
 _runtime_pid() { _get_pid "$RUNTIME_PID_FILE" "v3_process_runtime.py"; }
-_command_pid() { _get_pid "$COMMAND_PID_FILE" "v3.control_cli"; }
+_command_pid() {
+    _get_pid "$COMMAND_PID_FILE" "r2b4-proba" ||
+        _get_pid "$COMMAND_PID_FILE" "v3.control_cli"
+}
 
 _wait_gone() {
-    local pid="$1" i
+    local pid="$1" i state
     for i in {1..20}; do
         kill -0 "$pid" 2>/dev/null || return 0
+        state="$(cat "/proc/$pid/stat" 2>/dev/null || true)"
+        [[ "${state##*) }" == Z* ]] && return 0
         sleep 0.05
     done
     return 1
@@ -136,13 +162,13 @@ _wait_gone() {
 
 _stop_heartbeat() {
     local pid=""
-    pid="$(_command_pid 2>/dev/null || true)"
-    [[ -z "$pid" ]] && return 0
-    kill -TERM "$pid" 2>/dev/null || true
-    if ! _wait_gone "$pid"; then
-        echo "ERROR: command heartbeat did not stop (PID $pid)." >&2
-        return 1
-    fi
+    while pid="$(_command_pid 2>/dev/null)"; do
+        kill -TERM "$pid" 2>/dev/null || true
+        if ! _wait_gone "$pid"; then
+            echo "ERROR: command heartbeat did not stop (PID $pid)." >&2
+            return 1
+        fi
+    done
     rm -f "$COMMAND_PID_FILE"
 }
 
@@ -152,10 +178,16 @@ _publish_stop() {
 }
 
 _robot_stop() {
+    local result=0
+    _stop_heartbeat || result=1
+    _publish_stop || result=1
     _trigger_movement_capture_if_needed || true
-    _stop_heartbeat || return 1
-    _publish_stop || true
     rm -f "$MOVEMENT_CAPTURE_FILE"
+    if (( result != 0 )); then
+        echo "ERROR: STOP could not be completed; requesting runtime shutdown." >&2
+        _runtime_kill
+    fi
+    return "$result"
 }
 
 _runtime_kill() {
@@ -166,11 +198,11 @@ _runtime_kill() {
 }
 
 _panic() {
-    _robot_stop || true
-    _runtime_kill
+    _runtime_stop
 }
 
-trap '_panic; exit 130' INT
+trap 'trap "" INT TERM; _panic; exit 130' INT
+trap 'trap "" INT TERM; _panic; exit 143' TERM
 
 _status_json() {
     python3 -m v3.control_cli status 2>/dev/null
@@ -315,14 +347,42 @@ _capture_used() {
     [[ -n "$p" && -f "$p" ]]
 }
 
+# The detached shell only waits for the native process and runs offline tools.
+# It owns no robot-control path. Its capture argument belongs to this session,
+# so a later restart cannot redirect validation to another session's file.
+_runtime_session() {
+    local capture="$1" pid output result
+    python3 v3_process_runtime.py \
+        --approval native-resident-v3 \
+        --capture-path "${capture#"$ROOT"/}" \
+        --capture-mode triggered &
+    pid=$!
+    echo "$pid" >"$RUNTIME_PID_FILE"
+    chmod 600 "$RUNTIME_PID_FILE" 2>/dev/null || true
+    trap 'kill -TERM "$pid" 2>/dev/null || true' INT TERM
+    wait "$pid"
+    # A signal can interrupt wait before the native shutdown/finalizer finishes.
+    while _pid_has_arg "$pid" "v3_process_runtime.py"; do wait "$pid"; done
+    trap '' INT TERM
+    if [[ -f "$capture" ]]; then
+        output="$(mktemp -d /tmp/r2b4-test-hub.XXXXXXXX)" || return 1
+        echo "test hub: validating $capture -> $output"
+        python3 -m v3.test_hub validate "$capture" \
+            --project-root "$ROOT" --output-dir "$output"
+        result=$?
+        echo "test hub: finished (exit $result), results: $output"
+        return "$result"
+    fi
+    echo "test hub: no new capture finalized for this runtime session"
+}
+
 _runtime_start() {
-    local old="" fresh left="" status_baseline=""
+    local old="" fresh status_baseline="" pid="" supervisor i
     old="$(_runtime_pid 2>/dev/null || true)"
 
     if [[ -n "$old" ]]; then
         echo "runtime: existing instance -> STOP"
-        _robot_stop || true
-        kill -TERM "$old" 2>/dev/null || true
+        _runtime_stop || return 1
         echo "runtime: waiting 5 s"
         sleep 5
         if _pid_has_arg "$old" "v3_process_runtime.py"; then
@@ -331,9 +391,12 @@ _runtime_start() {
         fi
         rm -f "$RUNTIME_PID_FILE"
     else
-        _stop_heartbeat || true
+        _stop_heartbeat || return 1
     fi
 
+    # A missing mailbox is canonical STOP. An empty/malformed JSON file faults
+    # the gateway; remove the stale command only after the old writers exit.
+    rm -f -- "$COMMAND_FILE" || return 1
     status_baseline="$(_status_json 2>/dev/null || true)"
 
     fresh="$(_new_capture_path)"
@@ -341,15 +404,18 @@ _runtime_start() {
     chmod 600 "$CAPTURE_PATH_FILE" 2>/dev/null || true
     rm -f "$CAPTURE_USED_FILE" "$MOVEMENT_CAPTURE_FILE"
 
-    : >"$RUNTIME_LOG"
-    nohup python3 v3_process_runtime.py \
-        --approval native-resident-v3 \
-        --capture-path "${fresh#"$ROOT"/}" \
-        --capture-mode triggered \
+    RUNTIME_LOG="$(mktemp /tmp/r2b4-runtime.XXXXXXXX.log)" || return 1
+    echo "$RUNTIME_LOG" >"$RUNTIME_DIR/.r2b4_runtime_log"
+    rm -f "$RUNTIME_PID_FILE"
+    nohup bash "$ROOT/r2b4" __runtime-session "$fresh" \
         </dev/null >"$RUNTIME_LOG" 2>&1 &
-    local pid=$!
-    echo "$pid" >"$RUNTIME_PID_FILE"
-    chmod 600 "$RUNTIME_PID_FILE" 2>/dev/null || true
+    supervisor=$!
+    for i in {1..40}; do
+        [[ -r "$RUNTIME_PID_FILE" ]] && read -r pid <"$RUNTIME_PID_FILE"
+        [[ -n "$pid" ]] && break
+        kill -0 "$supervisor" 2>/dev/null || break
+        sleep 0.05
+    done
 
     sleep 0.20
     if ! _pid_has_arg "$pid" "v3_process_runtime.py"; then
@@ -361,27 +427,76 @@ _runtime_start() {
     if ! _wait_fresh_ready "$pid" "$status_baseline"; then
         echo "ERROR: runtime did not publish a fresh ready status." >&2
         _show_diag >&2
+        _runtime_stop || true
         return 1
     fi
 
     echo "runtime: STARTED (PID $pid)"
     echo "capture: ARMED (bounded ring)"
     echo "capture file: ${fresh#"$ROOT"/}"
+    echo "runtime / Test Hub log: $RUNTIME_LOG"
     [[ "${R2B4_CTRL_C_HOOK:-0}" != "1" ]] && \
         echo "note: global Ctrl+C panic hook inactive; source $ROOT/r2b4"
+    return 0
 }
 
 _runtime_stop() {
-    local pid=""
-    _robot_stop || true
+    local pid="" i result=0
+    _robot_stop || result=1
     pid="$(_runtime_pid 2>/dev/null || true)"
     if [[ -z "$pid" ]]; then
         echo "runtime: already STOPPED"
-        return
+        return "$result"
     fi
     kill -TERM "$pid" 2>/dev/null || true
-    rm -f "$RUNTIME_PID_FILE"
-    echo "runtime: shutdown requested (PID $pid)"
+    for i in {1..200}; do
+        if ! _pid_has_arg "$pid" "v3_process_runtime.py"; then
+            rm -f "$RUNTIME_PID_FILE"
+            echo "runtime: STOPPED (PID $pid)"
+            echo "test hub: automatic validation after finalization; log: $RUNTIME_LOG"
+            return "$result"
+        fi
+        sleep 0.05
+    done
+    echo "ERROR: runtime did not exit after shutdown (PID $pid)." >&2
+    return 1
+}
+
+_ensure_runtime() {
+    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] && return 0
+    _runtime_start
+}
+
+_wait_idle() {
+    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 0
+    python3 - "$STATUS_FILE" "$COMMAND_FILE" <<'PY'
+import json, sys, time
+from pathlib import Path
+from v3.control_cli import _read_status
+command = json.loads(Path(sys.argv[2]).read_text())
+if command.get("mode") != "STOP":
+    raise SystemExit("ERROR: another command replaced STOP before IDLE confirmation.")
+issued_ns = command["issued_monotonic_ns"]
+deadline = time.monotonic() + 3.0
+while time.monotonic() < deadline:
+    try:
+        s = _read_status(Path(sys.argv[1]))
+        age = time.monotonic_ns() - s.get("monotonic_ns", 0)
+        if (s.get("state") == "RUNNING" and 0 <= age < 500_000_000
+                and s.get("monotonic_ns", 0) > issued_ns
+                and s.get("ready_for_active") is True
+                and s.get("safety_decision") == "STOP"
+                and s.get("enabled") is False
+                and s.get("left_output") == s.get("right_output") == 0):
+            raise SystemExit(0)
+        if s.get("state") != "RUNNING" or s.get("fault_layer") or s.get("safety_decision") == "FAULT":
+            break
+    except ValueError:
+        break
+    time.sleep(0.05)
+print("ERROR: runtime did not confirm ready IDLE with inactive outputs.", file=sys.stderr)
+raise SystemExit(1)
+PY
 }
 
 _wait_ready() {
@@ -445,10 +560,7 @@ _trigger_current_capture() {
 
 _trigger_capture() {
     local origin="$1"
-    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || {
-        echo "ERROR: runtime is not running." >&2
-        return 1
-    }
+    _ensure_runtime || return 1
     _ensure_fresh_capture_slot || return 1
     _trigger_current_capture "$origin"
 }
@@ -596,12 +708,10 @@ _start_motion() {
     shift 2
     local s="" baseline="-1" cpid
 
-    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || { echo "ERROR: runtime is not running." >&2; return 1; }
-    _status_ready || { echo "ERROR: runtime is not ready for ACTIVE." >&2; _show_diag >&2; return 1; }
+    _ensure_runtime || return 1
 
     _robot_stop || return 1
-    for _ in {1..20}; do _status_ready && break; sleep 0.05; done
-    _status_ready || { echo "ERROR: runtime did not return to ready IDLE." >&2; _show_diag >&2; return 1; }
+    _wait_idle || { _show_diag >&2; return 1; }
 
     if [[ "$capture" == "yes" ]]; then
         _ensure_fresh_capture_slot || return 1
@@ -615,7 +725,8 @@ _start_motion() {
     s="$(_status_json)" || true
     [[ -n "$s" ]] && baseline="$(_tick_from_json "$s")"
 
-    : >"$COMMAND_LOG"
+    COMMAND_LOG="$(mktemp /tmp/r2b4-command.XXXXXXXX.log)" || return 1
+    echo "$COMMAND_LOG" >"$RUNTIME_DIR/.r2b4_command_log"
     nohup "$@" </dev/null >"$COMMAND_LOG" 2>&1 &
     cpid=$!
     echo "$cpid" >"$COMMAND_PID_FILE"
@@ -759,6 +870,167 @@ _roomcruise() {
         --command-id "launcher-roomcruise-$(date +%s%N)-$$"
 }
 
+_proba() {
+    local cpid result
+    _ensure_runtime || return 1
+    _robot_stop || return 1
+    _wait_idle || return 1
+    _ensure_fresh_capture_slot || return 1
+    echo "movement" >"$MOVEMENT_CAPTURE_FILE"
+    chmod 600 "$MOVEMENT_CAPTURE_FILE" 2>/dev/null || true
+
+    # One interruptible command producer owns the whole sequence, including
+    # pauses. External STOP terminates it before publishing the final STOP.
+    python3 - r2b4-proba "$ROOT" <<'PY' &
+import json, math, os, signal, sys, time
+from pathlib import Path
+from v3.adapters.resident_command import ResidentCommandClient, ResidentCommandMailboxConfig
+from v3.control_cli import _read_status
+
+root = Path(sys.argv[2])
+client = ResidentCommandClient(ResidentCommandMailboxConfig(path=root / "runtime/v3_command.json"))
+status_path = root / "runtime/v3_status.json"
+command_id = f"launcher-proba-{os.getpid()}-{time.monotonic_ns()}"
+ttl_ns = 200_000_000
+
+def interrupted(signum, frame):
+    raise KeyboardInterrupt
+
+signal.signal(signal.SIGINT, interrupted)
+signal.signal(signal.SIGTERM, interrupted)
+
+def status():
+    s = _read_status(status_path)
+    age = time.monotonic_ns() - s.get("monotonic_ns", 0)
+    if (s.get("state") != "RUNNING" or not 0 <= age < 500_000_000
+            or s.get("fault_layer") or s.get("safety_decision") == "FAULT"
+            or any(h.get("state") != "OK" for h in s.get("source_health", []))):
+        raise RuntimeError(f"runtime/health/timing failure: {s}")
+    return s
+
+def stopped(s):
+    return (s.get("safety_decision") == "STOP" and s.get("enabled") is False
+            and s.get("left_output") == s.get("right_output") == 0
+            and s.get("ready_for_active") is True)
+
+def stop():
+    client.publish_stop(command_id + "-stop", ttl_ns=ttl_ns)
+
+def idle(pause):
+    issued_ns = time.monotonic_ns()
+    stop()
+    deadline = time.monotonic() + 3.0
+    while True:
+        s = status()
+        if s["monotonic_ns"] > issued_ns and stopped(s):
+            break
+        if time.monotonic() >= deadline:
+            raise RuntimeError("IDLE was not confirmed")
+        time.sleep(0.05)
+    deadline = time.monotonic() + pause
+    while time.monotonic() < deadline:
+        if not stopped(status()):
+            raise RuntimeError("runtime left IDLE during pause")
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+
+def yaw(s):
+    value = (s.get("estimate") or {}).get("yaw_rad")
+    if not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise RuntimeError("missing/invalid runtime yaw")
+    return value
+
+def phase(index, label, target, angle=0.0):
+    print(f"proba {index}/10: {label}", flush=True)
+    initial = status()
+    if not stopped(initial):
+        raise RuntimeError("phase requires ready IDLE")
+    previous_yaw = yaw(initial) if angle else 0.0
+    turned = 0.0
+    started = time.monotonic()
+    published_ns = time.monotonic_ns()
+    allowed = False
+    next_send = started
+    while True:
+        now = time.monotonic()
+        elapsed = now - started
+        s = status()
+        if s["monotonic_ns"] > published_ns:
+            if s.get("safety_decision") == "ALLOW" and s.get("enabled") is True:
+                allowed = True
+            elif allowed or s.get("safety_reason") != "NOT_ACTIVE":
+                raise RuntimeError(f"motion stopped by safety: {s}")
+        if not allowed and elapsed > 1.5:
+            raise RuntimeError("phase did not reach ALLOW")
+        if angle:
+            current_yaw = yaw(s)
+            turned += math.atan2(math.sin(current_yaw - previous_yaw), math.cos(current_yaw - previous_yaw))
+            previous_yaw = current_yaw
+            remaining = abs(angle) - math.copysign(1.0, angle) * turned
+            if remaining <= math.radians(2):
+                break
+            if elapsed > 30.0:
+                raise RuntimeError("turn did not reach its target within 30 s")
+            # Slow down near the requested angle; wheel ratios stay unchanged.
+            scale = min(1.0, max(0.15, remaining / math.radians(25)))
+        else:
+            if elapsed >= 5.0:
+                break
+            scale = 1.0
+        if now - next_send > 0.08:
+            raise RuntimeError("command heartbeat deadline missed")
+        v, omega = target(min(1.0, elapsed / 4.9))
+        client.publish_teleop(f"{command_id}-{index}", v_mps=v * scale,
+                             omega_rad_s=omega * scale, max_v_mps=0.25,
+                             max_omega_rad_s=0.60, ttl_ns=ttl_ns)
+        next_send += 0.1
+        time.sleep(max(0.0, next_send - time.monotonic()))
+    idle(5.0 if index < 10 else 0.0)
+
+try:
+    track = float(json.loads((root / "conf/fizika.json").read_text())["nyomtav_szelesseg_m"])
+    if not math.isfinite(track) or track <= 0:
+        raise ValueError("invalid track width")
+    phase(1, "előre, 5 s, 0.15–0.25 m/s", lambda t: (0.15 + 0.10 * t, 0.0))
+    phase(2, "hátra, 5 s, 0.15–0.25 m/s", lambda t: (-0.15 - 0.10 * t, 0.0))
+    # Right/left describes the side of the arc relative to the chassis;
+    # reversing travel reverses yaw, just as for a wheel-speed pair.
+    for index, label, direction, side in (
+        (3, "jobbra előre", 1, -1), (4, "jobbra hátra", -1, -1),
+        (5, "balra előre", 1, 1), (6, "balra hátra", -1, 1),
+    ):
+        phase(index, label + ", 5 s, R=2.0→0.6 m",
+              lambda t: (direction * 0.15, side * direction * 0.15 / (2.0 - 1.4 * t)))
+    phase(7, "helyben jobbra 90°", lambda t: (0.0, -0.4), -math.pi / 2)
+    phase(8, "helyben balra 90°", lambda t: (0.0, 0.4), math.pi / 2)
+    pivot_omega = min(0.4, 0.20 / track)
+    phase(9, "jobbra 180°, jobb kerék célja 0", lambda t: (pivot_omega * track / 2, -pivot_omega), -math.pi)
+    phase(10, "balra 180°, jobb kerék célja 0", lambda t: (-pivot_omega * track / 2, pivot_omega), math.pi)
+    print("proba: kész, IDLE", flush=True)
+except KeyboardInterrupt:
+    print("proba: megszakítva", flush=True)
+    raise SystemExit(130)
+except Exception as exc:
+    print(f"ERROR: proba aborted: {exc}", file=sys.stderr, flush=True)
+    raise SystemExit(1)
+finally:
+    # Do not let a second interrupt prevent the final mailbox STOP.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    stop()
+PY
+    cpid=$!
+    echo "$cpid" >"$COMMAND_PID_FILE"
+    chmod 600 "$COMMAND_PID_FILE" 2>/dev/null || true
+    wait "$cpid"
+    result=$?
+    # Only finish our own capture; a replacing command may already be running.
+    if [[ "$(cat "$COMMAND_PID_FILE" 2>/dev/null)" == "$cpid" ]]; then
+        _trigger_movement_capture_if_needed || true
+        rm -f "$COMMAND_PID_FILE" "$MOVEMENT_CAPTURE_FILE"
+    fi
+    return "$result"
+}
+
 main() {
     case "${1:-} ${2:-}" in
         "runtime start")
@@ -800,8 +1072,21 @@ main() {
             ;;
         "stop ")
             [[ $# -eq 1 ]] || { usage; return 2; }
-            _robot_stop
-            echo "robot: STOP published"
+            _robot_stop || return 1
+            _wait_idle || return 1
+            echo "robot: IDLE (runtime kept running if present)"
+            ;;
+        "shutdown ")
+            [[ $# -eq 1 ]] || { usage; return 2; }
+            _runtime_stop
+            ;;
+        "proba ")
+            [[ $# -eq 1 ]] || { usage; return 2; }
+            _proba
+            ;;
+        __runtime-session\ *)
+            [[ $# -eq 2 ]] || return 2
+            _runtime_session "$2"
             ;;
         "panic --quiet")
             _panic
