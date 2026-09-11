@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # R2B4 user launcher: thin wrapper over the existing native V3 runtime/CLI.
-# No second robot-control or capture path is introduced.
+# No second robot-control, capture, replay or Test Hub authority is introduced.
 
 SRC="${BASH_SOURCE[0]}"
 ROOT="$(cd "$(dirname "$SRC")" && pwd)"
@@ -22,22 +22,24 @@ cd "$ROOT" || exit 1
 
 RUNTIME_DIR="$ROOT/runtime"
 CAPTURE_DIR="$RUNTIME_DIR/captures"
-STATUS_FILE="$RUNTIME_DIR/v3_status.json"
+TEST_HUB_DIR="$RUNTIME_DIR/test_hub"
 RUNTIME_LOG="/tmp/r2b4-runtime-current.log"
 COMMAND_LOG="/tmp/r2b4-command-current.log"
+TEST_HUB_LOG="/tmp/r2b4-testhub-current.log"
 
 RUNTIME_PID_FILE="$RUNTIME_DIR/.r2b4_runtime_pid"
 COMMAND_PID_FILE="$RUNTIME_DIR/.r2b4_command_pid"
 CAPTURE_PATH_FILE="$RUNTIME_DIR/.r2b4_capture_path"
 CAPTURE_USED_FILE="$RUNTIME_DIR/.r2b4_capture_triggered"
+CAPTURE_PROFILE_FILE="$RUNTIME_DIR/.r2b4_capture_profile"
 MOVEMENT_CAPTURE_FILE="$RUNTIME_DIR/.r2b4_movement_capture"
 
-mkdir -p "$RUNTIME_DIR" "$CAPTURE_DIR"
+mkdir -p "$RUNTIME_DIR" "$CAPTURE_DIR" "$TEST_HUB_DIR"
 
 usage() {
-cat <<'EOF'
+cat <<'EOF_USAGE'
 Usage:
-  r2b4 runtime start
+  r2b4 runtime start [ring|full]
   r2b4 runtime stop
   r2b4 runtime status
   r2b4 runtime diag
@@ -46,37 +48,45 @@ Usage:
   r2b4 capture stop
   r2b4 capture status
 
-  r2b4 forward start [speed_mps] [nocapture]
-  r2b4 mozog start <left_mps> <right_mps> [nocapture]
-  r2b4 roomcruise start [nocapture]
+  r2b4 forward start [speed_mps] [ring|full|nocapture]
+  r2b4 mozog start <left_mps> <right_mps> [ring|full|nocapture]
+  r2b4 roomcruise start [ring|full|nocapture]
 
+Short aliases:
+  r2b4 room [ring|full|nocapture]
+  r2b4 forward [speed_mps] [ring|full|nocapture]
+  r2b4 move <left_mps> <right_mps> [ring|full|nocapture]
+  r2b4 status
+  r2b4 diag
   r2b4 stop
+  r2b4 shutdown
+  r2b4 last
 
 Defaults:
   forward speed: 0.15 m/s
-  mozog wheel speeds: signed m/s, each within [-0.50, 0.50]
-  movement capture: ON
+  mozog/move wheel speeds: signed m/s, each within [-0.50, 0.50]
+  capture profile: ring
 
-Capture uses the existing native bounded triggered ring:
-  pre-event 5 s, post-event 2 s, max 512 ticks / 16 MiB.
+Capture profiles:
+  ring       native bounded triggered ring (default; STOP/FAULT event evidence)
+  full       native append_only capture for the whole runtime session
+  nocapture  skips movement-triggered capture; native FAULT evidence remains available
 
-"capture start" triggers one bounded event capture.
-"capture stop" waits for its automatic finalization and reports the file.
+Motion commands auto-start the runtime when it is not running. If the requested
+capture profile requires another native capture mode, the launcher performs the
+existing safe STOP -> runtime shutdown -> fresh runtime start transition.
 
-The native worker is one-shot per runtime. If a new captured movement needs
-a fresh slot, the launcher re-arms it by the existing safe runtime restart
-(STOP -> 5 s -> new runtime).
+After an actual runtime shutdown, a finalized complete capture that has no
+existing Test Hub evidence is validated automatically with:
+  python3 -m v3.test_hub validate <capture> --output-dir <dir>
+The Test Hub never runs while the live runtime is running.
 
-"mozog" accepts left/right wheel-speed targets and converts them to the
-canonical TELEOP body target using conf/fizika.json track width. Existing
-L5-L12 motion, operational and safety constraints remain authoritative.
-
-"nocapture" skips movement capture arming. Native automatic FAULT capture
-remains part of the runtime's existing fail evidence.
+"shutdown" performs robot STOP, runtime shutdown, capture finalization and then
+Test Hub validation. "last" shows the latest capture/Test Hub summary.
 
 Global Ctrl+C panic at the shell prompt:
   source /home/alba/project_r2b4/r2b4
-EOF
+EOF_USAGE
 }
 
 _pid_has_arg() {
@@ -127,7 +137,7 @@ _command_pid() { _get_pid "$COMMAND_PID_FILE" "v3.control_cli"; }
 
 _wait_gone() {
     local pid="$1" i
-    for i in {1..20}; do
+    for i in {1..100}; do
         kill -0 "$pid" 2>/dev/null || return 0
         sleep 0.05
     done
@@ -149,6 +159,50 @@ _stop_heartbeat() {
 _publish_stop() {
     python3 -m v3.control_cli stop \
         --command-id "launcher-stop-$(date +%s%N)-$$" >/dev/null 2>&1
+}
+
+_current_capture_profile() {
+    [[ -r "$CAPTURE_PROFILE_FILE" ]] && cat "$CAPTURE_PROFILE_FILE" || echo "ring"
+}
+
+_current_capture() {
+    [[ -r "$CAPTURE_PATH_FILE" ]] && cat "$CAPTURE_PATH_FILE"
+}
+
+_capture_used() {
+    [[ -e "$CAPTURE_USED_FILE" ]] && return 0
+    local p=""
+    p="$(_current_capture)"
+    [[ -n "$p" && -f "$p" ]]
+}
+
+_trigger_current_capture() {
+    local origin="$1" pid="" path="" profile=""
+    profile="$(_current_capture_profile)"
+    if [[ "$profile" == "full" ]]; then
+        # append_only is already continuously recording; no SIGUSR1 event trigger needed.
+        return 0
+    fi
+
+    pid="$(_runtime_pid 2>/dev/null || true)"
+    [[ -n "$pid" ]] || { echo "ERROR: runtime is not running." >&2; return 1; }
+    path="$(_current_capture)"
+    [[ -n "$path" ]] || { echo "ERROR: no launcher-managed capture path." >&2; return 1; }
+    _capture_used && return 0
+
+    kill -USR1 "$pid" 2>/dev/null || { echo "ERROR: capture trigger failed." >&2; return 1; }
+    printf 'origin=%s\ntriggered_at_ns=%s\n' "$origin" "$(date +%s%N)" >"$CAPTURE_USED_FILE"
+    chmod 600 "$CAPTURE_USED_FILE" 2>/dev/null || true
+    echo "capture: TRIGGERED ($origin)"
+    echo "capture file: ${path#"$ROOT"/}"
+}
+
+_trigger_movement_capture_if_needed() {
+    [[ -e "$MOVEMENT_CAPTURE_FILE" ]] || return 0
+    [[ "$(_current_capture_profile)" == "full" ]] && return 0
+    _capture_used && return 0
+    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 0
+    _trigger_current_capture "movement-stop"
 }
 
 _robot_stop() {
@@ -204,7 +258,6 @@ _status_has_real_allow() {
     [[ "$s" == *'"state": "RUNNING"'* ]] || return 1
     [[ "$s" == *'"safety_decision": "ALLOW"'* ]] || return 1
     [[ "$s" == *'"enabled": true'* ]] || return 1
-
     STATUS_JSON="$s" python3 -c '
 import json, os, sys
 d=json.loads(os.environ["STATUS_JSON"])
@@ -215,22 +268,25 @@ sys.exit(0 if ok else 1)
 }
 
 _show_status() {
-    local s="" pid=""
+    local s="" pid="" profile=""
     pid="$(_runtime_pid 2>/dev/null || true)"
     s="$(_status_json)" || true
+    profile="$(_current_capture_profile)"
 
     if [[ -z "$s" ]]; then
         [[ -n "$pid" ]] && echo "runtime: RUNNING (status unavailable/booting)" || echo "runtime: STOPPED"
+        echo "capture: $profile"
         return
     fi
 
-    STATUS_JSON="$s" RUNTIME_PID="$pid" python3 - <<'PY'
+    STATUS_JSON="$s" RUNTIME_PID="$pid" CAPTURE_PROFILE="$profile" python3 - <<'PY'
 import json, os
 d=json.loads(os.environ["STATUS_JSON"])
 state=d.get("state","UNKNOWN")
 print(f"runtime: {state}")
 if os.environ.get("RUNTIME_PID"):
     print(f"pid:     {os.environ['RUNTIME_PID']}")
+print(f"capture: {os.environ.get('CAPTURE_PROFILE','ring')}")
 if state=="RUNNING":
     ready=d.get("ready_for_active")
     print(f"ready:   {'YES' if ready is True else 'NO' if ready is False else '-'}")
@@ -245,24 +301,26 @@ PY
 }
 
 _show_diag() {
-    local s="" pid=""
+    local s="" pid="" profile=""
     pid="$(_runtime_pid 2>/dev/null || true)"
     s="$(_status_json)" || true
+    profile="$(_current_capture_profile)"
 
     if [[ -z "$s" ]]; then
         [[ -n "$pid" ]] && echo "R2B4 runtime: RUNNING (status unavailable/booting)" || echo "R2B4 runtime: STOPPED"
+        echo "Capture:      $profile"
         [[ -s "$RUNTIME_LOG" ]] && { echo; echo "Last runtime log:"; tail -n 20 "$RUNTIME_LOG"; }
         return
     fi
 
-    STATUS_JSON="$s" RUNTIME_PID="$pid" python3 - <<'PY'
+    STATUS_JSON="$s" RUNTIME_PID="$pid" CAPTURE_PROFILE="$profile" python3 - <<'PY'
 import json, math, os
 d=json.loads(os.environ["STATUS_JSON"])
 state=d.get("state","UNKNOWN")
 print(f"R2B4 runtime: {state}")
 if os.environ.get("RUNTIME_PID"):
     print(f"PID:          {os.environ['RUNTIME_PID']}")
-
+print(f"Capture:      {os.environ.get('CAPTURE_PROFILE','ring')}")
 if state=="RUNNING":
     ready=d.get("ready_for_active")
     print(f"Ready:        {'YES' if ready is True else 'NO' if ready is False else '-'}")
@@ -292,7 +350,6 @@ else:
     if d.get("error"):
         print(f"Error:        {d.get('error_type','ERROR')}: {d.get('error')}")
 PY
-
     [[ "$s" != *'"state": "RUNNING"'* && -s "$RUNTIME_LOG" ]] && {
         echo
         echo "Last runtime log:"
@@ -304,48 +361,186 @@ _new_capture_path() {
     echo "$CAPTURE_DIR/v3_$(date '+%Y%m%d_%H%M%S')_$$_capture.json"
 }
 
-_current_capture() {
-    [[ -r "$CAPTURE_PATH_FILE" ]] && cat "$CAPTURE_PATH_FILE"
+_capture_is_complete() {
+    local path="$1"
+    [[ -f "$path" ]] || return 1
+    CAPTURE_FILE="$path" python3 - <<'PY'
+import json, os
+from pathlib import Path
+try:
+    d=json.loads(Path(os.environ["CAPTURE_FILE"]).read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(1)
+i=d.get("capture_integrity")
+complete=isinstance(i, dict) and i.get("complete") is True
+terminal=d.get("status") in {"PASS","FAIL","FAULT"}
+raise SystemExit(0 if complete and terminal else 1)
+PY
 }
 
-_capture_used() {
-    [[ -e "$CAPTURE_USED_FILE" ]] && return 0
-    local p=""
-    p="$(_current_capture)"
-    [[ -n "$p" && -f "$p" ]]
+_capture_has_testhub_evidence() {
+    local path="$1"
+    CAPTURE_FILE="$path" TEST_HUB_DIR="$TEST_HUB_DIR" python3 - <<'PY'
+import json, os, sys
+from pathlib import Path
+capture=Path(os.environ["CAPTURE_FILE"]).resolve()
+root=Path(os.environ["TEST_HUB_DIR"])
+for index in root.glob("*/evidence_index.json"):
+    try:
+        d=json.loads(index.read_text(encoding="utf-8"))
+        p=((d.get("capture") or {}).get("path"))
+        if p and Path(p).resolve() == capture:
+            print(index)
+            raise SystemExit(0)
+    except (OSError, ValueError, json.JSONDecodeError):
+        continue
+raise SystemExit(1)
+PY
+}
+
+_wait_capture_finalized() {
+    local path="$1" i
+    [[ -n "$path" ]] || return 1
+    for i in {1..100}; do
+        [[ -f "$path" ]] && return 0
+        sleep 0.05
+    done
+    return 1
+}
+
+_run_testhub_for_capture() {
+    local path="$1" existing="" base="" out="" result=""
+    [[ -n "$path" && -f "$path" ]] || return 0
+    [[ -z "$(_runtime_pid 2>/dev/null || true)" ]] || {
+        echo "testhub: SKIPPED (runtime still running)"
+        return 0
+    }
+    if ! _capture_is_complete "$path"; then
+        echo "testhub: SKIPPED (capture not finalized/complete)"
+        return 0
+    fi
+    existing="$(_capture_has_testhub_evidence "$path" 2>/dev/null || true)"
+    if [[ -n "$existing" ]]; then
+        echo "testhub: already validated -> ${existing#"$ROOT"/}"
+        return 0
+    fi
+
+    base="$(basename "$path" .json)"
+    out="$TEST_HUB_DIR/auto_${base}"
+    if [[ -e "$out" ]]; then
+        out="${out}_retry_$(date '+%Y%m%d_%H%M%S')"
+    fi
+
+    : >"$TEST_HUB_LOG"
+    echo "testhub: RUN -> ${path#"$ROOT"/}"
+    if python3 -m v3.test_hub validate "$path" --output-dir "$out" --project-root "$ROOT" \
+        >"$TEST_HUB_LOG" 2>&1; then
+        :
+    fi
+
+    result="$(cat "$TEST_HUB_LOG" 2>/dev/null || true)"
+    if [[ -n "$result" ]]; then
+        TESTHUB_JSON="$result" python3 - <<'PY' 2>/dev/null || { cat "$TEST_HUB_LOG"; return 0; }
+import json, os
+try:
+    d=json.loads(os.environ["TESTHUB_JSON"])
+except json.JSONDecodeError:
+    raise SystemExit(1)
+print(f"testhub: {d.get('status','ERROR')}")
+print(f"capture: {d.get('capture_status','-')}")
+print(f"replay:  {d.get('replay_status','-')}")
+inc=d.get("first_live_incident")
+if isinstance(inc, dict):
+    reason=inc.get("reason") or inc.get("safety_reason") or inc.get("type")
+    layer=inc.get("layer") or inc.get("fault_layer")
+    if reason or layer:
+        print(f"incident:{' '+str(layer) if layer else ''}{' / '+str(reason) if reason else ''}")
+print(f"evidence: {d.get('output_dir','-')}")
+PY
+    else
+        echo "testhub: ERROR (no output)"
+    fi
+    return 0
+}
+
+_run_testhub_after_shutdown() {
+    local path="$1"
+    [[ -n "$path" ]] || return 0
+    _wait_capture_finalized "$path" || {
+        # A ring slot that was never triggered legitimately produces no file.
+        [[ -f "$path" ]] || { echo "testhub: no finalized capture"; return 0; }
+    }
+    _run_testhub_for_capture "$path"
+}
+
+_wait_ready() {
+    local i
+    for i in {1..160}; do
+        [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 1
+        _status_ready && return 0
+        sleep 0.05
+    done
+    return 1
+}
+
+_wait_fresh_ready() {
+    local pid="$1" baseline="$2" s="" i
+    for i in {1..160}; do
+        _pid_has_arg "$pid" "v3_process_runtime.py" || return 1
+        s="$(_status_json)" || { sleep 0.05; continue; }
+        if [[ "$s" != "$baseline" && "$s" == *'"state": "RUNNING"'* && "$s" == *'"ready_for_active": true'* ]]; then
+            return 0
+        fi
+        sleep 0.05
+    done
+    return 1
 }
 
 _runtime_start() {
-    local old="" fresh left="" status_baseline=""
-    old="$(_runtime_pid 2>/dev/null || true)"
+    local profile="${1:-ring}" force="${2:-no}" old="" fresh="" status_baseline="" mode="triggered"
+    [[ "$profile" == "ring" || "$profile" == "full" ]] || {
+        echo "ERROR: runtime capture profile must be ring or full." >&2
+        return 2
+    }
+    [[ "$profile" == "full" ]] && mode="append_only"
 
+    old="$(_runtime_pid 2>/dev/null || true)"
     if [[ -n "$old" ]]; then
-        echo "runtime: existing instance -> STOP"
+        local old_profile current_path
+        old_profile="$(_current_capture_profile)"
+        if [[ "$old_profile" == "$profile" && "$force" != "yes" ]] && _wait_ready; then
+            echo "runtime: already RUNNING / READY (capture=$profile)"
+            return 0
+        fi
+        current_path="$(_current_capture)"
+        echo "runtime: existing instance -> safe restart"
         _robot_stop || true
         kill -TERM "$old" 2>/dev/null || true
-        echo "runtime: waiting 5 s"
-        sleep 5
-        if _pid_has_arg "$old" "v3_process_runtime.py"; then
+        if ! _wait_gone "$old"; then
             echo "ERROR: old runtime still running (PID $old). New runtime not started." >&2
             return 1
         fi
         rm -f "$RUNTIME_PID_FILE"
+        echo "runtime: STOPPED"
+        _run_testhub_after_shutdown "$current_path" || true
+        echo "runtime: waiting 5 s"
+        sleep 5
     else
         _stop_heartbeat || true
     fi
 
     status_baseline="$(_status_json 2>/dev/null || true)"
-
     fresh="$(_new_capture_path)"
     echo "$fresh" >"$CAPTURE_PATH_FILE"
-    chmod 600 "$CAPTURE_PATH_FILE" 2>/dev/null || true
+    echo "$profile" >"$CAPTURE_PROFILE_FILE"
+    chmod 600 "$CAPTURE_PATH_FILE" "$CAPTURE_PROFILE_FILE" 2>/dev/null || true
     rm -f "$CAPTURE_USED_FILE" "$MOVEMENT_CAPTURE_FILE"
 
     : >"$RUNTIME_LOG"
     nohup python3 v3_process_runtime.py \
         --approval native-resident-v3 \
         --capture-path "${fresh#"$ROOT"/}" \
-        --capture-mode triggered \
+        --capture-mode "$mode" \
         </dev/null >"$RUNTIME_LOG" 2>&1 &
     local pid=$!
     echo "$pid" >"$RUNTIME_PID_FILE"
@@ -365,82 +560,69 @@ _runtime_start() {
     fi
 
     echo "runtime: STARTED (PID $pid)"
-    echo "capture: ARMED (bounded ring)"
+    if [[ "$profile" == "full" ]]; then
+        echo "capture: FULL / append_only"
+    else
+        echo "capture: ARMED (bounded ring)"
+    fi
     echo "capture file: ${fresh#"$ROOT"/}"
     [[ "${R2B4_CTRL_C_HOOK:-0}" != "1" ]] && \
         echo "note: global Ctrl+C panic hook inactive; source $ROOT/r2b4"
 }
 
+_ensure_runtime() {
+    local requested="$1" desired="$requested" pid="" current=""
+    [[ "$requested" == "nocapture" ]] && desired="ring"
+    pid="$(_runtime_pid 2>/dev/null || true)"
+    if [[ -z "$pid" ]]; then
+        echo "runtime: not running -> auto start"
+        _runtime_start "$desired" || return 1
+        return 0
+    fi
+    current="$(_current_capture_profile)"
+    if [[ "$current" != "$desired" ]]; then
+        echo "runtime: capture profile $current -> $desired"
+        _runtime_start "$desired" || return 1
+    fi
+    _wait_ready || { echo "ERROR: runtime is not ready for ACTIVE." >&2; _show_diag >&2; return 1; }
+}
+
 _runtime_stop() {
-    local pid=""
+    local pid="" path=""
+    path="$(_current_capture)"
     _robot_stop || true
     pid="$(_runtime_pid 2>/dev/null || true)"
     if [[ -z "$pid" ]]; then
         echo "runtime: already STOPPED"
-        return
+        _run_testhub_after_shutdown "$path" || true
+        return 0
     fi
     kill -TERM "$pid" 2>/dev/null || true
+    if ! _wait_gone "$pid"; then
+        echo "ERROR: runtime did not stop (PID $pid). Test Hub not started." >&2
+        return 1
+    fi
     rm -f "$RUNTIME_PID_FILE"
-    echo "runtime: shutdown requested (PID $pid)"
+    echo "runtime: STOPPED"
+    _run_testhub_after_shutdown "$path" || true
 }
 
-_wait_ready() {
-    local i
-    for i in {1..160}; do
-        [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 1
-        _status_ready && return 0
-        sleep 0.05
-    done
-    return 1
-}
-
-_wait_fresh_ready() {
-    local pid="$1" baseline="$2" s="" i
-    for i in {1..160}; do
-        _pid_has_arg "$pid" "v3_process_runtime.py" || return 1
-        s="$(_status_json)" || { sleep 0.05; continue; }
-        if [[ "$s" != "$baseline" &&
-              "$s" == *'"state": "RUNNING"'* &&
-              "$s" == *'"ready_for_active": true'* ]]; then
-            return 0
-        fi
-        sleep 0.05
-    done
-    return 1
+_shutdown() {
+    _runtime_stop
 }
 
 _ensure_fresh_capture_slot() {
+    [[ "$(_current_capture_profile)" == "full" ]] && return 0
     if ! _capture_used; then
         return 0
     fi
-
-    echo "capture: previous slot used -> re-arm requires runtime restart"
-    _runtime_start || return 1
+    echo "capture: previous ring slot used -> safe runtime re-arm"
+    _runtime_start ring yes || return 1
     _wait_ready || {
         echo "ERROR: restarted runtime not ready." >&2
         _show_diag >&2
         return 1
     }
-}
-
-_trigger_current_capture() {
-    local origin="$1" pid="" path=""
-    pid="$(_runtime_pid 2>/dev/null || true)"
-    [[ -n "$pid" ]] || { echo "ERROR: runtime is not running." >&2; return 1; }
-
-    path="$(_current_capture)"
-    [[ -n "$path" ]] || { echo "ERROR: no launcher-managed capture path." >&2; return 1; }
-
-    # If the file/launcher marker already exists, the native one-shot worker
-    # has already been used. Do not pretend a second trigger is possible.
-    _capture_used && return 0
-
-    kill -USR1 "$pid" 2>/dev/null || { echo "ERROR: capture trigger failed." >&2; return 1; }
-    printf 'origin=%s\ntriggered_at_ns=%s\n' "$origin" "$(date +%s%N)" >"$CAPTURE_USED_FILE"
-    chmod 600 "$CAPTURE_USED_FILE" 2>/dev/null || true
-
-    echo "capture: TRIGGERED ($origin)"
-    echo "capture file: ${path#"$ROOT"/}"
 }
 
 _trigger_capture() {
@@ -449,37 +631,40 @@ _trigger_capture() {
         echo "ERROR: runtime is not running." >&2
         return 1
     }
+    if [[ "$(_current_capture_profile)" == "full" ]]; then
+        echo "capture: FULL is already recording continuously"
+        return 0
+    fi
     _ensure_fresh_capture_slot || return 1
     _trigger_current_capture "$origin"
 }
 
-_trigger_movement_capture_if_needed() {
-    [[ -e "$MOVEMENT_CAPTURE_FILE" ]] || return 0
-    _capture_used && return 0
-    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 0
-    _trigger_current_capture "movement-stop"
-}
-
 _capture_status() {
-    local path=""
+    local path="" profile=""
     path="$(_current_capture)"
+    profile="$(_current_capture_profile)"
     [[ -n "$path" ]] || { echo "capture: NOT ARMED"; return; }
 
     if [[ -f "$path" ]]; then
-        CAPTURE_FILE="$path" python3 - <<'PY'
+        CAPTURE_FILE="$path" CAPTURE_PROFILE="$profile" python3 - <<'PY'
 import json, os
 from pathlib import Path
 p=Path(os.environ["CAPTURE_FILE"])
 d=json.loads(p.read_text(encoding="utf-8"))
 print("capture: FINALIZED")
+print(f"profile: {os.environ.get('CAPTURE_PROFILE','ring')}")
 print(f"file:    {p}")
 print(f"status:  {d.get('status','-')}")
 print(f"ticks:   {d.get('tick_count','-')}")
 w=d.get("capture_window") or {}
 i=d.get("capture_integrity") or {}
 print(f"trigger: {w.get('trigger_reason','-')}")
-print(f"complete:{' YES' if i.get('complete') is True else ' NO'}")
+if i:
+    print(f"complete:{' YES' if i.get('complete') is True else ' NO'}")
 PY
+    elif [[ "$profile" == "full" && -n "$(_runtime_pid 2>/dev/null || true)" ]]; then
+        echo "capture: FULL / recording"
+        echo "file:    ${path#"$ROOT"/}"
     elif [[ -e "$CAPTURE_USED_FILE" ]]; then
         echo "capture: TRIGGERED / finalizing"
         echo "file:    ${path#"$ROOT"/}"
@@ -493,17 +678,22 @@ PY
 }
 
 _capture_stop() {
-    local path="" i
+    local path="" profile="" i
     path="$(_current_capture)"
+    profile="$(_current_capture_profile)"
     [[ -n "$path" ]] || { echo "capture: NOT ARMED"; return 1; }
 
+    if [[ "$profile" == "full" ]]; then
+        echo "capture: FULL finalizes on runtime stop/shutdown"
+        _capture_status
+        return 0
+    fi
     if [[ -e "$MOVEMENT_CAPTURE_FILE" && ! -e "$CAPTURE_USED_FILE" && ! -f "$path" ]]; then
         _trigger_current_capture "capture-stop" || return 1
     fi
-
     if [[ ! -e "$CAPTURE_USED_FILE" && ! -f "$path" ]]; then
         echo "capture: no triggered capture"
-        return
+        return 0
     fi
     for i in {1..70}; do
         [[ -f "$path" ]] && break
@@ -527,9 +717,7 @@ PY
 }
 
 _failure_report() {
-    local label="$1"
-    local saved="${2:-}"
-    local s="$saved"
+    local label="$1" saved="${2:-}" s="$saved"
     echo "ERROR: $label did not reach motor ALLOW." >&2
     [[ -z "$s" ]] && s="$(_status_json)" || true
     if [[ -n "$s" ]]; then
@@ -564,7 +752,6 @@ _wait_allow() {
             _failure_report "$label"
             return 1
         fi
-
         s="$(_status_json)" || { sleep 0.05; continue; }
         tick="$(_tick_from_json "$s")"
         if (( tick > baseline )); then
@@ -592,18 +779,18 @@ _wait_allow() {
 }
 
 _start_motion() {
-    local label="$1" capture="$2"
+    local label="$1" profile="$2"
     shift 2
     local s="" baseline="-1" cpid
 
-    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || { echo "ERROR: runtime is not running." >&2; return 1; }
+    _ensure_runtime "$profile" || return 1
     _status_ready || { echo "ERROR: runtime is not ready for ACTIVE." >&2; _show_diag >&2; return 1; }
 
     _robot_stop || return 1
     for _ in {1..20}; do _status_ready && break; sleep 0.05; done
     _status_ready || { echo "ERROR: runtime did not return to ready IDLE." >&2; _show_diag >&2; return 1; }
 
-    if [[ "$capture" == "yes" ]]; then
+    if [[ "$profile" == "ring" ]]; then
         _ensure_fresh_capture_slot || return 1
         _wait_ready || { echo "ERROR: runtime not ready after capture re-arm." >&2; return 1; }
         echo "movement" >"$MOVEMENT_CAPTURE_FILE"
@@ -625,29 +812,35 @@ _start_motion() {
 
     echo "$label: STARTED"
     echo "motor: ALLOW confirmed"
-    if [[ "$capture" == "yes" ]]; then
-        local p="$(_current_capture)"
-        echo "capture: ARMED for STOP/FAULT -> ${p#"$ROOT"/}"
-    else
-        echo "capture: skipped by nocapture"
-    fi
+    case "$profile" in
+        ring)
+            local p="$(_current_capture)"
+            echo "capture: RING / armed for STOP/FAULT -> ${p#"$ROOT"/}"
+            ;;
+        full)
+            echo "capture: FULL / append_only recording"
+            ;;
+        nocapture)
+            echo "capture: movement capture skipped (FAULT evidence remains native)"
+            ;;
+    esac
 }
 
 _forward() {
-    local speed="0.15" speed_set="no" capture="yes" a
+    local speed="0.15" speed_set="no" profile="ring" a
     shift 2
     for a in "$@"; do
-        if [[ "$a" == "nocapture" ]]; then
-            capture="no"
-        elif [[ "$speed_set" == "no" ]]; then
-            speed="$a"; speed_set="yes"
-        else
-            echo "ERROR: invalid forward arguments." >&2; return 2
-        fi
+        case "$a" in
+            ring|full|nocapture) profile="$a" ;;
+            *)
+                if [[ "$speed_set" == "no" ]]; then speed="$a"; speed_set="yes"
+                else echo "ERROR: invalid forward arguments." >&2; return 2
+                fi
+                ;;
+        esac
     done
     _valid_speed "$speed" || { echo "ERROR: speed must be >0 and <=0.50 m/s." >&2; return 1; }
-
-    _start_motion "forward $speed m/s" "$capture" \
+    _start_motion "forward $speed m/s" "$profile" \
         python3 -m v3.control_cli teleop \
         --command-id "launcher-forward-$(date +%s%N)-$$" \
         --v-mps "$speed" --omega-rad-s 0 \
@@ -656,90 +849,51 @@ _forward() {
 
 _wheel_targets_to_twist() {
     python3 - "$ROOT/conf/fizika.json" "$1" "$2" <<'PY'
-import json
-import math
-import sys
+import json, math, sys
 from pathlib import Path
-
-physics_path = Path(sys.argv[1])
+physics_path=Path(sys.argv[1])
 try:
-    left_mps = float(sys.argv[2])
-    right_mps = float(sys.argv[3])
+    left_mps=float(sys.argv[2]); right_mps=float(sys.argv[3])
 except ValueError:
-    print("ERROR: left_mps and right_mps must be numeric.", file=sys.stderr)
-    raise SystemExit(1)
-
+    print("ERROR: left_mps and right_mps must be numeric.", file=sys.stderr); raise SystemExit(1)
 if not math.isfinite(left_mps) or not math.isfinite(right_mps):
-    print("ERROR: wheel speeds must be finite.", file=sys.stderr)
-    raise SystemExit(1)
-if abs(left_mps) > 0.50 or abs(right_mps) > 0.50:
-    print("ERROR: each wheel speed must be within [-0.50, 0.50] m/s.", file=sys.stderr)
-    raise SystemExit(1)
-if abs(left_mps) <= 1e-12 and abs(right_mps) <= 1e-12:
-    print("ERROR: both wheel targets are zero; use ./r2b4 stop.", file=sys.stderr)
-    raise SystemExit(1)
-
+    print("ERROR: wheel speeds must be finite.", file=sys.stderr); raise SystemExit(1)
+if abs(left_mps)>0.50 or abs(right_mps)>0.50:
+    print("ERROR: each wheel speed must be within [-0.50, 0.50] m/s.", file=sys.stderr); raise SystemExit(1)
+if abs(left_mps)<=1e-12 and abs(right_mps)<=1e-12:
+    print("ERROR: both wheel targets are zero; use ./r2b4 stop.", file=sys.stderr); raise SystemExit(1)
 try:
-    physics = json.loads(physics_path.read_text(encoding="utf-8"))
-    track_width_m = float(physics["nyomtav_szelesseg_m"])
+    physics=json.loads(physics_path.read_text(encoding="utf-8")); track=float(physics["nyomtav_szelesseg_m"])
 except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-    print(f"ERROR: cannot read valid track width from {physics_path}: {exc}", file=sys.stderr)
-    raise SystemExit(1)
-if not math.isfinite(track_width_m) or track_width_m <= 0.0:
-    print("ERROR: nyomtav_szelesseg_m must be finite and positive.", file=sys.stderr)
-    raise SystemExit(1)
-
-# Exact inverse of V3 L10 differential-drive kinematics:
-# left = v - omega * track/2
-# right = v + omega * track/2
-v_mps = 0.5 * (left_mps + right_mps)
-omega_rad_s = (right_mps - left_mps) / track_width_m
-
-# The resident command gateway is still the ingress authority. Reject only a
-# target that it cannot represent at all; lower L5-L12 constraints may further
-# reduce the executed motion and remain authoritative.
-if abs(v_mps) > 0.50 + 1e-12:
-    print(f"ERROR: wheel pair requires v={v_mps:.6f} m/s above the resident 0.50 m/s limit.", file=sys.stderr)
-    raise SystemExit(1)
-if abs(omega_rad_s) > 1.20 + 1e-12:
-    print(
-        f"ERROR: wheel pair requires omega={omega_rad_s:.6f} rad/s "
-        "above the resident 1.20 rad/s limit.",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
-
-# TELEOP declares positive limits even when one target component is exactly 0.
-max_v_mps = max(abs(v_mps), 1e-6)
-max_omega_rad_s = max(abs(omega_rad_s), 1e-6)
-print(
-    f"{v_mps:.12g} {omega_rad_s:.12g} "
-    f"{max_v_mps:.12g} {max_omega_rad_s:.12g} {track_width_m:.12g}"
-)
+    print(f"ERROR: cannot read valid track width from {physics_path}: {exc}", file=sys.stderr); raise SystemExit(1)
+if not math.isfinite(track) or track<=0:
+    print("ERROR: nyomtav_szelesseg_m must be finite and positive.", file=sys.stderr); raise SystemExit(1)
+v=0.5*(left_mps+right_mps)
+omega=(right_mps-left_mps)/track
+if abs(v)>0.50+1e-12:
+    print(f"ERROR: wheel pair requires v={v:.6f} m/s above the resident 0.50 m/s limit.", file=sys.stderr); raise SystemExit(1)
+if abs(omega)>1.20+1e-12:
+    print(f"ERROR: wheel pair requires omega={omega:.6f} rad/s above the resident 1.20 rad/s limit.", file=sys.stderr); raise SystemExit(1)
+print(f"{v:.12g} {omega:.12g} {max(abs(v),1e-6):.12g} {max(abs(omega),1e-6):.12g} {track:.12g}")
 PY
 }
 
 _mozog() {
-    local capture="yes" left right converted v omega max_v max_omega track
+    local profile="ring" left right converted v omega max_v max_omega track
     shift 2
     [[ $# -ge 2 && $# -le 3 ]] || {
-        echo "ERROR: usage: ./r2b4 mozog start <left_mps> <right_mps> [nocapture]" >&2
+        echo "ERROR: usage: ./r2b4 mozog start <left_mps> <right_mps> [ring|full|nocapture]" >&2
         return 2
     }
-    left="$1"
-    right="$2"
+    left="$1"; right="$2"
     if [[ $# -eq 3 ]]; then
-        [[ "$3" == "nocapture" ]] || { echo "ERROR: unknown option: $3" >&2; return 2; }
-        capture="no"
+        case "$3" in ring|full|nocapture) profile="$3" ;; *) echo "ERROR: unknown option: $3" >&2; return 2 ;; esac
     fi
-
     converted="$(_wheel_targets_to_twist "$left" "$right")" || return 1
     read -r v omega max_v max_omega track <<<"$converted"
-
     echo "mozog wheel target: left=$left m/s, right=$right m/s"
     echo "canonical target: v=$v m/s, omega=$omega rad/s (track=$track m)"
-
-    _start_motion "mozog L=$left R=$right m/s" "$capture" \
+    _start_motion "mozog L=$left R=$right m/s" "$profile" \
         python3 -m v3.control_cli teleop \
         --command-id "launcher-mozog-$(date +%s%N)-$$" \
         --v-mps "$v" --omega-rad-s "$omega" \
@@ -747,23 +901,69 @@ _mozog() {
 }
 
 _roomcruise() {
-    local capture="yes"
+    local profile="ring"
     shift 2
-    [[ $# -le 1 ]] || { echo "ERROR: roomcruise accepts only optional nocapture." >&2; return 2; }
+    [[ $# -le 1 ]] || { echo "ERROR: roomcruise accepts only optional ring|full|nocapture." >&2; return 2; }
     if [[ $# -eq 1 ]]; then
-        [[ "$1" == "nocapture" ]] || { echo "ERROR: unknown option: $1" >&2; return 2; }
-        capture="no"
+        case "$1" in ring|full|nocapture) profile="$1" ;; *) echo "ERROR: unknown option: $1" >&2; return 2 ;; esac
     fi
-    _start_motion "roomcruise" "$capture" \
+    _start_motion "roomcruise" "$profile" \
         python3 -m v3.control_cli explore \
         --command-id "launcher-roomcruise-$(date +%s%N)-$$"
+}
+
+_show_last() {
+    CAPTURE_DIR="$CAPTURE_DIR" TEST_HUB_DIR="$TEST_HUB_DIR" python3 - <<'PY'
+import json
+from pathlib import Path
+import os
+captures=sorted(Path(os.environ["CAPTURE_DIR"]).glob("v3_*_capture.json"), key=lambda p:p.stat().st_mtime, reverse=True)
+if not captures:
+    print("last: no finalized capture")
+    raise SystemExit(0)
+p=captures[0]
+try: d=json.loads(p.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"last capture: {p}"); print(f"ERROR: {exc}"); raise SystemExit(0)
+print(f"capture: {p}")
+print(f"status:  {d.get('status','-')}")
+print(f"ticks:   {d.get('tick_count','-')}")
+w=d.get("capture_window") or {}; integ=d.get("capture_integrity") or {}
+if w: print(f"trigger: {w.get('trigger_reason','-')}")
+if integ: print(f"complete:{' YES' if integ.get('complete') is True else ' NO'}")
+found=None
+for idx in Path(os.environ["TEST_HUB_DIR"]).glob("*/evidence_index.json"):
+    try:
+        x=json.loads(idx.read_text(encoding="utf-8")); cp=((x.get("capture") or {}).get("path"))
+        if cp and Path(cp).resolve()==p.resolve(): found=(idx,x); break
+    except Exception: pass
+if not found:
+    print("testhub: NOT RUN")
+    raise SystemExit(0)
+idx,x=found
+print(f"testhub: {x.get('status','-')}")
+rep=idx.parent/"replay_result.json"
+diag=idx.parent/"diagnosis.json"
+if rep.is_file():
+    try:
+        r=json.loads(rep.read_text(encoding="utf-8")); print(f"replay:  {r.get('status','-')}")
+    except Exception: pass
+if diag.is_file():
+    try:
+        g=json.loads(diag.read_text(encoding="utf-8")); inc=g.get("first_live_incident")
+        if isinstance(inc,dict):
+            layer=inc.get("layer") or inc.get("fault_layer"); reason=inc.get("reason") or inc.get("safety_reason") or inc.get("type")
+            if layer or reason: print(f"incident:{' '+str(layer) if layer else ''}{' / '+str(reason) if reason else ''}")
+    except Exception: pass
+print(f"evidence:{idx.parent}")
+PY
 }
 
 main() {
     case "${1:-} ${2:-}" in
         "runtime start")
-            [[ $# -eq 2 ]] || { usage; return 2; }
-            _runtime_start
+            [[ $# -le 3 ]] || { usage; return 2; }
+            _runtime_start "${3:-ring}" yes
             ;;
         "runtime stop")
             [[ $# -eq 2 ]] || { usage; return 2; }
@@ -789,34 +989,49 @@ main() {
             [[ $# -eq 2 ]] || { usage; return 2; }
             _capture_status
             ;;
-        "forward start")
-            _forward "$@"
-            ;;
-        "mozog start")
-            _mozog "$@"
-            ;;
-        "roomcruise start")
-            _roomcruise "$@"
-            ;;
+        "forward start") _forward "$@" ;;
+        "mozog start") _mozog "$@" ;;
+        "roomcruise start") _roomcruise "$@" ;;
         "stop ")
             [[ $# -eq 1 ]] || { usage; return 2; }
             _robot_stop
             echo "robot: STOP published"
             ;;
-        "panic --quiet")
-            _panic
+        "shutdown ")
+            [[ $# -eq 1 ]] || { usage; return 2; }
+            _shutdown
             ;;
+        "last ")
+            [[ $# -eq 1 ]] || { usage; return 2; }
+            _show_last
+            ;;
+        "status ")
+            [[ $# -eq 1 ]] || { usage; return 2; }
+            _show_status
+            ;;
+        "diag ")
+            [[ $# -eq 1 ]] || { usage; return 2; }
+            _show_diag
+            ;;
+        room\ *)
+            shift
+            _roomcruise room start "$@"
+            ;;
+        forward\ *)
+            shift
+            _forward forward start "$@"
+            ;;
+        move\ *)
+            shift
+            _mozog move start "$@"
+            ;;
+        "panic --quiet") _panic ;;
         "panic ")
             _panic
             echo "robot: STOP + runtime shutdown requested"
             ;;
-        "help "|"--help "|"-h ")
-            usage
-            ;;
-        *)
-            usage
-            return 2
-            ;;
+        "help "|"--help "|"-h ") usage ;;
+        *) usage; return 2 ;;
     esac
 }
 

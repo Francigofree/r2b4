@@ -603,7 +603,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--capture-post-event-ns", type=int, default=2_000_000_000)
     parser.add_argument("--capture-ingress-capacity", type=int, default=256)
     parser.add_argument("--capture-max-ticks", type=int, default=512)
-    parser.add_argument("--capture-max-bytes", type=int, default=16 * 1024 * 1024)
+    parser.add_argument("--capture-max-bytes", type=int, default=64 * 1024 * 1024)
     parser.add_argument("--capture-max-raw-scans", type=int, default=64)
     parser.add_argument("--capture-max-raw-points", type=int, default=4_096)
     parser.add_argument(
