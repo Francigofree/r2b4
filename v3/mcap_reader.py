@@ -218,16 +218,8 @@ class McapReader:
 
         chunk_crc_ok = True
         if verify_chunks:
-            for index in self.chunk_indexes:
-                try:
-                    self._read_chunk_records(index, verify_crc=True)
-                except McapReadError as exc:
-                    chunk_crc_ok = False
-                    errors.append(str(exc))
-                    break
-
-        if verify_chunks and chunk_crc_ok:
             try:
+                self._validate_index_coverage()
                 counts: dict[int, int] = {}
                 for message in self.iter_messages():
                     counts[message.channel_id] = counts.get(message.channel_id, 0) + 1
@@ -236,6 +228,7 @@ class McapReader:
                 if sum(counts.values()) != self.statistics.get("message_count"):
                     errors.append("indexed message total disagrees with statistics")
             except McapReadError as exc:
+                chunk_crc_ok = False
                 errors.append(str(exc))
         message_count = self.statistics.get("message_count")
         start = self.statistics.get("message_start_time")
@@ -573,6 +566,35 @@ class McapReader:
         else:
             raise McapReadError(f"unsupported record opcode {opcode:#x} in summary")
 
+    def _validate_index_coverage(self) -> None:
+        """Every data chunk must be indexed once; indexes cannot hide evidence."""
+        indexed = {chunk.chunk_start_offset: chunk.chunk_length for chunk in self.chunk_indexes}
+        if len(indexed) != len(self.chunk_indexes):
+            raise McapReadError("duplicate chunk index")
+        if len(indexed) != self.statistics.get("chunk_count"):
+            raise McapReadError("chunk index count differs from statistics")
+        observed: dict[int, int] = {}
+        limit = self.summary_start or self.footer_start
+        with self.path.open("rb") as handle:
+            handle.seek(len(MAGIC))
+            while handle.tell() < limit:
+                offset = handle.tell()
+                header = handle.read(9)
+                if len(header) != 9:
+                    raise McapReadError("truncated data record header")
+                length = struct.unpack_from("<Q", header, 1)[0] + 9
+                if offset + length > limit:
+                    raise McapReadError("data record overlaps summary")
+                if header[0] == OP_CHUNK:
+                    observed[offset] = length
+                elif header[0] == OP_MESSAGE:
+                    raise McapReadError("unindexed top-level message is unsupported")
+                elif header[0] == OP_DATA_END and (length != 13 or offset + length != limit):
+                    raise McapReadError("DataEnd must terminate the data section")
+                handle.seek(offset + length)
+        if indexed != observed:
+            raise McapReadError("chunk indexes do not cover the full data section")
+
     def _find_data_end(self) -> tuple[int, int]:
         if self.summary_start <= 0:
             limit = self.footer_start
@@ -613,6 +635,9 @@ class McapReader:
             records = cursor.bytes_u64()
             if compression not in {"", "none"}:
                 raise McapReadError(f"unsupported MCAP compression: {compression}")
+            if (compression != index.compression or len(records) != index.compressed_size
+                    or uncompressed_size != index.uncompressed_size or cursor.pos != len(content)):
+                raise McapReadError("chunk index size/compression mismatch")
             if len(records) != uncompressed_size:
                 raise McapReadError("chunk uncompressed size mismatch")
             if start != index.message_start_time or end != index.message_end_time:

@@ -394,3 +394,46 @@ def test_process_native_lidar_factory_closes_config_and_opens_one_port(monkeypat
     assert "sensors.lidar_service" not in Path(process.__file__).read_text(
         encoding="utf-8"
     )
+
+
+def test_mcap_process_closes_publishers_drains_then_runs_test_hub(tmp_path):
+    from v3.mcap_capture import McapCaptureConfig
+    from v3.mcap_reader import McapReader, TICK_TOPIC
+    from test_v3_mcap_e2e import records, raw
+    config, values = records(8)
+    session = process.McapCaptureSession(
+        'process-mcap', tmp_path / 'process.mcap', configuration={'resolved_control': config},
+        config=McapCaptureConfig(mode='append_only'), capacity=32,
+    )
+    gateway = AtomicResidentCommandGateway(ResidentCommandMailboxConfig(tmp_path / 'command.json'))
+    publisher = process.AsyncResidentStatusPublisher(process.ResidentStatusConfig(tmp_path / 'status.json'))
+    def run_hardware(*_args, **kwargs):
+        for i, record in enumerate(values):
+            kwargs['record_observer'](record)
+            kwargs['raw_lidar_observer'](raw(i + 1, record.inputs.context.monotonic_ns))
+        kwargs['raw_lidar_observer'](None)
+        assert not session.hub.snapshot().closed
+        assert session.worker.result is None
+        return _report()
+    process.run_v3_resident_process(
+        object(), lambda _: None, lambda _: None, object(), gateway,
+        process.load_resident_runtime_config(PROJECT_ROOT), publisher,
+        approval='native-resident-v3', stop_requested=lambda: False,
+        capture_session=session, run_hardware=run_hardware,
+    )
+    snapshot = session.subscription.snapshot()
+    assert snapshot.closed and snapshot.queued == 0
+    assert snapshot.accepted_count == snapshot.consumed_count == 16
+    assert session.evidence['status'] == 'PASS'
+    assert session.evidence['replay_status'] == 'MATCH'
+    assert [m.sequence for m in McapReader(session.worker.result.path).iter_messages(topics=[TICK_TOPIC])] == list(range(8))
+
+
+def test_mcap_finish_refuses_open_subscription(tmp_path):
+    from v3.mcap_capture import McapCaptureConfig
+    session = process.McapCaptureSession('open', tmp_path / 'open.mcap',
+                                        configuration={}, config=McapCaptureConfig(mode='append_only'))
+    with pytest.raises(RuntimeError, match='close ObservationHub'):
+        session.worker.finish()
+    session.hub.close()
+    assert session.worker.finish() is None

@@ -125,6 +125,7 @@ def diagnose_run(
     capture_source_manifest_path: str | Path | None = None,
     agent_max_bytes: int = DEFAULT_AGENT_MAX_BYTES,
     slice_max_bytes: int = DEFAULT_SLICE_MAX_BYTES,
+    replay_window: ReplayWindow | None = None,
 ) -> dict[str, object]:
     """Create one run-bound evidence directory from an MCAP authority capture."""
 
@@ -145,7 +146,9 @@ def diagnose_run(
         raise ValueError("replay_mode must be off, incident or full")
     if mode != "off":
         try:
-            if mode == "incident":
+            if replay_window is not None:
+                pass
+            elif mode == "incident":
                 root = triage.get("root_cause_candidate")
                 tick_id = root.get("tick_id") if isinstance(root, Mapping) else None
                 if isinstance(tick_id, int):

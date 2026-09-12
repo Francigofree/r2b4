@@ -41,6 +41,16 @@ def validate_run(
 ) -> dict[str, object]:
     """Create one immutable-style evidence directory without profiles or pointers."""
 
+    if Path(capture_path).suffix.lower() == ".mcap":
+        from .test_hub_v2 import diagnose_run
+        from .mcap_replay_bridge import ReplayWindow
+        window = None if selection is None else ReplayWindow(
+            requested_start_tick_id=selection.start_tick_id, requested_end_tick_id=selection.end_tick_id,
+            requested_start_ns=selection.start_monotonic_ns, requested_end_ns=selection.end_monotonic_ns,
+            start_layer=selection.start_layer, end_layer=selection.end_layer,
+        )
+        return diagnose_run(capture_path, output_dir, replay_mode="full", replay_window=window,
+                            project_root=project_root, capture_source_manifest_path=capture_source_manifest_path)
     destination = Path(output_dir)
     if destination.is_symlink():
         raise V3TestHubError("output directory must not be a symlink")
@@ -119,6 +129,9 @@ def verify_evidence(index_path: str | Path) -> dict[str, object]:
         raise V3TestHubError("evidence index must contain valid UTF-8 JSON") from exc
     if not isinstance(index, dict):
         raise V3TestHubError("evidence index root must be an object")
+    if index.get("schema") == "R2B4_EVIDENCE_INDEX_V2":
+        from .test_hub_v2 import verify_evidence as verify_mcap_evidence
+        return verify_mcap_evidence(index_path)
     checksum_ok = (
         index.get("schema") == V3_EVIDENCE_INDEX_SCHEMA
         and isinstance(index.get("evidence_sha256"), str)
@@ -326,7 +339,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         print(json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if output.get("status") in {"PASS", V3_REPLAY_STATUS_MATCH} else 2
-    except (OSError, TypeError, ValueError, V3ReplayError, V3TestHubError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
         print(json.dumps({"status": "ERROR", "error": str(exc)}, indent=2), file=sys.stderr)
         return 2
 

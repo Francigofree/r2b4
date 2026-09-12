@@ -242,6 +242,9 @@ def first_divergence(
 def inspect_capture(capture_path: str | Path) -> dict[str, object]:
     """Inspect a native V3 capture."""
 
+    if Path(capture_path).suffix.lower() == ".mcap":
+        from .test_hub_v2 import inspect_mcap
+        return inspect_mcap(capture_path, deep=True)
     path = _regular_file(capture_path, "capture")
     try:
         return inspect_general_capture(path)
@@ -258,6 +261,16 @@ def replay_capture(
 ) -> dict[str, object]:
     """Replay a V3 capture through current production source without live I/O."""
 
+    if Path(capture_path).suffix.lower() == ".mcap":
+        from .mcap_replay_bridge import ReplayWindow, replay_mcap
+        selected = selection or ReplaySelection()
+        return replay_mcap(capture_path, window=ReplayWindow(
+            requested_start_tick_id=selected.start_tick_id,
+            requested_end_tick_id=selected.end_tick_id,
+            requested_start_ns=selected.start_monotonic_ns,
+            requested_end_ns=selected.end_monotonic_ns,
+            start_layer=selected.start_layer, end_layer=selected.end_layer,
+        ), project_root=project_root, capture_source_manifest_path=capture_source_manifest_path)
     path = _regular_file(capture_path, "capture")
     selected = selection or ReplaySelection()
     try:

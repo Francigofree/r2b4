@@ -53,7 +53,7 @@ def replay_mcap(
     # Imports stay local so inspect/agent-only usage has no dependency on the
     # legacy JSON capture path and can run even while replay is being refactored.
     from .capture import V3_CAPTURE_SCHEMA, payload_sha256
-    from .replay import ReplaySelection, replay_capture
+    from .replay import ReplaySelection, replay_capture, _payload_sha256
 
     try:
         reader = McapReader(capture_path)
@@ -203,6 +203,13 @@ def replay_mcap(
             "checkpoint_used": checkpoint_payload is not None,
             "replay_eligible": replay_eligible,
         }
+        result["capture"] = {
+            **result["capture"], "path": str(reader.path.resolve()),
+            "sha256": authority_sha256, "schema": "R2B4_MCAP_CAPTURE_V1",
+            "payload_sha256": final["integrity"]["message_stream_sha256"],
+        }
+        result.pop("result_sha256", None)
+        result["result_sha256"] = _payload_sha256(result)
         return result
     finally:
         if temporary_path is not None:

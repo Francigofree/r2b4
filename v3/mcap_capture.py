@@ -17,6 +17,8 @@ import hashlib
 import json
 import os
 import queue
+import resource
+import sys
 import threading
 import time
 from collections import deque
@@ -79,6 +81,7 @@ class McapCaptureConfig:
     mode: str = "triggered"
     max_session_records: int = 100_000
     max_record_bytes: int = 16 * 1024 * 1024
+    max_referenced_revisions_per_tick: int = 16
 
     def __post_init__(self) -> None:
         for name in ("pre_event_ns", "post_event_ns", "checkpoint_context_ns"):
@@ -93,6 +96,7 @@ class McapCaptureConfig:
             "chunk_target_bytes",
             "max_session_records",
             "max_record_bytes",
+            "max_referenced_revisions_per_tick",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -118,10 +122,14 @@ class EncodedRecord:
     is_checkpoint: bool = False
     source_point_count: int | None = None
     points_truncated: bool = False
+    published_monotonic_ns: int | None = None
 
     @property
     def size_bytes(self) -> int:
-        return len(self.payload)
+        # Charge object/tuple/reference overhead as well as encoded bytes.
+        return (sys.getsizeof(self) + sys.getsizeof(self.payload)
+                + sys.getsizeof(self.referenced_lidar_revisions)
+                + sum(sys.getsizeof(v) for v in self.referenced_lidar_revisions) + 256)
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +164,8 @@ class McapCaptureConsumer:
         "_seen_records",
         "_started_ns",
         "_write_duration_ns",
+        "_cpu_started_ns",
+        "_timing",
         "_thread",
         "_started",
         "_finished",
@@ -239,6 +249,10 @@ class McapCaptureConsumer:
         self._seen_records = 0
         self._started_ns = 0
         self._write_duration_ns = 0
+        self._cpu_started_ns = 0
+        self._timing = {"tick_count": 0, "period_count": 0, "period_sum_ns": 0,
+                        "period_max_ns": 0, "completion_latency_sum_ns": 0,
+                        "completion_latency_max_ns": 0}
         self._thread = threading.Thread(
             target=self._run,
             name="v3-mcap-capture-consumer",
@@ -313,6 +327,7 @@ class McapCaptureConsumer:
             raise RuntimeError("capture consumer is already finished")
         self._started = True
         self._started_ns = time.monotonic_ns()
+        self._cpu_started_ns = time.process_time_ns()
         self._thread.start()
 
     def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
@@ -424,6 +439,16 @@ class McapCaptureConsumer:
             if len(record.payload) > self._config.max_record_bytes:
                 raise CaptureEncodingError("encoded record exceeds max_record_bytes")
             if record.mcap_topic == TICK_TOPIC:
+                timing = self._timing
+                timing["tick_count"] += 1
+                latency = max(0, item.published_monotonic_ns - record.monotonic_ns)
+                timing["completion_latency_sum_ns"] += latency
+                timing["completion_latency_max_ns"] = max(timing["completion_latency_max_ns"], latency)
+                if self._last_seen_ns is not None:
+                    period = record.monotonic_ns - self._last_seen_ns
+                    timing["period_count"] += 1
+                    timing["period_sum_ns"] += period
+                    timing["period_max_ns"] = max(timing["period_max_ns"], period)
                 if self._first_seen_ns is None:
                     self._first_seen_ns = record.monotonic_ns
                 self._last_seen_ns = record.monotonic_ns
@@ -455,8 +480,11 @@ class McapCaptureConsumer:
             tick_id = _non_negative_int(row.get("tick_id"), "tick_id")
             monotonic_ns = _non_negative_int(row.get("monotonic_ns"), "monotonic_ns")
             referenced = tuple(sorted(_referenced_lidar_revisions(row)))
+            if len(referenced) > self._config.max_referenced_revisions_per_tick:
+                raise CaptureEncodingError("tick exceeds referenced LiDAR revision bound")
             tick = EncodedRecord(
                 hub_sequence=item.sequence,
+                published_monotonic_ns=item.published_monotonic_ns,
                 source_topic=item.topic,
                 mcap_topic=TICK_TOPIC,
                 monotonic_ns=monotonic_ns,
@@ -478,6 +506,7 @@ class McapCaptureConsumer:
                 records.append(
                     EncodedRecord(
                         hub_sequence=item.sequence,
+                        published_monotonic_ns=item.published_monotonic_ns,
                         source_topic=item.topic,
                         mcap_topic=CHECKPOINT_TOPIC,
                         monotonic_ns=monotonic_ns,
@@ -516,6 +545,7 @@ class McapCaptureConsumer:
             return (
                 EncodedRecord(
                     hub_sequence=item.sequence,
+                    published_monotonic_ns=item.published_monotonic_ns,
                     source_topic=item.topic,
                     mcap_topic=RAW_LIDAR_TOPIC,
                     monotonic_ns=_non_negative_int(
@@ -535,6 +565,7 @@ class McapCaptureConsumer:
             return (
                 EncodedRecord(
                     hub_sequence=item.sequence,
+                    published_monotonic_ns=item.published_monotonic_ns,
                     source_topic=item.topic,
                     mcap_topic=CHECKPOINT_TOPIC,
                     monotonic_ns=item.published_monotonic_ns,
@@ -553,6 +584,7 @@ class McapCaptureConsumer:
         return (
             EncodedRecord(
                 hub_sequence=item.sequence,
+                published_monotonic_ns=item.published_monotonic_ns,
                 source_topic=item.topic,
                 mcap_topic=EVENT_TOPIC,
                 monotonic_ns=item.published_monotonic_ns,
@@ -662,6 +694,9 @@ class McapCaptureConsumer:
             self._activate_trigger(self._last_seen_ns, reason)
             return
 
+        needed_raw = {revision for item in selected for revision in item.referenced_lidar_revisions}
+        selected_ids = {id(item) for item in selected}
+        selected = tuple(item for item in retained if id(item) in selected_ids or item.raw_lidar_revision in needed_raw)
         self._open_writer(first_time_ns=min(item.monotonic_ns for item in selected))
         for item in selected:
             self._write_encoded_record(item)
@@ -784,6 +819,7 @@ class McapCaptureConsumer:
             item.monotonic_ns,
             message_sequence,
             item.payload,
+            published_monotonic_ns=item.published_monotonic_ns,
         )
 
     def _write_message(
@@ -794,6 +830,7 @@ class McapCaptureConsumer:
         payload: bytes,
         *,
         include_in_digest: bool = True,
+        published_monotonic_ns: int | None = None,
     ) -> None:
         writer = self._writer
         if writer is None:
@@ -803,7 +840,7 @@ class McapCaptureConsumer:
         writer.add_message(
             channel_id,
             log_time_ns=monotonic_ns,
-            publish_time_ns=monotonic_ns,
+            publish_time_ns=monotonic_ns if published_monotonic_ns is None else published_monotonic_ns,
             sequence=sequence,
             data=payload,
         )
@@ -882,6 +919,8 @@ class McapCaptureConsumer:
             self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
 
         complete = not self._integrity_reasons
+        if self._fault_observed and status == "PASS":
+            status = "FAULT"
         if not complete and status == "PASS":
             status = "FAIL"
         digest = self._message_digest.hexdigest()
@@ -929,6 +968,9 @@ class McapCaptureConsumer:
                 "write_duration_ns": self._write_duration_ns,
                 "bytes_before_finalization": writer.tell(),
                 "elapsed_ns": time.monotonic_ns() - self._started_ns,
+                "process_cpu_ns": time.process_time_ns() - self._cpu_started_ns,
+                "process_max_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+                "runtime_tick_timing": dict(self._timing),
             },
         }
         self._captured_event_count += 1
@@ -980,6 +1022,34 @@ class McapCaptureConsumer:
             tick_sequence_gap_count=len(self._captured_tick_gaps),
             raw_lidar_missing_revisions=missing_raw,
         )
+
+
+def conservative_ram_budget(config: McapCaptureConfig, *, mailbox_capacity: int,
+                            max_retained_observation_bytes: int,
+                            max_encoding_working_bytes: int) -> dict[str, int]:
+    """Conditional capacity budget, including CPython bookkeeping and peak copies.
+
+    The caller must bound the *whole retained typed graph* and encoder working
+    graph, including checkpoints. Encoded JSON length is not such a bound.
+    These assumptions cannot be enforced by the data-blind producer. This is
+    not an RSS guarantee: interpreter, layers, drivers and allocator are extra.
+    Session records bound indexes and diagnostic revision/gap sets in both modes.
+    """
+    if min(mailbox_capacity, max_retained_observation_bytes, max_encoding_working_bytes) <= 0:
+        raise ValueError("RAM budget assumptions must be positive")
+    chunk = max(config.chunk_target_bytes, config.max_record_bytes + 64)
+    parts = {
+        "mailbox_and_active_payloads": (mailbox_capacity + 1) * (max_retained_observation_bytes + 512),
+        "ring_with_entry_overhead": config.max_byte_capacity + 2 * (config.max_record_bytes + 1024),
+        "encoder_working_graph_and_json": max_encoding_working_bytes + 8 * config.max_record_bytes,
+        "writer_chunk_copies_and_message_indexes": 8 * chunk + (chunk // 31 + 1) * 256,
+        # Worst case every observation yields tick + checkpoint and a separate chunk.
+        # Also charge all bounded referenced revision sets and failure details.
+        "session_indexes_and_diagnostics": config.max_session_records * (
+            8192 + 128 * config.max_referenced_revisions_per_tick),
+    }
+    parts["total_bytes"] = sum(parts.values())
+    return parts
 
 
 def _json_bytes(value: object) -> bytes:
@@ -1094,10 +1164,7 @@ def _fsync_directory(path: Path) -> None:
     flags = os.O_RDONLY
     if hasattr(os, "O_DIRECTORY"):
         flags |= os.O_DIRECTORY
-    try:
-        fd = os.open(path, flags)
-    except OSError:
-        return
+    fd = os.open(path, flags)
     try:
         os.fsync(fd)
     finally:
@@ -1113,7 +1180,7 @@ __all__ = [
     "EVENT_TOPIC",
     "McapCaptureConfig",
     "McapCaptureConsumer",
-    "ObservationEnvelope",
+    "conservative_ram_budget",
     "RAW_LIDAR_TOPIC",
     "RUNTIME_TOPIC",
     "TICK_TOPIC",
