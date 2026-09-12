@@ -62,14 +62,16 @@ Defaults:
   mozog wheel speeds: signed m/s, each within [-0.50, 0.50]
   movement capture: ON
 
-Capture uses the existing native bounded triggered ring:
-  pre-event 5 s, post-event 2 s, max 512 ticks / 64 MiB.
+Capture uses the native MCAP bounded triggered ring:
+  pre-event 5 s, post-event 2 s, 64 MiB ring budget.
+  Final authority files are written under runtime/captures/*.mcap.
+  Test Hub V2 evidence is written beside each finalized MCAP as *.evidence/.
 
 Starting a movement or capture automatically starts the runtime if needed.
 "stop" cancels the command producer (including proba) and returns to IDLE.
 "shutdown", "runtime stop" and Ctrl+C stop the runtime as well.
-After each launcher-managed runtime exits, Test Hub validates its new capture.
-Results and logs use unique paths under /tmp; see the runtime log path.
+After each launcher-managed runtime exits, the runtime has already finalized
+the MCAP and run Test Hub V2. Runtime logs use unique paths under /tmp.
 
 "proba" runs ten slow phases in the foreground, with 5 s in IDLE between them:
   forward/reverse: 5 s each, ramping from 0.15 to 0.25 m/s;
@@ -333,7 +335,7 @@ PY
 }
 
 _new_capture_path() {
-    echo "$CAPTURE_DIR/v3_$(date '+%Y%m%d_%H%M%S')_$$_capture.json"
+    echo "$CAPTURE_DIR/v3_$(date '+%Y%m%d_%H%M%S')_$$_capture.mcap"
 }
 
 _current_capture() {
@@ -347,11 +349,10 @@ _capture_used() {
     [[ -n "$p" && -f "$p" ]]
 }
 
-# The detached shell only waits for the native process and runs offline tools.
-# It owns no robot-control path. Its capture argument belongs to this session,
-# so a later restart cannot redirect validation to another session's file.
+# The detached shell only waits for the native process. The native runtime
+# owns MCAP finalization and Test Hub V2 evidence generation.
 _runtime_session() {
-    local capture="$1" pid output result
+    local capture="$1" pid evidence
     python3 v3_process_runtime.py \
         --approval native-resident-v3 \
         --capture-path "${capture#"$ROOT"/}" \
@@ -364,16 +365,18 @@ _runtime_session() {
     # A signal can interrupt wait before the native shutdown/finalizer finishes.
     while _pid_has_arg "$pid" "v3_process_runtime.py"; do wait "$pid"; done
     trap '' INT TERM
+
     if [[ -f "$capture" ]]; then
-        output="$(mktemp -d /tmp/r2b4-test-hub.XXXXXXXX)" || return 1
-        echo "test hub: validating $capture -> $output"
-        python3 -m v3.test_hub validate "$capture" \
-            --project-root "$ROOT" --output-dir "$output"
-        result=$?
-        echo "test hub: finished (exit $result), results: $output"
-        return "$result"
+        evidence="${capture%.mcap}.evidence"
+        echo "capture: finalized -> ${capture#"$ROOT"/}"
+        if [[ -d "$evidence" ]]; then
+            echo "test hub v2: results -> ${evidence#"$ROOT"/}"
+        else
+            echo "WARNING: finalized MCAP exists but Test Hub V2 evidence directory is missing: $evidence" >&2
+        fi
+    else
+        echo "capture: no finalized MCAP for this runtime session"
     fi
-    echo "test hub: no new capture finalized for this runtime session"
 }
 
 _runtime_start() {
@@ -432,9 +435,9 @@ _runtime_start() {
     fi
 
     echo "runtime: STARTED (PID $pid)"
-    echo "capture: ARMED (bounded ring)"
+    echo "capture: ARMED (MCAP bounded ring)"
     echo "capture file: ${fresh#"$ROOT"/}"
-    echo "runtime / Test Hub log: $RUNTIME_LOG"
+    echo "runtime log: $RUNTIME_LOG"
     [[ "${R2B4_CTRL_C_HOOK:-0}" != "1" ]] && \
         echo "note: global Ctrl+C panic hook inactive; source $ROOT/r2b4"
     return 0
@@ -453,7 +456,16 @@ _runtime_stop() {
         if ! _pid_has_arg "$pid" "v3_process_runtime.py"; then
             rm -f "$RUNTIME_PID_FILE"
             echo "runtime: STOPPED (PID $pid)"
-            echo "test hub: automatic validation after finalization; log: $RUNTIME_LOG"
+            local capture evidence
+            capture="$(_current_capture)"
+            if [[ -n "$capture" && -f "$capture" ]]; then
+                evidence="${capture%.mcap}.evidence"
+                echo "capture: ${capture#"$ROOT"/}"
+                [[ -d "$evidence" ]] && echo "test hub v2: ${evidence#"$ROOT"/}"
+            else
+                echo "capture: no finalized MCAP for this runtime session"
+            fi
+            echo "runtime log: $RUNTIME_LOG"
             return "$result"
         fi
         sleep 0.05
@@ -579,18 +591,28 @@ _capture_status() {
 
     if [[ -f "$path" ]]; then
         CAPTURE_FILE="$path" python3 - <<'PY'
-import json, os
+import os
 from pathlib import Path
-p=Path(os.environ["CAPTURE_FILE"])
-d=json.loads(p.read_text(encoding="utf-8"))
+from v3.mcap_reader import EVENT_TOPIC, McapReader, McapReadError
+
+p = Path(os.environ["CAPTURE_FILE"])
+reader = McapReader(p)
+final_pair = reader.last_json(EVENT_TOPIC)
+final = final_pair[1] if final_pair else {}
+try:
+    reader.capture_integrity()
+    integrity_ok = True
+except McapReadError:
+    integrity_ok = False
+
 print("capture: FINALIZED")
 print(f"file:    {p}")
-print(f"status:  {d.get('status','-')}")
-print(f"ticks:   {d.get('tick_count','-')}")
-w=d.get("capture_window") or {}
-i=d.get("capture_integrity") or {}
-print(f"trigger: {w.get('trigger_reason','-')}")
-print(f"complete:{' YES' if i.get('complete') is True else ' NO'}")
+print(f"status:  {final.get('status','-')}")
+print(f"ticks:   {final.get('captured_tick_count','-')}")
+print(f"trigger: {final.get('trigger_reason','-')}")
+print(f"complete:{' YES' if final.get('complete') is True and integrity_ok else ' NO'}")
+evidence = p.with_suffix(".evidence")
+print(f"evidence:{' ' + str(evidence) if evidence.is_dir() else ' -'}")
 PY
     elif [[ -e "$CAPTURE_USED_FILE" ]]; then
         echo "capture: TRIGGERED / finalizing"

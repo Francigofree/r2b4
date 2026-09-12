@@ -1,0 +1,107 @@
+{
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": true,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [],
+    "message_stream_sha256": "b4bf24f5dd8561b9fa452f7ff599de344e1adb85b827403cfa6f4d190e07db78",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 4092,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 4092,
+      "first_lost_sequence": null,
+      "high_water_mark": 14,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 4092,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": true,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 1590,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [],
+    "raw_lidar_truncated_count": 0
+  },
+  "capture_status": "PASS",
+  "first_divergence": null,
+  "first_live_incident": null,
+  "incident_count": 128,
+  "metrics": {
+    "localization": {
+      "first_trace": 1.5374220744471692,
+      "growth_ratio": 1.4709301266620245,
+      "last_trace": 2.261440446699567,
+      "max_trace": 2.261440446699567,
+      "sample_count": 363
+    },
+    "motion": {
+      "constrained_to_zero_tick_count": 273,
+      "estimated_path_length_m": 0.0,
+      "requested_motion_tick_count": 273
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 9739378838840,
+        "progress_span": 0.0,
+        "tick_id": 1171,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 286,
+      "FAULT": 0,
+      "STOP": 77,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 0,
+      "l2_rejection_count": 588
+    },
+    "ticks": {
+      "count": 363,
+      "first_monotonic_ns": 9732083549588,
+      "first_tick_id": 809,
+      "last_monotonic_ns": 9739378838840,
+      "last_tick_id": 1171
+    },
+    "timing": {
+      "max_ms": 64.491488,
+      "p50_ms": 19.999802,
+      "p95_ms": 21.074346,
+      "p99_ms": 24.234049,
+      "sample_count": 362
+    }
+  },
+  "physical_root_cause": {
+    "cause": null,
+    "evidence": null,
+    "reason": "NO_LIVE_INCIDENT_IN_SCOPE",
+    "status": "NOT_PROVEN"
+  },
+  "replay_error": null,
+  "replay_requested": true,
+  "replay_status": "MATCH",
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "l2-reject-809"
+    ],
+    "layer": "L2",
+    "reason": "OBSERVATION_REJECTED",
+    "tick_id": 809
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "PASS",
+  "structure_valid": true
+}
