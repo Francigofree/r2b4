@@ -110,7 +110,10 @@ class InputAdmission:
                 degraded.add(sample.device_id)
                 reason = RejectionReason.UNTRUSTED
 
-            if previous_sequence is None or sample.sequence > previous_sequence:
+            if (
+                reason is not RejectionReason.TIME_ALIGNMENT_FAILED
+                and (previous_sequence is None or sample.sequence > previous_sequence)
+            ):
                 self._last_sequences[key] = sample.sequence
 
             if reason is not None:
