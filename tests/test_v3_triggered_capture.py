@@ -464,7 +464,7 @@ def test_default_byte_budget_holds_five_second_pre_and_two_second_post_window(tm
     worker, path = _worker(
         tmp_path,
         config=config,
-        capture_config=CaptureWindowConfig(ingress_queue_capacity=1_024),
+        capture_config=CaptureWindowConfig(pre_event_ns=5_000_000_000, ingress_queue_capacity=1_024),
     )
     for revision in range(250, 314):
         worker.observe_raw_lidar(_large_raw_snapshot(revision))

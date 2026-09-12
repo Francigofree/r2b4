@@ -74,6 +74,14 @@ def _check_import(
         ]
     root = imported.split(".", 1)[0]
     violations: list[ImportViolation] = []
+    if importer == "v3.observation" and root not in {
+        "__future__", "threading", "time", "collections", "dataclasses",
+        "enum", "queue", "typing",
+    }:
+        violations.append(ImportViolation(
+            path, line, "OBSERVATION_DEPENDENCY_NOT_ALLOWED", imported,
+            "data-blind observation may import only its bounded stdlib primitives",
+        ))
     if root == "importlib":
         violations.append(
             ImportViolation(
@@ -238,6 +246,14 @@ def validate_v3_imports(
                         )
                     )
             elif isinstance(node, ast.Call):
+                if importer == "v3.observation" and (
+                    isinstance(node.func, ast.Name) and node.func.id in {"open", "eval", "exec"}
+                    or isinstance(node.func, ast.Attribute) and node.func.attr == "open"
+                ):
+                    violations.append(ImportViolation(
+                        relative_text, node.lineno, "OBSERVATION_IO_NOT_ALLOWED", "",
+                        "observation publication must not perform file I/O or execute dynamic code",
+                    ))
                 dynamic = isinstance(node.func, ast.Name) and node.func.id == "__import__"
                 dynamic = dynamic or (
                     isinstance(node.func, ast.Attribute) and node.func.attr == "import_module"
