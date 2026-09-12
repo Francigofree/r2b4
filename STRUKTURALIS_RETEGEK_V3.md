@@ -2,99 +2,79 @@
 
 **Contract:** `R2B4_ARCH_LAYER_CONTRACT_V3`
 
-**Szerep:** normatív V3 architektúra-SSOT. Nem eseménynapló, fejlesztési napló,
-roadmap, tuningjegyzet vagy formális bizonyítási rendszer.
+**Szerep:** normatív V3 architektúra-SSOT. Nem eseménynapló, roadmap, tuningjegyzet, fájlformátum-leírás vagy formális proof rendszer.
 
-**Cél:** egyszerű, determinisztikus, jól tesztelhető és hosszú távon
-karbantartható robot-runtime. A szerkezet a stabil fizikai működést, a
-source-first fejlesztést, a gyors hibakeresést és a determinisztikus replayt
-szolgálja.
+**Cél:** egyszerű, determinisztikus, jól tesztelhető és hosszú távon karbantartható robot-runtime, amelyben a diagnosztikai eszközök nem válnak a control rendszer részévé.
 
-A pillanatnyi implementációs készültség, konkrét tuningérték és hardver-evidence
-nem ennek a dokumentumnak a feladata.
+Konkrét algoritmus, tuningérték, queue-méret, fájlformátum, CLI/GUI és pillanatnyi hardver-evidence nem ennek a dokumentumnak a feladata.
 
-Authority sorrend:
+## Authority — kérdéstípus szerint
 
-```text
-source + aktív config
-→ ez a canonical V3 contract
-→ Replayer + Test Hub V3 futásazonos evidence
-→ történeti dokumentáció vagy nyers log
-```
+* **Architekturális ownership, réteghatár, control/safety authority és engedélyezett adatél:** ez a dokumentum.
+* **Pillanatnyi algoritmus, típusmező, konfiguráció és tuning:** canonical source + aktív config, e contract korlátain belül.
+* **Egy konkrét futás tényei:** a végleges, integritás-ellenőrzött capture és az abból dolgozó canonical Replayer/Test Hub evidence.
+* **Történeti dokumentáció, nyers log, fejlesztési jegyzet:** háttéranyag.
 
-A dokumentum a V3 stabil architekturális határait rögzíti. Nem ír elő
-indokolatlan jövőbeli frameworköt vagy konkrét algoritmust.
+Source-first hibakeresésnél a tényleges viselkedést a source-ból kell megérteni, de véletlen source-drift nem írhatja felül ezt a contractot. Ha source és e dokumentum architekturális szabályban ellentmond, az eltérés hiba mindaddig, amíg a contractot tudatosan és az érintett source-szal együtt nem módosítják.
 
 ## 1. Minimum, nem alkuképes garanciák
 
-* Minden állapotnak és rétegnek pontosan egy owner-e van.
+* Minden stateful felelősségnek pontosan egy owner-e van.
 * Nincs legacy shared state, rejtett singleton vagy kerülő authority.
-* A réteghatárok immutable, konkrét Python típusok; `dict[str, Any]` nem
-  réteghatár-contract.
-* Egyetlen, szekvenciális TickEngine egy már lezárt TickInputs snapshotból, rögzített   sorrendben legfeljebb egyszer hívja a szükséges rétegeket.
-* Egy tickből pontosan egy L12 final döntés és legfeljebb egy normál motor-write
-  születik.
-* Az L12 hiányzó, hibás vagy bizonytalan, az adott mozgáshoz ténylegesen
-  kritikus inputnál fail-closed STOP/FAULT döntést és fizikailag inaktív
-  motorállapotot eredményez.
-* Azonos input, konfiguráció és kód azonos typed layer-outputokat eredményez.
-* Replay eltérésnél a legelső eltérő tick és réteg közvetlen
-  érték-összehasonlítással megnevezhető.
-* Egy fizikai szenzor több, egymástól független szemantikai adatot
-  szolgáltathat. Egy felhasználási ág hibája nem teheti automatikusan
-  érvénytelenné a többi, önmagában érvényes ágat.
-* A V3 production- és validációs út nem függ legacy source-tól, API-tól,
-  runtime-tól vagy compatibility rétegtől.
-* Nincs alternatív normál motorút, safety-bypass vagy tool-specifikus control
-  authority.
+* A production réteghatárok immutable, konkrét Python típusok; `dict[str, Any]` nem réteghatár-contract.
+* Egyetlen szekvenciális TickEngine dolgozik egy már lezárt `TickInputs` snapshotból, rögzített sorrendben, rétegenként legfeljebb egyszer.
+* Egy tickből pontosan egy L12 final döntés és legfeljebb egy normál motor-write születik.
+* Kritikus hiány, hiba vagy bizonytalanság fail-closed STOP/FAULT és fizikailag inaktív motorállapot.
+* Azonos lezárt input + konfiguráció + szükséges induló state + kód azonos typed layer-outputot ad.
+* Replay eltérésnél a legelső eltérő tick, réteg és mező megnevezhető.
+* Egy fizikai szenzor több független szemantikai capabilityt szolgáltathat; egy ág hibája nem érvénytelenítheti automatikusan a többit.
+* Nincs alternatív normál motorút, safety-bypass vagy tool-specifikus control authority.
+* Capture, telemetry, GUI, agent vagy más diagnosztikai consumer nem hathat vissza a production döntésre.
 
-Ezeket a garanciákat nem szabad adminisztratív könnyítés címén lazítani.
-Minden más mechanizmus csak akkor indokolt, ha konkrét runtime-, safety-,
-replay- vagy hibakeresési igényt egyszerűbben old meg, mint nélküle.
+Ezeket a garanciákat adminisztratív egyszerűsítés, diagnosztikai kényelmi funkció vagy tesztátvezetés miatt sem szabad lazítani.
 
-## 2. Determinisztikus végrehajtás
+## 2. Determinisztikus végrehajtás és passzív observation sík
 
-A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló
-folyamatban nincs rétegenkénti thread, sleep, falióra, rejtett I/O vagy
-modulglobális mutable state.
+A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló folyamatban nincs rétegenkénti thread, sleep, falióra, rejtett I/O vagy modulglobális mutable state.
 
-Egy tick menete:
+Egy normál tick:
 
-1. A composition root létrehozza a `TickContext(tick_id, monotonic_ns)` értéket.
-2. Lezárja a tick device- és command-inputját.
-3. L1-től L11-ig minden szükséges réteget legfeljebb egyszer, rögzített
-   sorrendben hív.
-4. Bármely upstream hiba esetén a normál lánc megszakad, és az L12 pontosan
-   egyszer explicit fault okkal kerül meghívásra.
-5. Az L12 dönt és birtokolja az egyetlen normál `MotorWriter` capabilityt.
-6. A tick typed trace-e diagnosztikához kiolvasható, de nem hat vissza a
-   controlra.
+1. `TickContext(tick_id, monotonic_ns)` létrejön.
+2. A device- és command-input lezárul.
+3. L1–L11 legfeljebb egyszer, rögzített sorrendben fut.
+4. Upstream hiba megszakítja a normál láncot; L12 egyszer, explicit fault okkal fut.
+5. L12 dönt és birtokolja az egyetlen normál `MotorWriter` capabilityt.
+6. A completed typed eredmény kifelé megfigyelhető, de nem hat vissza a controlra.
 
-A döntési idő kizárólag az injektált monoton idő. Randomizált algoritmus csak
-rögzített, replayelhető seedből dolgozhat. CPU-idős deadline helyett bounded,
-determinisztikus munka-budget szükséges ott, ahol a döntésnek reprodukálhatónak
-kell maradnia.
+A döntési idő az injektált monoton idő. Randomizált algoritmus csak replayelhető seedből dolgozhat; reprodukálható döntésnél bounded, determinisztikus work-budget kell.
 
-A live, capture, replay és szimuláció ugyanarra a kis végrehajtási határra
-illeszthető:
+A live, replay és szimuláció közös végrehajtási határa:
 
 ```text
 input source → production V3 → output sink
 ```
 
-Az input source lezárt `TickInputs` értéket ad, a production elem a canonical
-V3 végrehajtást futtatja, az output sink pedig passzív eredményt fogyaszt. A
-sink nem adhat vissza control state-et és nem kaphat motor-, lifecycle- vagy
-safety-authorityt.
+Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, motor-, lifecycle- és safety-authority nélkül. Aszinkron driver vagy feldolgozás megengedett, ha eredménye a tick számára lezárt, immutable, időbélyegzett input.
 
-Aszinkron fizikai input, driver vagy nagyobb szenzorfeldolgozás használható, ha
-annak eredménye a tick számára egyértelműen lezárt, immutable, időbélyegzett
-inputként jelenik meg. Az aszinkron producer nem válhat control-authorityvá.
+### 2.1 Passzív observation/fan-out
 
-## 3. Egyszerű contractmodell
+A productionból kifelé vezethet passzív observation/fan-out capture, telemetry, GUI vagy metrics felé. Ez **nem L13 és nem control layer**.
 
-Minden top-level layer output egy frozen, slotted dataclass. A közös metadata
-minimuma:
+Kötelező invariánsok:
+
+* csak completed vagy önállóan immutable production/edge értéket figyel meg;
+* bounded és production-publikáció szempontjából nem blokkoló;
+* a producer útján nincs serializáció, fájl-I/O vagy consumer callback;
+* a fan-out nem értelmezi és nem módosítja a payloadot;
+* consumer-ek izoláltak egymástól;
+* latest-only consumer szándékosan supersede-elhet telemetryt;
+* required evidence consumer adatvesztése explicit, tartós integrity failure.
+
+Observation publication time csak transport/diagnosztikai idő; nem helyettesíti a fizikai measurement időt vagy a domain saját revision/sequence jelentését. Filtered fan-outnál globális publication sequence kihagyása önmagában nem bizonyít loss-t: az evidence-loss authority annak a konkrét consumer-delivery élnek az integrity állapota, amely az adat kézbesítéséért felel.
+
+## 3. Egyszerű contractmodell és időszemantika
+
+Minden top-level layer output frozen, slotted dataclass. Közös metadata minimum:
 
 ```text
 TickContext
@@ -102,64 +82,41 @@ TickContext
   monotonic_ns: int
 ```
 
-Nincs kötelező közös schema envelope, schema registry, producer/session
-provenance, causation chain, config hash, event hash vagy boundarynkénti
-canonical serializer.
+Nincs kötelező univerzális schema envelope, schema registry, provenance/causation gráf, config hash, event hash vagy boundarynkénti serializer. A Python típusdefiníció a belső production contract.
 
-A Python típusdefiníció maga a belső contract. Inkompatibilis változást a hívó
-kód és a célzott contractteszt együtt követ.
+Validáció ott kötelező, ahol runtime-, safety- vagy determinisztikai értéke van: fizikai tartományok, idő/sorrend, azonos `TickContext`, freshness/trust, domain-invariánsok, STOP/FAULT null output és kritikus azonosítók.
 
-Validáció ott kötelező, ahol közvetlen runtime-, safety- vagy determinisztikai
-értéke van, például:
+A fizikai measurement idő, source completion idő, processing/result idő és observation publication idő külön fogalom. Freshness a releváns fizikai measurement idejéből számítandó.
 
-* véges számok, fizikai tartományok és nemnegatív idő/sorszám;
-* egy ticken belüli azonos `TickContext`;
-* measurement/source idő egyértelmű jelentése;
-* freshness, ordering és trust;
-* domain-invariánsok;
-* STOP/FAULT esetén null logikai final output és fizikailag inaktív motor-edge;
-* kritikus azonosítók és gyűjteménykulcsok egyértelműsége.
-
-A fizikai measurement idő és a feldolgozási/result idő nem keverhető.
-Freshness annak a fizikai mérésnek az idejéből számítandó, amelyre az eredmény
-vonatkozik.
-
-A diagnosztikai ok rövid stabil `reason`, nem általános proof- vagy reason-code
-gráf. A capture edge használhat egyszerű verziózott fájlformátumot, de a
-serializáció nem része minden runtime contractnak.
+A capture edge használhat verziózott külső serializációt, de az nem válik minden runtime contract részévé.
 
 ## 4. Rétegek és state-ownership
 
 | Réteg | Egyetlen felelősség és owned state | Typed output |
 | --- | --- | --- |
 | L0 Device HAL | eszközhandle, busz, fizikai read/write, lezárt device snapshot | `RawDeviceBatch` |
-| L1 Acquisition | a lezárt device snapshotból source sample-ek és I/O health zárása | `AcquisitionFrame` |
+| L1 Acquisition | source sample-ek és I/O health zárása | `AcquisitionFrame` |
 | L2 Admission | freshness, sorrend, duplikáció, trust/alignment history | `AdmittedFrame` |
 | L3 State Estimation | pose, twist, covariance | `RobotEstimate` |
-| L4 World Model | rolling lokális világállapot, costmap, revision és akadályhistory | `WorldSnapshot` |
-| L5 Command & Mission | validált command- és mission-lifecycle | `MissionIntent` |
-| L6 Navigation | route/progress, coverage/local goal és trajectory evaluation | `NavigationPlan` |
-| L7 Motion Selection | prioritás és pontosan egy kiválasztott trajectory/cél | `MotionObjective` |
-| L8 Motion Realization | a kiválasztott guidance pillanatnyi kinematikai célja | `MotionIntent` |
-| L9 Operational Constraints | dinamikai/környezeti korlátozás state | `ConstrainedMotion` |
+| L4 World Model | rolling lokális világállapot/costmap | `WorldSnapshot` |
+| L5 Command & Mission | command- és mission-lifecycle | `MissionIntent` |
+| L6 Navigation | route/progress, coverage/local goal, bounded trajectory evaluation | `NavigationPlan` |
+| L7 Motion Selection | pontosan egy trajectory/cél választása | `MotionObjective` |
+| L8 Motion Realization | guidance → pillanatnyi kinematikai cél | `MotionIntent` |
+| L9 Operational Constraints | motion/platform/gyorsulás/lokalizáció korlátozás | `ConstrainedMotion` |
 | L10 Chassis Control | chassis-kinematika | `WheelVelocitySetpoint` |
-| L11 Actuator Control | wheel-loop integrátor, feed-forward, calibration map | `ActuatorRequest` |
-| L12 Safety & Final | safety latch, final döntés, egyetlen normál `MotorWriter` | `FinalActuation` |
+| L11 Actuator Control | wheel-loop, feed-forward, calibration map | `ActuatorRequest` |
+| L12 Safety & Final | safety latch, final döntés, egyetlen normál writer | `FinalActuation` |
 | Composition root | tick, lifecycle, config snapshot és wiring | `TickTrace` |
 
-Egy réteg nem módosíthat másik réteg state-jét. Az output új immutable érték;
-nem adhat át controllert, GUI objektumot, device handlet vagy mutable
-collectiont.
+Egy réteg nem módosíthat másik réteg state-jét és nem adhat át controllert, GUI objektumot, device handlet vagy mutable collectiont. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
 
-A rétegezés nem jelenti azt, hogy egy fizikai szenzorhoz pontosan egy
-réteghatár-output tartozhat. Egyetlen acquisition forrásból több, eltérő célú
-typed sample zárható, ha ownershipjük és jelentésük egyértelmű.
-
-## 5. Engedélyezett adat-élek
+## 5. Engedélyezett production adat-élek
 
 ```text
 L0  -> L1
-L1  -> L2, L12
+L0  -> L12        (kritikus device health)
+L1  -> L2, L12    (közvetlen safety observation)
 L2  -> L3, L4, L11
 L3  -> L4, L6, L8, L9
 L4  -> L6, L8
@@ -168,314 +125,176 @@ L6  -> L7
 L7  -> L8
 L8  -> L9
 L9  -> L10
-L10 -> L11
+L10 -> L11, L12   (L12 felé safetyhez szükséges motion context)
 L11 -> L12
 L12 -> L0/MotorWriter
 CommandGateway -> L5
-CompositionRoot -> minden layer konstrukciója és lifecycle-ja
+CompositionRoot -> minden layer konstrukciója, lifecycle-ja és wiringja
 ```
 
-Az engedélyezett élek fan-outot is jelentenek. Ugyanaz a fizikailag megszerzett
-szenzorinformáció több, szemantikailag különálló typed eredményt táplálhat a
-megengedett célrétegek felé.
+Layer implementation nem importálhat másik layer implementationt; wiring csak composition rootban, typed callable/porttal történhet.
 
-Layer implementation nem importálhat másik layer implementationt. Kapcsolás
-csak a composition rootban, typed callable/port konstrukcióval történhet.
+A lista a production döntési élekre vonatkozik. Completed typed értékből vagy meglévő edge-owner immutable snapshotjából kifelé vezető passzív observation/capture él megengedett, ha nem tér vissza a döntési láncba és megfelel a 2.1 szakasznak.
 
 ## 6. Final safety és motorírás
 
-Az L12 a normál motor-write capability egyetlen tulajdonosa. Nincs alternatív
-pozitív PWM-, service-, GUI-, tool- vagy külső writer.
+L12 a normál motor-write capability egyetlen tulajdonosa. Nincs alternatív pozitív PWM-, service-, GUI-, tool- vagy külső writer.
 
-Az L12 kötelező viselkedése:
+Kötelező viselkedés:
 
-* upstream exception, kritikus device failure vagy hiányzó actuator request:
-  fail-closed `FAULT`, null logikai output;
-* ismeretlen vagy a konkrét mozgás biztonságos végrehajtásához szükséges
-  kritikus input hiánya: `STOP` vagy indokolt esetben `FAULT`;
-* érvényes safety observation közvetlenül korlátozhat vagy megtilthat
-  actuationt;
-* csak érvényes L11 request, megfelelő lifecycle és minden ténylegesen
-  szükséges safety feltétel esetén `ALLOW`;
-* egy normál döntés után legfeljebb egy atomi writer-hívás;
-* write exception után nincs automatikus második normál írás, a fault latch
-  beáll;
-* STOP/FAULT contract nem tartalmazhat nem nulla logikai final outputot.
+* upstream exception, kritikus device failure vagy hiányzó actuator request → fail-closed `FAULT`;
+* ismeretlen/bizonytalan, a mozgáshoz ténylegesen kritikus input → `STOP` vagy indokolt `FAULT`;
+* érvényes safety observation közvetlenül korlátozhat vagy tilthat actuationt;
+* `ALLOW` csak érvényes L11 request + megfelelő lifecycle + szükséges safety feltételek mellett;
+* döntésenként legfeljebb egy atomi writer-hívás;
+* write exception után nincs automatikus második normál write, fault latch beáll;
+* STOP/FAULT logikai final outputja nulla.
 
-A STOP/FAULT nem pusztán `duty=0` szoftveres értéket jelent. A motor-edge
-shutdown contractjának a hardver szempontjából fizikailag inaktív, igazolható
-állapotot kell eredményeznie.
-
-A `DeviceHealth` és a szenzor által megfigyelt veszély két külön fogalom. Egy
-magasabb szintű feldolgozás hibája nem változtathat működő hardverforrást
-automatikusan hibás device-zá.
-
-Külön általános `ActuationReceipt` rendszer nem kell. Ha a hardver alkalmazott
-érték-visszaolvasást igényel, az egyszerű typed device feedbackként kerül
-L0/L1-be.
+STOP/FAULT hardveroldalon fizikailag inaktív, igazolható állapotot jelent. `DeviceHealth` és a szenzor által megfigyelt veszély külön fogalom. Általános `ActuationReceipt` rendszer nem szükséges; valódi hardware feedback egyszerű typed L0/L1 adat.
 
 ## 7. Szenzoradat és capability-függetlenség
 
-Egy fizikai szenzor nem egyetlen algoritmus tulajdona.
+Külön kezelendő: (1) fizikai device/stream health, (2) measurement validity/freshness/trust, (3) egyes feldolgozási ágak minősége. Egy ág degradationje csak közös fizikai vagy contract-szintű ok esetén terjedhet másik ágra.
 
-A szenzorrendszer külön kezeli:
+### 7.1 Encoder
 
-1. a fizikai eszköz/stream működőképességét;
-2. az adott mérés érvényességét, freshness-ét és trustját;
-3. az egyes feldolgozási/felhasználási ágak minőségét.
+A fizikai count/delta és közvetlen elmozdulás RAW measurement; control-output vagy velocity filter nem írhatja át. Velocity estimation lehet stateful/időablakos, de bounded és determinisztikus. Pulse-window, debounce, CPR és tuning source/config, nem architektúra.
 
-Egy ág failure/degradation állapota csak akkor terjedhet másik ágra, ha közös
-fizikai vagy contract-szintű oka van. A safety számára önmagában használható
-mérés nem válhat használhatatlanná pusztán azért, mert ugyanabból a forrásból
-egy localization-, world-model- vagy más magasabb szintű ág nem tudott megfelelő
-eredményt előállítani.
-
-A capability-k szétválasztása nem jelent párhuzamos control authorityt. A
-különböző szenzorágak csak typed adatot szolgáltatnak; a végső actuation
-authority továbbra is az L12.
-
-### 7.1 Encoder invariánsok
-
-A fizikai számláló/delta és az abból közvetlenül származó elmozdulás RAW
-measurement; nem írható át sebességszűrő vagy control-output alapján.
-
-A keréksebesség becslése lehet stateful és időablakos, de bounded és
-determinisztikus marad. A measurement trust/timing minősége külön fogalom a
-fizikai encoder device health állapotától. L2 a measurement admissiont, L3 az
-állapotbecslést birtokolja.
-
-A konkrét pulse-window, debounce, CPR, velocity limit és egyéb tuning az aktív
-config és source része, nem architekturális contract.
-
-### 7.2 LiDAR szemantikai ágak
-
-Egy fizikai LiDAR acquisition több, egymástól független typed eredményt
-szolgáltathat:
+### 7.2 LiDAR
 
 ```text
 LiDAR acquisition
    ↓
 L1
-   ├── collision/safety measurement ─────────→ L12
-   ├── local perception ───────────→ L2 ─────→ L4
-   └── localization measurement ───→ L2 ─────→ L3
+   ├── collision/safety ─────────→ L12
+   ├── local perception ─→ L2 ──→ L4
+   └── localization ─────→ L2 ──→ L3
 ```
 
-A safety ág a közvetlen collision-releváns mérésből dolgozik. Nem függhet scan
-matcher sikerétől, localization pose-tól, térképtől vagy magasabb szintű
-perception eredménytől, ha a saját safety measurement önmagában érvényes.
+A safety ág nem függhet matcher-, localization- vagy map-sikertől, ha saját measurementje érvényes. World/costmap ownership L4-ben marad. Localization minőségromlás nem jelent automatikusan LiDAR device failure-t.
 
-A local-perception ág az L4 számára szükséges legegyszerűbb bounded, immutable
-lokális környezet-reprezentációt szolgáltatja. A world state/costmap ownershipje
-L4-ben marad, nem kerülhet a device adapterbe.
+A scan fizikai időtartama és canonical measurement ideje legyen egyértelmű; completion/capture/publication time külön adat. Pose-reference ugyanarra a measurement időre vonatkozzon. A konkrét measurement-idő képlet, pose-history kapacitás és interpoláció source + config + célzott teszt felelőssége; ezek nem architektúraváltások, amíg az idő- és ownership-invariáns megmarad.
 
-A localization ág opcionális L3 measurement. Hiánya vagy alacsony minősége nem
-jelent automatikusan LiDAR device failure-t, és nem érvényteleníti a független
-safety/local-perception ágat.
-
-A measurement timestamp a fizikai mérés idejét jelenti. A feldolgozás
-befejezési ideje külön diagnosztikai adat lehet. Raw scan csak akkor kerül
-magasabb szintű vagy capture adatba, ha annak konkrét funkcionális vagy
-diagnosztikai értéke van.
-
-Egy teljes LiDAR scan scan-szintű időcontractja a mért
-`scan_start_monotonic_ns`, `scan_end_monotonic_ns` és az ezekből kizárólag
-`start + (end - start) // 2` képlettel képzett `measurement_monotonic_ns`.
-A megtartott `captured_monotonic_ns` mező scan-completion timestamp; matcher
-pose-illesztésre nem használható. Ez a contract nem pontonkénti deskew.
-
-A matcher packet source scan revisiont, measurement timestampet és pontosan
-arra az időre vonatkozó pose reference-et visz; a pose-reference és measurement
-monoton időbélyege kötelezően azonos. A már elkészült `RobotEstimate` értékek
-scan-időre illesztéséhez a production hardware feedback edge egyetlen ownere
-bounded, monoton rendezett pose-historyt tarthat fenn exact lookupkal,
-lineáris x/y és wrap-safe yaw interpolációval. Túl régi, jövőbeli vagy nem
-interpolálható kérés fail-closed. Ez a hardware-edge state nem része a
-`NativeControlComposition` state-authorityjának.
-
-A production szenzorút natív V3 adapterekből és typed contractokból áll; nem
-függhet legacy runtime/shared-state authoritytól.
+Ha scan-időre pose feedback kell, annak egy bounded, determinisztikus ownere lehet az edge/composition határon; nem válhat második L3 vagy control authorityvá. Raw scan csak konkrét funkcionális/diagnosztikai értékkel kerüljön capture-be.
 
 ## 8. Motion és command szabadság
 
-Az L7→L12→MotorWriter lánc a stabil canonical motion core. Új command-, mission- vagy behavior capability nem kerülheti meg és nem duplikálhatja; ha a meglévő motion contract elegendő, az új funkció a CommandGateway/L5/L6 oldalán kapcsolódjon be.
+Az L7→L12→MotorWriter lánc stabil canonical motion core. Új command/mission/behavior ne kerülje meg; ha a meglévő motion contract elég, CommandGateway/L5/L6 oldalon kapcsolódjon be.
 
-Production motion live teszt csak a teljes CommandGateway→L5→L6→L7→L8→L9→L10→L11→L12→MotorWriter láncon keresztül végezhető. Célzott actuator-, motor-edge- vagy hardvervalidáció használhat szűkebb utat, de nem tekinthető production motion tesztnek és nem bizonyítja a teljes motion láncot.
+Production motion live teszt a teljes CommandGateway→L5→L6→L7→L8→L9→L10→L11→L12→MotorWriter láncon fut. Szűk actuator/hardware teszt nem bizonyítja a teljes production motion utat.
 
-Az L7–L12 mag stabil by default: csak akkor változzon, ha a konkrét funkció vagy igazolt source/replay/live evidence ténylegesen ezt igényli; pusztán új command, mission vagy behavior hozzáadása nem indok az átépítésére.
+L7–L12 stabil by default; csak konkrét funkció vagy igazolt source/replay/live evidence miatt változzon. Test Hub, teleop, script, follow/AI vagy más command source nem kaphat saját motor- vagy safety-utat.
 
-A robot normál mozgatásának egyetlen canonical V3 útja van:
+A runtime ne épüljön `FORWARD`, `ARC`, `PIVOT`, `MOVE_1M` jellegű motion primitive-ekre. Külső command általános kinematikai vagy magasabb szintű mission/navigation célt adjon. Kötelező gate csak olyan capability lehet, amely az adott funkcióhoz ténylegesen szükséges.
 
-```text
-CommandGateway
-→ L5
-→ L6
-→ L7
-→ L8
-→ L9
-→ L10
-→ L11
-→ L12
-→ MotorWriter
-```
+L6 bounded trajectory-jelölteket állít elő/értékel; L7 pontosan egy `MotionObjective`-et választ; L8 ezt pillanatnyi kinematikai céllá realizálja. Második motion-selection vagy safety authority tilos.
 
-Test Hub, teleop, script, későbbi follow/AI vagy más külső command source nem
-kaphat saját robotmozgató-, motor- vagy safety-útvonalat.
+## 9. Konfiguráció, command, GUI és külső I/O
 
-A motion rendszer nem épülhet `FORWARD`, `ARC`, `PIVOT`, `MOVE_1M` vagy más
-rögzített motion-primitive fogalmakra. Külső command source általános
-kinematikai célt vagy magasabb szintű mission/navigation célt adhat a canonical
-command út felé.
+A composition root validált, immutable configot injektál; layer nem olvas fájlt, environment variable-t vagy globális config managert. Actuationt érintő config csak biztonságos lifecycle-határon, fizikailag inaktív motor mellett cserélhető.
 
-Egy konkrét tesztszcenárió nem runtime primitive, hanem egy általános command
-source kimenete.
+GUI/CLI/LLM/tool **control irányban** csak `CommandGateway` kliensen keresztül adhat typed `CommandRequest`-et. **Read irányban** GUI/agent/telemetry fogyaszthatja a passzív observation/evidence felületet; ettől nem kap command-, lifecycle-, safety- vagy motor-authorityt.
 
-Egy motion request csak azokhoz a capability-khez köthető kötelező gate-ként,
-amelyek az adott mozgás szemantikájához vagy biztonságos végrehajtásához
-ténylegesen szükségesek. Opcionális magasabb szintű capability nem válhat
-pusztán a létezése miatt minden motion globális blokkoló feltételévé.
+Readiness/arming csak új, friss, független source evidence-et számolhat új bizonyítéknak. Resident ACTIVE csak érvényes preflight után indulhat; command expiry/kiesés fail-closed STOP, visszaaktiválás a normál readiness/preflight úton történik.
 
-A navigation L6 felelőssége a bounded trajectory-jelöltek előállítása és
-értékelése. Az L7 pontosan egy `MotionObjective` értéket választ, az L8 pedig a
-kiválasztott guidance pillanatnyi kinematikai célját realizálja. Külön
-behavior/planner nem hozhat létre második motion-selection vagy safety
-authorityt.
+A runtime headless. Külső I/O megfelelő edge/device vagy passzív observation/capture adapterben történik; adapter nem válhat state- vagy control-authorityvá.
 
-## 9. Konfiguráció, command és külső I/O
+## 10. V3-only source és dependency szabály
 
-A composition root validált, immutable konfigurációt injektál. Layer nem olvas
-fájlt, environment variable-t vagy globális config managert.
+A védett V3 production és canonical in-package validációs source csak V3-at, standard libraryt és explicit aktív numerikus/hardver függőségeket importálhat. Legacy source-import, shared state és alternatív runtime authority tilos.
 
-Actuationt érintő konfiguráció csak biztonságos lifecycle-határon és
-fizikailag inaktív motorállapot mellett cserélhető.
+Layer implementation más layer implementationt nem importál. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
 
-GUI, CLI, LLM és tool csak a `CommandGateway` kliensén keresztül adhat typed
-`CommandRequest` értéket. A gateway kezeli a külső command érvényességét és
-lejáratát; ezek adminisztratív részletei nem terjednek végig a belső layer
-contractokon.
+Külső GUI/vizualizáció/agent kliens használhat saját függőségeket a V3 csomagon kívül, de production V3 nem függhet vissza ezektől.
 
-Readiness vagy arming kapu csak valóban friss, egymástól független
-forrásevidence-et számolhat új bizonyítéknak; ugyanazon latest-only source
-revízió ismételt kiolvasása nem új measurement. Kötelező gate csak olyan
-capability lehet, amely az adott funkció biztonságos végrehajtásához ténylegesen
-szükséges.
+## 11. Capture, Replay, Test Hub és evidence
 
-Resident ACTIVE csak érvényes preflight után indulhat. Command lejárat vagy
-rövid command-kimaradás fail-closed STOP-ot eredményez; visszaaktiválás a normál
-readiness/preflight úton történik, alternatív motor- vagy safety-út nélkül.
+Capture, replay és Test Hub diagnosztikai capability, nem control authority. Hibájuk vagy lassúságuk nem módosíthat robotdöntést vagy motor-outputot. A persistent container formátuma implementációs döntés; a követelmény az ellenőrizhető integrity és a bounded visszakereshetőség.
 
-A runtime headless. Külső I/O kizárólag edge/device adapterben történik, és az
-adapter nem válhat state- vagy control-authorityvá.
+A Test Hub közvetlen capture-tényt, artifact-integrity eredményt és canonical replay verdictet csak a saját pontos scope-jában tekinthet authority evidence-nek. A Test Hub nem általános truth authority. Triage, root-cause rangsor, anomáliaértelmezés és javítási javaslat derived diagnosis; ezek csak közvetlen kauzális evidence esetén minősíthetők PROVEN-nek, egyébként INDICATED, NOT_PROVEN vagy EVIDENCE_BLOCKED maradnak.
 
-## 10. V3-only source szabály
+### 11.1 Capture integrity
 
-A V3 modulok csak a V3 csomagot, a standard libraryt és az explicit aktív
-numerikus/hardver függőségeket importálhatják. Legacy source-import,
-compatibility adapter, donor-allowlist, shared state és alternatív runtime
-authority tilos.
+Production observation bounded és nem blokkoló; encoding/tartós I/O nem lehet control-kritikus úton.
 
-Layer implementation más layer implementationt nem importálhat; a wiring a
-composition root felelőssége.
+Required evidence loss esetén az artifact megőrizhető, de az érintett scope-on nem nevezhető teljesnek és nem lehet exact-replay MATCH-re jogosult. Egy delivery edge integrityjének egy authorityja legyen; downstream ne rekonstruáljon más, nem ekvivalens counterből második loss truth-ot.
 
-Új capability minimális natív V3 implementációként, a typed V3 contractokból
-indulva készülhet.
+Normál shutdown: production publikáció vége → required backlog feldolgozható/drainelhető → integrity lezárul → artifact finalizálódik. Partial és canonical final artifact legyen egyértelműen megkülönböztethető.
 
-## 11. Capture, Replay és Test Hub
+Capture csak indokolt replay/diagnosztikai evidence-et tartson; nincs „mindent logoljunk” követelmény. A persisted capture szemantikájának egy canonical encoding/értelmezése legyen; container/bridge ne hozzon létre versengő encoder/decoder authorityt.
 
-A capture és replay fejlesztői/diagnosztikai capability, nem control authority.
-A capture hibája vagy lassúsága nem módosíthatja a robot döntését vagy
-motor-outputját.
+### 11.2 Canonical replay
 
-A production tick útból történő capture megfigyelés bounded és nem blokkoló.
-Encoding és tartós fájl-I/O nem lehet a control tick kritikus útjának része.
+Replayhez kell a futtatandó lezárt `TickInputs`, tényleges config és minden olyan determinisztikus state/input, amely nélkül a scope nem reprodukálható.
 
-A replay minimuma:
+A Replayer ugyanazt a canonical production composition/TickEngine utat futtatja offline; saját layer-logika tilos. Az első eltérő tick/réteg/mező közvetlenül megnevezendő.
 
-* a futtatandó tickek lezárt `TickInputs` értékei;
-* a ténylegesen használt konfiguráció;
-* minden további olyan determinisztikus state/input, amely nélkül a kivágott
-  futásrész nem reprodukálható.
+Production FAIL/FAULT futás is lehet teljes, MATCH replay evidence. Stateful slice csak megfelelő prefixből vagy bounded production-state checkpointból kaphat MATCH-et; checkpoint nem live authority és nem pótol hiányzó tick inputot.
 
-A Replayer ugyanazt a production `NativeControlComposition` utat futtatja
-offline. Nem imitálhat layer-viselkedést saját algoritmussal. Az eredményeket
-közvetlen typed érték-összehasonlítással vizsgálja, és az első eltérő ticket,
-réteget és mezőt jelöli meg.
+Ha validation scope replayt kér, csak tényleges `MATCH` teljesítheti a replay gate-et. `MISMATCH`, replay error vagy el nem végzett kért replay nem PASS. Explicit replay-off esetén replay-egyezésre nem tehető állítás.
 
-FAIL/FAULT futás ugyanúgy replayelhető evidence, mint PASS. Upstream hiba esetén
-a capture/replay nem gyárthat fiktív outputot a nem futott rétegekhez; a valós
-lezárt prefixet és a final safety eredményt őrzi meg.
+Capture/evidence hiány nem software divergence. Software divergence csak elegendő evidence/state mellett, tényleges canonical replay-eltérésből állítható. Bounded, rövid életű conversion/bridge artifact megengedett, de nem válik authorityvá; az eredeti final capture marad authority.
 
-Stateful futásrész csak akkor kaphat pontos MATCH verdictet, ha a Replayer a
-kivágás előtti szükséges állapotból indul. Ez származhat a capture-ben meglévő
-prefixből vagy bounded production-state checkpointból. A checkpoint kizárólag
-replay-indulóállapot; nem lehet live control authority és nem helyettesíthet
-hiányzó tick inputot.
+### 11.3 Test Hub és agentikus diagnosztika
 
-A capture csak a konkrét diagnosztikához szükséges evidence-et őrizze meg.
-Nincs általános „mindent logoljunk” követelmény. Raw szenzoradat csak indokolt
-esetben szükséges, és hiánya esetén a fizikai root cause nem állítható
-bizonyítottnak.
+A Test Hub offline evidence/diagnosztikai orchestrator a canonical capture és Replayer körül; **nem köteles minden kérdéshez replayt futtatni**. Replay nélkül végezhet integrity ellenőrzést, indexelt/bounded evidence-kiválasztást, leíró metrikát, incident triage-ot és agent/CLI/GUI derived nézeteket.
 
-Scan-matcher temporal diagnosztikánál a capture közvetlenül őrzi a source scan
-revisiont, scan start/end/measurement időt, pose-reference időt és azok tényleges
-időkülönbségét. A processing latency külön mező; nem helyettesítheti a
-pose-reference timestampet.
+Nem futtathat saját production layer-, motion- vagy safety-logikát, és heurisztikát nem nevezhet canonical replaynek. Agent, GUI és CLI ugyanazt az authority- és verdict-szemantikát fogyassza.
 
-Nem kötelező:
+Agentikus fejlesztés default útja: **kis összefoglaló → célzott evidence slice/query → csak szükség esetén nagy raw adat vagy széles replay**. Teljes capture automatikus betöltése nem alapértelmezett hibakeresés.
 
-* minden event vagy payload SHA-256 hash-e;
-* schema registry és mezőnkénti runtime schema validation;
-* causation/provenance gráf;
-* build/source fingerprint a control contractban;
-* layerenkénti receipt vagy külön proof objektum;
-* canonical round-trip teszt minden belső üzenethez;
-* teljes fizikai robot- vagy sensor-driver szimulátor minden replayhez.
+Brief, timeline, manifest, query-result és más derived artifact nem írhatja felül a canonical capture-t. Ha evidence-index authority capture-hez kötést állít, a verification az authority artifactot is ellenőrizze.
 
-Egyszerű capture/result checksum használható fájlsérülés észlelésére, de nem
-válhat runtime identityvé vagy döntési inputtá.
+### 11.4 Verdict és root-cause szemantika
 
-A V3 Test Hub vékony külső eszköz a canonical Replayer körül. Nem futtathat
-saját layer-logikát, nem tarthat fenn alternatív decodert vagy motion/safety
-utat, és nem lehet production runtime dependency.
+Külön fogalom:
+
+1. production run outcome;
+2. capture/evidence integrity;
+3. replay verdict;
+4. diagnosztikai bizonyosság.
+
+Ezek nem olvaszthatók össze. Production FAULT mellett lehet teljes capture + MATCH replay; normál run capture-je lehet hiányos.
+
+Root-cause szabályok:
+
+* capture-integrity hiba elsősorban **evidence blocker**, nem automatikusan robotikai/software ok;
+* megfigyelt esemény bizonyítható, de upstream oka csak kauzális evidence mellett nevezhető `PROVEN`-nek;
+* heurisztika/korreláció nem emelhető bizonyított okká;
+* a legkorábbi kauzálisan upstream eltérés fontosabb, mint egy későbbi súlyosabb következmény; severity önmagában nem root-cause sorrend;
+* hiányzó evidence esetén az ok maradjon bizonyítatlan/evidence-blocked.
+
+Temporal diagnosztikánál az állításhoz szükséges source revision és measurement/reference idő őrzendő; processing/publication latency nem helyettesítheti a fizikai measurement időt.
+
+Nem kötelező általánosan: minden payload hash-e, schema registry, provenance graph, build fingerprint a control contractban, layerenkénti receipt/proof, minden belső üzenet round-trip tesztje vagy teljes fizikai szimulátor. Hash/checksum használható artifact-integrityhez, de nem lehet control input.
 
 ## 12. Kötelező, célzott tesztkapuk
 
-A V3 architektúra alapkapui:
+Alapkapuk:
 
-* import guard: nincs cross-layer implementation import, külső shared-state,
-  GUI/tool authority vagy V3-on kívüli project-import;
-* contractteszt: immutable típusok és közvetlen domain/safety invariánsok;
-* TickEngine teszt: lezárt snapshot, rögzített sorrend, rétegenként legfeljebb
-  egy értékelés és egyetlen L12 final döntés;
-* fail-closed teszt: upstream exception, invalid tick/lifecycle, kritikus
-  input-hiba és writer failure;
-* replayteszt: azonos input/state esetén azonos trace, eltérésnél helyes első
-  divergáló réteg;
-* motor-edge változásnál annak célzott bizonyítása, hogy STOP/FAULT fizikailag
-  inaktív állapotot eredményez.
+* import guard;
+* immutable/domain/safety contractteszt;
+* TickEngine sorrend/egyszeri evaluation/egyetlen L12 döntés;
+* fail-closed upstream/lifecycle/input/writer-failure teszt;
+* determinisztikus replay és első divergence;
+* motor-edge változásnál fizikai STOP/FAULT inaktivitás bizonyítása.
 
-Szenzor- vagy algoritmusspecifikus változás a saját közvetlen invariánsait
-célzott teszttel bizonyítja. Többcélú szenzorág esetén különösen fontos, hogy
-egy független magasabb szintű ág hibája ne tegye érvénytelenné az önmagában
-használható safety ágat.
+Szenzor/algoritmus-változás saját közvetlen invariánsait célzottan bizonyítja.
 
-Nincs általános kötelező schema-, hash-, provenance-, receipt- vagy formális
-proof-kapu.
+Observation/capture boundary változásnál bizonyítandó: producer oldalon nincs consumer I/O/serializáció; required loss explicit; latest-only coalescing nem rontja required capture-t; payload szemantikája nem változik; close/drain/finalize alatt elfogadott required evidence nem vész el.
 
-A célzott teszt az alapértelmezett; széles regresszió csak a ténylegesen érintett
-közös boundary vagy kockázat miatt indokolt.
+Capture/Replay/Test Hub közös boundary változásnál legyen valódi, stub nélküli end-to-end teszt typed production record → persisted capture → canonical replay → Test Hub verdict útvonalon, valamint negatív integrity-loss és replay-failure eset.
 
-## 13. Fejlesztési határ
+Nincs általános kötelező schema/hash/provenance/receipt/formális proof-kapu. Formátum-specifikus interoperability, storage- és performance teszt a konkrét implementáció felelőssége.
 
-Ez a dokumentum nem fejlesztési workflow.
+Célzott teszt az alapértelmezett; széles regresszió csak tényleges közös boundary/kockázat miatt indokolt. Változatlan, már sikeres validációt nem kell mechanikusan újrafuttatni.
 
-A stabil architektúrát csak konkrét source-, replay- vagy fizikai evidence által
-igazolt igény miatt kell módosítani. Új capability a legkisebb teljes natív V3
-szelet legyen; ne épüljön általános framework feltételezett későbbi igényre.
+## 13. Fejlesztési határ és mikor változik ez a contract
 
-Meglévő safety- vagy quality gate-et nem szabad pusztán azért lazítani, hogy egy
-teszt átmenjen. Ha egy gate tévesen több független capabilityt köt össze, a
-coupling gyökerét kell kijavítani.
+Ez a dokumentum nem workflow és nem implementációs leltár. Stabil architektúra csak konkrét source/replay/fizikai evidence által igazolt igény miatt változzon. Új capability a legkisebb teljes natív V3 szelet legyen; ne épüljön framework feltételezett jövőbeli igényre. Safety/quality gate-et nem szabad csak azért lazítani, hogy teszt átmenjen.
 
-A pillanatnyi implementációs állapot authorityja a canonical source, az aktív
-config, a célzott tesztek és a run-bound evidence.
+**Ezt a dokumentumot módosítani kell**, ha változik: ownership; production control/data edge; motor/safety/lifecycle/command authority; layer felelősségi határ; fail-closed safety invariáns; determinisztikus execution/replay alapfeltétel; production–observation authority-határ; a capture/replay evidence alapvető completeness/MATCH/root-cause szemantikája; vagy V3 dependency boundary.
+
+**Nem kell módosítani csak azért**, mert változik: layeren belüli algoritmus; tuning/threshold/config; queue-kapacitás; capture konténerformátum/topic/chunkolás; azonos szemantikájú encoder-optimalizálás; CLI/GUI/agent brief mező; ideiglenes replay bridge; fájlnév/modulon belüli refaktor; vagy authorityt nem változtató diagnosztikai tool.
+
+A pillanatnyi implementáció authorityja a canonical source + aktív config; a konkrét futásé a run-bound evidence. Mindkettőnek e dokumentum architekturális korlátain belül kell maradnia.
