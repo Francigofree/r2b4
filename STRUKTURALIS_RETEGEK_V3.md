@@ -29,7 +29,7 @@ Source-first hibakeresésnél a tényleges viselkedést a source-ból kell megé
 * Replay eltérésnél a legelső eltérő tick, réteg és mező megnevezhető.
 * Egy fizikai szenzor több független szemantikai capabilityt szolgáltathat; egy ág hibája nem érvénytelenítheti automatikusan a többit.
 * Nincs alternatív normál motorút, safety-bypass vagy tool-specifikus control authority.
-* Capture, telemetry, GUI, agent vagy más diagnosztikai consumer nem hathat vissza a production döntésre.
+* Passzív observation/capture/telemetry consumer fogyasztói szerepében nem lehet production döntési input vagy control authority. Ugyanaz a GUI, agent vagy külső eszköz külön command kliensként kizárólag a canonical `CommandGateway` úton kérhet robotműveletet. Explicit lifecycle/health gate fail-safe STOP/SHUTDOWN-t kérhet, de pozitív actuation authorityt nem kaphat.
 
 Ezeket a garanciákat adminisztratív egyszerűsítés, diagnosztikai kényelmi funkció vagy tesztátvezetés miatt sem szabad lazítani.
 
@@ -64,7 +64,7 @@ Kötelező invariánsok:
 
 * csak completed vagy önállóan immutable production/edge értéket figyel meg;
 * bounded és production-publikáció szempontjából nem blokkoló;
-* a producer útján nincs serializáció, fájl-I/O vagy consumer callback;
+* a generikus observation fan-out publication útja nem végez serializációt vagy fájl-I/O-t, és nem futtat tetszőleges downstream consumer-munkát szinkron módon; a publication legfeljebb bounded delivery/enqueue és saját minimális bookkeeping lehet;
 * a fan-out nem értelmezi és nem módosítja a payloadot;
 * consumer-ek izoláltak egymástól;
 * latest-only consumer szándékosan supersede-elhet telemetryt;
@@ -100,14 +100,14 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 | L3 State Estimation | pose, twist, covariance | `RobotEstimate` |
 | L4 World Model | rolling lokális világállapot/costmap | `WorldSnapshot` |
 | L5 Command & Mission | command- és mission-lifecycle | `MissionIntent` |
-| L6 Navigation | route/progress, coverage/local goal, bounded trajectory evaluation | `NavigationPlan` |
+| L6 Navigation | navigation plan, progress és szükséges lokális/global navigation state | `NavigationPlan` |
 | L7 Motion Selection | pontosan egy trajectory/cél választása | `MotionObjective` |
 | L8 Motion Realization | guidance → pillanatnyi kinematikai cél | `MotionIntent` |
 | L9 Operational Constraints | motion/platform/gyorsulás/lokalizáció korlátozás | `ConstrainedMotion` |
 | L10 Chassis Control | chassis-kinematika | `WheelVelocitySetpoint` |
 | L11 Actuator Control | wheel-loop, feed-forward, calibration map | `ActuatorRequest` |
 | L12 Safety & Final | safety latch, final döntés, egyetlen normál writer | `FinalActuation` |
-| Composition root | tick, lifecycle, config snapshot és wiring | `TickTrace` |
+| Composition/runtime root | tick, lifecycle, config snapshot és wiring | `TickResult` / completed execution record |
 
 Egy réteg nem módosíthat másik réteg state-jét és nem adhat át más komponens által írható shared mutable state-et. Read-only vagy egyértelmű ownershipű bounded buffer/view megengedett. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
 
@@ -127,7 +127,7 @@ L8  -> L9
 L9  -> L10
 L10 -> L11, L12   (L12 felé safetyhez szükséges motion context)
 L11 -> L12
-L12 -> L0/MotorWriter
+L12 -> MotorWriter -> motor-edge/device I/O
 CommandGateway -> L5
 CompositionRoot -> minden layer konstrukciója, lifecycle-ja és wiringja
 ```
@@ -185,9 +185,9 @@ Production motion live teszt a teljes CommandGateway→L5→L6→L7→L8→L9→
 
 L7–L12 stabil by default; csak konkrét funkció vagy igazolt source/replay/live evidence miatt változzon. Test Hub, teleop, script, follow/AI vagy más command source nem kaphat saját motor- vagy safety-utat.
 
-A runtime ne épüljön `FORWARD`, `ARC`, `PIVOT`, `MOVE_1M` jellegű motion primitive-ekre. Külső command általános kinematikai vagy magasabb szintű mission/navigation célt adjon. Kötelező gate csak olyan capability lehet, amely az adott funkcióhoz ténylegesen szükséges.
+`FORWARD`, `ARC`, `PIVOT`, `MOVE_1M` vagy hasonló primitive nem kaphat külön control-, motor- vagy safety-útvonalat. Recovery, docking, calibration vagy más behavior használhat ilyen mozgásszemantikát, ha azt a canonical CommandGateway→L5→…→L12→MotorWriter út realizálja. Külső command általános kinematikai vagy magasabb szintű mission/navigation célt adjon. Kötelező gate csak olyan capability lehet, amely az adott funkcióhoz ténylegesen szükséges.
 
-L6 bounded trajectory-jelölteket állít elő/értékel; L7 pontosan egy `MotionObjective`-et választ; L8 ezt pillanatnyi kinematikai céllá realizálja. Második motion-selection vagy safety authority tilos.
+L6 birtokolja a navigation planninget és progress state-et, és egy érvényes `NavigationPlan` értéket állít elő. A terv konkrét reprezentációja és planner algoritmusa layeren belüli implementációs döntés. L7 a tervből pontosan egy `MotionObjective` értéket választ, L8 pedig azt pillanatnyi kinematikai céllá realizálja. Második motion-selection vagy safety authority tilos.
 
 ## 9. Konfiguráció, command, GUI és külső I/O
 
@@ -197,9 +197,10 @@ GUI/CLI/LLM/tool **control irányban** csak `CommandGateway` kliensen keresztül
 
 Readiness/arming csak új, friss, független source evidence-et számolhat új bizonyítéknak. Resident ACTIVE csak érvényes preflight után indulhat; command expiry/kiesés fail-closed STOP, visszaaktiválás a normál readiness/preflight úton történik.
 
-A runtime headless. Külső I/O megfelelő edge/device vagy passzív observation/capture adapterben történik; adapter nem válhat state- vagy control-authorityvá.
+A runtime headless. Külső I/O megfelelő edge/device vagy passzív observation/capture adapterben történik. Adapter vagy edge komponens birtokolhat a saját I/O-, timing-, buffering-, trust- vagy protocol-felelősségéhez szükséges bounded technikai state-et. Nem birtokolhat azonban más réteghez tartozó szemantikai production state-et, és nem válhat kerülő command-, motion-, safety- vagy motor-authorityvá.
 
 ## 10. V3-only source és dependency szabály
+
 A védett V3 production és canonical validációs source csak V3-at, standard libraryt és explicit jóváhagyott production dependencyket importálhat. Egy új dependency nem válhat control/state authorityvá, nem sértheti a bounded működést, és a replay/determinizmus módjának egyértelműnek kell maradnia.
 
 Layer implementation más layer implementationt nem importál. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
@@ -290,7 +291,7 @@ Célzott teszt az alapértelmezett; széles regresszió csak tényleges közös 
 
 ## 13. Fejlesztési határ és mikor változik ez a contract
 
-Ez a dokumentum nem workflow és nem implementációs leltár. Stabil architektúra csak konkrét source/replay/fizikai evidence által igazolt igény miatt változzon. Új capability a legkisebb teljes natív V3 szelet legyen; ne épüljön framework feltételezett jövőbeli igényre. Safety/quality gate-et nem szabad csak azért lazítani, hogy teszt átmenjen.
+Ez a dokumentum nem workflow és nem implementációs leltár. Stabil architektúra csak bizonyított meglévő rendszerigény/hiba vagy explicit elfogadott új capability-követelmény miatt változzon. Feltételezett, konkrét igény nélküli jövőbeli lehetőség önmagában nem indok általános framework vagy új authority bevezetésére. Új capability a legkisebb teljes natív V3 szelet legyen. Safety/quality gate-et nem szabad csak azért lazítani, hogy teszt átmenjen.
 
 **Ezt a dokumentumot módosítani kell**, ha változik: ownership; production control/data edge; motor/safety/lifecycle/command authority; layer felelősségi határ; fail-closed safety invariáns; determinisztikus execution/replay alapfeltétel; production–observation authority-határ; a capture/replay evidence alapvető completeness/MATCH/root-cause szemantikája; vagy V3 dependency boundary.
 
