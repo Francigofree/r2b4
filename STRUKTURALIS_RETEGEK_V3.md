@@ -74,7 +74,7 @@ Observation publication time csak transport/diagnosztikai idő; nem helyettesít
 
 ## 3. Egyszerű contractmodell és időszemantika
 
-Minden top-level layer output frozen, slotted dataclass. Közös metadata minimum:
+Minden production réteghatár explicit typed és a fogyasztó számára immutable érték. A jelenlegi Python implementáció használhat frozen/slotted dataclassot; nagy payload esetén read-only vagy egyértelmű ownershipű immutable buffer/view is használható, ha nincs kifelé szivárgó írható shared state. Közös metadata minimum:
 
 ```text
 TickContext
@@ -109,7 +109,7 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 | L12 Safety & Final | safety latch, final döntés, egyetlen normál writer | `FinalActuation` |
 | Composition root | tick, lifecycle, config snapshot és wiring | `TickTrace` |
 
-Egy réteg nem módosíthat másik réteg state-jét és nem adhat át controllert, GUI objektumot, device handlet vagy mutable collectiont. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
+Egy réteg nem módosíthat másik réteg state-jét és nem adhat át más komponens által írható shared mutable state-et. Read-only vagy egyértelmű ownershipű bounded buffer/view megengedett. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
 
 ## 5. Engedélyezett production adat-élek
 
@@ -200,8 +200,7 @@ Readiness/arming csak új, friss, független source evidence-et számolhat új b
 A runtime headless. Külső I/O megfelelő edge/device vagy passzív observation/capture adapterben történik; adapter nem válhat state- vagy control-authorityvá.
 
 ## 10. V3-only source és dependency szabály
-
-A védett V3 production és canonical in-package validációs source csak V3-at, standard libraryt és explicit aktív numerikus/hardver függőségeket importálhat. Legacy source-import, shared state és alternatív runtime authority tilos.
+A védett V3 production és canonical validációs source csak V3-at, standard libraryt és explicit jóváhagyott production dependencyket importálhat. Egy új dependency nem válhat control/state authorityvá, nem sértheti a bounded működést, és a replay/determinizmus módjának egyértelműnek kell maradnia.
 
 Layer implementation más layer implementationt nem importál. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
 
