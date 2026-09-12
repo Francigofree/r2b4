@@ -493,8 +493,8 @@ class NativeRplidarC1:
                     self._building = []
                     self._building_start_ns = packet_ns
                 elif self._building_start_ns is None:
-                    # Recover a bounded start for a stream joined mid-revolution.
-                    self._building_start_ns = packet_ns
+                    # Discard packets until the first real revolution boundary.
+                    continue
                 point = decoded.point
                 if (
                     self._config.minimum_distance_m

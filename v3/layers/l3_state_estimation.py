@@ -245,6 +245,8 @@ class NativeStateEstimatorConfig:
     lidar_nis_max: float = 35.0
     minimum_measurement_quality: float = 0.05
     covariance_min_diagonal: float = 1e-8
+    # process_noise variances are calibrated for this prediction interval.
+    process_noise_reference_dt_s: float = 0.020
 
     def __post_init__(self) -> None:
         if not isinstance(self.frame_id, str) or not self.frame_id:
@@ -275,6 +277,7 @@ class NativeStateEstimatorConfig:
             allow_zero=False,
         )
         for name in (
+            "process_noise_reference_dt_s",
             "velocity_measurement_variance",
             "yaw_measurement_variance",
             "omega_measurement_variance",
@@ -581,8 +584,9 @@ class NativeStateEstimator:
             _matmul(transition, self._covariance),
             _transpose(transition),
         )
+        noise_scale = dt_s / self._config.process_noise_reference_dt_s
         for index, noise in enumerate(self._config.process_noise):
-            predicted[index][index] += float(noise)
+            predicted[index][index] += float(noise) * noise_scale
         self._covariance = predicted
         self._stabilize_covariance()
 

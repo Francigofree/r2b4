@@ -99,6 +99,64 @@ def _config(**changes) -> NativeStateEstimatorConfig:
     return NativeStateEstimatorConfig(**values)
 
 
+@pytest.mark.parametrize("reference_dt_s", (0.020, 0.040))
+def test_native_predict_uses_configured_process_noise_reference_interval(reference_dt_s):
+    estimator = NativeStateEstimator(_config(process_noise_reference_dt_s=reference_dt_s))
+
+    estimator._predict(0.0, reference_dt_s, None)
+
+    # Velocity and bias have no incoming covariance coupling in prediction.
+    covariance = estimator.checkpoint().covariance
+    assert covariance[3][3] == pytest.approx(0.02)
+    assert covariance[4][4] == pytest.approx(0.00011)
+
+
+@pytest.mark.parametrize("reference_dt_s", (0.0, -0.020, math.nan, math.inf, True, "0.02"))
+def test_native_config_rejects_invalid_process_noise_reference_interval(reference_dt_s):
+    with pytest.raises(ValueError, match="process_noise_reference_dt_s"):
+        _config(process_noise_reference_dt_s=reference_dt_s)
+
+
+def test_native_predict_preserves_nominal_20_ms_covariance():
+    estimator = NativeStateEstimator(_config())
+
+    estimator._predict(0.0, 0.020, None)
+
+    expected = (
+        (0.011004, 0.0, 0.0, 0.0002, 0.0),
+        (0.0, 0.011, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.01050004, 0.0, -0.000002),
+        (0.0002, 0.0, 0.0, 0.02, 0.0),
+        (0.0, 0.0, -0.000002, 0.0, 0.00011),
+    )
+    for actual_row, expected_row in zip(estimator.checkpoint().covariance, expected):
+        assert actual_row == pytest.approx(expected_row)
+
+
+@pytest.mark.parametrize("step_ns", (10_000_000, 40_000_000))
+@pytest.mark.parametrize("use_wheel_distance", (False, True))
+def test_native_predict_covariance_tracks_elapsed_time_across_tick_rates(
+    step_ns, use_wheel_distance,
+):
+    def predict_one_second(interval_ns):
+        estimator = NativeStateEstimator(_config())
+        estimator(_frame(0, left_mps=0.2, right_mps=0.2, yaw_rad=math.pi / 6.0))
+        dt_s = interval_ns / 1_000_000_000
+        distance_delta = (0.2 * dt_s, 0.2 * dt_s) if use_wheel_distance else None
+        # Isolate prediction noise from the frequency of measurement corrections.
+        for _ in range(1_000_000_000 // interval_ns):
+            estimator._predict(0.0, dt_s, distance_delta)
+        return estimator.checkpoint()
+
+    nominal = predict_one_second(20_000_000)
+    actual = predict_one_second(step_ns)
+
+    assert actual.state == pytest.approx(nominal.state)
+    # F P F^T propagation retains a small discretization error in coupled terms.
+    for actual_row, nominal_row in zip(actual.covariance, nominal.covariance):
+        assert actual_row == pytest.approx(nominal_row, rel=0.04, abs=1e-10)
+
+
 @pytest.mark.parametrize("initial_yaw", (0.0, math.pi / 2.0))
 def test_native_predict_and_encoder_core_matches_linear_motion_contract(initial_yaw):
     native = NativeStateEstimator(_config())

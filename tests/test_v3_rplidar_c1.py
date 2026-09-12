@@ -71,6 +71,41 @@ def test_native_driver_recovers_alignment_and_publishes_only_complete_scan():
     assert driver.get_runtime_status()["invalid_packet_count"] == 1
 
 
+def test_mid_revolution_join_waits_for_two_boundaries_before_first_scan():
+    timestamps = iter((10, 20, 30, 40, 50, 60, 70))
+    driver = NativeRplidarC1(
+        RplidarC1Config(),
+        serial_factory=lambda *_args, **_kwargs: None,
+        monotonic_ns=lambda: next(timestamps),
+    )
+
+    driver.ingest_for_test(
+        _packet(start=False, angle_deg=180.0, distance_m=2.0)
+        + _packet(start=False, angle_deg=270.0, distance_m=2.0)
+    )
+    assert driver.get_latest_scan() is None
+
+    driver.ingest_for_test(_packet(start=True, angle_deg=0.0, distance_m=1.0))
+    assert driver.get_latest_scan() is None
+
+    driver.ingest_for_test(b"".join(
+        _packet(start=False, angle_deg=angle, distance_m=1.0)
+        for angle in (90.0, 180.0, 270.0)
+    ))
+    assert driver.get_latest_scan() is None
+
+    driver.ingest_for_test(_packet(start=True, angle_deg=1.0, distance_m=1.5))
+    scan = driver.get_latest_scan()
+    assert scan is not None
+    assert scan.revision == 1
+    assert scan.scan_start_monotonic_ns == 30
+    assert scan.scan_end_monotonic_ns == scan.captured_monotonic_ns == 70
+    assert scan.measurement_monotonic_ns == 50
+    assert tuple((point.angle_deg, point.distance_m) for point in scan.points) == (
+        (0.0, 1.0), (90.0, 1.0), (180.0, 1.0), (270.0, 1.0),
+    )
+
+
 def test_same_packets_and_clock_produce_same_scan_measurement_timestamp():
     payload = (
         _packet(start=True, angle_deg=0.0, distance_m=1.0)
