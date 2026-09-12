@@ -250,6 +250,18 @@ _LINE_JSON_SCHEMA: dict[str, Any] = {
     ],
 }
 
+# Foxglove's JSON-schema reader expects every array schema to define an
+# element schema. R2B4 currently emits these primitive arrays empty, but an
+# explicit object item type is still required or Foxglove can fail while
+# parsing SceneUpdate with "Cannot read properties of undefined (reading 'type')".
+def _unused_scene_primitive_schema(title: str) -> dict[str, Any]:
+    return {
+        "title": title,
+        "type": "object",
+        "properties": {},
+    }
+
+
 SCENE_UPDATE_JSON_SCHEMA: dict[str, Any] = {
     "title": "foxglove.SceneUpdate",
     "description": "An update to the entities displayed in a 3D scene",
@@ -289,13 +301,31 @@ SCENE_UPDATE_JSON_SCHEMA: dict[str, Any] = {
                         },
                     },
                     "arrows": {"type": "array", "items": _ARROW_JSON_SCHEMA},
-                    "cubes": {"type": "array"},
-                    "spheres": {"type": "array"},
-                    "cylinders": {"type": "array"},
+                    "cubes": {
+                        "type": "array",
+                        "items": _unused_scene_primitive_schema("foxglove.CubePrimitive"),
+                    },
+                    "spheres": {
+                        "type": "array",
+                        "items": _unused_scene_primitive_schema("foxglove.SpherePrimitive"),
+                    },
+                    "cylinders": {
+                        "type": "array",
+                        "items": _unused_scene_primitive_schema("foxglove.CylinderPrimitive"),
+                    },
                     "lines": {"type": "array", "items": _LINE_JSON_SCHEMA},
-                    "triangles": {"type": "array"},
-                    "texts": {"type": "array"},
-                    "models": {"type": "array"},
+                    "triangles": {
+                        "type": "array",
+                        "items": _unused_scene_primitive_schema("foxglove.TriangleListPrimitive"),
+                    },
+                    "texts": {
+                        "type": "array",
+                        "items": _unused_scene_primitive_schema("foxglove.TextPrimitive"),
+                    },
+                    "models": {
+                        "type": "array",
+                        "items": _unused_scene_primitive_schema("foxglove.ModelPrimitive"),
+                    },
                 },
                 "required": [
                     "timestamp",
@@ -797,7 +827,6 @@ class IndexedMcapWriter:
                 self.write_raw(rec)
             group_length = self.tell() - group_start
             group_locations.append((opcode, group_start, group_length))
-
         summary_offset_start = self.tell()
 
         for opcode, group_start, group_length in group_locations:
@@ -1197,7 +1226,6 @@ def robot_scene_message(
     x_m, y_m, yaw_rad = normalized_pose(sample, origin)
     robot_pose = pose_dict(x_m, y_m, yaw_rad, 0.03)
     color = safety_color(sample.safety_decision)
-
     axle = {
         "type": 2,  # LINE_LIST
         "pose": robot_pose,
