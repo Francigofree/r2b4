@@ -1,0 +1,54 @@
+{
+  "agent_brief": "/home/alba/project_r2b4/runtime/test_hub/latest5_20260913_135241/v3_20260912_231848_30097_capture/agent_brief.json",
+  "behavior_status": "NOMINAL",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": false,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [
+      "POST_WINDOW_INCOMPLETE"
+    ],
+    "message_stream_sha256": "70ca8adaf050fb90a8f8e3b8ed1077082faa5229d3266aca48b0228191b6b93c",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 1422,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 1422,
+      "first_lost_sequence": null,
+      "high_water_mark": 2,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 1422,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": false,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 520,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [],
+    "raw_lidar_truncated_count": 0
+  },
+  "capture_status": "FAULT",
+  "diagnosis_status": "FAIL",
+  "evidence_index": "/home/alba/project_r2b4/runtime/test_hub/latest5_20260913_135241/v3_20260912_231848_30097_capture/evidence_index.json",
+  "evidence_status": "FAIL",
+  "gui_manifest": "/home/alba/project_r2b4/runtime/test_hub/latest5_20260913_135241/v3_20260912_231848_30097_capture/gui_manifest.json",
+  "incident_count": 32,
+  "output_dir": "/home/alba/project_r2b4/runtime/test_hub/latest5_20260913_135241/v3_20260912_231848_30097_capture",
+  "replay_status": "ERROR",
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_TEST_HUB_V2",
+  "status": "FAIL"
+}
