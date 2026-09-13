@@ -1,0 +1,305 @@
+{
+  "behavior_status": "BLOCKED",
+  "budget": {
+    "actual_bytes": 5484,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "FAIL",
+    "integrity_complete": false,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260913_210506_19878_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260913_210506_19878_capture.evidence/interesting_slice.ndjson",
+    "rows": 147,
+    "size_bytes": 524073,
+    "tick_range": [
+      null,
+      null
+    ],
+    "truncated": true
+  },
+  "evidence_status": "FAIL",
+  "metrics": {
+    "localization": {
+      "first_trace": 7.19436271284812,
+      "growth_ratio": 1.0851601945757845,
+      "last_trace": 7.807036041323035,
+      "max_trace": 7.807036041323035,
+      "sample_count": 307
+    },
+    "motion": {
+      "behavior_status": "BLOCKED",
+      "constrained_to_zero_tick_count": 259,
+      "estimated_path_length_m": 0.0006446410582500202,
+      "requested_motion_tick_count": 259
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 2471215379018,
+        "progress_span": 0.0,
+        "tick_id": 4098,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 259,
+      "FAULT": 0,
+      "STOP": 48,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 0,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 535,
+      "l2_rejection_count": 535,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 535
+      }
+    },
+    "ticks": {
+      "count": 307,
+      "first_monotonic_ns": 2465084079413,
+      "first_tick_id": 3792,
+      "last_monotonic_ns": 2471215379018,
+      "last_tick_id": 4098
+    },
+    "timing": {
+      "max_ms": 46.775349,
+      "p50_ms": 19.99992,
+      "p95_ms": 21.547857,
+      "p99_ms": 31.437537,
+      "sample_count": 306
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "ERROR"
+  },
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FAIL",
+  "top_incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "POST_WINDOW_INCOMPLETE"
+          ],
+          "message_stream_sha256": "72b50dc65e66330819112fdc4700f1aa2f63e866503a813a7c039d747243a6dd",
+          "post_window_complete": false,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 3187,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "POST_WINDOW_INCOMPLETE",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3792",
+      "layer": "L9",
+      "monotonic_ns": 2465084079413,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3792
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3793",
+      "layer": "L9",
+      "monotonic_ns": 2465104082093,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3793
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3794",
+      "layer": "L9",
+      "monotonic_ns": 2465124078810,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3794
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3795",
+      "layer": "L9",
+      "monotonic_ns": 2465144078193,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3795
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3796",
+      "layer": "L9",
+      "monotonic_ns": 2465164085114,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3796
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3797",
+      "layer": "L9",
+      "monotonic_ns": 2465184076738,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3797
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.4
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-3798",
+      "layer": "L9",
+      "monotonic_ns": 2465204079159,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 3798
+    }
+  ]
+}

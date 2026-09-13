@@ -1,0 +1,174 @@
+{
+  "actionable_incident_count": 3,
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "capture_id": "v3_20260913_205450_17876_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "POST_WINDOW_INCOMPLETE"
+      ],
+      "message_stream_sha256": "72b5b750ef1e0faa2d0541ed599813192b1c902b216e4064983ec3abbf36b4da",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 1241,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 1241,
+        "first_lost_sequence": null,
+        "high_water_mark": 5,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 1241,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": false,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 448,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "status": "FAIL",
+    "trigger_reason": "SIGUSR1"
+  },
+  "incident_count": 3,
+  "incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "POST_WINDOW_INCOMPLETE"
+          ],
+          "message_stream_sha256": "72b5b750ef1e0faa2d0541ed599813192b1c902b216e4064983ec3abbf36b4da",
+          "post_window_complete": false,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 448,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "POST_WINDOW_INCOMPLETE",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "LOCALIZATION",
+      "evidence": {
+        "first_trace": 0.06990244439355407,
+        "growth_ratio": 5.747458063406019,
+        "last_trace": 0.39060068787740004,
+        "max_trace": 0.39060068787740004,
+        "sample_count": 270
+      },
+      "id": "covariance-growth-675",
+      "layer": "L3",
+      "monotonic_ns": 1786753753628,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 675
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "monotonic_ns": 1786753753628,
+        "progress_span": 0.0,
+        "tick_id": 675,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 1786753753628,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 675
+    }
+  ],
+  "localization": {
+    "first_trace": 0.06990244439355407,
+    "growth_ratio": 5.747458063406019,
+    "last_trace": 0.39060068787740004,
+    "max_trace": 0.39060068787740004,
+    "sample_count": 270
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 1.8659681245536304,
+    "requested_motion_tick_count": 247
+  },
+  "navigation": {
+    "stagnation": {
+      "last_progress": 0.0,
+      "monotonic_ns": 1786753753628,
+      "progress_span": 0.0,
+      "tick_id": 675,
+      "window_tick_count": 50
+    }
+  },
+  "root_cause_candidate": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "capture-integrity"
+    ],
+    "kind": "CAPTURE_INTEGRITY",
+    "layer": "Capture",
+    "reason": "POST_WINDOW_INCOMPLETE",
+    "tick_id": null
+  },
+  "safety": {
+    "ALLOW": 247,
+    "FAULT": 0,
+    "STOP": 23,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 0,
+    "l2_actionable_rejection_count": 0,
+    "l2_duplicate_count": 453,
+    "l2_rejection_count": 453,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 453
+    }
+  },
+  "ticks": {
+    "count": 270,
+    "first_monotonic_ns": 1781314917840,
+    "first_tick_id": 406,
+    "last_monotonic_ns": 1786753753628,
+    "last_tick_id": 675
+  },
+  "timing": {
+    "max_ms": 41.051272,
+    "p50_ms": 20.000052,
+    "p95_ms": 24.147133,
+    "p99_ms": 28.58564,
+    "sample_count": 269
+  }
+}

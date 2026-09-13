@@ -1,0 +1,158 @@
+{
+  "actionable_incident_count": 2,
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "capture_id": "v3_20260913_205303_14030_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "POST_WINDOW_INCOMPLETE"
+      ],
+      "message_stream_sha256": "fd2677b0cb3ad2523965e88ff8c591275efbcf39b4f6029cf9e741db0a379b33",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 703,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 703,
+        "first_lost_sequence": null,
+        "high_water_mark": 2,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 703,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": false,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 235,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "status": "FAIL",
+    "trigger_reason": "SIGUSR1"
+  },
+  "incident_count": 2,
+  "incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "POST_WINDOW_INCOMPLETE"
+          ],
+          "message_stream_sha256": "fd2677b0cb3ad2523965e88ff8c591275efbcf39b4f6029cf9e741db0a379b33",
+          "post_window_complete": false,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 235,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "POST_WINDOW_INCOMPLETE",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "monotonic_ns": 1674541932576,
+        "progress_span": 0.0,
+        "tick_id": 405,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 1674541932576,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 405
+    }
+  ],
+  "localization": {
+    "first_trace": 0.06265423084777633,
+    "growth_ratio": 2.4520359219041934,
+    "last_trace": 0.13198160920219718,
+    "max_trace": 0.13198160920219718,
+    "sample_count": 254
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 0.07109184210649067,
+    "requested_motion_tick_count": 225
+  },
+  "navigation": {
+    "stagnation": {
+      "last_progress": 0.0,
+      "monotonic_ns": 1674541932576,
+      "progress_span": 0.0,
+      "tick_id": 405,
+      "window_tick_count": 50
+    }
+  },
+  "root_cause_candidate": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "capture-integrity"
+    ],
+    "kind": "CAPTURE_INTEGRITY",
+    "layer": "Capture",
+    "reason": "POST_WINDOW_INCOMPLETE",
+    "tick_id": null
+  },
+  "safety": {
+    "ALLOW": 225,
+    "FAULT": 0,
+    "STOP": 29,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 0,
+    "l2_actionable_rejection_count": 0,
+    "l2_duplicate_count": 407,
+    "l2_rejection_count": 407,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 407
+    }
+  },
+  "ticks": {
+    "count": 254,
+    "first_monotonic_ns": 1669483371825,
+    "first_tick_id": 152,
+    "last_monotonic_ns": 1674541932576,
+    "last_tick_id": 405
+  },
+  "timing": {
+    "max_ms": 37.716272,
+    "p50_ms": 20.000056,
+    "p95_ms": 21.024892,
+    "p99_ms": 25.732868,
+    "sample_count": 253
+  }
+}
