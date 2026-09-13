@@ -972,7 +972,9 @@ class McapCaptureConsumer:
             ],
             "raw_lidar_truncated_count": self._raw_truncated_count,
             "pre_window_complete": pre_complete,
+            "session_start_short_pre_window": session_start_short_pre_window,
             "post_window_complete": post_complete,
+            "terminal_short_post_window": terminal_short_post_window,
             "message_stream_sha256": digest,
             "digest_scope": "all MCAP messages before capture_finalized event",
         }
