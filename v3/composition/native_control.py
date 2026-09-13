@@ -254,7 +254,9 @@ class NativeControlCompositionConfig:
     """Immutable production control configuration with no edge authority."""
 
     speed_map: WheelSpeedMap
-    admission: AdmissionConfig = AdmissionConfig(max_sample_age_ns=250_000_000)
+    admission: AdmissionConfig = AdmissionConfig(
+        max_sample_age_ns=250_000_000, max_future_skew_ns=10_000_000
+    )
     estimation: NativeStateEstimatorConfig = NativeStateEstimatorConfig(
         frame_id="R2B4_BOOT_ROBOT_MAP",
         track_width_m=0.3557,

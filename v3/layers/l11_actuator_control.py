@@ -188,6 +188,7 @@ class WheelActuatorStateCheckpoint:
     last_context: TickContext | None
     left_integral: float
     right_integral: float
+    transient_stale_ticks: int = 0
 
 
 class _PIState:
@@ -218,7 +219,7 @@ class _PIState:
 class WheelActuatorController:
     """Own the two PI integrators and produce one immutable L11 request."""
 
-    __slots__ = ("_config", "_last_context", "_left_pi", "_right_pi", "_speed_map")
+    __slots__ = ("_config", "_last_context", "_left_pi", "_right_pi", "_speed_map", "_transient_stale_ticks")
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
         self._speed_map = speed_map
@@ -226,17 +227,20 @@ class WheelActuatorController:
         self._left_pi = _PIState(config)
         self._right_pi = _PIState(config)
         self._last_context: TickContext | None = None
+        self._transient_stale_ticks = 0
 
     def reset(self) -> None:
         self._left_pi.reset()
         self._right_pi.reset()
         self._last_context = None
+        self._transient_stale_ticks = 0
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
             self._last_context,
             self._left_pi._integral,
             self._right_pi._integral,
+            self._transient_stale_ticks,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
@@ -245,9 +249,12 @@ class WheelActuatorController:
         for value in (checkpoint.left_integral, checkpoint.right_integral):
             if not math.isfinite(value):
                 raise ValueError("wheel actuator checkpoint integral must be finite")
+        if type(checkpoint.transient_stale_ticks) is not int or not 0 <= checkpoint.transient_stale_ticks <= 5:
+            raise ValueError("wheel actuator checkpoint stale ticks must be in [0, 5]")
         self._last_context = checkpoint.last_context
         self._left_pi._integral = checkpoint.left_integral
         self._right_pi._integral = checkpoint.right_integral
+        self._transient_stale_ticks = checkpoint.transient_stale_ticks
 
     def __call__(
         self,
@@ -266,12 +273,22 @@ class WheelActuatorController:
             # time and also gives that first tick a bounded encoder reacquisition
             # opportunity without changing the encoder/L2 safety thresholds.
             self._last_context = None
+            self._transient_stale_ticks = 0
             return ActuatorRequest(wheels.context, 0.0, 0.0)
 
-        left_measured, right_measured = self._wheel_feedback(
+        feedback = self._wheel_feedback(
             frame,
             allow_restart_stale=restarting_from_zero,
+            allow_transient_stale=self._transient_stale_ticks < 5,
         )
+        if feedback is None:
+            self._transient_stale_ticks += 1
+            self._left_pi.reset()
+            self._right_pi.reset()
+            # Keep the last fresh context so recovery re-anchors PI time.
+            return ActuatorRequest(wheels.context, 0.0, 0.0)
+        self._transient_stale_ticks = 0
+        left_measured, right_measured = feedback
         left_output, left_saturated = self._wheel_output(
             side="left",
             reference_mps=wheels.left_mps,
@@ -329,7 +346,8 @@ class WheelActuatorController:
         frame: AdmittedFrame,
         *,
         allow_restart_stale: bool = False,
-    ) -> tuple[float, float]:
+        allow_transient_stale: bool = False,
+    ) -> tuple[float, float] | None:
         matches = tuple(
             observation
             for observation in frame.accepted
@@ -344,15 +362,22 @@ class WheelActuatorController:
         if (
             observation.source_device_id in frame.degraded_sources
             and not (
-                allow_restart_stale
+                (allow_restart_stale or allow_transient_stale)
                 and WheelActuatorController._restart_stale_feedback_is_bounded(values)
             )
         ):
             raise ValueError("L11 wheel feedback source is degraded")
-        return (
+        feedback = (
             _finite_float(values.get("left_mps"), "left_mps"),
             _finite_float(values.get("right_mps"), "right_mps"),
         )
+        if (
+            allow_transient_stale
+            and not allow_restart_stale
+            and WheelActuatorController._restart_stale_feedback_is_bounded(values)
+        ):
+            return None
+        return feedback
 
     def _wheel_output(
         self,
