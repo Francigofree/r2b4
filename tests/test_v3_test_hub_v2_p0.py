@@ -2,7 +2,11 @@
 
 from types import SimpleNamespace
 
-from v3.test_hub_analysis import Incident, _append_incident, analyze_capture
+import pytest
+
+from v3.test_hub_analysis import (
+    Incident, _append_incident, _root_cause_candidate, analyze_capture,
+)
 from v3.test_hub_v2 import _build_diagnosis
 
 
@@ -154,6 +158,34 @@ def test_incident_budget_keeps_later_critical_over_earlier_medium():
     )
 
     assert any(item.incident_id == "critical-late" for item in items)
+
+
+@pytest.mark.parametrize("category,layer", [
+    ("SAFETY", "L12"), ("PRODUCTION_FAULT", "L3"),
+])
+@pytest.mark.parametrize("fault_tick", [99, 100, 101])
+def test_fault_severity_cannot_override_earlier_proven_motion_block(
+    category, layer, fault_tick,
+):
+    blocked = Incident(
+        "blocked", "HIGH", "MOTION_BLOCKED", 100, 2_000_000_000,
+        "L9", "LOCALIZATION_DEGRADED", {},
+    )
+    fault = Incident(
+        "fault", "CRITICAL", category, fault_tick, fault_tick * 20_000_000,
+        layer, "FAULT", {},
+    )
+
+    # The analyzer supplies incidents in severity order, so fault comes first.
+    root = _root_cause_candidate([fault, blocked])
+
+    expected = blocked if fault_tick > blocked.tick_id else fault
+    assert root["confidence"] == "PROVEN"
+    assert root["kind"] == expected.category
+    assert root["tick_id"] == expected.tick_id
+    assert root["layer"] == expected.layer
+    assert root["reason"] == expected.reason
+    assert expected.incident_id in root["evidence_ids"]
 
 
 def test_valid_evidence_plus_blocked_robot_is_finding_not_pass():

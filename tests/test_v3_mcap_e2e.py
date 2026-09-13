@@ -255,5 +255,7 @@ def test_complete_production_fault_is_fault_capture_and_match_evidence(tmp_path)
     captured = consumer.finish()
     assert captured.complete and captured.status == 'FAULT'
     evidence = diagnose_run(captured.path, tmp_path / 'fault.evidence', replay_mode='full', project_root=ROOT)
-    assert evidence['status'] == 'PASS' and evidence['replay_status'] == 'MATCH'
+    assert evidence['status'] == evidence['diagnosis_status'] == 'FINDING'
+    assert evidence['evidence_status'] == 'PASS'
+    assert evidence['replay_status'] == 'MATCH'
     assert evidence['capture_status'] == 'FAULT'
