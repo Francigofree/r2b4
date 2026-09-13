@@ -1,0 +1,2318 @@
+{
+  "actionable_incident_count": 116,
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "capture_id": "v3_20260912_231913_31045_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "POST_WINDOW_INCOMPLETE",
+        "PRE_WINDOW_INCOMPLETE"
+      ],
+      "message_stream_sha256": "6044bde6e46349413ea9a49bd33979360030513d2e4d24dbfb5abef5e9782019",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 244,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 244,
+        "first_lost_sequence": null,
+        "high_water_mark": 2,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 244,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": false,
+      "pre_window_complete": false,
+      "raw_lidar_duplicate_count": 47,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0
+    },
+    "status": "FAULT",
+    "trigger_reason": "L11_ERROR"
+  },
+  "incident_count": 116,
+  "incidents": [
+    {
+      "category": "PRODUCTION_FAULT",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 48680561,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 83976648,
+            "rejected[1].reason": "DUPLICATE"
+          },
+          "L3": {
+            "omega_rad_s": -0.6930206258758209,
+            "v_mps": 0.03808962327372439
+          },
+          "L4": {
+            "freshness_ns": 48680561,
+            "local_costmap.freshness_ns": 48680561,
+            "local_costmap.revision": 25,
+            "map_revision": 44
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "progress": 0.0078125,
+            "reason": null,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 178,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-05-08",
+            "trajectory.min_clearance_m": 0.38754151704425954,
+            "trajectory.omega_rad_s": 0.6,
+            "trajectory.progress_score": 0.35384063442644664,
+            "trajectory.v_mps": 0.3
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": 0.6,
+            "requested_v_mps": 0.3,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [
+              "ACCELERATION_LIMIT"
+            ],
+            "allowed_omega_rad_s": 0.0,
+            "allowed_v_mps": 0.287081433,
+            "requested_omega_rad_s": 0.6,
+            "requested_v_mps": 0.3
+          }
+        }
+      },
+      "id": "fault-layer-177",
+      "layer": "L11",
+      "monotonic_ns": 14925382071800,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 177
+    },
+    {
+      "category": "SAFETY",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 48680561,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 83976648,
+            "rejected[1].reason": "DUPLICATE"
+          },
+          "L3": {
+            "omega_rad_s": -0.6930206258758209,
+            "v_mps": 0.03808962327372439
+          },
+          "L4": {
+            "freshness_ns": 48680561,
+            "local_costmap.freshness_ns": 48680561,
+            "local_costmap.revision": 25,
+            "map_revision": 44
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "progress": 0.0078125,
+            "reason": null,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 178,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-05-08",
+            "trajectory.min_clearance_m": 0.38754151704425954,
+            "trajectory.omega_rad_s": 0.6,
+            "trajectory.progress_score": 0.35384063442644664,
+            "trajectory.v_mps": 0.3
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": 0.6,
+            "requested_v_mps": 0.3,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [
+              "ACCELERATION_LIMIT"
+            ],
+            "allowed_omega_rad_s": 0.0,
+            "allowed_v_mps": 0.287081433,
+            "requested_omega_rad_s": 0.6,
+            "requested_v_mps": 0.3
+          }
+        }
+      },
+      "id": "safety-fault-177",
+      "layer": "L12",
+      "monotonic_ns": 14925382071800,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 177
+    },
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "POST_WINDOW_INCOMPLETE",
+            "PRE_WINDOW_INCOMPLETE"
+          ],
+          "message_stream_sha256": "6044bde6e46349413ea9a49bd33979360030513d2e4d24dbfb5abef5e9782019",
+          "post_window_complete": false,
+          "pre_window_complete": false,
+          "raw_lidar_duplicate_count": 47,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [],
+          "raw_lidar_truncated_count": 0
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "POST_WINDOW_INCOMPLETE,PRE_WINDOW_INCOMPLETE",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 14921625859548,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-1",
+      "layer": "L1",
+      "monotonic_ns": 14921643610675,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 1
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-2",
+      "layer": "L1",
+      "monotonic_ns": 14921663617146,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 2
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-3",
+      "layer": "L1",
+      "monotonic_ns": 14921683607155,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 3
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-4",
+      "layer": "L1",
+      "monotonic_ns": 14921703596071,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 4
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-5",
+      "layer": "L1",
+      "monotonic_ns": 14921723629024,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 5
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 14921743602051,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-7",
+      "layer": "L1",
+      "monotonic_ns": 14921763597727,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 7
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-8",
+      "layer": "L1",
+      "monotonic_ns": 14921783596402,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 8
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-9",
+      "layer": "L1",
+      "monotonic_ns": 14921803602466,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 9
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-10",
+      "layer": "L1",
+      "monotonic_ns": 14921823602271,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 10
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-11",
+      "layer": "L1",
+      "monotonic_ns": 14921843593280,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 11
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-12",
+      "layer": "L1",
+      "monotonic_ns": 14921863591733,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 12
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-13",
+      "layer": "L1",
+      "monotonic_ns": 14921883605520,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 13
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-14",
+      "layer": "L1",
+      "monotonic_ns": 14921903598899,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 14
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-15",
+      "layer": "L1",
+      "monotonic_ns": 14921923595185,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 15
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 14921943598379,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-17",
+      "layer": "L1",
+      "monotonic_ns": 14921963607240,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 17
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-18",
+      "layer": "L1",
+      "monotonic_ns": 14921983588933,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 18
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-19",
+      "layer": "L1",
+      "monotonic_ns": 14922003589201,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 19
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-20",
+      "layer": "L1",
+      "monotonic_ns": 14922023608006,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 20
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-21",
+      "layer": "L1",
+      "monotonic_ns": 14922043600496,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 21
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-22",
+      "layer": "L1",
+      "monotonic_ns": 14922063597042,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 22
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-23",
+      "layer": "L1",
+      "monotonic_ns": 14922083591625,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 23
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-24",
+      "layer": "L1",
+      "monotonic_ns": 14922103602578,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 24
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-25",
+      "layer": "L1",
+      "monotonic_ns": 14922123603698,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 25
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-26",
+      "layer": "L1",
+      "monotonic_ns": 14922143590003,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 26
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-27",
+      "layer": "L1",
+      "monotonic_ns": 14922163593400,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 27
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-28",
+      "layer": "L1",
+      "monotonic_ns": 14922183594631,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 28
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-29",
+      "layer": "L1",
+      "monotonic_ns": 14922203601121,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 29
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-30",
+      "layer": "L1",
+      "monotonic_ns": 14922223600260,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 30
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-31",
+      "layer": "L1",
+      "monotonic_ns": 14922243599231,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 31
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-32",
+      "layer": "L1",
+      "monotonic_ns": 14922263603833,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 32
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-33",
+      "layer": "L1",
+      "monotonic_ns": 14922283590212,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 33
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-34",
+      "layer": "L1",
+      "monotonic_ns": 14922303590554,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 34
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-35",
+      "layer": "L1",
+      "monotonic_ns": 14922323607081,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 35
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-36",
+      "layer": "L1",
+      "monotonic_ns": 14922343603015,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 36
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-37",
+      "layer": "L1",
+      "monotonic_ns": 14922363599006,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 37
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-38",
+      "layer": "L1",
+      "monotonic_ns": 14922383596533,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 38
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-39",
+      "layer": "L1",
+      "monotonic_ns": 14922403609449,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 39
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-40",
+      "layer": "L1",
+      "monotonic_ns": 14922423601106,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 40
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-41",
+      "layer": "L1",
+      "monotonic_ns": 14922443597577,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 41
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-42",
+      "layer": "L1",
+      "monotonic_ns": 14922463593994,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 42
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-43",
+      "layer": "L1",
+      "monotonic_ns": 14922483599373,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 43
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-44",
+      "layer": "L1",
+      "monotonic_ns": 14922503604863,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 44
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-45",
+      "layer": "L1",
+      "monotonic_ns": 14922523752983,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 45
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-46",
+      "layer": "L1",
+      "monotonic_ns": 14922543670770,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 46
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-47",
+      "layer": "L1",
+      "monotonic_ns": 14922563623056,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 47
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-48",
+      "layer": "L1",
+      "monotonic_ns": 14922583627120,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 48
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-49",
+      "layer": "L1",
+      "monotonic_ns": 14922603595536,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 49
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-50",
+      "layer": "L1",
+      "monotonic_ns": 14922623599174,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 50
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-51",
+      "layer": "L1",
+      "monotonic_ns": 14922643624035,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 51
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-52",
+      "layer": "L1",
+      "monotonic_ns": 14922663605396,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 52
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-53",
+      "layer": "L1",
+      "monotonic_ns": 14922683608812,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 53
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-54",
+      "layer": "L1",
+      "monotonic_ns": 14922703595654,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 54
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-55",
+      "layer": "L1",
+      "monotonic_ns": 14922723614625,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 55
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-56",
+      "layer": "L1",
+      "monotonic_ns": 14922743752376,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 56
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-57",
+      "layer": "L1",
+      "monotonic_ns": 14922763601143,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 57
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-58",
+      "layer": "L1",
+      "monotonic_ns": 14922783592133,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 58
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-59",
+      "layer": "L1",
+      "monotonic_ns": 14922803598642,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 59
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-60",
+      "layer": "L1",
+      "monotonic_ns": 14922823602002,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 60
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-61",
+      "layer": "L1",
+      "monotonic_ns": 14922843596344,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 61
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-62",
+      "layer": "L1",
+      "monotonic_ns": 14922863605390,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 62
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-63",
+      "layer": "L1",
+      "monotonic_ns": 14922883602473,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 63
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-64",
+      "layer": "L1",
+      "monotonic_ns": 14922903593833,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 64
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-65",
+      "layer": "L1",
+      "monotonic_ns": 14922923594694,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 65
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-66",
+      "layer": "L1",
+      "monotonic_ns": 14922943606777,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 66
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-67",
+      "layer": "L1",
+      "monotonic_ns": 14922963599971,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 67
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-68",
+      "layer": "L1",
+      "monotonic_ns": 14922983601961,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 68
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-69",
+      "layer": "L1",
+      "monotonic_ns": 14923003596173,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 69
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-70",
+      "layer": "L1",
+      "monotonic_ns": 14923023607997,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 70
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-71",
+      "layer": "L1",
+      "monotonic_ns": 14923043597413,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 71
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-72",
+      "layer": "L1",
+      "monotonic_ns": 14923063599366,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 72
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-73",
+      "layer": "L1",
+      "monotonic_ns": 14923083596097,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 73
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-74",
+      "layer": "L1",
+      "monotonic_ns": 14923103601402,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 74
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-75",
+      "layer": "L1",
+      "monotonic_ns": 14923123600226,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 75
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-76",
+      "layer": "L1",
+      "monotonic_ns": 14923143590549,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 76
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-77",
+      "layer": "L1",
+      "monotonic_ns": 14923163601595,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 77
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-78",
+      "layer": "L1",
+      "monotonic_ns": 14923183632419,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 78
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-79",
+      "layer": "L1",
+      "monotonic_ns": 14923203597075,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 79
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-80",
+      "layer": "L1",
+      "monotonic_ns": 14923223593862,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 80
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-81",
+      "layer": "L1",
+      "monotonic_ns": 14923243605019,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 81
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-82",
+      "layer": "L1",
+      "monotonic_ns": 14923263617305,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 82
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-83",
+      "layer": "L1",
+      "monotonic_ns": 14923283600814,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 83
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-84",
+      "layer": "L1",
+      "monotonic_ns": 14923303611249,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 84
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-85",
+      "layer": "L1",
+      "monotonic_ns": 14923323611720,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 85
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-86",
+      "layer": "L1",
+      "monotonic_ns": 14923343597081,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 86
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-87",
+      "layer": "L1",
+      "monotonic_ns": 14923363595534,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 87
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-88",
+      "layer": "L1",
+      "monotonic_ns": 14923384073397,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 88
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-89",
+      "layer": "L1",
+      "monotonic_ns": 14923403597255,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 89
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-90",
+      "layer": "L1",
+      "monotonic_ns": 14923423595597,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 90
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-91",
+      "layer": "L1",
+      "monotonic_ns": 14923443592698,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 91
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-92",
+      "layer": "L1",
+      "monotonic_ns": 14923463596096,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 92
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-93",
+      "layer": "L1",
+      "monotonic_ns": 14923483617809,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 93
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-94",
+      "layer": "L1",
+      "monotonic_ns": 14923503597317,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 94
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-95",
+      "layer": "L1",
+      "monotonic_ns": 14923523589493,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 95
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-96",
+      "layer": "L1",
+      "monotonic_ns": 14923543613205,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 96
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-97",
+      "layer": "L1",
+      "monotonic_ns": 14923563614066,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 97
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-98",
+      "layer": "L1",
+      "monotonic_ns": 14923583596130,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 98
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-99",
+      "layer": "L1",
+      "monotonic_ns": 14923603593787,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 99
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-100",
+      "layer": "L1",
+      "monotonic_ns": 14923623609240,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 100
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-101",
+      "layer": "L1",
+      "monotonic_ns": 14923643609342,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 101
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-102",
+      "layer": "L1",
+      "monotonic_ns": 14923663590146,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 102
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-103",
+      "layer": "L1",
+      "monotonic_ns": 14923683593711,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 103
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-104",
+      "layer": "L1",
+      "monotonic_ns": 14923704032444,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 104
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-105",
+      "layer": "L1",
+      "monotonic_ns": 14923723603636,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 105
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-106",
+      "layer": "L1",
+      "monotonic_ns": 14923743607682,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 106
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-107",
+      "layer": "L1",
+      "monotonic_ns": 14923763614357,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 107
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-108",
+      "layer": "L1",
+      "monotonic_ns": 14923783610866,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 108
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-109",
+      "layer": "L1",
+      "monotonic_ns": 14923803597060,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 109
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-110",
+      "layer": "L1",
+      "monotonic_ns": 14923823594105,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 110
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-111",
+      "layer": "L1",
+      "monotonic_ns": 14923843604688,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 111
+    },
+    {
+      "category": "LOCALIZATION",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 6.403744931068167,
+        "last_trace": 0.07190109628568118,
+        "max_trace": 0.2621717445121312,
+        "sample_count": 178
+      },
+      "id": "covariance-growth-113",
+      "layer": "L3",
+      "monotonic_ns": 14923883602780,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 113
+    }
+  ],
+  "localization": {
+    "first_trace": 0.0461,
+    "growth_ratio": 6.403744931068167,
+    "last_trace": 0.07190109628568118,
+    "max_trace": 0.2621717445121312,
+    "sample_count": 178
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 0.03162667128295801,
+    "requested_motion_tick_count": 13
+  },
+  "navigation": {
+    "stagnation": null
+  },
+  "root_cause_candidate": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "fault-layer-177"
+    ],
+    "kind": "PRODUCTION_FAULT",
+    "layer": "L11",
+    "reason": "L11_ERROR",
+    "tick_id": 177
+  },
+  "safety": {
+    "ALLOW": 12,
+    "FAULT": 1,
+    "STOP": 165,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 112,
+    "l2_actionable_rejection_count": 0,
+    "l2_duplicate_count": 205,
+    "l2_rejection_count": 205,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 205
+    }
+  },
+  "ticks": {
+    "count": 178,
+    "first_monotonic_ns": 14921625859548,
+    "first_tick_id": 0,
+    "last_monotonic_ns": 14925382071800,
+    "last_tick_id": 177
+  },
+  "timing": {
+    "max_ms": 76.61074,
+    "p50_ms": 19.998842,
+    "p95_ms": 22.342947,
+    "p99_ms": 70.687321,
+    "sample_count": 177
+  }
+}
