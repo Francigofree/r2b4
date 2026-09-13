@@ -883,10 +883,20 @@ class McapCaptureConsumer:
         if status not in TERMINAL_STATUSES:
             raise ValueError("status must be PASS, FAIL or FAULT")
 
+        terminal_fault = terminal and (
+            status == "FAULT" or self._fault_observed
+        )
+
         upper = int(self._trigger_ns or 0) + self._config.post_event_ns
         post_complete = self._post_window_complete
         if terminal and self._last_seen_ns is not None and self._last_seen_ns < upper:
             post_complete = False
+
+        terminal_short_post_window = bool(
+            terminal_fault
+            and not post_complete
+            and self._last_seen_ns is not None
+        )
 
         lower = int(self._trigger_ns or 0) - self._config.pre_event_ns
         capacity_missing = bool(
@@ -895,6 +905,7 @@ class McapCaptureConsumer:
         )
         if capacity_missing:
             self._integrity_reasons.add("PRE_TRIGGER_CAPACITY_EVICTION")
+
         pre_complete = bool(
             self._config.pre_event_ns == 0
             or (
@@ -903,15 +914,29 @@ class McapCaptureConsumer:
                 and not capacity_missing
             )
         )
+
+        session_start_short_pre_window = bool(
+            terminal_fault
+            and not pre_complete
+            and self._first_seen_ns is not None
+            and self._first_seen_ns > lower
+            and not capacity_missing
+        )
+
         if self._config.mode == "append_only":
             pre_complete = post_complete = self._captured_tick_count > 0
-        if not pre_complete:
+            session_start_short_pre_window = False
+            terminal_short_post_window = False
+
+        if not pre_complete and not session_start_short_pre_window:
             self._integrity_reasons.add("PRE_WINDOW_INCOMPLETE")
+
         subscription = self._subscription.snapshot()
         ingress_drops = subscription.lost_count
         if ingress_drops:
             self._integrity_reasons.add("OBSERVATION_RELIABLE_LOSS")
-        if not post_complete:
+
+        if not post_complete and not terminal_short_post_window:
             self._integrity_reasons.add("POST_WINDOW_INCOMPLETE")
 
         missing_raw = tuple(sorted(self._referenced_raw_revisions - self._written_raw_revisions))
