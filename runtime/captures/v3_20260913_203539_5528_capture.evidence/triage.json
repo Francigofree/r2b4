@@ -1,0 +1,125 @@
+{
+  "actionable_incident_count": 1,
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "capture_id": "v3_20260913_203539_5528_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": true,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "message_stream_sha256": "630d9a07d1b84dc42be027f45c448ec48c6bde884a63b6026eb404adc60fbd62",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 3276,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 3276,
+        "first_lost_sequence": null,
+        "high_water_mark": 14,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 3276,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 1261,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "status": "PASS",
+    "trigger_reason": "SIGUSR1"
+  },
+  "incident_count": 1,
+  "incidents": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "monotonic_ns": 651984258287,
+        "progress_span": 0.0,
+        "tick_id": 1459,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 651984258287,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 1459
+    }
+  ],
+  "localization": {
+    "first_trace": 0.07674812419468395,
+    "growth_ratio": 3.2778157947046163,
+    "last_trace": 0.09290752648333883,
+    "max_trace": 0.24684477443636915,
+    "sample_count": 347
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 0.6364226397691829,
+    "requested_motion_tick_count": 230
+  },
+  "navigation": {
+    "stagnation": {
+      "last_progress": 0.0,
+      "monotonic_ns": 651984258287,
+      "progress_span": 0.0,
+      "tick_id": 1459,
+      "window_tick_count": 50
+    }
+  },
+  "root_cause_candidate": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "navigation-stagnation"
+    ],
+    "kind": "NAVIGATION",
+    "layer": "L6",
+    "reason": "NAVIGATION_PROGRESS_STAGNATION",
+    "tick_id": 1459
+  },
+  "safety": {
+    "ALLOW": 230,
+    "FAULT": 0,
+    "STOP": 117,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 0,
+    "l2_actionable_rejection_count": 0,
+    "l2_duplicate_count": 439,
+    "l2_rejection_count": 439,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 439
+    }
+  },
+  "ticks": {
+    "count": 347,
+    "first_monotonic_ns": 644882887844,
+    "first_tick_id": 1113,
+    "last_monotonic_ns": 651984258287,
+    "last_tick_id": 1459
+  },
+  "timing": {
+    "max_ms": 59.909914,
+    "p50_ms": 19.999761,
+    "p95_ms": 23.145819,
+    "p99_ms": 46.436839,
+    "sample_count": 346
+  }
+}
