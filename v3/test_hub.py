@@ -306,7 +306,11 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments or arguments[0] in {"run", "view", "compare", "-h", "--help"}:
+        from .test_hub_next import main as next_main
+        return next_main(arguments)
+    args = _parser().parse_args(arguments)
     try:
         if args.command == "inspect":
             output = inspect_capture(args.capture_path)

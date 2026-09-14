@@ -40,7 +40,7 @@ Automatikusan incident replay fut; az eredmény pontos scope-ja a
 
 ```bash
 python3 -m v3.test_hub_v2 inspect capture.mcap --deep
-python3 -m v3.test_hub_v2 diagnose capture.mcap --output-dir /tmp/egyedi-evidence --replay full
+python3 -m v3.test_hub run capture.mcap --output-dir /tmp/egyedi-evidence --replay full
 python3 -m v3.test_hub_v2 verify-evidence /tmp/egyedi-evidence/evidence_index.json
 python3 -m v3.replay replay capture.mcap --output /tmp/egyedi-replay.json
 ```

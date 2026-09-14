@@ -102,10 +102,28 @@ Az opcionális `requirements-interop.txt` csak fejlesztői/CI interoperabilitás
 ellenőrzéshez tartalmaz független MCAP implementációt; robot-runtime-ra nem kell
 telepíteni.
 
-## Test Hub V2
+## Test Hub
 
-Az új Test Hub ugyanabból a final MCAP authorityból dolgozik CLI, agent és későbbi
-GUI számára.
+Az alapértelmezett belépő az integrált Test Hub Next. Paraméter nélkül a
+legújabb `runtime/captures/*.mcap` fájlt elemzi, incident replayt futtat,
+és 5 Hz-es áttekintést, valamint `agent_view.json` összefoglalót készít:
+
+```bash
+python3 -m v3.test_hub
+python3 -m v3.test_hub run capture.mcap --output-dir /tmp/egyedi-hub --replay full
+python3 -m v3.test_hub view capture.mcap --hz 1 --output /tmp/egyedi-overview.ndjson
+python3 -m v3.test_hub compare before.mcap after.mcap
+```
+
+A `v3.test_hub_next` közvetlenül is használható. Az alapértelmezett cél
+`<capture>.mcap.evidence_next/`; meglévő adatot nem ír felül, ismételt futáshoz
+új `--output-dir` szükséges. Az 1/5/10 Hz-es nézet megőrzi a rövid
+állapotváltásokat is. A compare különbségeket mutat, automatikus verdict nélkül.
+A nézetek származtatott adatok; az MCAP és a canonical replay marad az authority.
+
+A V2 háttérmodulok szükséges függőségek. A launcher (`./r2b4`) változatlanul
+a korábbi V2 evidence-útvonalat használja. A régi `validate`, `replay`,
+`inspect`, `verify-result`, `verify-evidence` kompatibilitási parancsok is megmaradnak.
 
 Olcsó integritási összefoglaló:
 
