@@ -163,6 +163,31 @@ def test_motion_checkpoint_preserves_path_and_pivot_phase():
             second, 20, v=v, omega=omega, x=0.02, y=0.03)
 
 
+def test_world_stale_discards_reference_and_stationary_limit_does_not_move_it():
+    controller = MotionRealizer()
+    for tick in range(100):
+        motion = realize(controller, tick, v=0.15, x=0.0, y=0.0)
+        assert motion.requested_omega_rad_s == 0.0
+    assert controller.checkpoint().reference.x_m == 0.0
+    est = estimate(100, x=0.1, y=0.1)
+    stale = WorldSnapshot(est.context, est.frame_id, 0, (), 250_000_001)
+    stopped = controller.evaluate(objective(100), est, stale)
+    assert stopped.stop_reason == "WORLD_STALE"
+    assert controller.checkpoint().reference is None
+    assert realize(controller, 101, x=0.1, y=0.1).requested_omega_rad_s == 0.0
+
+
+def test_lower_effort_saturation_keeps_compensation_bounded_and_recovers():
+    controller = WheelActuatorController(CONFIG.speed_map, CONFIG.wheel_pi)
+    for tick in range(500):
+        output = wheel_step(controller, tick, 0.03, 0.3)
+        assert output.left_normalized >= 0.0
+    state = controller.checkpoint()
+    assert -0.2 < state.left_integral < 0.0
+    recovered = wheel_step(controller, 500, 0.03, 0.0)
+    assert 0.0 < recovered.left_normalized < 0.12
+
+
 def plant_inputs(tick, left, right, x, y, yaw, yaw_rate, v, omega):
     ctx = context(tick)
     def sample(device, kind, **values):
@@ -226,7 +251,10 @@ def run_plant(v, omega, *, count=1000, on_record=None):
     return tail
 
 
-@pytest.mark.parametrize("v,omega", [(0.15, 0.0), (-0.15, 0.0), (0.15, 0.15), (0.15, -0.15)])
+@pytest.mark.parametrize("v,omega", [
+    (0.15, 0.0), (-0.15, 0.0), (0.15, 0.15), (0.15, -0.15),
+    (-0.15, 0.15), (-0.15, -0.15),
+])
 def test_full_native_motion_holds_path_after_motor_load_and_chassis_disturbance(v, omega):
     tail = run_plant(v, omega)
     for x, y, yaw, speed, _ in tail:
@@ -240,6 +268,13 @@ def test_full_native_motion_holds_path_after_motor_load_and_chassis_disturbance(
         assert abs(error) < 0.025
         assert abs(math.atan2(math.sin(yaw - heading), math.cos(yaw - heading))) < 0.06
         assert speed == pytest.approx(v, abs=0.012)
+
+
+def test_full_native_pivot_recovers_heading_rate_after_load_change():
+    tail = run_plant(0.0, 0.3)
+    for _, _, _, speed, yaw_rate in tail:
+        assert abs(speed) < 0.004
+        assert yaw_rate == pytest.approx(0.3, abs=0.01)
 
 
 def test_adapted_motion_checkpoint_round_trips_through_mcap_replay(tmp_path):

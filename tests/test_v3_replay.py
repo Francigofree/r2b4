@@ -111,9 +111,10 @@ def test_general_replay_matches_generic_explore_trajectory_through_l4_l8(tmp_pat
     assert active["L7"]["kind"] == "TRACK_TRAJECTORY"
     assert active["L7"]["selected_source"] == "navigation.trajectory"
     assert active["L8"]["requested_v_mps"] == active["L7"]["trajectory"]["v_mps"]
-    assert active["L8"]["requested_omega_rad_s"] == active["L7"]["trajectory"][
+    # Stationary feedback asks for correction toward the selected turn rate.
+    assert active["L8"]["requested_omega_rad_s"] < active["L7"]["trajectory"][
         "omega_rad_s"
-    ]
+    ] < 0.0
     assert {
         tick["expected"]["layers"]["L5"]["mission_id"]
         for tick in active_ticks
