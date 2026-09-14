@@ -15,7 +15,7 @@ from v3.contracts import (
     AdmittedFrame, CommandMode, CommandRequest, DataField, DeviceHealth,
     DeviceHealthState, DeviceSample, LifecycleState, MotionObjective,
     MotionObjectiveKind, Observation, RawDeviceBatch, RobotEstimate, TickContext,
-    VelocityTarget, WheelVelocitySetpoint, WorldSnapshot,
+    TrajectoryEvaluation, TrajectoryPose, VelocityTarget, WheelVelocitySetpoint, WorldSnapshot,
 )
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
@@ -175,6 +175,23 @@ def test_world_stale_discards_reference_and_stationary_limit_does_not_move_it():
     assert stopped.stop_reason == "WORLD_STALE"
     assert controller.checkpoint().reference is None
     assert realize(controller, 101, x=0.1, y=0.1).requested_omega_rad_s == 0.0
+
+
+def test_stationary_selected_trajectory_cannot_create_corrective_motion():
+    controller = MotionRealizer()
+    realize(controller, 0)
+    trajectory = TrajectoryEvaluation(
+        "stationary", 0.0, 0.0, 100_000_000,
+        (TrajectoryPose(0.0, 0.0, 0.0, 100_000_000),),
+        False, 1.0, 0.0, 1.0, 1.0, 1.0,
+    )
+    selected = replace(objective(1), kind=MotionObjectiveKind.TRACK_TRAJECTORY,
+                       velocity_target=None, trajectory=trajectory)
+    est = estimate(1, v=0.1, omega=0.3)
+    stopped = controller.evaluate(selected, est, WorldSnapshot(est.context, est.frame_id, 0, (), 0))
+    assert stopped.stop_reason is None
+    assert (stopped.requested_v_mps, stopped.requested_omega_rad_s) == (0.0, 0.0)
+    assert controller.checkpoint().reference is None
 
 
 def test_lower_effort_saturation_keeps_compensation_bounded_and_recovers():

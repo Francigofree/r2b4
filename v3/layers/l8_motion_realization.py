@@ -195,6 +195,8 @@ class MotionRealizer:
         self, v_mps: float, omega_rad_s: float, reference: Waypoint,
         estimate: RobotEstimate, *, pivot_heading: bool = False,
     ) -> tuple[float, float]:
+        if abs(v_mps) <= 1e-12 and abs(omega_rad_s) <= 1e-12:
+            return 0.0, 0.0
         assert reference.yaw_rad is not None
         heading = reference.yaw_rad
         if abs(v_mps) > 1e-12:

@@ -81,6 +81,19 @@ megvalósítás offline viselkedését és determinizmusát bizonyítja. A régi
 capture új kóddal eltérő control-outputja MISMATCH, nem új fizikai pálya
 és nem teljesített régi replay gate.
 
+A módosított kódon mindkét régi capture L1–L7 eredménye változatlan;
+az első eltérés rendre a 159. és 505. tick `L8.requested_omega_rad_s`
+mezője. Az ismételt replay mindkét esetben determinisztikus.
+
+A célzott mozgás-, navigation-, composition- és replay-tesztek teljesültek;
+az import guard és a launcher szintaktikai ellenőrzése is PASS.
+A teljes regressziós körből két korábban is fennálló L3-teszthiba maradt:
+`test_native_predict_covariance_tracks_elapsed_time_across_tick_rates`
+mindkét 40 ms-os paraméterezése. A változatlan L3 és teszt izolált futtatása
+ugyanezt adja: egy kapcsolt kovarianciaelem 1,216e-5 a 20 ms-os referencia
+1,274e-5 értékével szemben, kívül a teszt 4%-os relatív határán. Ezt a
+szabályozásfejlesztés nem javította, a teszthatár nem lett lazítva.
+
 Új élő teszt nem történt. A tényleges padlón elérhető pontosság, a megváltozott
 gain-ek tranziens viselkedése és a tapadási határok csak külön engedélyezett
 canonical runtime-teszttel igazolhatók. Ehhez először rövid, 0,15 m/s-os
