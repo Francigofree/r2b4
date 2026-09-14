@@ -42,6 +42,17 @@ def _snapshot(
     )
 
 
+def _timed(pulses, start_count=0, start_ns=1_000_000_000, end_ns=1_100_000_000, **diagnostics):
+    delta = pulses - start_count
+    sign = 1 if delta > 0 else -1
+    edges = tuple(
+        SignedPulseEdge(start_ns + round(i * (end_ns - start_ns) / abs(delta)),
+                        start_count + sign * i)
+        for i in range(abs(delta) + 1)
+    ) if delta else ()
+    return _snapshot(pulses, edge_history=edges, **diagnostics)
+
+
 def _config() -> CounterEncoderBackendConfig:
     return CounterEncoderBackendConfig(
         left_step_distance_m=0.001,
@@ -105,8 +116,8 @@ def test_constructor_does_not_create_an_untimed_counter_baseline():
 
 def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     backend, left, right = _backend(
-        (_snapshot(100), _snapshot(110)),
-        (_snapshot(200), _snapshot(195)),
+        (_snapshot(100), _timed(110, 100)),
+        (_snapshot(200), _timed(195, 200)),
     )
     backend.read(TickContext(0, 1_000_000_000))
 
@@ -131,25 +142,6 @@ def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     assert not hasattr(backend, "set_last_pwm")
 
 
-def test_adaptive_window_keeps_recent_pulses_instead_of_one_tick_noise():
-    backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(10), _snapshot(13)),
-        (_snapshot(0), _snapshot(5), _snapshot(7)),
-    )
-
-    baseline = backend.read(TickContext(0, 1_000_000_000))
-    first = backend.read(TickContext(1, 1_100_000_000))
-    second = backend.read(TickContext(2, 1_200_000_000))
-
-    _assert_rejected(baseline)
-    assert first.left_mps == pytest.approx(0.1)
-    assert first.right_mps == pytest.approx(0.1)
-    assert second.left_mps == pytest.approx(0.065)
-    assert second.right_mps == pytest.approx(0.07)
-    assert second.diagnostics is not None
-    assert second.diagnostics.left_pulse_delta == 3
-    assert second.diagnostics.left_estimation_pulse_delta == 13
-    assert second.diagnostics.left_estimation_window_ns == 200_000_000
 
 
 def test_delayed_multi_pulse_batch_uses_physical_edge_window_not_tick_window():
@@ -432,8 +424,8 @@ def test_processing_gap_with_old_dual_wheel_edge_windows_remains_stale():
 
 def test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery():
     backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(20), _snapshot(25)),
-        (_snapshot(0), _snapshot(10), _snapshot(12)),
+        (_snapshot(0), _snapshot(20), _timed(25, 20, 1_300_000_000, 1_400_000_000)),
+        (_snapshot(0), _snapshot(10), _timed(12, 10, 1_300_000_000, 1_400_000_000)),
     )
     backend.read(TickContext(0, 1_000_000_000))
 
@@ -453,7 +445,7 @@ def test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery():
     assert stale.diagnostics.sample_interval_ns == 300_000_000
     assert stale.diagnostics.computed_left_mps == pytest.approx(0.0666666667)
     assert stale.diagnostics.computed_right_mps == pytest.approx(0.0666666667)
-    assert recovered.trust == pytest.approx(0.5)
+    assert recovered.trust == 1.0
     assert recovered.left_mps == pytest.approx(0.05)
     assert recovered.right_mps == pytest.approx(0.04)
 
@@ -517,8 +509,8 @@ def test_counter_diagnostic_reanchors_then_recovers_when_total_stays_constant(
 ):
     left_error = _snapshot(10, **diagnostic) if side == "left" else _snapshot(10)
     right_error = _snapshot(5, **diagnostic) if side == "right" else _snapshot(5)
-    left_clean = _snapshot(14, **diagnostic) if side == "left" else _snapshot(14)
-    right_clean = _snapshot(7, **diagnostic) if side == "right" else _snapshot(7)
+    left_clean = _timed(14, 10, 1_100_000_000, 1_200_000_000, **diagnostic) if side == "left" else _timed(14, 10, 1_100_000_000, 1_200_000_000)
+    right_clean = _timed(7, 5, 1_100_000_000, 1_200_000_000, **diagnostic) if side == "right" else _timed(7, 5, 1_100_000_000, 1_200_000_000)
     backend, _, _ = _backend(
         (_snapshot(0), left_error, left_clean),
         (_snapshot(0), right_error, right_clean),
@@ -529,7 +521,7 @@ def test_counter_diagnostic_reanchors_then_recovers_when_total_stays_constant(
     recovered = backend.read(TickContext(2, 1_200_000_000))
 
     _assert_rejected(rejected)
-    assert recovered.trust == pytest.approx(0.5)
+    assert recovered.trust == 1.0
     assert recovered.left_mps == pytest.approx(0.04)
     assert recovered.right_mps == pytest.approx(0.04)
 
@@ -560,8 +552,8 @@ def test_stopped_counter_is_timing_invalid_untrusted_and_zero():
 
 def test_impossible_velocity_is_untrusted_and_zero():
     backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(1_000)),
-        (_snapshot(0), _snapshot(0)),
+        (_snapshot(0), _timed(1_000)),
+        (_snapshot(0), _timed(1)),
     )
     backend.read(TickContext(0, 1_000_000_000))
 
@@ -576,16 +568,16 @@ def test_impossible_velocity_is_untrusted_and_zero():
         is EncoderRejectionCode.LEFT_VELOCITY_LIMIT_EXCEEDED
     )
     assert reading.diagnostics.left_pulse_delta == 1_000
-    assert reading.diagnostics.right_pulse_delta == 0
+    assert reading.diagnostics.right_pulse_delta == 1
     assert reading.diagnostics.computed_left_mps == pytest.approx(10.0)
-    assert reading.diagnostics.computed_right_mps == pytest.approx(0.0)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.02)
     assert reading.diagnostics.maximum_abs_velocity_mps == pytest.approx(1.5)
 
 
 def test_nonincreasing_tick_time_is_invalid_zero_and_does_not_reanchor():
     backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(1), _snapshot(2)),
-        (_snapshot(0), _snapshot(1), _snapshot(2)),
+        (_snapshot(0), _snapshot(1), _timed(2)),
+        (_snapshot(0), _snapshot(1), _timed(2)),
     )
     backend.read(TickContext(0, 1_000_000_000))
 
@@ -604,15 +596,15 @@ def test_nonincreasing_tick_time_is_invalid_zero_and_does_not_reanchor():
     assert invalid.diagnostics.right_pulse_delta == 1
     assert invalid.diagnostics.computed_left_mps is None
     assert invalid.diagnostics.computed_right_mps is None
-    assert recovered.trust == pytest.approx(0.5)
+    assert recovered.trust == 1.0
     assert recovered.left_mps == pytest.approx(0.02)
     assert recovered.right_mps == pytest.approx(0.04)
 
 
 def test_native_encoder_source_sees_low_trust_baseline_then_ok_delta():
     backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(10)),
-        (_snapshot(0), _snapshot(5)),
+        (_snapshot(0), _timed(10)),
+        (_snapshot(0), _timed(5)),
     )
     source = NativeEncoderSource(backend, NativeEncoderConfig("encoder", 0.5))
 
@@ -666,50 +658,8 @@ def test_concrete_counter_diagnostic_degrades_device_health_separately():
     assert _sample_values(snapshot)["trust"] == 0.0
 
 
-def test_low_speed_window_grows_until_four_pulses_then_stays_stable():
-    counts = tuple(_snapshot(value) for value in (0, 1, 1, 2, 2, 3, 3, 4, 4, 5))
-    backend, _, _ = _backend(counts, counts)
-
-    readings = [
-        backend.read(TickContext(tick_id, 1_000_000_000 + tick_id * 20_000_000))
-        for tick_id in range(len(counts))
-    ]
-
-    assert readings[7].left_mps == pytest.approx(4 * 0.001 / 0.14)
-    assert readings[7].trust == 1.0
-    assert readings[7].diagnostics is not None
-    assert readings[7].diagnostics.left_estimation_window_ns == 140_000_000
-    assert readings[8].left_mps == pytest.approx(4 * 0.001 / 0.16)
-    assert readings[9].left_mps == pytest.approx(4 * 0.001 / 0.14)
-    assert readings[9].diagnostics is not None
-    assert readings[9].diagnostics.instantaneous_left_mps == pytest.approx(0.05)
-    assert readings[9].diagnostics.left_velocity_uncertainty_mps == pytest.approx(
-        0.001 / 0.14
-    )
 
 
-def test_high_speed_window_is_minimal_and_raw_distance_is_never_smoothed():
-    backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(6), _snapshot(12)),
-        (_snapshot(0), _snapshot(5), _snapshot(10)),
-    )
-    backend.read(TickContext(0, 1_000_000_000))
-    backend.read(TickContext(1, 1_020_000_000))
-
-    reading = backend.read(TickContext(2, 1_040_000_000))
-
-    assert reading.left_mps == pytest.approx(0.3)
-    assert reading.right_mps == pytest.approx(0.5)
-    assert reading.trust == 1.0
-    assert reading.diagnostics is not None
-    assert reading.diagnostics.left_estimation_window_ns == 40_000_000
-    assert reading.diagnostics.right_estimation_window_ns == 40_000_000
-    assert reading.diagnostics.left_pulse_delta == 6
-    assert reading.diagnostics.right_pulse_delta == 5
-    assert reading.diagnostics.raw_left_distance_m == pytest.approx(0.012)
-    assert reading.diagnostics.raw_right_distance_m == pytest.approx(0.020)
-    assert reading.diagnostics.left_distance_delta_m == pytest.approx(0.006)
-    assert reading.diagnostics.right_distance_delta_m == pytest.approx(0.010)
 
 
 def test_first_read_from_stopped_counter_is_invalid_zero_baseline():
@@ -753,8 +703,8 @@ def test_combined_counter_diagnostics_have_one_exact_code_and_per_side_deltas():
 
 def test_both_velocity_limits_have_a_distinct_rejection_code():
     backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(200)),
-        (_snapshot(0), _snapshot(-100)),
+        (_snapshot(0), _timed(200)),
+        (_snapshot(0), _timed(-100)),
     )
     backend.read(TickContext(0, 1_000_000_000))
 

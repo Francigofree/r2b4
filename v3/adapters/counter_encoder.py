@@ -146,12 +146,6 @@ class _CounterPair:
 
 
 @dataclass(frozen=True, slots=True)
-class _TimedCounterPair:
-    monotonic_ns: int
-    counters: _CounterPair
-
-
-@dataclass(frozen=True, slots=True)
 class _WheelVelocityEstimate:
     velocity_mps: float
     pulse_delta: int
@@ -172,7 +166,8 @@ class NativeCounterEncoderBackend:
 
     __slots__ = (
         "_config",
-        "_history",
+        "_left_after_ns",
+        "_right_after_ns",
         "_left",
         "_previous",
         "_previous_monotonic_ns",
@@ -194,7 +189,8 @@ class NativeCounterEncoderBackend:
         self._left = left
         self._right = right
         self._config = config
-        self._history: list[_TimedCounterPair] = []
+        self._left_after_ns = 0
+        self._right_after_ns = 0
         self._previous: _CounterPair | None = None
         self._previous_monotonic_ns: int | None = None
 
@@ -350,182 +346,103 @@ class NativeCounterEncoderBackend:
             rejection_code=rejection_code,
         )
 
-    def _reset_history(self, context: TickContext, current: _CounterPair) -> None:
-        self._history = [_TimedCounterPair(context.monotonic_ns, current)]
-
-    def _append_history(self, context: TickContext, current: _CounterPair) -> None:
-        self._history.append(_TimedCounterPair(context.monotonic_ns, current))
-        cutoff_ns = context.monotonic_ns - self._config.maximum_estimation_window_ns
-        self._history = [
-            item for item in self._history if item.monotonic_ns >= cutoff_ns
-        ]
-
     def _estimate_wheel(
-        self,
-        *,
-        side: str,
-        step_distance_m: float,
-    ) -> _WheelVelocityEstimate | None:
-        if not self._history:
-            return None
-        current = self._history[-1]
-        current_snapshot = getattr(current.counters, side)
-        if current_snapshot.edge_history:
-            edge_estimate = self._estimate_wheel_from_edges(
-                current_snapshot,
-                step_distance_m=step_distance_m,
-            )
-            if edge_estimate is not None:
-                return edge_estimate
-            return None
-        if len(self._history) < 2:
-            return None
-        selected: _TimedCounterPair | None = None
-        for candidate in reversed(self._history[:-1]):
-            elapsed_ns = current.monotonic_ns - candidate.monotonic_ns
-            if elapsed_ns <= 0:
-                continue
-            if elapsed_ns > self._config.maximum_estimation_window_ns:
-                break
-            selected = candidate
-            candidate_snapshot = getattr(candidate.counters, side)
-            pulse_delta = (
-                current_snapshot.pulse_count - candidate_snapshot.pulse_count
-            )
-            if (
-                abs(pulse_delta) >= self._config.minimum_estimation_pulses
-                and elapsed_ns >= self._config.minimum_estimation_window_ns
-            ):
-                break
-        if selected is None:
-            return None
-        selected_snapshot = getattr(selected.counters, side)
-        pulse_delta = current_snapshot.pulse_count - selected_snapshot.pulse_count
-        window_ns = current.monotonic_ns - selected.monotonic_ns
-        elapsed_s = window_ns / 1_000_000_000.0
-        velocity_mps = pulse_delta * step_distance_m / elapsed_s
-        pulse_coverage = abs(pulse_delta) / self._config.minimum_estimation_pulses
-        coverage = (
-            min(1.0, window_ns / self._config.minimum_estimation_window_ns)
-            if pulse_coverage >= 1.0
-            else max(
-                pulse_coverage,
-                window_ns / self._config.maximum_estimation_window_ns,
-            )
-        )
-        return _WheelVelocityEstimate(
-            velocity_mps=float(velocity_mps),
-            pulse_delta=pulse_delta,
-            window_ns=window_ns,
-            uncertainty_mps=float(step_distance_m / elapsed_s),
-            trust=float(min(1.0, coverage)),
-            timebase="TICK_SNAPSHOT",
-            start_edge_timestamp_ns=None,
-            end_edge_timestamp_ns=None,
-        )
-
-    def _estimate_wheel_from_edges(
         self,
         snapshot: SignedPulseCounterSnapshot,
         *,
         step_distance_m: float,
+        after_ns: int,
     ) -> _WheelVelocityEstimate | None:
-        """Use physical edge time, independent of delayed callback delivery."""
+        """Fit edge time against exact signed count; never fit tick counts.
 
+        At most 128 physical edges, local scalar sums, no second history. The
+        configured pulse/time coverage chooses the short averaging span. Two
+        edges suffice at low speed. Fit t(count), whose measured noise is time,
+        then invert the slope. Subtract the newest edge before summing to avoid
+        precision loss with large kernel timestamps/cumulative counts.
+        """
         edges = snapshot.edge_history
         if len(edges) < 2:
             return None
-        current = edges[-1]
-        selected: SignedPulseEdge | None = None
-        for candidate in reversed(edges[:-1]):
-            elapsed_ns = current.timestamp_ns - candidate.timestamp_ns
-            if elapsed_ns <= 0:
-                continue
-            if elapsed_ns > self._config.maximum_estimation_window_ns:
-                break
-            selected = candidate
-            pulse_delta = current.pulse_count - candidate.pulse_count
+        newest = edges[-1]
+        direction = newest.pulse_count - edges[-2].pulse_count
+        if abs(direction) != 1:
+            return None
+        selected = newest
+        n = 1
+        sum_x = sum_t = sum_xx = sum_xt = sum_tt = 0.0
+        for i in range(len(edges) - 2, max(-1, len(edges) - 129), -1):
+            candidate = edges[i]
+            newer = edges[i + 1]
+            span_ns = newest.timestamp_ns - candidate.timestamp_ns
             if (
-                abs(pulse_delta) >= self._config.minimum_estimation_pulses
-                and elapsed_ns >= self._config.minimum_estimation_window_ns
+                candidate.timestamp_ns < after_ns
+                or span_ns > self._config.maximum_estimation_window_ns
+                or newer.timestamp_ns - candidate.timestamp_ns
+                > self._config.maximum_sample_interval_ns
+                or newer.pulse_count - candidate.pulse_count != direction
             ):
                 break
-        if selected is None:
+            # Do not span the unknown turning point before the first edge in
+            # the new direction. Two new-direction edges establish speed.
+            if i > 0 and candidate.pulse_count - edges[i - 1].pulse_count != direction:
+                break
+            selected = candidate
+            x = float(candidate.pulse_count - newest.pulse_count)
+            t = (candidate.timestamp_ns - newest.timestamp_ns) / 1_000_000_000.0
+            n += 1
+            sum_x += x
+            sum_t += t
+            sum_xx += x * x
+            sum_xt += x * t
+            sum_tt += t * t
+            if (
+                abs(x) >= self._config.minimum_estimation_pulses
+                and span_ns >= self._config.minimum_estimation_window_ns
+            ):
+                break
+        if n < 2:
             return None
-        pulse_delta = current.pulse_count - selected.pulse_count
-        window_ns = current.timestamp_ns - selected.timestamp_ns
-        elapsed_s = window_ns / 1_000_000_000.0
-        velocity_mps = pulse_delta * step_distance_m / elapsed_s
-        pulse_coverage = abs(pulse_delta) / self._config.minimum_estimation_pulses
-        coverage = (
-            min(1.0, window_ns / self._config.minimum_estimation_window_ns)
-            if pulse_coverage >= 1.0
-            else max(
-                pulse_coverage,
-                window_ns / self._config.maximum_estimation_window_ns,
-            )
-        )
+        variance_x = sum_xx - sum_x * sum_x / n
+        slope = (sum_xt - sum_x * sum_t / n) / variance_x
+        if slope * direction <= 0.0:
+            return None
+        velocity = step_distance_m / slope
+        # Fit standard error, not the old one-pulse/tick quantization bound.
+        residual = max(0.0, sum_tt - sum_t * sum_t / n - slope * slope * variance_x)
+        slope_error = math.sqrt(residual / ((n - 2) * variance_x)) if n > 2 else 0.0
         return _WheelVelocityEstimate(
-            velocity_mps=float(velocity_mps),
-            pulse_delta=pulse_delta,
-            window_ns=window_ns,
-            uncertainty_mps=float(step_distance_m / elapsed_s),
-            trust=float(min(1.0, coverage)),
+            velocity_mps=velocity,
+            pulse_delta=newest.pulse_count - selected.pulse_count,
+            window_ns=newest.timestamp_ns - selected.timestamp_ns,
+            uncertainty_mps=abs(velocity * slope_error / slope),
+            trust=1.0,
             timebase="GPIO_EDGE_HISTORY",
             start_edge_timestamp_ns=selected.timestamp_ns,
-            end_edge_timestamp_ns=current.timestamp_ns,
+            end_edge_timestamp_ns=newest.timestamp_ns,
         )
 
-    def _physical_edge_stale(
-        self,
-        current: _CounterPair,
-        *,
-        captured_monotonic_ns: int,
-    ) -> bool | None:
-        """Use dual-wheel physical edge age when that timebase is available."""
-
-        latest_edges = (
-            current.left.edge_history[-1] if current.left.edge_history else None,
-            current.right.edge_history[-1] if current.right.edge_history else None,
-        )
-        if latest_edges == (None, None):
-            return None
-        return any(
-            edge is None
-            or captured_monotonic_ns - edge.timestamp_ns < 0
-            or captured_monotonic_ns - edge.timestamp_ns
-            > self._config.maximum_sample_interval_ns
-            for edge in latest_edges
-        )
-
-    def _physical_edge_warming_up(
-        self,
-        current: _CounterPair,
-        *,
-        captured_monotonic_ns: int,
+    @staticmethod
+    def _invalid_edge_timing(
+        current: SignedPulseCounterSnapshot,
+        previous: SignedPulseCounterSnapshot,
+        now_ns: int,
+        after_ns: int,
     ) -> bool:
-        """Identify the initial dual-wheel history fill after first motion."""
-
-        history_counts = (
-            len(current.left.edge_history),
-            len(current.right.edge_history),
-        )
-        filling = (
-            history_counts in ((1, 0), (0, 1))
-            or all(count > 0 for count in history_counts)
-            and any(count < 2 for count in history_counts)
-        )
-        latest_edges = (
-            current.left.edge_history[-1] if current.left.edge_history else None,
-            current.right.edge_history[-1] if current.right.edge_history else None,
-        )
-        return filling and all(
-            edge is None
-            or 0
-            <= captured_monotonic_ns - edge.timestamp_ns
-            <= self._config.maximum_sample_interval_ns
-            for edge in latest_edges
-        )
+        edges = current.edge_history
+        old_edges = previous.edge_history
+        if not edges:
+            return bool(after_ns or old_edges) or current.pulse_count != previous.pulse_count
+        latest = edges[-1]
+        if latest.timestamp_ns > now_ns:
+            return True
+        if old_edges and (
+            latest.timestamp_ns < old_edges[-1].timestamp_ns
+            or latest.timestamp_ns == old_edges[-1].timestamp_ns
+            and latest.pulse_count != old_edges[-1].pulse_count
+        ):
+            return True
+        return len(edges) > 1 and abs(latest.pulse_count - edges[-2].pulse_count) != 1
 
     @staticmethod
     def _instantaneous_interval_ns(
@@ -611,7 +528,6 @@ class NativeCounterEncoderBackend:
         if previous is None or previous_monotonic_ns is None:
             self._previous = current
             self._previous_monotonic_ns = context.monotonic_ns
-            self._reset_history(context, current)
             return self._rejected_reading(
                 context,
                 stale=False,
@@ -639,22 +555,24 @@ class NativeCounterEncoderBackend:
 
         elapsed_ns = context.monotonic_ns - previous_monotonic_ns
         timing_valid = elapsed_ns > 0 and current.running
-        physical_edge_stale = self._physical_edge_stale(
-            current,
-            captured_monotonic_ns=context.monotonic_ns,
-        )
-        physical_edge_warming_up = self._physical_edge_warming_up(
-            current,
-            captured_monotonic_ns=context.monotonic_ns,
-        )
-        stale = (
-            timing_valid
-            and not physical_edge_warming_up
-            and (
-                physical_edge_stale
-                if physical_edge_stale is not None
-                else elapsed_ns > self._config.maximum_sample_interval_ns
+        invalid_edges = any(
+            self._invalid_edge_timing(new, old, context.monotonic_ns, after_ns)
+            for new, old, after_ns in (
+                (current.left, previous.left, self._left_after_ns),
+                (current.right, previous.right, self._right_after_ns),
             )
+        )
+        # An old physical edge is stale even if callbacks/ticks keep arriving.
+        # Preserve fail-closed stale zero: no edges cannot prove a healthy stop.
+        latest = tuple(
+            snapshot.edge_history[-1] if snapshot.edge_history else None
+            for snapshot in (current.left, current.right)
+        )
+        stale = timing_valid and (
+            any(edge is not None and context.monotonic_ns - edge.timestamp_ns
+                > self._config.maximum_sample_interval_ns for edge in latest)
+            or elapsed_ns > self._config.maximum_sample_interval_ns
+            and any(edge is None for edge in latest)
         )
         instantaneous_left_mps: float | None = None
         instantaneous_right_mps: float | None = None
@@ -692,28 +610,26 @@ class NativeCounterEncoderBackend:
             rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
         else:
             rejection_code = self._diagnostic_rejection_code(previous, current)
+            if rejection_code is EncoderRejectionCode.NONE and invalid_edges:
+                timing_valid = False
+                rejection_code = EncoderRejectionCode.INVALID_EDGE_TIMING
 
         if rejection_code is EncoderRejectionCode.NONE:
+            left_estimate = self._estimate_wheel(
+                current.left, step_distance_m=self._config.left_step_distance_m,
+                after_ns=self._left_after_ns,
+            )
+            right_estimate = self._estimate_wheel(
+                current.right, step_distance_m=self._config.right_step_distance_m,
+                after_ns=self._right_after_ns,
+            )
             if left_estimate is None or right_estimate is None:
-                self._append_history(context, current)
-                left_estimate = self._estimate_wheel(
-                    side="left",
-                    step_distance_m=self._config.left_step_distance_m,
-                )
-                right_estimate = self._estimate_wheel(
-                    side="right",
-                    step_distance_m=self._config.right_step_distance_m,
-                )
-            if left_estimate is None or right_estimate is None:
-                if physical_edge_warming_up:
-                    rejection_code = EncoderRejectionCode.BASELINE
-                else:
-                    stale = True
-                    rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+                # Initial empty/single-edge evidence and the first edge after
+                # a reversal/gap supply RAW distance, but no velocity interval.
+                rejection_code = EncoderRejectionCode.BASELINE
             else:
                 rejection_code = self._velocity_rejection_code(
-                    left_estimate.velocity_mps,
-                    right_estimate.velocity_mps,
+                    left_estimate.velocity_mps, right_estimate.velocity_mps,
                 )
 
         computed_left_mps = (
@@ -748,8 +664,15 @@ class NativeCounterEncoderBackend:
             self._previous_monotonic_ns = context.monotonic_ns
 
         if rejection_code is not EncoderRejectionCode.NONE:
-            if elapsed_ns > 0:
-                self._reset_history(context, current)
+            if elapsed_ns > 0 and rejection_code is not EncoderRejectionCode.BASELINE:
+                self._left_after_ns = min(
+                    context.monotonic_ns,
+                    latest[0].timestamp_ns if latest[0] else context.monotonic_ns,
+                )
+                self._right_after_ns = min(
+                    context.monotonic_ns,
+                    latest[1].timestamp_ns if latest[1] else context.monotonic_ns,
+                )
             return self._rejected_reading(
                 context,
                 stale=stale,

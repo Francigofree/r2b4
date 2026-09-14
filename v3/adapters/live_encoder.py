@@ -55,6 +55,7 @@ class EncoderRejectionCode(str, Enum):
     NONE = "NONE"
     BASELINE = "BASELINE"
     NONINCREASING_TICK_TIME = "NONINCREASING_TICK_TIME"
+    INVALID_EDGE_TIMING = "INVALID_EDGE_TIMING"
     COUNTER_NOT_RUNNING = "COUNTER_NOT_RUNNING"
     SAMPLE_INTERVAL_EXCEEDED = "SAMPLE_INTERVAL_EXCEEDED"
     COUNTER_READ_ERROR_CHANGED = "COUNTER_READ_ERROR_CHANGED"
@@ -303,6 +304,7 @@ class NativeEncoderSource:
                 "ENCODER_COUNTER_NOT_RUNNING",
             )
         elif rejection_code in {
+            EncoderRejectionCode.INVALID_EDGE_TIMING,
             EncoderRejectionCode.COUNTER_READ_ERROR_CHANGED,
             EncoderRejectionCode.COUNTER_INVALID_ALERT_CHANGED,
             EncoderRejectionCode.COUNTER_READ_ERROR_AND_INVALID_ALERT_CHANGED,
