@@ -1166,9 +1166,10 @@ if abs(omega_rad_s) > 1.20 + 1e-12:
     )
     raise SystemExit(1)
 
-# TELEOP declares positive limits even when one target component is exactly 0.
+# Wheel values specify the nominal path. Leave angular authority for heading
+# correction, including straight motion; L9/L12 still enforce all limits.
 max_v_mps = max(abs(v_mps), 1e-6)
-max_omega_rad_s = max(abs(omega_rad_s), 1e-6)
+max_omega_rad_s = min(1.20, abs(omega_rad_s) + 0.60)
 print(
     f"{v_mps:.12g} {omega_rad_s:.12g} "
     f"{max_v_mps:.12g} {max_omega_rad_s:.12g} {track_width_m:.12g}"

@@ -96,7 +96,7 @@ def test_l10_applies_the_differential_drive_contract(v_mps, omega_rad_s):
 @pytest.mark.parametrize(
     ("side", "target_mps", "expected_output", "expected_floor"),
     (
-        ("left", 0.10, 0.19566, 0.10),
+        ("left", 0.10, 0.16377333333333333, 0.10),
         ("left", 0.225, 0.275425, 0.10),
         ("left", 0.70, 0.64, 0.10),
         ("left", -0.225, -0.273695, 0.12),
@@ -147,8 +147,8 @@ def test_l11_pi_sequence_has_stable_native_characterization():
 
     assert tuple(value for pair in observed for value in pair) == pytest.approx(
         (
-            0.24957857142857146,
-            -0.26150285714285715,
+            0.29957857142857147,
+            -0.31150285714285714,
             0.2873185714285715,
             -0.3017588571428571,
             0.28001057142857144,

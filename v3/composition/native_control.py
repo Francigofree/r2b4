@@ -33,7 +33,11 @@ from v3.layers.l6_navigation import (
     TrajectoryNavigator,
 )
 from v3.layers.l7_motion_selection import select_motion
-from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
+from v3.layers.l8_motion_realization import (
+    MotionRealizationConfig,
+    MotionRealizationStateCheckpoint,
+    MotionRealizer,
+)
 from v3.layers.l9_operational_constraints import (
     OperationalConstraintLayer,
     OperationalConstraintsConfig,
@@ -269,8 +273,8 @@ class NativeControlCompositionConfig:
     chassis_control: ChassisControlConfig = ChassisControlConfig(track_width_m=0.3557)
     wheel_pi: WheelPiConfig = WheelPiConfig(
         kp=0.25,
-        ki=0.10,
-        integrator_limit=0.5,
+        ki=0.60,
+        integrator_limit=0.75,
         max_normalized_output=1.0,
     )
     lidar_safety: LidarSafetyConfig | None = None
@@ -321,6 +325,7 @@ class NativeControlStateCheckpoint:
     operational_constraints: OperationalConstraintsStateCheckpoint
     actuator_control: WheelActuatorStateCheckpoint
     final_safety: FinalSafetyStateCheckpoint
+    motion_realization: MotionRealizationStateCheckpoint = MotionRealizationStateCheckpoint()
 
 
 class NativeControlComposition:
@@ -337,6 +342,7 @@ class NativeControlComposition:
         "_estimator",
         "_final_safety",
         "_mission",
+        "_motion_realization",
         "_navigation",
         "_operational_constraints",
         "_world_model",
@@ -357,6 +363,7 @@ class NativeControlComposition:
         world_model = ShadowWorldModel(config.world_model)
         mission = MissionManager(config.mission)
         navigation = TrajectoryNavigator(config.navigation)
+        motion_realization = MotionRealizer(config.motion_realization)
         operational_constraints = OperationalConstraintLayer(
             config.operational_constraints
         )
@@ -370,6 +377,7 @@ class NativeControlComposition:
         self._world_model = world_model
         self._mission = mission
         self._navigation = navigation
+        self._motion_realization = motion_realization
         self._operational_constraints = operational_constraints
         self._actuator_control = actuator_control
         self._final_safety = final_safety
@@ -382,7 +390,7 @@ class NativeControlComposition:
                 command_mission=mission.evaluate,
                 navigation=navigation.evaluate,
                 motion_selection=select_motion,
-                motion_realization=MotionRealizer(config.motion_realization).evaluate,
+                motion_realization=motion_realization.evaluate,
                 constraints=operational_constraints.evaluate,
                 chassis_control=DifferentialDriveKinematics(config.chassis_control),
                 actuator_control=actuator_control,
@@ -410,6 +418,7 @@ class NativeControlComposition:
             self._operational_constraints.checkpoint(),
             self._actuator_control.checkpoint(),
             self._final_safety.checkpoint(),
+            self._motion_realization.checkpoint(),
         )
 
     def restore(self, checkpoint: NativeControlStateCheckpoint) -> None:
@@ -422,6 +431,7 @@ class NativeControlComposition:
         self._world_model.restore(checkpoint.world_model)
         self._mission.restore(checkpoint.mission)
         self._navigation.restore(checkpoint.navigation)
+        self._motion_realization.restore(checkpoint.motion_realization)
         self._operational_constraints.restore(checkpoint.operational_constraints)
         self._actuator_control.restore(checkpoint.actuator_control)
         self._final_safety.restore(checkpoint.final_safety)

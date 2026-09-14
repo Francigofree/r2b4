@@ -262,6 +262,7 @@ def test_explore_command_uses_the_single_native_l1_l12_trajectory_path():
     assert layers["L7"].kind is MotionObjectiveKind.TRACK_TRAJECTORY
     assert isinstance(layers["L8"], MotionIntent)
     assert layers["L8"].requested_v_mps == layers["L7"].trajectory.v_mps
-    assert layers["L8"].requested_omega_rad_s == layers["L7"].trajectory.omega_rad_s
+    # The stationary plant has not attained the selected turn rate yet.
+    assert layers["L8"].requested_omega_rad_s < layers["L7"].trajectory.omega_rad_s < 0.0
     assert results[-1].final_actuation.safety_decision is SafetyDecision.ALLOW
     assert writer.commands == [result.final_actuation for result in results]

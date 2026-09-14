@@ -116,9 +116,12 @@ def test_explore_and_navigate_share_the_same_generic_trajectory_contract(
     assert objective.trajectory == expected
     assert objective.trajectory.candidate_id == expected_candidate_id
 
-    realized = MotionRealizer().evaluate(objective, estimate, world)
-    assert realized.requested_v_mps == expected.v_mps
-    assert realized.requested_omega_rad_s == expected.omega_rad_s
+    # On the path, with its nominal twist already attained, feedback vanishes.
+    tracking_estimate = replace(estimate, v_mps=expected.v_mps,
+                                omega_rad_s=expected.omega_rad_s)
+    realized = MotionRealizer().evaluate(objective, tracking_estimate, world)
+    assert realized.requested_v_mps == pytest.approx(expected.v_mps)
+    assert realized.requested_omega_rad_s == pytest.approx(expected.omega_rad_s)
 
 
 def test_footprint_collision_is_scored_in_l6_and_excluded_only_by_l7():

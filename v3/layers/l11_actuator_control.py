@@ -84,7 +84,11 @@ class WheelSpeedCurve:
     def interpolate(self, speed_mps: float) -> float:
         speed = abs(_finite_float(speed_mps, "target_mps"))
         if speed <= self.points[0].speed_mps:
-            return float(self.points[0].normalized_output)
+            # The map is an approximate feed-forward, including below its
+            # first measured point. Do not apply 0.15 m/s effort to a crawl.
+            first = self.points[0]
+            floor = min(self.maintenance_output, first.normalized_output)
+            return float(floor + (first.normalized_output - floor) * speed / first.speed_mps)
         if speed >= self.points[-1].speed_mps:
             return float(self.points[-1].normalized_output)
         for lower, upper in zip(self.points, self.points[1:]):
@@ -173,6 +177,7 @@ class WheelPiConfig:
     ki: float
     integrator_limit: float
     max_normalized_output: float
+    max_control_gap_ns: int = 250_000_000
 
     def __post_init__(self) -> None:
         for name in ("kp", "ki", "integrator_limit", "max_normalized_output"):
@@ -181,6 +186,8 @@ class WheelPiConfig:
                 raise ValueError(f"{name} cannot be negative")
         if not 0.0 < self.max_normalized_output <= 1.0:
             raise ValueError("max_normalized_output must be in (0, 1]")
+        if type(self.max_control_gap_ns) is not int or self.max_control_gap_ns <= 0:
+            raise ValueError("max_control_gap_ns must be a positive integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,31 +196,34 @@ class WheelActuatorStateCheckpoint:
     left_integral: float
     right_integral: float
     transient_stale_ticks: int = 0
+    left_reference_mps: float = 0.0
+    right_reference_mps: float = 0.0
 
 
 class _PIState:
-    __slots__ = ("_integral", "_config")
+    __slots__ = ("_integral", "_config", "_reference_mps")
 
     def __init__(self, config: WheelPiConfig) -> None:
         self._config = config
         self._integral = 0.0
+        self._reference_mps = 0.0
 
     def reset(self) -> None:
         self._integral = 0.0
+        self._reference_mps = 0.0
 
-    def update(self, error: float, dt_s: float) -> tuple[float, float]:
-        if dt_s <= 0.0:
-            return 0.0, 0.0
-        if abs(error) > 0.006 and self._integral * error < 0.0:
-            self._integral = 0.0
-        self._integral += error * dt_s
+    def update(
+        self, error: float, dt_s: float, feedforward: float, lower: float, upper: float
+    ) -> tuple[float, float]:
+        proportional = self._config.kp * error
         limit = float(self._config.integrator_limit)
-        if limit > 0.0:
-            self._integral = max(-limit, min(limit, self._integral))
-        return (
-            float(self._config.kp * error),
-            float(self._config.ki * self._integral),
-        )
+        candidate = max(-limit, min(limit, self._integral + error * dt_s))
+        raw = feedforward + proportional + self._config.ki * candidate
+        # Keep learned load compensation through noisy error zero crossings.
+        # Integrate only toward realizable effort, or back out of saturation.
+        if not ((raw > upper and error > 0.0) or (raw < lower and error < 0.0)):
+            self._integral = candidate
+        return float(proportional), float(self._config.ki * self._integral)
 
 
 class WheelActuatorController:
@@ -241,12 +251,15 @@ class WheelActuatorController:
             self._left_pi._integral,
             self._right_pi._integral,
             self._transient_stale_ticks,
+            self._left_pi._reference_mps,
+            self._right_pi._reference_mps,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
         if not isinstance(checkpoint, WheelActuatorStateCheckpoint):
             raise TypeError("checkpoint must be WheelActuatorStateCheckpoint")
-        for value in (checkpoint.left_integral, checkpoint.right_integral):
+        for value in (checkpoint.left_integral, checkpoint.right_integral,
+                      checkpoint.left_reference_mps, checkpoint.right_reference_mps):
             if not math.isfinite(value):
                 raise ValueError("wheel actuator checkpoint integral must be finite")
         if type(checkpoint.transient_stale_ticks) is not int or not 0 <= checkpoint.transient_stale_ticks <= 5:
@@ -254,6 +267,8 @@ class WheelActuatorController:
         self._last_context = checkpoint.last_context
         self._left_pi._integral = checkpoint.left_integral
         self._right_pi._integral = checkpoint.right_integral
+        self._left_pi._reference_mps = checkpoint.left_reference_mps
+        self._right_pi._reference_mps = checkpoint.right_reference_mps
         self._transient_stale_ticks = checkpoint.transient_stale_ticks
 
     def __call__(
@@ -265,6 +280,9 @@ class WheelActuatorController:
             raise ValueError("L11 inputs must use the same tick context")
         restarting_from_zero = self._last_context is None
         dt_s = self._control_dt_s(wheels.context)
+        if dt_s == 0.0:
+            self._left_pi.reset()
+            self._right_pi.reset()
         if abs(wheels.left_mps) <= 1e-12 and abs(wheels.right_mps) <= 1e-12:
             self._left_pi.reset()
             self._right_pi.reset()
@@ -317,7 +335,8 @@ class WheelActuatorController:
             return 0.0
         if context.tick_id <= previous.tick_id or context.monotonic_ns <= previous.monotonic_ns:
             raise ValueError("L11 tick order must increase monotonically")
-        if context.tick_id != previous.tick_id + 1:
+        if (context.tick_id != previous.tick_id + 1
+                or context.monotonic_ns - previous.monotonic_ns > self._config.max_control_gap_ns):
             # TickEngine owns global ordering.  A gap here means an upstream
             # layer fault skipped L11; re-anchor without integrating stale PI
             # error so the next valid tick can recover deterministically.
@@ -391,20 +410,17 @@ class WheelActuatorController:
         if abs(reference_mps) <= 1e-9:
             pi.reset()
             return 0.0, False
-        feedforward, maintenance_floor = self._speed_map.lookup(side, reference_mps)
-        error = float(reference_mps - measured_mps)
-        proportional, integral = pi.update(error, dt_s)
-        raw_unclamped = feedforward + proportional + integral
-        maximum = float(self._config.max_normalized_output)
-        raw = max(-maximum, min(maximum, raw_unclamped))
-        saturated = abs(raw_unclamped) > maximum + 1e-12
-        if reference_mps * raw < 0.0:
+        if reference_mps * pi._reference_mps < 0.0:
             pi.reset()
-            return 0.0, saturated
-        floor = min(maximum, abs(maintenance_floor))
-        residual = proportional + integral
-        if abs(raw) < floor and residual * reference_mps >= -1e-12:
-            raw = math.copysign(floor, reference_mps)
+        pi._reference_mps = reference_mps
+        feedforward, _ = self._speed_map.lookup(side, reference_mps)
+        error = float(reference_mps - measured_mps)
+        maximum = float(self._config.max_normalized_output)
+        lower, upper = (0.0, maximum) if reference_mps > 0.0 else (-maximum, 0.0)
+        proportional, integral = pi.update(error, dt_s, feedforward, lower, upper)
+        raw_unclamped = feedforward + proportional + integral
+        raw = max(lower, min(upper, raw_unclamped))
+        saturated = abs(raw_unclamped - raw) > 1e-12
         return float(raw), saturated
 
 
