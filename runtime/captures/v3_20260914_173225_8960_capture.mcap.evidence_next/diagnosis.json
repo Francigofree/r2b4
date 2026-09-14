@@ -1,0 +1,119 @@
+{
+  "behavior_status": "DEGRADED",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": true,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [],
+    "message_stream_sha256": "e141aa39deb32883c2cb21cf3727284a7e93eb1220d773bc62fdc12fb234c084",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 1874,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 1874,
+      "first_lost_sequence": null,
+      "high_water_mark": 2,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 1874,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": true,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 702,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [],
+    "raw_lidar_truncated_count": 0,
+    "session_start_short_pre_window": false,
+    "terminal_short_post_window": false
+  },
+  "capture_status": "PASS",
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "first_divergence": null,
+  "first_live_incident": null,
+  "incident_count": 128,
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 32.31320663572834,
+      "last_trace": 1.322901703637579,
+      "max_trace": 1.322901703637579,
+      "sample_count": 993
+    },
+    "motion": {
+      "behavior_status": "DEGRADED",
+      "constrained_to_zero_tick_count": 385,
+      "estimated_path_length_m": 1.5330227199529975,
+      "requested_motion_tick_count": 815
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 4814516121895,
+        "progress_span": 0.0,
+        "tick_id": 992,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 815,
+      "FAULT": 0,
+      "STOP": 178,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 112,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 1583,
+      "l2_rejection_count": 1583,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1583
+      }
+    },
+    "ticks": {
+      "count": 993,
+      "first_monotonic_ns": 4794661946170,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 4814516121895,
+      "last_tick_id": 992
+    },
+    "timing": {
+      "max_ms": 41.686767,
+      "p50_ms": 19.9996,
+      "p95_ms": 21.226646,
+      "p99_ms": 26.181011,
+      "sample_count": 992
+    }
+  },
+  "physical_root_cause": {
+    "cause": null,
+    "evidence": null,
+    "reason": "NO_LIVE_INCIDENT_IN_SCOPE",
+    "status": "NOT_PROVEN"
+  },
+  "replay_error": null,
+  "replay_requested": true,
+  "replay_status": "MATCH",
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "motion-blocked-l9-591"
+    ],
+    "kind": "MOTION_BLOCKED",
+    "layer": "L9",
+    "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+    "tick_id": 591
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "FINDING",
+  "structure_valid": true
+}
