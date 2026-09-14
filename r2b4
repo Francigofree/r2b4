@@ -33,45 +33,64 @@ RUNTIME_PID_FILE="$RUNTIME_DIR/.r2b4_runtime_pid"
 COMMAND_PID_FILE="$RUNTIME_DIR/.r2b4_command_pid"
 CAPTURE_PATH_FILE="$RUNTIME_DIR/.r2b4_capture_path"
 CAPTURE_USED_FILE="$RUNTIME_DIR/.r2b4_capture_triggered"
+CAPTURE_MODE_FILE="$RUNTIME_DIR/.r2b4_capture_mode"
 MOVEMENT_CAPTURE_FILE="$RUNTIME_DIR/.r2b4_movement_capture"
+
+# Launcher selector. It is removed from argv before the legacy command parser
+# sees the remaining arguments, so all old command forms keep their meaning.
+CAPTURE_MODE="alap"
+CAPTURE_MODE_EXPLICIT=0
+CLEAN_ARGS=()
 
 mkdir -p "$RUNTIME_DIR" "$CAPTURE_DIR"
 
 usage() {
-cat <<'EOF'
+cat <<'USAGE'
 Usage:
-  r2b4 runtime start
+  r2b4 runtime start [c alap|full|nincs]
   r2b4 runtime stop
   r2b4 runtime status
   r2b4 runtime diag
 
-  r2b4 capture start
+  r2b4 capture start [c alap|full|nincs]
   r2b4 capture stop
   r2b4 capture status
 
-  r2b4 forward start [speed_mps] [nocapture]
-  r2b4 mozog start <left_mps> <right_mps> [nocapture]
-  r2b4 roomcruise start [nocapture]
+  r2b4 forward start [speed_mps] [nocapture] [c alap|full|nincs]
+  r2b4 mozog start <left_mps> <right_mps> [nocapture] [c alap|full|nincs]
+  r2b4 roomcruise start [nocapture] [c alap|full|nincs]
 
   r2b4 stop
   r2b4 shutdown
-  r2b4 proba
+  r2b4 proba [c alap|full|nincs]
 
 Defaults:
   forward speed: 0.15 m/s
   mozog wheel speeds: signed m/s, each within [-0.50, 0.50]
-  movement capture: ON
+  capture selector: alap
 
-Capture uses the native MCAP bounded triggered ring:
-  pre-event 5 s, post-event 2 s, 64 MiB ring budget.
-  Final authority files are written under runtime/captures/*.mcap.
-  Test Hub V2 evidence is written beside each finalized MCAP as *.evidence/.
+Capture selectors:
+  c alap   Native bounded triggered MCAP, explicit 8 s pre + 2 s post.
+           This is the default when no selector is supplied.
+  c full   Native append-only MCAP from the first capture-observable runtime
+           record until native runtime shutdown/finalization.
+  c nincs  Capture infrastructure OFF: no --capture-path is passed to the
+           native runtime. Intended for clean performance comparison.
+
+Final authority files are written under runtime/captures/*.mcap.
+Every finalized launcher-managed capture is analyzed through the integrated
+Test Hub entry point in its default mode:
+  python3 -m v3.test_hub run <capture.mcap>
+The current Test Hub generation keeps canonical V2 diagnosis/replay and adds
+the Next agent view. Default evidence is written as *.mcap.evidence_next/.
+The Test Hub waits for MCAP finalization/integrity before it starts. If the
+selected mode produces no capture, the watcher times out after runtime exit
+and still invokes Test Hub once; the missing capture then fails explicitly.
 
 Starting a movement or capture automatically starts the runtime if needed.
 "stop" cancels the command producer (including proba) and returns to IDLE.
 "shutdown", "runtime stop" and Ctrl+C stop the runtime as well.
-After each launcher-managed runtime exits, the runtime has already finalized
-the MCAP and run Test Hub V2. Runtime logs use unique paths under /tmp.
+Runtime logs use unique paths under /tmp.
 
 "proba" runs ten slow phases in the foreground, with 5 s in IDLE between them:
   forward/reverse: 5 s each, ramping from 0.15 to 0.25 m/s;
@@ -81,25 +100,64 @@ the MCAP and run Test Hub V2. Runtime logs use unique paths under /tmp.
   right/left turns about the stationary right wheel: 180 degrees each.
 Angles use runtime yaw feedback; safety or feedback failure aborts the test.
 The final left turn moves the left wheel backwards, with the right target zero.
-Capture remains the native bounded event window, not a full proba recording.
 
-"capture start" triggers one bounded event capture.
-"capture stop" waits for its automatic finalization and reports the file.
+"capture start" preserves the native one-shot triggered behavior in alap mode.
+In full mode capture is already continuous; in nincs mode capture is OFF.
+"capture stop" waits for bounded finalization in alap. A full capture is
+finalized by runtime stop/shutdown because it covers the complete session.
 
-The native worker is one-shot per runtime. If a new captured movement needs
-a fresh slot, the launcher re-arms it by the existing safe runtime restart
-(STOP -> 5 s -> new runtime).
+The native triggered worker is one-shot per runtime. If a new alap-captured
+movement needs a fresh slot, the launcher re-arms it by the existing safe
+runtime restart (STOP -> 5 s -> new runtime).
 
 "mozog" accepts left/right wheel-speed targets and converts them to the
 canonical TELEOP body target using conf/fizika.json track width. Existing
 L5-L12 motion, operational and safety constraints remain authoritative.
 
-"nocapture" skips movement capture arming. Native automatic FAULT capture
-remains part of the runtime's existing fail evidence.
+Legacy "nocapture" is retained unchanged: it skips movement-trigger arming in
+alap mode. It does NOT mean capture infrastructure OFF and automatic native
+FAULT evidence remains possible. Use "c nincs" for true capture-off operation.
 
 Global Ctrl+C panic at the shell prompt:
   source /home/alba/project_r2b4/r2b4
-EOF
+USAGE
+}
+
+_parse_capture_selector() {
+    local -a input=("$@")
+    local i=0 token mode seen=0
+    CLEAN_ARGS=()
+    CAPTURE_MODE="alap"
+    CAPTURE_MODE_EXPLICIT=0
+
+    while (( i < ${#input[@]} )); do
+        token="${input[$i]}"
+        if [[ "$token" == "c" ]]; then
+            (( i + 1 < ${#input[@]} )) || {
+                echo "ERROR: 'c' requires one of: alap, full, nincs." >&2
+                return 2
+            }
+            (( seen == 0 )) || {
+                echo "ERROR: capture selector may be specified only once." >&2
+                return 2
+            }
+            mode="${input[$((i + 1))]}"
+            case "$mode" in
+                alap|full|nincs) ;;
+                *)
+                    echo "ERROR: invalid capture mode '$mode'; use alap, full or nincs." >&2
+                    return 2
+                    ;;
+            esac
+            CAPTURE_MODE="$mode"
+            CAPTURE_MODE_EXPLICIT=1
+            seen=1
+            i=$((i + 2))
+            continue
+        fi
+        CLEAN_ARGS+=("$token")
+        i=$((i + 1))
+    done
 }
 
 _pid_has_arg() {
@@ -149,6 +207,26 @@ _runtime_pid() { _get_pid "$RUNTIME_PID_FILE" "v3_process_runtime.py"; }
 _command_pid() {
     _get_pid "$COMMAND_PID_FILE" "r2b4-proba" ||
         _get_pid "$COMMAND_PID_FILE" "v3.control_cli"
+}
+
+_current_capture_mode() {
+    local mode=""
+    if [[ -r "$CAPTURE_MODE_FILE" ]]; then
+        read -r mode <"$CAPTURE_MODE_FILE" || true
+        case "$mode" in alap|full|nincs) echo "$mode"; return 0;; esac
+    fi
+    # A running pre-selector launcher could only have used triggered capture.
+    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] && { echo "alap"; return 0; }
+    return 1
+}
+
+_capture_mode_label() {
+    case "$1" in
+        alap) echo "ALAP 8+2 triggered" ;;
+        full) echo "FULL append-only" ;;
+        nincs) echo "OFF" ;;
+        *) echo "UNKNOWN" ;;
+    esac
 }
 
 _wait_gone() {
@@ -248,6 +326,12 @@ sys.exit(0 if ok else 1)
 '
 }
 
+_show_capture_mode() {
+    local mode=""
+    mode="$(_current_capture_mode 2>/dev/null || true)"
+    [[ -n "$mode" ]] && echo "capture: $(_capture_mode_label "$mode")"
+}
+
 _show_status() {
     local s="" pid=""
     pid="$(_runtime_pid 2>/dev/null || true)"
@@ -255,6 +339,7 @@ _show_status() {
 
     if [[ -z "$s" ]]; then
         [[ -n "$pid" ]] && echo "runtime: RUNNING (status unavailable/booting)" || echo "runtime: STOPPED"
+        _show_capture_mode
         return
     fi
 
@@ -276,6 +361,7 @@ else:
     if r.get("fault_layer"):
         print(f"fault:   {r['fault_layer']}")
 PY
+    _show_capture_mode
 }
 
 _show_diag() {
@@ -285,6 +371,7 @@ _show_diag() {
 
     if [[ -z "$s" ]]; then
         [[ -n "$pid" ]] && echo "R2B4 runtime: RUNNING (status unavailable/booting)" || echo "R2B4 runtime: STOPPED"
+        _show_capture_mode
         [[ -s "$RUNTIME_LOG" ]] && { echo; echo "Last runtime log:"; tail -n 20 "$RUNTIME_LOG"; }
         return
     fi
@@ -326,6 +413,7 @@ else:
     if d.get("error"):
         print(f"Error:        {d.get('error_type','ERROR')}: {d.get('error')}")
 PY
+    _show_capture_mode
 
     [[ "$s" != *'"state": "RUNNING"'* && -s "$RUNTIME_LOG" ]] && {
         echo
@@ -343,36 +431,150 @@ _current_capture() {
 }
 
 _capture_used() {
+    local mode="" p=""
+    mode="$(_current_capture_mode 2>/dev/null || true)"
+    [[ "$mode" == "alap" ]] || return 1
     [[ -e "$CAPTURE_USED_FILE" ]] && return 0
-    local p=""
     p="$(_current_capture)"
     [[ -n "$p" && -f "$p" ]]
 }
 
-# The detached shell only waits for the native process. The native runtime
-# owns MCAP finalization and Test Hub V2 evidence generation.
+_capture_ready() {
+    local path="$1"
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    CAPTURE_FILE="$path" python3 - <<'PY' >/dev/null 2>&1
+import os
+from pathlib import Path
+from v3.mcap_reader import EVENT_TOPIC, McapReader, McapReadError
+p=Path(os.environ["CAPTURE_FILE"])
+try:
+    reader=McapReader(p)
+    reader.capture_integrity()
+    pair=reader.last_json(EVENT_TOPIC)
+    final=pair[1] if pair else {}
+except (OSError, ValueError, McapReadError):
+    raise SystemExit(1)
+raise SystemExit(0 if final.get("complete") is True else 1)
+PY
+}
+
+_test_hub_evidence_dir() {
+    echo "$1.evidence_next"
+}
+
+_run_test_hub_default() {
+    local capture="$1" evidence
+    evidence="$(_test_hub_evidence_dir "$capture")"
+    echo "TEST_HUB_AUTORUN START capture=${capture#"$ROOT"/}"
+    # Intentionally use the integrated stable entry point and its defaults:
+    # Next generation, 5 Hz agent view, incident replay, canonical V2 backend.
+    local rc=0
+    python3 -m v3.test_hub run "$capture" || rc=$?
+    if (( rc == 0 )); then
+        echo "TEST_HUB_AUTORUN PASS evidence=${evidence#"$ROOT"/}"
+        return 0
+    fi
+    echo "TEST_HUB_AUTORUN FAIL rc=$rc capture=${capture#"$ROOT"/}" >&2
+    return "$rc"
+}
+
+_test_hub_supervisor() {
+    local capture="$1" runtime_pid="$2" mode="$3" i
+
+    # Triggered captures can become immutable before the resident runtime exits,
+    # so analyze them as soon as integrity/finalization is observable.
+    if [[ "$mode" == "alap" ]]; then
+        while _pid_has_arg "$runtime_pid" "v3_process_runtime.py"; do
+            if _capture_ready "$capture"; then
+                _run_test_hub_default "$capture" || true
+                return 0
+            fi
+            sleep 0.20
+        done
+    else
+        # FULL is final only at runtime shutdown. NINCS deliberately has no
+        # capture producer; sleeping here keeps capture-off overhead negligible.
+        while _pid_has_arg "$runtime_pid" "v3_process_runtime.py"; do
+            sleep 0.50
+        done
+    fi
+
+    # Native process shutdown includes capture_session.finalize(). Give the
+    # final file a bounded visibility/integrity window before declaring timeout.
+    for i in {1..100}; do
+        if _capture_ready "$capture"; then
+            _run_test_hub_default "$capture" || true
+            return 0
+        fi
+        sleep 0.10
+    done
+
+    echo "TEST_HUB_AUTORUN capture wait timeout: ${capture#"$ROOT"/}" >&2
+    # Required invariant: attempt the new Test Hub once even when no capture
+    # exists (notably c nincs). It will return a clear missing-capture ERROR.
+    _run_test_hub_default "$capture" || true
+}
+
+# Detached supervisor: owns native process lifetime plus exactly one Test Hub
+# autorun for the launcher-managed session.
 _runtime_session() {
-    local capture="$1" pid evidence
-    python3 v3_process_runtime.py \
-        --approval native-resident-v3 \
-        --capture-path "${capture#"$ROOT"/}" \
-        --capture-mode triggered &
+    local capture="$1" mode="$2" pid hub_pid evidence
+    local -a command=(python3 v3_process_runtime.py --approval native-resident-v3)
+
+    case "$mode" in
+        alap)
+            command+=(
+                --capture-path "${capture#"$ROOT"/}"
+                --capture-mode triggered
+                --capture-pre-event-ns 8000000000
+                --capture-post-event-ns 2000000000
+                --capture-max-ticks 768
+                --capture-max-raw-scans 128
+            )
+            ;;
+        full)
+            command+=(
+                --capture-path "${capture#"$ROOT"/}"
+                --capture-mode append_only
+                # Effectively session-unbounded for practical robot runs while
+                # retaining the runtime's required positive hard-bound contract.
+                --capture-max-session-records 2147483647
+            )
+            ;;
+        nincs)
+            # True capture OFF: deliberately no --capture-path and therefore no
+            # McapCaptureSession / ObservationHub capture subscription/writer.
+            ;;
+        *)
+            echo "ERROR: internal invalid capture mode: $mode" >&2
+            return 2
+            ;;
+    esac
+
+    "${command[@]}" &
     pid=$!
     echo "$pid" >"$RUNTIME_PID_FILE"
     chmod 600 "$RUNTIME_PID_FILE" 2>/dev/null || true
+
+    _test_hub_supervisor "$capture" "$pid" "$mode" &
+    hub_pid=$!
+
     trap 'kill -TERM "$pid" 2>/dev/null || true' INT TERM
     wait "$pid"
     # A signal can interrupt wait before the native shutdown/finalizer finishes.
     while _pid_has_arg "$pid" "v3_process_runtime.py"; do wait "$pid"; done
     trap '' INT TERM
 
+    # Keep this detached session alive until the one Test Hub autorun finishes.
+    wait "$hub_pid" 2>/dev/null || true
+
+    evidence="$(_test_hub_evidence_dir "$capture")"
     if [[ -f "$capture" ]]; then
-        evidence="${capture%.mcap}.evidence"
         echo "capture: finalized -> ${capture#"$ROOT"/}"
         if [[ -d "$evidence" ]]; then
-            echo "test hub v2: results -> ${evidence#"$ROOT"/}"
+            echo "test hub: results -> ${evidence#"$ROOT"/}"
         else
-            echo "WARNING: finalized MCAP exists but Test Hub V2 evidence directory is missing: $evidence" >&2
+            echo "WARNING: finalized MCAP exists but Test Hub evidence directory is missing: $evidence" >&2
         fi
     else
         echo "capture: no finalized MCAP for this runtime session"
@@ -380,7 +582,8 @@ _runtime_session() {
 }
 
 _runtime_start() {
-    local old="" fresh status_baseline="" pid="" supervisor i
+    local mode="${1:-$CAPTURE_MODE}" old="" fresh status_baseline="" pid="" supervisor i
+    case "$mode" in alap|full|nincs) ;; *) echo "ERROR: invalid capture mode: $mode" >&2; return 2;; esac
     old="$(_runtime_pid 2>/dev/null || true)"
 
     if [[ -n "$old" ]]; then
@@ -404,13 +607,14 @@ _runtime_start() {
 
     fresh="$(_new_capture_path)"
     echo "$fresh" >"$CAPTURE_PATH_FILE"
-    chmod 600 "$CAPTURE_PATH_FILE" 2>/dev/null || true
+    echo "$mode" >"$CAPTURE_MODE_FILE"
+    chmod 600 "$CAPTURE_PATH_FILE" "$CAPTURE_MODE_FILE" 2>/dev/null || true
     rm -f "$CAPTURE_USED_FILE" "$MOVEMENT_CAPTURE_FILE"
 
     RUNTIME_LOG="$(mktemp /tmp/r2b4-runtime.XXXXXXXX.log)" || return 1
     echo "$RUNTIME_LOG" >"$RUNTIME_DIR/.r2b4_runtime_log"
     rm -f "$RUNTIME_PID_FILE"
-    nohup bash "$ROOT/r2b4" __runtime-session "$fresh" \
+    nohup bash "$ROOT/r2b4" __runtime-session "$fresh" "$mode" \
         </dev/null >"$RUNTIME_LOG" 2>&1 &
     supervisor=$!
     for i in {1..40}; do
@@ -435,11 +639,40 @@ _runtime_start() {
     fi
 
     echo "runtime: STARTED (PID $pid)"
-    echo "capture: ARMED (MCAP bounded ring)"
-    echo "capture file: ${fresh#"$ROOT"/}"
+    case "$mode" in
+        alap)
+            echo "capture: ARMED (ALAP, native MCAP 8+2 bounded ring)"
+            echo "capture file: ${fresh#"$ROOT"/}"
+            ;;
+        full)
+            echo "capture: RECORDING (FULL append-only until runtime shutdown)"
+            echo "capture file: ${fresh#"$ROOT"/}"
+            ;;
+        nincs)
+            echo "capture: OFF (no native capture consumer/writer)"
+            echo "test hub: will attempt once after shutdown and report missing capture"
+            ;;
+    esac
     echo "runtime log: $RUNTIME_LOG"
     [[ "${R2B4_CTRL_C_HOOK:-0}" != "1" ]] && \
         echo "note: global Ctrl+C panic hook inactive; source $ROOT/r2b4"
+    return 0
+}
+
+_wait_triggered_capture_tail() {
+    local mode="" path="" i
+    mode="$(_current_capture_mode 2>/dev/null || true)"
+    [[ "$mode" == "alap" ]] || return 0
+    path="$(_current_capture)"
+    [[ -n "$path" && -e "$CAPTURE_USED_FILE" ]] || return 0
+    _capture_ready "$path" && return 0
+
+    echo "capture: waiting for 2 s post-event tail/finalization"
+    for i in {1..70}; do
+        _capture_ready "$path" && return 0
+        sleep 0.05
+    done
+    echo "WARNING: bounded capture was not finalized before runtime shutdown; native finalizer will finish it." >&2
     return 0
 }
 
@@ -451,17 +684,33 @@ _runtime_stop() {
         echo "runtime: already STOPPED"
         return "$result"
     fi
+
+    # In ALAP mode, if nothing has triggered the one-shot capture yet, make
+    # shutdown itself the event. Then keep the already-stopped robot runtime
+    # alive long enough for the requested +2 s tail before SIGTERM.
+    if [[ "$(_current_capture_mode 2>/dev/null || true)" == "alap" ]]; then
+        if ! _capture_used; then
+            _trigger_current_capture "runtime-shutdown" || true
+        fi
+        _wait_triggered_capture_tail
+    fi
+
     kill -TERM "$pid" 2>/dev/null || true
     for i in {1..200}; do
         if ! _pid_has_arg "$pid" "v3_process_runtime.py"; then
             rm -f "$RUNTIME_PID_FILE"
             echo "runtime: STOPPED (PID $pid)"
-            local capture evidence
+            local capture evidence mode
             capture="$(_current_capture)"
+            mode="$(_current_capture_mode 2>/dev/null || true)"
+            evidence="$(_test_hub_evidence_dir "$capture")"
             if [[ -n "$capture" && -f "$capture" ]]; then
-                evidence="${capture%.mcap}.evidence"
                 echo "capture: ${capture#"$ROOT"/}"
-                [[ -d "$evidence" ]] && echo "test hub v2: ${evidence#"$ROOT"/}"
+                [[ -d "$evidence" ]] && echo "test hub: ${evidence#"$ROOT"/}" || \
+                    echo "test hub: finalization/analysis continuing in runtime log"
+            elif [[ "$mode" == "nincs" ]]; then
+                echo "capture: OFF"
+                echo "test hub: missing-capture check continuing in runtime log"
             else
                 echo "capture: no finalized MCAP for this runtime session"
             fi
@@ -475,8 +724,16 @@ _runtime_stop() {
 }
 
 _ensure_runtime() {
-    [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] && return 0
-    _runtime_start
+    local requested="${1:-$CAPTURE_MODE}" pid="" current=""
+    pid="$(_runtime_pid 2>/dev/null || true)"
+    if [[ -n "$pid" ]]; then
+        current="$(_current_capture_mode 2>/dev/null || echo alap)"
+        if [[ "$current" == "$requested" ]]; then
+            return 0
+        fi
+        echo "runtime: capture mode $current -> $requested requires safe restart"
+    fi
+    _runtime_start "$requested"
 }
 
 _wait_idle() {
@@ -537,12 +794,15 @@ _wait_fresh_ready() {
 }
 
 _ensure_fresh_capture_slot() {
+    local mode=""
+    mode="$(_current_capture_mode 2>/dev/null || true)"
+    [[ "$mode" == "alap" ]] || return 0
     if ! _capture_used; then
         return 0
     fi
 
-    echo "capture: previous slot used -> re-arm requires runtime restart"
-    _runtime_start || return 1
+    echo "capture: previous bounded slot used -> re-arm requires runtime restart"
+    _runtime_start "alap" || return 1
     _wait_ready || {
         echo "ERROR: restarted runtime not ready." >&2
         _show_diag >&2
@@ -551,9 +811,22 @@ _ensure_fresh_capture_slot() {
 }
 
 _trigger_current_capture() {
-    local origin="$1" pid="" path=""
+    local origin="$1" pid="" path="" mode=""
     pid="$(_runtime_pid 2>/dev/null || true)"
     [[ -n "$pid" ]] || { echo "ERROR: runtime is not running." >&2; return 1; }
+    mode="$(_current_capture_mode 2>/dev/null || true)"
+    case "$mode" in
+        full)
+            echo "capture: FULL already records continuously; trigger not required"
+            return 0
+            ;;
+        nincs)
+            echo "ERROR: capture is OFF (c nincs)." >&2
+            return 1
+            ;;
+        alap) ;;
+        *) echo "ERROR: unknown runtime capture mode." >&2; return 1;;
+    esac
 
     path="$(_current_capture)"
     [[ -n "$path" ]] || { echo "ERROR: no launcher-managed capture path." >&2; return 1; }
@@ -572,12 +845,24 @@ _trigger_current_capture() {
 
 _trigger_capture() {
     local origin="$1"
-    _ensure_runtime || return 1
-    _ensure_fresh_capture_slot || return 1
-    _trigger_current_capture "$origin"
+    _ensure_runtime "$CAPTURE_MODE" || return 1
+    case "$CAPTURE_MODE" in
+        alap)
+            _ensure_fresh_capture_slot || return 1
+            _trigger_current_capture "$origin"
+            ;;
+        full)
+            echo "capture: FULL already recording"
+            ;;
+        nincs)
+            echo "ERROR: capture is OFF (c nincs)." >&2
+            return 1
+            ;;
+    esac
 }
 
 _trigger_movement_capture_if_needed() {
+    [[ "$(_current_capture_mode 2>/dev/null || true)" == "alap" ]] || return 0
     [[ -e "$MOVEMENT_CAPTURE_FILE" ]] || return 0
     _capture_used && return 0
     [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] || return 0
@@ -585,35 +870,48 @@ _trigger_movement_capture_if_needed() {
 }
 
 _capture_status() {
-    local path=""
+    local path="" mode=""
+    mode="$(_current_capture_mode 2>/dev/null || true)"
     path="$(_current_capture)"
+
+    if [[ "$mode" == "nincs" ]]; then
+        echo "capture: OFF"
+        [[ -n "$path" ]] && echo "expected file (not produced): ${path#"$ROOT"/}"
+        return
+    fi
     [[ -n "$path" ]] || { echo "capture: NOT ARMED"; return; }
 
     if [[ -f "$path" ]]; then
-        CAPTURE_FILE="$path" python3 - <<'PY'
+        CAPTURE_FILE="$path" CAPTURE_MODE_VALUE="$mode" python3 - <<'PY'
 import os
 from pathlib import Path
 from v3.mcap_reader import EVENT_TOPIC, McapReader, McapReadError
 
 p = Path(os.environ["CAPTURE_FILE"])
-reader = McapReader(p)
-final_pair = reader.last_json(EVENT_TOPIC)
-final = final_pair[1] if final_pair else {}
+mode = os.environ.get("CAPTURE_MODE_VALUE", "-")
 try:
+    reader = McapReader(p)
+    final_pair = reader.last_json(EVENT_TOPIC)
+    final = final_pair[1] if final_pair else {}
     reader.capture_integrity()
     integrity_ok = True
-except McapReadError:
+except (OSError, ValueError, McapReadError):
+    final = {}
     integrity_ok = False
 
-print("capture: FINALIZED")
+print("capture: FINALIZED" if integrity_ok and final.get("complete") is True else "capture: RECORDING / FINALIZING")
+print(f"mode:    {mode}")
 print(f"file:    {p}")
 print(f"status:  {final.get('status','-')}")
 print(f"ticks:   {final.get('captured_tick_count','-')}")
 print(f"trigger: {final.get('trigger_reason','-')}")
 print(f"complete:{' YES' if final.get('complete') is True and integrity_ok else ' NO'}")
-evidence = p.with_suffix(".evidence")
+evidence = p.with_name(p.name + ".evidence_next")
 print(f"evidence:{' ' + str(evidence) if evidence.is_dir() else ' -'}")
 PY
+    elif [[ "$mode" == "full" ]]; then
+        echo "capture: FULL recording (file not yet finalized/visible)"
+        echo "file:    ${path#"$ROOT"/}"
     elif [[ -e "$CAPTURE_USED_FILE" ]]; then
         echo "capture: TRIGGERED / finalizing"
         echo "file:    ${path#"$ROOT"/}"
@@ -627,9 +925,23 @@ PY
 }
 
 _capture_stop() {
-    local path="" i
+    local path="" mode="" i
+    mode="$(_current_capture_mode 2>/dev/null || true)"
     path="$(_current_capture)"
     [[ -n "$path" ]] || { echo "capture: NOT ARMED"; return 1; }
+
+    case "$mode" in
+        nincs)
+            echo "capture: OFF"
+            return 0
+            ;;
+        full)
+            echo "capture: FULL remains continuous until runtime stop/shutdown"
+            echo "file:    ${path#"$ROOT"/}"
+            return 0
+            ;;
+        alap) ;;
+    esac
 
     if [[ -e "$MOVEMENT_CAPTURE_FILE" && ! -e "$CAPTURE_USED_FILE" && ! -f "$path" ]]; then
         _trigger_current_capture "capture-stop" || return 1
@@ -640,7 +952,7 @@ _capture_stop() {
         return
     fi
     for i in {1..70}; do
-        [[ -f "$path" ]] && break
+        _capture_ready "$path" && break
         sleep 0.05
     done
     if [[ -f "$path" ]]; then
@@ -728,14 +1040,15 @@ _wait_allow() {
 _start_motion() {
     local label="$1" capture="$2"
     shift 2
-    local s="" baseline="-1" cpid
+    local s="" baseline="-1" cpid mode
 
-    _ensure_runtime || return 1
+    _ensure_runtime "$CAPTURE_MODE" || return 1
 
     _robot_stop || return 1
     _wait_idle || { _show_diag >&2; return 1; }
 
-    if [[ "$capture" == "yes" ]]; then
+    mode="$(_current_capture_mode 2>/dev/null || echo alap)"
+    if [[ "$mode" == "alap" && "$capture" == "yes" ]]; then
         _ensure_fresh_capture_slot || return 1
         _wait_ready || { echo "ERROR: runtime not ready after capture re-arm." >&2; return 1; }
         echo "movement" >"$MOVEMENT_CAPTURE_FILE"
@@ -758,12 +1071,23 @@ _start_motion() {
 
     echo "$label: STARTED"
     echo "motor: ALLOW confirmed"
-    if [[ "$capture" == "yes" ]]; then
-        local p="$(_current_capture)"
-        echo "capture: ARMED for STOP/FAULT -> ${p#"$ROOT"/}"
-    else
-        echo "capture: skipped by nocapture"
-    fi
+    case "$mode" in
+        alap)
+            if [[ "$capture" == "yes" ]]; then
+                local p="$(_current_capture)"
+                echo "capture: ALAP armed for STOP/FAULT -> ${p#"$ROOT"/}"
+            else
+                echo "capture: movement trigger skipped by legacy nocapture"
+            fi
+            ;;
+        full)
+            echo "capture: FULL continuous recording"
+            [[ "$capture" == "no" ]] && echo "note: legacy nocapture does not disable explicit c full"
+            ;;
+        nincs)
+            echo "capture: OFF"
+            ;;
+    esac
 }
 
 _forward() {
@@ -856,7 +1180,7 @@ _mozog() {
     local capture="yes" left right converted v omega max_v max_omega track
     shift 2
     [[ $# -ge 2 && $# -le 3 ]] || {
-        echo "ERROR: usage: ./r2b4 mozog start <left_mps> <right_mps> [nocapture]" >&2
+        echo "ERROR: usage: ./r2b4 mozog start <left_mps> <right_mps> [nocapture] [c alap|full|nincs]" >&2
         return 2
     }
     left="$1"
@@ -882,7 +1206,7 @@ _mozog() {
 _roomcruise() {
     local capture="yes"
     shift 2
-    [[ $# -le 1 ]] || { echo "ERROR: roomcruise accepts only optional nocapture." >&2; return 2; }
+    [[ $# -le 1 ]] || { echo "ERROR: roomcruise accepts only optional nocapture plus c selector." >&2; return 2; }
     if [[ $# -eq 1 ]]; then
         [[ "$1" == "nocapture" ]] || { echo "ERROR: unknown option: $1" >&2; return 2; }
         capture="no"
@@ -893,13 +1217,18 @@ _roomcruise() {
 }
 
 _proba() {
-    local cpid result
-    _ensure_runtime || return 1
+    local cpid result mode
+    _ensure_runtime "$CAPTURE_MODE" || return 1
     _robot_stop || return 1
     _wait_idle || return 1
-    _ensure_fresh_capture_slot || return 1
-    echo "movement" >"$MOVEMENT_CAPTURE_FILE"
-    chmod 600 "$MOVEMENT_CAPTURE_FILE" 2>/dev/null || true
+    mode="$(_current_capture_mode 2>/dev/null || echo alap)"
+    if [[ "$mode" == "alap" ]]; then
+        _ensure_fresh_capture_slot || return 1
+        echo "movement" >"$MOVEMENT_CAPTURE_FILE"
+        chmod 600 "$MOVEMENT_CAPTURE_FILE" 2>/dev/null || true
+    else
+        rm -f "$MOVEMENT_CAPTURE_FILE"
+    fi
 
     # One interruptible command producer owns the whole sequence, including
     # pauses. External STOP terminates it before publishing the final STOP.
@@ -1054,10 +1383,13 @@ PY
 }
 
 main() {
+    _parse_capture_selector "$@" || return $?
+    set -- "${CLEAN_ARGS[@]}"
+
     case "${1:-} ${2:-}" in
         "runtime start")
             [[ $# -eq 2 ]] || { usage; return 2; }
-            _runtime_start
+            _runtime_start "$CAPTURE_MODE"
             ;;
         "runtime stop")
             [[ $# -eq 2 ]] || { usage; return 2; }
@@ -1073,6 +1405,15 @@ main() {
             ;;
         "capture start")
             [[ $# -eq 2 ]] || { usage; return 2; }
+            # Preserve an already-running explicit mode when old syntax
+            # "capture start" is used without a selector. A cold start defaults
+            # to ALAP, exactly like legacy behavior.
+            if (( CAPTURE_MODE_EXPLICIT == 0 )); then
+                local current_mode=""
+                current_mode="$(_current_capture_mode 2>/dev/null || true)"
+                [[ -n "$(_runtime_pid 2>/dev/null || true)" && -n "$current_mode" ]] && \
+                    CAPTURE_MODE="$current_mode"
+            fi
             _trigger_capture "manual"
             ;;
         "capture stop")
@@ -1107,8 +1448,8 @@ main() {
             _proba
             ;;
         __runtime-session\ *)
-            [[ $# -eq 2 ]] || return 2
-            _runtime_session "$2"
+            [[ $# -eq 3 ]] || return 2
+            _runtime_session "$2" "$3"
             ;;
         "panic --quiet")
             _panic
