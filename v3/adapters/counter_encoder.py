@@ -154,7 +154,7 @@ class _WheelVelocityEstimate:
     window_ns: int
     uncertainty_mps: float | None
     trust: float
-    timebase: str
+    timebase: str | None
     start_edge_timestamp_ns: int | None
     end_edge_timestamp_ns: int | None
 
@@ -167,12 +167,15 @@ class NativeCounterEncoderBackend:
     Count/distance and the diagnostic instantaneous rate retain their RAW
     meaning; only the edge fit supplies control velocity. No edge interval
     means baseline zero, and expired physical evidence means stale zero.
+    Before the first motion, unchanged empty counters establish standstill
+    confidence over the configured observation horizon, without a rate fit.
     """
 
     __slots__ = (
         "_config",
         "_left_after_ns",
         "_right_after_ns",
+        "_stationary_since_ns",
         "_left",
         "_previous",
         "_previous_monotonic_ns",
@@ -196,6 +199,7 @@ class NativeCounterEncoderBackend:
         self._config = config
         self._left_after_ns = 0
         self._right_after_ns = 0
+        self._stationary_since_ns = 0
         self._previous: _CounterPair | None = None
         self._previous_monotonic_ns: int | None = None
 
@@ -357,6 +361,7 @@ class NativeCounterEncoderBackend:
         *,
         step_distance_m: float,
         after_ns: int,
+        now_ns: int,
     ) -> _WheelVelocityEstimate | None:
         """Fit edge time against exact signed count; never fit tick counts.
 
@@ -367,6 +372,16 @@ class NativeCounterEncoderBackend:
         precision loss with large kernel timestamps/cumulative counts.
         """
         edges = snapshot.edge_history
+        if not edges:
+            # Only reachable for unchanged counters: missing timing on a
+            # count change/lost history is rejected before estimation. Keep
+            # startup standstill confidence without a count/rate fallback.
+            horizon_ns = self._config.maximum_estimation_window_ns
+            observed_ns = min(horizon_ns, now_ns - self._stationary_since_ns)
+            return _WheelVelocityEstimate(
+                0.0, 0, observed_ns, None, observed_ns / horizon_ns,
+                None, None, None,
+            )
         if len(edges) < 2:
             return None
         newest = edges[-1]
@@ -538,6 +553,7 @@ class NativeCounterEncoderBackend:
         if previous is None or previous_monotonic_ns is None:
             self._previous = current
             self._previous_monotonic_ns = context.monotonic_ns
+            self._stationary_since_ns = context.monotonic_ns
             invalid_edges = any(
                 self._invalid_edge_timing(snapshot, snapshot, context.monotonic_ns, 0)
                 for snapshot in (current.left, current.right)
@@ -642,10 +658,12 @@ class NativeCounterEncoderBackend:
             left_estimate = self._estimate_wheel(
                 current.left, step_distance_m=self._config.left_step_distance_m,
                 after_ns=self._left_after_ns,
+                now_ns=context.monotonic_ns,
             )
             right_estimate = self._estimate_wheel(
                 current.right, step_distance_m=self._config.right_step_distance_m,
                 after_ns=self._right_after_ns,
+                now_ns=context.monotonic_ns,
             )
             if left_estimate is None or right_estimate is None:
                 # Initial empty/single-edge evidence and the first edge after
@@ -689,14 +707,15 @@ class NativeCounterEncoderBackend:
 
         if rejection_code is not EncoderRejectionCode.NONE:
             if elapsed_ns > 0 and rejection_code is not EncoderRejectionCode.BASELINE:
-                self._left_after_ns = min(
-                    context.monotonic_ns,
-                    latest[0].timestamp_ns if latest[0] else context.monotonic_ns,
-                )
-                self._right_after_ns = min(
-                    context.monotonic_ns,
-                    latest[1].timestamp_ns if latest[1] else context.monotonic_ns,
-                )
+                self._stationary_since_ns = context.monotonic_ns
+                if latest[0] is not None:
+                    self._left_after_ns = min(context.monotonic_ns, latest[0].timestamp_ns)
+                elif rejection_code is EncoderRejectionCode.INVALID_EDGE_TIMING:
+                    self._left_after_ns = context.monotonic_ns
+                if latest[1] is not None:
+                    self._right_after_ns = min(context.monotonic_ns, latest[1].timestamp_ns)
+                elif rejection_code is EncoderRejectionCode.INVALID_EDGE_TIMING:
+                    self._right_after_ns = context.monotonic_ns
             return self._rejected_reading(
                 context,
                 stale=stale,

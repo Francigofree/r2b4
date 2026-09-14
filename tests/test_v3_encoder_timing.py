@@ -192,7 +192,7 @@ def test_stop_timeout_and_long_gap_require_new_edge_interval():
 def test_speed_below_timeout_resolution_is_fail_closed():
     # With active 100 ms freshness, a 215 ms period is not observable reliably.
     r = run_edges(constant_edges(.003))
-    assert all(x.left_mps == 0.0 and x.trust == 0.0 for x in r)
+    assert all(x.left_mps == 0.0 and x.trust == 0.0 for x in r[4:])
     assert any(x.stale for x in r)
 
 
@@ -317,3 +317,15 @@ def test_one_wheel_without_edges_keeps_the_dual_wheel_stale_gate():
     assert r.stale and r.trust == 0.0
     assert r.left_mps == r.right_mps == 0.0
     assert r.diagnostics.rejection_code is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+
+
+def test_startup_standstill_confidence_needs_no_tick_count_history():
+    readings = run_edges(())
+    assert readings[0].trust == 0.0
+    assert readings[1].trust == pytest.approx(20_000_000 / CONFIG.maximum_estimation_window_ns)
+    for r in readings[8:]:
+        assert r.left_mps == r.right_mps == 0.0 and r.trust == 1.0
+        assert not r.stale and r.timing_valid
+        assert r.diagnostics.left_estimation_timebase is None
+        assert r.diagnostics.left_estimation_start_edge_timestamp_ns is None
+        assert r.diagnostics.raw_left_distance_m == 0.0
