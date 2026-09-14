@@ -387,11 +387,11 @@ def test_processing_gap_without_dual_wheel_edge_proof_remains_stale():
 
     _assert_rejected(reading)
     assert reading.stale is True
-    assert reading.timing_valid is True
+    assert reading.timing_valid is False
     assert reading.diagnostics is not None
     assert (
         reading.diagnostics.rejection_code
-        is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+        is EncoderRejectionCode.INVALID_EDGE_TIMING
     )
 
 
@@ -424,8 +424,8 @@ def test_processing_gap_with_old_dual_wheel_edge_windows_remains_stale():
 
 def test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery():
     backend, _, _ = _backend(
-        (_snapshot(0), _snapshot(20), _timed(25, 20, 1_300_000_000, 1_400_000_000)),
-        (_snapshot(0), _snapshot(10), _timed(12, 10, 1_300_000_000, 1_400_000_000)),
+        (_snapshot(0), _timed(20, end_ns=1_050_000_000), _timed(25, 20, 1_300_000_000, 1_400_000_000)),
+        (_snapshot(0), _timed(10, end_ns=1_050_000_000), _timed(12, 10, 1_300_000_000, 1_400_000_000)),
     )
     backend.read(TickContext(0, 1_000_000_000))
 

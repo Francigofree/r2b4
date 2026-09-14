@@ -14,6 +14,8 @@ from .live_encoder import (
     EncoderVelocityReading,
 )
 
+_MAX_ESTIMATION_EDGES = 128
+
 
 def _positive_float(value: object, name: str) -> float:
     if (
@@ -150,7 +152,7 @@ class _WheelVelocityEstimate:
     velocity_mps: float
     pulse_delta: int
     window_ns: int
-    uncertainty_mps: float
+    uncertainty_mps: float | None
     trust: float
     timebase: str
     start_edge_timestamp_ns: int | None
@@ -158,10 +160,13 @@ class _WheelVelocityEstimate:
 
 
 class NativeCounterEncoderBackend:
-    """Derive signed wheel velocity from tick-bound counter snapshots.
+    """Derive velocity only from physical edge timing in closed snapshots.
 
     The first ``read(TickContext)`` establishes both the counter and timestamp
     baseline. No wall clock, PWM, command, GPIO or worker thread is owned here.
+    Count/distance and the diagnostic instantaneous rate retain their RAW
+    meaning; only the edge fit supplies control velocity. No edge interval
+    means baseline zero, and expired physical evidence means stale zero.
     """
 
     __slots__ = (
@@ -371,7 +376,9 @@ class NativeCounterEncoderBackend:
         selected = newest
         n = 1
         sum_x = sum_t = sum_xx = sum_xt = sum_tt = 0.0
-        for i in range(len(edges) - 2, max(-1, len(edges) - 129), -1):
+        for i in range(
+            len(edges) - 2, max(-1, len(edges) - _MAX_ESTIMATION_EDGES - 1), -1,
+        ):
             candidate = edges[i]
             newer = edges[i + 1]
             span_ns = newest.timestamp_ns - candidate.timestamp_ns
@@ -410,12 +417,15 @@ class NativeCounterEncoderBackend:
         velocity = step_distance_m / slope
         # Fit standard error, not the old one-pulse/tick quantization bound.
         residual = max(0.0, sum_tt - sum_t * sum_t / n - slope * slope * variance_x)
-        slope_error = math.sqrt(residual / ((n - 2) * variance_x)) if n > 2 else 0.0
+        uncertainty = (
+            abs(velocity / slope) * math.sqrt(residual / ((n - 2) * variance_x))
+            if n > 2 else None
+        )
         return _WheelVelocityEstimate(
             velocity_mps=velocity,
             pulse_delta=newest.pulse_count - selected.pulse_count,
             window_ns=newest.timestamp_ns - selected.timestamp_ns,
-            uncertainty_mps=abs(velocity * slope_error / slope),
+            uncertainty_mps=uncertainty,
             trust=1.0,
             timebase="GPIO_EDGE_HISTORY",
             start_edge_timestamp_ns=selected.timestamp_ns,
@@ -528,10 +538,14 @@ class NativeCounterEncoderBackend:
         if previous is None or previous_monotonic_ns is None:
             self._previous = current
             self._previous_monotonic_ns = context.monotonic_ns
+            invalid_edges = any(
+                self._invalid_edge_timing(snapshot, snapshot, context.monotonic_ns, 0)
+                for snapshot in (current.left, current.right)
+            )
             return self._rejected_reading(
                 context,
                 stale=False,
-                timing_valid=current.running,
+                timing_valid=current.running and not invalid_edges,
                 diagnostics=self._edge_diagnostics(
                     self._config,
                     current,
@@ -546,9 +560,10 @@ class NativeCounterEncoderBackend:
                     instantaneous_left_interval_ns=None,
                     instantaneous_right_interval_ns=None,
                     rejection_code=(
-                        EncoderRejectionCode.BASELINE
-                        if current.running
-                        else EncoderRejectionCode.COUNTER_NOT_RUNNING
+                        EncoderRejectionCode.COUNTER_NOT_RUNNING
+                        if not current.running else
+                        EncoderRejectionCode.INVALID_EDGE_TIMING
+                        if invalid_edges else EncoderRejectionCode.BASELINE
                     ),
                 ),
             )
@@ -569,10 +584,19 @@ class NativeCounterEncoderBackend:
             for snapshot in (current.left, current.right)
         )
         stale = timing_valid and (
-            any(edge is not None and context.monotonic_ns - edge.timestamp_ns
-                > self._config.maximum_sample_interval_ns for edge in latest)
-            or elapsed_ns > self._config.maximum_sample_interval_ns
-            and any(edge is None for edge in latest)
+            any(
+                edge is not None and context.monotonic_ns - edge.timestamp_ns
+                > self._config.maximum_sample_interval_ns
+                for edge in latest
+            )
+            or (
+                elapsed_ns > self._config.maximum_sample_interval_ns
+                and any(edge is None for edge in latest)
+            )
+            or (
+                (latest[0] is None) != (latest[1] is None)
+                and max(len(current.left.edge_history), len(current.right.edge_history)) > 1
+            )
         )
         instantaneous_left_mps: float | None = None
         instantaneous_right_mps: float | None = None
@@ -606,13 +630,13 @@ class NativeCounterEncoderBackend:
             rejection_code = EncoderRejectionCode.NONINCREASING_TICK_TIME
         elif not current.running:
             rejection_code = EncoderRejectionCode.COUNTER_NOT_RUNNING
-        elif stale:
-            rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
         else:
             rejection_code = self._diagnostic_rejection_code(previous, current)
             if rejection_code is EncoderRejectionCode.NONE and invalid_edges:
                 timing_valid = False
                 rejection_code = EncoderRejectionCode.INVALID_EDGE_TIMING
+            elif rejection_code is EncoderRejectionCode.NONE and stale:
+                rejection_code = EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
 
         if rejection_code is EncoderRejectionCode.NONE:
             left_estimate = self._estimate_wheel(
