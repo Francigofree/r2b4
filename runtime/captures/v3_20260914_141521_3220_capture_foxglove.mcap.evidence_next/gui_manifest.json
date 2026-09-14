@@ -1,0 +1,54 @@
+{
+  "artifacts": {
+    "diagnosis_json": "diagnosis.json",
+    "interesting_slice_ndjson": "interesting_slice.ndjson",
+    "replay_json": "replay_result.json",
+    "timeline_ndjson": "timeline.ndjson"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "capture": {
+    "integrity": null,
+    "status": null,
+    "topics": {
+      "/r2b4/foxglove/full_path": {
+        "channel_id": 2,
+        "encoding": "json",
+        "message_count": 1,
+        "metadata": {}
+      },
+      "/r2b4/foxglove/lidar": {
+        "channel_id": 3,
+        "encoding": "json",
+        "message_count": 53,
+        "metadata": {}
+      },
+      "/r2b4/foxglove/robot_pose": {
+        "channel_id": 1,
+        "encoding": "json",
+        "message_count": 259,
+        "metadata": {}
+      }
+    }
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_status": "FAIL",
+  "incidents": [],
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE"
+  },
+  "schema": "R2B4_TEST_HUB_GUI_V2",
+  "status": "FAIL",
+  "tracks": [
+    "pose.x_m",
+    "pose.y_m",
+    "pose.yaw_rad",
+    "pose.covariance_trace",
+    "navigation_progress",
+    "requested_motion.v_mps",
+    "constrained_motion.v_mps",
+    "safety_decision",
+    "l9_constraints"
+  ]
+}
