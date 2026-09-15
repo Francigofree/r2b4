@@ -1,0 +1,373 @@
+{
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "1f24068fa662b3e25fd10c74c39e09392be443a842cffc13c593a6cc28868e1a",
+      "size_bytes": 17033
+    },
+    "diagnosis.json": {
+      "sha256": "3e47ebdc86072548d2bf1b959f9e950284dcf973cbf96375168e4faa49c1ac05",
+      "size_bytes": 30127
+    },
+    "gui_manifest.json": {
+      "sha256": "6f0097fe39e8a11bd7cd14964f5684c9790429c1e3e2091b7fdbb07bee01bcc1",
+      "size_bytes": 58289
+    },
+    "inspect.json": {
+      "sha256": "678d948dd73780499e38d04a006bda7b4a6542327e567d8d677b1c73ef440714",
+      "size_bytes": 4794
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "04054186c63424b7bc1dccfa80e20d177c9794bf79975a388a9783b309220d26",
+      "size_bytes": 11756
+    },
+    "replay_result.json": {
+      "sha256": "27e16b91b4eb916043f5a6ec5ed205d7cf7ed949efc08e3f6cf77609e90eea31",
+      "size_bytes": 56913
+    },
+    "timeline.ndjson": {
+      "sha256": "177db4e07cbe94d2d88b1a8a88b3789a439969c708c478228637008aaa3f5dc9",
+      "size_bytes": 5021164
+    },
+    "triage.json": {
+      "sha256": "b5d29ed38e1da802b58de9fe6f91c1b946da2ae36a71cffdbc7f82c53ab84e99",
+      "size_bytes": 48348
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260915_152254_44555_capture.mcap",
+    "sha256": "8964d805a8bec8cd8b7cd875bb699a08ea7839ba5a7d80c9304f4e451c577bd6"
+  },
+  "behavior_status": "NOMINAL",
+  "created_at_utc": "2026-09-15T13:24:02Z",
+  "diagnosis_status": "FINDING",
+  "evidence_sha256": "42726d67971af904239f9b791d849b157a936cc5da973887e4b323dd42408236",
+  "evidence_status": "PASS",
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "device-0"
+    ],
+    "kind": "DEVICE_HEALTH",
+    "layer": "L1",
+    "reason": "DEVICE_HEALTH_NON_OK",
+    "replayer_physical_root_cause": {
+      "cause": "LIDAR_STALE",
+      "evidence": {
+        "device_health": [
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "WHEEL_ENCODERS",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "BNO055_IMU",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ],
+        "input_reference": "ticks[0].inputs",
+        "record_type": "closed_input_tick",
+        "sensor_samples": [
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 6803370680941,
+            "device_id": "WHEEL_ENCODERS",
+            "kind": "wheel_velocity",
+            "sequence": 0,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "left_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "trust",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_stale",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "rejection_code",
+                "value": "BASELINE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_left_pulse_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_right_pulse_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pulse_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pulse_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "sample_interval_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_error_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_error_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alert_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alert_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_left_mps",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_right_mps",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "instantaneous_left_mps",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "instantaneous_right_mps",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_left_distance_m",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_right_distance_m",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_distance_delta_m",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_distance_delta_m",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_estimation_pulse_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_estimation_pulse_delta",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_estimation_window_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_estimation_window_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_estimation_timebase",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_estimation_timebase",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_estimation_start_edge_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_estimation_end_edge_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_estimation_start_edge_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_estimation_end_edge_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_edge_history_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_edge_history_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "instantaneous_left_interval_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "instantaneous_right_interval_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_velocity_uncertainty_mps",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_velocity_uncertainty_mps",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_measurement_trust",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_measurement_trust",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "maximum_abs_velocity_mps",
+                "value": 1.5
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 6803370680941,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_health",
+            "sequence": 0,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 6803370680941
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 6803370680941
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 6803370680941
+              }
+            ]
+          }
+        ]
+      },
+      "reason": "EDGE_HEALTH_AND_TICK_EVIDENCE_AGREE",
+      "status": "INDICATED"
+    },
+    "tick_id": 0
+  },
+  "run_id": "v3_20260915_152254_44555_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}
