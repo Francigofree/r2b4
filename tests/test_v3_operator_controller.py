@@ -307,8 +307,11 @@ def test_native_capture_finalization_is_detected_and_replayed_by_test_hub(tmp_pa
     captured, _ = capture(tmp_path)
     assert captured.complete
     assert c._capture_ready(captured.path)
-    c.capture_path_file = tmp_path / 'capture_pointer'
-    c.capture_path_file.write_text(str(captured.path))
+    c.capture_path_file = tmp_path / "capture_pointer"
+    c.capture_path_file.write_text(str(captured.path), encoding="utf-8")
+    # Keep this test independent from the repository's transient runtime state.
+    c.capture_mode_file = tmp_path / "capture_mode"
+    c.capture_mode_file.write_text("alap\n", encoding="utf-8")
     status = c.capture_status()
     assert status['state'] == 'FINALIZED'
     assert status['complete'] is True

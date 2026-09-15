@@ -290,7 +290,7 @@ def test_initial_two_by_one_edge_fill_is_untrusted_without_becoming_stale():
     assert ready.diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
 
 
-def test_initial_edge_fill_expires_by_physical_edge_age():
+def test_initial_edge_fill_ages_into_bounded_stationary_evidence():
     left_edges = (
         SignedPulseEdge(1_010_000_000, 1),
         SignedPulseEdge(1_020_000_000, 2),
@@ -311,19 +311,25 @@ def test_initial_edge_fill_expires_by_physical_edge_age():
     backend.read(TickContext(0, 1_000_000_000))
 
     filling = backend.read(TickContext(1, 1_030_000_000))
-    expired = backend.read(TickContext(2, 1_230_000_000))
+    stationary = backend.read(TickContext(2, 1_230_000_000))
 
     assert filling.stale is False
     assert filling.diagnostics is not None
     assert filling.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
-    _assert_rejected(expired)
-    assert expired.stale is True
-    assert expired.diagnostics is not None
-    assert expired.diagnostics.sample_interval_ns == 200_000_000
-    assert (
-        expired.diagnostics.rejection_code
-        is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
-    )
+
+    # No new pulse in a fresh counter snapshot is bounded standstill evidence,
+    # not device staleness.  Old edge speed must disappear from control output.
+    assert stationary.left_mps == stationary.right_mps == 0.0
+    assert stationary.trust == pytest.approx(0.84)
+    assert stationary.stale is False
+    assert stationary.timing_valid is True
+    assert stationary.diagnostics is not None
+    assert stationary.diagnostics.sample_interval_ns == 200_000_000
+    assert stationary.diagnostics.left_measurement_trust == pytest.approx(0.84)
+    assert stationary.diagnostics.right_measurement_trust == pytest.approx(0.86)
+    assert stationary.diagnostics.left_estimation_timebase == "TICK_SNAPSHOT"
+    assert stationary.diagnostics.right_estimation_timebase == "TICK_SNAPSHOT"
+    assert stationary.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
 
 
 def test_processing_gap_uses_fresh_dual_wheel_physical_edge_windows():
@@ -472,7 +478,9 @@ def test_counter_diagnostic_error_is_untrusted_and_zero(side, diagnostic):
 
     _assert_rejected(reading)
     assert reading.timing_valid is True
-    assert reading.stale is False
+    # The diagnostic error is the primary rejection reason, while the changed
+    # count still lacks physical edge proof and is therefore stale evidence too.
+    assert reading.stale is True
     assert reading.diagnostics is not None
     expected_code = (
         EncoderRejectionCode.COUNTER_READ_ERROR_CHANGED

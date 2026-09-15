@@ -161,7 +161,9 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
     assert values["right_read_error_delta"] == 0
     assert values["left_invalid_alert_delta"] == 0
     assert values["right_invalid_alert_delta"] == 0
-    assert values["computed_left_mps"] == pytest.approx(0.2)
+    # Diagnostics expose the physical edge-timed candidate.  Two left edges
+    # 10 ms apart imply 1.0 m/s even though the fit is still BASELINE/untrusted.
+    assert values["computed_left_mps"] == pytest.approx(1.0)
     assert values["computed_right_mps"] == pytest.approx(0.2)
     assert values["raw_left_distance_m"] == pytest.approx(0.02)
     assert values["raw_right_distance_m"] == pytest.approx(0.02)

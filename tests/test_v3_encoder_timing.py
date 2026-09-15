@@ -159,10 +159,17 @@ def test_reversal_does_not_mix_directions_or_reuse_the_old_speed():
     times = (START, START + 100_000_000, START + 105_000_000, START + 110_000_000, START + 200_000_000)
     readings = run_edges(edges + reverse, times=times)
     assert readings[1].left_mps == pytest.approx(STEP / .005)
+
+    # A direction boundary must reacquire enough physical-time evidence before
+    # the new sign becomes control-grade.  The old forward speed is never reused.
     assert readings[2].left_mps == 0.0
     assert readings[2].diagnostics.rejection_code is EncoderRejectionCode.BASELINE
-    assert readings[3].left_mps == pytest.approx(-STEP / .005)
+    assert readings[3].left_mps == 0.0
+    assert readings[3].diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert 0.0 < readings[3].diagnostics.left_measurement_trust < 1.0
+
     assert readings[4].left_mps == pytest.approx(-STEP / .005)
+    assert readings[4].trust == 1.0
     assert readings[-1].diagnostics.raw_left_distance_m == 0.0
 
 
@@ -176,24 +183,59 @@ def test_missing_physical_edge_is_not_invented_in_speed_or_distance():
     assert all(abs(r.left_mps - .15) < 1e-8 for r in readings[30:])
 
 
-def test_stop_timeout_and_long_gap_require_new_edge_interval():
+def test_stop_timeout_becomes_stationary_then_reacquires_from_a_fresh_edge_window():
     early = tuple(SignedPulseEdge(START + i * 5_000_000, i) for i in range(1, 21))
-    late = (SignedPulseEdge(START + 500_000_000, 21), SignedPulseEdge(START + 510_000_000, 22))
-    times = (START, START + 100_000_000, START + 200_000_000, START + 200_000_001, START + 500_000_000, START + 510_000_000)
+    late = tuple(
+        SignedPulseEdge(START + offset_ns, 21 + index)
+        for index, offset_ns in enumerate(
+            (500_000_000, 510_000_000, 520_000_000, 530_000_000, 540_000_000)
+        )
+    )
+    times = (
+        START,
+        START + 100_000_000,
+        START + 200_000_000,
+        START + 200_000_001,
+        START + 500_000_000,
+        START + 510_000_000,
+        START + 520_000_000,
+        START + 530_000_000,
+        START + 540_000_000,
+    )
     r = run_edges(early + late, times=times)
     assert r[2].left_mps > 0.0
-    assert (r[3].left_mps, r[3].trust, r[3].stale) == (0.0, 0.0, True)
-    assert r[3].diagnostics.rejection_code is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
-    assert r[4].left_mps == 0.0 and r[4].trust == 0.0
-    assert r[5].left_mps == pytest.approx(STEP / .010)
-    assert r[5].diagnostics.raw_left_distance_m == 22 * STEP
+
+    # Once the old fitted edge ages out, unchanged counts become bounded
+    # stationary evidence instead of a stale-device fault.
+    assert r[3].left_mps == 0.0
+    assert r[3].trust == pytest.approx(100_000_001 / 160_000_000)
+    assert r[3].stale is False
+    assert r[3].diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert r[3].diagnostics.left_estimation_timebase == "TICK_SNAPSHOT"
+
+    # A single edge after the long gap is not enough.  Four fresh intervals
+    # spanning the configured 40 ms window restore control-grade velocity.
+    for reading in r[4:8]:
+        assert reading.left_mps == 0.0
+        assert reading.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert r[8].left_mps == pytest.approx(STEP / .010)
+    assert r[8].trust == 1.0
+    assert r[8].diagnostics.rejection_code is EncoderRejectionCode.NONE
+    assert r[8].diagnostics.raw_left_distance_m == 25 * STEP
 
 
-def test_speed_below_timeout_resolution_is_fail_closed():
-    # With active 100 ms freshness, a 215 ms period is not observable reliably.
+def test_speed_below_edge_interval_resolution_never_becomes_control_grade():
+    # A ~215 ms physical edge period exceeds the 100 ms edge-continuity bound.
+    # Fresh unchanged snapshots may accumulate standstill confidence, but that
+    # TICK_SNAPSHOT evidence must never be promoted to non-zero wheel velocity.
     r = run_edges(constant_edges(.003))
-    assert all(x.left_mps == 0.0 and x.trust == 0.0 for x in r[4:])
-    assert any(x.stale for x in r)
+    assert all(x.left_mps == x.right_mps == 0.0 for x in r)
+    assert all(not x.stale and x.timing_valid for x in r)
+    assert all(
+        x.diagnostics.left_estimation_timebase != "GPIO_EDGE_HISTORY"
+        for x in r
+        if x.diagnostics is not None
+    )
 
 
 @pytest.mark.parametrize("bad", ("future", "regression", "changed_count", "lost_history"))
@@ -312,11 +354,16 @@ def test_first_read_future_timestamp_is_invalid_and_clean_edges_can_recover():
     assert r.left_mps == pytest.approx(STEP / .010)
 
 
-def test_one_wheel_without_edges_keeps_the_dual_wheel_stale_gate():
+def test_stationary_wheel_does_not_stale_the_moving_wheel():
     r = run_edges(constant_edges(.15), ())[2]
-    assert r.stale and r.trust == 0.0
-    assert r.left_mps == r.right_mps == 0.0
-    assert r.diagnostics.rejection_code is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+    assert r.stale is False
+    assert r.timing_valid is True
+    assert r.left_mps == pytest.approx(0.15, abs=1e-8)
+    assert r.right_mps == 0.0
+    assert 0.0 < r.trust < 1.0
+    assert r.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert r.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert r.diagnostics.right_estimation_timebase is None
 
 
 def test_startup_standstill_confidence_needs_no_tick_count_history():

@@ -337,11 +337,19 @@ def test_counter_encoder_backend_has_no_hardware_or_pwm_authority():
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported_modules = set()
     attribute_names = set()
+    time_calls = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             imported_modules.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_modules.add("." * node.level + node.module)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "time"
+        ):
+            time_calls.add(node.func.attr)
         elif isinstance(node, ast.Attribute):
             attribute_names.add(node.attr)
 
@@ -350,10 +358,14 @@ def test_counter_encoder_backend_has_no_hardware_or_pwm_authority():
         ".live_encoder",
         "dataclasses",
         "math",
+        "time",
         "typing",
         "v3.contracts",
     }
-    assert not imported_modules & {"lgpio", "threading", "time"}
+    assert not imported_modules & {"lgpio", "threading"}
+    # The backend may close a live measurement against the host monotonic clock,
+    # but it must not acquire scheduling/sleep/runtime authority.
+    assert time_calls <= {"monotonic_ns"}
     assert "set_last_pwm" not in attribute_names
 
 
