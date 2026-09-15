@@ -1296,7 +1296,6 @@ def phase(index, label, target, angle=0.0):
     initial = status()
     if not stopped(initial):
         raise RuntimeError("phase requires ready IDLE")
-    v, omega = target(0.0)
     previous_yaw = yaw(initial) if angle else 0.0
     turned = 0.0
     started = time.monotonic()
@@ -1322,12 +1321,18 @@ def phase(index, label, target, angle=0.0):
             if remaining <= math.radians(2):
                 break
             if elapsed > 30.0:
-                raise RuntimeError("turn did not reach its target within 30 s")        else:
+                raise RuntimeError("turn did not reach its target within 30 s")
+            # Slow down near the requested angle; wheel ratios stay unchanged.
+            scale = min(1.0, max(0.15, remaining / math.radians(25)))
+        else:
             if elapsed >= 5.0:
-                break        if now - next_send > 0.08:
+                break
+            scale = 1.0
+        if now - next_send > 0.08:
             raise RuntimeError("command heartbeat deadline missed")
-        client.publish_teleop(f"{command_id}-{index}", v_mps=v,
-                             omega_rad_s=omega, max_v_mps=0.25,
+        v, omega = target(min(1.0, elapsed / 4.9))
+        client.publish_teleop(f"{command_id}-{index}", v_mps=v * scale,
+                             omega_rad_s=omega * scale, max_v_mps=0.25,
                              max_omega_rad_s=0.60, ttl_ns=ttl_ns)
         next_send += 0.1
         time.sleep(max(0.0, next_send - time.monotonic()))
