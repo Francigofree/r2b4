@@ -278,7 +278,6 @@ class WheelActuatorController:
     ) -> ActuatorRequest:
         if frame.context != wheels.context:
             raise ValueError("L11 inputs must use the same tick context")
-        restarting_from_zero = self._last_context is None
         dt_s = self._control_dt_s(wheels.context)
         if dt_s == 0.0:
             self._left_pi.reset()
@@ -288,15 +287,13 @@ class WheelActuatorController:
             self._right_pi.reset()
             # Zero output is an explicit control-epoch boundary.  Re-anchoring
             # the next non-zero tick prevents STOP dwell time from becoming PI
-            # time and also gives that first tick a bounded encoder reacquisition
-            # opportunity without changing the encoder/L2 safety thresholds.
+            # time.
             self._last_context = None
             self._transient_stale_ticks = 0
             return ActuatorRequest(wheels.context, 0.0, 0.0)
 
         feedback = self._wheel_feedback(
             frame,
-            allow_restart_stale=restarting_from_zero,
             allow_transient_stale=self._transient_stale_ticks < 5,
         )
         if feedback is None:
@@ -304,7 +301,16 @@ class WheelActuatorController:
             self._left_pi.reset()
             self._right_pi.reset()
             # Keep the last fresh context so recovery re-anchors PI time.
-            return ActuatorRequest(wheels.context, 0.0, 0.0)
+            # Healthy transient stale feedback permits bounded feed-forward only.
+            maximum = float(self._config.max_normalized_output)
+            left, _ = self._speed_map.lookup("left", wheels.left_mps)
+            right, _ = self._speed_map.lookup("right", wheels.right_mps)
+            return ActuatorRequest(
+                wheels.context,
+                max(-maximum, min(maximum, left)),
+                max(-maximum, min(maximum, right)),
+                saturated=max(abs(left), abs(right)) - maximum > 1e-12,
+            )
         self._transient_stale_ticks = 0
         left_measured, right_measured = feedback
         left_output, left_saturated = self._wheel_output(
@@ -344,7 +350,7 @@ class WheelActuatorController:
         return float(context.monotonic_ns - previous.monotonic_ns) / 1_000_000_000.0
 
     @staticmethod
-    def _restart_stale_feedback_is_bounded(values: Mapping[str, object]) -> bool:
+    def _transient_stale_feedback_is_bounded(values: Mapping[str, object]) -> bool:
         """Match only a healthy-counter stale sample during encoder reacquisition."""
 
         return (
@@ -364,7 +370,6 @@ class WheelActuatorController:
     def _wheel_feedback(
         frame: AdmittedFrame,
         *,
-        allow_restart_stale: bool = False,
         allow_transient_stale: bool = False,
     ) -> tuple[float, float] | None:
         matches = tuple(
@@ -381,8 +386,8 @@ class WheelActuatorController:
         if (
             observation.source_device_id in frame.degraded_sources
             and not (
-                (allow_restart_stale or allow_transient_stale)
-                and WheelActuatorController._restart_stale_feedback_is_bounded(values)
+                allow_transient_stale
+                and WheelActuatorController._transient_stale_feedback_is_bounded(values)
             )
         ):
             raise ValueError("L11 wheel feedback source is degraded")
@@ -392,8 +397,7 @@ class WheelActuatorController:
         )
         if (
             allow_transient_stale
-            and not allow_restart_stale
-            and WheelActuatorController._restart_stale_feedback_is_bounded(values)
+            and WheelActuatorController._transient_stale_feedback_is_bounded(values)
         ):
             return None
         return feedback
