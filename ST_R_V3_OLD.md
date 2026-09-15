@@ -107,11 +107,9 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 | L10 Chassis Control | chassis-kinematika | `WheelVelocitySetpoint` |
 | L11 Actuator Control | wheel-loop, feed-forward, calibration map | `ActuatorRequest` |
 | L12 Safety & Final | safety latch, final döntés, egyetlen normál writer | `FinalActuation` |
-| Composition/runtime root | tick, production lifecycle state, config snapshot és wiring | `TickResult` / completed execution record |
+| Composition/runtime root | tick, lifecycle, config snapshot és wiring | `TickResult` / completed execution record |
 
 Egy réteg nem módosíthat másik réteg state-jét és nem adhat át más komponens által írható shared mutable state-et. Read-only vagy egyértelmű ownershipű bounded buffer/view megengedett. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
-
-A host/operator controller a production L0–L12 és a composition/runtime root fölötti orchestration komponens; nem L13 és nem production robotréteg. Saját state-je kizárólag host/session state lehet, például process supervision, parancsproducer-életciklus, capture-session, tesztfázis vagy felhasználói művelet állapota. Production lifecycle-, navigation-, motion-, actuator- vagy safety-state-et nem birtokolhat.
 
 ## 5. Engedélyezett production adat-élek
 
@@ -131,14 +129,8 @@ L10 -> L11, L12   (L12 felé safetyhez szükséges motion context)
 L11 -> L12
 L12 -> MotorWriter -> motor-edge/device I/O
 CommandGateway -> L5
-CompositionRoot -> minden layer konstrukciója, production lifecycle-ja és wiringja
+CompositionRoot -> minden layer konstrukciója, lifecycle-ja és wiringja
 ```
-
-A host/operator nem része a production döntési él-listának. Control irányban kizárólag a canonical command ingressen keresztül kapcsolódhat:
-
-host/operator → canonical command producer/ingress → CommandGateway → L5
-
-A runtime status/observation kifelé olvasható host/operator orchestration számára. Ez használható például readiness-, IDLE- vagy ALLOW-várásra, tesztfázis befejezésének felismerésére és fail-safe megszakításra, de nem vezethető vissza kerülő production adatélként valamely L0–L12 rétegbe.
 
 Layer implementation nem importálhat másik layer implementationt; wiring csak composition rootban, typed callable/porttal történhet.
 
@@ -195,33 +187,21 @@ L7–L12 stabil by default; csak konkrét funkció vagy igazolt source/replay/li
 
 `FORWARD`, `ARC`, `PIVOT`, `MOVE_1M` vagy hasonló primitive nem kaphat külön control-, motor- vagy safety-útvonalat. Recovery, docking, calibration vagy más behavior használhat ilyen mozgásszemantikát, ha azt a canonical CommandGateway→L5→…→L12→MotorWriter út realizálja. Külső command általános kinematikai vagy magasabb szintű mission/navigation célt adjon. Kötelező gate csak olyan capability lehet, amely az adott funkcióhoz ténylegesen szükséges.
 
-Host/UI convenience adapter elfogadhat emberbarát primitive-et vagy bal/jobb keréksebesség-célt, ha azt még a CommandGateway előtt általános kinematikai commanddá alakítja. Ez nem L10 ownership: külső komponens nem injektálhat közvetlen `WheelVelocitySetpoint`, `ActuatorRequest`, PWM vagy más downstream control értéket. A tényleges chassis-, actuator- és safety-realizáció továbbra is kizárólag a canonical L9→L10→L11→L12 úton történik.
-
 L6 birtokolja a navigation planninget és progress state-et, és egy érvényes `NavigationPlan` értéket állít elő. A terv konkrét reprezentációja és planner algoritmusa layeren belüli implementációs döntés. L7 a tervből pontosan egy `MotionObjective` értéket választ, L8 pedig azt pillanatnyi kinematikai céllá realizálja. Második motion-selection vagy safety authority tilos.
 
-## 9. Konfiguráció, command, host/operator és külső I/O
+## 9. Konfiguráció, command, GUI és külső I/O
 
-A composition root validált, immutable configot injektál; layer nem olvas fájlt, environment variable-t vagy globális config managert. Actuationt érintő config csak biztonságos production lifecycle-határon, fizikailag inaktív motor mellett cserélhető.
+A composition root validált, immutable configot injektál; layer nem olvas fájlt, environment variable-t vagy globális config managert. Actuationt érintő config csak biztonságos lifecycle-határon, fizikailag inaktív motor mellett cserélhető.
 
-GUI, CLI, LLM, tool vagy host/operator control irányban csak a canonical command ingress kliensén keresztül kérhet robotműveletet a `CommandGateway` felé. A host/operator command-request authorityval rendelkezhet, de production actuation-, motion-, safety- vagy motor-authorityval nem.
+GUI/CLI/LLM/tool **control irányban** csak `CommandGateway` kliensen keresztül adhat typed `CommandRequest`-et. **Read irányban** GUI/agent/telemetry fogyaszthatja a passzív observation/evidence felületet; ettől nem kap command-, lifecycle-, safety- vagy motor-authorityt.
 
-A host/operator controller birtokolhatja a felhasználói és host-oldali session orchestrationt: runtime process start/stop/shutdown, command-producer process lifecycle, readiness/IDLE/ALLOW várás, capture-session koordináció, Test Hub indítás, diagnosztika és többfázisú fizikai tesztszekvencia. Ezek host-side state-ek; nem válhatnak L0–L12 production state-té.
+Readiness/arming csak új, friss, független source evidence-et számolhat új bizonyítéknak. Resident ACTIVE csak érvényes preflight után indulhat; command expiry/kiesés fail-closed STOP, visszaaktiválás a normál readiness/preflight úton történik.
 
-A production readiness, lifecycle és safety truth a runtime tulajdona. A host/operator olvashat runtime statust és használhatja azt orchestration döntésekhez, például ACTIVE parancs előtti readiness-váráshoz, valódi ALLOW visszaigazolásához, IDLE felismeréséhez, tesztfázis mérési végpontjához vagy fail-safe megszakításhoz. Nem szintetizálhat saját readiness/ALLOW truth-ot, nem írhatja felül a runtime STOP/FAULT döntését, és nem valósíthat meg kerülő navigation-, motion-, actuator- vagy safety controllert.
-
-Egy logikai aktív command liveness mechanizmusának pontosan egy ownere lehet. A heartbeat ütemezés, command revision folytonosság, TTL-frissítés és atomi command-publikálás a canonical command producer/ingress stack felelőssége. A host/operator elindíthatja, megfigyelheti és leállíthatja ezt a command producert, de ugyanazt a heartbeat/revision/TTL/mailbox mechanizmust nem implementálhatja párhuzamosan.
-
-A resident `CommandGateway` önállóan validálja a command trustot, sorrendet, freshness/TTL-t és process limiteket. Command expiry, hiány vagy ingress-hiba fail-closed STOP/FAULT marad; külső orchestration ezt nem kerülheti meg.
-
-Capture, replay és Test Hub host/operator által koordinálható, de továbbra is observation/evidence capability. Eredményük nem válhat a futó production control pozitív actuation inputjává. Integritási vagy diagnosztikai hiba megszakíthat egy host-oldali tesztszekvenciát vagy indokolhat fail-safe STOP/SHUTDOWN kérést, de nem hozhat létre ALLOW-t és nem módosíthat production layer-outputot.
-
-A runtime headless. Külső I/O megfelelő edge/device, canonical command ingress vagy passzív observation/capture adapterben történik. Adapter vagy edge komponens birtokolhat a saját I/O-, timing-, buffering-, trust- vagy protocol-felelősségéhez szükséges bounded technikai state-et. Nem birtokolhat azonban más réteghez tartozó szemantikai production state-et, és nem válhat kerülő command-, motion-, safety- vagy motor-authorityvá.
+A runtime headless. Külső I/O megfelelő edge/device vagy passzív observation/capture adapterben történik. Adapter vagy edge komponens birtokolhat a saját I/O-, timing-, buffering-, trust- vagy protocol-felelősségéhez szükséges bounded technikai state-et. Nem birtokolhat azonban más réteghez tartozó szemantikai production state-et, és nem válhat kerülő command-, motion-, safety- vagy motor-authorityvá.
 
 ## 10. V3-only source és dependency szabály
 
 A védett V3 production és canonical validációs source csak V3-at, standard libraryt és explicit jóváhagyott production dependencyket importálhat. Egy új dependency nem válhat control/state authorityvá, nem sértheti a bounded működést, és a replay/determinizmus módjának egyértelműnek kell maradnia.
-
-A host/operator dependency iránya egyirányú: host/operator függhet a canonical command ingress, runtime status/lifecycle edge, capture és Test Hub felületektől, de production layer, TickEngine, composition/runtime root vagy CommandGateway nem függhet vissza launcher- vagy host/operator-implementációtól. Az, hogy egy host/operator modul technikailag a `v3` Python package-ben található, önmagában nem teszi production réteggé.
 
 Layer implementation más layer implementationt nem importál. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
 
@@ -298,8 +278,6 @@ Alapkapuk:
 * fail-closed upstream/lifecycle/input/writer-failure teszt;
 * determinisztikus replay és első divergence;
 * motor-edge változásnál fizikai STOP/FAULT inaktivitás bizonyítása.
-
-Host/operator boundary változásnál célzottan bizonyítandó: minden pozitív motion request és STOP a canonical command ingressen halad; aktív command livenessnek egyetlen logikai ownere van; a host/operator runtime readiness/ALLOW/FAULT truth-ot fogyaszt és nem gyárt második authorityt; command-producer hiba vagy megszakítás fail-safe útra jut; production V3 nem függ vissza az operator implementációtól; capture/Test Hub orchestration nem tér vissza production control inputként.
 
 Szenzor/algoritmus-változás saját közvetlen invariánsait célzottan bizonyítja.
 
