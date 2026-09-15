@@ -20,6 +20,10 @@ from v3.contracts import (
 )
 
 
+_PLANNING_BUCKET_SIZE_M = 0.50
+_POINT_CLEARANCE_EPSILON_M = 1e-9
+
+
 @dataclass(frozen=True, slots=True)
 class NavigationConfig:
     max_world_freshness_ns: int = 250_000_000
@@ -134,6 +138,28 @@ class NavigationStateCheckpoint:
     trajectory_candidates: tuple[TrajectoryEvaluation, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _ObstacleDisc:
+    x_m: float
+    y_m: float
+    radius_m: float
+
+
+@dataclass(frozen=True, slots=True)
+class _StaticPlanningIndex:
+    cache_key: tuple[str, int, int, float]
+    bucket_size_m: float
+    cell_radius_m: float
+    costmap_radius_m: float
+    buckets: dict[tuple[int, int], tuple[_ObstacleDisc, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class _LocalPlanningScene:
+    static_index: _StaticPlanningIndex | None
+    dynamic_obstacles: tuple[_ObstacleDisc, ...]
+
+
 class TrajectoryNavigator:
     """Own reusable trajectory evaluation plus deterministic exploration state."""
 
@@ -147,6 +173,7 @@ class TrajectoryNavigator:
         "_local_goal",
         "_mission_id",
         "_progress",
+        "_static_planning_index",
         "_trajectory_candidates",
     )
 
@@ -160,6 +187,7 @@ class TrajectoryNavigator:
         self._local_goal: Waypoint | None = None
         self._goal_selected_ns = 0
         self._last_replan_ns: int | None = None
+        self._static_planning_index: _StaticPlanningIndex | None = None
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
 
     def checkpoint(self) -> NavigationStateCheckpoint:
@@ -195,6 +223,8 @@ class TrajectoryNavigator:
         self._goal_selected_ns = checkpoint.goal_selected_ns
         self._last_replan_ns = checkpoint.last_replan_ns
         self._trajectory_candidates = checkpoint.trajectory_candidates
+        # Derived acceleration state is deliberately not part of replay authority.
+        self._static_planning_index = None
 
     def evaluate(
         self,
@@ -274,6 +304,7 @@ class TrajectoryNavigator:
                 "LOCAL_COSTMAP_STALE",
             )
         if self._replan_due(mission.context.monotonic_ns):
+            scene = self._build_planning_scene(world)
             local_distance = min(distance_m, self._config.local_goal_distance_m)
             heading = math.atan2(target.y_m - estimate.y_m, target.x_m - estimate.x_m)
             local_goal = Waypoint(
@@ -287,6 +318,7 @@ class TrajectoryNavigator:
                 self._trajectory_rollout(
                     estimate,
                     world,
+                    scene,
                     local_goal,
                     mission.constraints.max_v_mps,
                     mission.constraints.max_omega_rad_s,
@@ -352,6 +384,7 @@ class TrajectoryNavigator:
         self._goal_selected_ns = 0
         self._last_replan_ns = None
         self._trajectory_candidates = ()
+        self._static_planning_index = None
 
     def _exploration_plan(
         self,
@@ -381,6 +414,7 @@ class TrajectoryNavigator:
         self._mark_coverage(estimate.x_m, estimate.y_m, mission.context.tick_id)
         goal = self._local_goal
         if self._replan_due(mission.context.monotonic_ns):
+            scene = self._build_planning_scene(world)
             if (
                 goal is None
                 or math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
@@ -388,7 +422,7 @@ class TrajectoryNavigator:
                 or mission.context.monotonic_ns - self._goal_selected_ns
                 >= self._config.local_goal_max_age_ns
             ):
-                goal = self._choose_local_goal(estimate, costmap)
+                goal = self._choose_local_goal(estimate, costmap, scene)
                 self._goal_selected_ns = mission.context.monotonic_ns
             self._store_trajectory_plan(
                 mission.context.monotonic_ns,
@@ -396,6 +430,7 @@ class TrajectoryNavigator:
                 self._trajectory_rollout(
                     estimate,
                     world,
+                    scene,
                     goal,
                     mission.constraints.max_v_mps,
                     mission.constraints.max_omega_rad_s,
@@ -417,6 +452,23 @@ class TrajectoryNavigator:
             local_goal=goal,
             trajectory_candidates=candidates,
         )
+
+    def _build_planning_scene(self, world: WorldSnapshot) -> _LocalPlanningScene:
+        costmap = world.local_costmap
+        static_index: _StaticPlanningIndex | None = None
+        if costmap is not None:
+            cache_key = _costmap_cache_key(costmap)
+            cached = self._static_planning_index
+            if cached is None or cached.cache_key != cache_key:
+                cached = _build_static_planning_index(costmap)
+                self._static_planning_index = cached
+            static_index = cached
+        dynamic_obstacles = tuple(
+            _ObstacleDisc(obstacle.x_m, obstacle.y_m, obstacle.radius_m)
+            for obstacle in world.obstacle_tracks
+            if obstacle.confidence >= self._config.obstacle_confidence_floor
+        )
+        return _LocalPlanningScene(static_index, dynamic_obstacles)
 
     def _replan_due(self, monotonic_ns: int) -> bool:
         previous = self._last_replan_ns
@@ -459,8 +511,17 @@ class TrajectoryNavigator:
         self,
         estimate: RobotEstimate,
         costmap: RollingLocalCostmap,
+        scene: _LocalPlanningScene,
     ) -> Waypoint:
         options: list[tuple[float, int, Waypoint]] = []
+        footprint_radius = 0.5 * math.hypot(
+            self._config.footprint_length_m,
+            self._config.footprint_width_m,
+        )
+        relevant_clearance_m = max(
+            self._config.clearance_score_cap_m,
+            footprint_radius + self._config.footprint_safety_margin_m,
+        ) + _POINT_CLEARANCE_EPSILON_M
         for index in range(self._config.local_goal_heading_samples):
             offset = _alternating_heading_offset(
                 index,
@@ -471,10 +532,12 @@ class TrajectoryNavigator:
                 estimate.x_m + self._config.local_goal_distance_m * math.cos(heading),
                 estimate.y_m + self._config.local_goal_distance_m * math.sin(heading),
             )
-            clearance = _costmap_point_clearance(goal.x_m, goal.y_m, costmap)
-            footprint_radius = 0.5 * math.hypot(
-                self._config.footprint_length_m,
-                self._config.footprint_width_m,
+            clearance = _planning_scene_point_clearance(
+                goal.x_m,
+                goal.y_m,
+                scene,
+                costmap.radius_m,
+                relevant_clearance_m,
             )
             if clearance <= footprint_radius + self._config.footprint_safety_margin_m:
                 continue
@@ -492,6 +555,7 @@ class TrajectoryNavigator:
         self,
         estimate: RobotEstimate,
         world: WorldSnapshot,
+        scene: _LocalPlanningScene,
         goal: Waypoint,
         max_v_mps: float,
         max_omega_rad_s: float,
@@ -502,6 +566,7 @@ class TrajectoryNavigator:
             estimate.yaw_rad,
             world,
             self._config,
+            scene,
         )
         evaluations: list[TrajectoryEvaluation] = []
         for linear_index in range(self._config.rollout_linear_samples):
@@ -519,6 +584,7 @@ class TrajectoryNavigator:
                         omega_rad_s,
                         estimate,
                         world,
+                        scene,
                         goal,
                         max_v_mps,
                         max_omega_rad_s,
@@ -535,6 +601,7 @@ class TrajectoryNavigator:
         omega_rad_s: float,
         estimate: RobotEstimate,
         world: WorldSnapshot,
+        scene: _LocalPlanningScene,
         goal: Waypoint,
         max_v_mps: float,
         max_omega_rad_s: float,
@@ -564,7 +631,14 @@ class TrajectoryNavigator:
             sample = TrajectoryPose(x_m, y_m, yaw_rad, offset_ns)
             samples.append(sample)
             if not start_collision:
-                clearance = _footprint_clearance(x_m, y_m, yaw_rad, world, self._config)
+                clearance = _footprint_clearance(
+                    x_m,
+                    y_m,
+                    yaw_rad,
+                    world,
+                    self._config,
+                    scene,
+                )
                 min_clearance = min(min_clearance, clearance)
                 collision = collision or clearance <= self._config.footprint_safety_margin_m
 
@@ -675,6 +749,106 @@ def _clamp_signed(value: float) -> float:
     return min(1.0, max(-1.0, value))
 
 
+def _costmap_cache_key(costmap: RollingLocalCostmap) -> tuple[str, int, int, float]:
+    return (
+        costmap.frame_id,
+        costmap.revision,
+        costmap.source_sequence,
+        costmap.resolution_m,
+    )
+
+
+def _bucket_key(x_m: float, y_m: float, bucket_size_m: float) -> tuple[int, int]:
+    return math.floor(x_m / bucket_size_m), math.floor(y_m / bucket_size_m)
+
+
+def _build_static_planning_index(costmap: RollingLocalCostmap) -> _StaticPlanningIndex:
+    cell_radius_m = costmap.resolution_m / math.sqrt(2.0)
+    bucket_lists: dict[tuple[int, int], list[_ObstacleDisc]] = {}
+    for cell in costmap.occupied_cells:
+        obstacle = _ObstacleDisc(
+            (cell.grid_x + 0.5) * costmap.resolution_m,
+            (cell.grid_y + 0.5) * costmap.resolution_m,
+            cell_radius_m,
+        )
+        key = _bucket_key(obstacle.x_m, obstacle.y_m, _PLANNING_BUCKET_SIZE_M)
+        bucket_lists.setdefault(key, []).append(obstacle)
+    return _StaticPlanningIndex(
+        cache_key=_costmap_cache_key(costmap),
+        bucket_size_m=_PLANNING_BUCKET_SIZE_M,
+        cell_radius_m=cell_radius_m,
+        costmap_radius_m=costmap.radius_m,
+        buckets={key: tuple(items) for key, items in bucket_lists.items()},
+    )
+
+
+def _scene_from_world(
+    world: WorldSnapshot,
+    config: NavigationConfig,
+) -> _LocalPlanningScene:
+    static_index = (
+        _build_static_planning_index(world.local_costmap)
+        if world.local_costmap is not None
+        else None
+    )
+    return _LocalPlanningScene(
+        static_index,
+        tuple(
+            _ObstacleDisc(obstacle.x_m, obstacle.y_m, obstacle.radius_m)
+            for obstacle in world.obstacle_tracks
+            if obstacle.confidence >= config.obstacle_confidence_floor
+        ),
+    )
+
+
+def _static_obstacles_in_bounds(
+    static_index: _StaticPlanningIndex,
+    min_x_m: float,
+    max_x_m: float,
+    min_y_m: float,
+    max_y_m: float,
+):
+    bucket_size = static_index.bucket_size_m
+    min_bucket_x = math.floor(min_x_m / bucket_size)
+    max_bucket_x = math.floor(max_x_m / bucket_size)
+    min_bucket_y = math.floor(min_y_m / bucket_size)
+    max_bucket_y = math.floor(max_y_m / bucket_size)
+    for bucket_x in range(min_bucket_x, max_bucket_x + 1):
+        for bucket_y in range(min_bucket_y, max_bucket_y + 1):
+            yield from static_index.buckets.get((bucket_x, bucket_y), ())
+
+
+def _planning_scene_point_clearance(
+    x_m: float,
+    y_m: float,
+    scene: _LocalPlanningScene,
+    empty_default_m: float,
+    relevant_clearance_m: float,
+) -> float:
+    static_index = scene.static_index
+    if static_index is None or not static_index.buckets:
+        return empty_default_m
+    search_radius_m = relevant_clearance_m + static_index.cell_radius_m
+    minimum = relevant_clearance_m
+    for obstacle in _static_obstacles_in_bounds(
+        static_index,
+        x_m - search_radius_m,
+        x_m + search_radius_m,
+        y_m - search_radius_m,
+        y_m + search_radius_m,
+    ):
+        clearance = max(
+            0.0,
+            math.hypot(obstacle.x_m - x_m, obstacle.y_m - y_m)
+            - obstacle.radius_m,
+        )
+        if clearance < minimum:
+            minimum = clearance
+            if minimum <= 0.0:
+                return 0.0
+    return minimum
+
+
 def _costmap_point_clearance(
     x_m: float,
     y_m: float,
@@ -696,53 +870,97 @@ def _costmap_point_clearance(
     )
 
 
+def _rectangle_disc_clearance(
+    robot_x_m: float,
+    robot_y_m: float,
+    half_length_m: float,
+    half_width_m: float,
+    yaw_cos: float,
+    yaw_sin: float,
+    obstacle: _ObstacleDisc,
+) -> float:
+    dx = obstacle.x_m - robot_x_m
+    dy = obstacle.y_m - robot_y_m
+    local_x = yaw_cos * dx + yaw_sin * dy
+    local_y = -yaw_sin * dx + yaw_cos * dy
+    outside_x = max(0.0, abs(local_x) - half_length_m)
+    outside_y = max(0.0, abs(local_y) - half_width_m)
+    return max(0.0, math.hypot(outside_x, outside_y) - obstacle.radius_m)
+
+
 def _footprint_clearance(
     x_m: float,
     y_m: float,
     yaw_rad: float,
     world: WorldSnapshot,
     config: NavigationConfig,
+    scene: _LocalPlanningScene | None = None,
 ) -> float:
+    if scene is None:
+        scene = _scene_from_world(world, config)
+
     half_length = 0.5 * config.footprint_length_m
     half_width = 0.5 * config.footprint_width_m
     yaw_cos = math.cos(yaw_rad)
     yaw_sin = math.sin(yaw_rad)
-    clearances: list[float] = []
+    minimum = config.clearance_score_cap_m
 
-    def rectangle_clearance(
-        obstacle_x: float,
-        obstacle_y: float,
-        obstacle_radius: float,
-    ) -> float:
-        dx = obstacle_x - x_m
-        dy = obstacle_y - y_m
-        local_x = yaw_cos * dx + yaw_sin * dy
-        local_y = -yaw_sin * dx + yaw_cos * dy
-        outside_x = max(0.0, abs(local_x) - half_length)
-        outside_y = max(0.0, abs(local_y) - half_width)
-        return max(0.0, math.hypot(outside_x, outside_y) - obstacle_radius)
+    # Static costmap: broad-phase buckets first, then the unchanged exact
+    # rotated-rectangle/disc clearance. The AABB reach is conservative, so
+    # cells that could reduce the capped result cannot be omitted.
+    static_index = scene.static_index
+    if static_index is not None and static_index.buckets:
+        padding_m = static_index.cell_radius_m + config.clearance_score_cap_m
+        extent_x_m = (
+            abs(yaw_cos) * half_length
+            + abs(yaw_sin) * half_width
+            + padding_m
+        )
+        extent_y_m = (
+            abs(yaw_sin) * half_length
+            + abs(yaw_cos) * half_width
+            + padding_m
+        )
+        for obstacle in _static_obstacles_in_bounds(
+            static_index,
+            x_m - extent_x_m,
+            x_m + extent_x_m,
+            y_m - extent_y_m,
+            y_m + extent_y_m,
+        ):
+            clearance = _rectangle_disc_clearance(
+                x_m,
+                y_m,
+                half_length,
+                half_width,
+                yaw_cos,
+                yaw_sin,
+                obstacle,
+            )
+            if clearance < minimum:
+                minimum = clearance
+                if minimum <= 0.0:
+                    return 0.0
 
-    costmap = world.local_costmap
-    if costmap is not None:
-        cell_radius = costmap.resolution_m / math.sqrt(2.0)
-        for cell in costmap.occupied_cells:
-            clearances.append(
-                rectangle_clearance(
-                    (cell.grid_x + 0.5) * costmap.resolution_m,
-                    (cell.grid_y + 0.5) * costmap.resolution_m,
-                    cell_radius,
-                )
-            )
-    for obstacle in world.obstacle_tracks:
-        if obstacle.confidence >= config.obstacle_confidence_floor:
-            clearances.append(
-                rectangle_clearance(
-                    obstacle.x_m,
-                    obstacle.y_m,
-                    obstacle.radius_m,
-                )
-            )
-    return min(clearances, default=config.clearance_score_cap_m)
+    # Dynamic tracks intentionally stay separate: their population is small
+    # and a later P1 can predict each track at TrajectoryPose.time_offset_ns
+    # without changing the static spatial index or introducing another planner.
+    for obstacle in scene.dynamic_obstacles:
+        clearance = _rectangle_disc_clearance(
+            x_m,
+            y_m,
+            half_length,
+            half_width,
+            yaw_cos,
+            yaw_sin,
+            obstacle,
+        )
+        if clearance < minimum:
+            minimum = clearance
+            if minimum <= 0.0:
+                return 0.0
+
+    return minimum
 
 
 __all__ = [
