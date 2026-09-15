@@ -42,36 +42,57 @@ def replace_once(text: str, old: str, new: str, *, label: str, already: str | No
 
 
 def patch_l3(text: str) -> str:
+    """Patch only the production NativeStateEstimator block.
+
+    l3_state_estimation.py also contains ShadowStateEstimator, which legitimately
+    repeats some wheel-input parsing lines.  Scoping the replacements to the
+    NativeStateEstimator class prevents ambiguous two-match failures and avoids
+    changing the offline shadow estimator.
+    """
+    native_marker = "class NativeStateEstimator:"
+    shadow_marker = "class ShadowStateEstimator:"
+    native_start = text.find(native_marker)
+    shadow_start = text.find(shadow_marker)
+    if native_start < 0 or shadow_start < 0 or shadow_start <= native_start:
+        raise RuntimeError(
+            "L3 class anchors not found in expected order; refusing blind patch"
+        )
+
+    prefix = text[:native_start]
+    native = text[native_start:shadow_start]
+    suffix = text[shadow_start:]
+
     old = '''        encoder_trust = _numeric_value(wheel, "trust")\n        wheel_distance_delta = _optional_wheel_distance_delta(wheel)\n'''
     new = '''        encoder_trust = _numeric_value(wheel, "trust")\n        wheel_values = {field.key: field.value for field in wheel.values}\n        encoder_rejection_code = wheel_values.get("rejection_code", "NONE")\n        if not isinstance(encoder_rejection_code, str):\n            raise ValueError("wheel_velocity.rejection_code must be a string")\n        encoder_timing_valid = wheel_values.get("measurement_timing_valid", True)\n        encoder_stale = wheel_values.get("measurement_stale", False)\n        if type(encoder_timing_valid) is not bool or type(encoder_stale) is not bool:\n            raise ValueError("wheel_velocity timing flags must be bool")\n        velocity_feedback_valid = (\n            encoder_rejection_code == "NONE"\n            and encoder_timing_valid\n            and not encoder_stale\n        )\n        wheel_distance_delta = _optional_wheel_distance_delta(wheel)\n'''
-    text = replace_once(
-        text,
+    native = replace_once(
+        native,
         old,
         new,
-        label="L3 encoder quality gate",
+        label="L3 NativeStateEstimator encoder quality gate",
         already='        velocity_feedback_valid = (\n',
     )
 
     old = '''        still = (\n            abs(left_mps) < self._config.still_velocity_threshold_mps\n            and abs(right_mps) < self._config.still_velocity_threshold_mps\n        )\n\n        if self._last_context is None:\n            self._state[self._YAW] = measured_yaw\n            self._state[self._VELOCITY] = measured_velocity\n'''
     new = '''        still = (\n            velocity_feedback_valid\n            and abs(left_mps) < self._config.still_velocity_threshold_mps\n            and abs(right_mps) < self._config.still_velocity_threshold_mps\n        )\n\n        if self._last_context is None:\n            self._state[self._YAW] = measured_yaw\n            if velocity_feedback_valid:\n                self._state[self._VELOCITY] = measured_velocity\n'''
-    text = replace_once(
-        text,
+    native = replace_once(
+        native,
         old,
         new,
-        label="L3 standstill gate",
+        label="L3 NativeStateEstimator standstill gate",
         already='            velocity_feedback_valid\n            and abs(left_mps)',
     )
 
     old = '''            quality_floor = self._config.minimum_measurement_quality\n            self._update_scalar(\n                self._VELOCITY,\n                measured_velocity,\n                self._config.velocity_measurement_variance\n                / max(quality_floor, encoder_trust),\n                nis_max=self._config.velocity_nis_max,\n                update_type="VELOCITY",\n            )\n            if still:\n                self._update_scalar(\n                    self._VELOCITY,\n                    0.0,\n                    self._config.zupt_variance,\n                    nis_max=None,\n                    update_type="ZUPT",\n                )\n            self._update_scalar(\n'''
     new = '''            quality_floor = self._config.minimum_measurement_quality\n            if velocity_feedback_valid:\n                self._update_scalar(\n                    self._VELOCITY,\n                    measured_velocity,\n                    self._config.velocity_measurement_variance\n                    / max(quality_floor, encoder_trust),\n                    nis_max=self._config.velocity_nis_max,\n                    update_type="VELOCITY",\n                )\n                if still:\n                    self._update_scalar(\n                        self._VELOCITY,\n                        0.0,\n                        self._config.zupt_variance,\n                        nis_max=None,\n                        update_type="ZUPT",\n                    )\n            self._update_scalar(\n'''
-    text = replace_once(
-        text,
+    native = replace_once(
+        native,
         old,
         new,
-        label="L3 velocity/ZUPT update gate",
+        label="L3 NativeStateEstimator velocity/ZUPT update gate",
         already='            if velocity_feedback_valid:\n                self._update_scalar(\n                    self._VELOCITY,',
     )
-    return text
+
+    return prefix + native + suffix
 
 
 def patch_native_control(text: str) -> str:
