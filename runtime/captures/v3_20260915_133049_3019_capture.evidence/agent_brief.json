@@ -1,0 +1,331 @@
+{
+  "behavior_status": "DEGRADED",
+  "budget": {
+    "actual_bytes": 5121,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "FAIL",
+    "integrity_complete": false,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260915_133049_3019_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260915_133049_3019_capture.evidence/interesting_slice.ndjson",
+    "rows": 166,
+    "size_bytes": 518939,
+    "tick_range": [
+      null,
+      null
+    ],
+    "truncated": true
+  },
+  "evidence_status": "FAIL",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 6.752742930689354,
+      "last_trace": 0.09240031026550066,
+      "max_trace": 0.2764375686334267,
+      "sample_count": 1093
+    },
+    "motion": {
+      "behavior_status": "DEGRADED",
+      "constrained_to_zero_tick_count": 1,
+      "estimated_path_length_m": 4.196367602607289,
+      "requested_motion_tick_count": 428
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 649,
+      "FAULT": 0,
+      "STOP": 444,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 110,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 1336,
+      "l2_rejection_count": 1336,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1336
+      }
+    },
+    "ticks": {
+      "count": 1093,
+      "first_monotonic_ns": 79583291039,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 120281844479,
+      "last_tick_id": 1092
+    },
+    "timing": {
+      "max_ms": 168.527502,
+      "p50_ms": 20.130113,
+      "p95_ms": 96.434196,
+      "p99_ms": 115.869428,
+      "sample_count": 1092
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "ERROR"
+  },
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FAIL",
+  "top_incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "RAW_LIDAR_REVISION_GAP",
+            "REFERENCED_RAW_LIDAR_MISSING"
+          ],
+          "message_stream_sha256": "6b4bf60df6072c00d3d40c39e39548405986c189f81e1751798228dde92ab4b1",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 606,
+          "raw_lidar_missing_revisions": [
+            62,
+            94,
+            103,
+            132,
+            137,
+            225
+          ],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [
+            {
+              "after": 52,
+              "before": 54
+            },
+            {
+              "after": 59,
+              "before": 61
+            },
+            {
+              "after": 61,
+              "before": 63
+            },
+            {
+              "after": 65,
+              "before": 67
+            },
+            {
+              "after": 93,
+              "before": 95
+            },
+            {
+              "after": 102,
+              "before": 104
+            },
+            {
+              "after": 131,
+              "before": 133
+            },
+            {
+              "after": 136,
+              "before": 138
+            },
+            {
+              "after": 224,
+              "before": 226
+            },
+            {
+              "after": 248,
+              "before": 250
+            },
+            {
+              "after": 381,
+              "before": 383
+            }
+          ],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "RAW_LIDAR_REVISION_GAP,REFERENCED_RAW_LIDAR_MISSING",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 79583291039,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-1",
+      "layer": "L1",
+      "monotonic_ns": 79601013110,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 1
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-2",
+      "layer": "L1",
+      "monotonic_ns": 79621000092,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 2
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-3",
+      "layer": "L1",
+      "monotonic_ns": 79641013637,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 3
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-4",
+      "layer": "L1",
+      "monotonic_ns": 79661016570,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 4
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-5",
+      "layer": "L1",
+      "monotonic_ns": 79681006020,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 5
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 79701009342,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 6
+    }
+  ]
+}

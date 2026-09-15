@@ -1,0 +1,212 @@
+{
+  "capture_metadata": {
+    "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+    "capture_id": "v3_20260915_133049_3019_capture",
+    "clock_epoch": "linux_monotonic_boot",
+    "compression": "none",
+    "container": "MCAP v0",
+    "message_encoding": "json"
+  },
+  "capture_path": "/home/alba/project_r2b4/runtime/captures/v3_20260915_133049_3019_capture.mcap",
+  "final_event": {
+    "capture_id": "v3_20260915_133049_3019_capture",
+    "capture_mode": "append_only",
+    "captured_checkpoint_count": 40,
+    "captured_event_count_before_final": 0,
+    "captured_raw_lidar_count": 377,
+    "captured_tick_count": 1093,
+    "event_type": "capture_finalized",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "RAW_LIDAR_REVISION_GAP",
+        "REFERENCED_RAW_LIDAR_MISSING"
+      ],
+      "message_stream_sha256": "6b4bf60df6072c00d3d40c39e39548405986c189f81e1751798228dde92ab4b1",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 2076,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 2076,
+        "first_lost_sequence": null,
+        "high_water_mark": 123,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 2076,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 606,
+      "raw_lidar_missing_revisions": [
+        62,
+        94,
+        103,
+        132,
+        137,
+        225
+      ],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [
+        {
+          "after": 52,
+          "before": 54
+        },
+        {
+          "after": 59,
+          "before": 61
+        },
+        {
+          "after": 61,
+          "before": 63
+        },
+        {
+          "after": 65,
+          "before": 67
+        },
+        {
+          "after": 93,
+          "before": 95
+        },
+        {
+          "after": 102,
+          "before": 104
+        },
+        {
+          "after": 131,
+          "before": 133
+        },
+        {
+          "after": 136,
+          "before": 138
+        },
+        {
+          "after": 224,
+          "before": 226
+        },
+        {
+          "after": 248,
+          "before": 250
+        },
+        {
+          "after": 381,
+          "before": 383
+        }
+      ],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "metrics": {
+      "bytes_before_finalization": 101121418,
+      "elapsed_ns": 47410766349,
+      "process_cpu_ns": 36936307645,
+      "process_max_rss_bytes": 71467008,
+      "runtime_tick_timing": {
+        "completion_latency_max_ns": 161626573,
+        "completion_latency_sum_ns": 30972885253,
+        "period_count": 1092,
+        "period_max_ns": 168527502,
+        "period_sum_ns": 40698553440,
+        "tick_count": 1093
+      },
+      "subscription_high_water_mark": 123,
+      "write_duration_ns": 1805794969
+    },
+    "status": "FAIL",
+    "trigger_monotonic_ns": null,
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "final_metadata": {
+    "capture_id": "v3_20260915_133049_3019_capture",
+    "checkpoint_count": "40",
+    "complete": "false",
+    "integrity_reasons": "[\"RAW_LIDAR_REVISION_GAP\",\"REFERENCED_RAW_LIDAR_MISSING\"]",
+    "message_stream_sha256": "6b4bf60df6072c00d3d40c39e39548405986c189f81e1751798228dde92ab4b1",
+    "raw_lidar_count": "377",
+    "status": "FAIL",
+    "tick_count": "1093",
+    "trigger_monotonic_ns": "0",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "integrity_error": "CAPTURE_INCOMPLETE: required evidence is incomplete",
+  "runtime": {
+    "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+    "capture_id": "v3_20260915_133049_3019_capture",
+    "clock_epoch": "linux_monotonic_boot"
+  },
+  "schema": "R2B4_TEST_HUB_V2",
+  "status": "FAIL",
+  "structure": {
+    "channel_count": 5,
+    "chunk_count": 101,
+    "chunk_crc_ok": true,
+    "data_crc_ok": true,
+    "errors": [],
+    "file_size": 101590212,
+    "library": "R2B4 McapCaptureConsumer stdlib/1",
+    "message_count": 1512,
+    "message_end_time": 120281844479,
+    "message_start_time": 79583291039,
+    "metadata_count": 2,
+    "profile": "r2b4-v3",
+    "summary_crc_ok": true,
+    "valid": true
+  },
+  "topics": {
+    "/r2b4/checkpoint": {
+      "channel_id": 3,
+      "encoding": "json",
+      "message_count": 40,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/event": {
+      "channel_id": 4,
+      "encoding": "json",
+      "message_count": 1,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/raw_lidar": {
+      "channel_id": 2,
+      "encoding": "json",
+      "message_count": 377,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/runtime": {
+      "channel_id": 5,
+      "encoding": "json",
+      "message_count": 1,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/tick": {
+      "channel_id": 1,
+      "encoding": "json",
+      "message_count": 1093,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    }
+  }
+}
