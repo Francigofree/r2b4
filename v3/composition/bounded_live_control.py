@@ -22,6 +22,10 @@ from v3.contracts import (
     SafetyDecision,
     TickContext,
 )
+from v3.device_health_policy import (
+    blocking_degraded_sources,
+    critical_devices_ready,
+)
 from v3.engine import TickExecutionError, TickInputs, TickResult
 
 from .native_control import NativeControlComposition, NativeControlCompositionConfig
@@ -129,6 +133,7 @@ class BoundedLiveControlComposition:
     def _is_healthy_preflight(
         batch_health: tuple[DeviceHealth, ...],
         result: TickResult,
+        critical_device_ids: frozenset[str] | None,
     ) -> bool:
         command = result.final_actuation
         admission = next(
@@ -140,10 +145,12 @@ class BoundedLiveControlComposition:
             None,
         )
         return (
-            bool(batch_health)
-            and all(item.state is DeviceHealthState.OK for item in batch_health)
+            critical_devices_ready(batch_health, critical_device_ids)
             and isinstance(admission, AdmittedFrame)
-            and not admission.degraded_sources
+            and not blocking_degraded_sources(
+                admission.degraded_sources,
+                critical_device_ids,
+            )
             and result.trace.fault_layer is None
             and command.safety_decision is SafetyDecision.STOP
             and not command.enabled
@@ -237,7 +244,11 @@ class BoundedLiveControlComposition:
             if (
                 not inside_active_window
                 and context.tick_id < self._config.command_profile.start_tick_id
-                and self._is_healthy_preflight(batch.device_health, result)
+                and self._is_healthy_preflight(
+                    batch.device_health,
+                    result,
+                    self._config.control.critical_device_ids,
+                )
             ):
                 self._preflight_context = context
         return result

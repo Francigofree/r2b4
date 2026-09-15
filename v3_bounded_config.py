@@ -34,6 +34,7 @@ from v3.composition.native_sensor_inputs import (
     NativeSensorHardwareConfig,
     NativeSensorInputConfig,
 )
+from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.layers.l3_state_estimation import NativeStateEstimatorConfig
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
@@ -490,9 +491,7 @@ def load_bounded_physical_runtime_config(
         ),
         chassis_control=ChassisControlConfig(track_width_m=track_width_m),
         lidar_safety=lidar_safety,
-        critical_device_ids=frozenset(
-            {"WHEEL_ENCODERS", "BNO055_IMU", "RPLIDAR_C1"}
-        ),
+        critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS,
         **navigation_kwargs,
     )
     physical = BoundedPhysicalControlConfig(

@@ -18,6 +18,7 @@ from v3.contracts import (
     SafetyDecision,
     TickContext,
 )
+from v3.device_health_policy import critical_devices_ready
 from v3.engine import TickExecutionError, TickInputs, TickResult
 from v3.execution import (
     CaptureRecord,
@@ -207,11 +208,11 @@ class ResidentLiveControlComposition:
     def _is_healthy_idle(
         batch_health: tuple[DeviceHealth, ...],
         result: TickResult,
+        critical_device_ids: frozenset[str] | None,
     ) -> bool:
         command = result.final_actuation
         return (
-            bool(batch_health)
-            and all(item.state is DeviceHealthState.OK for item in batch_health)
+            critical_devices_ready(batch_health, critical_device_ids)
             and result.trace.fault_layer is None
             and command.safety_decision is SafetyDecision.STOP
             and not command.enabled
@@ -367,7 +368,11 @@ class ResidentLiveControlComposition:
                 self._rearm_pending = False
             elif was_active:
                 self._rearm_pending = True
-            if not active and self._is_healthy_idle(batch.device_health, result):
+            if not active and self._is_healthy_idle(
+                batch.device_health,
+                result,
+                self._config.control.critical_device_ids,
+            ):
                 self._record_healthy_idle(batch, context)
             elif not active:
                 self._reset_preflight()

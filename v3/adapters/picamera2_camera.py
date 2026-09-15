@@ -215,6 +215,13 @@ class NativePicamera2Camera:
         with self._lock:
             if self._running:
                 return True
+            stale_owner = self._picamera is not None or self._thread is not None
+        if stale_owner:
+            # A previous acquisition thread may have ended after an exception.
+            # Retire its physical handle before a new Picamera2 instance can
+            # replace the reference.
+            self.stop()
+        with self._lock:
             self._last_error = None
             self._stop_event.clear()
         camera: Picamera2Device | None = None
@@ -341,10 +348,10 @@ class NativePicamera2Camera:
         )
         exposure_time_ns = exposure_us * 1_000
         frame_duration_ns = frame_duration_us * 1_000
-        # SensorTimestamp is the first-pixel readout time. Approximate the
-        # first-row exposure midpoint before mapping to the V3 monotonic domain.
-        sensor_measurement_ns = max(0, sensor_timestamp_ns - exposure_time_ns // 2)
-        measurement_monotonic_ns = self._timestamp_mapper(sensor_measurement_ns)
+        # Keep the documented sensor start-of-frame timestamp as the current
+        # physical reference.  Do not invent an exposure/rolling-shutter shift
+        # before an R2B4 camera-vs-LiDAR timing calibration has validated one.
+        measurement_monotonic_ns = self._timestamp_mapper(sensor_timestamp_ns)
         _nonnegative_int(measurement_monotonic_ns, "mapped camera measurement timestamp")
         completed_monotonic_ns = self._checked_clock()
         raw_buffer = request.make_buffer(self._config.stream_name)

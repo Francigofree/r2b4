@@ -16,6 +16,7 @@ from v3.contracts import (
     TickContext,
     WheelVelocitySetpoint,
 )
+from v3.device_health_policy import critical_device_health_view
 from v3.ports import MotorWriter
 
 
@@ -113,31 +114,12 @@ class FinalSafetyGate:
     ) -> FinalActuation:
         """Make one fail-closed decision and perform one atomic writer call."""
 
-        if self._critical_device_ids is not None:
-            health_by_id = {item.device_id: item for item in critical_health}
-            if any(
-                device_id not in health_by_id
-                for device_id in self._critical_device_ids
-            ):
-                command = self._stop(
-                    context,
-                    SafetyDecision.STOP,
-                    "CRITICAL_DEVICE_HEALTH_MISSING",
-                )
-                try:
-                    self._writer.write(command)
-                except Exception as exc:
-                    self._fault_latched = True
-                    raise MotorWriteError(
-                        "the single final motor write failed",
-                        command,
-                    ) from exc
-                return command
-            critical_health = tuple(
-                item
-                for item in critical_health
-                if item.device_id in self._critical_device_ids
-            )
+        health_view = critical_device_health_view(
+            critical_health,
+            self._critical_device_ids,
+        )
+        critical_health = health_view.critical_health
+        missing_critical_health = bool(health_view.missing_device_ids)
 
         failed_device = next(
             (item for item in critical_health if item.state is DeviceHealthState.FAILED),
@@ -160,6 +142,12 @@ class FinalSafetyGate:
             command = self._stop(context, SafetyDecision.FAULT, "CRITICAL_DEVICE_FAILED")
         elif self._fault_latched:
             command = self._stop(context, SafetyDecision.FAULT, "FAULT_LATCHED")
+        elif missing_critical_health:
+            command = self._stop(
+                context,
+                SafetyDecision.STOP,
+                "CRITICAL_DEVICE_HEALTH_MISSING",
+            )
         elif unknown_device is not None:
             command = self._stop(context, SafetyDecision.STOP, "CRITICAL_DEVICE_UNKNOWN")
         elif degraded_device is not None:

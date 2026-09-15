@@ -42,6 +42,7 @@ from .composition.native_control import (
     v3_navigation_config_from_mapping,
 )
 from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext
+from .device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from .engine import LayerValue, TickEngine, TickInputs, TickResult, TickTrace
 from .layers.l10_chassis_control import ChassisControlConfig
 from .layers.l11_actuator_control import WheelSpeedMap
@@ -844,6 +845,7 @@ def _compat_control_config_from_documents(
         ),
         chassis_control=ChassisControlConfig(track_width),
         lidar_safety=lidar_safety,
+        critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS,
         **navigation_kwargs,
     )
 
