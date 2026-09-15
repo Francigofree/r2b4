@@ -115,27 +115,27 @@
       "max_cells": 1200
     },
     "exploration": {
-      "coverage_cell_size_m": 0.35,
-      "coverage_max_cells": 256,
-      "local_goal_distance_m": 1,
-      "local_goal_tolerance_m": 0.2,
+      "coverage_cell_size_m": 0.25,
+      "coverage_max_cells": 512,
+      "local_goal_distance_m": 0.60,
+      "local_goal_tolerance_m": 0.15,
       "local_goal_max_age_ns": 8000000000,
-      "local_goal_heading_samples": 16
+      "local_goal_heading_samples": 32
     },
     "trajectory_rollout": {
       "replan_interval_ns": 100000000,
       "linear_samples": 6,
       "angular_samples": 9,
-      "horizon_ns": 1200000000,
+      "horizon_ns": 800000000,
       "step_count": 8,
       "footprint_length_m": 0.46,
       "footprint_width_m": 0.38,
       "footprint_safety_margin_m": 0.05,
-      "clearance_score_cap_m": 0.75,
-      "progress_weight": 0.38,
-      "clearance_weight": 0.25,
-      "smoothness_weight": 0.15,
-      "novelty_weight": 0.22
+      "clearance_score_cap_m": 1.00,
+      "progress_weight": 0.60,
+      "clearance_weight": 0.10,
+      "smoothness_weight": 0.16,
+      "novelty_weight": 0.14
     }
   }
 }
