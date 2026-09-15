@@ -426,6 +426,19 @@ class NativeStateEstimator:
         left_mps = _numeric_value(wheel, "left_mps")
         right_mps = _numeric_value(wheel, "right_mps")
         encoder_trust = _numeric_value(wheel, "trust")
+        wheel_values = {field.key: field.value for field in wheel.values}
+        encoder_rejection_code = wheel_values.get("rejection_code", "NONE")
+        if not isinstance(encoder_rejection_code, str):
+            raise ValueError("wheel_velocity.rejection_code must be a string")
+        encoder_timing_valid = wheel_values.get("measurement_timing_valid", True)
+        encoder_stale = wheel_values.get("measurement_stale", False)
+        if type(encoder_timing_valid) is not bool or type(encoder_stale) is not bool:
+            raise ValueError("wheel_velocity timing flags must be bool")
+        velocity_feedback_valid = (
+            encoder_rejection_code == "NONE"
+            and encoder_timing_valid
+            and not encoder_stale
+        )
         wheel_distance_delta = _optional_wheel_distance_delta(wheel)
         measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
         measured_omega = _numeric_value(heading, "omega_rad_s")
@@ -456,13 +469,15 @@ class NativeStateEstimator:
             ) / self._config.track_width_m
         measured_velocity = 0.5 * (left_mps + right_mps)
         still = (
-            abs(left_mps) < self._config.still_velocity_threshold_mps
+            velocity_feedback_valid
+            and abs(left_mps) < self._config.still_velocity_threshold_mps
             and abs(right_mps) < self._config.still_velocity_threshold_mps
         )
 
         if self._last_context is None:
             self._state[self._YAW] = measured_yaw
-            self._state[self._VELOCITY] = measured_velocity
+            if velocity_feedback_valid:
+                self._state[self._VELOCITY] = measured_velocity
         else:
             dt_s = self._dt_s(frame)
             if dt_s > 0.0:
@@ -470,22 +485,23 @@ class NativeStateEstimator:
                     self._adapt_stationary_bias(measured_omega, dt_s, still)
                 self._predict(measured_omega, dt_s, wheel_distance_delta)
             quality_floor = self._config.minimum_measurement_quality
-            self._update_scalar(
-                self._VELOCITY,
-                measured_velocity,
-                self._config.velocity_measurement_variance
-                / max(quality_floor, encoder_trust),
-                nis_max=self._config.velocity_nis_max,
-                update_type="VELOCITY",
-            )
-            if still:
+            if velocity_feedback_valid:
                 self._update_scalar(
                     self._VELOCITY,
-                    0.0,
-                    self._config.zupt_variance,
-                    nis_max=None,
-                    update_type="ZUPT",
+                    measured_velocity,
+                    self._config.velocity_measurement_variance
+                    / max(quality_floor, encoder_trust),
+                    nis_max=self._config.velocity_nis_max,
+                    update_type="VELOCITY",
                 )
+                if still:
+                    self._update_scalar(
+                        self._VELOCITY,
+                        0.0,
+                        self._config.zupt_variance,
+                        nis_max=None,
+                        update_type="ZUPT",
+                    )
             self._update_scalar(
                 self._YAW,
                 measured_yaw,

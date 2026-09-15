@@ -276,6 +276,11 @@ class NativeControlCompositionConfig:
         ki=0.60,
         integrator_limit=0.75,
         max_normalized_output=1.0,
+        # Live 2026-09-15 captures proved that the 100 ms default can expire
+        # before the 40 ms edge-fit window becomes control-grade during motor
+        # startup. Keep the generic WheelPiConfig default available to tests,
+        # but make the production reacquisition policy explicit here.
+        max_feedback_uncertainty_ns=250_000_000,
     )
     lidar_safety: LidarSafetyConfig | None = None
 

@@ -213,6 +213,7 @@ class WheelActuatorStateCheckpoint:
     right_reference_mps: float = 0.0
     left_uncertain_since_ns: int | None = None
     right_uncertain_since_ns: int | None = None
+    feedback_uncertain_since_ns: int | None = None
 
 
 class _PIState:
@@ -247,11 +248,13 @@ class _PIState:
 class WheelActuatorController:
     """Own PI state and gate it with per-wheel encoder evidence quality.
 
-    Missing/partial velocity evidence is *not* treated as measured zero.  Each
-    commanded wheel independently drops to speed-map feed-forward while its
-    encoder estimate reacquires.  The uncertainty budget is monotonic-time
-    based, not tick-count based.  Continuous uncertainty beyond the configured
-    bound raises an L11 error and therefore remains fail-closed at L12.
+    Missing/partial velocity evidence is *not* treated as measured zero.  Any
+    commanded wheel lacking control-grade feedback makes the whole actuator
+    stage use bounded speed-map feed-forward while encoder evidence reacquires.
+    Per-wheel timestamps remain diagnostic; one global monotonic uncertainty
+    episode is the watchdog authority so alternating wheel targets cannot reset
+    the safety budget. Continuous uncertainty beyond the configured bound raises
+    an L11 error and therefore remains fail-closed at L12.
 
     A wheel whose target is exactly zero needs no velocity estimate.  This is
     what permits a deliberate one-wheel-stationary pivot without allowing a
@@ -268,6 +271,7 @@ class WheelActuatorController:
         "_transient_stale_ticks",
         "_left_uncertain_since_ns",
         "_right_uncertain_since_ns",
+        "_feedback_uncertain_since_ns",
     )
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
@@ -279,6 +283,7 @@ class WheelActuatorController:
         self._transient_stale_ticks = 0
         self._left_uncertain_since_ns: int | None = None
         self._right_uncertain_since_ns: int | None = None
+        self._feedback_uncertain_since_ns: int | None = None
 
     def reset(self) -> None:
         self._left_pi.reset()
@@ -287,6 +292,7 @@ class WheelActuatorController:
         self._transient_stale_ticks = 0
         self._left_uncertain_since_ns = None
         self._right_uncertain_since_ns = None
+        self._feedback_uncertain_since_ns = None
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
@@ -298,6 +304,7 @@ class WheelActuatorController:
             self._right_pi._reference_mps,
             self._left_uncertain_since_ns,
             self._right_uncertain_since_ns,
+            self._feedback_uncertain_since_ns,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
@@ -319,6 +326,7 @@ class WheelActuatorController:
         for value, name in (
             (checkpoint.left_uncertain_since_ns, "left_uncertain_since_ns"),
             (checkpoint.right_uncertain_since_ns, "right_uncertain_since_ns"),
+            (checkpoint.feedback_uncertain_since_ns, "feedback_uncertain_since_ns"),
         ):
             if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{name} must be non-negative integer or None")
@@ -331,6 +339,7 @@ class WheelActuatorController:
         self._transient_stale_ticks = checkpoint.transient_stale_ticks
         self._left_uncertain_since_ns = checkpoint.left_uncertain_since_ns
         self._right_uncertain_since_ns = checkpoint.right_uncertain_since_ns
+        self._feedback_uncertain_since_ns = checkpoint.feedback_uncertain_since_ns
 
     def __call__(
         self,
@@ -357,29 +366,27 @@ class WheelActuatorController:
             required_right=required_right,
         )
 
-        if required_left and left_measured is None:
-            self._left_uncertain_since_ns = self._bounded_uncertainty_start(
-                "left",
-                self._left_uncertain_since_ns,
-                wheels.context.monotonic_ns,
-            )
-        else:
-            self._left_uncertain_since_ns = None
+        left_uncertain = required_left and left_measured is None
+        right_uncertain = required_right and right_measured is None
 
-        if required_right and right_measured is None:
-            self._right_uncertain_since_ns = self._bounded_uncertainty_start(
-                "right",
-                self._right_uncertain_since_ns,
-                wheels.context.monotonic_ns,
-            )
-        else:
-            self._right_uncertain_since_ns = None
-
-        uncertain = (
-            self._left_uncertain_since_ns is not None
-            or self._right_uncertain_since_ns is not None
+        self._left_uncertain_since_ns = self._evidence_uncertainty_start(
+            self._left_uncertain_since_ns,
+            wheels.context.monotonic_ns,
+            active=left_uncertain,
         )
+        self._right_uncertain_since_ns = self._evidence_uncertainty_start(
+            self._right_uncertain_since_ns,
+            wheels.context.monotonic_ns,
+            active=right_uncertain,
+        )
+
+        uncertain = left_uncertain or right_uncertain
         if uncertain:
+            self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
+                "feedback",
+                self._feedback_uncertain_since_ns,
+                wheels.context.monotonic_ns,
+            )
             self._transient_stale_ticks += 1
             self._left_pi.reset()
             self._right_pi.reset()
@@ -401,6 +408,7 @@ class WheelActuatorController:
             )
 
         self._transient_stale_ticks = 0
+        self._feedback_uncertain_since_ns = None
         assert left_measured is not None or not required_left
         assert right_measured is not None or not required_right
         left_output, left_saturated = self._wheel_output(
@@ -425,6 +433,21 @@ class WheelActuatorController:
             saturated=left_saturated or right_saturated,
         )
 
+    @staticmethod
+    def _evidence_uncertainty_start(
+        started_ns: int | None,
+        now_ns: int,
+        *,
+        active: bool,
+    ) -> int | None:
+        if not active:
+            return None
+        if started_ns is None:
+            return now_ns
+        if now_ns < started_ns:
+            raise ValueError("L11 per-wheel feedback uncertainty time must be monotonic")
+        return started_ns
+
     def _bounded_uncertainty_start(
         self,
         side: str,
@@ -436,6 +459,8 @@ class WheelActuatorController:
         if now_ns < started_ns:
             raise ValueError("L11 feedback uncertainty time must be monotonic")
         if now_ns - started_ns >= self._config.max_feedback_uncertainty_ns:
+            if side == "feedback":
+                raise ValueError("L11 feedback remained uncertain too long")
             raise ValueError(f"L11 {side} wheel feedback remained uncertain too long")
         return started_ns
 
@@ -477,6 +502,7 @@ class WheelActuatorController:
             values.get("measurement_stale") is True
             and values.get("measurement_timing_valid") is True
             and values.get("rejection_code") == "SAMPLE_INTERVAL_EXCEEDED"
+            and values.get("trust") == 0.0
             and WheelActuatorController._counter_diagnostics_are_clean(values)
         )
 
