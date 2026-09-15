@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # R2B4 user launcher: thin wrapper over the existing native V3 runtime/CLI.
-# No second robot-control or capture path is introduced.
+# Source-first repair: current V3 runtime/capture/Test Hub paths are preserved.
+# The proba motion test uses one immutable TELEOP target per phase.
 
 SRC="${BASH_SOURCE[0]}"
 ROOT="$(cd "$(dirname "$SRC")" && pwd)"
@@ -36,8 +37,6 @@ CAPTURE_USED_FILE="$RUNTIME_DIR/.r2b4_capture_triggered"
 CAPTURE_MODE_FILE="$RUNTIME_DIR/.r2b4_capture_mode"
 MOVEMENT_CAPTURE_FILE="$RUNTIME_DIR/.r2b4_movement_capture"
 
-# Launcher selector. It is removed from argv before the legacy command parser
-# sees the remaining arguments, so all old command forms keep their meaning.
 CAPTURE_MODE="alap"
 CAPTURE_MODE_EXPLICIT=0
 CLEAN_ARGS=()
@@ -81,30 +80,27 @@ Final authority files are written under runtime/captures/*.mcap.
 Every finalized launcher-managed capture is analyzed through the integrated
 Test Hub entry point in its default mode:
   python3 -m v3.test_hub run <capture.mcap>
-The current Test Hub generation keeps canonical V2 diagnosis/replay and adds
-the Next agent view. Default evidence is written as *.mcap.evidence_next/.
-The Test Hub waits for MCAP finalization/integrity before it starts. If the
-selected mode produces no capture, the watcher times out after runtime exit
-and still invokes Test Hub once; the missing capture then fails explicitly.
+Default evidence is written as *.mcap.evidence_next/.
 
 Starting a movement or capture automatically starts the runtime if needed.
 "stop" cancels the command producer (including proba) and returns to IDLE.
 "shutdown", "runtime stop" and Ctrl+C stop the runtime as well.
-Runtime logs use unique paths under /tmp.
 
 "proba" runs ten slow phases in the foreground, with 5 s in IDLE between them:
-  forward/reverse: 5 s each, ramping from 0.15 to 0.25 m/s;
-  right-forward/right-reverse/left-forward/left-reverse arcs: 5 s each,
-    radius decreasing from 2.0 to 0.6 m at 0.15 m/s;
+  forward/reverse: 5 s each at fixed 0.15 m/s;
+  right-forward/right-reverse/left-forward/left-reverse arcs:
+    5 s each, fixed R=1.0 m at 0.15 m/s;
   right/left in-place turns: 90 degrees each;
   right/left turns about the stationary right wheel: 180 degrees each.
-Angles use runtime yaw feedback; safety or feedback failure aborts the test.
-The final left turn moves the left wheel backwards, with the right target zero.
+Each phase has one fixed TELEOP (v, omega) target and one logical command_id.
+The 10 Hz publications are heartbeat revisions only; the target does not
+change within a phase. Angles use runtime yaw feedback. Safety or feedback
+failure aborts the test.
 
 "capture start" preserves the native one-shot triggered behavior in alap mode.
-In full mode capture is already continuous; in nincs mode capture is OFF.
+In full mode capture is continuous; in nincs mode capture is OFF.
 "capture stop" waits for bounded finalization in alap. A full capture is
-finalized by runtime stop/shutdown because it covers the complete session.
+finalized by runtime stop/shutdown.
 
 The native triggered worker is one-shot per runtime. If a new alap-captured
 movement needs a fresh slot, the launcher re-arms it by the existing safe
@@ -114,9 +110,8 @@ runtime restart (STOP -> 5 s -> new runtime).
 canonical TELEOP body target using conf/fizika.json track width. Existing
 L5-L12 motion, operational and safety constraints remain authoritative.
 
-Legacy "nocapture" is retained unchanged: it skips movement-trigger arming in
-alap mode. It does NOT mean capture infrastructure OFF and automatic native
-FAULT evidence remains possible. Use "c nincs" for true capture-off operation.
+Legacy "nocapture" skips movement-trigger arming in alap mode. It does NOT
+mean capture infrastructure OFF. Use "c nincs" for true capture-off operation.
 
 Global Ctrl+C panic at the shell prompt:
   source /home/alba/project_r2b4/r2b4
@@ -129,7 +124,6 @@ _parse_capture_selector() {
     CLEAN_ARGS=()
     CAPTURE_MODE="alap"
     CAPTURE_MODE_EXPLICIT=0
-
     while (( i < ${#input[@]} )); do
         token="${input[$i]}"
         if [[ "$token" == "c" ]]; then
@@ -215,7 +209,6 @@ _current_capture_mode() {
         read -r mode <"$CAPTURE_MODE_FILE" || true
         case "$mode" in alap|full|nincs) echo "$mode"; return 0;; esac
     fi
-    # A running pre-selector launcher could only have used triggered capture.
     [[ -n "$(_runtime_pid 2>/dev/null || true)" ]] && { echo "alap"; return 0; }
     return 1
 }
@@ -257,6 +250,13 @@ _publish_stop() {
         --command-id "launcher-stop-$(date +%s%N)-$$" >/dev/null 2>&1
 }
 
+_runtime_kill() {
+    local pid=""
+    pid="$(_runtime_pid 2>/dev/null || true)"
+    [[ -z "$pid" ]] && return 0
+    kill -TERM "$pid" 2>/dev/null || true
+}
+
 _robot_stop() {
     local result=0
     _stop_heartbeat || result=1
@@ -270,23 +270,12 @@ _robot_stop() {
     return "$result"
 }
 
-_runtime_kill() {
-    local pid=""
-    pid="$(_runtime_pid 2>/dev/null || true)"
-    [[ -z "$pid" ]] && return 0
-    kill -TERM "$pid" 2>/dev/null || true
-}
-
-_panic() {
-    _runtime_stop
-}
+_panic() { _runtime_stop; }
 
 trap 'trap "" INT TERM; _panic; exit 130' INT
 trap 'trap "" INT TERM; _panic; exit 143' TERM
 
-_status_json() {
-    python3 -m v3.control_cli status 2>/dev/null
-}
+_status_json() { python3 -m v3.control_cli status 2>/dev/null; }
 
 _status_ready() {
     local s=""
@@ -316,7 +305,6 @@ _status_has_real_allow() {
     [[ "$s" == *'"state": "RUNNING"'* ]] || return 1
     [[ "$s" == *'"safety_decision": "ALLOW"'* ]] || return 1
     [[ "$s" == *'"enabled": true'* ]] || return 1
-
     STATUS_JSON="$s" python3 -c '
 import json, os, sys
 d=json.loads(os.environ["STATUS_JSON"])
@@ -336,13 +324,11 @@ _show_status() {
     local s="" pid=""
     pid="$(_runtime_pid 2>/dev/null || true)"
     s="$(_status_json)" || true
-
     if [[ -z "$s" ]]; then
         [[ -n "$pid" ]] && echo "runtime: RUNNING (status unavailable/booting)" || echo "runtime: STOPPED"
         _show_capture_mode
         return
     fi
-
     STATUS_JSON="$s" RUNTIME_PID="$pid" python3 - <<'PY'
 import json, os
 d=json.loads(os.environ["STATUS_JSON"])
@@ -368,14 +354,12 @@ _show_diag() {
     local s="" pid=""
     pid="$(_runtime_pid 2>/dev/null || true)"
     s="$(_status_json)" || true
-
     if [[ -z "$s" ]]; then
         [[ -n "$pid" ]] && echo "R2B4 runtime: RUNNING (status unavailable/booting)" || echo "R2B4 runtime: STOPPED"
         _show_capture_mode
         [[ -s "$RUNTIME_LOG" ]] && { echo; echo "Last runtime log:"; tail -n 20 "$RUNTIME_LOG"; }
         return
     fi
-
     STATUS_JSON="$s" RUNTIME_PID="$pid" python3 - <<'PY'
 import json, math, os
 d=json.loads(os.environ["STATUS_JSON"])
@@ -383,7 +367,6 @@ state=d.get("state","UNKNOWN")
 print(f"R2B4 runtime: {state}")
 if os.environ.get("RUNTIME_PID"):
     print(f"PID:          {os.environ['RUNTIME_PID']}")
-
 if state=="RUNNING":
     ready=d.get("ready_for_active")
     print(f"Ready:        {'YES' if ready is True else 'NO' if ready is False else '-'}")
@@ -414,7 +397,6 @@ else:
         print(f"Error:        {d.get('error_type','ERROR')}: {d.get('error')}")
 PY
     _show_capture_mode
-
     [[ "$s" != *'"state": "RUNNING"'* && -s "$RUNTIME_LOG" ]] && {
         echo
         echo "Last runtime log:"
@@ -422,13 +404,8 @@ PY
     }
 }
 
-_new_capture_path() {
-    echo "$CAPTURE_DIR/v3_$(date '+%Y%m%d_%H%M%S')_$$_capture.mcap"
-}
-
-_current_capture() {
-    [[ -r "$CAPTURE_PATH_FILE" ]] && cat "$CAPTURE_PATH_FILE"
-}
+_new_capture_path() { echo "$CAPTURE_DIR/v3_$(date '+%Y%m%d_%H%M%S')_$$_capture.mcap"; }
+_current_capture() { [[ -r "$CAPTURE_PATH_FILE" ]] && cat "$CAPTURE_PATH_FILE"; }
 
 _capture_used() {
     local mode="" p=""
@@ -458,16 +435,12 @@ raise SystemExit(0 if final.get("complete") is True else 1)
 PY
 }
 
-_test_hub_evidence_dir() {
-    echo "$1.evidence_next"
-}
+_test_hub_evidence_dir() { echo "$1.evidence_next"; }
 
 _run_test_hub_default() {
     local capture="$1" evidence
     evidence="$(_test_hub_evidence_dir "$capture")"
     echo "TEST_HUB_AUTORUN START capture=${capture#"$ROOT"/}"
-    # Intentionally use the integrated stable entry point and its defaults:
-    # Next generation, 5 Hz agent view, incident replay, canonical V2 backend.
     local rc=0
     python3 -m v3.test_hub run "$capture" || rc=$?
     if (( rc == 0 )); then
@@ -480,9 +453,6 @@ _run_test_hub_default() {
 
 _test_hub_supervisor() {
     local capture="$1" runtime_pid="$2" mode="$3" i
-
-    # Triggered captures can become immutable before the resident runtime exits,
-    # so analyze them as soon as integrity/finalization is observable.
     if [[ "$mode" == "alap" ]]; then
         while _pid_has_arg "$runtime_pid" "v3_process_runtime.py"; do
             if _capture_ready "$capture"; then
@@ -492,15 +462,10 @@ _test_hub_supervisor() {
             sleep 0.20
         done
     else
-        # FULL is final only at runtime shutdown. NINCS deliberately has no
-        # capture producer; sleeping here keeps capture-off overhead negligible.
         while _pid_has_arg "$runtime_pid" "v3_process_runtime.py"; do
             sleep 0.50
         done
     fi
-
-    # Native process shutdown includes capture_session.finalize(). Give the
-    # final file a bounded visibility/integrity window before declaring timeout.
     for i in {1..100}; do
         if _capture_ready "$capture"; then
             _run_test_hub_default "$capture" || true
@@ -508,19 +473,13 @@ _test_hub_supervisor() {
         fi
         sleep 0.10
     done
-
     echo "TEST_HUB_AUTORUN capture wait timeout: ${capture#"$ROOT"/}" >&2
-    # Required invariant: attempt the new Test Hub once even when no capture
-    # exists (notably c nincs). It will return a clear missing-capture ERROR.
     _run_test_hub_default "$capture" || true
 }
 
-# Detached supervisor: owns native process lifetime plus exactly one Test Hub
-# autorun for the launcher-managed session.
 _runtime_session() {
     local capture="$1" mode="$2" pid hub_pid evidence
     local -a command=(python3 v3_process_runtime.py --approval native-resident-v3)
-
     case "$mode" in
         alap)
             command+=(
@@ -536,15 +495,10 @@ _runtime_session() {
             command+=(
                 --capture-path "${capture#"$ROOT"/}"
                 --capture-mode append_only
-                # Effectively session-unbounded for practical robot runs while
-                # retaining the runtime's required positive hard-bound contract.
                 --capture-max-session-records 2147483647
             )
             ;;
-        nincs)
-            # True capture OFF: deliberately no --capture-path and therefore no
-            # McapCaptureSession / ObservationHub capture subscription/writer.
-            ;;
+        nincs) ;;
         *)
             echo "ERROR: internal invalid capture mode: $mode" >&2
             return 2
@@ -561,11 +515,8 @@ _runtime_session() {
 
     trap 'kill -TERM "$pid" 2>/dev/null || true' INT TERM
     wait "$pid"
-    # A signal can interrupt wait before the native shutdown/finalizer finishes.
     while _pid_has_arg "$pid" "v3_process_runtime.py"; do wait "$pid"; done
     trap '' INT TERM
-
-    # Keep this detached session alive until the one Test Hub autorun finishes.
     wait "$hub_pid" 2>/dev/null || true
 
     evidence="$(_test_hub_evidence_dir "$capture")"
@@ -585,7 +536,6 @@ _runtime_start() {
     local mode="${1:-$CAPTURE_MODE}" old="" fresh status_baseline="" pid="" supervisor i
     case "$mode" in alap|full|nincs) ;; *) echo "ERROR: invalid capture mode: $mode" >&2; return 2;; esac
     old="$(_runtime_pid 2>/dev/null || true)"
-
     if [[ -n "$old" ]]; then
         echo "runtime: existing instance -> STOP"
         _runtime_stop || return 1
@@ -600,8 +550,6 @@ _runtime_start() {
         _stop_heartbeat || return 1
     fi
 
-    # A missing mailbox is canonical STOP. An empty/malformed JSON file faults
-    # the gateway; remove the stale command only after the old writers exit.
     rm -f -- "$COMMAND_FILE" || return 1
     status_baseline="$(_status_json 2>/dev/null || true)"
 
@@ -617,6 +565,7 @@ _runtime_start() {
     nohup bash "$ROOT/r2b4" __runtime-session "$fresh" "$mode" \
         </dev/null >"$RUNTIME_LOG" 2>&1 &
     supervisor=$!
+
     for i in {1..40}; do
         [[ -r "$RUNTIME_PID_FILE" ]] && read -r pid <"$RUNTIME_PID_FILE"
         [[ -n "$pid" ]] && break
@@ -631,6 +580,7 @@ _runtime_start() {
         [[ -s "$RUNTIME_LOG" ]] && tail -n 30 "$RUNTIME_LOG" >&2
         return 1
     fi
+
     if ! _wait_fresh_ready "$pid" "$status_baseline"; then
         echo "ERROR: runtime did not publish a fresh ready status." >&2
         _show_diag >&2
@@ -656,7 +606,6 @@ _runtime_start() {
     echo "runtime log: $RUNTIME_LOG"
     [[ "${R2B4_CTRL_C_HOOK:-0}" != "1" ]] && \
         echo "note: global Ctrl+C panic hook inactive; source $ROOT/r2b4"
-    return 0
 }
 
 _wait_triggered_capture_tail() {
@@ -666,14 +615,12 @@ _wait_triggered_capture_tail() {
     path="$(_current_capture)"
     [[ -n "$path" && -e "$CAPTURE_USED_FILE" ]] || return 0
     _capture_ready "$path" && return 0
-
     echo "capture: waiting for 2 s post-event tail/finalization"
     for i in {1..70}; do
         _capture_ready "$path" && return 0
         sleep 0.05
     done
     echo "WARNING: bounded capture was not finalized before runtime shutdown; native finalizer will finish it." >&2
-    return 0
 }
 
 _runtime_stop() {
@@ -684,10 +631,6 @@ _runtime_stop() {
         echo "runtime: already STOPPED"
         return "$result"
     fi
-
-    # In ALAP mode, if nothing has triggered the one-shot capture yet, make
-    # shutdown itself the event. Then keep the already-stopped robot runtime
-    # alive long enough for the requested +2 s tail before SIGTERM.
     if [[ "$(_current_capture_mode 2>/dev/null || true)" == "alap" ]]; then
         if ! _capture_used; then
             _trigger_current_capture "runtime-shutdown" || true
@@ -797,10 +740,7 @@ _ensure_fresh_capture_slot() {
     local mode=""
     mode="$(_current_capture_mode 2>/dev/null || true)"
     [[ "$mode" == "alap" ]] || return 0
-    if ! _capture_used; then
-        return 0
-    fi
-
+    if ! _capture_used; then return 0; fi
     echo "capture: previous bounded slot used -> re-arm requires runtime restart"
     _runtime_start "alap" || return 1
     _wait_ready || {
@@ -830,15 +770,11 @@ _trigger_current_capture() {
 
     path="$(_current_capture)"
     [[ -n "$path" ]] || { echo "ERROR: no launcher-managed capture path." >&2; return 1; }
-
-    # If the file/launcher marker already exists, the native one-shot worker
-    # has already been used. Do not pretend a second trigger is possible.
     _capture_used && return 0
 
     kill -USR1 "$pid" 2>/dev/null || { echo "ERROR: capture trigger failed." >&2; return 1; }
     printf 'origin=%s\ntriggered_at_ns=%s\n' "$origin" "$(date +%s%N)" >"$CAPTURE_USED_FILE"
     chmod 600 "$CAPTURE_USED_FILE" 2>/dev/null || true
-
     echo "capture: TRIGGERED ($origin)"
     echo "capture file: ${path#"$ROOT"/}"
 }
@@ -851,9 +787,7 @@ _trigger_capture() {
             _ensure_fresh_capture_slot || return 1
             _trigger_current_capture "$origin"
             ;;
-        full)
-            echo "capture: FULL already recording"
-            ;;
+        full) echo "capture: FULL already recording" ;;
         nincs)
             echo "ERROR: capture is OFF (c nincs)." >&2
             return 1
@@ -886,7 +820,6 @@ _capture_status() {
 import os
 from pathlib import Path
 from v3.mcap_reader import EVENT_TOPIC, McapReader, McapReadError
-
 p = Path(os.environ["CAPTURE_FILE"])
 mode = os.environ.get("CAPTURE_MODE_VALUE", "-")
 try:
@@ -898,7 +831,6 @@ try:
 except (OSError, ValueError, McapReadError):
     final = {}
     integrity_ok = False
-
 print("capture: FINALIZED" if integrity_ok and final.get("complete") is True else "capture: RECORDING / FINALIZING")
 print(f"mode:    {mode}")
 print(f"file:    {p}")
@@ -929,12 +861,8 @@ _capture_stop() {
     mode="$(_current_capture_mode 2>/dev/null || true)"
     path="$(_current_capture)"
     [[ -n "$path" ]] || { echo "capture: NOT ARMED"; return 1; }
-
     case "$mode" in
-        nincs)
-            echo "capture: OFF"
-            return 0
-            ;;
+        nincs) echo "capture: OFF"; return 0 ;;
         full)
             echo "capture: FULL remains continuous until runtime stop/shutdown"
             echo "file:    ${path#"$ROOT"/}"
@@ -946,7 +874,6 @@ _capture_stop() {
     if [[ -e "$MOVEMENT_CAPTURE_FILE" && ! -e "$CAPTURE_USED_FILE" && ! -f "$path" ]]; then
         _trigger_current_capture "capture-stop" || return 1
     fi
-
     if [[ ! -e "$CAPTURE_USED_FILE" && ! -f "$path" ]]; then
         echo "capture: no triggered capture"
         return
@@ -1010,7 +937,6 @@ _wait_allow() {
             _failure_report "$label"
             return 1
         fi
-
         s="$(_status_json)" || { sleep 0.05; continue; }
         tick="$(_tick_from_json "$s")"
         if (( tick > baseline )); then
@@ -1027,7 +953,6 @@ _wait_allow() {
         fi
         sleep 0.05
     done
-
     local last="$s"
     _trigger_movement_capture_if_needed || true
     _stop_heartbeat || true
@@ -1041,9 +966,7 @@ _start_motion() {
     local label="$1" capture="$2"
     shift 2
     local s="" baseline="-1" cpid mode
-
     _ensure_runtime "$CAPTURE_MODE" || return 1
-
     _robot_stop || return 1
     _wait_idle || { _show_diag >&2; return 1; }
 
@@ -1080,13 +1003,8 @@ _start_motion() {
                 echo "capture: movement trigger skipped by legacy nocapture"
             fi
             ;;
-        full)
-            echo "capture: FULL continuous recording"
-            [[ "$capture" == "no" ]] && echo "note: legacy nocapture does not disable explicit c full"
-            ;;
-        nincs)
-            echo "capture: OFF"
-            ;;
+        full) echo "capture: FULL continuous recording" ;;
+        nincs) echo "capture: OFF" ;;
     esac
 }
 
@@ -1099,11 +1017,11 @@ _forward() {
         elif [[ "$speed_set" == "no" ]]; then
             speed="$a"; speed_set="yes"
         else
-            echo "ERROR: invalid forward arguments." >&2; return 2
+            echo "ERROR: invalid forward arguments." >&2
+            return 2
         fi
     done
     _valid_speed "$speed" || { echo "ERROR: speed must be >0 and <=0.50 m/s." >&2; return 1; }
-
     _start_motion "forward $speed m/s" "$capture" \
         python3 -m v3.control_cli teleop \
         --command-id "launcher-forward-$(date +%s%N)-$$" \
@@ -1113,67 +1031,38 @@ _forward() {
 
 _wheel_targets_to_twist() {
     python3 - "$ROOT/conf/fizika.json" "$1" "$2" <<'PY'
-import json
-import math
-import sys
+import json, math, sys
 from pathlib import Path
-
 physics_path = Path(sys.argv[1])
 try:
-    left_mps = float(sys.argv[2])
-    right_mps = float(sys.argv[3])
+    left_mps = float(sys.argv[2]); right_mps = float(sys.argv[3])
 except ValueError:
     print("ERROR: left_mps and right_mps must be numeric.", file=sys.stderr)
     raise SystemExit(1)
-
 if not math.isfinite(left_mps) or not math.isfinite(right_mps):
-    print("ERROR: wheel speeds must be finite.", file=sys.stderr)
-    raise SystemExit(1)
+    print("ERROR: wheel speeds must be finite.", file=sys.stderr); raise SystemExit(1)
 if abs(left_mps) > 0.50 or abs(right_mps) > 0.50:
-    print("ERROR: each wheel speed must be within [-0.50, 0.50] m/s.", file=sys.stderr)
-    raise SystemExit(1)
+    print("ERROR: each wheel speed must be within [-0.50, 0.50] m/s.", file=sys.stderr); raise SystemExit(1)
 if abs(left_mps) <= 1e-12 and abs(right_mps) <= 1e-12:
-    print("ERROR: both wheel targets are zero; use ./r2b4 stop.", file=sys.stderr)
-    raise SystemExit(1)
-
+    print("ERROR: both wheel targets are zero; use ./r2b4 stop.", file=sys.stderr); raise SystemExit(1)
 try:
     physics = json.loads(physics_path.read_text(encoding="utf-8"))
     track_width_m = float(physics["nyomtav_szelesseg_m"])
 except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-    print(f"ERROR: cannot read valid track width from {physics_path}: {exc}", file=sys.stderr)
-    raise SystemExit(1)
+    print(f"ERROR: cannot read valid track width from {physics_path}: {exc}", file=sys.stderr); raise SystemExit(1)
 if not math.isfinite(track_width_m) or track_width_m <= 0.0:
-    print("ERROR: nyomtav_szelesseg_m must be finite and positive.", file=sys.stderr)
-    raise SystemExit(1)
-
-# Exact inverse of V3 L10 differential-drive kinematics:
-# left = v - omega * track/2
-# right = v + omega * track/2
+    print("ERROR: nyomtav_szelesseg_m must be finite and positive.", file=sys.stderr); raise SystemExit(1)
 v_mps = 0.5 * (left_mps + right_mps)
 omega_rad_s = (right_mps - left_mps) / track_width_m
-
-# The resident command gateway is still the ingress authority. Reject only a
-# target that it cannot represent at all; lower L5-L12 constraints may further
-# reduce the executed motion and remain authoritative.
 if abs(v_mps) > 0.50 + 1e-12:
     print(f"ERROR: wheel pair requires v={v_mps:.6f} m/s above the resident 0.50 m/s limit.", file=sys.stderr)
     raise SystemExit(1)
 if abs(omega_rad_s) > 1.20 + 1e-12:
-    print(
-        f"ERROR: wheel pair requires omega={omega_rad_s:.6f} rad/s "
-        "above the resident 1.20 rad/s limit.",
-        file=sys.stderr,
-    )
+    print(f"ERROR: wheel pair requires omega={omega_rad_s:.6f} rad/s above the resident 1.20 rad/s limit.", file=sys.stderr)
     raise SystemExit(1)
-
-# Wheel values specify the nominal path. Leave angular authority for heading
-# correction, including straight motion; L9/L12 still enforce all limits.
 max_v_mps = max(abs(v_mps), 1e-6)
 max_omega_rad_s = min(1.20, abs(omega_rad_s) + 0.60)
-print(
-    f"{v_mps:.12g} {omega_rad_s:.12g} "
-    f"{max_v_mps:.12g} {max_omega_rad_s:.12g} {track_width_m:.12g}"
-)
+print(f"{v_mps:.12g} {omega_rad_s:.12g} {max_v_mps:.12g} {max_omega_rad_s:.12g} {track_width_m:.12g}")
 PY
 }
 
@@ -1184,19 +1073,15 @@ _mozog() {
         echo "ERROR: usage: ./r2b4 mozog start <left_mps> <right_mps> [nocapture] [c alap|full|nincs]" >&2
         return 2
     }
-    left="$1"
-    right="$2"
+    left="$1"; right="$2"
     if [[ $# -eq 3 ]]; then
         [[ "$3" == "nocapture" ]] || { echo "ERROR: unknown option: $3" >&2; return 2; }
         capture="no"
     fi
-
     converted="$(_wheel_targets_to_twist "$left" "$right")" || return 1
     read -r v omega max_v max_omega track <<<"$converted"
-
     echo "mozog wheel target: left=$left m/s, right=$right m/s"
     echo "canonical target: v=$v m/s, omega=$omega rad/s (track=$track m)"
-
     _start_motion "mozog L=$left R=$right m/s" "$capture" \
         python3 -m v3.control_cli teleop \
         --command-id "launcher-mozog-$(date +%s%N)-$$" \
@@ -1223,6 +1108,7 @@ _proba() {
     _robot_stop || return 1
     _wait_idle || return 1
     mode="$(_current_capture_mode 2>/dev/null || echo alap)"
+
     if [[ "$mode" == "alap" ]]; then
         _ensure_fresh_capture_slot || return 1
         echo "movement" >"$MOVEMENT_CAPTURE_FILE"
@@ -1231,8 +1117,8 @@ _proba() {
         rm -f "$MOVEMENT_CAPTURE_FILE"
     fi
 
-    # One interruptible command producer owns the whole sequence, including
-    # pauses. External STOP terminates it before publishing the final STOP.
+    # One producer owns the complete sequence. Each phase is one immutable
+    # logical TELEOP command; only the mailbox revision/TTL heartbeat changes.
     python3 - r2b4-proba "$ROOT" <<'PY' &
 import json, math, os, signal, sys, time
 from pathlib import Path
@@ -1240,7 +1126,9 @@ from v3.adapters.resident_command import ResidentCommandClient, ResidentCommandM
 from v3.control_cli import _read_status
 
 root = Path(sys.argv[2])
-client = ResidentCommandClient(ResidentCommandMailboxConfig(path=root / "runtime/v3_command.json"))
+client = ResidentCommandClient(
+    ResidentCommandMailboxConfig(path=root / "runtime/v3_command.json")
+)
 status_path = root / "runtime/v3_status.json"
 command_id = f"launcher-proba-{os.getpid()}-{time.monotonic_ns()}"
 ttl_ns = 200_000_000
@@ -1254,16 +1142,23 @@ signal.signal(signal.SIGTERM, interrupted)
 def status():
     s = _read_status(status_path)
     age = time.monotonic_ns() - s.get("monotonic_ns", 0)
-    if (s.get("state") != "RUNNING" or not 0 <= age < 500_000_000
-            or s.get("fault_layer") or s.get("safety_decision") == "FAULT"
-            or any(h.get("state") != "OK" for h in s.get("source_health", []))):
+    if (
+        s.get("state") != "RUNNING"
+        or not 0 <= age < 500_000_000
+        or s.get("fault_layer")
+        or s.get("safety_decision") == "FAULT"
+        or any(h.get("state") != "OK" for h in s.get("source_health", []))
+    ):
         raise RuntimeError(f"runtime/health/timing failure: {s}")
     return s
 
 def stopped(s):
-    return (s.get("safety_decision") == "STOP" and s.get("enabled") is False
-            and s.get("left_output") == s.get("right_output") == 0
-            and s.get("ready_for_active") is True)
+    return (
+        s.get("safety_decision") == "STOP"
+        and s.get("enabled") is False
+        and s.get("left_output") == s.get("right_output") == 0
+        and s.get("ready_for_active") is True
+    )
 
 def stop():
     client.publish_stop(command_id + "-stop", ttl_ns=ttl_ns)
@@ -1279,6 +1174,7 @@ def idle(pause):
         if time.monotonic() >= deadline:
             raise RuntimeError("IDLE was not confirmed")
         time.sleep(0.05)
+
     deadline = time.monotonic() + pause
     while time.monotonic() < deadline:
         if not stopped(status()):
@@ -1291,67 +1187,101 @@ def yaw(s):
         raise RuntimeError("missing/invalid runtime yaw")
     return value
 
-def phase(index, label, target, angle=0.0):
+def phase(index, label, v_mps, omega_rad_s, angle=0.0):
     print(f"proba {index}/10: {label}", flush=True)
     initial = status()
     if not stopped(initial):
         raise RuntimeError("phase requires ready IDLE")
-    v, omega = target(0.0)
+
     previous_yaw = yaw(initial) if angle else 0.0
     turned = 0.0
     started = time.monotonic()
     published_ns = time.monotonic_ns()
     allowed = False
     next_send = started
+
     while True:
         now = time.monotonic()
         elapsed = now - started
         s = status()
+
         if s["monotonic_ns"] > published_ns:
             if s.get("safety_decision") == "ALLOW" and s.get("enabled") is True:
                 allowed = True
             elif allowed or s.get("safety_reason") != "NOT_ACTIVE":
                 raise RuntimeError(f"motion stopped by safety: {s}")
+
         if not allowed and elapsed > 1.5:
             raise RuntimeError("phase did not reach ALLOW")
+
         if angle:
             current_yaw = yaw(s)
-            turned += math.atan2(math.sin(current_yaw - previous_yaw), math.cos(current_yaw - previous_yaw))
+            turned += math.atan2(
+                math.sin(current_yaw - previous_yaw),
+                math.cos(current_yaw - previous_yaw),
+            )
             previous_yaw = current_yaw
             remaining = abs(angle) - math.copysign(1.0, angle) * turned
             if remaining <= math.radians(2):
                 break
             if elapsed > 30.0:
-                raise RuntimeError("turn did not reach its target within 30 s")        else:
-            if elapsed >= 5.0:
-                break        if now - next_send > 0.08:
+                raise RuntimeError("turn did not reach its target within 30 s")
+        elif elapsed >= 5.0:
+            break
+
+        if now - next_send > 0.08:
             raise RuntimeError("command heartbeat deadline missed")
-        client.publish_teleop(f"{command_id}-{index}", v_mps=v,
-                             omega_rad_s=omega, max_v_mps=0.25,
-                             max_omega_rad_s=0.60, ttl_ns=ttl_ns)
+
+        client.publish_teleop(
+            f"{command_id}-{index}",
+            v_mps=v_mps,
+            omega_rad_s=omega_rad_s,
+            max_v_mps=0.25,
+            max_omega_rad_s=0.60,
+            ttl_ns=ttl_ns,
+        )
         next_send += 0.1
         time.sleep(max(0.0, next_send - time.monotonic()))
+
     idle(5.0 if index < 10 else 0.0)
 
 try:
-    track = float(json.loads((root / "conf/fizika.json").read_text())["nyomtav_szelesseg_m"])
+    track = float(
+        json.loads((root / "conf/fizika.json").read_text())["nyomtav_szelesseg_m"]
+    )
     if not math.isfinite(track) or track <= 0:
         raise ValueError("invalid track width")
-    phase(1, "előre, 5 s, 0.15–0.25 m/s", lambda t: (0.15 + 0.10 * t, 0.0))
-    phase(2, "hátra, 5 s, 0.15–0.25 m/s", lambda t: (-0.15 - 0.10 * t, 0.0))
-    # Right/left describes the side of the arc relative to the chassis;
-    # reversing travel reverses yaw, just as for a wheel-speed pair.
-    for index, label, direction, side in (
-        (3, "jobbra előre", 1, -1), (4, "jobbra hátra", -1, -1),
-        (5, "balra előre", 1, 1), (6, "balra hátra", -1, 1),
-    ):
-        phase(index, label + ", 5 s, R=2.0→0.6 m",
-              lambda t: (direction * 0.15, side * direction * 0.15 / (2.0 - 1.4 * t)))
-    phase(7, "helyben jobbra 90°", lambda t: (0.0, -0.4), -math.pi / 2)
-    phase(8, "helyben balra 90°", lambda t: (0.0, 0.4), math.pi / 2)
+
+    # Fixed targets are deliberate: V3 L5 forbids a changed goal under the
+    # same logical command_id. Heartbeats may advance revision/TTL only.
+    phase(1, "előre, 5 s, 0.15 m/s", 0.15, 0.0)
+    phase(2, "hátra, 5 s, 0.15 m/s", -0.15, 0.0)
+
+    arc_v = 0.15
+    arc_omega = arc_v / 1.0
+    phase(3, "jobbra előre, 5 s, R=1.0 m", arc_v, -arc_omega)
+    phase(4, "jobbra hátra, 5 s, R=1.0 m", -arc_v, arc_omega)
+    phase(5, "balra előre, 5 s, R=1.0 m", arc_v, arc_omega)
+    phase(6, "balra hátra, 5 s, R=1.0 m", -arc_v, -arc_omega)
+
+    phase(7, "helyben jobbra 90°", 0.0, -0.4, -math.pi / 2)
+    phase(8, "helyben balra 90°", 0.0, 0.4, math.pi / 2)
+
     pivot_omega = min(0.4, 0.20 / track)
-    phase(9, "jobbra 180°, jobb kerék célja 0", lambda t: (pivot_omega * track / 2, -pivot_omega), -math.pi)
-    phase(10, "balra 180°, jobb kerék célja 0", lambda t: (-pivot_omega * track / 2, pivot_omega), math.pi)
+    phase(
+        9,
+        "jobbra 180°, jobb kerék célja 0",
+        pivot_omega * track / 2,
+        -pivot_omega,
+        -math.pi,
+    )
+    phase(
+        10,
+        "balra 180°, jobb kerék célja 0",
+        -pivot_omega * track / 2,
+        pivot_omega,
+        math.pi,
+    )
     print("proba: kész, IDLE", flush=True)
 except KeyboardInterrupt:
     print("proba: megszakítva", flush=True)
@@ -1360,7 +1290,6 @@ except Exception as exc:
     print(f"ERROR: proba aborted: {exc}", file=sys.stderr, flush=True)
     raise SystemExit(1)
 finally:
-    # Do not let a second interrupt prevent the final mailbox STOP.
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     stop()
@@ -1370,7 +1299,7 @@ PY
     chmod 600 "$COMMAND_PID_FILE" 2>/dev/null || true
     wait "$cpid"
     result=$?
-    # Only finish our own capture; a replacing command may already be running.
+
     if [[ "$(cat "$COMMAND_PID_FILE" 2>/dev/null)" == "$cpid" ]]; then
         _trigger_movement_capture_if_needed || true
         rm -f "$COMMAND_PID_FILE" "$MOVEMENT_CAPTURE_FILE"
@@ -1401,9 +1330,6 @@ main() {
             ;;
         "capture start")
             [[ $# -eq 2 ]] || { usage; return 2; }
-            # Preserve an already-running explicit mode when old syntax
-            # "capture start" is used without a selector. A cold start defaults
-            # to ALAP, exactly like legacy behavior.
             if (( CAPTURE_MODE_EXPLICIT == 0 )); then
                 local current_mode=""
                 current_mode="$(_current_capture_mode 2>/dev/null || true)"
