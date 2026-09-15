@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -163,7 +164,11 @@ class NativeCounterEncoderBackend:
     """Derive velocity only from physical edge timing in closed snapshots.
 
     The first ``read(TickContext)`` establishes both the counter and timestamp
-    baseline. No wall clock, PWM, command, GPIO or worker thread is owned here.
+    baseline. Live edge validity uses a monotonic read-close timestamp taken
+    after the snapshots, so edges arriving after tick creation but before input
+    closure are not misclassified as future evidence. Synthetic/replay clocks
+    remain bound to their supplied ``TickContext``. No wall-clock time, PWM,
+    command, GPIO or worker thread is owned here.
     Count/distance and the diagnostic instantaneous rate retain their RAW
     meaning; only the edge fit supplies control velocity. No edge interval
     means baseline zero, and expired physical evidence means stale zero.
@@ -225,6 +230,21 @@ class NativeCounterEncoderBackend:
         left_running = self._running(self._left, "left")
         right_running = self._running(self._right, "right")
         return _CounterPair(left, right, left_running, right_running)
+
+    def _measurement_reference_ns(self, context_ns: int) -> int:
+        """Return the live read-close time, without contaminating replay clocks.
+
+        Live runtime TickContext values and ``time.monotonic_ns()`` share the
+        same boot-relative clock and differ only by the input-read latency. A
+        replay/synthetic context can belong to another boot or a test epoch; in
+        that case keep the supplied deterministic context as the authority.
+        """
+
+        read_closed_ns = time.monotonic_ns()
+        read_latency_ns = read_closed_ns - context_ns
+        if 0 <= read_latency_ns <= self._config.maximum_sample_interval_ns:
+            return read_closed_ns
+        return context_ns
 
     @staticmethod
     def _edge_diagnostics(
@@ -547,15 +567,16 @@ class NativeCounterEncoderBackend:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
         current = self._snapshot_pair()
+        measurement_now_ns = self._measurement_reference_ns(context.monotonic_ns)
         previous = self._previous
         previous_monotonic_ns = self._previous_monotonic_ns
 
         if previous is None or previous_monotonic_ns is None:
             self._previous = current
             self._previous_monotonic_ns = context.monotonic_ns
-            self._stationary_since_ns = context.monotonic_ns
+            self._stationary_since_ns = measurement_now_ns
             invalid_edges = any(
-                self._invalid_edge_timing(snapshot, snapshot, context.monotonic_ns, 0)
+                self._invalid_edge_timing(snapshot, snapshot, measurement_now_ns, 0)
                 for snapshot in (current.left, current.right)
             )
             return self._rejected_reading(
@@ -587,7 +608,7 @@ class NativeCounterEncoderBackend:
         elapsed_ns = context.monotonic_ns - previous_monotonic_ns
         timing_valid = elapsed_ns > 0 and current.running
         invalid_edges = any(
-            self._invalid_edge_timing(new, old, context.monotonic_ns, after_ns)
+            self._invalid_edge_timing(new, old, measurement_now_ns, after_ns)
             for new, old, after_ns in (
                 (current.left, previous.left, self._left_after_ns),
                 (current.right, previous.right, self._right_after_ns),
@@ -601,7 +622,7 @@ class NativeCounterEncoderBackend:
         )
         stale = timing_valid and (
             any(
-                edge is not None and context.monotonic_ns - edge.timestamp_ns
+                edge is not None and measurement_now_ns - edge.timestamp_ns
                 > self._config.maximum_sample_interval_ns
                 for edge in latest
             )
@@ -658,12 +679,12 @@ class NativeCounterEncoderBackend:
             left_estimate = self._estimate_wheel(
                 current.left, step_distance_m=self._config.left_step_distance_m,
                 after_ns=self._left_after_ns,
-                now_ns=context.monotonic_ns,
+                now_ns=measurement_now_ns,
             )
             right_estimate = self._estimate_wheel(
                 current.right, step_distance_m=self._config.right_step_distance_m,
                 after_ns=self._right_after_ns,
-                now_ns=context.monotonic_ns,
+                now_ns=measurement_now_ns,
             )
             if left_estimate is None or right_estimate is None:
                 # Initial empty/single-edge evidence and the first edge after
@@ -707,15 +728,15 @@ class NativeCounterEncoderBackend:
 
         if rejection_code is not EncoderRejectionCode.NONE:
             if elapsed_ns > 0 and rejection_code is not EncoderRejectionCode.BASELINE:
-                self._stationary_since_ns = context.monotonic_ns
+                self._stationary_since_ns = measurement_now_ns
                 if latest[0] is not None:
-                    self._left_after_ns = min(context.monotonic_ns, latest[0].timestamp_ns)
+                    self._left_after_ns = min(measurement_now_ns, latest[0].timestamp_ns)
                 elif rejection_code is EncoderRejectionCode.INVALID_EDGE_TIMING:
-                    self._left_after_ns = context.monotonic_ns
+                    self._left_after_ns = measurement_now_ns
                 if latest[1] is not None:
-                    self._right_after_ns = min(context.monotonic_ns, latest[1].timestamp_ns)
+                    self._right_after_ns = min(measurement_now_ns, latest[1].timestamp_ns)
                 elif rejection_code is EncoderRejectionCode.INVALID_EDGE_TIMING:
-                    self._right_after_ns = context.monotonic_ns
+                    self._right_after_ns = measurement_now_ns
             return self._rejected_reading(
                 context,
                 stale=stale,
