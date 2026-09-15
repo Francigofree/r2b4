@@ -57,12 +57,39 @@ class SignedPulseCounterSnapshot:
     read_errors: int = 0
     invalid_alerts: int = 0
     edge_history: tuple[SignedPulseEdge, ...] = ()
+    quadrature_rejections: int = 0
+    direction_change_candidates: int = 0
+    direction_changes_confirmed: int = 0
+    confirmed_direction: int = 0
+    pending_direction: int = 0
+    pending_direction_edges: int = 0
+    last_a_timestamp_ns: int | None = None
+    last_b_timestamp_ns: int | None = None
+    last_b_level: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.pulse_count, int) or isinstance(self.pulse_count, bool):
             raise ValueError("pulse_count must be an integer")
         _nonnegative_int(self.read_errors, "read_errors")
         _nonnegative_int(self.invalid_alerts, "invalid_alerts")
+        _nonnegative_int(self.quadrature_rejections, "quadrature_rejections")
+        _nonnegative_int(self.direction_change_candidates, "direction_change_candidates")
+        _nonnegative_int(self.direction_changes_confirmed, "direction_changes_confirmed")
+        _nonnegative_int(self.pending_direction_edges, "pending_direction_edges")
+        for value, name in (
+            (self.confirmed_direction, "confirmed_direction"),
+            (self.pending_direction, "pending_direction"),
+        ):
+            if value not in (-1, 0, 1):
+                raise ValueError(f"{name} must be -1, 0 or 1")
+        for value, name in (
+            (self.last_a_timestamp_ns, "last_a_timestamp_ns"),
+            (self.last_b_timestamp_ns, "last_b_timestamp_ns"),
+        ):
+            if value is not None:
+                _nonnegative_int(value, name)
+        if self.last_b_level not in (None, 0, 1):
+            raise ValueError("last_b_level must be 0, 1 or None")
         if not isinstance(self.edge_history, tuple) or any(
             not isinstance(edge, SignedPulseEdge) for edge in self.edge_history
         ):
@@ -373,6 +400,32 @@ class NativeCounterEncoderBackend:
             ),
             maximum_abs_velocity_mps=config.maximum_abs_velocity_mps,
             rejection_code=rejection_code,
+            left_quadrature_rejections=current.left.quadrature_rejections,
+            right_quadrature_rejections=current.right.quadrature_rejections,
+            left_quadrature_rejection_delta=(
+                None if previous is None else
+                current.left.quadrature_rejections - previous.left.quadrature_rejections
+            ),
+            right_quadrature_rejection_delta=(
+                None if previous is None else
+                current.right.quadrature_rejections - previous.right.quadrature_rejections
+            ),
+            left_direction_change_candidates=current.left.direction_change_candidates,
+            right_direction_change_candidates=current.right.direction_change_candidates,
+            left_direction_changes_confirmed=current.left.direction_changes_confirmed,
+            right_direction_changes_confirmed=current.right.direction_changes_confirmed,
+            left_confirmed_direction=current.left.confirmed_direction,
+            right_confirmed_direction=current.right.confirmed_direction,
+            left_pending_direction=current.left.pending_direction,
+            right_pending_direction=current.right.pending_direction,
+            left_pending_direction_edges=current.left.pending_direction_edges,
+            right_pending_direction_edges=current.right.pending_direction_edges,
+            left_last_a_timestamp_ns=current.left.last_a_timestamp_ns,
+            right_last_a_timestamp_ns=current.right.last_a_timestamp_ns,
+            left_last_b_timestamp_ns=current.left.last_b_timestamp_ns,
+            right_last_b_timestamp_ns=current.right.last_b_timestamp_ns,
+            left_last_b_level=current.left.last_b_level,
+            right_last_b_level=current.right.last_b_level,
         )
 
     def _stationary_estimate(

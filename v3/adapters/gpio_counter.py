@@ -32,6 +32,13 @@ class GpioCounterChannelConfig:
     invert: bool = False
     pull_up: bool = False
     a_debounce_micros: int = 0
+    # Around an A physical edge, B must be stable for this interval.  The
+    # production config uses 50 us; zero preserves the generic X1 primitive.
+    direction_guard_micros: int = 0
+    # A genuine sign reversal must persist for this many A-rising candidates
+    # before it is committed to signed edge history.
+    direction_change_confirm_edges: int = 1
+    direction_change_confirm_window_micros: int = 250_000
 
     def __post_init__(self) -> None:
         _nonnegative_int(self.pin_a, "pin_a")
@@ -47,6 +54,19 @@ class GpioCounterChannelConfig:
         _bool(self.invert, "invert")
         _bool(self.pull_up, "pull_up")
         _nonnegative_int(self.a_debounce_micros, "a_debounce_micros")
+        _nonnegative_int(self.direction_guard_micros, "direction_guard_micros")
+        confirm_edges = _nonnegative_int(
+            self.direction_change_confirm_edges,
+            "direction_change_confirm_edges",
+        )
+        if not 1 <= confirm_edges <= 8:
+            raise ValueError("direction_change_confirm_edges must be within [1, 8]")
+        confirm_window = _nonnegative_int(
+            self.direction_change_confirm_window_micros,
+            "direction_change_confirm_window_micros",
+        )
+        if confirm_window == 0:
+            raise ValueError("direction_change_confirm_window_micros must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +77,7 @@ class GpioCounterPairConfig:
     right: GpioCounterChannelConfig
     gpio_chip: int = 0
     edge_history_capacity: int = 512
+    diagnostic_event_capacity: int = 2048
 
     def __post_init__(self) -> None:
         if not isinstance(self.left, GpioCounterChannelConfig):
@@ -70,6 +91,12 @@ class GpioCounterPairConfig:
         )
         if not 2 <= capacity <= 4096:
             raise ValueError("edge_history_capacity must be within [2, 4096]")
+        diagnostic_capacity = _nonnegative_int(
+            self.diagnostic_event_capacity,
+            "diagnostic_event_capacity",
+        )
+        if not 16 <= diagnostic_capacity <= 16384:
+            raise ValueError("diagnostic_event_capacity must be within [16, 16384]")
         if len(set(self.pins)) != 4:
             raise ValueError("left and right counter GPIO pins must be unique")
 
@@ -128,6 +155,36 @@ class GpioCounterBackend(Protocol):
     def gpiochip_close(self, handle: int) -> object: ...
 
 
+@dataclass(frozen=True, slots=True)
+class QuadratureAlertEvent:
+    """One bounded raw A/B callback decision for offline diagnosis."""
+
+    channel: str
+    callback_timestamp_ns: int
+    physical_timestamp_ns: int | None
+    level: int
+    accepted: bool
+    reason: str
+    candidate_direction: int | None
+    pulse_count_after: int
+
+    def __post_init__(self) -> None:
+        if self.channel not in ("A", "B"):
+            raise ValueError("channel must be A or B")
+        _nonnegative_int(self.callback_timestamp_ns, "callback_timestamp_ns")
+        if self.physical_timestamp_ns is not None:
+            _nonnegative_int(self.physical_timestamp_ns, "physical_timestamp_ns")
+        if self.level not in (0, 1):
+            raise ValueError("level must be 0 or 1")
+        _bool(self.accepted, "accepted")
+        if not isinstance(self.reason, str) or not self.reason:
+            raise ValueError("reason must be a non-empty string")
+        if self.candidate_direction not in (None, -1, 1):
+            raise ValueError("candidate_direction must be -1, 1 or None")
+        if not isinstance(self.pulse_count_after, int) or isinstance(self.pulse_count_after, bool):
+            raise ValueError("pulse_count_after must be an integer")
+
+
 @dataclass(slots=True)
 class _CounterState:
     pulse_count: int = 0
@@ -138,6 +195,15 @@ class _CounterState:
     edge_history: deque[SignedPulseEdge] | None = None
     b_history: deque[tuple[int, int]] | None = None
     last_a_timestamp_ns: int | None = None
+    last_b_timestamp_ns: int | None = None
+    last_b_level: int | None = None
+    confirmed_direction: int = 0
+    pending_direction: int = 0
+    pending_a_timestamps: list[int] | None = None
+    quadrature_rejections: int = 0
+    direction_change_candidates: int = 0
+    direction_changes_confirmed: int = 0
+    diagnostic_events: deque[QuadratureAlertEvent] | None = None
 
 
 class _CounterView:
@@ -202,6 +268,8 @@ class NativeGpioSignedCounterPair:
             side: _CounterState(
                 edge_history=deque(maxlen=config.edge_history_capacity),
                 b_history=deque(maxlen=config.edge_history_capacity),
+                pending_a_timestamps=[],
+                diagnostic_events=deque(maxlen=config.diagnostic_event_capacity),
             )
             for side in ("left", "right")
         }
@@ -341,6 +409,32 @@ class NativeGpioSignedCounterPair:
             and tick >= 0
         )
 
+    @staticmethod
+    def _record_event(
+        state: _CounterState,
+        *,
+        channel: str,
+        callback_timestamp_ns: int,
+        physical_timestamp_ns: int | None,
+        level: int,
+        accepted: bool,
+        reason: str,
+        candidate_direction: int | None = None,
+    ) -> None:
+        assert state.diagnostic_events is not None
+        state.diagnostic_events.append(
+            QuadratureAlertEvent(
+                channel=channel,
+                callback_timestamp_ns=callback_timestamp_ns,
+                physical_timestamp_ns=physical_timestamp_ns,
+                level=level,
+                accepted=accepted,
+                reason=reason,
+                candidate_direction=candidate_direction,
+                pulse_count_after=state.pulse_count,
+            )
+        )
+
     def _b_handler(
         self,
         side: str,
@@ -362,34 +456,146 @@ class NativeGpioSignedCounterPair:
                     return
 
                 assert state.b_history is not None
-                # A B transition which belongs at/before an already committed
-                # A edge arrived too late to establish that A edge's direction.
-                # Reject it rather than silently changing future sign state.
+                # A B transition which belongs at/before an already observed
+                # physical A edge arrived too late to establish that A edge's
+                # direction. This remains a hard ordering diagnostic.
                 if (
                     state.last_a_timestamp_ns is not None
                     and tick <= state.last_a_timestamp_ns
                 ):
                     state.invalid_alerts += 1
+                    self._record_event(
+                        state, channel="B", callback_timestamp_ns=tick,
+                        physical_timestamp_ns=tick, level=level, accepted=False,
+                        reason="B_LATE_AFTER_A",
+                    )
                     return
                 if state.b_history and tick <= state.b_history[-1][0]:
                     state.invalid_alerts += 1
+                    self._record_event(
+                        state, channel="B", callback_timestamp_ns=tick,
+                        physical_timestamp_ns=tick, level=level, accepted=False,
+                        reason="B_NONMONOTONIC",
+                    )
+                    return
+                if level == state.level_b:
+                    state.quadrature_rejections += 1
+                    self._record_event(
+                        state, channel="B", callback_timestamp_ns=tick,
+                        physical_timestamp_ns=tick, level=level, accepted=False,
+                        reason="B_DUPLICATE_LEVEL",
+                    )
                     return
 
                 state.b_history.append((tick, level))
                 state.level_b = level
+                state.last_b_timestamp_ns = tick
+                state.last_b_level = level
+                self._record_event(
+                    state, channel="B", callback_timestamp_ns=tick,
+                    physical_timestamp_ns=tick, level=level, accepted=True,
+                    reason="B_TRANSITION",
+                )
 
         return handle
 
     @staticmethod
-    def _level_b_at_physical_a(state: _CounterState, physical_tick: int) -> int | None:
+    def _b_evidence_at_physical_a(
+        state: _CounterState,
+        physical_tick: int,
+        guard_ns: int,
+    ) -> tuple[int | None, str]:
         assert state.b_history is not None
-        # Simultaneous A/B timestamps are ambiguous for X1 direction decoding.
-        if any(timestamp == physical_tick for timestamp, _ in reversed(state.b_history)):
-            return None
-        for timestamp, level in reversed(state.b_history):
-            if timestamp < physical_tick:
-                return level
-        return state.initial_level_b
+        previous: tuple[int, int] | None = None
+        following: tuple[int, int] | None = None
+        for event in state.b_history:
+            if event[0] < physical_tick:
+                previous = event
+                continue
+            if event[0] == physical_tick:
+                return None, "B_AT_A_TIMESTAMP"
+            following = event
+            break
+        if guard_ns > 0:
+            if previous is not None and physical_tick - previous[0] <= guard_ns:
+                return None, "B_UNSTABLE_BEFORE_A"
+            if following is not None and following[0] - physical_tick <= guard_ns:
+                return None, "B_UNSTABLE_AFTER_A"
+        return (
+            previous[1] if previous is not None else state.initial_level_b,
+            "B_STABLE_AT_A",
+        )
+
+    @staticmethod
+    def _append_signed_edge(
+        state: _CounterState,
+        timestamp_ns: int,
+        direction: int,
+    ) -> None:
+        assert state.edge_history is not None
+        state.pulse_count += direction
+        state.edge_history.append(SignedPulseEdge(timestamp_ns, state.pulse_count))
+
+    @staticmethod
+    def _reject_pending_direction(state: _CounterState) -> None:
+        assert state.pending_a_timestamps is not None
+        if state.pending_a_timestamps:
+            state.quadrature_rejections += len(state.pending_a_timestamps)
+        state.pending_a_timestamps.clear()
+        state.pending_direction = 0
+
+    def _commit_a_direction(
+        self,
+        state: _CounterState,
+        channel: GpioCounterChannelConfig,
+        physical_tick: int,
+        direction: int,
+    ) -> tuple[bool, str]:
+        assert state.pending_a_timestamps is not None
+        confirm_edges = channel.direction_change_confirm_edges
+        if state.confirmed_direction == 0:
+            state.confirmed_direction = direction
+            self._append_signed_edge(state, physical_tick, direction)
+            return True, "A_INITIAL_DIRECTION"
+
+        if direction == state.confirmed_direction:
+            if state.pending_a_timestamps:
+                self._reject_pending_direction(state)
+            self._append_signed_edge(state, physical_tick, direction)
+            return True, "A_CONFIRMED_DIRECTION"
+
+        if confirm_edges == 1:
+            state.direction_change_candidates += 1
+            state.direction_changes_confirmed += 1
+            state.confirmed_direction = direction
+            self._append_signed_edge(state, physical_tick, direction)
+            return True, "A_REVERSAL_CONFIRMED"
+
+        window_ns = channel.direction_change_confirm_window_micros * 1_000
+        if state.pending_direction != direction:
+            self._reject_pending_direction(state)
+        elif (
+            state.pending_a_timestamps
+            and physical_tick - state.pending_a_timestamps[0] > window_ns
+        ):
+            self._reject_pending_direction(state)
+
+        if not state.pending_a_timestamps:
+            state.pending_direction = direction
+        state.pending_a_timestamps.append(physical_tick)
+        state.direction_change_candidates += 1
+
+        if len(state.pending_a_timestamps) < confirm_edges:
+            return False, "A_REVERSAL_PENDING"
+
+        pending = tuple(state.pending_a_timestamps)
+        state.pending_a_timestamps.clear()
+        state.pending_direction = 0
+        state.confirmed_direction = direction
+        state.direction_changes_confirmed += 1
+        for timestamp_ns in pending:
+            self._append_signed_edge(state, timestamp_ns, direction)
+        return True, "A_REVERSAL_CONFIRMED"
 
     def _a_handler(
         self,
@@ -420,27 +626,39 @@ class NativeGpioSignedCounterPair:
                 # live callbacks use the documented debounce correction.
                 physical_tick = tick - debounce_ns if tick >= debounce_ns else tick
 
-                assert state.edge_history is not None
                 if (
-                    state.edge_history
-                    and physical_tick <= state.edge_history[-1].timestamp_ns
+                    state.last_a_timestamp_ns is not None
+                    and physical_tick <= state.last_a_timestamp_ns
                 ):
                     state.invalid_alerts += 1
                     return
 
-                level_b = self._level_b_at_physical_a(state, physical_tick)
+                guard_ns = channel.direction_guard_micros * 1_000
+                level_b, evidence_reason = self._b_evidence_at_physical_a(
+                    state, physical_tick, guard_ns
+                )
                 if level_b is None:
-                    state.invalid_alerts += 1
+                    state.quadrature_rejections += 1
+                    state.last_a_timestamp_ns = physical_tick
+                    self._record_event(
+                        state, channel="A", callback_timestamp_ns=tick,
+                        physical_timestamp_ns=physical_tick, level=1, accepted=False,
+                        reason=evidence_reason,
+                    )
                     return
 
                 direction = 1 if level_b == channel.forward_b_level else -1
                 if channel.invert:
                     direction = -direction
-                state.pulse_count += direction
-                state.edge_history.append(
-                    SignedPulseEdge(physical_tick, state.pulse_count),
+                accepted, reason = self._commit_a_direction(
+                    state, channel, physical_tick, direction
                 )
                 state.last_a_timestamp_ns = physical_tick
+                self._record_event(
+                    state, channel="A", callback_timestamp_ns=tick,
+                    physical_timestamp_ns=physical_tick, level=1, accepted=accepted,
+                    reason=reason, candidate_direction=direction,
+                )
 
         return handle
 
@@ -476,7 +694,26 @@ class NativeGpioSignedCounterPair:
                 read_errors=state.read_errors,
                 invalid_alerts=state.invalid_alerts,
                 edge_history=tuple(state.edge_history),
+                quadrature_rejections=state.quadrature_rejections,
+                direction_change_candidates=state.direction_change_candidates,
+                direction_changes_confirmed=state.direction_changes_confirmed,
+                confirmed_direction=state.confirmed_direction,
+                pending_direction=state.pending_direction,
+                pending_direction_edges=len(state.pending_a_timestamps or ()),
+                last_a_timestamp_ns=state.last_a_timestamp_ns,
+                last_b_timestamp_ns=state.last_b_timestamp_ns,
+                last_b_level=state.last_b_level,
             )
+
+    def diagnostic_events(self, side: str) -> tuple[QuadratureAlertEvent, ...]:
+        """Return the bounded raw A/B decision trace without motor authority."""
+
+        if side not in self._states:
+            raise ValueError("side must be left or right")
+        with self._lock:
+            events = self._states[side].diagnostic_events
+            assert events is not None
+            return tuple(events)
 
     def _release_resources(self, *, suppress_errors: bool) -> None:
         first_error: Exception | None = None
@@ -530,4 +767,5 @@ __all__ = [
     "GpioCounterChannelConfig",
     "GpioCounterPairConfig",
     "NativeGpioSignedCounterPair",
+    "QuadratureAlertEvent",
 ]

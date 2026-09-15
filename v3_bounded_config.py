@@ -342,6 +342,11 @@ def _encoder_runtime_config(
 
     forward_b_level = encoders.get("forward_b_level")
     debounce_micros = encoders.get("a_debounce_micros")
+    direction_guard_micros = encoders.get("direction_guard_micros", 50)
+    direction_change_confirm_edges = encoders.get("direction_change_confirm_edges", 3)
+    direction_change_confirm_window_micros = encoders.get(
+        "direction_change_confirm_window_micros", 250_000
+    )
     pull_up = _required_bool(
         encoders.get("input_pull_up"),
         "hardware config encoderek.input_pull_up",
@@ -357,6 +362,11 @@ def _encoder_runtime_config(
             ),
             pull_up=pull_up,
             a_debounce_micros=debounce_micros,  # type: ignore[arg-type]
+            direction_guard_micros=direction_guard_micros,  # type: ignore[arg-type]
+            direction_change_confirm_edges=direction_change_confirm_edges,  # type: ignore[arg-type]
+            direction_change_confirm_window_micros=(
+                direction_change_confirm_window_micros  # type: ignore[arg-type]
+            ),
         ),
         right=GpioCounterChannelConfig(
             pin_a=encoders.get("jobb_a_pin"),  # type: ignore[arg-type]
@@ -368,6 +378,11 @@ def _encoder_runtime_config(
             ),
             pull_up=pull_up,
             a_debounce_micros=debounce_micros,  # type: ignore[arg-type]
+            direction_guard_micros=direction_guard_micros,  # type: ignore[arg-type]
+            direction_change_confirm_edges=direction_change_confirm_edges,  # type: ignore[arg-type]
+            direction_change_confirm_window_micros=(
+                direction_change_confirm_window_micros  # type: ignore[arg-type]
+            ),
         ),
         gpio_chip=gpio_chip,
     )

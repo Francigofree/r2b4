@@ -127,6 +127,26 @@ class EncoderEdgeDiagnostics:
     right_measurement_trust: float
     maximum_abs_velocity_mps: float
     rejection_code: EncoderRejectionCode
+    left_quadrature_rejections: int = 0
+    right_quadrature_rejections: int = 0
+    left_quadrature_rejection_delta: int | None = None
+    right_quadrature_rejection_delta: int | None = None
+    left_direction_change_candidates: int = 0
+    right_direction_change_candidates: int = 0
+    left_direction_changes_confirmed: int = 0
+    right_direction_changes_confirmed: int = 0
+    left_confirmed_direction: int = 0
+    right_confirmed_direction: int = 0
+    left_pending_direction: int = 0
+    right_pending_direction: int = 0
+    left_pending_direction_edges: int = 0
+    right_pending_direction_edges: int = 0
+    left_last_a_timestamp_ns: int | None = None
+    right_last_a_timestamp_ns: int | None = None
+    left_last_b_timestamp_ns: int | None = None
+    right_last_b_timestamp_ns: int | None = None
+    left_last_b_level: int | None = None
+    right_last_b_level: int | None = None
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -224,6 +244,40 @@ class EncoderEdgeDiagnostics:
             "maximum_abs_velocity_mps",
         ) <= 0.0:
             raise ValueError("maximum_abs_velocity_mps must be positive")
+        for value, name in (
+            (self.left_quadrature_rejections, "left_quadrature_rejections"),
+            (self.right_quadrature_rejections, "right_quadrature_rejections"),
+            (self.left_direction_change_candidates, "left_direction_change_candidates"),
+            (self.right_direction_change_candidates, "right_direction_change_candidates"),
+            (self.left_direction_changes_confirmed, "left_direction_changes_confirmed"),
+            (self.right_direction_changes_confirmed, "right_direction_changes_confirmed"),
+            (self.left_pending_direction_edges, "left_pending_direction_edges"),
+            (self.right_pending_direction_edges, "right_pending_direction_edges"),
+        ):
+            _nonnegative_integer(value, name)
+        for value, name in (
+            (self.left_quadrature_rejection_delta, "left_quadrature_rejection_delta"),
+            (self.right_quadrature_rejection_delta, "right_quadrature_rejection_delta"),
+            (self.left_last_a_timestamp_ns, "left_last_a_timestamp_ns"),
+            (self.right_last_a_timestamp_ns, "right_last_a_timestamp_ns"),
+            (self.left_last_b_timestamp_ns, "left_last_b_timestamp_ns"),
+            (self.right_last_b_timestamp_ns, "right_last_b_timestamp_ns"),
+        ):
+            _optional_integer(value, name)
+        for value, name in (
+            (self.left_confirmed_direction, "left_confirmed_direction"),
+            (self.right_confirmed_direction, "right_confirmed_direction"),
+            (self.left_pending_direction, "left_pending_direction"),
+            (self.right_pending_direction, "right_pending_direction"),
+        ):
+            if value not in (-1, 0, 1):
+                raise ValueError(f"{name} must be -1, 0 or 1")
+        for value, name in (
+            (self.left_last_b_level, "left_last_b_level"),
+            (self.right_last_b_level, "right_last_b_level"),
+        ):
+            if value not in (None, 0, 1):
+                raise ValueError(f"{name} must be 0, 1 or None")
         if not isinstance(self.rejection_code, EncoderRejectionCode):
             raise TypeError("rejection_code must be EncoderRejectionCode")
 
@@ -436,6 +490,26 @@ class NativeEncoderSource:
                 "maximum_abs_velocity_mps",
                 diagnostics.maximum_abs_velocity_mps,
             ),
+            DataField("left_quadrature_rejections", diagnostics.left_quadrature_rejections),
+            DataField("right_quadrature_rejections", diagnostics.right_quadrature_rejections),
+            DataField("left_quadrature_rejection_delta", diagnostics.left_quadrature_rejection_delta),
+            DataField("right_quadrature_rejection_delta", diagnostics.right_quadrature_rejection_delta),
+            DataField("left_direction_change_candidates", diagnostics.left_direction_change_candidates),
+            DataField("right_direction_change_candidates", diagnostics.right_direction_change_candidates),
+            DataField("left_direction_changes_confirmed", diagnostics.left_direction_changes_confirmed),
+            DataField("right_direction_changes_confirmed", diagnostics.right_direction_changes_confirmed),
+            DataField("left_confirmed_direction", diagnostics.left_confirmed_direction),
+            DataField("right_confirmed_direction", diagnostics.right_confirmed_direction),
+            DataField("left_pending_direction", diagnostics.left_pending_direction),
+            DataField("right_pending_direction", diagnostics.right_pending_direction),
+            DataField("left_pending_direction_edges", diagnostics.left_pending_direction_edges),
+            DataField("right_pending_direction_edges", diagnostics.right_pending_direction_edges),
+            DataField("left_last_a_timestamp_ns", diagnostics.left_last_a_timestamp_ns),
+            DataField("right_last_a_timestamp_ns", diagnostics.right_last_a_timestamp_ns),
+            DataField("left_last_b_timestamp_ns", diagnostics.left_last_b_timestamp_ns),
+            DataField("right_last_b_timestamp_ns", diagnostics.right_last_b_timestamp_ns),
+            DataField("left_last_b_level", diagnostics.left_last_b_level),
+            DataField("right_last_b_level", diagnostics.right_last_b_level),
         )
 
 
