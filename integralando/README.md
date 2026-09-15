@@ -1,51 +1,50 @@
-# R2B4 L6 P0 planning-scene optimization
+# R2B4 camera integration — Slice 1 (foundation)
 
-Baseline: `Francigofree/r2b4` main, `v3/layers/l6_navigation.py` Git blob `2cef8fc14895b49511c481b3f0db4ad88f0d5e03`.
+Baseline inspected: `Francigofree/r2b4` main commit `0968943d5fc8b6f08c6f736d333e4a4136fe3ba3`.
 
-## Implemented
+## What this slice implements
 
-- **P0.1**: one private `_LocalPlanningScene` per replan; static index cached by `frame_id/revision/source_sequence/resolution_m`.
-- **P0.2**: 0.50 m spatial buckets for occupied costmap cells; world coordinates and cell radius are precomputed once per costmap revision.
-- **P0.3**: exact rotated-rectangle clearance is preserved after the broad phase; no circle-footprint simplification.
-- **P0.4**: running minimum and exact-zero early exit; no temporary clearance list and no second `min()` pass.
-- **P0.5**: static costmap and dynamic obstacle-track clearance are separate; confidence filtering happens once per replan.
-- **Replay/restore**: the static index is derived acceleration state only; it is not checkpointed and is discarded by `restore()`.
-- Explore local-goal costmap lookup also reuses the precomputed static index.
-
-No V3 contract, L4, L7, L8, runtime, candidate count, rollout sample count, replan rate, score weight, or footprint geometry was changed.
-
-## Not implemented in this package
-
-- **P1** dynamic-track prediction using `TrajectoryPose.time_offset_ns`.
-- **P1** `FOLLOW_PERSON` mission/local-goal generation and target-person role semantics.
-- Live Room Cruise / Raspberry Pi timing proof. This package contains no live motor test.
+- New bounded `NativePicamera2Camera` physical owner.
+- Immutable `CameraFrameSnapshot` with separate sensor, measurement and completion timing.
+- Picamera2 is lazy-imported; no new global V3 import dependency.
+- New `NativeCameraSource` produces only bounded `camera_frame_health` metadata. Raw image bytes do **not** enter `DeviceSample`/TickEngine.
+- L12 gains an explicit `critical_device_ids` policy. Legacy default remains unchanged when the policy is `None`.
+- Production config explicitly marks the current three sensors as critical: `WHEEL_ENCODERS`, `BNO055_IMU`, `RPLIDAR_C1`. A future `CAMERA_FRONT` failure therefore does not automatically gain motor/safety authority.
+- Missing configured critical-device health remains fail-closed (`STOP`).
+- Targeted foundation tests are included.
 
 ## Apply
 
 From the extracted package:
 
 ```bash
-python3 apply.py /home/alba/project_r2b4
+python3 apply_camera_slice1.py /home/alba/project_r2b4
+cd /home/alba/project_r2b4
+python3 -m pytest -q tests/test_v3_camera_foundation.py
 ```
 
-The installer refuses to overwrite `l6_navigation.py` if its Git blob differs from the inspected baseline, so newer/local work is not silently destroyed. It does not commit or push.
+Do not start a physical camera or motion test until the next wiring slice is completed and the normal V3 regression gates are green.
 
-## Recommended repo validation after applying
+## Deployment note
+
+This code intentionally does not add Picamera2 to `requirements.txt`. On Raspberry Pi OS, Picamera2 belongs to the system/libcamera stack. Install/verify it separately, preferably headless:
 
 ```bash
-cd /home/alba/project_r2b4
-python -m pytest -q \
-  tests/test_v3_navigation_trajectory.py \
-  tests/test_v3_l6_planning_scene.py \
-  tests/test_v3_l5_l9_mission_navigation.py
+sudo apt install -y python3-picamera2 --no-install-recommends
+python3 -c "from picamera2 import Picamera2; print('Picamera2 OK')"
 ```
 
-## Validation performed while building the package
+## Still intentionally NOT implemented
 
-- Python syntax compile: **PASS**.
-- Existing acceptance candidate IDs reproduced with the current repo parameters: EXPLORE `trajectory-05-03`, NAVIGATE `trajectory-05-04`.
-- 1000 deterministic random poses: indexed clearance == capped legacy clearance: **PASS**.
-- Static-index reuse and restore invalidation: **PASS**.
-- Local synthetic clearance-core timing with 1200 occupied cells / 432 poses: about **8.6-11.3x faster** across two local runs in this environment. This is not a Raspberry Pi or end-to-end Room Cruise benchmark.
+- Camera creation/opening in `v3_hardware_runtime.py`.
+- Camera insertion into the fixed three-source live/resident runtime signatures.
+- Verified Raspberry Pi camera `SensorTimestamp` → V3 monotonic clock mapper.
+- Latest-only vision worker process and result queue.
+- Object detector/model backend.
+- `camera_detections` L1/L2 semantic sample.
+- L4 `VisualTrack` and camera↔LiDAR association.
+- Camera capture/JPEG evidence path.
+- Replay/Test Hub camera semantic evidence.
+- L5/L6 behaviours such as follow/docking/object navigation.
 
-Full repository pytest/replay/live evidence was not available in the packaging environment and must be run on the robot checkout after applying.
+Those belong to Slice 2/3. This package deliberately does not fake them.
