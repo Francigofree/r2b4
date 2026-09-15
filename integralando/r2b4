@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# R2B4 human launcher. All orchestration lives in v3.operator_controller.
+
+SRC="${BASH_SOURCE[0]}"
+ROOT="$(cd "$(dirname "$SRC")" && pwd)"
+
+# Optional shell-wide Ctrl+C panic hook:
+#   source /home/alba/project_r2b4/r2b4
+if [[ "$SRC" != "$0" ]]; then
+    export R2B4_CTRL_C_HOOK=1
+    _r2b4_panic_hook() {
+        printf '\nR2B4: Ctrl+C -> STOP + runtime shutdown\n' >&2
+        "$ROOT/r2b4" panic --quiet >/dev/null 2>&1 || true
+    }
+    trap '_r2b4_panic_hook' INT
+    return 0
+fi
+
+cd "$ROOT" || exit 1
+exec python3 -m v3.operator_cli "$@"

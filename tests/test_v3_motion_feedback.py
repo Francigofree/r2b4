@@ -4,7 +4,6 @@ from collections import deque
 from dataclasses import replace
 import math
 from pathlib import Path
-import subprocess
 
 import pytest
 
@@ -24,6 +23,7 @@ from v3.layers.l8_motion_realization import MotionRealizer
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.mcap_replay_bridge import ReplayWindow, replay_mcap
 from v3.observation import ObservationHub
+from v3.operator_controller import OperatorController
 from v3_validation_helpers import RecordingMotorSink, control_config
 
 
@@ -323,13 +323,8 @@ def test_adapted_motion_checkpoint_round_trips_through_mcap_replay(tmp_path):
 
 
 def test_launcher_straight_command_keeps_heading_correction_authority():
-    # Execute only the pure conversion helper, never source/start the launcher.
+    # Exercise only target conversion; no runtime or motion is started.
     root = Path(__file__).resolve().parents[1]
-    launcher = (root / "r2b4").read_text()
-    function = launcher.split("_wheel_targets_to_twist() {", 1)[1].split("\n}\n", 1)[0]
-    script = '_wheel_targets_to_twist() {' + function + '\n}\n_wheel_targets_to_twist 0.15 0.15\n'
-    result = subprocess.run(["bash", "-c", script], env={"ROOT": str(root), "PATH": "/usr/bin:/bin"},
-                            check=True, text=True, capture_output=True)
-    v, omega, max_v, max_omega, _ = map(float, result.stdout.split())
+    v, omega, max_v, max_omega, _ = OperatorController(root).wheel_targets_to_twist(0.15, 0.15)
     assert (v, omega, max_v) == (0.15, 0.0, 0.15)
     assert max_omega == 0.6

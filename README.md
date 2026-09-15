@@ -27,25 +27,40 @@ Aktív konfigurációk:
 Ajánlott belépő a gyökérben lévő launcher:
 
 ```bash
-./r2b4 runtime start
-./r2b4 runtime status
-./r2b4 runtime diag
+./r2b4 start
+./r2b4 status
+./r2b4 diag
 
 ./r2b4 capture start
 ./r2b4 capture status
 ./r2b4 capture stop
 
-./r2b4 forward start [speed_mps] [nocapture]
-./r2b4 mozog start <left_mps> <right_mps> [nocapture]
-./r2b4 roomcruise start [nocapture]
+./r2b4 forward 0.15
+./r2b4 backward 0.15
+./r2b4 wheels 0.10 0.20
+./r2b4 teleop 0.15 -0.20
+./r2b4 roomcruise
+./r2b4 proba c full
 
 ./r2b4 stop
 ./r2b4 shutdown
 ```
 
-A launcher a szükséges runtime-ot automatikusan elindítja. A `nocapture` csak a
-launcher által kért mozgás-capture-t hagyja ki; a runtime fail-evidence szabályai
-ettől nem változnak.
+A launcher a szükséges runtime-ot automatikusan elindítja. A capture-választó
+`c alap` (alapértelmezett, 8+2 másodperces triggered capture), `c full`
+(folyamatos felvétel) vagy `c nincs` (capture kikapcsolva); `--capture MODE`
+alakban is megadható. A régi `runtime start/status/diag`, `forward start`,
+`mozog start` és `roomcruise start` parancsok továbbra is működnek.
+A `--no-trigger` és régi `nocapture` csak a launcher által kért ALAP
+mozgás-trigger élesítését hagyja ki; a runtime fail-evidence szabályai ettől
+nem változnak.
+
+A shell launcher a `v3.operator_cli` adaptert indítja. Az orchestration
+Pythonból a `v3.operator_controller.OperatorController` API-n érhető el,
+opcionális `OperatorEvent` callbackkel. A mozgásparancsokat és a heartbeatet
+továbbra is a canonical `v3.control_cli` kezeli; a robot readiness- és
+safety-döntéseit a V3 runtime hozza. A `proba` tíz rögzített TELEOP fázist futtat,
+öt másodperces szünetekkel; a fordulás végét a runtime yaw-telemetriája jelzi.
 
 Közvetlen production entrypoint:
 
