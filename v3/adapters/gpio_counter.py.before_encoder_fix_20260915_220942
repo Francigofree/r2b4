@@ -133,11 +133,8 @@ class _CounterState:
     pulse_count: int = 0
     read_errors: int = 0
     invalid_alerts: int = 0
-    initial_level_b: int = 0
     level_b: int = 0
     edge_history: deque[SignedPulseEdge] | None = None
-    b_history: deque[tuple[int, int]] | None = None
-    last_a_timestamp_ns: int | None = None
 
 
 class _CounterView:
@@ -145,7 +142,7 @@ class _CounterView:
 
     __slots__ = ("_owner", "_side")
 
-    def __init__(self, owner: "NativeGpioSignedCounterPair", side: str) -> None:
+    def __init__(self, owner: NativeGpioSignedCounterPair, side: str) -> None:
         self._owner = owner
         self._side = side
 
@@ -160,15 +157,9 @@ class _CounterView:
 class NativeGpioSignedCounterPair:
     """Own one GPIO handle and expose two signed pulse-counter views.
 
-    Direction is resolved against the *physical* A-edge time, not simply the
-    last B callback delivered by Python.  B transitions are kept in a bounded
-    timestamped history.  The A callback timestamp is moved back by the
-    configured lgpio debounce delay before direction lookup and before it is
-    written to encoder edge history.
-
-    A late B callback whose timestamp belongs at or before an already committed
-    A edge is diagnostic evidence of callback-order ambiguity.  It is rejected
-    and increments ``invalid_alerts`` so the next encoder read fails closed.
+    Each B alert latches direction state. Each A rising alert increments or
+    decrements its signed counter under the same lock. No worker, clock,
+    velocity policy or concrete GPIO module is owned here.
     """
 
     __slots__ = (
@@ -201,7 +192,6 @@ class NativeGpioSignedCounterPair:
         self._states = {
             side: _CounterState(
                 edge_history=deque(maxlen=config.edge_history_capacity),
-                b_history=deque(maxlen=config.edge_history_capacity),
             )
             for side in ("left", "right")
         }
@@ -292,10 +282,7 @@ class NativeGpioSignedCounterPair:
                 )
             )
             with self._lock:
-                initial = self._read_level(channel.pin_b)
-                state = self._states[side]
-                state.initial_level_b = initial
-                state.level_b = initial
+                self._states[side].level_b = self._read_level(channel.pin_b)
             self._callbacks.append(
                 self._register_callback(
                     channel.pin_a,
@@ -323,7 +310,8 @@ class NativeGpioSignedCounterPair:
 
     def _valid_alert(self, chip: object, gpio: object, expected_pin: int) -> bool:
         # lgpio callback payloads identify the gpiochip device number, not the
-        # opaque handle returned by gpiochip_open().
+        # opaque handle returned by gpiochip_open().  Backend operations still
+        # use the handle; only asynchronous alert lineage uses gpio_chip.
         return (
             isinstance(chip, int)
             and not isinstance(chip, bool)
@@ -331,14 +319,6 @@ class NativeGpioSignedCounterPair:
             and isinstance(gpio, int)
             and not isinstance(gpio, bool)
             and gpio == expected_pin
-        )
-
-    @staticmethod
-    def _valid_tick(tick: object) -> bool:
-        return (
-            isinstance(tick, int)
-            and not isinstance(tick, bool)
-            and tick >= 0
         )
 
     def _b_handler(
@@ -356,40 +336,12 @@ class NativeGpioSignedCounterPair:
                     or not isinstance(level, int)
                     or isinstance(level, bool)
                     or level not in (0, 1)
-                    or not self._valid_tick(tick)
                 ):
                     state.invalid_alerts += 1
                     return
-
-                assert state.b_history is not None
-                # A B transition which belongs at/before an already committed
-                # A edge arrived too late to establish that A edge's direction.
-                # Reject it rather than silently changing future sign state.
-                if (
-                    state.last_a_timestamp_ns is not None
-                    and tick <= state.last_a_timestamp_ns
-                ):
-                    state.invalid_alerts += 1
-                    return
-                if state.b_history and tick <= state.b_history[-1][0]:
-                    state.invalid_alerts += 1
-                    return
-
-                state.b_history.append((tick, level))
                 state.level_b = level
 
         return handle
-
-    @staticmethod
-    def _level_b_at_physical_a(state: _CounterState, physical_tick: int) -> int | None:
-        assert state.b_history is not None
-        # Simultaneous A/B timestamps are ambiguous for X1 direction decoding.
-        if any(timestamp == physical_tick for timestamp, _ in reversed(state.b_history)):
-            return None
-        for timestamp, level in reversed(state.b_history):
-            if timestamp < physical_tick:
-                return level
-        return state.initial_level_b
 
     def _a_handler(
         self,
@@ -406,41 +358,26 @@ class NativeGpioSignedCounterPair:
                     or not isinstance(level, int)
                     or isinstance(level, bool)
                     or level != 1
-                    or not self._valid_tick(tick)
+                    or not isinstance(tick, int)
+                    or isinstance(tick, bool)
+                    or tick < 0
                 ):
                     state.invalid_alerts += 1
                     return
-
-                # lgpio timestamps a debounced level change after the configured
-                # debounce interval.  Recover the physical A transition time so
-                # B is sampled from the matching quadrature instant.
-                debounce_ns = channel.a_debounce_micros * 1_000
-                # Real lgpio epochs are vastly larger than the debounce delay.
-                # Preserve tiny synthetic test clocks (< debounce_ns) as-is;
-                # live callbacks use the documented debounce correction.
-                physical_tick = tick - debounce_ns if tick >= debounce_ns else tick
-
                 assert state.edge_history is not None
                 if (
                     state.edge_history
-                    and physical_tick <= state.edge_history[-1].timestamp_ns
+                    and tick <= state.edge_history[-1].timestamp_ns
                 ):
                     state.invalid_alerts += 1
                     return
-
-                level_b = self._level_b_at_physical_a(state, physical_tick)
-                if level_b is None:
-                    state.invalid_alerts += 1
-                    return
-
-                direction = 1 if level_b == channel.forward_b_level else -1
+                direction = 1 if state.level_b == channel.forward_b_level else -1
                 if channel.invert:
                     direction = -direction
                 state.pulse_count += direction
                 state.edge_history.append(
-                    SignedPulseEdge(physical_tick, state.pulse_count),
+                    SignedPulseEdge(tick, state.pulse_count),
                 )
-                state.last_a_timestamp_ns = physical_tick
 
         return handle
 

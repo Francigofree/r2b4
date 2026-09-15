@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from v3.contracts import (
     ActuatorRequest,
     AdmittedFrame,
+    Observation,
     TickContext,
     WheelVelocitySetpoint,
 )
@@ -22,7 +23,6 @@ WHEEL_CURVE_NAMES = (
     "right_forward",
     "right_reverse",
 )
-_FULL_TRUST_EPSILON = 1e-12
 
 
 def _finite_float(value: object, name: str) -> float:
@@ -84,21 +84,16 @@ class WheelSpeedCurve:
     def interpolate(self, speed_mps: float) -> float:
         speed = abs(_finite_float(speed_mps, "target_mps"))
         if speed <= self.points[0].speed_mps:
+            # The map is an approximate feed-forward, including below its
+            # first measured point. Do not apply 0.15 m/s effort to a crawl.
             first = self.points[0]
             floor = min(self.maintenance_output, first.normalized_output)
-            return float(
-                floor
-                + (first.normalized_output - floor)
-                * speed
-                / first.speed_mps
-            )
+            return float(floor + (first.normalized_output - floor) * speed / first.speed_mps)
         if speed >= self.points[-1].speed_mps:
             return float(self.points[-1].normalized_output)
         for lower, upper in zip(self.points, self.points[1:]):
             if lower.speed_mps <= speed <= upper.speed_mps:
-                ratio = (speed - lower.speed_mps) / (
-                    upper.speed_mps - lower.speed_mps
-                )
+                ratio = (speed - lower.speed_mps) / (upper.speed_mps - lower.speed_mps)
                 return float(
                     lower.normalized_output
                     + ratio * (upper.normalized_output - lower.normalized_output)
@@ -125,26 +120,19 @@ class WheelSpeedMap:
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, object]) -> "WheelSpeedMap":
+        """Close an edge-loaded JSON value into immutable L11 configuration."""
+
         curves_raw = _mapping(raw.get("curves"), "curves")
         curves: list[WheelSpeedCurve] = []
         for name in WHEEL_CURVE_NAMES:
             curve_raw = _mapping(curves_raw.get(name), name)
             point_rows = curve_raw.get("points")
-            if isinstance(point_rows, (str, bytes)) or not isinstance(
-                point_rows,
-                Sequence,
-            ):
+            if isinstance(point_rows, (str, bytes)) or not isinstance(point_rows, Sequence):
                 raise ValueError(f"{name}.points must be a sequence")
             points = tuple(
                 SpeedMapPoint(
-                    _finite_float(
-                        _mapping(row, f"{name}.point").get("speed_mps"),
-                        "speed_mps",
-                    ),
-                    _finite_float(
-                        _mapping(row, f"{name}.point").get("pwm"),
-                        "pwm",
-                    ),
+                    _finite_float(_mapping(row, f"{name}.point").get("speed_mps"), "speed_mps"),
+                    _finite_float(_mapping(row, f"{name}.point").get("pwm"), "pwm"),
                 )
                 for row in point_rows
             )
@@ -169,6 +157,8 @@ class WheelSpeedMap:
         )
 
     def lookup(self, side: str, target_mps: float) -> tuple[float, float]:
+        """Return signed feed-forward and the unsigned maintenance floor."""
+
         target = _finite_float(target_mps, "target_mps")
         if side not in {"left", "right"}:
             raise ValueError("wheel side must be left or right")
@@ -188,7 +178,6 @@ class WheelPiConfig:
     integrator_limit: float
     max_normalized_output: float
     max_control_gap_ns: int = 250_000_000
-    max_feedback_uncertainty_ns: int = 100_000_000
 
     def __post_init__(self) -> None:
         for name in ("kp", "ki", "integrator_limit", "max_normalized_output"):
@@ -197,10 +186,8 @@ class WheelPiConfig:
                 raise ValueError(f"{name} cannot be negative")
         if not 0.0 < self.max_normalized_output <= 1.0:
             raise ValueError("max_normalized_output must be in (0, 1]")
-        for name in ("max_control_gap_ns", "max_feedback_uncertainty_ns"):
-            value = getattr(self, name)
-            if type(value) is not int or value <= 0:
-                raise ValueError(f"{name} must be a positive integer")
+        if type(self.max_control_gap_ns) is not int or self.max_control_gap_ns <= 0:
+            raise ValueError("max_control_gap_ns must be a positive integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,8 +198,6 @@ class WheelActuatorStateCheckpoint:
     transient_stale_ticks: int = 0
     left_reference_mps: float = 0.0
     right_reference_mps: float = 0.0
-    left_uncertain_since_ns: int | None = None
-    right_uncertain_since_ns: int | None = None
 
 
 class _PIState:
@@ -228,47 +213,23 @@ class _PIState:
         self._reference_mps = 0.0
 
     def update(
-        self,
-        error: float,
-        dt_s: float,
-        feedforward: float,
-        lower: float,
-        upper: float,
+        self, error: float, dt_s: float, feedforward: float, lower: float, upper: float
     ) -> tuple[float, float]:
         proportional = self._config.kp * error
         limit = float(self._config.integrator_limit)
         candidate = max(-limit, min(limit, self._integral + error * dt_s))
         raw = feedforward + proportional + self._config.ki * candidate
+        # Keep learned load compensation through noisy error zero crossings.
+        # Integrate only toward realizable effort, or back out of saturation.
         if not ((raw > upper and error > 0.0) or (raw < lower and error < 0.0)):
             self._integral = candidate
         return float(proportional), float(self._config.ki * self._integral)
 
 
 class WheelActuatorController:
-    """Own PI state and gate it with per-wheel encoder evidence quality.
+    """Own the two PI integrators and produce one immutable L11 request."""
 
-    Missing/partial velocity evidence is *not* treated as measured zero.  Each
-    commanded wheel independently drops to speed-map feed-forward while its
-    encoder estimate reacquires.  The uncertainty budget is monotonic-time
-    based, not tick-count based.  Continuous uncertainty beyond the configured
-    bound raises an L11 error and therefore remains fail-closed at L12.
-
-    A wheel whose target is exactly zero needs no velocity estimate.  This is
-    what permits a deliberate one-wheel-stationary pivot without allowing a
-    silent encoder to masquerade as a healthy stopped wheel under non-zero
-    motion demand.
-    """
-
-    __slots__ = (
-        "_config",
-        "_last_context",
-        "_left_pi",
-        "_right_pi",
-        "_speed_map",
-        "_transient_stale_ticks",
-        "_left_uncertain_since_ns",
-        "_right_uncertain_since_ns",
-    )
+    __slots__ = ("_config", "_last_context", "_left_pi", "_right_pi", "_speed_map", "_transient_stale_ticks")
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
         self._speed_map = speed_map
@@ -277,16 +238,12 @@ class WheelActuatorController:
         self._right_pi = _PIState(config)
         self._last_context: TickContext | None = None
         self._transient_stale_ticks = 0
-        self._left_uncertain_since_ns: int | None = None
-        self._right_uncertain_since_ns: int | None = None
 
     def reset(self) -> None:
         self._left_pi.reset()
         self._right_pi.reset()
         self._last_context = None
         self._transient_stale_ticks = 0
-        self._left_uncertain_since_ns = None
-        self._right_uncertain_since_ns = None
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
@@ -296,41 +253,23 @@ class WheelActuatorController:
             self._transient_stale_ticks,
             self._left_pi._reference_mps,
             self._right_pi._reference_mps,
-            self._left_uncertain_since_ns,
-            self._right_uncertain_since_ns,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
         if not isinstance(checkpoint, WheelActuatorStateCheckpoint):
             raise TypeError("checkpoint must be WheelActuatorStateCheckpoint")
-        for value in (
-            checkpoint.left_integral,
-            checkpoint.right_integral,
-            checkpoint.left_reference_mps,
-            checkpoint.right_reference_mps,
-        ):
+        for value in (checkpoint.left_integral, checkpoint.right_integral,
+                      checkpoint.left_reference_mps, checkpoint.right_reference_mps):
             if not math.isfinite(value):
-                raise ValueError("wheel actuator checkpoint values must be finite")
-        if (
-            type(checkpoint.transient_stale_ticks) is not int
-            or checkpoint.transient_stale_ticks < 0
-        ):
-            raise ValueError("wheel actuator checkpoint stale ticks must be non-negative")
-        for value, name in (
-            (checkpoint.left_uncertain_since_ns, "left_uncertain_since_ns"),
-            (checkpoint.right_uncertain_since_ns, "right_uncertain_since_ns"),
-        ):
-            if value is not None and (type(value) is not int or value < 0):
-                raise ValueError(f"{name} must be non-negative integer or None")
-
+                raise ValueError("wheel actuator checkpoint integral must be finite")
+        if type(checkpoint.transient_stale_ticks) is not int or not 0 <= checkpoint.transient_stale_ticks <= 5:
+            raise ValueError("wheel actuator checkpoint stale ticks must be in [0, 5]")
         self._last_context = checkpoint.last_context
         self._left_pi._integral = checkpoint.left_integral
         self._right_pi._integral = checkpoint.right_integral
         self._left_pi._reference_mps = checkpoint.left_reference_mps
         self._right_pi._reference_mps = checkpoint.right_reference_mps
         self._transient_stale_ticks = checkpoint.transient_stale_ticks
-        self._left_uncertain_since_ns = checkpoint.left_uncertain_since_ns
-        self._right_uncertain_since_ns = checkpoint.right_uncertain_since_ns
 
     def __call__(
         self,
@@ -343,77 +282,48 @@ class WheelActuatorController:
         if dt_s == 0.0:
             self._left_pi.reset()
             self._right_pi.reset()
-
         if abs(wheels.left_mps) <= 1e-12 and abs(wheels.right_mps) <= 1e-12:
-            self.reset()
+            self._left_pi.reset()
+            self._right_pi.reset()
+            # Zero output is an explicit control-epoch boundary.  Re-anchoring
+            # the next non-zero tick prevents STOP dwell time from becoming PI
+            # time.
+            self._last_context = None
+            self._transient_stale_ticks = 0
             return ActuatorRequest(wheels.context, 0.0, 0.0)
 
-        required_left = abs(wheels.left_mps) > 1e-9
-        required_right = abs(wheels.right_mps) > 1e-9
-        left_measured, right_measured = self._wheel_feedback(
+        feedback = self._wheel_feedback(
             frame,
-            allow_transient_stale=True,
-            required_left=required_left,
-            required_right=required_right,
+            allow_transient_stale=self._transient_stale_ticks < 5,
         )
-
-        if required_left and left_measured is None:
-            self._left_uncertain_since_ns = self._bounded_uncertainty_start(
-                "left",
-                self._left_uncertain_since_ns,
-                wheels.context.monotonic_ns,
-            )
-        else:
-            self._left_uncertain_since_ns = None
-
-        if required_right and right_measured is None:
-            self._right_uncertain_since_ns = self._bounded_uncertainty_start(
-                "right",
-                self._right_uncertain_since_ns,
-                wheels.context.monotonic_ns,
-            )
-        else:
-            self._right_uncertain_since_ns = None
-
-        uncertain = (
-            self._left_uncertain_since_ns is not None
-            or self._right_uncertain_since_ns is not None
-        )
-        if uncertain:
+        if feedback is None:
             self._transient_stale_ticks += 1
             self._left_pi.reset()
             self._right_pi.reset()
-            # Preserve the last fully closed-loop context.  Recovery therefore
-            # re-anchors PI time through the existing tick-gap rule instead of
-            # integrating the whole uncertainty interval.  The current targets
-            # still get bounded speed-map feed-forward only.
-            left_output, left_saturated = self._feedforward_output(
-                "left", wheels.left_mps
-            )
-            right_output, right_saturated = self._feedforward_output(
-                "right", wheels.right_mps
-            )
+            # Keep the last fresh context so recovery re-anchors PI time.
+            # Healthy transient stale feedback permits bounded feed-forward only.
+            maximum = float(self._config.max_normalized_output)
+            left, _ = self._speed_map.lookup("left", wheels.left_mps)
+            right, _ = self._speed_map.lookup("right", wheels.right_mps)
             return ActuatorRequest(
                 wheels.context,
-                left_normalized=left_output,
-                right_normalized=right_output,
-                saturated=left_saturated or right_saturated,
+                max(-maximum, min(maximum, left)),
+                max(-maximum, min(maximum, right)),
+                saturated=max(abs(left), abs(right)) - maximum > 1e-12,
             )
-
         self._transient_stale_ticks = 0
-        assert left_measured is not None or not required_left
-        assert right_measured is not None or not required_right
+        left_measured, right_measured = feedback
         left_output, left_saturated = self._wheel_output(
             side="left",
             reference_mps=wheels.left_mps,
-            measured_mps=0.0 if left_measured is None else left_measured,
+            measured_mps=left_measured,
             dt_s=dt_s,
             pi=self._left_pi,
         )
         right_output, right_saturated = self._wheel_output(
             side="right",
             reference_mps=wheels.right_mps,
-            measured_mps=0.0 if right_measured is None else right_measured,
+            measured_mps=right_measured,
             dt_s=dt_s,
             pi=self._right_pi,
         )
@@ -425,188 +335,72 @@ class WheelActuatorController:
             saturated=left_saturated or right_saturated,
         )
 
-    def _bounded_uncertainty_start(
-        self,
-        side: str,
-        started_ns: int | None,
-        now_ns: int,
-    ) -> int:
-        if started_ns is None:
-            return now_ns
-        if now_ns < started_ns:
-            raise ValueError("L11 feedback uncertainty time must be monotonic")
-        if now_ns - started_ns >= self._config.max_feedback_uncertainty_ns:
-            raise ValueError(f"L11 {side} wheel feedback remained uncertain too long")
-        return started_ns
-
     def _control_dt_s(self, context: TickContext) -> float:
         previous = self._last_context
         if previous is None:
             return 0.0
-        if (
-            context.tick_id <= previous.tick_id
-            or context.monotonic_ns <= previous.monotonic_ns
-        ):
+        if context.tick_id <= previous.tick_id or context.monotonic_ns <= previous.monotonic_ns:
             raise ValueError("L11 tick order must increase monotonically")
-        if (
-            context.tick_id != previous.tick_id + 1
-            or context.monotonic_ns - previous.monotonic_ns
-            > self._config.max_control_gap_ns
-        ):
+        if (context.tick_id != previous.tick_id + 1
+                or context.monotonic_ns - previous.monotonic_ns > self._config.max_control_gap_ns):
+            # TickEngine owns global ordering.  A gap here means an upstream
+            # layer fault skipped L11; re-anchor without integrating stale PI
+            # error so the next valid tick can recover deterministically.
             return 0.0
-        return float(
-            context.monotonic_ns - previous.monotonic_ns
-        ) / 1_000_000_000.0
-
-    @staticmethod
-    def _counter_diagnostics_are_clean(values: Mapping[str, object]) -> bool:
-        return (
-            values.get("left_counter_running", True) is True
-            and values.get("right_counter_running", True) is True
-            and values.get("left_read_error_delta", 0) in (0, None)
-            and values.get("right_read_error_delta", 0) in (0, None)
-            and values.get("left_invalid_alert_delta", 0) in (0, None)
-            and values.get("right_invalid_alert_delta", 0) in (0, None)
-        )
+        return float(context.monotonic_ns - previous.monotonic_ns) / 1_000_000_000.0
 
     @staticmethod
     def _transient_stale_feedback_is_bounded(values: Mapping[str, object]) -> bool:
-        """Match only healthy-counter stale evidence during reacquisition."""
+        """Match only a healthy-counter stale sample during encoder reacquisition."""
 
         return (
             values.get("measurement_stale") is True
             and values.get("measurement_timing_valid") is True
             and values.get("rejection_code") == "SAMPLE_INTERVAL_EXCEEDED"
-            and WheelActuatorController._counter_diagnostics_are_clean(values)
+            and values.get("trust") == 0.0
+            and values.get("left_counter_running") is True
+            and values.get("right_counter_running") is True
+            and values.get("left_read_error_delta") == 0
+            and values.get("right_read_error_delta") == 0
+            and values.get("left_invalid_alert_delta") == 0
+            and values.get("right_invalid_alert_delta") == 0
         )
-
-    @staticmethod
-    def _per_wheel_trust(values: Mapping[str, object], side: str) -> float:
-        key = f"{side}_measurement_trust"
-        if key in values:
-            return _finite_float(values.get(key), key)
-        if "trust" in values:
-            return _finite_float(values.get("trust"), "trust")
-        # Unit/fake frames predating encoder quality fields are treated as
-        # already-admitted trusted test input. Production encoder samples carry
-        # both global and per-wheel trust explicitly.
-        return 1.0
-
-    @staticmethod
-    def _required_feedback_value(
-        values: Mapping[str, object],
-        side: str,
-        *,
-        required: bool,
-    ) -> float | None:
-        measured = _finite_float(values.get(f"{side}_mps"), f"{side}_mps")
-        if not required:
-            return measured
-
-        trust = WheelActuatorController._per_wheel_trust(values, side)
-        if not 0.0 <= trust <= 1.0:
-            raise ValueError(f"{side} wheel measurement trust must be in [0, 1]")
-        if trust < 1.0 - _FULL_TRUST_EPSILON:
-            return None
-
-        timebase_key = f"{side}_estimation_timebase"
-        # Only enforce timebase when the production diagnostic field exists.
-        # A TICK_SNAPSHOT zero is a good standstill observation, but under a
-        # non-zero wheel command it is not proof that the encoder is tracking
-        # motion.  This is the per-wheel missing-feedback watchdog.
-        if timebase_key in values and values.get(timebase_key) != "GPIO_EDGE_HISTORY":
-            return None
-        return measured
 
     @staticmethod
     def _wheel_feedback(
         frame: AdmittedFrame,
         *,
         allow_transient_stale: bool = False,
-        required_left: bool = True,
-        required_right: bool = True,
-    ) -> tuple[float | None, float | None]:
+    ) -> tuple[float, float] | None:
         matches = tuple(
             observation
             for observation in frame.accepted
             if observation.kind == WHEEL_FEEDBACK_KIND
         )
         if len(matches) != 1:
-            raise ValueError(
-                "L11 requires exactly one admitted wheel_velocity observation"
-            )
+            raise ValueError("L11 requires exactly one admitted wheel_velocity observation")
         observation = matches[0]
         if observation.captured_monotonic_ns > frame.context.monotonic_ns:
             raise ValueError("L11 wheel feedback cannot be captured in the future")
         values = {field.key: field.value for field in observation.values}
-
-        timing_valid = values.get("measurement_timing_valid", True)
-        stale = values.get("measurement_stale", False)
-        if type(timing_valid) is not bool or type(stale) is not bool:
-            raise ValueError("L11 encoder timing flags must be bool")
-
-        bounded_stale = (
+        if (
+            observation.source_device_id in frame.degraded_sources
+            and not (
+                allow_transient_stale
+                and WheelActuatorController._transient_stale_feedback_is_bounded(values)
+            )
+        ):
+            raise ValueError("L11 wheel feedback source is degraded")
+        feedback = (
+            _finite_float(values.get("left_mps"), "left_mps"),
+            _finite_float(values.get("right_mps"), "right_mps"),
+        )
+        if (
             allow_transient_stale
             and WheelActuatorController._transient_stale_feedback_is_bounded(values)
-        )
-        if observation.source_device_id in frame.degraded_sources and not bounded_stale:
-            raise ValueError("L11 wheel feedback source is degraded")
-        if not timing_valid:
-            raise ValueError("L11 wheel feedback timing is invalid")
-        if stale and not bounded_stale:
-            raise ValueError("L11 wheel feedback is stale")
-
-        # Velocity-limit, callback-order and counter-read diagnostics are hard
-        # errors because NativeEncoderSource marks them degraded. BASELINE is a
-        # quality state, not a fake zero measurement.
-        if bounded_stale:
-            return (
-                None if required_left else _finite_float(values.get("left_mps"), "left_mps"),
-                None if required_right else _finite_float(values.get("right_mps"), "right_mps"),
-            )
-
-        left = WheelActuatorController._required_feedback_value(
-            values,
-            "left",
-            required=required_left,
-        )
-        right = WheelActuatorController._required_feedback_value(
-            values,
-            "right",
-            required=required_right,
-        )
-        return left, right
-
-    def _feedforward_output(self, side: str, reference_mps: float) -> tuple[float, bool]:
-        if abs(reference_mps) <= 1e-9:
-            return 0.0, False
-        feedforward, _ = self._speed_map.lookup(side, reference_mps)
-        maximum = float(self._config.max_normalized_output)
-        raw = max(-maximum, min(maximum, feedforward))
-        return float(raw), abs(feedforward - raw) > 1e-12
-
-    def _controlled_wheel_output(
-        self,
-        *,
-        side: str,
-        reference_mps: float,
-        measured_mps: float | None,
-        dt_s: float,
-        pi: _PIState,
-    ) -> tuple[float, bool]:
-        if abs(reference_mps) <= 1e-9:
-            pi.reset()
-            return 0.0, False
-        if measured_mps is None:
-            pi.reset()
-            return self._feedforward_output(side, reference_mps)
-        return self._wheel_output(
-            side=side,
-            reference_mps=reference_mps,
-            measured_mps=measured_mps,
-            dt_s=dt_s,
-            pi=pi,
-        )
+        ):
+            return None
+        return feedback
 
     def _wheel_output(
         self,
@@ -626,16 +420,8 @@ class WheelActuatorController:
         feedforward, _ = self._speed_map.lookup(side, reference_mps)
         error = float(reference_mps - measured_mps)
         maximum = float(self._config.max_normalized_output)
-        lower, upper = (
-            (0.0, maximum) if reference_mps > 0.0 else (-maximum, 0.0)
-        )
-        proportional, integral = pi.update(
-            error,
-            dt_s,
-            feedforward,
-            lower,
-            upper,
-        )
+        lower, upper = (0.0, maximum) if reference_mps > 0.0 else (-maximum, 0.0)
+        proportional, integral = pi.update(error, dt_s, feedforward, lower, upper)
         raw_unclamped = feedforward + proportional + integral
         raw = max(lower, min(upper, raw_unclamped))
         saturated = abs(raw_unclamped - raw) > 1e-12
@@ -648,11 +434,7 @@ def zero_actuator_request(
 ) -> ActuatorRequest:
     """Preserve the explicit zero stage used by the STOP-only composition."""
 
-    return ActuatorRequest(
-        wheels.context,
-        left_normalized=0.0,
-        right_normalized=0.0,
-    )
+    return ActuatorRequest(wheels.context, left_normalized=0.0, right_normalized=0.0)
 
 
 __all__ = [
