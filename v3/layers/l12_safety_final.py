@@ -70,11 +70,23 @@ class FinalSafetyGate:
         self,
         writer: MotorWriter,
         lidar: LidarSafetyConfig | None = None,
+        critical_device_ids: frozenset[str] | None = None,
     ) -> None:
         if lidar is not None and not isinstance(lidar, LidarSafetyConfig):
             raise TypeError("lidar must be LidarSafetyConfig or None")
+        if critical_device_ids is not None:
+            if not isinstance(critical_device_ids, frozenset):
+                raise TypeError("critical_device_ids must be frozenset[str] or None")
+            if not critical_device_ids:
+                raise ValueError("critical_device_ids cannot be empty")
+            if any(
+                not isinstance(device_id, str) or not device_id.strip()
+                for device_id in critical_device_ids
+            ):
+                raise ValueError("critical_device_ids must contain non-empty strings")
         self._writer = writer
         self._lidar = lidar
+        self._critical_device_ids = critical_device_ids
         self._fault_latched = False
 
     @property
@@ -100,6 +112,32 @@ class FinalSafetyGate:
         wheel_setpoint: WheelVelocitySetpoint | None = None,
     ) -> FinalActuation:
         """Make one fail-closed decision and perform one atomic writer call."""
+
+        if self._critical_device_ids is not None:
+            health_by_id = {item.device_id: item for item in critical_health}
+            if any(
+                device_id not in health_by_id
+                for device_id in self._critical_device_ids
+            ):
+                command = self._stop(
+                    context,
+                    SafetyDecision.STOP,
+                    "CRITICAL_DEVICE_HEALTH_MISSING",
+                )
+                try:
+                    self._writer.write(command)
+                except Exception as exc:
+                    self._fault_latched = True
+                    raise MotorWriteError(
+                        "the single final motor write failed",
+                        command,
+                    ) from exc
+                return command
+            critical_health = tuple(
+                item
+                for item in critical_health
+                if item.device_id in self._critical_device_ids
+            )
 
         failed_device = next(
             (item for item in critical_health if item.state is DeviceHealthState.FAILED),

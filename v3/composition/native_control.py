@@ -283,6 +283,7 @@ class NativeControlCompositionConfig:
         max_feedback_uncertainty_ns=250_000_000,
     )
     lidar_safety: LidarSafetyConfig | None = None
+    critical_device_ids: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         expected_types = (
@@ -315,6 +316,16 @@ class NativeControlCompositionConfig:
             LidarSafetyConfig,
         ):
             raise TypeError("lidar_safety must be LidarSafetyConfig or None")
+        if self.critical_device_ids is not None:
+            if not isinstance(self.critical_device_ids, frozenset):
+                raise TypeError("critical_device_ids must be frozenset[str] or None")
+            if not self.critical_device_ids:
+                raise ValueError("critical_device_ids cannot be empty")
+            if any(
+                not isinstance(device_id, str) or not device_id.strip()
+                for device_id in self.critical_device_ids
+            ):
+                raise ValueError("critical_device_ids must contain non-empty strings")
 
 
 @dataclass(frozen=True, slots=True)
@@ -376,7 +387,11 @@ class NativeControlComposition:
             config.speed_map,
             config.wheel_pi,
         )
-        final_safety = FinalSafetyGate(motor_writer, config.lidar_safety)
+        final_safety = FinalSafetyGate(
+            motor_writer,
+            config.lidar_safety,
+            critical_device_ids=config.critical_device_ids,
+        )
         self._admission = admission
         self._estimator = estimator
         self._world_model = world_model

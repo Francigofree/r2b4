@@ -490,6 +490,9 @@ def load_bounded_physical_runtime_config(
         ),
         chassis_control=ChassisControlConfig(track_width_m=track_width_m),
         lidar_safety=lidar_safety,
+        critical_device_ids=frozenset(
+            {"WHEEL_ENCODERS", "BNO055_IMU", "RPLIDAR_C1"}
+        ),
         **navigation_kwargs,
     )
     physical = BoundedPhysicalControlConfig(
