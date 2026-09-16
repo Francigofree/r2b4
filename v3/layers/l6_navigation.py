@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Protocol
 
 from v3.contracts import (
     CommandMode,
@@ -13,6 +14,7 @@ from v3.contracts import (
     NavigationStatus,
     RobotEstimate,
     RollingLocalCostmap,
+    TickContext,
     TrajectoryEvaluation,
     TrajectoryPose,
     Waypoint,
@@ -141,6 +143,128 @@ class NavigationStateCheckpoint:
     last_replan_ns: int | None
     last_replan_tick_id: int | None
     trajectory_candidates: tuple[TrajectoryEvaluation, ...]
+    pending_rollout_request: TrajectoryRolloutRequest | None = None
+    pending_goal_selected_ns: int | None = None
+    pending_release_tick_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TrajectoryRolloutRequest:
+    """Immutable pure-computation snapshot handed to the rollout worker."""
+
+    context: TickContext
+    estimate: RobotEstimate
+    world: WorldSnapshot
+    goal: Waypoint
+    max_v_mps: float
+    max_omega_rad_s: float
+    coverage: tuple[tuple[int, int, int], ...]
+
+    def __post_init__(self) -> None:
+        if self.estimate.context != self.context or self.world.context != self.context:
+            raise ValueError("rollout request inputs must share one TickContext")
+        if not isinstance(self.goal, Waypoint):
+            raise TypeError("goal must be Waypoint")
+        for name in ("max_v_mps", "max_omega_rad_s"):
+            value = getattr(self, name)
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0.0
+            ):
+                raise ValueError(f"{name} must be finite and non-negative")
+        if any(
+            not isinstance(item, tuple)
+            or len(item) != 3
+            or any(not isinstance(value, int) or isinstance(value, bool) for value in item)
+            or item[2] < 0
+            for item in self.coverage
+        ):
+            raise ValueError("coverage must contain integer (x, y, visits) tuples")
+
+
+@dataclass(frozen=True, slots=True)
+class TrajectoryRolloutResult:
+    source_context: TickContext
+    trajectory_candidates: tuple[TrajectoryEvaluation, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_context, TickContext):
+            raise TypeError("source_context must be TickContext")
+        if (
+            not isinstance(self.trajectory_candidates, tuple)
+            or not self.trajectory_candidates
+            or any(
+                not isinstance(item, TrajectoryEvaluation)
+                for item in self.trajectory_candidates
+            )
+        ):
+            raise ValueError("trajectory_candidates must be a non-empty tuple")
+
+
+class TrajectoryRolloutBackend(Protocol):
+    """Authority-free compute port injected by the composition root."""
+
+    def submit(self, request: TrajectoryRolloutRequest) -> int: ...
+    def take(self, request_id: int) -> TrajectoryRolloutResult | None: ...
+    def abandon(self, request_id: int) -> None: ...
+    def close(self) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class AsyncL6PlannerConfig:
+    """Deterministic handoff policy; process placement is not layer state."""
+
+    enabled: bool = False
+    release_tick_gap: int = 5
+    max_plan_age_ns: int = 350_000_000
+
+    def __post_init__(self) -> None:
+        if type(self.enabled) is not bool:
+            raise TypeError("enabled must be bool")
+        for value, name in (
+            (self.release_tick_gap, "release_tick_gap"),
+            (self.max_plan_age_ns, "max_plan_age_ns"),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+
+
+class InlineTrajectoryRolloutBackend:
+    """Pure replay/test backend; compute now, reveal only on L6 release tick."""
+
+    __slots__ = ("_closed", "_computer", "_next_id", "_results")
+
+    def __init__(self, config: NavigationConfig) -> None:
+        if not isinstance(config, NavigationConfig):
+            raise TypeError("config must be NavigationConfig")
+        self._computer = TrajectoryRolloutComputer(config)
+        self._next_id = 1
+        self._results: dict[int, TrajectoryRolloutResult] = {}
+        self._closed = False
+
+    def submit(self, request: TrajectoryRolloutRequest) -> int:
+        if self._closed:
+            raise RuntimeError("trajectory rollout backend is closed")
+        if not isinstance(request, TrajectoryRolloutRequest):
+            raise TypeError("request must be TrajectoryRolloutRequest")
+        request_id = self._next_id
+        self._next_id += 1
+        self._results[request_id] = self._computer.compute(request)
+        return request_id
+
+    def take(self, request_id: int) -> TrajectoryRolloutResult | None:
+        if self._closed:
+            raise RuntimeError("trajectory rollout backend is closed")
+        return self._results.pop(request_id, None)
+
+    def abandon(self, request_id: int) -> None:
+        self._results.pop(request_id, None)
+
+    def close(self) -> None:
+        self._results.clear()
+        self._closed = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,14 +301,43 @@ class TrajectoryNavigator:
         "_last_replan_ns",
         "_last_replan_tick_id",
         "_local_goal",
+        "_max_plan_age_ns",
         "_mission_id",
+        "_pending_goal_selected_ns",
+        "_pending_release_tick_id",
+        "_pending_rollout_id",
+        "_pending_rollout_request",
         "_progress",
+        "_rollout_backend",
+        "_rollout_release_tick_gap",
         "_static_planning_index",
         "_trajectory_candidates",
     )
 
-    def __init__(self, config: NavigationConfig = NavigationConfig()) -> None:
+    def __init__(
+        self,
+        config: NavigationConfig = NavigationConfig(),
+        *,
+        rollout_backend: TrajectoryRolloutBackend | None = None,
+        rollout_release_tick_gap: int = 5,
+        max_plan_age_ns: int = 350_000_000,
+    ) -> None:
+        if rollout_backend is not None:
+            for method_name in ("submit", "take", "abandon", "close"):
+                if not callable(getattr(rollout_backend, method_name, None)):
+                    raise TypeError(
+                        "rollout_backend must implement submit/take/abandon/close"
+                    )
+        for value, name in (
+            (rollout_release_tick_gap, "rollout_release_tick_gap"),
+            (max_plan_age_ns, "max_plan_age_ns"),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
         self._config = config
+        self._rollout_backend = rollout_backend
+        self._rollout_release_tick_gap = rollout_release_tick_gap
+        self._max_plan_age_ns = max_plan_age_ns
         self._mission_id: str | None = None
         self._initial_distance_m = 0.0
         self._progress = 0.0
@@ -194,6 +347,10 @@ class TrajectoryNavigator:
         self._goal_selected_ns = 0
         self._last_replan_ns: int | None = None
         self._last_replan_tick_id: int | None = None
+        self._pending_rollout_id: int | None = None
+        self._pending_rollout_request: TrajectoryRolloutRequest | None = None
+        self._pending_goal_selected_ns: int | None = None
+        self._pending_release_tick_id: int | None = None
         self._static_planning_index: _StaticPlanningIndex | None = None
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
 
@@ -214,11 +371,15 @@ class TrajectoryNavigator:
             self._last_replan_ns,
             self._last_replan_tick_id,
             self._trajectory_candidates,
+            self._pending_rollout_request,
+            self._pending_goal_selected_ns,
+            self._pending_release_tick_id,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
         if not isinstance(checkpoint, NavigationStateCheckpoint):
             raise TypeError("checkpoint must be NavigationStateCheckpoint")
+        self._abandon_pending_rollout()
         self._mission_id = checkpoint.mission_id
         self._initial_distance_m = checkpoint.initial_distance_m
         self._progress = checkpoint.progress
@@ -234,6 +395,19 @@ class TrajectoryNavigator:
         self._trajectory_candidates = checkpoint.trajectory_candidates
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
+        pending = checkpoint.pending_rollout_request
+        if pending is not None:
+            backend = self._rollout_backend
+            if backend is None:
+                raise RuntimeError("async navigation checkpoint requires rollout backend")
+            release_tick_id = checkpoint.pending_release_tick_id
+            if release_tick_id is None:
+                raise RuntimeError("async navigation checkpoint lacks release tick")
+            request_id = backend.submit(pending)
+            self._pending_rollout_id = request_id
+            self._pending_rollout_request = pending
+            self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns
+            self._pending_release_tick_id = release_tick_id
 
     def evaluate(
         self,
@@ -312,11 +486,11 @@ class TrajectoryNavigator:
                 NavigationStatus.INVALIDATED,
                 "LOCAL_COSTMAP_STALE",
             )
+        self._accept_pending_rollout(mission.context)
         if self._replan_due(
             mission.context.monotonic_ns,
             mission.context.tick_id,
         ):
-            scene = self._build_planning_scene(world)
             local_distance = min(distance_m, self._config.local_goal_distance_m)
             heading = math.atan2(target.y_m - estimate.y_m, target.x_m - estimate.x_m)
             local_goal = Waypoint(
@@ -324,18 +498,13 @@ class TrajectoryNavigator:
                 estimate.y_m + local_distance * math.sin(heading),
                 target.yaw_rad if local_distance == distance_m else None,
             )
-            self._store_trajectory_plan(
-                mission.context.monotonic_ns,
-                mission.context.tick_id,
+            self._schedule_or_store_rollout(
+                mission.context,
+                estimate,
+                world,
                 local_goal,
-                self._trajectory_rollout(
-                    estimate,
-                    world,
-                    scene,
-                    local_goal,
-                    mission.constraints.max_v_mps,
-                    mission.constraints.max_omega_rad_s,
-                ),
+                mission.constraints.max_v_mps,
+                mission.constraints.max_omega_rad_s,
             )
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
@@ -388,6 +557,7 @@ class TrajectoryNavigator:
         )
 
     def _reset(self) -> None:
+        self._abandon_pending_rollout()
         self._mission_id = None
         self._initial_distance_m = 0.0
         self._progress = 0.0
@@ -425,13 +595,15 @@ class TrajectoryNavigator:
             self._reset()
             self._mission_id = mission.mission_id
 
+        self._accept_pending_rollout(mission.context)
         self._mark_coverage(estimate.x_m, estimate.y_m, mission.context.tick_id)
         goal = self._local_goal
         if self._replan_due(
             mission.context.monotonic_ns,
             mission.context.tick_id,
         ):
-            scene = self._build_planning_scene(world)
+            scene: _LocalPlanningScene | None = None
+            goal_selected_ns: int | None = None
             if (
                 goal is None
                 or math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
@@ -439,20 +611,19 @@ class TrajectoryNavigator:
                 or mission.context.monotonic_ns - self._goal_selected_ns
                 >= self._config.local_goal_max_age_ns
             ):
+                scene = self._build_planning_scene(world)
                 goal = self._choose_local_goal(estimate, costmap, scene)
-                self._goal_selected_ns = mission.context.monotonic_ns
-            self._store_trajectory_plan(
-                mission.context.monotonic_ns,
-                mission.context.tick_id,
+                goal_selected_ns = mission.context.monotonic_ns
+            assert goal is not None
+            self._schedule_or_store_rollout(
+                mission.context,
+                estimate,
+                world,
                 goal,
-                self._trajectory_rollout(
-                    estimate,
-                    world,
-                    scene,
-                    goal,
-                    mission.constraints.max_v_mps,
-                    mission.constraints.max_omega_rad_s,
-                ),
+                mission.constraints.max_v_mps,
+                mission.constraints.max_omega_rad_s,
+                scene=scene,
+                goal_selected_ns=goal_selected_ns,
             )
         goal = self._local_goal
         candidates = self._trajectory_candidates
@@ -489,6 +660,8 @@ class TrajectoryNavigator:
         return _LocalPlanningScene(static_index, dynamic_obstacles)
 
     def _replan_due(self, monotonic_ns: int, tick_id: int) -> bool:
+        if self._pending_rollout_id is not None:
+            return False
         previous_ns = self._last_replan_ns
         previous_tick_id = self._last_replan_tick_id
         if (
@@ -503,6 +676,114 @@ class TrajectoryNavigator:
             >= self._config.trajectory_replan_min_tick_gap
         )
 
+    def _schedule_or_store_rollout(
+        self,
+        context: TickContext,
+        estimate: RobotEstimate,
+        world: WorldSnapshot,
+        goal: Waypoint,
+        max_v_mps: float,
+        max_omega_rad_s: float,
+        *,
+        scene: _LocalPlanningScene | None = None,
+        goal_selected_ns: int | None = None,
+    ) -> None:
+        backend = self._rollout_backend
+        # Every new mission gets one synchronous seed. This avoids an ACTIVE
+        # planner-warmup STOP and moves all recurring heavy replans off CPU3.
+        if backend is None or not self._trajectory_candidates:
+            planning_scene = scene or self._build_planning_scene(world)
+            candidates = self._trajectory_rollout(
+                estimate,
+                world,
+                planning_scene,
+                goal,
+                max_v_mps,
+                max_omega_rad_s,
+            )
+            if goal_selected_ns is not None:
+                self._goal_selected_ns = goal_selected_ns
+            self._store_trajectory_plan(
+                context.monotonic_ns,
+                context.tick_id,
+                goal,
+                candidates,
+            )
+            return
+        if self._pending_rollout_id is not None:
+            raise RuntimeError("async trajectory rollout is already pending")
+        request = TrajectoryRolloutRequest(
+            context=context,
+            estimate=estimate,
+            world=world,
+            goal=goal,
+            max_v_mps=max_v_mps,
+            max_omega_rad_s=max_omega_rad_s,
+            coverage=tuple(
+                (x_index, y_index, visits)
+                for (x_index, y_index), (visits, _tick_id) in sorted(
+                    self._coverage.items()
+                )
+            ),
+        )
+        request_id = backend.submit(request)
+        if not isinstance(request_id, int) or isinstance(request_id, bool) or request_id <= 0:
+            raise RuntimeError("async rollout backend returned invalid request id")
+        self._pending_rollout_id = request_id
+        self._pending_rollout_request = request
+        self._pending_goal_selected_ns = goal_selected_ns
+        self._pending_release_tick_id = context.tick_id + self._rollout_release_tick_gap
+
+    def _accept_pending_rollout(self, context: TickContext) -> bool:
+        request_id = self._pending_rollout_id
+        if request_id is None:
+            return False
+        request = self._pending_rollout_request
+        release_tick_id = self._pending_release_tick_id
+        backend = self._rollout_backend
+        if request is None or release_tick_id is None or backend is None:
+            raise RuntimeError("async rollout pending state is incomplete")
+        source_context = request.context
+        goal = request.goal
+        if (
+            self._last_replan_ns is not None
+            and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns
+        ):
+            raise RuntimeError("ASYNC_L6_PLAN_STALE")
+        if context.tick_id < release_tick_id:
+            return False
+        if context.tick_id > release_tick_id:
+            raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")
+        result = backend.take(request_id)
+        if result is None:
+            raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
+        if result.source_context != source_context:
+            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
+        selected_ns = self._pending_goal_selected_ns
+        self._pending_rollout_id = None
+        self._pending_rollout_request = None
+        self._pending_goal_selected_ns = None
+        self._pending_release_tick_id = None
+        if selected_ns is not None:
+            self._goal_selected_ns = selected_ns
+        self._store_trajectory_plan(
+            result.source_context.monotonic_ns,
+            result.source_context.tick_id,
+            goal,
+            result.trajectory_candidates,
+        )
+        return True
+
+    def _abandon_pending_rollout(self) -> None:
+        request_id = self._pending_rollout_id
+        backend = self._rollout_backend
+        if request_id is not None and backend is not None:
+            backend.abandon(request_id)
+        self._pending_rollout_id = None
+        self._pending_rollout_request = None
+        self._pending_goal_selected_ns = None
+        self._pending_release_tick_id = None
+
     def _store_trajectory_plan(
         self,
         monotonic_ns: int,
@@ -516,6 +797,7 @@ class TrajectoryNavigator:
         self._trajectory_candidates = candidates
 
     def _clear_trajectory_plan(self) -> None:
+        self._abandon_pending_rollout()
         self._last_replan_ns = None
         self._last_replan_tick_id = None
         self._trajectory_candidates = ()
@@ -708,6 +990,192 @@ class TrajectoryNavigator:
             v_mps=v_mps,
             omega_rad_s=omega_rad_s,
             horizon_ns=self._config.rollout_horizon_ns,
+            samples=tuple(samples),
+            collision=collision,
+            min_clearance_m=bounded_clearance,
+            progress_score=progress,
+            smoothness_score=smoothness,
+            novelty_score=novelty,
+            total_score=total_score,
+        )
+
+
+class TrajectoryRolloutComputer:
+    """Pure rollout kernel; owns only config and a derived static-index cache."""
+
+    __slots__ = ("_config", "_static_planning_index")
+
+    def __init__(self, config: NavigationConfig) -> None:
+        if not isinstance(config, NavigationConfig):
+            raise TypeError("config must be NavigationConfig")
+        self._config = config
+        self._static_planning_index: _StaticPlanningIndex | None = None
+
+    def _planning_scene(self, world: WorldSnapshot) -> _LocalPlanningScene:
+        static_index: _StaticPlanningIndex | None = None
+        costmap = world.local_costmap
+        if costmap is not None:
+            cache_key = _costmap_cache_key(costmap)
+            cached = self._static_planning_index
+            if cached is None or cached.cache_key != cache_key:
+                cached = _build_static_planning_index(costmap)
+                self._static_planning_index = cached
+            static_index = cached
+        dynamic_obstacles = tuple(
+            _ObstacleDisc(obstacle.x_m, obstacle.y_m, obstacle.radius_m)
+            for obstacle in world.obstacle_tracks
+            if obstacle.confidence >= self._config.obstacle_confidence_floor
+        )
+        return _LocalPlanningScene(static_index, dynamic_obstacles)
+
+    def _coverage_key(self, x_m: float, y_m: float) -> tuple[int, int]:
+        size = self._config.coverage_cell_size_m
+        return math.floor(x_m / size), math.floor(y_m / size)
+
+    def compute(self, request: TrajectoryRolloutRequest) -> TrajectoryRolloutResult:
+        if not isinstance(request, TrajectoryRolloutRequest):
+            raise TypeError("request must be TrajectoryRolloutRequest")
+        config = self._config
+        estimate = request.estimate
+        world = request.world
+        goal = request.goal
+        scene = self._planning_scene(world)
+        coverage = {
+            (x_index, y_index): visits
+            for x_index, y_index, visits in request.coverage
+        }
+        start_clearance_m = _footprint_clearance(
+            estimate.x_m,
+            estimate.y_m,
+            estimate.yaw_rad,
+            world,
+            config,
+            scene,
+        )
+        evaluations: list[TrajectoryEvaluation] = []
+        for linear_index in range(config.rollout_linear_samples):
+            v_mps = (
+                request.max_v_mps
+                * linear_index
+                / (config.rollout_linear_samples - 1)
+            )
+            for angular_index in range(config.rollout_angular_samples):
+                angular_ratio = (
+                    2.0 * angular_index / (config.rollout_angular_samples - 1) - 1.0
+                )
+                omega_rad_s = request.max_omega_rad_s * angular_ratio
+                evaluations.append(
+                    self._evaluate_candidate(
+                        linear_index,
+                        angular_index,
+                        v_mps,
+                        omega_rad_s,
+                        estimate,
+                        world,
+                        scene,
+                        goal,
+                        request.max_v_mps,
+                        request.max_omega_rad_s,
+                        start_clearance_m,
+                        coverage,
+                    )
+                )
+        return TrajectoryRolloutResult(request.context, tuple(evaluations))
+
+    def _evaluate_candidate(
+        self,
+        linear_index: int,
+        angular_index: int,
+        v_mps: float,
+        omega_rad_s: float,
+        estimate: RobotEstimate,
+        world: WorldSnapshot,
+        scene: _LocalPlanningScene,
+        goal: Waypoint,
+        max_v_mps: float,
+        max_omega_rad_s: float,
+        start_clearance_m: float,
+        coverage: dict[tuple[int, int], int],
+    ) -> TrajectoryEvaluation:
+        config = self._config
+        step_ns = config.rollout_horizon_ns // config.rollout_step_count
+        samples: list[TrajectoryPose] = []
+        x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
+        min_clearance = start_clearance_m
+        start_collision = min_clearance <= config.footprint_safety_margin_m
+        collision = start_collision
+        for step in range(1, config.rollout_step_count + 1):
+            offset_ns = (
+                config.rollout_horizon_ns
+                if step == config.rollout_step_count
+                else step_ns * step
+            )
+            dt_s = (
+                offset_ns - (samples[-1].time_offset_ns if samples else 0)
+            ) / 1e9
+            x_m, y_m, yaw_rad = _integrate_constant_twist(
+                x_m,
+                y_m,
+                yaw_rad,
+                v_mps,
+                omega_rad_s,
+                dt_s,
+            )
+            sample = TrajectoryPose(x_m, y_m, yaw_rad, offset_ns)
+            samples.append(sample)
+            if not start_collision:
+                clearance = _footprint_clearance(
+                    x_m,
+                    y_m,
+                    yaw_rad,
+                    world,
+                    config,
+                    scene,
+                )
+                min_clearance = min(min_clearance, clearance)
+                collision = (
+                    collision
+                    or clearance <= config.footprint_safety_margin_m
+                )
+
+        start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
+        final_distance = math.hypot(goal.x_m - x_m, goal.y_m - y_m)
+        progress = _clamp_signed(
+            (start_distance - final_distance) / max(start_distance, 1e-9)
+        )
+        linear_change = abs(v_mps - estimate.v_mps) / max(max_v_mps, 1e-9)
+        angular_change = abs(omega_rad_s - estimate.omega_rad_s) / max(
+            max_omega_rad_s,
+            1e-9,
+        )
+        smoothness = max(
+            0.0,
+            1.0 - min(1.0, 0.5 * (linear_change + angular_change)),
+        )
+        novelty = sum(
+            1.0
+            / (
+                1.0
+                + coverage.get(self._coverage_key(sample.x_m, sample.y_m), 0)
+            )
+            for sample in samples
+        ) / len(samples)
+        bounded_clearance = min(
+            config.clearance_score_cap_m,
+            max(0.0, min_clearance),
+        )
+        clearance_score = bounded_clearance / config.clearance_score_cap_m
+        total_score = (
+            config.progress_weight * progress
+            + config.clearance_weight * clearance_score
+            + config.smoothness_weight * smoothness
+            + config.novelty_weight * novelty
+        )
+        return TrajectoryEvaluation(
+            candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
+            v_mps=v_mps,
+            omega_rad_s=omega_rad_s,
+            horizon_ns=config.rollout_horizon_ns,
             samples=tuple(samples),
             collision=collision,
             min_clearance_m=bounded_clearance,

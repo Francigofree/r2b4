@@ -35,6 +35,7 @@ from v3.composition.live_inputs import (
     LiveInputComposition,
     LiveInputCompositionConfig,
 )
+from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
 from v3.composition.native_sensor_inputs import (
     NativeSensorHardwareConfig,
     NativeSensorInputOwner,
@@ -735,6 +736,15 @@ def run_native_hardware_resident_control(
         monotonic_ns=monotonic_ns,
         sleep=sleep,
     )
+    rollout_backend = None
+    async_l6 = config.composition.live_control.control.async_l6
+    if async_l6.enabled:
+        affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
+        rollout_backend = ProcessTrajectoryRolloutBackend(
+            config.composition.live_control.control.navigation,
+            worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+            strict_affinity=(affinity.strict if affinity.enabled else False),
+        )
     try:
         def observe(result: TickResult) -> None:
             owner.publish_tick_result(result)
@@ -757,8 +767,11 @@ def run_native_hardware_resident_control(
             timing_enabled=bool(
                 affinity_config is not None and affinity_config.enabled
             ),
+            trajectory_rollout_backend=rollout_backend,
         )
     finally:
+        if rollout_backend is not None:
+            rollout_backend.close()
         owner.close()
 
 

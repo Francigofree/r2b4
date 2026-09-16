@@ -833,6 +833,7 @@ def _compat_control_config_from_documents(
         {
             "world_model": navigation.world_model,
             "navigation": navigation.navigation,
+            "async_l6": navigation.async_l6,
         }
         if navigation is not None
         else {}

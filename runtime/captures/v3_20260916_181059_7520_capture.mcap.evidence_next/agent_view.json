@@ -1,0 +1,244 @@
+{
+  "authority": {
+    "capture": "/home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap",
+    "new_files_are_derived_only": true,
+    "v2_evidence_index": "/home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap.evidence_next/evidence_index.json"
+  },
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 9,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 88,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 203,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "effective_incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "RAW_LIDAR_REVISION_GAP"
+          ],
+          "message_stream_sha256": "153429c7134b78ca86c7f9cf5a75cbc63df5d2e9686513c4a2e6a960b9c64c5e",
+          "post_window_complete": false,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 281,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [
+            {
+              "after": 52,
+              "before": 54
+            }
+          ],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": true
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "RAW_LIDAR_REVISION_GAP",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_TIME_INVALID",
+            "state": "FAILED"
+          }
+        ]
+      },
+      "id": "device-443",
+      "layer": "L1",
+      "monotonic_ns": 2192267196465,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 443
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_TIME_INVALID",
+            "state": "FAILED"
+          }
+        ]
+      },
+      "id": "device-509",
+      "layer": "L1",
+      "monotonic_ns": 2194972516306,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 509
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 0,
+            "reason": "TIME_ALIGNMENT_FAILED",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 209
+          }
+        ]
+      },
+      "id": "l2-reject-569",
+      "layer": "L2",
+      "monotonic_ns": 2197296665730,
+      "reason": "OBSERVATION_REJECTED:TIME_ALIGNMENT_FAILED",
+      "severity": "HIGH",
+      "tick_id": 569
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.056766822499999994,
+          "v_mps": 0.013624037399999999
+        },
+        "requested": {
+          "omega_rad_s": 0.14216423223540955,
+          "v_mps": 0.06
+        },
+        "safety_decision": "STOP"
+      },
+      "id": "motion-blocked-l12-583",
+      "layer": "L12",
+      "monotonic_ns": 2197798361186,
+      "reason": "LIDAR_CLEARANCE_LOW",
+      "severity": "HIGH",
+      "tick_id": 583
+    },
+    {
+      "category": "TIMING",
+      "evidence": {
+        "delta_ms": 111.012554,
+        "median_ms": 33.062585
+      },
+      "id": "timing-gap-2",
+      "layer": "Runtime",
+      "monotonic_ns": null,
+      "reason": "TICK_INTERVAL_OUTLIER",
+      "severity": "HIGH",
+      "tick_id": null
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.03515625,
+        "monotonic_ns": 2197798361186,
+        "progress_span": 0.0,
+        "tick_id": 583,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 2197798361186,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 583
+    }
+  ],
+  "evidence_status": "FAIL",
+  "how_to_drill_down": {
+    "exact_ticks": "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks START:END --layers L8,L9,L10,L11,L12",
+    "other_view_rates": "python3 -m v3.test_hub_next view <capture.mcap> --hz 1|5|10",
+    "raw_lidar": "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  },
+  "incident_drilldowns": [
+    {
+      "command": "python3 -m v3.test_hub_v2 query /home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap --ticks 433:453 --layers L1,L2,L3",
+      "incident_id": "device-443",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "tick_range": [
+        433,
+        453
+      ]
+    },
+    {
+      "command": "python3 -m v3.test_hub_v2 query /home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap --ticks 499:519 --layers L1,L2,L3",
+      "incident_id": "device-509",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "tick_range": [
+        499,
+        519
+      ]
+    },
+    {
+      "command": "python3 -m v3.test_hub_v2 query /home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap --ticks 559:579 --layers L1,L2,L3,L4",
+      "incident_id": "l2-reject-569",
+      "reason": "OBSERVATION_REJECTED:TIME_ALIGNMENT_FAILED",
+      "tick_range": [
+        559,
+        579
+      ]
+    },
+    {
+      "command": "python3 -m v3.test_hub_v2 query /home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap --ticks 573:593 --layers L10,L11,L12",
+      "incident_id": "motion-blocked-l12-583",
+      "reason": "LIDAR_CLEARANCE_LOW",
+      "tick_range": [
+        573,
+        593
+      ]
+    },
+    {
+      "command": "python3 -m v3.test_hub_v2 query /home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap --ticks 573:593 --layers L4,L5,L6,L7,L8",
+      "incident_id": "navigation-stagnation",
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "tick_range": [
+        573,
+        593
+      ]
+    }
+  ],
+  "overview": "/home/alba/project_r2b4/runtime/captures/v3_20260916_181059_7520_capture.mcap.evidence_next/overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 8.555136294,
+      "end_tick": 583,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 188,
+      "start_s": 0.0,
+      "start_tick": 381,
+      "stop_ticks": 1,
+      "tick_count": 203
+    }
+  ],
+  "replay_status": "ERROR",
+  "schema": "R2B4_TEST_HUB_NEXT_V1",
+  "status": "FAIL",
+  "suppressed_agent_noise": []
+}

@@ -571,6 +571,7 @@ def load_bounded_physical_runtime_config(
         {
             "world_model": navigation_config.world_model,
             "navigation": navigation_config.navigation,
+            "async_l6": navigation_config.async_l6,
         }
         if navigation_config is not None
         else {}

@@ -51,6 +51,7 @@ class ResidentPhysicalControlComposition:
         config: ResidentPhysicalControlConfig,
         *,
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
+        trajectory_rollout_backend: object | None = None,
     ) -> None:
         if not isinstance(config, ResidentPhysicalControlConfig):
             raise TypeError("config must be ResidentPhysicalControlConfig")
@@ -67,6 +68,7 @@ class ResidentPhysicalControlComposition:
                 motor_output,
                 config.live_control,
                 auxiliary_sources=auxiliary_sources,
+                trajectory_rollout_backend=trajectory_rollout_backend,
             )
         except Exception:
             motor_output.close()
@@ -131,7 +133,10 @@ class ResidentPhysicalControlComposition:
         try:
             self._motor_output.close()
         finally:
-            self._shutdown = True
+            try:
+                self._live_control.close()
+            finally:
+                self._shutdown = True
 
 
 __all__ = [

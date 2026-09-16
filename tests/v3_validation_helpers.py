@@ -105,6 +105,7 @@ def control_config() -> NativeControlCompositionConfig:
         ),
         world_model=navigation.world_model,
         navigation=navigation.navigation,
+        async_l6=navigation.async_l6,
     )
 
 

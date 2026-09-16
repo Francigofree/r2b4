@@ -1,0 +1,242 @@
+# R2B4_ASYNC_L6_PLANNER_V1
+"""Process edge for authority-free L6 trajectory rollout computation.
+
+This adapter owns only worker-process/transport resources. It has no command,
+mission, navigation-state, safety, motor, GPIO, or lifecycle authority. The L6
+layer remains the sole owner of accepted plans and deterministic handoff timing.
+"""
+
+from __future__ import annotations
+
+import multiprocessing as mp
+import queue
+from dataclasses import dataclass
+
+from v3.layers.l6_navigation import (
+    NavigationConfig,
+    TrajectoryRolloutComputer,
+    TrajectoryRolloutRequest,
+    TrajectoryRolloutResult,
+)
+
+from v3.runtime_performance import (
+    apply_current_affinity,
+    temporary_current_affinity,
+)
+
+
+
+@dataclass(frozen=True, slots=True)
+class _WorkItem:
+    request_id: int
+    request: TrajectoryRolloutRequest
+
+
+@dataclass(frozen=True, slots=True)
+class _WorkResult:
+    request_id: int
+    result: TrajectoryRolloutResult | None
+    error: str | None = None
+
+
+def _worker_main(
+    config: NavigationConfig,
+    request_queue: object,
+    result_queue: object,
+    worker_cpu: int | None,
+    strict_affinity: bool,
+) -> None:
+    try:
+        if worker_cpu is not None:
+            apply_current_affinity(
+                worker_cpu,
+                role="l6-planner",
+                strict=strict_affinity,
+            )
+        computer = TrajectoryRolloutComputer(config)
+        result_queue.put(("ready", None))
+        while True:
+            item = request_queue.get()
+            if item == ("stop",):
+                return
+            if item == ("warmup",):
+                result_queue.put(("warmup", None))
+                continue
+            if not isinstance(item, _WorkItem):
+                result_queue.put(("worker_error", "INVALID_WORK_ITEM"))
+                continue
+            try:
+                result = computer.compute(item.request)
+            except BaseException as exc:
+                result_queue.put(
+                    _WorkResult(
+                        item.request_id,
+                        None,
+                        f"{type(exc).__name__}:{exc}",
+                    )
+                )
+            else:
+                result_queue.put(_WorkResult(item.request_id, result, None))
+    except BaseException as exc:
+        try:
+            result_queue.put(("startup_error", f"{type(exc).__name__}:{exc}"))
+        except BaseException:
+            pass
+
+
+class ProcessTrajectoryRolloutBackend:
+    """One bounded spawn worker; L6 permits at most one live request at a time."""
+
+    __slots__ = (
+        "_abandoned",
+        "_buffer",
+        "_closed",
+        "_next_id",
+        "_process",
+        "_request_queue",
+        "_result_queue",
+    )
+
+    def __init__(
+        self,
+        config: NavigationConfig,
+        *,
+        worker_cpu: int | None = None,
+        strict_affinity: bool = True,
+        ready_timeout_s: float = 5.0,
+    ) -> None:
+        if not isinstance(config, NavigationConfig):
+            raise TypeError("config must be NavigationConfig")
+        if worker_cpu is not None and (
+            not isinstance(worker_cpu, int)
+            or isinstance(worker_cpu, bool)
+            or worker_cpu < 0
+        ):
+            raise ValueError("worker_cpu must be a non-negative integer or None")
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
+        if not isinstance(ready_timeout_s, (int, float)) or ready_timeout_s <= 0:
+            raise ValueError("ready_timeout_s must be positive")
+
+        context = mp.get_context("spawn")
+        self._request_queue = context.Queue(maxsize=1)
+        self._result_queue = context.Queue(maxsize=4)
+        self._process = context.Process(
+            target=_worker_main,
+            args=(
+                config,
+                self._request_queue,
+                self._result_queue,
+                worker_cpu,
+                strict_affinity,
+            ),
+            name="r2b4-l6plan",
+            daemon=False,
+        )
+        self._next_id = 1
+        self._buffer: dict[int, _WorkResult] = {}
+        self._abandoned: set[int] = set()
+        self._closed = False
+        self._process.start()
+        try:
+            message = self._result_queue.get(timeout=float(ready_timeout_s))
+            if message != ("ready", None):
+                raise RuntimeError(f"L6 planner worker failed to start: {message!r}")
+            # multiprocessing.Queue creates its feeder on first put. Create it
+            # while the calling task is temporarily pinned to the worker/I/O CPU,
+            # so request serialization cannot later steal CPU3 control time.
+            with temporary_current_affinity(
+                worker_cpu,
+                role="l6-planner-feeder",
+                strict=strict_affinity,
+            ):
+                self._request_queue.put(("warmup",), timeout=float(ready_timeout_s))
+            message = self._result_queue.get(timeout=float(ready_timeout_s))
+            if message != ("warmup", None):
+                raise RuntimeError(f"L6 planner worker warmup failed: {message!r}")
+        except BaseException:
+            self.close()
+            raise
+
+    @property
+    def pid(self) -> int | None:
+        return self._process.pid
+
+    def submit(self, request: TrajectoryRolloutRequest) -> int:
+        if self._closed:
+            raise RuntimeError("trajectory rollout backend is closed")
+        if not isinstance(request, TrajectoryRolloutRequest):
+            raise TypeError("request must be TrajectoryRolloutRequest")
+        self._drain_results()
+        request_id = self._next_id
+        self._next_id += 1
+        try:
+            self._request_queue.put_nowait(_WorkItem(request_id, request))
+        except queue.Full as exc:
+            raise RuntimeError("ASYNC_L6_REQUEST_QUEUE_FULL") from exc
+        return request_id
+
+    def _drain_results(self) -> None:
+        while True:
+            try:
+                message = self._result_queue.get_nowait()
+            except queue.Empty:
+                return
+            if isinstance(message, _WorkResult):
+                if message.request_id in self._abandoned:
+                    self._abandoned.discard(message.request_id)
+                    continue
+                self._buffer[message.request_id] = message
+                continue
+            if isinstance(message, tuple) and message:
+                if message[0] in {"startup_error", "worker_error"}:
+                    raise RuntimeError(f"ASYNC_L6_WORKER_ERROR:{message[1]}")
+
+    def take(self, request_id: int) -> TrajectoryRolloutResult | None:
+        if self._closed:
+            raise RuntimeError("trajectory rollout backend is closed")
+        self._drain_results()
+        message = self._buffer.pop(request_id, None)
+        if message is None:
+            if not self._process.is_alive():
+                raise RuntimeError("ASYNC_L6_WORKER_EXITED")
+            return None
+        if message.error is not None or message.result is None:
+            raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{message.error}")
+        return message.result
+
+    def abandon(self, request_id: int) -> None:
+        if self._closed:
+            return
+        self._buffer.pop(request_id, None)
+        self._abandoned.add(request_id)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if self._process.is_alive():
+                try:
+                    self._request_queue.put(("stop",), timeout=0.2)
+                except (queue.Full, OSError, ValueError):
+                    pass
+                self._process.join(timeout=1.0)
+                if self._process.is_alive():
+                    self._process.terminate()
+                    self._process.join(timeout=1.0)
+        finally:
+            for item in (self._request_queue, self._result_queue):
+                try:
+                    item.close()
+                except (OSError, ValueError):
+                    pass
+                try:
+                    item.cancel_join_thread()
+                except (AttributeError, OSError, ValueError):
+                    pass
+            self._buffer.clear()
+            self._abandoned.clear()
+
+
+__all__ = ["ProcessTrajectoryRolloutBackend"]

@@ -251,6 +251,7 @@ def run_resident_physical_control(
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
+    trajectory_rollout_backend: object | None = None,
 ) -> ResidentRuntimeReport:
     """Run until signal/stop or fault, then release every physical capability."""
 
@@ -297,6 +298,7 @@ def run_resident_physical_control(
         gpio_backend,
         config.composition,
         auxiliary_sources=auxiliary_sources,
+        trajectory_rollout_backend=trajectory_rollout_backend,
     )
     previous_clock_ns = first_deadline_ns
     previous_tick_ns: int | None = None
@@ -423,6 +425,7 @@ def run_owned_resident_physical_control(
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
+    trajectory_rollout_backend: object | None = None,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
 
@@ -442,6 +445,7 @@ def run_owned_resident_physical_control(
             readiness_observer=readiness_observer,
             record_observer=record_observer,
             timing_enabled=timing_enabled,
+            trajectory_rollout_backend=trajectory_rollout_backend,
         )
     finally:
         sensor_inputs.close()

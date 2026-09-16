@@ -1,0 +1,31 @@
+R2B4 asynchronous L6 planner / deterministic latest-plan handoff
+Base inspected: c183965fc4d702d91e809471c685d6515d8d3811
+
+Boundary decision
+- No test bypass and no import whitelist relaxation.
+- L6 owns policy, pending request state, accepted NavigationPlan and pure rollout kernel.
+- Multiprocessing/Queue/CPU-affinity live only in v3/adapters/l6_planner_process.py.
+- native_control imports only the existing L6 implementation module, so the current architecture-boundary rule remains valid.
+- V3 architecture doc is clarified narrowly to permit authority-free pure-computation workers at the runtime/adapter edge.
+
+Behavior
+- First plan of a new mission remains synchronous as a safe seed.
+- Recurring 54 x 8 trajectory rollout runs in one spawn process.
+- Worker is pinned to runtime_affinity.io_cpu (current active config: CPU0).
+- CPU3 keeps the latest accepted immutable plan while the next rollout computes.
+- Request from tick T is accepted only at T+5. Missing result there is fail-closed L6 error.
+- Pending immutable request + release tick are checkpointed/restored.
+- Replay uses the same pure kernel inline with the same deterministic release tick.
+- Old config/captures default async_l6 to disabled.
+- L12, MotorWriter and physical safety ownership are unchanged.
+
+Active config
+v3_navigation.async_l6.enabled=true
+release_tick_gap=5
+max_plan_age_ns=350000000
+
+Watch in live test
+- no ASYNC_L6_* fault
+- CPU3 steady-state control p95/p99 improves substantially
+- CPU0 capture/status I/O and raw-LiDAR integrity do not regress
+- replay MATCH

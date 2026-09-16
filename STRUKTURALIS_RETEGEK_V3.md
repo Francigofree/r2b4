@@ -35,7 +35,7 @@ Ezeket a garanciákat adminisztratív egyszerűsítés, diagnosztikai kényelmi 
 
 ## 2. Determinisztikus végrehajtás és passzív observation sík
 
-A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló folyamatban nincs rétegenkénti thread, sleep, falióra, rejtett I/O vagy modulglobális mutable state.
+A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az owning layer az eredményt csak előre meghatározott tick-határon fogadhatja el; worker-hiány, deadline-miss, context-eltérés vagy túl öreg elfogadott terv fail-closed hiba. A checkpointnak az esetleges pending immutable kérést és determinisztikus release tickjét is rögzítenie kell, hogy replay ugyanazt a pure számítást ugyanazon a handoff ticken tegye láthatóvá.
 
 Egy normál tick:
 

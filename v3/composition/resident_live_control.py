@@ -104,6 +104,7 @@ class ResidentLiveControlComposition:
         config: ResidentLiveControlConfig,
         *,
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
+        trajectory_rollout_backend: object | None = None,
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
             raise TypeError("encoder_source must be NativeEncoderSource")
@@ -123,7 +124,11 @@ class ResidentLiveControlComposition:
             (encoder_source, imu_source, lidar_source, *auxiliary_sources)
         )
         self._command_gateway = command_gateway
-        self._control = NativeControlComposition(motor_writer, config.control)
+        self._control = NativeControlComposition(
+            motor_writer,
+            config.control,
+            trajectory_rollout_backend=trajectory_rollout_backend,
+        )
         self._config = config
         self._lifecycle = LifecycleState.BOOTING
         self._preflight_context: TickContext | None = None
@@ -167,6 +172,9 @@ class ResidentLiveControlComposition:
 
     def checkpoint(self) -> NativeControlStateCheckpoint:
         return self._control.checkpoint()
+
+    def close(self) -> None:
+        self._control.close()
 
     def _preflight_is_fresh_for(self, context: TickContext) -> bool:
         previous = self._preflight_context

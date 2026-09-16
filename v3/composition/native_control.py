@@ -28,6 +28,8 @@ from v3.layers.l5_command_mission import (
     MissionStateCheckpoint,
 )
 from v3.layers.l6_navigation import (
+    AsyncL6PlannerConfig,
+    InlineTrajectoryRolloutBackend,
     NavigationConfig,
     NavigationStateCheckpoint,
     TrajectoryNavigator,
@@ -101,6 +103,7 @@ class V3NavigationConfig:
     local_perception_max_points: int
     world_model: WorldModelConfig
     navigation: NavigationConfig
+    async_l6: AsyncL6PlannerConfig = AsyncL6PlannerConfig()
 
     def __post_init__(self) -> None:
         minimum_range = _finite_float(
@@ -121,6 +124,8 @@ class V3NavigationConfig:
             raise TypeError("world_model must be WorldModelConfig")
         if not isinstance(self.navigation, NavigationConfig):
             raise TypeError("navigation must be NavigationConfig")
+        if not isinstance(self.async_l6, AsyncL6PlannerConfig):
+            raise TypeError("async_l6 must be AsyncL6PlannerConfig")
 
 
 def v3_navigation_config_from_mapping(
@@ -144,6 +149,26 @@ def v3_navigation_config_from_mapping(
         raise ValueError("v3_navigation.person_tracking.enabled must be bool")
     exploration = _mapping(root.get("exploration"), "v3_navigation.exploration")
     rollout = _mapping(root.get("trajectory_rollout"), "v3_navigation.trajectory_rollout")
+    async_value = root.get("async_l6")
+    async_mapping = (
+        {}
+        if async_value is None
+        else _mapping(async_value, "v3_navigation.async_l6")
+    )
+    async_enabled = async_mapping.get("enabled", False)
+    if type(async_enabled) is not bool:
+        raise ValueError("v3_navigation.async_l6.enabled must be bool")
+    async_l6 = AsyncL6PlannerConfig(
+        enabled=async_enabled,
+        release_tick_gap=_positive_int(
+            async_mapping.get("release_tick_gap", 5),
+            "v3_navigation.async_l6.release_tick_gap",
+        ),
+        max_plan_age_ns=_positive_int(
+            async_mapping.get("max_plan_age_ns", 350_000_000),
+            "v3_navigation.async_l6.max_plan_age_ns",
+        ),
+    )
     local_min_range_m = _finite_float(
         local.get("min_range_m"),
         "v3_navigation.local_perception.min_range_m",
@@ -296,6 +321,7 @@ def v3_navigation_config_from_mapping(
         local_perception_max_points=local_max_points,
         world_model=world_model,
         navigation=navigation,
+        async_l6=async_l6,
     )
 
 
@@ -314,6 +340,7 @@ class NativeControlCompositionConfig:
     world_model: WorldModelConfig = WorldModelConfig()
     mission: MissionConfig = MissionConfig()
     navigation: NavigationConfig = NavigationConfig()
+    async_l6: AsyncL6PlannerConfig = AsyncL6PlannerConfig()
     motion_realization: MotionRealizationConfig = MotionRealizationConfig()
     operational_constraints: OperationalConstraintsConfig = OperationalConstraintsConfig()
     chassis_control: ChassisControlConfig = ChassisControlConfig(track_width_m=0.3557)
@@ -339,6 +366,7 @@ class NativeControlCompositionConfig:
             ("world_model", self.world_model, WorldModelConfig),
             ("mission", self.mission, MissionConfig),
             ("navigation", self.navigation, NavigationConfig),
+            ("async_l6", self.async_l6, AsyncL6PlannerConfig),
             (
                 "motion_realization",
                 self.motion_realization,
@@ -407,6 +435,7 @@ class NativeControlComposition:
         "_motion_realization",
         "_navigation",
         "_operational_constraints",
+        "_rollout_backend",
         "_world_model",
     )
 
@@ -414,6 +443,8 @@ class NativeControlComposition:
         self,
         motor_writer: object,
         config: NativeControlCompositionConfig,
+        *,
+        trajectory_rollout_backend: object | None = None,
     ) -> None:
         if not callable(getattr(motor_writer, "write", None)):
             raise TypeError("motor_writer must provide a callable write method")
@@ -424,7 +455,21 @@ class NativeControlComposition:
         estimator = NativeStateEstimator(config.estimation)
         world_model = ShadowWorldModel(config.world_model)
         mission = MissionManager(config.mission)
-        navigation = TrajectoryNavigator(config.navigation)
+        if config.async_l6.enabled:
+            backend = trajectory_rollout_backend
+            if backend is None:
+                backend = InlineTrajectoryRolloutBackend(config.navigation)
+            navigation = TrajectoryNavigator(
+                config.navigation,
+                rollout_backend=backend,
+                rollout_release_tick_gap=config.async_l6.release_tick_gap,
+                max_plan_age_ns=config.async_l6.max_plan_age_ns,
+            )
+        else:
+            if trajectory_rollout_backend is not None:
+                raise ValueError("trajectory rollout backend requires async_l6.enabled")
+            backend = None
+            navigation = TrajectoryNavigator(config.navigation)
         motion_realization = MotionRealizer(config.motion_realization)
         operational_constraints = OperationalConstraintLayer(
             config.operational_constraints
@@ -443,6 +488,7 @@ class NativeControlComposition:
         self._world_model = world_model
         self._mission = mission
         self._navigation = navigation
+        self._rollout_backend = backend
         self._motion_realization = motion_realization
         self._operational_constraints = operational_constraints
         self._actuator_control = actuator_control
@@ -507,6 +553,12 @@ class NativeControlComposition:
         if not isinstance(inputs, TickInputs):
             raise TypeError("inputs must be TickInputs")
         return self._engine.run_tick(inputs)
+
+    def close(self) -> None:
+        backend = self._rollout_backend
+        self._rollout_backend = None
+        if backend is not None:
+            backend.close()
 
     def run_fault_tick(
         self,
