@@ -76,6 +76,12 @@ def encode_value(value: object) -> object:
         }
     if isinstance(value, Mapping):
         return {str(key): encode_value(item) for key, item in value.items()}
+    if isinstance(value, frozenset):
+        if not all(isinstance(item, str) for item in value):
+            raise CaptureEncodingError(
+                "capture frozenset values must contain strings"
+            )
+        return [encode_value(item) for item in sorted(value)]
     if isinstance(value, (tuple, list)):
         return [encode_value(item) for item in value]
     raise CaptureEncodingError(f"cannot serialize capture value {type(value).__name__}")
