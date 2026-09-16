@@ -1,0 +1,132 @@
+{
+  "behavior_status": "NOMINAL",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": true,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [],
+    "message_stream_sha256": "44c5ea58bde7e2e4869e04187b9be75fb98e130f0344fac0f5b2c8d6ee957adc",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 150,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 150,
+      "first_lost_sequence": null,
+      "high_water_mark": 2,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 150,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": true,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 19,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [],
+    "raw_lidar_truncated_count": 0,
+    "session_start_short_pre_window": false,
+    "terminal_short_post_window": false
+  },
+  "capture_status": "FAULT",
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "first_divergence": null,
+  "first_live_incident": {
+    "evidence": {
+      "edge_fault": {
+        "fault_layer": "L0",
+        "reason": "L0_ERROR"
+      },
+      "input_reference": "ticks[119].inputs",
+      "record_type": "edge_fault_tick"
+    },
+    "layer": "L0",
+    "reason": "L0_ERROR",
+    "tick_id": 119
+  },
+  "incident_count": 93,
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 4.771311489332629,
+      "last_trace": 0.07065610509146687,
+      "max_trace": 0.2199574596582342,
+      "sample_count": 119
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 0.014871063032534215,
+      "requested_motion_tick_count": 6
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 6,
+      "FAULT": 1,
+      "STOP": 113,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 135,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 238,
+      "l2_rejection_count": 238,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 238
+      }
+    },
+    "ticks": {
+      "count": 120,
+      "first_monotonic_ns": 2119321290242,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 2121893589616,
+      "last_tick_id": 119
+    },
+    "timing": {
+      "max_ms": 72.289371,
+      "p50_ms": 20.00146,
+      "p95_ms": 30.649647,
+      "p99_ms": 53.594174,
+      "sample_count": 119
+    }
+  },
+  "physical_root_cause": {
+    "cause": null,
+    "evidence": {
+      "edge_fault": {
+        "fault_layer": "L0",
+        "reason": "L0_ERROR"
+      },
+      "input_reference": "ticks[119].inputs",
+      "record_type": "edge_fault_tick"
+    },
+    "reason": "INSUFFICIENT_PHYSICAL_EDGE_EVIDENCE",
+    "status": "NOT_PROVEN"
+  },
+  "replay_error": null,
+  "replay_requested": true,
+  "replay_status": "MATCH",
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "safety-fault-119"
+    ],
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L0_ERROR",
+    "tick_id": 119
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "FINDING",
+  "structure_valid": true
+}

@@ -1,0 +1,33 @@
+R2B4 L6 replan cooldown patch
+
+Problem
+-------
+The 100 ms replan scheduler uses tick-start monotonic time. If one L6 replan
+itself takes >100 ms, the next control tick immediately sees another replan due.
+This can create a replan -> delay -> replan overload loop.
+
+Fix
+---
+A replan is due only when BOTH are true:
+
+  1. monotonic elapsed time >= trajectory_replan_interval_ns (100 ms)
+  2. tick_id gap >= trajectory_replan_min_tick_gap (5 ticks)
+
+Normal 50 Hz behavior:
+  tick 100: replan
+  tick 101-104: reuse cached trajectory candidates
+  tick 105: replan allowed again
+=> nominal 10 Hz planner cadence is preserved.
+
+Over-budget behavior:
+  tick 100: replan takes 150 ms
+  tick 101: NOT allowed to replan again immediately
+  tick 102-104: cached plan reused
+  tick 105: replan allowed
+=> overload cannot self-sustain solely because wall time jumped.
+
+Determinism
+-----------
+No new wall-clock read is introduced.
+last_replan_tick_id is part of NavigationStateCheckpoint, so replay/restore
+preserves the same scheduling state.
