@@ -12,12 +12,20 @@ APPROVED_THIRD_PARTY_ROOTS: frozenset[str] = frozenset({"numpy", "scipy"})
 STDLIB_ROOTS = frozenset(sys.stdlib_module_names) | frozenset({"__future__"})
 LAYER_PREFIX = "v3.layers."
 
-# Concrete hardware/media libraries are not deterministic production
-# dependencies. They are allowed only at the named camera edge adapters;
-# the same imports remain forbidden everywhere else in V3.
+# Concrete hardware/media/ML libraries are not deterministic production
+# dependencies. They are allowed only at the named edge adapters; the same
+# imports remain forbidden everywhere else in V3.
 EDGE_THIRD_PARTY_ROOTS: dict[str, frozenset[str]] = {
     "v3.adapters.picamera2_camera": frozenset({"libcamera", "picamera2"}),
     "v3.adapters.camera_media": frozenset({"picamera2"}),
+    "v3.adapters.litert_person_detector": frozenset({"ai_edge_litert"}),
+}
+
+# Deterministic shared policy modules remain forbidden to layers by default.
+# A layer may consume one only when that exact dependency is explicitly named
+# here. This keeps the generic layer boundary fail-closed.
+LAYER_APPROVED_INTERNAL_MODULES: dict[str, frozenset[str]] = {
+    "v3.layers.l12_safety_final": frozenset({"v3.device_health_policy"}),
 }
 
 
@@ -139,9 +147,16 @@ def _check_import(
         )
     if source_layer and root == "v3":
         own_layer = f"v3.layers.{source_layer}"
+        explicitly_approved = LAYER_APPROVED_INTERNAL_MODULES.get(
+            importer,
+            frozenset(),
+        )
         allowed_internal = any(
             _module_matches(imported, item)
             for item in ("v3.contracts", "v3.math", "v3.ports", own_layer)
+        ) or any(
+            _module_matches(imported, item)
+            for item in explicitly_approved
         )
         if (
             not allowed_internal
@@ -154,7 +169,10 @@ def _check_import(
                     line,
                     "LAYER_INTERNAL_IMPORT_NOT_ALLOWED",
                     imported,
-                    "layer imports are limited to contracts, ports, pure math, and its own package",
+                    (
+                        "layer imports are limited to contracts, ports, pure math, "
+                        "explicitly approved pure policy, and its own package"
+                    ),
                 )
             )
     if (
