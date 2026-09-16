@@ -179,6 +179,9 @@ def test_native_control_core_has_no_edge_or_runtime_authority():
         "v3.layers.l10_chassis_control",
         "v3.layers.l11_actuator_control",
         "v3.layers.l12_safety_final",
+        "v3.adapters.live_person_detection",
+        "v3.adapters.litert_person_detector",
+        "v3.adapters.person_photo_evidence",
     }
 
 
