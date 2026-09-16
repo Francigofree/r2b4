@@ -32,6 +32,12 @@ from v3.contracts import AcquisitionFrame, RobotEstimate
 from v3.composition.native_sensor_inputs import NativeSensorHardwareConfig
 from v3.engine import TickResult
 from v3.execution import CaptureRecord
+from v3.runtime_performance import (
+    RuntimeAffinityConfig,
+    apply_process_affinity_layout,
+    load_runtime_affinity_config,
+    temporary_current_affinity,
+)
 from v3_bounded_config import (
     NativeSensorPolicyConfig,
     load_bounded_physical_runtime_config,
@@ -450,6 +456,7 @@ def run_v3_resident_process(
     stop_requested: Callable[[], bool],
     capture_session: _PassiveCaptureSession | TriggeredCaptureSession | McapCaptureSession | None = None,
     capture_trigger_requested: Callable[[], bool] | None = None,
+    affinity_config: RuntimeAffinityConfig | None = None,
     run_hardware: Callable[..., ResidentRuntimeReport] = run_native_hardware_resident_control,
 ) -> ResidentRuntimeReport:
     """Run one process ownership session and stop if status publication fails."""
@@ -471,9 +478,21 @@ def run_v3_resident_process(
         raise TypeError("capture_session must be a process capture session or None")
     if capture_trigger_requested is not None and not callable(capture_trigger_requested):
         raise TypeError("capture_trigger_requested must be callable or None")
+    if affinity_config is not None and not isinstance(
+        affinity_config, RuntimeAffinityConfig
+    ):
+        raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
 
+    affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
+    if affinity.enabled:
+        apply_process_affinity_layout(affinity)
     if capture_session is not None:
-        capture_session.start()
+        with temporary_current_affinity(
+            affinity.io_cpu if affinity.enabled else None,
+            role="io-start",
+            strict=affinity.strict,
+        ):
+            capture_session.start()
     report: ResidentRuntimeReport | None = None
     caught: BaseException | None = None
     capture_error: BaseException | None = None
@@ -491,12 +510,19 @@ def run_v3_resident_process(
         return value or status_publisher.failed
 
     try:
-        status_publisher.start()
+        with temporary_current_affinity(
+            affinity.io_cpu if affinity.enabled else None,
+            role="io-start",
+            strict=affinity.strict,
+        ):
+            status_publisher.start()
         hardware_kwargs: dict[str, object] = {
             "approval": approval,
             "stop_requested": combined_stop,
             "readiness_observer": status_publisher.publish_tick,
         }
+        if affinity_config is not None:
+            hardware_kwargs["affinity_config"] = affinity_config
         if isinstance(capture_session, McapCaptureSession):
             hub = capture_session.hub
             hardware_kwargs["record_observer"] = lambda record: hub.publish(record, topic="v3.capture_record")
@@ -593,6 +619,7 @@ def native_lidar_factory(
     sensors: NativeSensorHardwareConfig,
     serial_factory: Callable[..., object],
     project_root: Path = PROJECT_ROOT,
+    affinity_config: RuntimeAffinityConfig | None = None,
 ) -> Callable[[Callable[[int], TimedPoseReference | None]], object]:
     """Close active LiDAR config once and return the sole production opener."""
 
@@ -600,6 +627,11 @@ def native_lidar_factory(
         raise TypeError("sensors must be NativeSensorHardwareConfig")
     if not callable(serial_factory):
         raise TypeError("serial_factory must be callable")
+    if affinity_config is not None and not isinstance(
+        affinity_config, RuntimeAffinityConfig
+    ):
+        raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
+    affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
     lidar_config = load_native_lidar_port_config(
         project_root / "conf" / "hardver.json",
         project_root / "conf" / "vezerles.json",
@@ -609,7 +641,12 @@ def native_lidar_factory(
     def open_lidar(
         pose_provider: Callable[[int], TimedPoseReference | None],
     ) -> object:
-        return open_native_lidar_port(lidar_config, pose_provider, serial_factory)
+        with temporary_current_affinity(
+            affinity.lidar_cpu if affinity.enabled else None,
+            role="lidar",
+            strict=affinity.strict,
+        ):
+            return open_native_lidar_port(lidar_config, pose_provider, serial_factory)
 
     return open_lidar
 
@@ -708,6 +745,9 @@ def main(argv: list[str] | None = None) -> int:
         if len(set(process_paths)) != len(process_paths):
             raise ValueError("command, status and capture paths must differ")
         runtime_config = load_resident_runtime_config()
+        affinity_config = load_runtime_affinity_config(
+            PROJECT_ROOT / "conf" / "vezerles.json"
+        )
         command_gateway = AtomicResidentCommandGateway(
             ResidentCommandMailboxConfig(path=command_path)
         )
@@ -719,7 +759,11 @@ def main(argv: list[str] | None = None) -> int:
                 capture_path.stem,
                 capture_path,
                 configuration=_capture_configuration(PROJECT_ROOT, runtime_config),
-                metadata={"runtime": "v3_process_runtime", "command_gateway": "AtomicResidentCommandGateway"},
+                metadata={
+                    "runtime": "v3_process_runtime",
+                    "command_gateway": "AtomicResidentCommandGateway",
+                    "runtime_affinity": affinity_config.as_dict(),
+                },
                 capacity=args.capture_ingress_capacity,
                 config=McapCaptureConfig(
                     pre_event_ns=args.capture_pre_event_ns,
@@ -745,6 +789,7 @@ def main(argv: list[str] | None = None) -> int:
         open_lidar = native_lidar_factory(
             runtime_config.sensor_inputs,
             serial.Serial,
+            affinity_config=affinity_config,
         )
 
         report = run_v3_resident_process(
@@ -761,6 +806,7 @@ def main(argv: list[str] | None = None) -> int:
             capture_trigger_requested=(
                 capture_trigger.consume if capture_session is not None else None
             ),
+            affinity_config=affinity_config,
         )
         output = report.as_dict()
         if capture_session is not None:

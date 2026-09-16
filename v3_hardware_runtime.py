@@ -51,6 +51,10 @@ from v3.contracts import (
 from v3.engine import TickResult
 from v3.execution import CaptureRecord
 from v3.ports import CommandGateway
+from v3.runtime_performance import (
+    RuntimeAffinityConfig,
+    temporary_current_affinity,
+)
 from v3.device_health_policy import (
     PRODUCTION_CRITICAL_DEVICE_IDS,
     critical_devices_ready,
@@ -343,11 +347,17 @@ class NativeHardwareSensorOwner:
         config: NativeSensorHardwareConfig,
         *,
         open_camera: Picamera2Factory = default_picamera2_factory,
+        affinity_config: RuntimeAffinityConfig | None = None,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not isinstance(config, NativeSensorHardwareConfig):
             raise TypeError("config must be NativeSensorHardwareConfig")
+        if affinity_config is not None and not isinstance(
+            affinity_config, RuntimeAffinityConfig
+        ):
+            raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
+        affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
         for callback, name in (
             (open_imu_bus, "open_imu_bus"),
             (open_lidar_port, "open_lidar_port"),
@@ -377,18 +387,22 @@ class NativeHardwareSensorOwner:
             imu.initialize()
             lidar = open_lidar_port(pose_feedback)
             if config.camera_device is not None:
-                camera = NativePicamera2Camera(
-                    config.camera_device,
-                    picamera_factory=open_camera,
-                    sensor_timestamp_mapper=(
-                        raspberry_pi_sensor_timestamp_to_monotonic_ns
-                    ),
-                    monotonic_ns=monotonic_ns,
-                )
-                # Camera is explicitly non-critical. A start failure remains
-                # visible as CAMERA_FRONT FAILED but must not abort core input
-                # ownership or the motor-control runtime.
-                camera.start()
+                with temporary_current_affinity(
+                    affinity.vision_cpu if affinity.enabled else None,
+                    role="vision",
+                    strict=affinity.strict,
+                ):
+                    camera = NativePicamera2Camera(
+                        config.camera_device,
+                        picamera_factory=open_camera,
+                        sensor_timestamp_mapper=(
+                            raspberry_pi_sensor_timestamp_to_monotonic_ns
+                        ),
+                        monotonic_ns=monotonic_ns,
+                    )
+                    # Camera/libcamera workers inherit the dedicated vision CPU.
+                    # Camera remains non-critical for motor safety authority.
+                    camera.start()
 
             if config.person_detection_backend is not None:
                 assert config.inputs.person_detection_source is not None
@@ -403,26 +417,31 @@ class NativeHardwareSensorOwner:
                     )
                 else:
                     detector: NativePersonDetector | None = None
-                    try:
-                        backend = LiteRtSsdPersonDetector(
-                            config.person_detection_backend
-                        )
-                        detector = NativePersonDetector(camera, backend)
-                        if not detector.start():
-                            raise RuntimeError("person detector worker did not start")
-                        person_detection_port = detector
-                    except Exception as exc:
-                        if detector is not None:
-                            try:
-                                detector.stop()
-                            except Exception:
-                                pass
-                        # Detector/model/runtime failures are capability-local.
-                        # TELEOP/EXPLORE motor availability is unchanged because
-                        # PERSON_DETECTOR_FRONT is not production-critical.
-                        person_detection_port = UnavailablePersonDetectionPort(
-                            f"{type(exc).__name__}:{exc}"
-                        )
+                    with temporary_current_affinity(
+                        affinity.vision_cpu if affinity.enabled else None,
+                        role="vision",
+                        strict=affinity.strict,
+                    ):
+                        try:
+                            backend = LiteRtSsdPersonDetector(
+                                config.person_detection_backend
+                            )
+                            detector = NativePersonDetector(camera, backend)
+                            if not detector.start():
+                                raise RuntimeError("person detector worker did not start")
+                            person_detection_port = detector
+                        except Exception as exc:
+                            if detector is not None:
+                                try:
+                                    detector.stop()
+                                except Exception:
+                                    pass
+                            # Detector/model/runtime failures are capability-local.
+                            # TELEOP/EXPLORE motor availability is unchanged because
+                            # PERSON_DETECTOR_FRONT is not production-critical.
+                            person_detection_port = UnavailablePersonDetectionPort(
+                                f"{type(exc).__name__}:{exc}"
+                            )
 
                 if config.person_photo_evidence is not None:
                     person_evidence = PersonPhotoEvidenceRecorder(
@@ -662,6 +681,7 @@ def run_native_hardware_resident_control(
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
     raw_lidar_observer: Callable[[object | None], None] | None = None,
+    affinity_config: RuntimeAffinityConfig | None = None,
 ) -> ResidentRuntimeReport:
     """Own all hardware for one resident session behind an explicit cutover gate."""
 
@@ -688,6 +708,10 @@ def run_native_hardware_resident_control(
         raise TypeError("record_observer must be callable or None")
     if raw_lidar_observer is not None and not callable(raw_lidar_observer):
         raise TypeError("raw_lidar_observer must be callable or None")
+    if affinity_config is not None and not isinstance(
+        affinity_config, RuntimeAffinityConfig
+    ):
+        raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
     if _stop_value(stop_requested):
         return ResidentRuntimeReport(
             status=RUN_OK,
@@ -707,6 +731,7 @@ def run_native_hardware_resident_control(
         open_imu_bus,
         open_lidar_port,
         config.sensor_inputs,
+        affinity_config=affinity_config,
         monotonic_ns=monotonic_ns,
         sleep=sleep,
     )
@@ -729,6 +754,9 @@ def run_native_hardware_resident_control(
             tick_observer=observe,
             readiness_observer=readiness_observer,
             record_observer=record_observer,
+            timing_enabled=bool(
+                affinity_config is not None and affinity_config.enabled
+            ),
         )
     finally:
         owner.close()

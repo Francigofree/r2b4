@@ -28,6 +28,10 @@ from v3.execution import (
     REPLAY_STATE_CHECKPOINT_INTERVAL_NS,
 )
 from v3.ports import CommandGateway
+from v3.runtime_performance import (
+    RuntimeTimingAccumulator,
+    RuntimeTimingEvidence,
+)
 from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, RUN_FAULT, RUN_OK
 
 
@@ -99,6 +103,7 @@ class ResidentRuntimeReport:
     final_reason: str | None
     fault_layer: str | None
     operator_stopped: bool
+    timing: RuntimeTimingEvidence | None = None
 
     def __post_init__(self) -> None:
         if self.status not in (RUN_OK, RUN_FAULT):
@@ -128,11 +133,15 @@ class ResidentRuntimeReport:
             raise TypeError("final_safety_decision must be SafetyDecision or None")
         if type(self.operator_stopped) is not bool:
             raise TypeError("operator_stopped must be bool")
+        if self.timing is not None and not isinstance(
+            self.timing, RuntimeTimingEvidence
+        ):
+            raise TypeError("timing must be RuntimeTimingEvidence or None")
 
     def as_dict(self) -> dict[str, object]:
-        """Return the bounded status surface used by a later process entrypoint."""
+        """Return terminal status plus passive scheduling evidence."""
 
-        return {
+        payload: dict[str, object] = {
             "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
             "status": "PASS" if self.status == RUN_OK else "FAULT",
             "run_status": self.status,
@@ -151,6 +160,9 @@ class ResidentRuntimeReport:
             "operator_stopped": self.operator_stopped,
             "termination_class": self.termination_class,
         }
+        if self.timing is not None:
+            payload["timing"] = self.timing.as_dict()
+        return payload
 
     @property
     def termination_class(self) -> str:
@@ -190,6 +202,7 @@ def _report(
     exit_reason: str,
     normal_tick_count: int,
     operator_stopped: bool,
+    timing: RuntimeTimingEvidence | None = None,
 ) -> ResidentRuntimeReport:
     return ResidentRuntimeReport(
         status=status,
@@ -218,6 +231,7 @@ def _report(
             last_result.trace.fault_layer if last_result is not None else None
         ),
         operator_stopped=operator_stopped,
+        timing=timing,
     )
 
 
@@ -236,6 +250,7 @@ def run_resident_physical_control(
     tick_observer: Callable[[TickResult], None] | None = None,
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
+    timing_enabled: bool = False,
 ) -> ResidentRuntimeReport:
     """Run until signal/stop or fault, then release every physical capability."""
 
@@ -256,6 +271,13 @@ def run_resident_physical_control(
         raise TypeError("readiness_observer must be callable or None")
     if record_observer is not None and not callable(record_observer):
         raise TypeError("record_observer must be callable or None")
+    if type(timing_enabled) is not bool:
+        raise TypeError("timing_enabled must be bool")
+    timing = (
+        RuntimeTimingAccumulator(config.tick_period_ns)
+        if timing_enabled
+        else None
+    )
     if _stop_is_requested(stop_requested):
         return _report(
             runtime=None,
@@ -326,14 +348,23 @@ def run_resident_physical_control(
                     ),
                     normal_tick_count=normal_tick_count,
                     operator_stopped=True,
+                    timing=(timing.snapshot() if timing is not None else None),
                 )
 
+            if timing is not None:
+                timing.observe_tick_start(now_ns, next_deadline_ns)
+            work_started_ns = time.perf_counter_ns()
+            control_started_ns = work_started_ns
             try:
                 last_result, record = runtime.tick_execution(context)
             except TickExecutionError as exc:
                 if record_observer is not None and exc.capture_record is not None:
                     record_observer(exc.capture_record)
                 raise
+            control_completed_ns = time.perf_counter_ns()
+            if timing is not None:
+                timing.observe_control(control_completed_ns - control_started_ns)
+            observer_started_ns = control_completed_ns
             if record_observer is not None:
                 if (
                     isinstance(record, ExecutionRecord)
@@ -354,6 +385,10 @@ def run_resident_physical_control(
                 tick_observer(last_result)
             if readiness_observer is not None:
                 readiness_observer(last_result, runtime.ready_for_active)
+            observers_completed_ns = time.perf_counter_ns()
+            if timing is not None:
+                timing.observe_observer(observers_completed_ns - observer_started_ns)
+                timing.observe_work(observers_completed_ns - work_started_ns)
             normal_tick_count += 1
             previous_tick_ns = now_ns
             if runtime.lifecycle is LifecycleState.FAULT:
@@ -364,6 +399,7 @@ def run_resident_physical_control(
                     exit_reason="RUNTIME_FAULT",
                     normal_tick_count=normal_tick_count,
                     operator_stopped=False,
+                    timing=(timing.snapshot() if timing is not None else None),
                 )
             tick_id += 1
             next_deadline_ns = max(
@@ -386,6 +422,7 @@ def run_owned_resident_physical_control(
     tick_observer: Callable[[TickResult], None] | None = None,
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
+    timing_enabled: bool = False,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
 
@@ -404,6 +441,7 @@ def run_owned_resident_physical_control(
             tick_observer=tick_observer,
             readiness_observer=readiness_observer,
             record_observer=record_observer,
+            timing_enabled=timing_enabled,
         )
     finally:
         sensor_inputs.close()
