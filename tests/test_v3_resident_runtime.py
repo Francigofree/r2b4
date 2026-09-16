@@ -268,8 +268,8 @@ def _runtime_config(*, required_lidar_preflight_revisions=1):
 
 def _sources(encoder, lidar_backend=None):
     return (
-        NativeEncoderSource(encoder, NativeEncoderConfig("encoder", 0.5)),
-        NativeImuSource(ImuBackend(), NativeImuConfig("imu", 0.5, 2)),
+        NativeEncoderSource(encoder, NativeEncoderConfig("WHEEL_ENCODERS", 0.5)),
+        NativeImuSource(ImuBackend(), NativeImuConfig("BNO055_IMU", 0.5, 2)),
         NativeLidarSource(
             lidar_backend or LidarBackend(),
             NativeLidarConfig("RPLIDAR_C1", 0.5, 100_000_000),

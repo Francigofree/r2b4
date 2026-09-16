@@ -28,6 +28,36 @@ def test_v3_only_import_policy_declares_its_math_dependencies():
     assert APPROVED_THIRD_PARTY_ROOTS == frozenset({"numpy", "scipy"})
 
 
+def test_camera_hardware_dependencies_are_scoped_to_camera_edge_adapters(tmp_path):
+    _write(
+        tmp_path,
+        "v3/adapters/picamera2_camera.py",
+        "from picamera2 import Picamera2\nfrom libcamera import controls\n",
+    )
+    _write(
+        tmp_path,
+        "v3/adapters/camera_media.py",
+        "from picamera2.encoders import H264Encoder\n"
+        "from picamera2.outputs import FileOutput\n",
+    )
+
+    assert validate_v3_imports(tmp_path) == ()
+
+    _write(
+        tmp_path,
+        "v3/layers/l4_world_model/illegal_camera_dependency.py",
+        "from picamera2 import Picamera2\n",
+    )
+    violations = validate_v3_imports(tmp_path)
+
+    assert any(
+        item.path == "v3/layers/l4_world_model/illegal_camera_dependency.py"
+        and item.code == "PROJECT_OR_THIRD_PARTY_IMPORT_NOT_ALLOWED"
+        and item.imported_module == "picamera2.Picamera2"
+        for item in violations
+    )
+
+
 def test_native_motor_pwm_planner_remains_io_and_writer_capability_free():
     path = PROJECT_ROOT / "v3" / "adapters" / "motor_pwm.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -172,6 +202,7 @@ def test_bounded_live_control_has_no_physical_output_or_runtime_authority():
         "v3.adapters.live_inputs",
         "v3.adapters.live_lidar",
         "v3.contracts",
+        "v3.device_health_policy",
         "v3.engine",
     }
 
@@ -195,6 +226,7 @@ def test_bounded_physical_control_has_no_concrete_gpio_or_runtime_authority():
         "v3.adapters.live_encoder",
         "v3.adapters.live_imu",
         "v3.adapters.live_lidar",
+        "v3.adapters.live_inputs",
         "v3.contracts",
         "v3.engine",
     }
@@ -225,6 +257,7 @@ def test_bounded_physical_runtime_has_no_entrypoint_or_external_io_authority():
         "v3.adapters.live_encoder",
         "v3.adapters.live_imu",
         "v3.adapters.live_lidar",
+        "v3.adapters.live_inputs",
         "v3.composition.bounded_physical_control",
         "v3.composition.native_sensor_inputs",
         "v3.contracts",
@@ -277,11 +310,14 @@ def test_bounded_runtime_config_loader_has_no_hardware_authority():
         "v3.adapters.live_encoder",
         "v3.adapters.live_imu",
         "v3.adapters.live_lidar",
+        "v3.adapters.live_camera",
+        "v3.adapters.picamera2_camera",
         "v3.adapters.motor_pwm",
         "v3.composition.bounded_live_control",
         "v3.composition.bounded_physical_control",
         "v3.composition.native_control",
         "v3.composition.native_sensor_inputs",
+        "v3.device_health_policy",
         "v3.layers.l3_state_estimation",
         "v3.layers.l10_chassis_control",
         "v3.layers.l11_actuator_control",

@@ -12,6 +12,14 @@ APPROVED_THIRD_PARTY_ROOTS: frozenset[str] = frozenset({"numpy", "scipy"})
 STDLIB_ROOTS = frozenset(sys.stdlib_module_names) | frozenset({"__future__"})
 LAYER_PREFIX = "v3.layers."
 
+# Concrete hardware/media libraries are not deterministic production
+# dependencies. They are allowed only at the named camera edge adapters;
+# the same imports remain forbidden everywhere else in V3.
+EDGE_THIRD_PARTY_ROOTS: dict[str, frozenset[str]] = {
+    "v3.adapters.picamera2_camera": frozenset({"libcamera", "picamera2"}),
+    "v3.adapters.camera_media": frozenset({"picamera2"}),
+}
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class ImportViolation:
@@ -163,7 +171,11 @@ def _check_import(
                 "contract definitions must remain independent of implementations",
             )
         )
-    if root not in {"v3"} | set(STDLIB_ROOTS) | set(approved_third_party):
+    authorized_edge_roots = EDGE_THIRD_PARTY_ROOTS.get(importer, frozenset())
+    if (
+        root not in {"v3"} | set(STDLIB_ROOTS) | set(approved_third_party)
+        and root not in authorized_edge_roots
+    ):
         violations.append(
             ImportViolation(
                 path,

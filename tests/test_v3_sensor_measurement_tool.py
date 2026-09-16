@@ -30,11 +30,11 @@ def test_summary_exposes_health_ranges_estimate_and_zero_commit():
     context = TickContext(0, 1_000)
     encoder = NativeEncoderSource(
         Backend((EncoderVelocityReading(0, 1_000, 0.1, 0.2, 1.0, False, True),)),
-        NativeEncoderConfig("encoder", 0.5),
+        NativeEncoderConfig("WHEEL_ENCODERS", 0.5),
     )
     imu = NativeImuSource(
         Backend((ImuHeadingReading(0, 1_000, 0.3, 0.4, 1.0, 3, False, True),)),
-        NativeImuConfig("imu", 0.5, 2),
+        NativeImuConfig("BNO055_IMU", 0.5, 2),
     )
     lidar = NativeLidarSource(
         Backend(
@@ -50,7 +50,7 @@ def test_summary_exposes_health_ranges_estimate_and_zero_commit():
                 ),
             )
         ),
-        NativeLidarConfig("lidar", 0.2, 100),
+        NativeLidarConfig("RPLIDAR_C1", 0.2, 100),
     )
     result = LiveInputComposition(encoder, imu, lidar).tick(context)
 
@@ -61,9 +61,9 @@ def test_summary_exposes_health_ranges_estimate_and_zero_commit():
     assert summary["l3_estimate_count"] == 1
     assert summary["all_commits_zero"] is True
     assert summary["source_state_counts"] == {
-        "encoder": {"OK": 1},
-        "imu": {"OK": 1},
-        "lidar": {"OK": 1},
+        "WHEEL_ENCODERS": {"OK": 1},
+        "BNO055_IMU": {"OK": 1},
+        "RPLIDAR_C1": {"OK": 1},
     }
     assert summary["sample_ranges"]["wheel_velocity"]["left_mps"] == [0.1, 0.1]
     assert summary["sample_ranges"]["ekf_heading"]["yaw_rad"] == [0.3, 0.3]

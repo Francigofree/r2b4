@@ -28,6 +28,7 @@ from v3.contracts import (
     TickContext,
     WheelVelocitySetpoint,
 )
+from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
 from v3.layers.l10_chassis_control import (
@@ -90,6 +91,7 @@ def _control_config() -> NativeControlCompositionConfig:
             "RPLIDAR_C1",
             float(hardware["lidar"]["biztonsagi_zona_m"]),
         ),
+        critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS,
     )
 
 
@@ -149,7 +151,7 @@ def _raw(context: TickContext, clearance_m: float = 1.0) -> RawDeviceBatch:
             ),
         ),
         DeviceSample(
-            "LIDAR_LOCALIZATION",
+            "RPLIDAR_C1",
             "lidar_health",
             context.tick_id + 1,
             context.monotonic_ns,
@@ -163,7 +165,7 @@ def _raw(context: TickContext, clearance_m: float = 1.0) -> RawDeviceBatch:
         (
             DeviceHealth("WHEEL_ENCODERS", DeviceHealthState.OK),
             DeviceHealth("BNO055_IMU", DeviceHealthState.OK),
-            DeviceHealth("LIDAR_LOCALIZATION", DeviceHealthState.OK),
+            DeviceHealth("RPLIDAR_C1", DeviceHealthState.OK),
         ),
     )
 
