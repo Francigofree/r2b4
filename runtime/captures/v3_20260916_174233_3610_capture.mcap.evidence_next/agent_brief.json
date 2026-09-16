@@ -1,0 +1,132 @@
+{
+  "behavior_status": "NO_MOTION_REQUEST",
+  "budget": {
+    "actual_bytes": 2845,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260916_174233_3610_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "PASS",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260916_174233_3610_capture.mcap.evidence_next/interesting_slice.ndjson",
+    "rows": 152,
+    "size_bytes": 521660,
+    "tick_range": [
+      null,
+      null
+    ],
+    "truncated": true
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.05502923782230505,
+      "growth_ratio": 2.703318675331361,
+      "last_trace": 0.05894358814599231,
+      "max_trace": 0.14419655679579335,
+      "sample_count": 500
+    },
+    "motion": {
+      "behavior_status": "NO_MOTION_REQUEST",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 0.02273713861323987,
+      "requested_motion_tick_count": 0
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 0,
+      "FAULT": 0,
+      "STOP": 500,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 0,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 1411,
+      "l2_rejection_count": 1411,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1411
+      }
+    },
+    "ticks": {
+      "count": 500,
+      "first_monotonic_ns": 534605765033,
+      "first_tick_id": 3263,
+      "last_monotonic_ns": 544721309295,
+      "last_tick_id": 3762
+    },
+    "timing": {
+      "max_ms": 60.246511,
+      "p50_ms": 19.990047,
+      "p95_ms": 24.076361,
+      "p99_ms": 34.125339,
+      "sample_count": 499
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": {
+      "authority_capture": "/home/alba/project_r2b4/runtime/captures/v3_20260916_174233_3610_capture.mcap",
+      "authority_sha256": "2db5936a4b1ff118127a5124dc79d436c839b9fe29a38c2e03e129d238300961",
+      "checkpoint_used": true,
+      "materialized_bytes": 509375,
+      "materialized_tick_count": 11,
+      "preflight": "PASS",
+      "replay_eligible": true,
+      "temporary_json_persisted": false
+    },
+    "first_divergence": null,
+    "status": "MATCH"
+  },
+  "root_cause": {
+    "confidence": "NOT_PROVEN",
+    "evidence_ids": [],
+    "kind": null,
+    "layer": null,
+    "reason": "NO_NON_NOMINAL_EVIDENCE_FOUND",
+    "tick_id": null
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": "3e454ef21676ccd7ee9db9f83d8c6ae0d568e9833b78b111fe8b8c143044e6ea"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": "5a9a80d4fc4ea07c869ed4f2db4fa544fb5200a23e7017c03ab9981934752b2e"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": "5ca62ce285759839d5388784646e825a4df2741336273dd3c687083383020132"
+    }
+  ],
+  "status": "PASS",
+  "top_incidents": []
+}

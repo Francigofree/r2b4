@@ -1,0 +1,119 @@
+{
+  "authority": {
+    "capture": "/home/alba/project_r2b4/runtime/captures/v3_20260916_173559_3226_capture.mcap",
+    "new_files_are_derived_only": true,
+    "v2_evidence_index": "/home/alba/project_r2b4/runtime/captures/v3_20260916_173559_3226_capture.mcap.evidence_next/evidence_index.json"
+  },
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 11,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 109,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 536,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "effective_incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "REFERENCED_RAW_LIDAR_MISSING"
+          ],
+          "message_stream_sha256": "c04e178603e33ae55a6f06b8365643f2a83767e7f90748701cc1c89bceecb627",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 1964,
+          "raw_lidar_missing_revisions": [
+            374
+          ],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "REFERENCED_RAW_LIDAR_MISSING",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_TIME_INVALID",
+            "state": "FAILED"
+          }
+        ]
+      },
+      "id": "device-2347",
+      "layer": "L1",
+      "monotonic_ns": 123472579681,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 2347
+    }
+  ],
+  "evidence_status": "FAIL",
+  "how_to_drill_down": {
+    "exact_ticks": "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks START:END --layers L8,L9,L10,L11,L12",
+    "other_view_rates": "python3 -m v3.test_hub_next view <capture.mcap> --hz 1|5|10",
+    "raw_lidar": "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  },
+  "incident_drilldowns": [
+    {
+      "command": "python3 -m v3.test_hub_v2 query /home/alba/project_r2b4/runtime/captures/v3_20260916_173559_3226_capture.mcap --ticks 2337:2357 --layers L1,L2,L3",
+      "incident_id": "device-2347",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "tick_range": [
+        2337,
+        2357
+      ]
+    }
+  ],
+  "overview": "/home/alba/project_r2b4/runtime/captures/v3_20260916_173559_3226_capture.mcap.evidence_next/overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 10.860909638,
+      "end_tick": 2448,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 1913,
+      "stop_ticks": 536,
+      "tick_count": 536
+    }
+  ],
+  "replay_status": "ERROR",
+  "schema": "R2B4_TEST_HUB_NEXT_V1",
+  "status": "FAIL",
+  "suppressed_agent_noise": []
+}
