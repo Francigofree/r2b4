@@ -117,7 +117,7 @@
     "exploration": {
       "coverage_cell_size_m": 0.25,
       "coverage_max_cells": 512,
-      "local_goal_distance_m": 0.60,
+      "local_goal_distance_m": 0.6,
       "local_goal_tolerance_m": 0.15,
       "local_goal_max_age_ns": 8000000000,
       "local_goal_heading_samples": 32
@@ -131,11 +131,23 @@
       "footprint_length_m": 0.46,
       "footprint_width_m": 0.38,
       "footprint_safety_margin_m": 0.05,
-      "clearance_score_cap_m": 1.00,
-      "progress_weight": 0.60,
-      "clearance_weight": 0.10,
+      "clearance_score_cap_m": 1.0,
+      "progress_weight": 0.6,
+      "clearance_weight": 0.1,
       "smoothness_weight": 0.16,
       "novelty_weight": 0.14
+    },
+    "person_tracking": {
+      "enabled": true,
+      "camera_horizontal_fov_rad": 1.1519173063162575,
+      "camera_yaw_offset_rad": 0.0,
+      "lidar_max_skew_ns": 150000000,
+      "lidar_angular_margin_rad": 0.04,
+      "lidar_cluster_depth_m": 0.3,
+      "lidar_min_points": 1,
+      "max_association_distance_m": 0.75,
+      "max_speed_mps": 6.0,
+      "track_radius_m": 0.3
     }
   }
 }

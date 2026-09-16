@@ -133,6 +133,15 @@ def v3_navigation_config_from_mapping(
         raise ValueError("control config v3_navigation.contract is invalid")
     local = _mapping(root.get("local_perception"), "v3_navigation.local_perception")
     rolling = _mapping(root.get("rolling_costmap"), "v3_navigation.rolling_costmap")
+    person_tracking_value = root.get("person_tracking")
+    person_tracking = (
+        {}
+        if person_tracking_value is None
+        else _mapping(person_tracking_value, "v3_navigation.person_tracking")
+    )
+    person_tracking_enabled = person_tracking.get("enabled", True)
+    if type(person_tracking_enabled) is not bool:
+        raise ValueError("v3_navigation.person_tracking.enabled must be bool")
     exploration = _mapping(root.get("exploration"), "v3_navigation.exploration")
     rollout = _mapping(root.get("trajectory_rollout"), "v3_navigation.trajectory_rollout")
     local_min_range_m = _finite_float(
@@ -165,6 +174,43 @@ def v3_navigation_config_from_mapping(
             "v3_navigation.rolling_costmap.max_cells",
         ),
         local_costmap_max_points_per_scan=local_max_points,
+        person_tracking_enabled=person_tracking_enabled,
+        person_camera_horizontal_fov_rad=_positive_float(
+            person_tracking.get("camera_horizontal_fov_rad", 1.1519173063162575),
+            "v3_navigation.person_tracking.camera_horizontal_fov_rad",
+        ),
+        person_camera_yaw_offset_rad=_finite_float(
+            person_tracking.get("camera_yaw_offset_rad", 0.0),
+            "v3_navigation.person_tracking.camera_yaw_offset_rad",
+        ),
+        person_lidar_max_skew_ns=_positive_int(
+            person_tracking.get("lidar_max_skew_ns", 150_000_000),
+            "v3_navigation.person_tracking.lidar_max_skew_ns",
+        ),
+        person_lidar_angular_margin_rad=_finite_float(
+            person_tracking.get("lidar_angular_margin_rad", 0.04),
+            "v3_navigation.person_tracking.lidar_angular_margin_rad",
+        ),
+        person_lidar_cluster_depth_m=_positive_float(
+            person_tracking.get("lidar_cluster_depth_m", 0.30),
+            "v3_navigation.person_tracking.lidar_cluster_depth_m",
+        ),
+        person_lidar_min_points=_positive_int(
+            person_tracking.get("lidar_min_points", 1),
+            "v3_navigation.person_tracking.lidar_min_points",
+        ),
+        person_track_max_association_distance_m=_positive_float(
+            person_tracking.get("max_association_distance_m", 0.75),
+            "v3_navigation.person_tracking.max_association_distance_m",
+        ),
+        person_track_max_speed_mps=_positive_float(
+            person_tracking.get("max_speed_mps", 6.0),
+            "v3_navigation.person_tracking.max_speed_mps",
+        ),
+        person_track_radius_m=_positive_float(
+            person_tracking.get("track_radius_m", 0.30),
+            "v3_navigation.person_tracking.track_radius_m",
+        ),
     )
     navigation = NavigationConfig(
         trajectory_replan_interval_ns=_positive_int(
