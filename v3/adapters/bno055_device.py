@@ -273,7 +273,10 @@ class NativeBno055Device:
             self.sensor_ok = False
             raise
 
-        self.sensor_ok = system_error == 0
+        # SYS_ERR is only current when SYS_STATUS reports SYSTEM_ERROR (0x01).
+        # In other states, including 0x05 (fusion running), SYS_ERR must not
+        # by itself mark the sensor failed.
+        self.sensor_ok = system_status != 0x01
         return {
             "timestamp": captured_ns / 1_000_000_000.0,
             "heading_deg": float(

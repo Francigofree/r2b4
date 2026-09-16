@@ -153,7 +153,12 @@ class NativeBno055ImuBackend:
             "gyro_dps[yaw_rate_axis]",
         )
         calibration, omega_calibration = self._calibration(sample)
-        system_error = _nonnegative_int(sample.get("sys_error", 0), "sys_error")
+        system_status = _nonnegative_int(
+            sample.get("sys_status", 0),
+            "sys_status",
+        )
+        _nonnegative_int(sample.get("sys_error", 0), "sys_error")
+        system_error_active = system_status == 0x01
 
         yaw_sign = -1.0 if self._config.heading_clockwise_positive else 1.0
         rate_sign = (
@@ -167,7 +172,7 @@ class NativeBno055ImuBackend:
             age_ns >= 0
             and self._device.initialized
             and self._device.sensor_ok
-            and system_error == 0
+            and not system_error_active
         )
         stale = (
             timing_valid
