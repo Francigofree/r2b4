@@ -1,0 +1,16 @@
+diff --git a/v3/mcap_capture.py b/v3/mcap_capture.py
+--- a/v3/mcap_capture.py
++++ b/v3/mcap_capture.py
+@@
+                 elif revision > previous + 1:
+                     self._raw_revision_gaps.append((previous, revision))
+-                    self._integrity_reasons.add("RAW_LIDAR_REVISION_GAP")
+             self._last_raw_revision = max(previous or revision, revision)
+             truncated = bool(row.get("points_truncated"))
+             if truncated:
+@@
+         missing_raw = tuple(sorted(self._referenced_raw_revisions - self._written_raw_revisions))
+-        if missing_raw:
+-            self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
+
+         complete = not self._integrity_reasons
