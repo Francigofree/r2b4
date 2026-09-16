@@ -158,15 +158,6 @@ def v3_navigation_config_from_mapping(
     async_enabled = async_mapping.get("enabled", False)
     if type(async_enabled) is not bool:
         raise ValueError("v3_navigation.async_l6.enabled must be bool")
-    release_delay_value = async_mapping.get("release_delay_ns")
-    release_delay_ns = (
-        None
-        if release_delay_value is None
-        else _positive_int(
-            release_delay_value,
-            "v3_navigation.async_l6.release_delay_ns",
-        )
-    )
     async_l6 = AsyncL6PlannerConfig(
         enabled=async_enabled,
         release_tick_gap=_positive_int(
@@ -177,7 +168,6 @@ def v3_navigation_config_from_mapping(
             async_mapping.get("max_plan_age_ns", 350_000_000),
             "v3_navigation.async_l6.max_plan_age_ns",
         ),
-        release_delay_ns=release_delay_ns,
     )
     local_min_range_m = _finite_float(
         local.get("min_range_m"),
@@ -473,7 +463,6 @@ class NativeControlComposition:
                 config.navigation,
                 rollout_backend=backend,
                 rollout_release_tick_gap=config.async_l6.release_tick_gap,
-                rollout_release_delay_ns=config.async_l6.release_delay_ns,
                 max_plan_age_ns=config.async_l6.max_plan_age_ns,
             )
         else:

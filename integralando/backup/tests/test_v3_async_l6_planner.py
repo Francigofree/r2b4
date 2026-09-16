@@ -139,7 +139,6 @@ def test_async_latest_plan_handoff_and_pending_checkpoint_restore_are_determinis
     assert checkpoint is not None
     assert checkpoint.pending_rollout_request is not None
     assert checkpoint.pending_release_tick_id == 10
-    assert checkpoint.pending_release_not_before_ns is None
     assert plans[5].trajectory_candidates == plans[4].trajectory_candidates
 
     restored = TrajectoryNavigator(
@@ -163,7 +162,6 @@ def test_async_latest_plan_handoff_and_pending_checkpoint_restore_are_determinis
     assert next_checkpoint.pending_rollout_request is not None
     assert next_checkpoint.pending_rollout_request.context.tick_id == 10
     assert next_checkpoint.pending_release_tick_id == 15
-    assert next_checkpoint.pending_release_not_before_ns is None
 
     original_backend.close()
     restored_backend.close()
@@ -252,13 +250,11 @@ def test_async_l6_config_is_explicit_and_defaults_off_for_old_documents():
         enabled=True,
         release_tick_gap=5,
         max_plan_age_ns=350_000_000,
-        release_delay_ns=100_000_000,
     )
     base["v3_navigation"]["async_l6"] = {
         "enabled": enabled.enabled,
         "release_tick_gap": enabled.release_tick_gap,
         "max_plan_age_ns": enabled.max_plan_age_ns,
-        "release_delay_ns": enabled.release_delay_ns,
     }
     parsed = v3_navigation_config_from_mapping(base)
     assert parsed.async_l6 == enabled
@@ -347,87 +343,4 @@ def test_previous_plan_staleness_still_fails_closed_before_release_tick():
         _evaluate(navigator, manager, 6)
 
     backend.close()
-
-def _evaluate_at(navigator, manager, tick_id: int, monotonic_ns: int):
-    context = TickContext(tick_id, monotonic_ns)
-    return navigator.evaluate(
-        _mission(manager, context),
-        _estimate(context, x_m=0.02 * tick_id),
-        _world(context),
-    )
-
-
-def test_time_based_async_handoff_is_stable_under_control_tick_jitter():
-    """Reproduce the live failure shape without tying 100 ms to five ticks."""
-
-    config = NavigationConfig(
-        trajectory_replan_interval_ns=100_000_000,
-        trajectory_replan_min_tick_gap=5,
-    )
-    backend = InlineTrajectoryRolloutBackend(config)
-    navigator = TrajectoryNavigator(
-        config,
-        rollout_backend=backend,
-        rollout_release_tick_gap=5,
-        rollout_release_delay_ns=100_000_000,
-        max_plan_age_ns=350_000_000,
-    )
-    manager = MissionManager()
-
-    times = {
-        0: 1_000_000_000,
-        1: 1_020_000_000,
-        2: 1_040_000_000,
-        3: 1_060_000_000,
-        4: 1_080_000_000,
-        5: 1_100_000_000,
-        6: 1_130_000_000,
-        7: 1_165_000_000,
-        8: 1_195_000_000,
-        # Four ticks after request, but already 180 ms later.
-        9: 1_280_000_000,
-    }
-
-    for tick_id in range(6):
-        _evaluate_at(navigator, manager, tick_id, times[tick_id])
-
-    pending = navigator.checkpoint()
-    assert pending.last_replan_tick_id == 0
-    assert pending.pending_rollout_request is not None
-    assert pending.pending_rollout_request.context.tick_id == 5
-    assert pending.pending_release_tick_id is None
-    assert pending.pending_release_not_before_ns == 1_200_000_000
-
-    for tick_id in (6, 7, 8):
-        _evaluate_at(navigator, manager, tick_id, times[tick_id])
-        assert navigator.checkpoint().last_replan_tick_id == 0
-
-    # Tick 9 is the first closed tick after the 100 ms handoff threshold.
-    # The old five-tick scheme would still wait for tick 10.
-    _evaluate_at(navigator, manager, 9, times[9])
-    after_handoff = navigator.checkpoint()
-    assert after_handoff.last_replan_tick_id == 5
-
-    # Because the accepted source snapshot is already >100 ms old, the next
-    # async request is scheduled immediately. The historic min-tick-gap must
-    # not turn scheduler jitter into another planner-age failure.
-    assert after_handoff.pending_rollout_request is not None
-    assert after_handoff.pending_rollout_request.context.tick_id == 9
-    assert after_handoff.pending_release_tick_id is None
-    assert after_handoff.pending_release_not_before_ns == 1_380_000_000
-
-    backend.close()
-
-
-def test_time_based_async_handoff_budget_must_fit_inside_plan_freshness():
-    with pytest.raises(
-        ValueError,
-        match="release_delay_ns must be shorter than max_plan_age_ns",
-    ):
-        AsyncL6PlannerConfig(
-            enabled=True,
-            release_tick_gap=5,
-            max_plan_age_ns=100_000_000,
-            release_delay_ns=100_000_000,
-        )
 

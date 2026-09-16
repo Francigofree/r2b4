@@ -1,4 +1,4 @@
-# R2B4 async L6 monotonic handoff P0 fix
+# R2B4 async L6 monotonic handoff P0 fix — V2 installer
 
 Base inspected: `3236cada2eb12b7f63944ffa1fc55c47b39ae8be`
 
@@ -79,6 +79,25 @@ No L12, motor, GPIO, command or process authority changes.
 - `tests/test_v3_async_l6_planner.py`
 
 No change to the process adapter, motor path, capture engine or replay engine.
+
+## V2 preflight dry run
+
+Before installing, run:
+
+```bash
+python3 upgrade.py --check /home/alba/project_r2b4
+```
+
+It must end with:
+
+```text
+PASS: exact inspected source matches
+PASS: all anchors unique
+PASS: generated Python/JSON validates in memory
+PASS: no files changed (--check)
+```
+
+Only then run the normal installer.
 
 ## Install
 

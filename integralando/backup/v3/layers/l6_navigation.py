@@ -146,7 +146,6 @@ class NavigationStateCheckpoint:
     pending_rollout_request: TrajectoryRolloutRequest | None = None
     pending_goal_selected_ns: int | None = None
     pending_release_tick_id: int | None = None
-    pending_release_not_before_ns: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,10 +217,8 @@ class AsyncL6PlannerConfig:
     """Deterministic handoff policy; process placement is not layer state."""
 
     enabled: bool = False
-    # Legacy replay compatibility. New production handoffs use release_delay_ns.
     release_tick_gap: int = 5
     max_plan_age_ns: int = 350_000_000
-    release_delay_ns: int | None = None
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
@@ -232,21 +229,10 @@ class AsyncL6PlannerConfig:
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        if self.release_delay_ns is not None:
-            if (
-                not isinstance(self.release_delay_ns, int)
-                or isinstance(self.release_delay_ns, bool)
-                or self.release_delay_ns <= 0
-            ):
-                raise ValueError("release_delay_ns must be a positive integer or None")
-            if self.release_delay_ns >= self.max_plan_age_ns:
-                raise ValueError(
-                    "release_delay_ns must be shorter than max_plan_age_ns"
-                )
 
 
 class InlineTrajectoryRolloutBackend:
-    """Pure replay/test backend; L6 owns deterministic result visibility."""
+    """Pure replay/test backend; compute now, reveal only on L6 release tick."""
 
     __slots__ = ("_closed", "_computer", "_next_id", "_results")
 
@@ -318,13 +304,11 @@ class TrajectoryNavigator:
         "_max_plan_age_ns",
         "_mission_id",
         "_pending_goal_selected_ns",
-        "_pending_release_not_before_ns",
         "_pending_release_tick_id",
         "_pending_rollout_id",
         "_pending_rollout_request",
         "_progress",
         "_rollout_backend",
-        "_rollout_release_delay_ns",
         "_rollout_release_tick_gap",
         "_static_planning_index",
         "_trajectory_candidates",
@@ -336,7 +320,6 @@ class TrajectoryNavigator:
         *,
         rollout_backend: TrajectoryRolloutBackend | None = None,
         rollout_release_tick_gap: int = 5,
-        rollout_release_delay_ns: int | None = None,
         max_plan_age_ns: int = 350_000_000,
     ) -> None:
         if rollout_backend is not None:
@@ -351,23 +334,9 @@ class TrajectoryNavigator:
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        if rollout_release_delay_ns is not None:
-            if (
-                not isinstance(rollout_release_delay_ns, int)
-                or isinstance(rollout_release_delay_ns, bool)
-                or rollout_release_delay_ns <= 0
-            ):
-                raise ValueError(
-                    "rollout_release_delay_ns must be a positive integer or None"
-                )
-            if rollout_release_delay_ns >= max_plan_age_ns:
-                raise ValueError(
-                    "rollout_release_delay_ns must be shorter than max_plan_age_ns"
-                )
         self._config = config
         self._rollout_backend = rollout_backend
         self._rollout_release_tick_gap = rollout_release_tick_gap
-        self._rollout_release_delay_ns = rollout_release_delay_ns
         self._max_plan_age_ns = max_plan_age_ns
         self._mission_id: str | None = None
         self._initial_distance_m = 0.0
@@ -382,7 +351,6 @@ class TrajectoryNavigator:
         self._pending_rollout_request: TrajectoryRolloutRequest | None = None
         self._pending_goal_selected_ns: int | None = None
         self._pending_release_tick_id: int | None = None
-        self._pending_release_not_before_ns: int | None = None
         self._static_planning_index: _StaticPlanningIndex | None = None
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
 
@@ -406,7 +374,6 @@ class TrajectoryNavigator:
             self._pending_rollout_request,
             self._pending_goal_selected_ns,
             self._pending_release_tick_id,
-            self._pending_release_not_before_ns,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -434,24 +401,13 @@ class TrajectoryNavigator:
             if backend is None:
                 raise RuntimeError("async navigation checkpoint requires rollout backend")
             release_tick_id = checkpoint.pending_release_tick_id
-            release_not_before_ns = checkpoint.pending_release_not_before_ns
-            if (release_tick_id is None) == (release_not_before_ns is None):
-                raise RuntimeError(
-                    "async navigation checkpoint must contain exactly one release criterion"
-                )
-            if (
-                release_not_before_ns is not None
-                and release_not_before_ns <= pending.context.monotonic_ns
-            ):
-                raise RuntimeError(
-                    "async navigation checkpoint release time is not after request time"
-                )
+            if release_tick_id is None:
+                raise RuntimeError("async navigation checkpoint lacks release tick")
             request_id = backend.submit(pending)
             self._pending_rollout_id = request_id
             self._pending_rollout_request = pending
             self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns
             self._pending_release_tick_id = release_tick_id
-            self._pending_release_not_before_ns = release_not_before_ns
 
     def evaluate(
         self,
@@ -714,16 +670,9 @@ class TrajectoryNavigator:
             or not self._trajectory_candidates
         ):
             return True
-        if monotonic_ns - previous_ns < self._config.trajectory_replan_interval_ns:
-            return False
-        # New async production timing is monotonic-time based. A pending request
-        # already bounds work to one rollout, so a second tick-count gate would
-        # only turn runtime jitter into planner latency. Legacy tick-mode replay
-        # and the synchronous planner retain the historic cooldown.
-        if self._rollout_backend is not None and self._rollout_release_delay_ns is not None:
-            return True
         return (
-            tick_id - previous_tick_id
+            monotonic_ns - previous_ns >= self._config.trajectory_replan_interval_ns
+            and tick_id - previous_tick_id
             >= self._config.trajectory_replan_min_tick_gap
         )
 
@@ -783,19 +732,7 @@ class TrajectoryNavigator:
         self._pending_rollout_id = request_id
         self._pending_rollout_request = request
         self._pending_goal_selected_ns = goal_selected_ns
-        if self._rollout_release_delay_ns is None:
-            # Legacy capture/replay mode: preserve the historical tick gate.
-            self._pending_release_tick_id = (
-                context.tick_id + self._rollout_release_tick_gap
-            )
-            self._pending_release_not_before_ns = None
-        else:
-            # Production mode: one canonical monotonic-time authority. The
-            # first closed tick at/after this threshold owns the handoff.
-            self._pending_release_tick_id = None
-            self._pending_release_not_before_ns = (
-                context.monotonic_ns + self._rollout_release_delay_ns
-            )
+        self._pending_release_tick_id = context.tick_id + self._rollout_release_tick_gap
 
     def _accept_pending_rollout(self, context: TickContext) -> bool:
         request_id = self._pending_rollout_id
@@ -803,37 +740,26 @@ class TrajectoryNavigator:
             return False
         request = self._pending_rollout_request
         release_tick_id = self._pending_release_tick_id
-        release_not_before_ns = self._pending_release_not_before_ns
         backend = self._rollout_backend
-        if (
-            request is None
-            or backend is None
-            or (release_tick_id is None) == (release_not_before_ns is None)
-        ):
+        if request is None or release_tick_id is None or backend is None:
             raise RuntimeError("async rollout pending state is incomplete")
         source_context = request.context
         goal = request.goal
-
-        if release_not_before_ns is not None:
-            before_handoff = context.monotonic_ns < release_not_before_ns
-        else:
-            assert release_tick_id is not None
-            before_handoff = context.tick_id < release_tick_id
-            if context.tick_id > release_tick_id:
-                raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")
-
-        if before_handoff:
-            # Until the deterministic handoff boundary the previously accepted
-            # plan remains authoritative, so its age is still safety-critical.
+        if context.tick_id < release_tick_id:
+            # Before the deterministic handoff tick, the previously accepted
+            # plan is still authoritative, so its age remains safety-critical.
             if (
                 self._last_replan_ns is not None
                 and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns
             ):
                 raise RuntimeError("ASYNC_L6_PLAN_STALE")
             return False
+        if context.tick_id > release_tick_id:
+            raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")
 
-        # At the deterministic handoff boundary inspect the replacement first.
-        # Its immutable source snapshot, not scheduler jitter, defines freshness.
+        # At the handoff tick, inspect the new result before judging plan age.
+        # The previous plan may have crossed max_plan_age_ns while the new
+        # rollout is already ready and fresh enough to replace it.
         result = backend.take(request_id)
         if result is None:
             raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
@@ -849,7 +775,6 @@ class TrajectoryNavigator:
         self._pending_rollout_request = None
         self._pending_goal_selected_ns = None
         self._pending_release_tick_id = None
-        self._pending_release_not_before_ns = None
         if selected_ns is not None:
             self._goal_selected_ns = selected_ns
         self._store_trajectory_plan(
@@ -869,7 +794,6 @@ class TrajectoryNavigator:
         self._pending_rollout_request = None
         self._pending_goal_selected_ns = None
         self._pending_release_tick_id = None
-        self._pending_release_not_before_ns = None
 
     def _store_trajectory_plan(
         self,
