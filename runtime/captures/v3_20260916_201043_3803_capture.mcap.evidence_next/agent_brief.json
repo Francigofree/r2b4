@@ -1,0 +1,324 @@
+{
+  "behavior_status": "DEGRADED",
+  "budget": {
+    "actual_bytes": 6496,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260916_201043_3803_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L7",
+      "L8",
+      "L9",
+      "L10",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260916_201043_3803_capture.mcap.evidence_next/interesting_slice.ndjson",
+    "rows": 11,
+    "size_bytes": 35547,
+    "tick_range": [
+      1882,
+      1892
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.38631314223436364,
+      "growth_ratio": 6.468362843181239,
+      "last_trace": 0.09323217085060485,
+      "max_trace": 0.5475751404103177,
+      "sample_count": 453
+    },
+    "motion": {
+      "behavior_status": "DEGRADED",
+      "constrained_to_zero_tick_count": 14,
+      "estimated_path_length_m": 1.85824276206487,
+      "requested_motion_tick_count": 357
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 575418590388,
+        "progress_span": 0.0,
+        "tick_id": 2284,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 357,
+      "FAULT": 0,
+      "STOP": 96,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 2,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 1210,
+      "l2_rejection_count": 1210,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1210
+      }
+    },
+    "ticks": {
+      "count": 453,
+      "first_monotonic_ns": 564637577730,
+      "first_tick_id": 1832,
+      "last_monotonic_ns": 575418590388,
+      "last_tick_id": 2284
+    },
+    "timing": {
+      "max_ms": 82.229828,
+      "p50_ms": 22.456659,
+      "p95_ms": 32.857299,
+      "p99_ms": 52.727446,
+      "sample_count": 452
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 1837:1897 --layers L7,L8,L9,L10,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 1887:1887 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": {
+      "authority_capture": "/home/alba/project_r2b4/runtime/captures/v3_20260916_201043_3803_capture.mcap",
+      "authority_sha256": "cb8a7142bf6b6ef2c39811088a79d5e3b80b038f8ecc8c5d8014f7d82e4aa643",
+      "checkpoint_used": true,
+      "materialized_bytes": 3162458,
+      "materialized_tick_count": 66,
+      "preflight": "PASS",
+      "replay_eligible": true,
+      "temporary_json_persisted": false
+    },
+    "first_divergence": null,
+    "status": "MATCH"
+  },
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "motion-blocked-l9-1887"
+    ],
+    "kind": "MOTION_BLOCKED",
+    "layer": "L9",
+    "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+    "tick_id": 1887
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l8_motion_realization.py",
+      "sha256": "ed23460c3c6d04b48829e5748da8e20fe86221777e0b86e56a3b85cf7e318adc"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l9_operational_constraints.py",
+      "sha256": "3fcd688277af61485546e7c1df39a61f9974ac3e3161d5288d85ae8cbaf8cdef"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l10_chassis_control.py",
+      "sha256": "8bc1733e7ec6a13a826775c54ef647746e672c3fda593a3091b53b98346c0a65"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": "3e454ef21676ccd7ee9db9f83d8c6ae0d568e9833b78b111fe8b8c143044e6ea"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": "5a9a80d4fc4ea07c869ed4f2db4fa544fb5200a23e7017c03ab9981934752b2e"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": "591f8b408f50c86a64cceed14835b303e81f7dc980e1f39806f90193ea95828c"
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.028882621143960674,
+          "v_mps": 0.19999841793501769
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1887",
+      "layer": "L9",
+      "monotonic_ns": 565982035390,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1887
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.03877296497371956,
+          "v_mps": 0.19999997905743466
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1888",
+      "layer": "L9",
+      "monotonic_ns": 566012724359,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1888
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.03849466397257668,
+          "v_mps": 0.1999986783904732
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1889",
+      "layer": "L9",
+      "monotonic_ns": 566037525421,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1889
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.032000403740265755,
+          "v_mps": 0.19999747307615162
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1890",
+      "layer": "L9",
+      "monotonic_ns": 566052474921,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1890
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.033964331453968356,
+          "v_mps": 0.19999462736015458
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1891",
+      "layer": "L9",
+      "monotonic_ns": 566079829628,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1891
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.03609503894745572,
+          "v_mps": 0.19999274928466232
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1892",
+      "layer": "L9",
+      "monotonic_ns": 566094910852,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1892
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.03023594496065948,
+          "v_mps": 0.19999008555697073
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1893",
+      "layer": "L9",
+      "monotonic_ns": 566123834087,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1893
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.03038680614650173,
+          "v_mps": 0.19998833925709364
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-1894",
+      "layer": "L9",
+      "monotonic_ns": 566142366147,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 1894
+    }
+  ]
+}

@@ -1,0 +1,307 @@
+{
+  "behavior_status": "DEGRADED",
+  "budget": {
+    "actual_bytes": 5719,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "FAIL",
+    "integrity_complete": false,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260916_201213_4375_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260916_201213_4375_capture.mcap.evidence_next/interesting_slice.ndjson",
+    "rows": 141,
+    "size_bytes": 522799,
+    "tick_range": [
+      null,
+      null
+    ],
+    "truncated": true
+  },
+  "evidence_status": "FAIL",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.1701946596597656,
+      "growth_ratio": 5.518044932678542,
+      "last_trace": 0.10550485105532276,
+      "max_trace": 0.5440667854269388,
+      "sample_count": 481
+    },
+    "motion": {
+      "behavior_status": "DEGRADED",
+      "constrained_to_zero_tick_count": 13,
+      "estimated_path_length_m": 1.7811229666024597,
+      "requested_motion_tick_count": 381
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 636056714806,
+        "progress_span": 0.0,
+        "tick_id": 853,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 381,
+      "FAULT": 0,
+      "STOP": 100,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 1,
+      "l2_actionable_rejection_count": 0,
+      "l2_duplicate_count": 1322,
+      "l2_rejection_count": 1322,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1322
+      }
+    },
+    "ticks": {
+      "count": 481,
+      "first_monotonic_ns": 625103295879,
+      "first_tick_id": 373,
+      "last_monotonic_ns": 636056714806,
+      "last_tick_id": 853
+    },
+    "timing": {
+      "max_ms": 71.09699,
+      "p50_ms": 21.375097,
+      "p95_ms": 33.982521,
+      "p99_ms": 59.721134,
+      "sample_count": 480
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "ERROR"
+  },
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FAIL",
+  "top_incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "REFERENCED_RAW_LIDAR_MISSING"
+          ],
+          "message_stream_sha256": "e49d4ce0113706394e94272cc68540599ccd0defb8fa24e0c2156732a459b4ac",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 983,
+          "raw_lidar_missing_revisions": [
+            70
+          ],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "REFERENCED_RAW_LIDAR_MISSING",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.036099206995282886,
+          "v_mps": -0.19999957876820212
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-643",
+      "layer": "L9",
+      "monotonic_ns": 631247525193,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 643
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.04557138088426978,
+          "v_mps": -0.19999745509660896
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-644",
+      "layer": "L9",
+      "monotonic_ns": 631269165718,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 644
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.008181107410237677,
+          "v_mps": -0.19999761932848478
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-645",
+      "layer": "L9",
+      "monotonic_ns": 631289161824,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 645
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.003934327085946227,
+          "v_mps": -0.19999858900598397
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-646",
+      "layer": "L9",
+      "monotonic_ns": 631312907734,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 646
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.004331072974043138,
+          "v_mps": -0.19999877363078267
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-647",
+      "layer": "L9",
+      "monotonic_ns": 631330954233,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 647
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.001055617763297205,
+          "v_mps": -0.1999990715372519
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-648",
+      "layer": "L9",
+      "monotonic_ns": 631352807963,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 648
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0217818321957574,
+          "v_mps": -0.19999990662497116
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-649",
+      "layer": "L9",
+      "monotonic_ns": 631374033745,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 649
+    }
+  ]
+}
