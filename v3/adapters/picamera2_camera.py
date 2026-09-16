@@ -22,6 +22,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 
@@ -29,6 +30,10 @@ class Picamera2Request(Protocol):
     def get_metadata(self) -> Mapping[str, object]: ...
 
     def make_buffer(self, stream_name: str) -> object: ...
+
+    def save(
+        self, stream_name: str, output: str, *, format: str | None = None
+    ) -> object: ...
 
     def release(self) -> None: ...
 
@@ -312,6 +317,16 @@ class CameraRuntimeStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class CameraPhotoStatus:
+    """Non-critical JPEG request status from the existing camera owner."""
+
+    pending: bool
+    saved_count: int
+    last_output: str | None
+    last_error: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class CameraEdgeSnapshot:
     """One coherent read of camera status and its corresponding latest frame."""
 
@@ -350,6 +365,10 @@ class NativePicamera2Camera:
         "_stop_event",
         "_thread",
         "_timestamp_mapper",
+        "_pending_photo",
+        "_photo_saved_count",
+        "_photo_last_output",
+        "_photo_last_error",
     )
 
     def __init__(
@@ -389,6 +408,10 @@ class NativePicamera2Camera:
         self._running = False
         self._last_error: str | None = None
         self._model: str | None = None
+        self._pending_photo: tuple[str, str] | None = None
+        self._photo_saved_count = 0
+        self._photo_last_output: str | None = None
+        self._photo_last_error: str | None = None
 
     @property
     def config(self) -> Picamera2CameraConfig:
@@ -410,6 +433,10 @@ class NativePicamera2Camera:
             self._last_sensor_timestamp_ns = None
             self._last_error = None
             self._model = None
+            self._pending_photo = None
+            self._photo_saved_count = 0
+            self._photo_last_output = None
+            self._photo_last_error = None
             self._stop_event.clear()
             self._frame_condition.notify_all()
 
@@ -466,6 +493,7 @@ class NativePicamera2Camera:
             was_running = self._running
             self._running = False
             self._stop_event.set()
+            self._pending_photo = None
             self._frame_condition.notify_all()
         if camera is not None:
             try:
@@ -499,6 +527,42 @@ class NativePicamera2Camera:
 
     def get_runtime_status(self) -> CameraRuntimeStatus:
         return self.get_edge_snapshot().status
+
+    def request_jpeg(
+        self,
+        output: str | Path,
+        *,
+        stream_name: str = "lores",
+    ) -> bool:
+        """Queue at most one JPEG on the already-owned Picamera2 session.
+
+        The request is non-blocking for the caller.  Encoding/file I/O happens
+        on the camera acquisition thread while the corresponding Picamera2
+        request is still valid.  Failure is isolated from camera acquisition
+        health and is reported only through ``get_photo_status``.
+        """
+
+        path = Path(output).expanduser()
+        if path.suffix.lower() not in {".jpg", ".jpeg"}:
+            raise ValueError("camera photo output must use .jpg or .jpeg")
+        if stream_name not in {"main", "lores"}:
+            raise ValueError("camera photo stream_name must be 'main' or 'lores'")
+        with self._frame_condition:
+            if not self._running or self._pending_photo is not None:
+                return False
+            self._pending_photo = (str(path), stream_name)
+            self._photo_last_error = None
+            self._frame_condition.notify_all()
+            return True
+
+    def get_photo_status(self) -> CameraPhotoStatus:
+        with self._lock:
+            return CameraPhotoStatus(
+                pending=self._pending_photo is not None,
+                saved_count=self._photo_saved_count,
+                last_output=self._photo_last_output,
+                last_error=self._photo_last_error,
+            )
 
     def wait_for_new_frame(
         self,
@@ -565,9 +629,30 @@ class NativePicamera2Camera:
                 request = camera.capture_request()
                 snapshot = self._snapshot_from_request(request, geometry)
                 with self._frame_condition:
+                    pending_photo = self._pending_photo
+                    self._pending_photo = None
                     self._latest = snapshot
                     self._last_error = None
                     self._frame_condition.notify_all()
+                if pending_photo is not None:
+                    output, stream_name = pending_photo
+                    try:
+                        saver = getattr(request, "save", None)
+                        if not callable(saver):
+                            raise RuntimeError("Picamera2 request.save is unavailable")
+                        saver(stream_name, output, format="jpeg")
+                        with self._frame_condition:
+                            self._photo_saved_count += 1
+                            self._photo_last_output = output
+                            self._photo_last_error = None
+                            self._frame_condition.notify_all()
+                    except Exception as photo_exc:
+                        # Photo evidence must never terminate camera acquisition.
+                        with self._frame_condition:
+                            self._photo_last_error = (
+                                f"{type(photo_exc).__name__}:{photo_exc}"
+                            )
+                            self._frame_condition.notify_all()
             except Exception as exc:
                 if self._stop_event.is_set():
                     return
@@ -750,6 +835,7 @@ __all__ = [
     "CameraEdgeSnapshot",
     "CameraFramePort",
     "CameraFrameSnapshot",
+    "CameraPhotoStatus",
     "CameraRuntimeStatus",
     "CameraStreamGeometry",
     "NativePicamera2Camera",

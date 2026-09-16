@@ -24,6 +24,13 @@ from v3.adapters.picamera2_camera import (
     default_picamera2_factory,
     raspberry_pi_sensor_timestamp_to_monotonic_ns,
 )
+from v3.adapters.litert_person_detector import LiteRtSsdPersonDetector
+from v3.adapters.person_detection import (
+    NativePersonDetector,
+    PersonDetectionPort,
+    UnavailablePersonDetectionPort,
+)
+from v3.adapters.person_photo_evidence import PersonPhotoEvidenceRecorder
 from v3.composition.live_inputs import (
     LiveInputComposition,
     LiveInputCompositionConfig,
@@ -35,7 +42,9 @@ from v3.composition.native_sensor_inputs import (
 from v3.contracts import (
     AcquisitionFrame,
     DeviceHealthState,
+    AdmittedFrame,
     LifecycleState,
+    MissionIntent,
     RobotEstimate,
     TickContext,
 )
@@ -324,7 +333,7 @@ class NativePoseFeedback:
 class NativeHardwareSensorOwner:
     """Acquire/release core sensors plus the optional native camera capability."""
 
-    __slots__ = ("_closed", "_inputs", "_pose_feedback")
+    __slots__ = ("_closed", "_inputs", "_person_evidence", "_pose_feedback")
 
     def __init__(
         self,
@@ -353,6 +362,8 @@ class NativeHardwareSensorOwner:
         imu: NativeBno055Device | None = None
         lidar: LatestMatcherResultPort | None = None
         camera: NativePicamera2Camera | None = None
+        person_detection_port: PersonDetectionPort | None = None
+        person_evidence: PersonPhotoEvidenceRecorder | None = None
         inputs: NativeSensorInputOwner | None = None
         pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
         try:
@@ -378,17 +389,67 @@ class NativeHardwareSensorOwner:
                 # visible as CAMERA_FRONT FAILED but must not abort core input
                 # ownership or the motor-control runtime.
                 camera.start()
+
+            if config.person_detection_backend is not None:
+                assert config.inputs.person_detection_source is not None
+                if camera is None or not camera.get_runtime_status().running:
+                    camera_error = (
+                        camera.get_runtime_status().last_error
+                        if camera is not None
+                        else "camera capability unavailable"
+                    )
+                    person_detection_port = UnavailablePersonDetectionPort(
+                        f"PERSON_DETECTOR_CAMERA_UNAVAILABLE:{camera_error}"
+                    )
+                else:
+                    detector: NativePersonDetector | None = None
+                    try:
+                        backend = LiteRtSsdPersonDetector(
+                            config.person_detection_backend
+                        )
+                        detector = NativePersonDetector(camera, backend)
+                        if not detector.start():
+                            raise RuntimeError("person detector worker did not start")
+                        person_detection_port = detector
+                    except Exception as exc:
+                        if detector is not None:
+                            try:
+                                detector.stop()
+                            except Exception:
+                                pass
+                        # Detector/model/runtime failures are capability-local.
+                        # TELEOP/EXPLORE motor availability is unchanged because
+                        # PERSON_DETECTOR_FRONT is not production-critical.
+                        person_detection_port = UnavailablePersonDetectionPort(
+                            f"{type(exc).__name__}:{exc}"
+                        )
+
+                if config.person_photo_evidence is not None:
+                    person_evidence = PersonPhotoEvidenceRecorder(
+                        camera,
+                        config.person_photo_evidence,
+                        source_device_id=(
+                            config.inputs.person_detection_source.device_id
+                        ),
+                    )
+
             inputs = NativeSensorInputOwner(
                 counter_gpio_backend,
                 imu,
                 lidar,
                 config.inputs,
                 camera_port=camera,
+                person_detection_port=person_detection_port,
             )
         except Exception:
             if inputs is not None:
                 inputs.close()
             else:
+                if person_detection_port is not None:
+                    try:
+                        person_detection_port.stop()
+                    except Exception:
+                        pass
                 if camera is not None:
                     try:
                         camera.stop()
@@ -412,6 +473,7 @@ class NativeHardwareSensorOwner:
             raise
         self._inputs = inputs
         self._pose_feedback = pose_feedback
+        self._person_evidence = person_evidence
         self._closed = False
 
     @property
@@ -432,6 +494,14 @@ class NativeHardwareSensorOwner:
         estimate = _layer_output(result, "L3")
         if isinstance(estimate, RobotEstimate):
             self._pose_feedback.publish(estimate)
+        admitted = _layer_output(result, "L2")
+        mission = _layer_output(result, "L5")
+        if (
+            self._person_evidence is not None
+            and isinstance(admitted, AdmittedFrame)
+            and isinstance(mission, MissionIntent)
+        ):
+            self._person_evidence.observe(admitted, mission)
 
     def close(self) -> None:
         if self._closed:

@@ -69,5 +69,23 @@
     "continuous_autofocus": true,
     "max_frame_completion_lag_ns": 500000000,
     "stop_join_timeout_s": 2.0
+  },
+  "person_detection": {
+    "enabled": true,
+    "provider": "litert_ssd",
+    "model_path": "models/efficientdet_lite0.tflite",
+    "person_class_id": 0,
+    "score_threshold": 0.45,
+    "max_detections": 5,
+    "num_threads": 2,
+    "maximum_result_age_ns": 500000000,
+    "photo_evidence": {
+      "enabled": true,
+      "directory": "pic",
+      "stream_name": "main",
+      "confirm_results": 3,
+      "rearm_misses": 5,
+      "minimum_interval_ns": 5000000000
+    }
   }
 }

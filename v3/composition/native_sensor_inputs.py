@@ -24,6 +24,13 @@ from v3.adapters.live_imu import NativeImuConfig, NativeImuSource
 from v3.adapters.live_lidar import NativeLidarConfig, NativeLidarSource
 from v3.adapters.live_camera import CameraFramePort, NativeCameraConfig, NativeCameraSource
 from v3.adapters.live_inputs import LiveDeviceSource
+from v3.adapters.live_person_detection import (
+    NativePersonDetectionConfig,
+    NativePersonDetectionSource,
+)
+from v3.adapters.litert_person_detector import LiteRtPersonDetectorConfig
+from v3.adapters.person_detection import PersonDetectionPort
+from v3.adapters.person_photo_evidence import PersonPhotoEvidenceConfig
 from v3.adapters.picamera2_camera import Picamera2CameraConfig
 
 
@@ -39,6 +46,7 @@ class NativeSensorInputConfig:
     lidar_backend: LatestLidarBackendConfig
     lidar_source: NativeLidarConfig
     camera_source: NativeCameraConfig | None = None
+    person_detection_source: NativePersonDetectionConfig | None = None
 
     def __post_init__(self) -> None:
         expected_types = (
@@ -57,6 +65,12 @@ class NativeSensorInputConfig:
             self.camera_source, NativeCameraConfig
         ):
             raise TypeError("camera_source must be NativeCameraConfig or None")
+        if self.person_detection_source is not None and not isinstance(
+            self.person_detection_source, NativePersonDetectionConfig
+        ):
+            raise TypeError(
+                "person_detection_source must be NativePersonDetectionConfig or None"
+            )
         device_ids = (
             self.encoder_source.device_id,
             self.imu_source.device_id,
@@ -64,6 +78,8 @@ class NativeSensorInputConfig:
         )
         if self.camera_source is not None:
             device_ids += (self.camera_source.device_id,)
+        if self.person_detection_source is not None:
+            device_ids += (self.person_detection_source.device_id,)
         if len(set(device_ids)) != len(device_ids):
             raise ValueError("native sensor source device IDs must be unique")
         if self.lidar_source.pose_frame_id != self.lidar_backend.pose_frame_id:
@@ -85,6 +101,8 @@ class NativeSensorHardwareConfig:
     inputs: NativeSensorInputConfig
     lidar_danger_zone_m: float
     camera_device: Picamera2CameraConfig | None = None
+    person_detection_backend: LiteRtPersonDetectorConfig | None = None
+    person_photo_evidence: PersonPhotoEvidenceConfig | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.imu_device, NativeBno055DeviceConfig):
@@ -97,6 +115,28 @@ class NativeSensorHardwareConfig:
             raise TypeError("camera_device must be Picamera2CameraConfig or None")
         if (self.camera_device is None) != (self.inputs.camera_source is None):
             raise ValueError("camera device and source configs must be enabled together")
+        if self.person_detection_backend is not None and not isinstance(
+            self.person_detection_backend, LiteRtPersonDetectorConfig
+        ):
+            raise TypeError(
+                "person_detection_backend must be LiteRtPersonDetectorConfig or None"
+            )
+        if self.person_photo_evidence is not None and not isinstance(
+            self.person_photo_evidence, PersonPhotoEvidenceConfig
+        ):
+            raise TypeError(
+                "person_photo_evidence must be PersonPhotoEvidenceConfig or None"
+            )
+        if (self.person_detection_backend is None) != (
+            self.inputs.person_detection_source is None
+        ):
+            raise ValueError(
+                "person detector backend and source configs must be enabled together"
+            )
+        if self.person_detection_backend is not None and self.camera_device is None:
+            raise ValueError("person detection requires the native camera capability")
+        if self.person_photo_evidence is not None and self.person_detection_backend is None:
+            raise ValueError("person photo evidence requires person detection")
         if (
             isinstance(self.lidar_danger_zone_m, bool)
             or not isinstance(self.lidar_danger_zone_m, (int, float))
@@ -112,6 +152,8 @@ class NativeSensorInputOwner:
     __slots__ = (
         "_camera_port",
         "_camera_source",
+        "_person_detection_port",
+        "_person_detection_source",
         "_closed",
         "_encoder_source",
         "_imu_device",
@@ -128,6 +170,7 @@ class NativeSensorInputOwner:
         config: NativeSensorInputConfig,
         *,
         camera_port: CameraFramePort | None = None,
+        person_detection_port: PersonDetectionPort | None = None,
     ) -> None:
         if not isinstance(config, NativeSensorInputConfig):
             raise TypeError("config must be NativeSensorInputConfig")
@@ -136,6 +179,14 @@ class NativeSensorInputOwner:
             raise ValueError("camera port and source config must be enabled together")
         if camera_port is not None and not callable(getattr(camera_port, "stop", None)):
             raise TypeError("camera port owner must provide stop")
+        if (config.person_detection_source is None) != (person_detection_port is None):
+            raise ValueError(
+                "person detection port and source config must be enabled together"
+            )
+        if person_detection_port is not None and not callable(
+            getattr(person_detection_port, "stop", None)
+        ):
+            raise TypeError("person detection port owner must provide stop")
 
         try:
             imu_backend = NativeBno055ImuBackend(imu_device, config.imu_backend)
@@ -153,8 +204,17 @@ class NativeSensorInputOwner:
                 if camera_port is not None and config.camera_source is not None
                 else None
             )
+            person_detection_source = (
+                NativePersonDetectionSource(
+                    person_detection_port, config.person_detection_source
+                )
+                if person_detection_port is not None
+                and config.person_detection_source is not None
+                else None
+            )
         except Exception:
             for close in (
+                getattr(person_detection_port, "stop", lambda: None),
                 getattr(camera_port, "stop", lambda: None),
                 getattr(lidar_port, "stop", lambda: None),
                 getattr(imu_device, "close", lambda: None),
@@ -171,6 +231,8 @@ class NativeSensorInputOwner:
         self._lidar_source = lidar_source
         self._camera_source = camera_source
         self._camera_port = camera_port
+        self._person_detection_source = person_detection_source
+        self._person_detection_port = person_detection_port
         self._imu_device = imu_device
         self._lidar_port = lidar_port
         self._closed = False
@@ -200,8 +262,20 @@ class NativeSensorInputOwner:
         return self._camera_port
 
     @property
+    def person_detection_source(self) -> NativePersonDetectionSource | None:
+        return self._person_detection_source
+
+    @property
+    def person_detection_port(self) -> PersonDetectionPort | None:
+        return self._person_detection_port
+
+    @property
     def auxiliary_sources(self) -> tuple[LiveDeviceSource, ...]:
-        return (self._camera_source,) if self._camera_source is not None else ()
+        return tuple(
+            source
+            for source in (self._camera_source, self._person_detection_source)
+            if source is not None
+        )
 
     @property
     def sources(
@@ -225,6 +299,7 @@ class NativeSensorInputOwner:
         self._closed = True
         first_error: Exception | None = None
         for close in (
+            getattr(self._person_detection_port, "stop", lambda: None),
             getattr(self._camera_port, "stop", lambda: None),
             self._lidar_port.stop,
             self._imu_device.close,

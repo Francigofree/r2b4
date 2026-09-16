@@ -22,6 +22,13 @@ from v3.adapters.live_encoder import NativeEncoderConfig
 from v3.adapters.live_imu import NativeImuConfig
 from v3.adapters.live_lidar import NativeLidarConfig
 from v3.adapters.live_camera import NativeCameraConfig
+from v3.adapters.live_person_detection import NativePersonDetectionConfig
+from v3.adapters.litert_person_detector import (
+    litert_person_detector_config_from_mapping,
+)
+from v3.adapters.person_photo_evidence import (
+    person_photo_evidence_config_from_mapping,
+)
 from v3.adapters.picamera2_camera import (
     Picamera2CameraConfig,
     picamera2_camera_config_from_mapping,
@@ -251,6 +258,59 @@ def _sensor_hardware_config(
                 policy.camera_maximum_frame_age_ns,
             )
 
+    person_detection_backend = None
+    person_detection_source = None
+    person_photo_evidence = None
+    person_value = hardware.get("person_detection")
+    if person_value is not None:
+        person = _mapping(person_value, "hardware config person_detection")
+        allowed = {
+            "enabled",
+            "provider",
+            "model_path",
+            "person_class_id",
+            "score_threshold",
+            "max_detections",
+            "num_threads",
+            "maximum_result_age_ns",
+            "photo_evidence",
+        }
+        unknown = sorted(set(person) - allowed)
+        if unknown:
+            raise ValueError(
+                "unknown hardware person_detection keys: " + ", ".join(unknown)
+            )
+        person_enabled = person.get("enabled", False)
+        if type(person_enabled) is not bool:
+            raise ValueError("hardware config person_detection.enabled must be bool")
+        if person_enabled:
+            if camera_device is None:
+                raise ValueError("enabled person_detection requires enabled camera")
+            backend_keys = {
+                "enabled",
+                "provider",
+                "model_path",
+                "person_class_id",
+                "score_threshold",
+                "max_detections",
+                "num_threads",
+            }
+            person_detection_backend = litert_person_detector_config_from_mapping(
+                {key: person[key] for key in backend_keys if key in person}
+            )
+            person_detection_source = NativePersonDetectionConfig(
+                device_id="PERSON_DETECTOR_FRONT",
+                maximum_result_age_ns=_positive_int(
+                    person.get("maximum_result_age_ns", 500_000_000),
+                    "hardware config person_detection.maximum_result_age_ns",
+                ),
+            )
+            photo_value = person.get("photo_evidence")
+            if photo_value is not None:
+                parsed_photo = person_photo_evidence_config_from_mapping(photo_value)
+                if parsed_photo.enabled:
+                    person_photo_evidence = parsed_photo
+
     inputs = NativeSensorInputConfig(
         encoder_counter=encoder.counter_gpio,
         encoder_backend=encoder.backend_config(
@@ -287,6 +347,7 @@ def _sensor_hardware_config(
             maximum_future_skew_ns=policy.lidar_maximum_future_skew_ns,
         ),
         camera_source=camera_source,
+        person_detection_source=person_detection_source,
         lidar_source=NativeLidarConfig(
             "RPLIDAR_C1",
             policy.lidar_minimum_confidence,
@@ -317,6 +378,8 @@ def _sensor_hardware_config(
             "hardware config lidar.biztonsagi_zona_m",
         ),
         camera_device=camera_device,
+        person_detection_backend=person_detection_backend,
+        person_photo_evidence=person_photo_evidence,
     )
 
 

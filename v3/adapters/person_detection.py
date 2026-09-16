@@ -158,6 +158,8 @@ class PersonDetectionPort(Protocol):
         self, after_sequence: int = 0, timeout_s: float = 1.0
     ) -> PersonDetectionSnapshot | None: ...
 
+    def stop(self) -> None: ...
+
 
 class NativePersonDetector:
     """Own one latest-only person-detection worker over an existing camera owner."""
