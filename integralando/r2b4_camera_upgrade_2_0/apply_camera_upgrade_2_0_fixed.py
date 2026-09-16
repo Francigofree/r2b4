@@ -18,7 +18,7 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 OVERLAY = PACKAGE_ROOT / "overlay"
-EXPECTED_BASE = "affec338d60b141a6fcbd1eef2d58a110d656cb6"
+EXPECTED_BASE = "e1333d28a7177822b61bd9ee132e9251b77a4c71"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -203,8 +203,8 @@ def patch_bounded_runtime(text: str) -> str:
     )
     text = replace_once(
         text,
-        '''    config: BoundedPhysicalRuntimeConfig,\n    *,\n    stop_requested: Callable[[], bool],\n''',
-        '''    config: BoundedPhysicalRuntimeConfig,\n    *,\n    auxiliary_sources: tuple[LiveDeviceSource, ...] = (),\n    stop_requested: Callable[[], bool],\n''',
+        '''def run_bounded_physical_control(\n    encoder_source: NativeEncoderSource,\n    imu_source: NativeImuSource,\n    lidar_source: NativeLidarSource,\n    gpio_backend: PwmGpioBackend,\n    config: BoundedPhysicalRuntimeConfig,\n    *,\n    stop_requested: Callable[[], bool],\n''',
+        '''def run_bounded_physical_control(\n    encoder_source: NativeEncoderSource,\n    imu_source: NativeImuSource,\n    lidar_source: NativeLidarSource,\n    gpio_backend: PwmGpioBackend,\n    config: BoundedPhysicalRuntimeConfig,\n    *,\n    auxiliary_sources: tuple[LiveDeviceSource, ...] = (),\n    stop_requested: Callable[[], bool],\n''',
         "bounded runtime auxiliary argument",
     )
     text = replace_once(
@@ -213,11 +213,11 @@ def patch_bounded_runtime(text: str) -> str:
         '''        gpio_backend,\n        config.composition,\n        auxiliary_sources=auxiliary_sources,\n    )\n''',
         "bounded runtime physical pass-through",
     )
-    owned_call = '''            gpio_backend,\n            config,\n            stop_requested=stop_requested,\n'''
+    owned_call = '''        return run_bounded_physical_control(\n            *sensor_inputs.sources,\n            gpio_backend,\n            config,\n            stop_requested=stop_requested,\n'''
     text = replace_once(
         text,
         owned_call,
-        '''            gpio_backend,\n            config,\n            auxiliary_sources=sensor_inputs.auxiliary_sources,\n            stop_requested=stop_requested,\n''',
+        '''        return run_bounded_physical_control(\n            *sensor_inputs.sources,\n            gpio_backend,\n            config,\n            auxiliary_sources=sensor_inputs.auxiliary_sources,\n            stop_requested=stop_requested,\n''',
         "bounded owned auxiliary pass-through",
     )
     return text
@@ -232,8 +232,8 @@ def patch_resident_runtime(text: str) -> str:
     )
     text = replace_once(
         text,
-        '''    config: ResidentPhysicalRuntimeConfig,\n    *,\n    stop_requested: Callable[[], bool],\n''',
-        '''    config: ResidentPhysicalRuntimeConfig,\n    *,\n    auxiliary_sources: tuple[LiveDeviceSource, ...] = (),\n    stop_requested: Callable[[], bool],\n''',
+        '''def run_resident_physical_control(\n    encoder_source: NativeEncoderSource,\n    imu_source: NativeImuSource,\n    lidar_source: NativeLidarSource,\n    command_gateway: CommandGateway,\n    gpio_backend: PwmGpioBackend,\n    config: ResidentPhysicalRuntimeConfig,\n    *,\n    stop_requested: Callable[[], bool],\n''',
+        '''def run_resident_physical_control(\n    encoder_source: NativeEncoderSource,\n    imu_source: NativeImuSource,\n    lidar_source: NativeLidarSource,\n    command_gateway: CommandGateway,\n    gpio_backend: PwmGpioBackend,\n    config: ResidentPhysicalRuntimeConfig,\n    *,\n    auxiliary_sources: tuple[LiveDeviceSource, ...] = (),\n    stop_requested: Callable[[], bool],\n''',
         "resident runtime auxiliary argument",
     )
     text = replace_once(
@@ -244,8 +244,8 @@ def patch_resident_runtime(text: str) -> str:
     )
     text = replace_once(
         text,
-        '''            gpio_backend,\n            config,\n            stop_requested=stop_requested,\n''',
-        '''            gpio_backend,\n            config,\n            auxiliary_sources=sensor_inputs.auxiliary_sources,\n            stop_requested=stop_requested,\n''',
+        '''        return run_resident_physical_control(\n            *sensor_inputs.sources,\n            command_gateway,\n            gpio_backend,\n            config,\n            stop_requested=stop_requested,\n''',
+        '''        return run_resident_physical_control(\n            *sensor_inputs.sources,\n            command_gateway,\n            gpio_backend,\n            config,\n            auxiliary_sources=sensor_inputs.auxiliary_sources,\n            stop_requested=stop_requested,\n''',
         "resident owned auxiliary pass-through",
     )
     return text
