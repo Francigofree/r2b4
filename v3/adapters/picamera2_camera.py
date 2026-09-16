@@ -41,6 +41,8 @@ class Picamera2Device(Protocol):
 
     def configure(self, configuration: object) -> None: ...
 
+    def stream_configuration(self, stream_name: str) -> Mapping[str, object]: ...
+
     def set_controls(self, controls: Mapping[str, object]) -> None: ...
 
     def start(self) -> None: ...
@@ -216,6 +218,30 @@ def picamera2_camera_config_from_mapping(
 
 
 @dataclass(frozen=True, slots=True)
+class CameraStreamGeometry:
+    """Actual Picamera2 stream geometry after libcamera configuration."""
+
+    stream_name: str
+    width: int
+    height: int
+    pixel_format: str
+    stride_bytes: int
+    frame_size_bytes: int
+
+    def __post_init__(self) -> None:
+        _nonempty_string(self.stream_name, "stream_name")
+        _positive_int(self.width, "width")
+        _positive_int(self.height, "height")
+        _nonempty_string(self.pixel_format, "pixel_format")
+        _positive_int(self.stride_bytes, "stride_bytes")
+        _positive_int(self.frame_size_bytes, "frame_size_bytes")
+        if self.stride_bytes < self.width:
+            raise ValueError("camera stride cannot be smaller than image width")
+        if self.frame_size_bytes < self.stride_bytes * self.height:
+            raise ValueError("camera frame size is smaller than one full stride plane")
+
+
+@dataclass(frozen=True, slots=True)
 class CameraFrameSnapshot:
     """One immutable latest frame with physical timing lineage."""
 
@@ -228,6 +254,8 @@ class CameraFrameSnapshot:
     width: int
     height: int
     pixel_format: str
+    stride_bytes: int
+    frame_size_bytes: int
     focus_state: str
     lens_position: float | None
     image_bytes: bytes
@@ -247,6 +275,12 @@ class CameraFrameSnapshot:
         _positive_int(self.width, "width")
         _positive_int(self.height, "height")
         _nonempty_string(self.pixel_format, "pixel_format")
+        _positive_int(self.stride_bytes, "stride_bytes")
+        _positive_int(self.frame_size_bytes, "frame_size_bytes")
+        if self.stride_bytes < self.width:
+            raise ValueError("camera stride cannot be smaller than image width")
+        if self.frame_size_bytes < self.stride_bytes * self.height:
+            raise ValueError("camera frame size is smaller than one full stride plane")
         _nonempty_string(self.focus_state, "focus_state")
         if self.lens_position is not None:
             if (
@@ -259,6 +293,8 @@ class CameraFrameSnapshot:
             raise TypeError("image_bytes must be immutable bytes")
         if not self.image_bytes:
             raise ValueError("image_bytes must not be empty")
+        if len(self.image_bytes) != self.frame_size_bytes:
+            raise ValueError("camera payload size does not match configured frame size")
 
     @property
     def completion_lag_ns(self) -> int:
@@ -301,6 +337,7 @@ class NativePicamera2Camera:
         "_controls_factory",
         "_factory",
         "_frame_condition",
+        "_geometry",
         "_last_error",
         "_last_sensor_timestamp_ns",
         "_latest",
@@ -345,6 +382,7 @@ class NativePicamera2Camera:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._picamera: Picamera2Device | None = None
+        self._geometry: CameraStreamGeometry | None = None
         self._latest: CameraFrameSnapshot | None = None
         self._sequence = 0
         self._last_sensor_timestamp_ns: int | None = None
@@ -368,6 +406,7 @@ class NativePicamera2Camera:
             # Never allow a frame from an earlier camera session to masquerade
             # as the first frame of a restarted session.
             self._latest = None
+            self._geometry = None
             self._last_sensor_timestamp_ns = None
             self._last_error = None
             self._model = None
@@ -385,6 +424,7 @@ class NativePicamera2Camera:
                 )
             configuration = build_video_configuration(camera, self._config)
             camera.configure(configuration)
+            geometry = camera_stream_geometry(camera, self._config.stream_name)
             controls = (
                 self._controls_factory()
                 if self._controls_factory is not None
@@ -407,6 +447,7 @@ class NativePicamera2Camera:
 
         with self._frame_condition:
             self._picamera = camera
+            self._geometry = geometry
             self._model = model
             self._running = True
             self._frame_condition.notify_all()
@@ -439,6 +480,7 @@ class NativePicamera2Camera:
         self._thread = None
         with self._frame_condition:
             self._picamera = None
+            self._geometry = None
             self._frame_condition.notify_all()
         if camera is not None:
             try:
@@ -478,8 +520,15 @@ class NativePicamera2Camera:
                     return self._edge_snapshot_locked(self._checked_clock())
                 self._frame_condition.wait(remaining)
 
-    def capture_once_for_test(self, request: Picamera2Request) -> CameraFrameSnapshot:
-        return self._snapshot_from_request(request)
+    def capture_once_for_test(
+        self,
+        request: Picamera2Request,
+        geometry: CameraStreamGeometry,
+    ) -> CameraFrameSnapshot:
+        """Exercise frame closure against an explicit actual stream geometry."""
+        if not isinstance(geometry, CameraStreamGeometry):
+            raise TypeError("geometry must be CameraStreamGeometry")
+        return self._snapshot_from_request(request, geometry)
 
     def _edge_snapshot_locked(self, now_ns: int) -> CameraEdgeSnapshot:
         latest = self._latest
@@ -501,13 +550,20 @@ class NativePicamera2Camera:
         while not self._stop_event.is_set():
             with self._lock:
                 camera = self._picamera
+                geometry = self._geometry
                 running = self._running
             if not running or camera is None:
+                return
+            if geometry is None:
+                with self._frame_condition:
+                    self._last_error = "RuntimeError:camera stream geometry is unavailable"
+                    self._running = False
+                    self._frame_condition.notify_all()
                 return
             request: Picamera2Request | None = None
             try:
                 request = camera.capture_request()
-                snapshot = self._snapshot_from_request(request)
+                snapshot = self._snapshot_from_request(request, geometry)
                 with self._frame_condition:
                     self._latest = snapshot
                     self._last_error = None
@@ -527,7 +583,11 @@ class NativePicamera2Camera:
                     except Exception:
                         pass
 
-    def _snapshot_from_request(self, request: Picamera2Request) -> CameraFrameSnapshot:
+    def _snapshot_from_request(
+        self,
+        request: Picamera2Request,
+        geometry: CameraStreamGeometry,
+    ) -> CameraFrameSnapshot:
         metadata = request.get_metadata()
         sensor_timestamp_ns = _nonnegative_int(
             metadata.get("SensorTimestamp"),
@@ -541,8 +601,12 @@ class NativePicamera2Camera:
         measurement_monotonic_ns = self._timestamp_mapper(sensor_timestamp_ns)
         _nonnegative_int(measurement_monotonic_ns, "mapped camera measurement timestamp")
 
-        raw_buffer = request.make_buffer(self._config.stream_name)
+        raw_buffer = request.make_buffer(geometry.stream_name)
         image_bytes = bytes(raw_buffer)
+        if len(image_bytes) != geometry.frame_size_bytes:
+            raise RuntimeError(
+                "camera buffer size does not match Picamera2 stream configuration"
+            )
         completed_monotonic_ns = self._checked_clock()
         if measurement_monotonic_ns > completed_monotonic_ns:
             raise ValueError("mapped camera timestamp is in the future")
@@ -572,9 +636,11 @@ class NativePicamera2Camera:
             completed_monotonic_ns=completed_monotonic_ns,
             exposure_time_ns=exposure_us * 1_000,
             frame_duration_ns=frame_duration_us * 1_000,
-            width=self._config.published_width,
-            height=self._config.published_height,
-            pixel_format=self._config.published_pixel_format,
+            width=geometry.width,
+            height=geometry.height,
+            pixel_format=geometry.pixel_format,
+            stride_bytes=geometry.stride_bytes,
+            frame_size_bytes=geometry.frame_size_bytes,
             focus_state=focus_state,
             lens_position=lens_position,
             image_bytes=image_bytes,
@@ -589,6 +655,31 @@ def _camera_model(camera: Picamera2Device) -> str:
     if not isinstance(properties, Mapping):
         raise RuntimeError("Picamera2 camera_properties are unavailable")
     return _nonempty_string(properties.get("Model"), "camera_properties.Model")
+
+
+def camera_stream_geometry(
+    camera: Picamera2Device,
+    stream_name: str,
+) -> CameraStreamGeometry:
+    """Read the post-configure Picamera2 buffer contract for one stream."""
+    _nonempty_string(stream_name, "stream_name")
+    getter = getattr(camera, "stream_configuration", None)
+    if not callable(getter):
+        raise RuntimeError("Picamera2 stream_configuration is unavailable")
+    value = getter(stream_name)
+    if not isinstance(value, Mapping):
+        raise RuntimeError("Picamera2 stream configuration must be a mapping")
+    size = value.get("size")
+    if not isinstance(size, (tuple, list)) or len(size) != 2:
+        raise RuntimeError("Picamera2 stream size is unavailable")
+    return CameraStreamGeometry(
+        stream_name=stream_name,
+        width=_positive_int(size[0], "stream width"),
+        height=_positive_int(size[1], "stream height"),
+        pixel_format=_nonempty_string(value.get("format"), "stream format"),
+        stride_bytes=_positive_int(value.get("stride"), "stream stride"),
+        frame_size_bytes=_positive_int(value.get("framesize"), "stream framesize"),
+    )
 
 
 def build_video_configuration(
@@ -660,6 +751,7 @@ __all__ = [
     "CameraFramePort",
     "CameraFrameSnapshot",
     "CameraRuntimeStatus",
+    "CameraStreamGeometry",
     "NativePicamera2Camera",
     "Picamera2CameraConfig",
     "Picamera2Device",
@@ -667,6 +759,7 @@ __all__ = [
     "Picamera2Request",
     "SensorTimestampMapper",
     "build_video_configuration",
+    "camera_stream_geometry",
     "default_camera_controls",
     "default_picamera2_factory",
     "picamera2_camera_config_from_mapping",

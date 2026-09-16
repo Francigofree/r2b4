@@ -102,6 +102,8 @@ class NativeCameraSource:
                 DataField("width", frame.width),
                 DataField("height", frame.height),
                 DataField("pixel_format", frame.pixel_format),
+                DataField("stride_bytes", frame.stride_bytes),
+                DataField("frame_size_bytes", frame.frame_size_bytes),
                 DataField("exposure_time_ns", frame.exposure_time_ns),
                 DataField("frame_duration_ns", frame.frame_duration_ns),
                 DataField("focus_state", frame.focus_state),

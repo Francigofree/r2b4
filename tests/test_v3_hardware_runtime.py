@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -301,7 +302,7 @@ def _policy() -> NativeSensorPolicyConfig:
 
 
 def _runtime_config():
-    return load_bounded_physical_runtime_config(
+    runtime = load_bounded_physical_runtime_config(
         PROJECT_ROOT / "conf" / "hardver.json",
         PROJECT_ROOT / "conf" / "fizika.json",
         PROJECT_ROOT / "conf" / "speed_map.json",
@@ -316,6 +317,14 @@ def _runtime_config():
         ),
         sensor_policy=_policy(),
     )
+    # These tests validate fake core hardware. Never open the host camera here.
+    assert runtime.sensor_inputs is not None
+    sensor_inputs = replace(
+        runtime.sensor_inputs,
+        camera_device=None,
+        inputs=replace(runtime.sensor_inputs.inputs, camera_source=None),
+    )
+    return replace(runtime, sensor_inputs=sensor_inputs)
 
 
 def _ports(timestamps):

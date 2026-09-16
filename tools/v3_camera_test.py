@@ -112,8 +112,20 @@ def _status(args: argparse.Namespace) -> int:
             "max_completion_lag_ms": max_completion_lag_ns / 1_000_000.0,
             "last_error": final.status.last_error,
             "published_stream": config.stream_name,
-            "published_size": [config.published_width, config.published_height],
-            "published_format": config.published_pixel_format,
+            "published_size": (
+                [final.frame.width, final.frame.height]
+                if final.frame is not None
+                else [config.published_width, config.published_height]
+            ),
+            "published_format": (
+                final.frame.pixel_format
+                if final.frame is not None
+                else config.published_pixel_format
+            ),
+            "stride_bytes": final.frame.stride_bytes if final.frame is not None else None,
+            "frame_size_bytes": (
+                final.frame.frame_size_bytes if final.frame is not None else None
+            ),
             "main_size": [config.main_width, config.main_height],
             "main_format": config.main_pixel_format,
             "queue": config.queue,

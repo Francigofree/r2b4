@@ -8,6 +8,7 @@ from v3.adapters.picamera2_camera import (
     CameraEdgeSnapshot,
     CameraFrameSnapshot,
     CameraRuntimeStatus,
+    CameraStreamGeometry,
     NativePicamera2Camera,
     Picamera2CameraConfig,
     picamera2_camera_config_from_mapping,
@@ -26,10 +27,10 @@ from v3.layers.l12_safety_final import FinalSafetyGate
 
 
 class _Request:
-    def __init__(self, timestamp=1_000_000_000, data=b"camera-frame") -> None:
+    def __init__(self, timestamp=1_000_000_000, data=None) -> None:
         self.released = False
         self.timestamp = timestamp
-        self.data = data
+        self.data = bytes(640 * 360 * 3) if data is None else data
 
     def get_metadata(self):
         return {
@@ -63,6 +64,25 @@ class _ConfiguredCamera:
 
     def configure(self, configuration) -> None:
         self.events.append("configure")
+
+    def stream_configuration(self, stream_name: str):
+        spec = self.configuration_kwargs[stream_name]
+        width, height = spec["size"]
+        pixel_format = spec["format"]
+        if pixel_format == "RGB888":
+            stride = width * 3
+            framesize = stride * height
+        elif pixel_format == "YUV420":
+            stride = width
+            framesize = stride * height * 3 // 2
+        else:
+            raise AssertionError(pixel_format)
+        return {
+            "size": (width, height),
+            "format": pixel_format,
+            "stride": stride,
+            "framesize": framesize,
+        }
 
     def set_controls(self, controls) -> None:
         self.controls = dict(controls)
@@ -139,14 +159,49 @@ def test_camera_frame_keeps_sensor_timestamp_without_exposure_shift():
         camera_controls_factory=lambda: {},
         monotonic_ns=lambda: next(clock),
     )
-    snapshot = owner.capture_once_for_test(_Request())
+    geometry = CameraStreamGeometry("lores", 640, 360, "RGB888", 1920, 691200)
+    snapshot = owner.capture_once_for_test(_Request(), geometry)
     assert snapshot.sensor_timestamp_ns == 1_000_000_000
     assert snapshot.exposure_time_ns == 10_000_000
     assert snapshot.measurement_monotonic_ns == 1_000_000_100
     assert snapshot.completed_monotonic_ns == 2_000_000_000
-    assert snapshot.image_bytes == b"camera-frame"
+    assert len(snapshot.image_bytes) == 691200
     assert snapshot.width == 640
     assert snapshot.height == 360
+    assert snapshot.stride_bytes == 1920
+    assert snapshot.frame_size_bytes == 691200
+
+
+
+def test_camera_publishes_actual_post_configure_stream_geometry():
+    class _AlignedCamera(_ConfiguredCamera):
+        def stream_configuration(self, stream_name: str):
+            if stream_name == "lores":
+                return {
+                    "size": (672, 360),
+                    "format": "RGB888",
+                    "stride": 2048,
+                    "framesize": 2048 * 360,
+                }
+            return super().stream_configuration(stream_name)
+
+    camera = _AlignedCamera(requests=[_Request(data=bytes(2048 * 360))])
+    owner = NativePicamera2Camera(
+        Picamera2CameraConfig(max_frame_completion_lag_ns=2_000_000_000),
+        picamera_factory=lambda index: camera,
+        sensor_timestamp_mapper=lambda value: value,
+        camera_controls_factory=lambda: {},
+        monotonic_ns=lambda: 2_000_000_000,
+    )
+    assert owner.start()
+    edge = owner.wait_for_new_frame(0, timeout_s=1.0)
+    assert edge.frame is not None
+    assert edge.frame.width == 672
+    assert edge.frame.height == 360
+    assert edge.frame.stride_bytes == 2048
+    assert edge.frame.frame_size_bytes == 2048 * 360
+    assert len(edge.frame.image_bytes) == edge.frame.frame_size_bytes
+    owner.stop()
 
 
 def test_raspberry_pi_timestamp_mapper_is_identity():
@@ -169,12 +224,14 @@ def _frame(measurement_ns: int = 900) -> CameraFrameSnapshot:
         completed_monotonic_ns=950,
         exposure_time_ns=10,
         frame_duration_ns=50,
-        width=640,
-        height=360,
+        width=2,
+        height=2,
         pixel_format="RGB888",
+        stride_bytes=6,
+        frame_size_bytes=12,
         focus_state="2",
         lens_position=1.0,
-        image_bytes=b"abc",
+        image_bytes=b"abcdefghijkl",
     )
 
 
@@ -199,7 +256,9 @@ def test_live_camera_exposes_metadata_but_not_raw_image():
     assert snapshot.health.state is DeviceHealthState.OK
     assert len(snapshot.samples) == 1
     values = {field.key: field.value for field in snapshot.samples[0].values}
-    assert values["payload_bytes"] == 3
+    assert values["payload_bytes"] == 12
+    assert values["stride_bytes"] == 6
+    assert values["frame_size_bytes"] == 12
     assert values["camera_model"] == "imx708"
     assert values["measurement_stale"] is False
     assert "image_bytes" not in values
