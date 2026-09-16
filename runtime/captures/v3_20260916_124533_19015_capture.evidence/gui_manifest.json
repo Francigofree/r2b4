@@ -1,0 +1,193 @@
+{
+  "artifacts": {
+    "diagnosis_json": "diagnosis.json",
+    "interesting_slice_ndjson": "interesting_slice.ndjson",
+    "replay_json": "replay_result.json",
+    "timeline_ndjson": "timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "RAW_LIDAR_REVISION_GAP"
+      ],
+      "message_stream_sha256": "478ab25a37c7134bfb4ef019c0f31246f974b3e878df85f2ca56965538b56323",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 5631,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 5631,
+        "first_lost_sequence": null,
+        "high_water_mark": 22,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 5631,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 1916,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [
+        {
+          "after": 452,
+          "before": 454
+        }
+      ],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "status": "FAIL",
+    "topics": {
+      "/r2b4/checkpoint": {
+        "channel_id": 3,
+        "encoding": "json",
+        "message_count": 10,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/event": {
+        "channel_id": 4,
+        "encoding": "json",
+        "message_count": 2,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/raw_lidar": {
+        "channel_id": 2,
+        "encoding": "json",
+        "message_count": 105,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/runtime": {
+        "channel_id": 5,
+        "encoding": "json",
+        "message_count": 1,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/tick": {
+        "channel_id": 1,
+        "encoding": "json",
+        "message_count": 324,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      }
+    }
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_status": "FAIL",
+  "incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "RAW_LIDAR_REVISION_GAP"
+          ],
+          "message_stream_sha256": "478ab25a37c7134bfb4ef019c0f31246f974b3e878df85f2ca56965538b56323",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 1916,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [
+            {
+              "after": 452,
+              "before": 454
+            }
+          ],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "RAW_LIDAR_REVISION_GAP",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_TIME_INVALID",
+            "state": "FAILED"
+          }
+        ]
+      },
+      "id": "device-1743",
+      "layer": "L1",
+      "monotonic_ns": 8871586676247,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 1743
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "monotonic_ns": 8873360256448,
+        "progress_span": 0.0,
+        "tick_id": 1830,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 8873360256448,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 1830
+    }
+  ],
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_TEST_HUB_GUI_V2",
+  "status": "FAIL",
+  "tracks": [
+    "pose.x_m",
+    "pose.y_m",
+    "pose.yaw_rad",
+    "pose.covariance_trace",
+    "navigation_progress",
+    "requested_motion.v_mps",
+    "constrained_motion.v_mps",
+    "safety_decision",
+    "l9_constraints"
+  ]
+}

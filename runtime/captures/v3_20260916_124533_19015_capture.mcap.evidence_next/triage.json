@@ -1,0 +1,186 @@
+{
+  "actionable_incident_count": 3,
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "capture_id": "v3_20260916_124533_19015_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "RAW_LIDAR_REVISION_GAP"
+      ],
+      "message_stream_sha256": "478ab25a37c7134bfb4ef019c0f31246f974b3e878df85f2ca56965538b56323",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 5631,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 5631,
+        "first_lost_sequence": null,
+        "high_water_mark": 22,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 5631,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 1916,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [
+        {
+          "after": 452,
+          "before": 454
+        }
+      ],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "status": "FAIL",
+    "trigger_reason": "SIGUSR1"
+  },
+  "incident_count": 3,
+  "incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "RAW_LIDAR_REVISION_GAP"
+          ],
+          "message_stream_sha256": "478ab25a37c7134bfb4ef019c0f31246f974b3e878df85f2ca56965538b56323",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_lidar_duplicate_count": 1916,
+          "raw_lidar_missing_revisions": [],
+          "raw_lidar_out_of_order_count": 0,
+          "raw_lidar_revision_gaps": [
+            {
+              "after": 452,
+              "before": 454
+            }
+          ],
+          "raw_lidar_truncated_count": 0,
+          "session_start_short_pre_window": false,
+          "terminal_short_post_window": false
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "RAW_LIDAR_REVISION_GAP",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_TIME_INVALID",
+            "state": "FAILED"
+          }
+        ]
+      },
+      "id": "device-1743",
+      "layer": "L1",
+      "monotonic_ns": 8871586676247,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 1743
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "monotonic_ns": 8873360256448,
+        "progress_span": 0.0,
+        "tick_id": 1830,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 8873360256448,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 1830
+    }
+  ],
+  "localization": {
+    "first_trace": 0.06973651717325915,
+    "growth_ratio": 3.4796755001726565,
+    "last_trace": 0.05713993443602048,
+    "max_trace": 0.18655448870253866,
+    "sample_count": 324
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 0.5935160538232399,
+    "requested_motion_tick_count": 221
+  },
+  "navigation": {
+    "stagnation": {
+      "last_progress": 0.0,
+      "monotonic_ns": 8873360256448,
+      "progress_span": 0.0,
+      "tick_id": 1830,
+      "window_tick_count": 50
+    }
+  },
+  "root_cause_candidate": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "capture-integrity"
+    ],
+    "kind": "CAPTURE_INTEGRITY",
+    "layer": "Capture",
+    "reason": "RAW_LIDAR_REVISION_GAP",
+    "tick_id": null
+  },
+  "safety": {
+    "ALLOW": 221,
+    "FAULT": 0,
+    "STOP": 103,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 1,
+    "l2_actionable_rejection_count": 0,
+    "l2_duplicate_count": 582,
+    "l2_rejection_count": 582,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 582
+    }
+  },
+  "ticks": {
+    "count": 324,
+    "first_monotonic_ns": 8863201921241,
+    "first_tick_id": 1507,
+    "last_monotonic_ns": 8873360256448,
+    "last_tick_id": 1830
+  },
+  "timing": {
+    "max_ms": 98.355058,
+    "p50_ms": 22.337343,
+    "p95_ms": 66.356799,
+    "p99_ms": 85.322902,
+    "sample_count": 323
+  }
+}
