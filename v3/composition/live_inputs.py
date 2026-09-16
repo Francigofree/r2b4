@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
-from v3.adapters.live_inputs import NativeLiveInputReader
+from v3.adapters.live_inputs import LiveDeviceSource, NativeLiveInputReader
 from v3.adapters.live_lidar import NativeLidarSource
 from v3.contracts import FinalActuation, TickContext
 from v3.engine import TickResult
@@ -33,7 +33,7 @@ class LiveInputCompositionConfig:
 
 
 class LiveInputComposition:
-    """Poll the three native sources once and run one IDLE/STOP V3 tick.
+    """Poll native core and auxiliary sources once and run one IDLE/STOP V3 tick.
 
     This composition owns no clock or owner loop: its caller supplies the closed
     ``TickContext``.  It has no activation API and its internal final sink rejects
@@ -48,6 +48,8 @@ class LiveInputComposition:
         imu_source: NativeImuSource,
         lidar_source: NativeLidarSource,
         config: LiveInputCompositionConfig = LiveInputCompositionConfig(),
+        *,
+        auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
             raise TypeError("encoder_source must be NativeEncoderSource")
@@ -58,8 +60,11 @@ class LiveInputComposition:
         if not isinstance(config, LiveInputCompositionConfig):
             raise TypeError("config must be LiveInputCompositionConfig")
 
+        if not isinstance(auxiliary_sources, tuple):
+            raise TypeError("auxiliary_sources must be tuple[LiveDeviceSource, ...]")
+
         self._reader = NativeLiveInputReader(
-            (encoder_source, imu_source, lidar_source)
+            (encoder_source, imu_source, lidar_source, *auxiliary_sources)
         )
         self._runtime = InputShadowComposition(
             admission_config=config.admission,

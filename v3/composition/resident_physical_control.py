@@ -8,6 +8,7 @@ from v3.adapters.gpio_motor import GpioMotorFrameSinkConfig, PwmGpioBackend
 from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
 from v3.adapters.live_lidar import NativeLidarSource
+from v3.adapters.live_inputs import LiveDeviceSource
 from v3.contracts import LifecycleState, TickContext
 from v3.engine import TickResult
 from v3.execution import CaptureRecord
@@ -48,6 +49,8 @@ class ResidentPhysicalControlComposition:
         command_gateway: CommandGateway,
         gpio_backend: PwmGpioBackend,
         config: ResidentPhysicalControlConfig,
+        *,
+        auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     ) -> None:
         if not isinstance(config, ResidentPhysicalControlConfig):
             raise TypeError("config must be ResidentPhysicalControlConfig")
@@ -63,6 +66,7 @@ class ResidentPhysicalControlComposition:
                 command_gateway,
                 motor_output,
                 config.live_control,
+                auxiliary_sources=auxiliary_sources,
             )
         except Exception:
             motor_output.close()

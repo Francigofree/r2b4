@@ -50,5 +50,24 @@
       ],
       "use_external_crystal": false
     }
+  },
+  "camera": {
+    "enabled": true,
+    "provider": "picamera2",
+    "camera_index": 0,
+    "expected_model": "imx708",
+    "stream_name": "lores",
+    "width": 640,
+    "height": 360,
+    "pixel_format": "RGB888",
+    "main_width": 1280,
+    "main_height": 720,
+    "main_pixel_format": "YUV420",
+    "fps": 20.0,
+    "buffer_count": 6,
+    "queue": false,
+    "continuous_autofocus": true,
+    "max_frame_completion_lag_ns": 500000000,
+    "stop_join_timeout_s": 2.0
   }
 }

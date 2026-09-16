@@ -10,6 +10,7 @@ from v3.adapters.gpio_motor import PwmGpioBackend
 from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
 from v3.adapters.live_lidar import NativeLidarSource
+from v3.adapters.live_inputs import LiveDeviceSource
 from v3.composition.native_sensor_inputs import (
     NativeSensorHardwareConfig,
     NativeSensorInputOwner,
@@ -228,6 +229,7 @@ def run_resident_physical_control(
     gpio_backend: PwmGpioBackend,
     config: ResidentPhysicalRuntimeConfig,
     *,
+    auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     stop_requested: Callable[[], bool],
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
@@ -272,6 +274,7 @@ def run_resident_physical_control(
         command_gateway,
         gpio_backend,
         config.composition,
+        auxiliary_sources=auxiliary_sources,
     )
     previous_clock_ns = first_deadline_ns
     previous_tick_ns: int | None = None
@@ -394,6 +397,7 @@ def run_owned_resident_physical_control(
             command_gateway,
             gpio_backend,
             config,
+            auxiliary_sources=sensor_inputs.auxiliary_sources,
             stop_requested=stop_requested,
             monotonic_ns=monotonic_ns,
             sleep=sleep,

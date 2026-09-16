@@ -21,6 +21,11 @@ from v3.adapters.latest_lidar import LatestLidarBackendConfig
 from v3.adapters.live_encoder import NativeEncoderConfig
 from v3.adapters.live_imu import NativeImuConfig
 from v3.adapters.live_lidar import NativeLidarConfig
+from v3.adapters.live_camera import NativeCameraConfig
+from v3.adapters.picamera2_camera import (
+    Picamera2CameraConfig,
+    picamera2_camera_config_from_mapping,
+)
 from v3.adapters.motor_pwm import MotorChannelPhysicalConfig, PwmDecayMode
 from v3.composition.bounded_live_control import BoundedLiveControlConfig
 from v3.composition.bounded_physical_control import BoundedPhysicalControlConfig
@@ -71,6 +76,7 @@ class NativeSensorPolicyConfig:
     encoder_minimum_estimation_pulses: int = 4
     encoder_minimum_estimation_window_ns: int = 40_000_000
     encoder_maximum_estimation_window_ns: int = 160_000_000
+    camera_maximum_frame_age_ns: int = 250_000_000
 
     def __post_init__(self) -> None:
         # Construct the downstream immutable contracts now, before any file or
@@ -112,6 +118,10 @@ class NativeSensorPolicyConfig:
             self.lidar_minimum_confidence,
             self.lidar_maximum_measurement_age_ns,
             POSE_FRAME_ID,
+        )
+        NativeCameraConfig(
+            "CAMERA_FRONT",
+            self.camera_maximum_frame_age_ns,
         )
 
 
@@ -224,6 +234,23 @@ def _sensor_hardware_config(
             "hardware config imu.bno055.use_external_crystal",
         ),
     )
+    camera_device: Picamera2CameraConfig | None = None
+    camera_source: NativeCameraConfig | None = None
+    camera_value = hardware.get("camera")
+    if camera_value is not None:
+        camera = _mapping(camera_value, "hardware config camera")
+        enabled = camera.get("enabled", False)
+        if type(enabled) is not bool:
+            raise ValueError("hardware config camera.enabled must be bool")
+        if enabled:
+            if camera.get("provider", "picamera2") != "picamera2":
+                raise ValueError("hardware config camera.provider must be picamera2")
+            camera_device = picamera2_camera_config_from_mapping(camera)
+            camera_source = NativeCameraConfig(
+                "CAMERA_FRONT",
+                policy.camera_maximum_frame_age_ns,
+            )
+
     inputs = NativeSensorInputConfig(
         encoder_counter=encoder.counter_gpio,
         encoder_backend=encoder.backend_config(
@@ -259,6 +286,7 @@ def _sensor_hardware_config(
             policy.lidar_pose_r_scale,
             maximum_future_skew_ns=policy.lidar_maximum_future_skew_ns,
         ),
+        camera_source=camera_source,
         lidar_source=NativeLidarConfig(
             "RPLIDAR_C1",
             policy.lidar_minimum_confidence,
@@ -282,12 +310,13 @@ def _sensor_hardware_config(
         ),
     )
     return NativeSensorHardwareConfig(
-        imu_device,
-        inputs,
-        _positive_float(
+        imu_device=imu_device,
+        inputs=inputs,
+        lidar_danger_zone_m=_positive_float(
             lidar.get("biztonsagi_zona_m"),
             "hardware config lidar.biztonsagi_zona_m",
         ),
+        camera_device=camera_device,
     )
 
 

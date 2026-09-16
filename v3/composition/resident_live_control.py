@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
-from v3.adapters.live_inputs import NativeLiveInputReader
+from v3.adapters.live_inputs import LiveDeviceSource, NativeLiveInputReader
 from v3.adapters.live_lidar import NativeLidarSource
 from v3.contracts import (
     CommandMode,
@@ -102,6 +102,8 @@ class ResidentLiveControlComposition:
         command_gateway: CommandGateway,
         motor_writer: object,
         config: ResidentLiveControlConfig,
+        *,
+        auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
             raise TypeError("encoder_source must be NativeEncoderSource")
@@ -114,8 +116,11 @@ class ResidentLiveControlComposition:
         if not isinstance(config, ResidentLiveControlConfig):
             raise TypeError("config must be ResidentLiveControlConfig")
 
+        if not isinstance(auxiliary_sources, tuple):
+            raise TypeError("auxiliary_sources must be tuple[LiveDeviceSource, ...]")
+
         self._reader = NativeLiveInputReader(
-            (encoder_source, imu_source, lidar_source)
+            (encoder_source, imu_source, lidar_source, *auxiliary_sources)
         )
         self._command_gateway = command_gateway
         self._control = NativeControlComposition(motor_writer, config.control)

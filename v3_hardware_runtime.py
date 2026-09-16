@@ -18,6 +18,12 @@ from v3.adapters.gpio_counter import GpioCounterBackend
 from v3.adapters.gpio_motor import PwmGpioBackend
 from v3.adapters.latest_lidar import LatestMatcherResultPort
 from v3.adapters.native_lidar_port import TimedPoseReference
+from v3.adapters.picamera2_camera import (
+    NativePicamera2Camera,
+    Picamera2Factory,
+    default_picamera2_factory,
+    raspberry_pi_sensor_timestamp_to_monotonic_ns,
+)
 from v3.composition.live_inputs import (
     LiveInputComposition,
     LiveInputCompositionConfig,
@@ -36,6 +42,10 @@ from v3.contracts import (
 from v3.engine import TickResult
 from v3.execution import CaptureRecord
 from v3.ports import CommandGateway
+from v3.device_health_policy import (
+    PRODUCTION_CRITICAL_DEVICE_IDS,
+    critical_devices_ready,
+)
 from v3_bounded_runtime import (
     BoundedPhysicalRuntimeConfig,
     RUN_OK,
@@ -157,9 +167,9 @@ class SensorMeasurementReport:
             if (
                 isinstance(acquisition, AcquisitionFrame)
                 and acquisition.io_health
-                and all(
-                    item.state is DeviceHealthState.OK
-                    for item in acquisition.io_health
+                and critical_devices_ready(
+                    acquisition.io_health,
+                    PRODUCTION_CRITICAL_DEVICE_IDS,
                 )
             ):
                 total += 1
@@ -312,7 +322,7 @@ class NativePoseFeedback:
 
 
 class NativeHardwareSensorOwner:
-    """Acquire and release the bus, matcher port and three typed V3 sources."""
+    """Acquire/release core sensors plus the optional native camera capability."""
 
     __slots__ = ("_closed", "_inputs", "_pose_feedback")
 
@@ -323,6 +333,7 @@ class NativeHardwareSensorOwner:
         open_lidar_port: LidarPortFactory,
         config: NativeSensorHardwareConfig,
         *,
+        open_camera: Picamera2Factory = default_picamera2_factory,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -331,6 +342,7 @@ class NativeHardwareSensorOwner:
         for callback, name in (
             (open_imu_bus, "open_imu_bus"),
             (open_lidar_port, "open_lidar_port"),
+            (open_camera, "open_camera"),
             (monotonic_ns, "monotonic_ns"),
             (sleep, "sleep"),
         ):
@@ -340,6 +352,7 @@ class NativeHardwareSensorOwner:
         bus: Bno055RegisterBus | None = None
         imu: NativeBno055Device | None = None
         lidar: LatestMatcherResultPort | None = None
+        camera: NativePicamera2Camera | None = None
         inputs: NativeSensorInputOwner | None = None
         pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
         try:
@@ -352,16 +365,35 @@ class NativeHardwareSensorOwner:
             )
             imu.initialize()
             lidar = open_lidar_port(pose_feedback)
+            if config.camera_device is not None:
+                camera = NativePicamera2Camera(
+                    config.camera_device,
+                    picamera_factory=open_camera,
+                    sensor_timestamp_mapper=(
+                        raspberry_pi_sensor_timestamp_to_monotonic_ns
+                    ),
+                    monotonic_ns=monotonic_ns,
+                )
+                # Camera is explicitly non-critical. A start failure remains
+                # visible as CAMERA_FRONT FAILED but must not abort core input
+                # ownership or the motor-control runtime.
+                camera.start()
             inputs = NativeSensorInputOwner(
                 counter_gpio_backend,
                 imu,
                 lidar,
                 config.inputs,
+                camera_port=camera,
             )
         except Exception:
             if inputs is not None:
                 inputs.close()
             else:
+                if camera is not None:
+                    try:
+                        camera.stop()
+                    except Exception:
+                        pass
                 if lidar is not None:
                     try:
                         lidar.stop()
@@ -449,7 +481,11 @@ def run_finite_sensor_measurement(
     previous_tick_ns: int | None = None
     next_deadline_ns = first_deadline_ns
     try:
-        runtime = LiveInputComposition(*owner.inputs.sources, config.live_inputs)
+        runtime = LiveInputComposition(
+            *owner.inputs.sources,
+            config.live_inputs,
+            auxiliary_sources=owner.inputs.auxiliary_sources,
+        )
         for tick_id in range(config.tick_count):
             if tick_id > 0 and _stop_value(stop_requested):
                 operator_stopped = True

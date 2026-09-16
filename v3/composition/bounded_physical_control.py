@@ -8,6 +8,7 @@ from v3.adapters.gpio_motor import GpioMotorFrameSinkConfig, PwmGpioBackend
 from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
 from v3.adapters.live_lidar import NativeLidarSource
+from v3.adapters.live_inputs import LiveDeviceSource
 from v3.contracts import LifecycleState, TickContext
 from v3.engine import TickResult
 
@@ -49,6 +50,8 @@ class BoundedPhysicalControlComposition:
         lidar_source: NativeLidarSource,
         gpio_backend: PwmGpioBackend,
         config: BoundedPhysicalControlConfig,
+        *,
+        auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
             raise TypeError("encoder_source must be NativeEncoderSource")
@@ -70,6 +73,7 @@ class BoundedPhysicalControlComposition:
                 lidar_source,
                 motor_output,
                 config.live_control,
+                auxiliary_sources=auxiliary_sources,
             )
         except Exception:
             motor_output.close()

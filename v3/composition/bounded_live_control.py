@@ -12,7 +12,7 @@ from v3.adapters.bounded_command import (
 )
 from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
-from v3.adapters.live_inputs import NativeLiveInputReader
+from v3.adapters.live_inputs import LiveDeviceSource, NativeLiveInputReader
 from v3.adapters.live_lidar import NativeLidarSource
 from v3.contracts import (
     AdmittedFrame,
@@ -84,6 +84,8 @@ class BoundedLiveControlComposition:
         lidar_source: NativeLidarSource,
         motor_writer: object,
         config: BoundedLiveControlConfig,
+        *,
+        auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
             raise TypeError("encoder_source must be NativeEncoderSource")
@@ -94,8 +96,11 @@ class BoundedLiveControlComposition:
         if not isinstance(config, BoundedLiveControlConfig):
             raise TypeError("config must be BoundedLiveControlConfig")
 
+        if not isinstance(auxiliary_sources, tuple):
+            raise TypeError("auxiliary_sources must be tuple[LiveDeviceSource, ...]")
+
         self._reader = NativeLiveInputReader(
-            (encoder_source, imu_source, lidar_source)
+            (encoder_source, imu_source, lidar_source, *auxiliary_sources)
         )
         self._gateway = (
             BoundedExploreCommandGateway(config.command_profile)
