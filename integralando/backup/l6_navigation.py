@@ -745,31 +745,20 @@ class TrajectoryNavigator:
             raise RuntimeError("async rollout pending state is incomplete")
         source_context = request.context
         goal = request.goal
+        if (
+            self._last_replan_ns is not None
+            and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns
+        ):
+            raise RuntimeError("ASYNC_L6_PLAN_STALE")
         if context.tick_id < release_tick_id:
-            # Before the deterministic handoff tick, the previously accepted
-            # plan is still authoritative, so its age remains safety-critical.
-            if (
-                self._last_replan_ns is not None
-                and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns
-            ):
-                raise RuntimeError("ASYNC_L6_PLAN_STALE")
             return False
         if context.tick_id > release_tick_id:
             raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")
-
-        # At the handoff tick, inspect the new result before judging plan age.
-        # The previous plan may have crossed max_plan_age_ns while the new
-        # rollout is already ready and fresh enough to replace it.
         result = backend.take(request_id)
         if result is None:
             raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
         if result.source_context != source_context:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
-        if (
-            context.monotonic_ns - result.source_context.monotonic_ns
-            > self._max_plan_age_ns
-        ):
-            raise RuntimeError("ASYNC_L6_PLAN_STALE")
         selected_ns = self._pending_goal_selected_ns
         self._pending_rollout_id = None
         self._pending_rollout_request = None

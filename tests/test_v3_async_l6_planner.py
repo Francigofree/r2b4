@@ -288,3 +288,59 @@ def test_process_adapter_boundary_has_compute_only_dependencies():
         "v3.adapters.resident_command",
     }
     assert not imported_modules & forbidden
+
+def test_ready_release_result_replaces_stale_previous_plan_before_freshness_gate():
+    """Regression for the 2026-09-16 live tick-115 false PLAN_STALE fault."""
+
+    config = NavigationConfig()
+    backend = InlineTrajectoryRolloutBackend(config)
+    navigator = TrajectoryNavigator(
+        config,
+        rollout_backend=backend,
+        rollout_release_tick_gap=5,
+        # Tick 10 is 200 ms after the synchronous seed at tick 0, but only
+        # 100 ms after the pending request snapshot at tick 5.
+        max_plan_age_ns=150_000_000,
+    )
+    manager = MissionManager()
+
+    plans = [_evaluate(navigator, manager, tick_id) for tick_id in range(10)]
+    previous_candidates = plans[-1].trajectory_candidates
+
+    # The old accepted plan is stale here, but the ready result sourced at
+    # tick 5 is still fresh. The handoff must accept the new result first.
+    released = _evaluate(navigator, manager, 10)
+
+    assert released.trajectory_candidates != previous_candidates
+    checkpoint = navigator.checkpoint()
+    assert checkpoint.last_replan_tick_id == 5
+    assert checkpoint.pending_rollout_request is not None
+    assert checkpoint.pending_rollout_request.context.tick_id == 10
+    assert checkpoint.pending_release_tick_id == 15
+
+    backend.close()
+
+
+def test_previous_plan_staleness_still_fails_closed_before_release_tick():
+    """The P0 fix must not weaken pre-release fail-closed freshness."""
+
+    config = NavigationConfig()
+    backend = InlineTrajectoryRolloutBackend(config)
+    navigator = TrajectoryNavigator(
+        config,
+        rollout_backend=backend,
+        rollout_release_tick_gap=5,
+        max_plan_age_ns=100_000_000,
+    )
+    manager = MissionManager()
+
+    for tick_id in range(6):
+        _evaluate(navigator, manager, tick_id)
+
+    # Pending result releases at tick 10. At tick 6 the old plan is already
+    # 120 ms old, so continuing to drive on it must still fail closed.
+    with pytest.raises(RuntimeError, match="ASYNC_L6_PLAN_STALE"):
+        _evaluate(navigator, manager, 6)
+
+    backend.close()
+

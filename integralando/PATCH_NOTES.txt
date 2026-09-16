@@ -1,0 +1,21 @@
+R2B4 ASYNC L6 P0 HANDOFF FIX
+Base inspected: fe197fb6a9a5e0f63960871b9c9529231f76f12e
+
+P0 root cause:
+- _accept_pending_rollout() checked the age of the previous accepted plan
+  before attempting to take the new result at the deterministic release tick.
+- In live Room Cruise tick 115 this produced a false-positive L6 PLAN_STALE
+  path: old plan age crossed 350 ms before the ready/fresh replacement could
+  even be queried.
+
+Resolution:
+- pre-release: retain old-plan freshness fail-closed check;
+- release tick: take result first;
+- validate source context;
+- validate freshness of the result source snapshot;
+- no safety-limit increase;
+- no architecture/config/process changes.
+
+Regression:
+- fresh ready replacement wins over stale previous plan at release;
+- stale previous plan still fails closed before release.
