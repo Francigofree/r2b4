@@ -1,1039 +1,166 @@
 #!/usr/bin/env python3
-"""R2B4 FACE_PERSON canonical V3 upgrade for the 2026-09-16 source tree.
-
-Applies only to the exact source blobs listed in BASE_BLOBS. Runtime/capture files
-and unrelated working-tree changes are ignored. On targeted test failure the
-upgrade automatically restores the touched files from runtime/upgrade_backups/.
-"""
-
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
-import time
-from pathlib import Path
 
-BASE_COMMIT = "3236cada2eb12b7f63944ffa1fc55c47b39ae8be"
-UPGRADE_ID = "r2b4-faceperson-v1-20260916-r2"
-
-BASE_BLOBS = {
-    "README.md": "394101bfeb94db7d665eda7771899235927e5172",
-    "conf/vezerles.json": "699067c80814e44f190bc2de4cd6873672094df8",
-    "v3/contracts/messages.py": "55b5388dce84b7b0790cad48a4b1fd13e94d48c1",
-    "v3/layers/l5_command_mission.py": "d093630490fcfa9c0c80159ae11308417fbb6c58",
-    "v3/layers/l6_navigation.py": "fc6465cd83483bc89d656c9e950a68fe3989c07a",
-    "v3/layers/l7_motion_selection.py": "583b28073c5e6a3ef3bac1c9ca2c9db9cc2628f8",
-    "v3/composition/native_control.py": "cbcf40e0a60481843033fa352fef86d761e16363",
-    "v3/adapters/resident_command.py": "b45c7b714f7a5140cdd293c930d3a689ce94d9ee",
-    "v3/control_cli.py": "5005dfdfab3f1963b73796ff42dbaebf7b631320",
-    "v3/operator_controller.py": "cfbfa2b354695f891e5b3eb917cd12500bf42a7b",
-    "v3/operator_cli.py": "6e041e9eedb28add67c24e09df9cae6490411217",
-    "v3/adapters/person_photo_evidence.py": "eaccb2fef166d3e68ab5df9cd9a8bf4c3a09e7df",
-    "tests/test_v3_resident_command.py": "47ca893603cdb02725fdf5764528b9f73980e830",
-}
-
-NEW_TEST_PATH = "tests/test_v3_face_person.py"
-BACKUP_MARKER = "runtime/.faceperson_upgrade_backup"
-
-
-def run(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        list(args), cwd=root, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, check=check,
-    )
-
-
-def git_blob(root: Path, relative: str) -> str:
-    result = run(root, "git", "hash-object", relative)
-    return result.stdout.strip()
-
-
-def replace_once(text: str, old: str, new: str, label: str) -> str:
-    count = text.count(old)
-    if count != 1:
-        raise RuntimeError(f"{label}: expected exactly one source match, found {count}")
-    return text.replace(old, new, 1)
-
-
-def patch_file(root: Path, relative: str, transforms: list[tuple[str, str, str]]) -> None:
-    path = root / relative
-    text = path.read_text(encoding="utf-8")
-    for old, new, label in transforms:
-        text = replace_once(text, old, new, f"{relative}: {label}")
-    path.write_text(text, encoding="utf-8")
-
-
-def preflight(root: Path) -> None:
-    if not (root / ".git").exists():
-        raise RuntimeError(f"not a Git working tree: {root}")
-    messages = (root / "v3/contracts/messages.py").read_text(encoding="utf-8")
-    controller = (root / "v3/operator_controller.py").read_text(encoding="utf-8")
-    if "FACE_PERSON = \"FACE_PERSON\"" in messages and "def faceperson(" in controller:
-        raise SystemExit("FACE_PERSON upgrade already appears to be installed")
-    mismatches: list[str] = []
-    for relative, expected in BASE_BLOBS.items():
-        path = root / relative
-        if not path.is_file():
-            mismatches.append(f"{relative}: missing")
-            continue
-        actual = git_blob(root, relative)
-        if actual != expected:
-            mismatches.append(f"{relative}: expected {expected}, got {actual}")
-    l6_text = (root / "v3/layers/l6_navigation.py").read_text(encoding="utf-8")
-    if "context.monotonic_ns - result.source_context.monotonic_ns" not in l6_text:
-        mismatches.append(
-            "v3/layers/l6_navigation.py: async-L6 handoff freshness P0 fix anchor missing"
-        )
-    if (root / NEW_TEST_PATH).exists():
-        mismatches.append(f"{NEW_TEST_PATH}: already exists")
-    if mismatches:
-        joined = "\n  - ".join(mismatches)
-        raise RuntimeError(
-            "source preflight failed; package refuses to patch a different source tree:\n  - " + joined
-        )
-
-
-def backup(root: Path) -> Path:
-    stamp = time.strftime("%Y%m%d_%H%M%S")
-    target = root / "runtime" / "upgrade_backups" / f"faceperson_{stamp}"
-    target.mkdir(parents=True, exist_ok=False)
-    for relative in BASE_BLOBS:
-        source = root / relative
-        destination = target / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-    manifest = {
-        "upgrade_id": UPGRADE_ID,
-        "base_commit": BASE_COMMIT,
-        "files": sorted(BASE_BLOBS),
-        "created_files": [NEW_TEST_PATH],
-    }
-    (target / "manifest.json").write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    marker = root / BACKUP_MARKER
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(str(target) + "\n", encoding="utf-8")
-    return target
-
-
-def rollback(root: Path, backup_dir: Path | None = None) -> None:
-    if backup_dir is None:
-        marker = root / BACKUP_MARKER
-        if not marker.is_file():
-            raise RuntimeError("no FACE_PERSON backup marker found")
-        backup_dir = Path(marker.read_text(encoding="utf-8").strip())
-    manifest_path = backup_dir / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    for relative in manifest["files"]:
-        source = backup_dir / relative
-        destination = root / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-    for relative in manifest.get("created_files", []):
-        try:
-            (root / relative).unlink()
-        except FileNotFoundError:
-            pass
-    print(f"ROLLBACK OK: {backup_dir}")
-
-
-def apply_patches(root: Path) -> None:
-    patch_file(root, "v3/contracts/messages.py", [
-        (
-            '    EXPLORE = "EXPLORE"\n    SERVICE = "SERVICE"',
-            '    EXPLORE = "EXPLORE"\n    FACE_PERSON = "FACE_PERSON"\n    SERVICE = "SERVICE"',
-            "add FACE_PERSON command mode",
-        ),
-        (
-            '            if self.mode is CommandMode.EXPLORE and (\n'
-            '                self.target_pose is not None or self.velocity_target is not None\n'
-            '            ):\n'
-            '                raise ContractValidationError("active EXPLORE mission cannot carry a fixed target")',
-            '            if self.mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON) and (\n'
-            '                self.target_pose is not None or self.velocity_target is not None\n'
-            '            ):\n'
-            '                raise ContractValidationError(\n'
-            '                    "active EXPLORE/FACE_PERSON mission cannot carry a fixed target"\n'
-            '                )',
-            "allow target-free active FACE_PERSON MissionIntent",
-        ),
-    ])
-
-    patch_file(root, "v3/layers/l5_command_mission.py", [
-        (
-            '            elif command.mode is CommandMode.EXPLORE:\n',
-            '            elif command.mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON):\n',
-            "L5 accepts FACE_PERSON mission",
-        ),
-    ])
-
-    patch_file(root, "v3/layers/l6_navigation.py", [
-        (
-            '    TrajectoryPose,\n    Waypoint,\n',
-            '    TrajectoryPose,\n    VelocityTarget,\n    Waypoint,\n',
-            "import VelocityTarget",
-        ),
-        (
-            '    novelty_weight: float = 0.22\n\n    def __post_init__(self) -> None:\n',
-            '    novelty_weight: float = 0.22\n'
-            '    face_person_confidence_floor: float = 0.50\n'
-            '    face_person_yaw_deadband_rad: float = 0.10\n'
-            '    face_person_yaw_gain: float = 2.5\n'
-            '    face_person_min_omega_rad_s: float = 0.40\n'
-            '    face_person_max_omega_rad_s: float = 0.60\n\n'
-            '    def __post_init__(self) -> None:\n',
-            "add FACE_PERSON navigation config",
-        ),
-        (
-            '            raise ValueError("obstacle_confidence_floor must be in [0, 1]")\n'
-            '        for name in (\n',
-            '            raise ValueError("obstacle_confidence_floor must be in [0, 1]")\n'
-            '        if (\n'
-            '            not isinstance(self.face_person_confidence_floor, (int, float))\n'
-            '            or isinstance(self.face_person_confidence_floor, bool)\n'
-            '            or not math.isfinite(self.face_person_confidence_floor)\n'
-            '            or not 0.0 <= self.face_person_confidence_floor <= 1.0\n'
-            '        ):\n'
-            '            raise ValueError("face_person_confidence_floor must be in [0, 1]")\n'
-            '        for name in (\n',
-            "validate FACE_PERSON confidence",
-        ),
-        (
-            '            "clearance_score_cap_m",\n        ):\n',
-            '            "clearance_score_cap_m",\n'
-            '            "face_person_yaw_deadband_rad",\n'
-            '            "face_person_yaw_gain",\n'
-            '            "face_person_min_omega_rad_s",\n'
-            '            "face_person_max_omega_rad_s",\n'
-            '        ):\n',
-            "validate positive FACE_PERSON gains and limits",
-        ),
-        (
-            '        if (\n            not isinstance(self.footprint_safety_margin_m, (int, float))\n',
-            '        if self.face_person_yaw_deadband_rad >= math.pi:\n'
-            '            raise ValueError("face_person_yaw_deadband_rad must be below pi")\n'
-            '        if self.face_person_min_omega_rad_s > self.face_person_max_omega_rad_s:\n'
-            '            raise ValueError("face_person minimum omega cannot exceed maximum omega")\n'
-            '        if (\n            not isinstance(self.footprint_safety_margin_m, (int, float))\n',
-            "validate FACE_PERSON omega ordering",
-        ),
-        (
-            '        if mission.mode is CommandMode.EXPLORE:\n            return self._exploration_plan(mission, estimate, world)\n',
-            '        if mission.mode is CommandMode.FACE_PERSON:\n'
-            '            self._reset()\n'
-            '            return self._face_person_plan(mission, estimate, world)\n'
-            '        if mission.mode is CommandMode.EXPLORE:\n'
-            '            return self._exploration_plan(mission, estimate, world)\n',
-            "route FACE_PERSON through L6",
-        ),
-        (
-            '    def _inactive(\n',
-            '    def _face_person_plan(\n'
-            '        self,\n'
-            '        mission: MissionIntent,\n'
-            '        estimate: RobotEstimate,\n'
-            '        world: WorldSnapshot,\n'
-            '    ) -> NavigationPlan:\n'
-            '        people = tuple(\n'
-            '            track\n'
-            '            for track in world.obstacle_tracks\n'
-            '            if track.track_id.startswith("person-")\n'
-            '            and track.confidence >= self._config.face_person_confidence_floor\n'
-            '        )\n'
-            '        if not people:\n'
-            '            return self._inactive(\n'
-            '                mission,\n'
-            '                NavigationStatus.INVALIDATED,\n'
-            '                "FACE_PERSON_TARGET_MISSING",\n'
-            '            )\n\n'
-            '        def target_key(track):\n'
-            '            dx = track.x_m - estimate.x_m\n'
-            '            dy = track.y_m - estimate.y_m\n'
-            '            heading_error = _wrapped_angle(math.atan2(dy, dx) - estimate.yaw_rad)\n'
-            '            distance_m = math.hypot(dx, dy)\n'
-            '            return (abs(heading_error), distance_m, -track.confidence, track.track_id)\n\n'
-            '        target = min(people, key=target_key)\n'
-            '        dx = target.x_m - estimate.x_m\n'
-            '        dy = target.y_m - estimate.y_m\n'
-            '        heading_error = _wrapped_angle(math.atan2(dy, dx) - estimate.yaw_rad)\n'
-            '        if abs(heading_error) <= self._config.face_person_yaw_deadband_rad:\n'
-            '            return self._inactive(\n'
-            '                mission,\n'
-            '                NavigationStatus.IDLE,\n'
-            '                "FACE_PERSON_ALIGNED",\n'
-            '            )\n\n'
-            '        max_omega = min(\n'
-            '            self._config.face_person_max_omega_rad_s,\n'
-            '            mission.constraints.max_omega_rad_s,\n'
-            '        )\n'
-            '        raw_omega = abs(self._config.face_person_yaw_gain * heading_error)\n'
-            '        omega_magnitude = min(\n'
-            '            max_omega,\n'
-            '            max(self._config.face_person_min_omega_rad_s, raw_omega),\n'
-            '        )\n'
-            '        omega = math.copysign(omega_magnitude, heading_error)\n'
-            '        return NavigationPlan(\n'
-            '            context=mission.context,\n'
-            '            mission_id=mission.mission_id,\n'
-            '            route=(),\n'
-            '            velocity_target=VelocityTarget(0.0, omega),\n'
-            '            constraints=mission.constraints,\n'
-            '            corridor_radius_m=0.0,\n'
-            '            progress=0.0,\n'
-            '            status=NavigationStatus.ACTIVE,\n'
-            '            reason="FACE_PERSON_TRACK",\n'
-            '        )\n\n'
-            '    def _inactive(\n',
-            "add deterministic L4-person to pivot target planner",
-        ),
-    ])
-
-    patch_file(root, "v3/layers/l7_motion_selection.py", [
-        (
-            '    if plan.status is NavigationStatus.ACTIVE and plan.velocity_target is not None:\n'
-            '        return MotionObjective(\n'
-            '            context=plan.context,\n'
-            '            selected_source="teleop",\n'
-            '            kind=MotionObjectiveKind.VELOCITY,\n'
-            '            priority=200,\n'
-            '            expiry_tick=plan.context.tick_id + 1,\n'
-            '            selection_reason="DIRECT_VELOCITY",\n',
-            '    if plan.status is NavigationStatus.ACTIVE and plan.velocity_target is not None:\n'
-            '        face_person = plan.reason == "FACE_PERSON_TRACK"\n'
-            '        return MotionObjective(\n'
-            '            context=plan.context,\n'
-            '            selected_source="face_person" if face_person else "teleop",\n'
-            '            kind=MotionObjectiveKind.VELOCITY,\n'
-            '            priority=200,\n'
-            '            expiry_tick=plan.context.tick_id + 1,\n'
-            '            selection_reason="FACE_PERSON_TRACK" if face_person else "DIRECT_VELOCITY",\n',
-            "preserve FACE_PERSON source identity in L7",
-        ),
-    ])
-
-    patch_file(root, "v3/composition/native_control.py", [
-        (
-            '    person_tracking_enabled = person_tracking.get("enabled", True)\n'
-            '    if type(person_tracking_enabled) is not bool:\n'
-            '        raise ValueError("v3_navigation.person_tracking.enabled must be bool")\n'
-            '    exploration = _mapping(root.get("exploration"), "v3_navigation.exploration")\n',
-            '    person_tracking_enabled = person_tracking.get("enabled", True)\n'
-            '    if type(person_tracking_enabled) is not bool:\n'
-            '        raise ValueError("v3_navigation.person_tracking.enabled must be bool")\n'
-            '    face_person_value = root.get("face_person")\n'
-            '    face_person = (\n'
-            '        {}\n'
-            '        if face_person_value is None\n'
-            '        else _mapping(face_person_value, "v3_navigation.face_person")\n'
-            '    )\n'
-            '    exploration = _mapping(root.get("exploration"), "v3_navigation.exploration")\n',
-            "parse FACE_PERSON config section",
-        ),
-        (
-            '    navigation = NavigationConfig(\n'
-            '        trajectory_replan_interval_ns=_positive_int(\n',
-            '    navigation = NavigationConfig(\n'
-            '        face_person_confidence_floor=_finite_float(\n'
-            '            face_person.get("confidence_floor", 0.50),\n'
-            '            "v3_navigation.face_person.confidence_floor",\n'
-            '        ),\n'
-            '        face_person_yaw_deadband_rad=_positive_float(\n'
-            '            face_person.get("yaw_deadband_rad", 0.10),\n'
-            '            "v3_navigation.face_person.yaw_deadband_rad",\n'
-            '        ),\n'
-            '        face_person_yaw_gain=_positive_float(\n'
-            '            face_person.get("yaw_gain", 2.5),\n'
-            '            "v3_navigation.face_person.yaw_gain",\n'
-            '        ),\n'
-            '        face_person_min_omega_rad_s=_positive_float(\n'
-            '            face_person.get("min_omega_rad_s", 0.40),\n'
-            '            "v3_navigation.face_person.min_omega_rad_s",\n'
-            '        ),\n'
-            '        face_person_max_omega_rad_s=_positive_float(\n'
-            '            face_person.get("max_omega_rad_s", 0.60),\n'
-            '            "v3_navigation.face_person.max_omega_rad_s",\n'
-            '        ),\n'
-            '        trajectory_replan_interval_ns=_positive_int(\n',
-            "inject FACE_PERSON config into L6",
-        ),
-    ])
-
-    patch_file(root, "conf/vezerles.json", [
-        (
-            '      "track_radius_m": 0.3\n    },\n    "async_l6": {',
-            '      "track_radius_m": 0.3\n    },\n'
-            '    "face_person": {\n'
-            '      "confidence_floor": 0.5,\n'
-            '      "yaw_deadband_rad": 0.1,\n'
-            '      "yaw_gain": 2.5,\n'
-            '      "min_omega_rad_s": 0.4,\n'
-            '      "max_omega_rad_s": 0.6\n'
-            '    },\n'
-            '    "async_l6": {',
-            "add production FACE_PERSON tuning",
-        ),
-    ])
-
-    patch_file(root, "v3/adapters/resident_command.py", [
-        (
-            '            raise ValueError("command mode must be STOP, TELEOP or EXPLORE") from exc\n'
-            '        if mode not in (CommandMode.STOP, CommandMode.TELEOP, CommandMode.EXPLORE):\n'
-            '            raise ValueError("command mode must be STOP, TELEOP or EXPLORE")\n',
-            '            raise ValueError("command mode must be STOP, TELEOP, EXPLORE or FACE_PERSON") from exc\n'
-            '        if mode not in (\n'
-            '            CommandMode.STOP,\n'
-            '            CommandMode.TELEOP,\n'
-            '            CommandMode.EXPLORE,\n'
-            '            CommandMode.FACE_PERSON,\n'
-            '        ):\n'
-            '            raise ValueError("command mode must be STOP, TELEOP, EXPLORE or FACE_PERSON")\n',
-            "resident gateway accepts FACE_PERSON",
-        ),
-        (
-            '            else limit_keys if mode is CommandMode.EXPLORE else set()\n',
-            '            else limit_keys\n'
-            '            if mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON)\n'
-            '            else set()\n',
-            "FACE_PERSON mailbox field shape",
-        ),
-        (
-            '        if mode is CommandMode.EXPLORE:\n'
-            '            return CommandRequest(\n'
-            '                context=context,\n'
-            '                command_id=command_id,\n'
-            '                mode=CommandMode.EXPLORE,\n',
-            '        if mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON):\n'
-            '            return CommandRequest(\n'
-            '                context=context,\n'
-            '                command_id=command_id,\n'
-            '                mode=mode,\n',
-            "deserialize FACE_PERSON mission limits",
-        ),
-        (
-            '    def _publish(\n'
-            '        self,\n'
-            '        command_id: str,\n',
-            '    def publish_face_person(\n'
-            '        self,\n'
-            '        command_id: str,\n'
-            '        *,\n'
-            '        max_v_mps: float,\n'
-            '        max_omega_rad_s: float,\n'
-            '        ttl_ns: int,\n'
-            '    ) -> int:\n'
-            '        return self._publish(\n'
-            '            command_id,\n'
-            '            CommandMode.FACE_PERSON,\n'
-            '            {\n'
-            '                "max_v_mps": max_v_mps,\n'
-            '                "max_omega_rad_s": max_omega_rad_s,\n'
-            '            },\n'
-            '            ttl_ns,\n'
-            '        )\n\n'
-            '    def _publish(\n'
-            '        self,\n'
-            '        command_id: str,\n',
-            "add FACE_PERSON client publisher",
-        ),
-        (
-            '        if mode not in (CommandMode.STOP, CommandMode.TELEOP, CommandMode.EXPLORE):\n'
-            '            raise ValueError("client mode must be STOP, TELEOP or EXPLORE")\n',
-            '        if mode not in (\n'
-            '            CommandMode.STOP,\n'
-            '            CommandMode.TELEOP,\n'
-            '            CommandMode.EXPLORE,\n'
-            '            CommandMode.FACE_PERSON,\n'
-            '        ):\n'
-            '            raise ValueError("client mode must be STOP, TELEOP, EXPLORE or FACE_PERSON")\n',
-            "client allows FACE_PERSON mode",
-        ),
-        (
-            '            if mode is CommandMode.EXPLORE\n            else set()\n',
-            '            if mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON)\n            else set()\n',
-            "validate FACE_PERSON command values",
-        ),
-    ])
-
-    patch_file(root, "v3/control_cli.py", [
-        (
-            '    explore.add_argument("--max-v-mps", type=float, default=0.30)\n'
-            '    explore.add_argument("--max-omega-rad-s", type=float, default=0.60)\n'
-            '    return parser\n',
-            '    explore.add_argument("--max-v-mps", type=float, default=0.30)\n'
-            '    explore.add_argument("--max-omega-rad-s", type=float, default=0.60)\n\n'
-            '    faceperson = subcommands.add_parser(\n'
-            '        "faceperson",\n'
-            '        help="heartbeat FACE_PERSON: pivot in place toward an L4 person track",\n'
-            '    )\n'
-            '    faceperson.add_argument("--command-id")\n'
-            '    faceperson.add_argument("--max-v-mps", type=float, default=0.05)\n'
-            '    faceperson.add_argument("--max-omega-rad-s", type=float, default=0.60)\n'
-            '    return parser\n',
-            "add machine FACE_PERSON command",
-        ),
-        (
-            '        if args.operation == "teleop":\n'
-            '            publish = lambda logical_id: client.publish_teleop(\n'
-            '                logical_id,\n'
-            '                v_mps=args.v_mps,\n'
-            '                omega_rad_s=args.omega_rad_s,\n'
-            '                max_v_mps=args.max_v_mps,\n'
-            '                max_omega_rad_s=args.max_omega_rad_s,\n'
-            '                ttl_ns=ttl_ns,\n'
-            '            )\n'
-            '        else:\n'
-            '            publish = lambda logical_id: client.publish_explore(\n'
-            '                logical_id,\n'
-            '                max_v_mps=args.max_v_mps,\n'
-            '                max_omega_rad_s=args.max_omega_rad_s,\n'
-            '                ttl_ns=ttl_ns,\n'
-            '            )\n',
-            '        if args.operation == "teleop":\n'
-            '            publish = lambda logical_id: client.publish_teleop(\n'
-            '                logical_id,\n'
-            '                v_mps=args.v_mps,\n'
-            '                omega_rad_s=args.omega_rad_s,\n'
-            '                max_v_mps=args.max_v_mps,\n'
-            '                max_omega_rad_s=args.max_omega_rad_s,\n'
-            '                ttl_ns=ttl_ns,\n'
-            '            )\n'
-            '        elif args.operation == "faceperson":\n'
-            '            publish = lambda logical_id: client.publish_face_person(\n'
-            '                logical_id,\n'
-            '                max_v_mps=args.max_v_mps,\n'
-            '                max_omega_rad_s=args.max_omega_rad_s,\n'
-            '                ttl_ns=ttl_ns,\n'
-            '            )\n'
-            '        else:\n'
-            '            publish = lambda logical_id: client.publish_explore(\n'
-            '                logical_id,\n'
-            '                max_v_mps=args.max_v_mps,\n'
-            '                max_omega_rad_s=args.max_omega_rad_s,\n'
-            '                ttl_ns=ttl_ns,\n'
-            '            )\n',
-            "publish FACE_PERSON heartbeat",
-        ),
-    ])
-
-    patch_file(root, "v3/operator_controller.py", [
-        (
-            '        pid, mode = self._start_motion("roomcruise", capture, capture_mode, args)\n'
-            '        return MotionHandle(pid=pid, label="roomcruise", command_id=command_id, capture_mode=mode)\n\n'
-            '    def wheel_targets_to_twist(\n',
-            '        pid, mode = self._start_motion("roomcruise", capture, capture_mode, args)\n'
-            '        return MotionHandle(pid=pid, label="roomcruise", command_id=command_id, capture_mode=mode)\n\n'
-            '    def faceperson(\n'
-            '        self,\n'
-            '        *,\n'
-            '        capture: bool = True,\n'
-            '        capture_mode: str = DEFAULT_CAPTURE_MODE,\n'
-            '    ) -> MotionHandle:\n'
-            '        command_id = f"operator-faceperson-{time.time_ns()}-{os.getpid()}"\n'
-            '        args = [\n'
-            '            self.python,\n'
-            '            "-m",\n'
-            '            "v3.control_cli",\n'
-            '            "faceperson",\n'
-            '            "--command-id",\n'
-            '            command_id,\n'
-            '        ]\n'
-            '        pid, mode = self._start_motion(\n'
-            '            "faceperson",\n'
-            '            capture,\n'
-            '            capture_mode,\n'
-            '            args,\n'
-            '            wait_for_allow=False,\n'
-            '            command_id=command_id,\n'
-            '            command_mode="FACE_PERSON",\n'
-            '        )\n'
-            '        return MotionHandle(pid=pid, label="faceperson", command_id=command_id, capture_mode=mode)\n\n'
-            '    def wheel_targets_to_twist(\n',
-            "add FACE_PERSON operator action",
-        ),
-        (
-            '    def _start_motion(\n'
-            '        self,\n'
-            '        label: str,\n'
-            '        capture: bool,\n'
-            '        capture_mode: str,\n'
-            '        command: list[str],\n'
-            '    ) -> tuple[int, str]:\n',
-            '    def _start_motion(\n'
-            '        self,\n'
-            '        label: str,\n'
-            '        capture: bool,\n'
-            '        capture_mode: str,\n'
-            '        command: list[str],\n'
-            '        *,\n'
-            '        wait_for_allow: bool = True,\n'
-            '        command_id: str | None = None,\n'
-            '        command_mode: str | None = None,\n'
-            '    ) -> tuple[int, str]:\n',
-            "support armed autonomous behavior startup",
-        ),
-        (
-            '        try:\n'
-            '            pid = self._spawn_control_process(command)\n'
-            '            if not self._wait_allow(pid, baseline, label):\n'
-            '                raise OperatorError(f"{label} did not reach motor ALLOW")\n'
-            '        except BaseException:\n'
-            '            self.stop(wait_idle=False)\n'
-            '            raise\n\n'
-            '        self._emit("info", f"{label}: STARTED")\n'
-            '        self._emit("info", "motor: ALLOW confirmed")\n',
-            '        try:\n'
-            '            pid = self._spawn_control_process(command)\n'
-            '            if wait_for_allow:\n'
-            '                if not self._wait_allow(pid, baseline, label):\n'
-            '                    raise OperatorError(f"{label} did not reach motor ALLOW")\n'
-            '            else:\n'
-            '                if not command_id or not command_mode:\n'
-            '                    raise OperatorError("armed behavior startup requires command identity")\n'
-            '                if not self._wait_behavior_armed(\n'
-            '                    pid, baseline, label, command_id, command_mode\n'
-            '                ):\n'
-            '                    raise OperatorError(f"{label} did not arm")\n'
-            '        except BaseException:\n'
-            '            self.stop(wait_idle=False)\n'
-            '            raise\n\n'
-            '        self._emit("info", f"{label}: STARTED")\n'
-            '        if wait_for_allow:\n'
-            '            self._emit("info", "motor: ALLOW confirmed")\n'
-            '        else:\n'
-            '            self._emit("info", "behavior: ARMED; motor may remain STOP until a valid target exists")\n',
-            "do not require ALLOW before FACE_PERSON target acquisition",
-        ),
-        (
-            '    def _wait_allow(self, pid: int, baseline: int, label: str) -> bool:\n',
-            '    def _wait_behavior_armed(\n'
-            '        self,\n'
-            '        pid: int,\n'
-            '        baseline: int,\n'
-            '        label: str,\n'
-            '        command_id: str,\n'
-            '        command_mode: str,\n'
-            '    ) -> bool:\n'
-            '        last: Mapping[str, object] | None = None\n'
-            '        for _ in range(50):\n'
-            '            if not self._pid_matches(pid, ("v3.control_cli",)):\n'
-            '                self._emit("error", f"{label} command producer stopped before arming")\n'
-            '                return False\n'
-            '            if self._runtime_pid() is None:\n'
-            '                self._emit("error", f"{label} runtime stopped before arming")\n'
-            '                return False\n'
-            '            last = self._read_status_optional()\n'
-            '            if last is not None and self._status_is_fault(last):\n'
-            '                self._emit("error", f"{label} runtime faulted before arming")\n'
-            '                return False\n'
-            '            try:\n'
-            '                payload = json.loads(self.command_file.read_text(encoding="utf-8"))\n'
-            '            except (OSError, UnicodeError, json.JSONDecodeError):\n'
-            '                payload = None\n'
-            '            if (\n'
-            '                isinstance(payload, dict)\n'
-            '                and payload.get("command_id") == command_id\n'
-            '                and payload.get("mode") == command_mode\n'
-            '                and last is not None\n'
-            '                and self._tick(last) > baseline\n'
-            '            ):\n'
-            '                return True\n'
-            '            time.sleep(0.05)\n'
-            '        self._emit("error", f"{label} command was not observed by a fresh runtime tick")\n'
-            '        return False\n\n'
-            '    def _wait_allow(self, pid: int, baseline: int, label: str) -> bool:\n',
-            "add FACE_PERSON armed-state acceptance",
-        ),
-    ])
-
-    patch_file(root, "v3/operator_cli.py", [
-        (
-            '    if len(args) >= 2 and args[0] in {"forward", "mozog", "wheels", "roomcruise", "explore"} and args[1] == "start":\n',
-            '    if len(args) >= 2 and args[0] in {"forward", "mozog", "wheels", "roomcruise", "explore", "faceperson"} and args[1] == "start":\n',
-            "legacy normalization includes faceperson",
-        ),
-        (
-            '            "  ./r2b4 roomcruise\\n"\n'
-            '            "  ./r2b4 proba c full\\n"\n',
-            '            "  ./r2b4 roomcruise\\n"\n'
-            '            "  ./r2b4 faceperson c full\\n"\n'
-            '            "  ./r2b4 proba c full\\n"\n',
-            "document FACE_PERSON launcher example",
-        ),
-        (
-            '    room = sub.add_parser("roomcruise", aliases=["explore"], help="autonomous Room Cruise / EXPLORE")\n'
-            '    motion_flags(room)\n\n'
-            '    panic = sub.add_parser("panic", help="stop motion and shut down the runtime")\n',
-            '    room = sub.add_parser("roomcruise", aliases=["explore"], help="autonomous Room Cruise / EXPLORE")\n'
-            '    motion_flags(room)\n\n'
-            '    faceperson = sub.add_parser(\n'
-            '        "faceperson",\n'
-            '        help="rotate in place to face the current L4 person track",\n'
-            '    )\n'
-            '    motion_flags(faceperson)\n\n'
-            '    panic = sub.add_parser("panic", help="stop motion and shut down the runtime")\n',
-            "add human FACE_PERSON launcher parser",
-        ),
-        (
-            '        elif args.command in {"roomcruise", "explore"}:\n'
-            '            controller.roomcruise(capture=not args.no_trigger, capture_mode=capture_mode)\n'
-            '        elif args.command == "proba":\n',
-            '        elif args.command in {"roomcruise", "explore"}:\n'
-            '            controller.roomcruise(capture=not args.no_trigger, capture_mode=capture_mode)\n'
-            '        elif args.command == "faceperson":\n'
-            '            controller.faceperson(capture=not args.no_trigger, capture_mode=capture_mode)\n'
-            '        elif args.command == "proba":\n',
-            "dispatch FACE_PERSON launcher command",
-        ),
-    ])
-
-    patch_file(root, "v3/adapters/person_photo_evidence.py", [
-        (
-            '"""Passive roomcruise person-photo evidence from completed V3 tick values.\n',
-            '"""Passive EXPLORE/FACE_PERSON photo evidence from completed V3 tick values.\n',
-            "broaden photo evidence module scope",
-        ),
-        (
-            '    """Bounded live-only evidence policy for EXPLORE/roomcruise acceptance."""\n',
-            '    """Bounded live-only evidence policy for EXPLORE/FACE_PERSON acceptance."""\n',
-            "broaden photo evidence config scope",
-        ),
-        (
-            '    """Request one JPEG per stable person-presence episode during EXPLORE.\n',
-            '    """Request one JPEG per stable person-presence episode during EXPLORE/FACE_PERSON.\n',
-            "broaden recorder scope",
-        ),
-        (
-            '            or mission.mode is not CommandMode.EXPLORE\n',
-            '            or mission.mode not in (CommandMode.EXPLORE, CommandMode.FACE_PERSON)\n',
-            "enable FACE_PERSON photo proof",
-        ),
-    ])
-
-    patch_file(root, "tests/test_v3_resident_command.py", [
-        (
-            '"STOP, TELEOP or EXPLORE"',
-            '"STOP, TELEOP, EXPLORE or FACE_PERSON"',
-            "update strict-mode diagnostic expectation",
-        ),
-    ])
-
-    patch_file(root, "README.md", [
-        (
-            './r2b4 roomcruise\n./r2b4 proba c full\n',
-            './r2b4 roomcruise\n./r2b4 faceperson c full\n./r2b4 proba c full\n',
-            "document FACE_PERSON command",
-        ),
-    ])
-
-    test_source = r'''import json
-import os
-
-from v3 import control_cli, operator_cli
-from v3.adapters.person_photo_evidence import (
-    PersonPhotoEvidenceConfig,
-    PersonPhotoEvidenceRecorder,
-)
-from v3.adapters.resident_command import (
-    AtomicResidentCommandGateway,
-    ResidentCommandClient,
-    ResidentCommandMailboxConfig,
-)
-from v3.contracts import (
-    AdmittedFrame,
-    CommandMode,
-    CommandRequest,
-    DataField,
-    MissionIntent,
-    MissionLifecycle,
-    NavigationStatus,
-    ObstacleTrack,
-    Observation,
-    RobotEstimate,
-    TickContext,
-    WorldSnapshot,
-)
-from v3.layers.l5_command_mission import MissionManager
-from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
-from v3.layers.l7_motion_selection import select_motion
-from v3.layers.l8_motion_realization import MotionRealizer
-
-
-def _context(tick: int = 10, ns: int = 1_000_000_000) -> TickContext:
-    return TickContext(tick, ns)
-
-
-def _estimate(context: TickContext, *, yaw: float = 0.0) -> RobotEstimate:
-    covariance = tuple(0.01 if index % 6 == 0 else 0.0 for index in range(25))
-    return RobotEstimate(context, "MAP", 0.0, 0.0, yaw, 0.0, 0.0, covariance)
-
-
-def _world(context: TickContext, *tracks: ObstacleTrack) -> WorldSnapshot:
-    return WorldSnapshot(context, "MAP", 1, tuple(tracks), 0, None)
-
-
-def _person(track_id: str, x: float, y: float, confidence: float = 0.9) -> ObstacleTrack:
-    return ObstacleTrack(track_id, x, y, 0.30, 0.0, 0.0, confidence)
-
-
-def _mission(context: TickContext):
-    command = CommandRequest(
-        context,
-        "face-person-test",
-        CommandMode.FACE_PERSON,
-        (DataField("max_v_mps", 0.05), DataField("max_omega_rad_s", 0.60)),
-        context.tick_id,
-    )
-    return MissionManager().evaluate(command)
-
-
-def test_face_person_l5_is_active_target_free_mission():
-    context = _context()
-    mission = _mission(context)
-    assert mission.mode is CommandMode.FACE_PERSON
-    assert mission.lifecycle is MissionLifecycle.ACTIVE
-    assert mission.target_pose is None
-    assert mission.velocity_target is None
-    assert mission.constraints.max_v_mps == 0.05
-    assert mission.constraints.max_omega_rad_s == 0.60
-
-
-def test_face_person_l6_fails_closed_without_person_track():
-    context = _context()
-    plan = TrajectoryNavigator().evaluate(_mission(context), _estimate(context), _world(context))
-    assert plan.status is NavigationStatus.INVALIDATED
-    assert plan.reason == "FACE_PERSON_TARGET_MISSING"
-    assert plan.velocity_target is None
-
-
-def test_face_person_ignores_low_confidence_track():
-    context = _context()
-    world = _world(context, _person("person-1", 1.0, 0.4, confidence=0.49))
-    plan = TrajectoryNavigator().evaluate(_mission(context), _estimate(context), world)
-    assert plan.status is NavigationStatus.INVALIDATED
-    assert plan.reason == "FACE_PERSON_TARGET_MISSING"
-
-
-def test_face_person_left_target_pivots_only_and_reaches_l8():
-    context = _context()
-    estimate = _estimate(context)
-    world = _world(context, _person("person-1", 1.0, 0.5))
-    plan = TrajectoryNavigator().evaluate(_mission(context), estimate, world)
-    assert plan.status is NavigationStatus.ACTIVE
-    assert plan.reason == "FACE_PERSON_TRACK"
-    assert plan.velocity_target is not None
-    assert plan.velocity_target.v_mps == 0.0
-    assert 0.0 < plan.velocity_target.omega_rad_s <= 0.60
-    objective = select_motion(plan)
-    assert objective.selected_source == "face_person"
-    assert objective.selection_reason == "FACE_PERSON_TRACK"
-    motion = MotionRealizer().evaluate(objective, estimate, world)
-    assert motion.stop_reason is None
-    assert motion.requested_v_mps == 0.0
-    assert motion.requested_omega_rad_s > 0.0
-
-
-def test_face_person_right_target_pivots_other_direction():
-    context = _context()
-    plan = TrajectoryNavigator().evaluate(
-        _mission(context),
-        _estimate(context),
-        _world(context, _person("person-1", 1.0, -0.5)),
-    )
-    assert plan.status is NavigationStatus.ACTIVE
-    assert plan.velocity_target is not None
-    assert plan.velocity_target.v_mps == 0.0
-    assert plan.velocity_target.omega_rad_s < 0.0
-
-
-def test_face_person_aligned_target_stops_without_ending_mission():
-    context = _context()
-    plan = TrajectoryNavigator().evaluate(
-        _mission(context),
-        _estimate(context),
-        _world(context, _person("person-1", 1.0, 0.05)),
-    )
-    assert plan.status is NavigationStatus.IDLE
-    assert plan.reason == "FACE_PERSON_ALIGNED"
-    assert plan.velocity_target is None
-
-
-def test_face_person_deterministically_prefers_smallest_bearing_error():
-    context = _context()
-    world = _world(
-        context,
-        _person("person-1", 1.0, 0.8, 0.95),
-        _person("person-2", 1.0, 0.25, 0.80),
-    )
-    plan = TrajectoryNavigator(NavigationConfig(face_person_yaw_deadband_rad=0.05)).evaluate(
-        _mission(context), _estimate(context), world
-    )
-    assert plan.velocity_target is not None
-    assert plan.velocity_target.omega_rad_s > 0.0
-
-
-def test_face_person_mailbox_round_trip(tmp_path):
-    now = 2_000_000_000
-    path = tmp_path / "command.json"
-    config = ResidentCommandMailboxConfig(path=path, expected_uid=os.geteuid())
-    client = ResidentCommandClient(config, monotonic_ns=lambda: now)
-    client.publish_face_person(
-        "face-mailbox",
-        max_v_mps=0.05,
-        max_omega_rad_s=0.60,
-        ttl_ns=200_000_000,
-    )
-    gateway = AtomicResidentCommandGateway(config, monotonic_ns=lambda: now + 1)
-    command = gateway.snapshot(_context(1, now + 1))
-    assert command.mode is CommandMode.FACE_PERSON
-    assert {field.key: field.value for field in command.goal} == {
-        "max_v_mps": 0.05,
-        "max_omega_rad_s": 0.60,
-    }
-
-
-def test_operator_launcher_accepts_faceperson_full_capture():
-    clean, mode, explicit = operator_cli._extract_capture_selector(["faceperson", "c", "full"])
-    assert clean == ["faceperson"]
-    assert mode == "full"
-    assert explicit is True
-    parsed = operator_cli._parser().parse_args(clean)
-    assert parsed.command == "faceperson"
-
-
-def test_control_cli_parser_accepts_faceperson():
-    parsed = control_cli._parser().parse_args(["faceperson", "--command-id", "face-cli"])
-    assert parsed.operation == "faceperson"
-    assert parsed.command_id == "face-cli"
-    assert parsed.max_v_mps == 0.05
-    assert parsed.max_omega_rad_s == 0.60
-
-
-class _PhotoPort:
-    def __init__(self):
-        self.outputs = []
-
-    def request_jpeg(self, output, *, stream_name="lores"):
-        self.outputs.append((str(output), stream_name))
-        return True
-
-
-def test_face_person_photo_evidence_is_live_proof(tmp_path):
-    context = _context()
-    port = _PhotoPort()
-    recorder = PersonPhotoEvidenceRecorder(
-        port,
-        PersonPhotoEvidenceConfig(
-            enabled=True,
-            directory="pic",
-            stream_name="main",
-            confirm_results=1,
-            rearm_misses=1,
-            minimum_interval_ns=1,
-        ),
-        project_root=tmp_path,
-    )
-    admitted = AdmittedFrame(
-        context,
-        (
-            Observation(
-                "person_detection",
-                "PERSON_DETECTOR_FRONT",
-                7,
-                context.monotonic_ns,
-                (
-                    DataField("person_detected", True),
-                    DataField("source_frame_sequence", 11),
-                ),
-            ),
-        ),
-        (),
-    )
-    mission = MissionIntent(
-        context,
-        "mission-face-photo",
-        CommandMode.FACE_PERSON,
-        None,
-        None,
-        _mission(context).constraints,
-        MissionLifecycle.ACTIVE,
-    )
-    assert recorder.observe(admitted, mission) is True
-    assert len(port.outputs) == 1
-    output, stream = port.outputs[0]
-    assert stream == "main"
-    assert "person_" in output and "det000007_frame000011.jpg" in output
-'''
-    (root / NEW_TEST_PATH).write_text(test_source, encoding="utf-8")
-
-
-def validate(root: Path, *, full_tests: bool = False) -> None:
-    commands = [
-        ["git", "diff", "--check"],
-        [sys.executable, "-m", "v3.import_guard"],
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            NEW_TEST_PATH,
-            "tests/test_v3_contracts.py",
-            "tests/test_v3_resident_command.py",
-            "tests/test_v3_control_cli.py",
-            "tests/test_v3_operator_controller.py",
-            "tests/test_v3_person_detection_runtime_integration.py",
-            "tests/test_v3_l5_l9_mission_navigation.py",
-            "tests/test_v3_async_l6_planner.py",
-            "tests/test_v3_process_runtime.py",
-        ],
-    ]
-    if full_tests:
-        commands.append([sys.executable, "-m", "pytest", "-q"] )
-    for command in commands:
-        print("+", " ".join(command), flush=True)
-        completed = subprocess.run(command, cwd=root)
-        if completed.returncode != 0:
-            raise RuntimeError(f"validation failed with exit code {completed.returncode}")
+BASE_COMMIT = '3236cada2eb12b7f63944ffa1fc55c47b39ae8be'
+PATCHES = {'v3/layers/l6_navigation.py': [('    pending_rollout_request: TrajectoryRolloutRequest | None = None\n    pending_goal_selected_ns: int | None = None\n    pending_release_tick_id: int | None = None\n', '    pending_rollout_request: TrajectoryRolloutRequest | None = None\n    pending_goal_selected_ns: int | None = None\n    pending_release_tick_id: int | None = None\n    pending_release_not_before_ns: int | None = None\n'), ('@dataclass(frozen=True, slots=True)\nclass AsyncL6PlannerConfig:\n    """Deterministic handoff policy; process placement is not layer state."""\n\n    enabled: bool = False\n    release_tick_gap: int = 5\n    max_plan_age_ns: int = 350_000_000\n\n    def __post_init__(self) -> None:\n        if type(self.enabled) is not bool:\n            raise TypeError("enabled must be bool")\n        for value, name in (\n            (self.release_tick_gap, "release_tick_gap"),\n            (self.max_plan_age_ns, "max_plan_age_ns"),\n        ):\n            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:\n                raise ValueError(f"{name} must be a positive integer")\n', '@dataclass(frozen=True, slots=True)\nclass AsyncL6PlannerConfig:\n    """Deterministic handoff policy; process placement is not layer state."""\n\n    enabled: bool = False\n    # Legacy replay compatibility. New production handoffs use release_delay_ns.\n    release_tick_gap: int = 5\n    max_plan_age_ns: int = 350_000_000\n    release_delay_ns: int | None = None\n\n    def __post_init__(self) -> None:\n        if type(self.enabled) is not bool:\n            raise TypeError("enabled must be bool")\n        for value, name in (\n            (self.release_tick_gap, "release_tick_gap"),\n            (self.max_plan_age_ns, "max_plan_age_ns"),\n        ):\n            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:\n                raise ValueError(f"{name} must be a positive integer")\n        if self.release_delay_ns is not None:\n            if (\n                not isinstance(self.release_delay_ns, int)\n                or isinstance(self.release_delay_ns, bool)\n                or self.release_delay_ns <= 0\n            ):\n                raise ValueError("release_delay_ns must be a positive integer or None")\n            if self.release_delay_ns >= self.max_plan_age_ns:\n                raise ValueError(\n                    "release_delay_ns must be shorter than max_plan_age_ns"\n                )\n'), ('class InlineTrajectoryRolloutBackend:\n    """Pure replay/test backend; compute now, reveal only on L6 release tick."""\n', 'class InlineTrajectoryRolloutBackend:\n    """Pure replay/test backend; L6 owns deterministic result visibility."""\n'), ('        "_pending_goal_selected_ns",\n        "_pending_release_tick_id",\n        "_pending_rollout_id",\n', '        "_pending_goal_selected_ns",\n        "_pending_release_not_before_ns",\n        "_pending_release_tick_id",\n        "_pending_rollout_id",\n'), ('        "_rollout_backend",\n        "_rollout_release_tick_gap",\n        "_static_planning_index",\n', '        "_rollout_backend",\n        "_rollout_release_delay_ns",\n        "_rollout_release_tick_gap",\n        "_static_planning_index",\n'), ('        rollout_backend: TrajectoryRolloutBackend | None = None,\n        rollout_release_tick_gap: int = 5,\n        max_plan_age_ns: int = 350_000_000,\n    ) -> None:\n', '        rollout_backend: TrajectoryRolloutBackend | None = None,\n        rollout_release_tick_gap: int = 5,\n        rollout_release_delay_ns: int | None = None,\n        max_plan_age_ns: int = 350_000_000,\n    ) -> None:\n'), ('        for value, name in (\n            (rollout_release_tick_gap, "rollout_release_tick_gap"),\n            (max_plan_age_ns, "max_plan_age_ns"),\n        ):\n            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:\n                raise ValueError(f"{name} must be a positive integer")\n        self._config = config\n        self._rollout_backend = rollout_backend\n        self._rollout_release_tick_gap = rollout_release_tick_gap\n        self._max_plan_age_ns = max_plan_age_ns\n', '        for value, name in (\n            (rollout_release_tick_gap, "rollout_release_tick_gap"),\n            (max_plan_age_ns, "max_plan_age_ns"),\n        ):\n            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:\n                raise ValueError(f"{name} must be a positive integer")\n        if rollout_release_delay_ns is not None:\n            if (\n                not isinstance(rollout_release_delay_ns, int)\n                or isinstance(rollout_release_delay_ns, bool)\n                or rollout_release_delay_ns <= 0\n            ):\n                raise ValueError(\n                    "rollout_release_delay_ns must be a positive integer or None"\n                )\n            if rollout_release_delay_ns >= max_plan_age_ns:\n                raise ValueError(\n                    "rollout_release_delay_ns must be shorter than max_plan_age_ns"\n                )\n        self._config = config\n        self._rollout_backend = rollout_backend\n        self._rollout_release_tick_gap = rollout_release_tick_gap\n        self._rollout_release_delay_ns = rollout_release_delay_ns\n        self._max_plan_age_ns = max_plan_age_ns\n'), ('        self._pending_rollout_request: TrajectoryRolloutRequest | None = None\n        self._pending_goal_selected_ns: int | None = None\n        self._pending_release_tick_id: int | None = None\n        self._static_planning_index: _StaticPlanningIndex | None = None\n', '        self._pending_rollout_request: TrajectoryRolloutRequest | None = None\n        self._pending_goal_selected_ns: int | None = None\n        self._pending_release_tick_id: int | None = None\n        self._pending_release_not_before_ns: int | None = None\n        self._static_planning_index: _StaticPlanningIndex | None = None\n'), ('            self._pending_rollout_request,\n            self._pending_goal_selected_ns,\n            self._pending_release_tick_id,\n        )\n', '            self._pending_rollout_request,\n            self._pending_goal_selected_ns,\n            self._pending_release_tick_id,\n            self._pending_release_not_before_ns,\n        )\n'), ('            release_tick_id = checkpoint.pending_release_tick_id\n            if release_tick_id is None:\n                raise RuntimeError("async navigation checkpoint lacks release tick")\n            request_id = backend.submit(pending)\n            self._pending_rollout_id = request_id\n            self._pending_rollout_request = pending\n            self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns\n            self._pending_release_tick_id = release_tick_id\n', '            release_tick_id = checkpoint.pending_release_tick_id\n            release_not_before_ns = checkpoint.pending_release_not_before_ns\n            if (release_tick_id is None) == (release_not_before_ns is None):\n                raise RuntimeError(\n                    "async navigation checkpoint must contain exactly one release criterion"\n                )\n            if (\n                release_not_before_ns is not None\n                and release_not_before_ns <= pending.context.monotonic_ns\n            ):\n                raise RuntimeError(\n                    "async navigation checkpoint release time is not after request time"\n                )\n            request_id = backend.submit(pending)\n            self._pending_rollout_id = request_id\n            self._pending_rollout_request = pending\n            self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns\n            self._pending_release_tick_id = release_tick_id\n            self._pending_release_not_before_ns = release_not_before_ns\n'), ('    def _replan_due(self, monotonic_ns: int, tick_id: int) -> bool:\n        if self._pending_rollout_id is not None:\n            return False\n        previous_ns = self._last_replan_ns\n        previous_tick_id = self._last_replan_tick_id\n        if (\n            previous_ns is None\n            or previous_tick_id is None\n            or not self._trajectory_candidates\n        ):\n            return True\n        return (\n            monotonic_ns - previous_ns >= self._config.trajectory_replan_interval_ns\n            and tick_id - previous_tick_id\n            >= self._config.trajectory_replan_min_tick_gap\n        )\n', '    def _replan_due(self, monotonic_ns: int, tick_id: int) -> bool:\n        if self._pending_rollout_id is not None:\n            return False\n        previous_ns = self._last_replan_ns\n        previous_tick_id = self._last_replan_tick_id\n        if (\n            previous_ns is None\n            or previous_tick_id is None\n            or not self._trajectory_candidates\n        ):\n            return True\n        if monotonic_ns - previous_ns < self._config.trajectory_replan_interval_ns:\n            return False\n        # New async production timing is monotonic-time based. A pending request\n        # already bounds work to one rollout, so a second tick-count gate would\n        # only turn runtime jitter into planner latency. Legacy tick-mode replay\n        # and the synchronous planner retain the historic cooldown.\n        if self._rollout_backend is not None and self._rollout_release_delay_ns is not None:\n            return True\n        return (\n            tick_id - previous_tick_id\n            >= self._config.trajectory_replan_min_tick_gap\n        )\n'), ('        self._pending_rollout_id = request_id\n        self._pending_rollout_request = request\n        self._pending_goal_selected_ns = goal_selected_ns\n        self._pending_release_tick_id = context.tick_id + self._rollout_release_tick_gap\n', '        self._pending_rollout_id = request_id\n        self._pending_rollout_request = request\n        self._pending_goal_selected_ns = goal_selected_ns\n        if self._rollout_release_delay_ns is None:\n            # Legacy capture/replay mode: preserve the historical tick gate.\n            self._pending_release_tick_id = (\n                context.tick_id + self._rollout_release_tick_gap\n            )\n            self._pending_release_not_before_ns = None\n        else:\n            # Production mode: one canonical monotonic-time authority. The\n            # first closed tick at/after this threshold owns the handoff.\n            self._pending_release_tick_id = None\n            self._pending_release_not_before_ns = (\n                context.monotonic_ns + self._rollout_release_delay_ns\n            )\n'), ('    def _accept_pending_rollout(self, context: TickContext) -> bool:\n        request_id = self._pending_rollout_id\n        if request_id is None:\n            return False\n        request = self._pending_rollout_request\n        release_tick_id = self._pending_release_tick_id\n        backend = self._rollout_backend\n        if request is None or release_tick_id is None or backend is None:\n            raise RuntimeError("async rollout pending state is incomplete")\n        source_context = request.context\n        goal = request.goal\n        if context.tick_id < release_tick_id:\n            # Before the deterministic handoff tick, the previously accepted\n            # plan is still authoritative, so its age remains safety-critical.\n            if (\n                self._last_replan_ns is not None\n                and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns\n            ):\n                raise RuntimeError("ASYNC_L6_PLAN_STALE")\n            return False\n        if context.tick_id > release_tick_id:\n            raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")\n\n        # At the handoff tick, inspect the new result before judging plan age.\n        # The previous plan may have crossed max_plan_age_ns while the new\n        # rollout is already ready and fresh enough to replace it.\n        result = backend.take(request_id)\n        if result is None:\n            raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")\n        if result.source_context != source_context:\n            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")\n        if (\n            context.monotonic_ns - result.source_context.monotonic_ns\n            > self._max_plan_age_ns\n        ):\n            raise RuntimeError("ASYNC_L6_PLAN_STALE")\n        selected_ns = self._pending_goal_selected_ns\n        self._pending_rollout_id = None\n        self._pending_rollout_request = None\n        self._pending_goal_selected_ns = None\n        self._pending_release_tick_id = None\n        if selected_ns is not None:\n            self._goal_selected_ns = selected_ns\n        self._store_trajectory_plan(\n            result.source_context.monotonic_ns,\n            result.source_context.tick_id,\n            goal,\n            result.trajectory_candidates,\n        )\n        return True\n', '    def _accept_pending_rollout(self, context: TickContext) -> bool:\n        request_id = self._pending_rollout_id\n        if request_id is None:\n            return False\n        request = self._pending_rollout_request\n        release_tick_id = self._pending_release_tick_id\n        release_not_before_ns = self._pending_release_not_before_ns\n        backend = self._rollout_backend\n        if (\n            request is None\n            or backend is None\n            or (release_tick_id is None) == (release_not_before_ns is None)\n        ):\n            raise RuntimeError("async rollout pending state is incomplete")\n        source_context = request.context\n        goal = request.goal\n\n        if release_not_before_ns is not None:\n            before_handoff = context.monotonic_ns < release_not_before_ns\n        else:\n            assert release_tick_id is not None\n            before_handoff = context.tick_id < release_tick_id\n            if context.tick_id > release_tick_id:\n                raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")\n\n        if before_handoff:\n            # Until the deterministic handoff boundary the previously accepted\n            # plan remains authoritative, so its age is still safety-critical.\n            if (\n                self._last_replan_ns is not None\n                and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns\n            ):\n                raise RuntimeError("ASYNC_L6_PLAN_STALE")\n            return False\n\n        # At the deterministic handoff boundary inspect the replacement first.\n        # Its immutable source snapshot, not scheduler jitter, defines freshness.\n        result = backend.take(request_id)\n        if result is None:\n            raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")\n        if result.source_context != source_context:\n            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")\n        if (\n            context.monotonic_ns - result.source_context.monotonic_ns\n            > self._max_plan_age_ns\n        ):\n            raise RuntimeError("ASYNC_L6_PLAN_STALE")\n        selected_ns = self._pending_goal_selected_ns\n        self._pending_rollout_id = None\n        self._pending_rollout_request = None\n        self._pending_goal_selected_ns = None\n        self._pending_release_tick_id = None\n        self._pending_release_not_before_ns = None\n        if selected_ns is not None:\n            self._goal_selected_ns = selected_ns\n        self._store_trajectory_plan(\n            result.source_context.monotonic_ns,\n            result.source_context.tick_id,\n            goal,\n            result.trajectory_candidates,\n        )\n        return True\n'), ('        self._pending_rollout_id = None\n        self._pending_rollout_request = None\n        self._pending_goal_selected_ns = None\n        self._pending_release_tick_id = None\n', '        self._pending_rollout_id = None\n        self._pending_rollout_request = None\n        self._pending_goal_selected_ns = None\n        self._pending_release_tick_id = None\n        self._pending_release_not_before_ns = None\n')], 'v3/composition/native_control.py': [('    async_l6 = AsyncL6PlannerConfig(\n        enabled=async_enabled,\n        release_tick_gap=_positive_int(\n            async_mapping.get("release_tick_gap", 5),\n            "v3_navigation.async_l6.release_tick_gap",\n        ),\n        max_plan_age_ns=_positive_int(\n            async_mapping.get("max_plan_age_ns", 350_000_000),\n            "v3_navigation.async_l6.max_plan_age_ns",\n        ),\n    )\n', '    release_delay_value = async_mapping.get("release_delay_ns")\n    release_delay_ns = (\n        None\n        if release_delay_value is None\n        else _positive_int(\n            release_delay_value,\n            "v3_navigation.async_l6.release_delay_ns",\n        )\n    )\n    async_l6 = AsyncL6PlannerConfig(\n        enabled=async_enabled,\n        release_tick_gap=_positive_int(\n            async_mapping.get("release_tick_gap", 5),\n            "v3_navigation.async_l6.release_tick_gap",\n        ),\n        max_plan_age_ns=_positive_int(\n            async_mapping.get("max_plan_age_ns", 350_000_000),\n            "v3_navigation.async_l6.max_plan_age_ns",\n        ),\n        release_delay_ns=release_delay_ns,\n    )\n'), ('                rollout_backend=backend,\n                rollout_release_tick_gap=config.async_l6.release_tick_gap,\n                max_plan_age_ns=config.async_l6.max_plan_age_ns,\n', '                rollout_backend=backend,\n                rollout_release_tick_gap=config.async_l6.release_tick_gap,\n                rollout_release_delay_ns=config.async_l6.release_delay_ns,\n                max_plan_age_ns=config.async_l6.max_plan_age_ns,\n')], 'conf/vezerles.json': [('    "async_l6": {\n      "enabled": true,\n      "release_tick_gap": 5,\n      "max_plan_age_ns": 350000000\n    }\n', '    "async_l6": {\n      "enabled": true,\n      "release_tick_gap": 5,\n      "release_delay_ns": 100000000,\n      "max_plan_age_ns": 350000000\n    }\n')], 'STRUKTURALIS_RETEGEK_V3.md': [('A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az owning layer az eredményt csak előre meghatározott tick-határon fogadhatja el; worker-hiány, deadline-miss, context-eltérés vagy túl öreg elfogadott terv fail-closed hiba. A checkpointnak az esetleges pending immutable kérést és determinisztikus release tickjét is rögzítenie kell, hogy replay ugyanazt a pure számítást ugyanazon a handoff ticken tegye láthatóvá.\n', 'A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az owning layer az eredményt csak előre meghatározott, kizárólag a lezárt `TickContext` (`tick_id`, `monotonic_ns`) alapján determinisztikusan eldönthető tick-határon fogadhatja el; worker-hiány, deadline-miss, context-eltérés vagy túl öreg elfogadott terv fail-closed hiba. A checkpointnak az esetleges pending immutable kérést és a determinisztikus handoff-kritériumot is rögzítenie kell (új production módban például `not-before monotonic_ns`, legacy capture esetén release tick), hogy replay ugyanazon a determinisztikus handoff-határon tegye láthatóvá ugyanazt a pure számítást.\n')], 'tests/test_v3_async_l6_planner.py': [('    enabled = replace(\n        old.async_l6,\n        enabled=True,\n        release_tick_gap=5,\n        max_plan_age_ns=350_000_000,\n    )\n    base["v3_navigation"]["async_l6"] = {\n        "enabled": enabled.enabled,\n        "release_tick_gap": enabled.release_tick_gap,\n        "max_plan_age_ns": enabled.max_plan_age_ns,\n    }\n', '    enabled = replace(\n        old.async_l6,\n        enabled=True,\n        release_tick_gap=5,\n        max_plan_age_ns=350_000_000,\n        release_delay_ns=100_000_000,\n    )\n    base["v3_navigation"]["async_l6"] = {\n        "enabled": enabled.enabled,\n        "release_tick_gap": enabled.release_tick_gap,\n        "max_plan_age_ns": enabled.max_plan_age_ns,\n        "release_delay_ns": enabled.release_delay_ns,\n    }\n'), ('    assert checkpoint.pending_rollout_request is not None\n    assert checkpoint.pending_release_tick_id == 10\n    assert plans[5].trajectory_candidates == plans[4].trajectory_candidates\n', '    assert checkpoint.pending_rollout_request is not None\n    assert checkpoint.pending_release_tick_id == 10\n    assert checkpoint.pending_release_not_before_ns is None\n    assert plans[5].trajectory_candidates == plans[4].trajectory_candidates\n'), ('    assert next_checkpoint.pending_rollout_request.context.tick_id == 10\n    assert next_checkpoint.pending_release_tick_id == 15\n\n    original_backend.close()\n', '    assert next_checkpoint.pending_rollout_request.context.tick_id == 10\n    assert next_checkpoint.pending_release_tick_id == 15\n    assert next_checkpoint.pending_release_not_before_ns is None\n\n    original_backend.close()\n')]}
+TEST_APPEND = '\n\ndef _evaluate_at(navigator, manager, tick_id: int, monotonic_ns: int):\n    context = TickContext(tick_id, monotonic_ns)\n    return navigator.evaluate(\n        _mission(manager, context),\n        _estimate(context, x_m=0.02 * tick_id),\n        _world(context),\n    )\n\n\ndef test_time_based_async_handoff_is_stable_under_control_tick_jitter():\n    """Reproduce the live failure shape without tying 100 ms to five ticks."""\n\n    config = NavigationConfig(\n        trajectory_replan_interval_ns=100_000_000,\n        trajectory_replan_min_tick_gap=5,\n    )\n    backend = InlineTrajectoryRolloutBackend(config)\n    navigator = TrajectoryNavigator(\n        config,\n        rollout_backend=backend,\n        rollout_release_tick_gap=5,\n        rollout_release_delay_ns=100_000_000,\n        max_plan_age_ns=350_000_000,\n    )\n    manager = MissionManager()\n\n    times = {\n        0: 1_000_000_000,\n        1: 1_020_000_000,\n        2: 1_040_000_000,\n        3: 1_060_000_000,\n        4: 1_080_000_000,\n        5: 1_100_000_000,\n        6: 1_130_000_000,\n        7: 1_165_000_000,\n        8: 1_195_000_000,\n        # Four ticks after request, but already 180 ms later.\n        9: 1_280_000_000,\n    }\n\n    for tick_id in range(6):\n        _evaluate_at(navigator, manager, tick_id, times[tick_id])\n\n    pending = navigator.checkpoint()\n    assert pending.last_replan_tick_id == 0\n    assert pending.pending_rollout_request is not None\n    assert pending.pending_rollout_request.context.tick_id == 5\n    assert pending.pending_release_tick_id is None\n    assert pending.pending_release_not_before_ns == 1_200_000_000\n\n    for tick_id in (6, 7, 8):\n        _evaluate_at(navigator, manager, tick_id, times[tick_id])\n        assert navigator.checkpoint().last_replan_tick_id == 0\n\n    # Tick 9 is the first closed tick after the 100 ms handoff threshold.\n    # The old five-tick scheme would still wait for tick 10.\n    _evaluate_at(navigator, manager, 9, times[9])\n    after_handoff = navigator.checkpoint()\n    assert after_handoff.last_replan_tick_id == 5\n\n    # Because the accepted source snapshot is already >100 ms old, the next\n    # async request is scheduled immediately. The historic min-tick-gap must\n    # not turn scheduler jitter into another planner-age failure.\n    assert after_handoff.pending_rollout_request is not None\n    assert after_handoff.pending_rollout_request.context.tick_id == 9\n    assert after_handoff.pending_release_tick_id is None\n    assert after_handoff.pending_release_not_before_ns == 1_380_000_000\n\n    backend.close()\n\n\ndef test_time_based_async_handoff_budget_must_fit_inside_plan_freshness():\n    with pytest.raises(\n        ValueError,\n        match="release_delay_ns must be shorter than max_plan_age_ns",\n    ):\n        AsyncL6PlannerConfig(\n            enabled=True,\n            release_tick_gap=5,\n            max_plan_age_ns=100_000_000,\n            release_delay_ns=100_000_000,\n        )\n'
+TEST_MARKER = "test_time_based_async_handoff_is_stable_under_control_tick_jitter"
+
+
+def run(repo: Path, *args: str) -> str:
+    return subprocess.check_output(
+        list(args), cwd=repo, text=True, stderr=subprocess.STDOUT
+    ).strip()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def runtime_pid(repo: Path) -> int | None:
+    path = repo / "runtime/.r2b4_runtime_pid"
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    try:
+        pid = int(raw)
+    except ValueError:
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return None
+    except PermissionError:
+        return pid
+    return pid
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Install canonical V3 FACE_PERSON support")
-    parser.add_argument("--root", default="/home/alba/project_r2b4")
-    parser.add_argument("--check", action="store_true", help="preflight only")
-    parser.add_argument("--rollback", action="store_true", help="restore latest installer backup")
-    parser.add_argument("--no-tests", action="store_true", help="apply without targeted validation")
-    parser.add_argument("--full-tests", action="store_true", help="also run the complete pytest suite")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("repo", nargs="?", default="/home/alba/project_r2b4")
     args = parser.parse_args()
-    root = Path(args.root).resolve()
+    repo = Path(args.repo).resolve()
+    package = Path(__file__).resolve().parent
 
-    if args.rollback:
-        rollback(root)
-        return 0
+    if not (repo / ".git").exists():
+        raise SystemExit(f"ERROR: not a git repo: {repo}")
+    pid = runtime_pid(repo)
+    if pid is not None:
+        raise SystemExit(
+            f"ERROR: resident runtime appears active (pid {pid}). "
+            "Run ./r2b4 shutdown first."
+        )
 
-    preflight(root)
-    print(f"preflight: PASS (source compatible with {BASE_COMMIT})")
-    if args.check:
-        return 0
-
-    backup_dir = backup(root)
-    print(f"backup: {backup_dir}")
+    head = run(repo, "git", "rev-parse", "HEAD")
     try:
-        apply_patches(root)
-        print("patch: PASS")
-        if not args.no_tests:
-            validate(root, full_tests=args.full_tests)
-            print("validation: PASS")
-    except BaseException:
-        print("upgrade failed; restoring backup", file=sys.stderr)
-        rollback(root, backup_dir)
+        run(repo, "git", "merge-base", "--is-ancestor", BASE_COMMIT, head)
+    except subprocess.CalledProcessError:
+        raise SystemExit(
+            "ERROR: repo HEAD is not based on the inspected source "
+            f"{BASE_COMMIT} (HEAD={head})."
+        )
+
+    targets = tuple(PATCHES)
+    dirty = run(repo, "git", "status", "--porcelain", "--", *targets)
+    if dirty:
+        raise SystemExit(
+            "ERROR: target files have uncommitted changes. "
+            "Commit/stash them first:\n" + dirty
+        )
+
+    current: dict[str, str] = {}
+    updated: dict[str, str] = {}
+    for rel, replacements in PATCHES.items():
+        path = repo / rel
+        text = path.read_text(encoding="utf-8")
+        current[rel] = text
+        changed = text
+        for old, new in replacements:
+            count = changed.count(old)
+            if count != 1:
+                raise SystemExit(
+                    f"ERROR: source anchor for {rel} matched {count} times; "
+                    "repo has drifted. No files changed."
+                )
+            changed = changed.replace(old, new, 1)
+        if rel == "tests/test_v3_async_l6_planner.py":
+            if TEST_MARKER in changed:
+                raise SystemExit(
+                    "ERROR: new timebase regression tests already exist while "
+                    "source anchors are still old; partial state detected."
+                )
+            changed = changed.rstrip() + TEST_APPEND + "\n"
+        updated[rel] = changed
+
+    backup = package / "backup"
+    if backup.exists():
+        shutil.rmtree(backup)
+    backup.mkdir(parents=True)
+
+    manifest = {
+        "schema": "R2B4_ASYNC_L6_TIMEBASE_FIX_BACKUP_V1",
+        "base_commit": BASE_COMMIT,
+        "install_head": head,
+        "files": {},
+    }
+    written: list[str] = []
+    try:
+        for rel in targets:
+            src = repo / rel
+            dst = backup / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            before = current[rel].encode()
+            after = updated[rel].encode()
+            manifest["files"][rel] = {
+                "before_sha256": sha256_bytes(before),
+                "after_sha256": sha256_bytes(after),
+            }
+
+        (backup / "manifest.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        for rel in targets:
+            (repo / rel).write_text(updated[rel], encoding="utf-8")
+            written.append(rel)
+
+        subprocess.check_call(
+            [
+                sys.executable, "-m", "py_compile",
+                str(repo / "v3/layers/l6_navigation.py"),
+                str(repo / "v3/composition/native_control.py"),
+                str(repo / "tests/test_v3_async_l6_planner.py"),
+            ],
+            cwd=repo,
+        )
+    except Exception:
+        for rel in written:
+            backup_file = backup / rel
+            if backup_file.exists():
+                shutil.copy2(backup_file, repo / rel)
         raise
 
-    print("FACE_PERSON upgrade installed")
-    print("live test: ./r2b4 faceperson c full")
-    print("stop:      ./r2b4 stop")
+    print("INSTALLED: async-L6 monotonic handoff P0 fix")
+    print(f"repo: {repo}")
+    print("changed:")
+    for rel in targets:
+        print(f"  {rel}")
+    print("next:")
+    print(f"  bash {package / 'validate_upgrade.sh'} {repo}")
     return 0
 
 
