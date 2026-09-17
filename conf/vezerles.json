@@ -163,14 +163,17 @@
     },
     "follow_person": {
       "minimum_confidence": 0.6,
-      "align_tolerance_rad": 0.1,
+      "align_tolerance_rad": 0.22,
       "release_tolerance_rad": 0.3,
       "stand_off_m": 1.05,
       "distance_deadband_m": 0.15,
       "min_safe_distance_m": 0.75,
       "lost_hold_ns": 400000000,
       "pivot_enter_rad": 0.55,
-      "slowdown_distance_m": 0.3
+      "slowdown_distance_m": 0.18,
+      "hold_release_margin_m": 0.05,
+      "minimum_follow_speed_mps": 0.1,
+      "heading_min_factor": 0.75
     }
   },
   "runtime_affinity": {

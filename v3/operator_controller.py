@@ -1006,7 +1006,7 @@ class OperatorController:
         self._emit("warning", "bounded capture was not finalized before runtime shutdown; native finalizer will finish it")
 
     def _test_hub_evidence_dir(self, capture: Path) -> Path:
-        return Path(str(capture) + ".evidence_next")
+        return capture.with_suffix(".evidence")
 
     def _run_test_hub_default(self, capture: Path) -> int:
         evidence = self._test_hub_evidence_dir(capture)

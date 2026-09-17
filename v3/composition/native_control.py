@@ -281,7 +281,7 @@ def v3_navigation_config_from_mapping(
             "v3_navigation.follow_person.minimum_confidence",
         ),
         follow_person_align_tolerance_rad=_positive_float(
-            follow_person.get("align_tolerance_rad", 0.10),
+            follow_person.get("align_tolerance_rad", 0.22),
             "v3_navigation.follow_person.align_tolerance_rad",
         ),
         follow_person_release_tolerance_rad=_positive_float(
@@ -308,9 +308,21 @@ def v3_navigation_config_from_mapping(
             follow_person.get("pivot_enter_rad", 0.55),
             "v3_navigation.follow_person.pivot_enter_rad",
         ),
+        follow_person_hold_release_margin_m=_positive_float(
+            follow_person.get("hold_release_margin_m", 0.05),
+            "v3_navigation.follow_person.hold_release_margin_m",
+        ),
         follow_person_slowdown_distance_m=_positive_float(
-            follow_person.get("slowdown_distance_m", 0.30),
+            follow_person.get("slowdown_distance_m", 0.18),
             "v3_navigation.follow_person.slowdown_distance_m",
+        ),
+        follow_person_minimum_follow_speed_mps=_positive_float(
+            follow_person.get("minimum_follow_speed_mps", 0.10),
+            "v3_navigation.follow_person.minimum_follow_speed_mps",
+        ),
+        follow_person_heading_min_factor=_positive_float(
+            follow_person.get("heading_min_factor", 0.75),
+            "v3_navigation.follow_person.heading_min_factor",
         ),
         trajectory_replan_interval_ns=_positive_int(
             rollout.get("replan_interval_ns"),

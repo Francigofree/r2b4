@@ -175,7 +175,7 @@ def test_resident_gateway_admits_bounded_explore_without_a_second_control_path(t
     ("mutate", "message"),
     [
         (lambda value: value.update(schema="wrong"), "schema"),
-        (lambda value: value.update(mode="NAVIGATE"), "STOP, TELEOP or EXPLORE"),
+        (lambda value: value.update(mode="NAVIGATE"), "STOP, TELEOP, EXPLORE, FACE_PERSON or FOLLOW_PERSON"),
         (lambda value: value.update(expires_monotonic_ns=300_000_000), "TTL"),
         (
             lambda value: value.update(

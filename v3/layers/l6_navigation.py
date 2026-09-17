@@ -57,14 +57,17 @@ class NavigationConfig:
     face_person_align_tolerance_rad: float = 0.10
     face_person_release_tolerance_rad: float = 0.16
     follow_person_min_confidence: float = 0.60
-    follow_person_align_tolerance_rad: float = 0.10
+    follow_person_align_tolerance_rad: float = 0.22
     follow_person_release_tolerance_rad: float = 0.30
     follow_person_stand_off_m: float = 1.05
     follow_person_distance_deadband_m: float = 0.15
     follow_person_min_safe_distance_m: float = 0.75
     follow_person_lost_hold_ns: int = 400_000_000
     follow_person_pivot_enter_rad: float = 0.55
-    follow_person_slowdown_distance_m: float = 0.30
+    follow_person_hold_release_margin_m: float = 0.05
+    follow_person_slowdown_distance_m: float = 0.18
+    follow_person_minimum_follow_speed_mps: float = 0.10
+    follow_person_heading_min_factor: float = 0.75
 
     def __post_init__(self) -> None:
         for name in (
@@ -233,13 +236,26 @@ class NavigationConfig:
             raise ValueError(
                 "follow_person_pivot_enter_rad must exceed release tolerance"
             )
-        if (
-            not isinstance(self.follow_person_slowdown_distance_m, (int, float))
-            or isinstance(self.follow_person_slowdown_distance_m, bool)
-            or not math.isfinite(self.follow_person_slowdown_distance_m)
-            or self.follow_person_slowdown_distance_m <= 0.0
+        for name in (
+            "follow_person_hold_release_margin_m",
+            "follow_person_slowdown_distance_m",
+            "follow_person_minimum_follow_speed_mps",
         ):
-            raise ValueError("follow_person_slowdown_distance_m must be positive")
+            value = getattr(self, name)
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value <= 0.0
+            ):
+                raise ValueError(f"{name} must be positive")
+        if (
+            not isinstance(self.follow_person_heading_min_factor, (int, float))
+            or isinstance(self.follow_person_heading_min_factor, bool)
+            or not math.isfinite(self.follow_person_heading_min_factor)
+            or not 0.0 < self.follow_person_heading_min_factor <= 1.0
+        ):
+            raise ValueError("follow_person_heading_min_factor must be in (0, 1]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -958,7 +974,7 @@ class TrajectoryNavigator:
             self._config.follow_person_stand_off_m
             + self._config.follow_person_distance_deadband_m
         )
-        hold_release_m = hold_enter_m + self._config.follow_person_distance_deadband_m
+        hold_release_m = hold_enter_m + self._config.follow_person_hold_release_margin_m
         if self._follow_person_holding:
             if distance_m >= hold_release_m:
                 self._follow_person_holding = False
@@ -994,8 +1010,17 @@ class TrajectoryNavigator:
                 "LOCAL_COSTMAP_STALE",
             )
 
-        # Human-specific speed shaping: slow before HOLD and while bending.
-        distance_factor = min(
+        # FOLLOW motion shaping keeps HOLD, distance approach and heading response
+        # independent. HOLD is the only behavior-level zero-motion state here.
+        # The minimum speed is a rollout-envelope floor, not a forced command:
+        # rollout still contains v=0 and downstream L7-L12 remain authoritative.
+        max_follow_v_mps = mission.constraints.max_v_mps
+        minimum_follow_v_mps = min(
+            self._config.follow_person_minimum_follow_speed_mps,
+            max_follow_v_mps,
+        )
+
+        distance_ratio = min(
             1.0,
             max(
                 0.0,
@@ -1003,6 +1028,14 @@ class TrajectoryNavigator:
                 / self._config.follow_person_slowdown_distance_m,
             ),
         )
+        distance_cap_mps = min(
+            max_follow_v_mps,
+            max(
+                minimum_follow_v_mps,
+                max_follow_v_mps * distance_ratio,
+            ),
+        )
+
         if absolute_error <= self._config.follow_person_align_tolerance_rad:
             heading_factor = 1.0
         else:
@@ -1011,18 +1044,28 @@ class TrajectoryNavigator:
                 - self._config.follow_person_align_tolerance_rad,
                 1e-9,
             )
-            ratio = min(
+            heading_ratio = min(
                 1.0,
                 max(
                     0.0,
-                    (absolute_error - self._config.follow_person_align_tolerance_rad)
+                    (
+                        absolute_error
+                        - self._config.follow_person_align_tolerance_rad
+                    )
                     / heading_span,
                 ),
             )
-            heading_factor = 1.0 - 0.65 * ratio
-        follow_max_v_mps = mission.constraints.max_v_mps * min(
-            distance_factor,
-            heading_factor,
+            heading_factor = 1.0 - (
+                1.0 - self._config.follow_person_heading_min_factor
+            ) * heading_ratio
+
+        heading_cap_mps = max_follow_v_mps * heading_factor
+        follow_max_v_mps = min(
+            max_follow_v_mps,
+            max(
+                minimum_follow_v_mps,
+                min(distance_cap_mps, heading_cap_mps),
+            ),
         )
 
         self._accept_pending_rollout(mission.context)

@@ -94,9 +94,13 @@ def _mission(context: TickContext, command_id: str = "follow-p0"):
 def test_p0_config_is_production_bounded():
     config = _config()
     assert config.follow_person_lost_hold_ns == 400_000_000
+    assert config.follow_person_align_tolerance_rad == pytest.approx(0.22)
     assert config.follow_person_release_tolerance_rad == pytest.approx(0.30)
     assert config.follow_person_pivot_enter_rad == pytest.approx(0.55)
-    assert config.follow_person_slowdown_distance_m == pytest.approx(0.30)
+    assert config.follow_person_hold_release_margin_m == pytest.approx(0.05)
+    assert config.follow_person_slowdown_distance_m == pytest.approx(0.18)
+    assert config.follow_person_minimum_follow_speed_mps == pytest.approx(0.10)
+    assert config.follow_person_heading_min_factor == pytest.approx(0.75)
 
 
 def test_p0_lost_hold_ignores_other_people_and_then_fails_closed():
@@ -212,24 +216,24 @@ def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_slowly():
     assert len(hold.route) == 1
     assert nav.checkpoint().follow_person_holding is True
 
-    # 1.25 m is above the 1.20 m entry threshold but below the 1.35 m release
-    # threshold, so a held robot stays held instead of chattering on/off.
+    # HOLD hysteresis is intentionally narrow: 1.20 m entry, 1.25 m release.
+    # This prevents chatter without making the robot wait 15 cm before reacting.
     c2 = TickContext(41, 5_020_000_000)
     still_hold = nav.evaluate(
-        _mission(c2, command_id), _estimate(c2), _world(c2, _person("person-a", 1.25, 0.0))
+        _mission(c2, command_id), _estimate(c2), _world(c2, _person("person-a", 1.23, 0.0))
     )
     assert len(still_hold.route) == 1
     assert nav.checkpoint().follow_person_holding is True
 
     c3 = TickContext(42, 5_040_000_000)
     resumed = nav.evaluate(
-        _mission(c3, command_id), _estimate(c3), _world(c3, _person("person-a", 1.36, 0.0))
+        _mission(c3, command_id), _estimate(c3), _world(c3, _person("person-a", 1.26, 0.0))
     )
     assert resumed.route == ()
     assert resumed.trajectory_candidates
     assert nav.checkpoint().follow_person_holding is False
     max_candidate_v = max(candidate.v_mps for candidate in resumed.trajectory_candidates)
-    assert 0.0 < max_candidate_v < 0.15
+    assert 0.10 <= max_candidate_v < 0.15
 
 
 def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
