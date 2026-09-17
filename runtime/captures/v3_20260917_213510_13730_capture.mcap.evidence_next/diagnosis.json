@@ -1,0 +1,129 @@
+{
+  "behavior_status": "NOMINAL",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": true,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [],
+    "integrity_warnings": [],
+    "message_stream_sha256": "ca6a56e92d19e4766103d089abc2514521acb1faa5b545664ecd070dc1526be3",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 2144,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 2144,
+      "first_lost_sequence": null,
+      "high_water_mark": 2,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 2144,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": false,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 614,
+    "raw_lidar_expected_scan_count": 88,
+    "raw_lidar_gap_missing_revisions": [],
+    "raw_lidar_loss_fraction": 0.0,
+    "raw_lidar_loss_missing_revisions": [],
+    "raw_lidar_loss_tolerance_fraction": 0.05,
+    "raw_lidar_loss_within_tolerance": false,
+    "raw_lidar_max_consecutive_missing": 0,
+    "raw_lidar_max_consecutive_missing_allowed": 2,
+    "raw_lidar_missing_count": 0,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [
+      {
+        "after": 196,
+        "before": 198
+      }
+    ],
+    "raw_lidar_truncated_count": 0,
+    "session_start_short_pre_window": false,
+    "terminal_short_post_window": true
+  },
+  "capture_status": "FAULT",
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "first_divergence": null,
+  "first_live_incident": null,
+  "incident_count": 10,
+  "metrics": {
+    "localization": {
+      "first_trace": 0.07967253960931384,
+      "growth_ratio": 2.8010780563696707,
+      "last_trace": 0.07873849669719524,
+      "max_trace": 0.1536081688349358,
+      "sample_count": 210
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 1.2518385639118992,
+      "requested_motion_tick_count": 210
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 209,
+      "FAULT": 0,
+      "STOP": 1,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 5,
+      "l2_actionable_rejection_count": 4,
+      "l2_duplicate_count": 423,
+      "l2_rejection_count": 427,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 423,
+        "TIME_ALIGNMENT_FAILED": 4
+      }
+    },
+    "ticks": {
+      "count": 210,
+      "first_monotonic_ns": 11964564350688,
+      "first_tick_id": 897,
+      "last_monotonic_ns": 11973110473709,
+      "last_tick_id": 1106
+    },
+    "timing": {
+      "max_ms": 110.241834,
+      "p50_ms": 39.014767,
+      "p95_ms": 66.99608,
+      "p99_ms": 87.987611,
+      "sample_count": 209
+    }
+  },
+  "physical_root_cause": {
+    "cause": null,
+    "evidence": null,
+    "reason": "NO_LIVE_INCIDENT_IN_SCOPE",
+    "status": "NOT_PROVEN"
+  },
+  "replay_error": null,
+  "replay_requested": true,
+  "replay_status": "MATCH",
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "motion-blocked-l12-1106"
+    ],
+    "kind": "MOTION_BLOCKED",
+    "layer": "L12",
+    "reason": "LIDAR_CLEARANCE_LOW",
+    "tick_id": 1106
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "FINDING",
+  "structure_valid": true
+}

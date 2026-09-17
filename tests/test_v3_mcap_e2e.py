@@ -43,8 +43,18 @@ def raw(revision, monotonic_ns, points=4):
     )
 
 
-def capture(tmp_path, *, count=12, capacity=100, settings=None, trigger=None, configuration=None):
+def capture(
+    tmp_path,
+    *,
+    count=12,
+    capacity=100,
+    settings=None,
+    trigger=None,
+    configuration=None,
+    missing_raw_revisions=(),
+):
     config, values = records(count)
+    missing = set(missing_raw_revisions)
     hub = ObservationHub()
     sub = hub.subscribe_reliable('capture', capacity=capacity,
                                  topics=('v3.capture_record', 'v3.raw_lidar'), required=True)
@@ -55,7 +65,9 @@ def capture(tmp_path, *, count=12, capacity=100, settings=None, trigger=None, co
         consumer.trigger(*trigger)
     for record in values:
         tick = record.inputs.context.tick_id
-        hub.publish(raw(tick + 1, record.inputs.context.monotonic_ns), topic='v3.raw_lidar')
+        revision = tick + 1
+        if revision not in missing:
+            hub.publish(raw(revision, record.inputs.context.monotonic_ns), topic='v3.raw_lidar')
         hub.publish(object(), topic='unrelated')
         hub.publish(record, topic='v3.capture_record')
     hub.close()
@@ -159,6 +171,88 @@ def test_raw_lidar_over_limit_is_explicit_incomplete(tmp_path):
     assert result.status == 'FAIL' and not result.complete
     final = McapReader(result.path).last_json(EVENT_TOPIC)[1]
     assert final['integrity']['raw_lidar_truncated_count'] == 2
+
+
+def test_sparse_raw_lidar_loss_below_five_percent_is_tolerated(tmp_path):
+    result, sub = capture(
+        tmp_path,
+        count=100,
+        capacity=256,
+        missing_raw_revisions={20, 80},
+    )
+    assert result.complete and result.status == 'PASS'
+    assert sub.snapshot().lost_count == 0
+    final = McapReader(result.path).last_json(EVENT_TOPIC)[1]
+    integrity = final['integrity']
+    assert integrity['raw_lidar_loss_missing_revisions'] == [20, 80]
+    assert integrity['raw_lidar_missing_count'] == 2
+    assert integrity['raw_lidar_expected_scan_count'] == 100
+    assert integrity['raw_lidar_loss_fraction'] == pytest.approx(0.02)
+    assert integrity['raw_lidar_max_consecutive_missing'] == 1
+    assert integrity['raw_lidar_loss_within_tolerance'] is True
+    assert integrity['integrity_warnings'] == ['RAW_LIDAR_SPARSE_LOSS_TOLERATED']
+    assert 'RAW_LIDAR_REVISION_GAP' not in integrity['integrity_reasons']
+    assert 'REFERENCED_RAW_LIDAR_MISSING' not in integrity['integrity_reasons']
+
+
+def test_exactly_five_percent_sparse_raw_lidar_loss_is_tolerated(tmp_path):
+    result, _ = capture(
+        tmp_path,
+        count=100,
+        capacity=256,
+        missing_raw_revisions={10, 30, 50, 70, 90},
+    )
+    assert result.complete and result.status == 'PASS'
+    integrity = McapReader(result.path).last_json(EVENT_TOPIC)[1]['integrity']
+    assert integrity['raw_lidar_missing_count'] == 5
+    assert integrity['raw_lidar_loss_fraction'] == pytest.approx(0.05)
+    assert integrity['raw_lidar_max_consecutive_missing'] == 1
+    assert integrity['raw_lidar_loss_within_tolerance'] is True
+
+
+def test_raw_lidar_loss_above_five_percent_remains_integrity_failure(tmp_path):
+    result, _ = capture(
+        tmp_path,
+        count=100,
+        capacity=256,
+        missing_raw_revisions={10, 20, 30, 40, 50, 60},
+    )
+    assert not result.complete and result.status == 'FAIL'
+    integrity = McapReader(result.path).last_json(EVENT_TOPIC)[1]['integrity']
+    assert integrity['raw_lidar_missing_count'] == 6
+    assert integrity['raw_lidar_loss_fraction'] == pytest.approx(0.06)
+    assert integrity['raw_lidar_max_consecutive_missing'] == 1
+    assert integrity['raw_lidar_loss_within_tolerance'] is False
+    assert 'RAW_LIDAR_REVISION_GAP' in integrity['integrity_reasons']
+    assert 'RAW_LIDAR_SPARSE_LOSS_TOLERATED' not in integrity['integrity_warnings']
+
+
+def test_three_consecutive_missing_raw_lidar_scans_fail_even_below_five_percent(tmp_path):
+    result, _ = capture(
+        tmp_path,
+        count=100,
+        capacity=256,
+        missing_raw_revisions={40, 41, 42},
+    )
+    assert not result.complete and result.status == 'FAIL'
+    integrity = McapReader(result.path).last_json(EVENT_TOPIC)[1]['integrity']
+    assert integrity['raw_lidar_missing_count'] == 3
+    assert integrity['raw_lidar_loss_fraction'] == pytest.approx(0.03)
+    assert integrity['raw_lidar_max_consecutive_missing'] == 3
+    assert integrity['raw_lidar_loss_within_tolerance'] is False
+    assert 'RAW_LIDAR_REVISION_GAP' in integrity['integrity_reasons']
+
+
+def test_raw_lidar_loss_tolerance_config_validation():
+    config = McapCaptureConfig()
+    assert config.max_raw_lidar_missing_fraction == pytest.approx(0.05)
+    assert config.max_consecutive_raw_lidar_missing == 2
+    with pytest.raises(ValueError, match='max_raw_lidar_missing_fraction'):
+        McapCaptureConfig(max_raw_lidar_missing_fraction=-0.01)
+    with pytest.raises(ValueError, match='max_raw_lidar_missing_fraction'):
+        McapCaptureConfig(max_raw_lidar_missing_fraction=1.01)
+    with pytest.raises(ValueError, match='max_consecutive_raw_lidar_missing'):
+        McapCaptureConfig(max_consecutive_raw_lidar_missing=-1)
 
 
 def test_session_bound_fails_explicitly_but_drains_mailbox(tmp_path):

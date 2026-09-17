@@ -82,9 +82,16 @@ class McapCaptureConfig:
     max_session_records: int = 100_000
     max_record_bytes: int = 16 * 1024 * 1024
     max_referenced_revisions_per_tick: int = 16
+    max_raw_lidar_missing_fraction: float = 0.05
+    max_consecutive_raw_lidar_missing: int = 2
 
     def __post_init__(self) -> None:
-        for name in ("pre_event_ns", "post_event_ns", "checkpoint_context_ns"):
+        for name in (
+            "pre_event_ns",
+            "post_event_ns",
+            "checkpoint_context_ns",
+            "max_consecutive_raw_lidar_missing",
+        ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
@@ -101,6 +108,13 @@ class McapCaptureConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        missing_fraction = self.max_raw_lidar_missing_fraction
+        if (
+            not isinstance(missing_fraction, (int, float))
+            or isinstance(missing_fraction, bool)
+            or not 0.0 <= float(missing_fraction) <= 1.0
+        ):
+            raise ValueError("max_raw_lidar_missing_fraction must be in [0.0, 1.0]")
 
         if self.mode not in {"triggered", "append_only"}:
             raise ValueError("mode must be triggered or append_only")
@@ -940,8 +954,39 @@ class McapCaptureConsumer:
             self._integrity_reasons.add("POST_WINDOW_INCOMPLETE")
 
         missing_raw = tuple(sorted(self._referenced_raw_revisions - self._written_raw_revisions))
-        if missing_raw:
-            self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
+        gap_missing_raw = _captured_gap_missing_revisions(
+            self._raw_revision_gaps,
+            self._written_raw_revisions,
+        )
+        loss_missing_raw = tuple(sorted(set(missing_raw).union(gap_missing_raw)))
+        raw_lidar_missing_count = len(loss_missing_raw)
+        raw_lidar_expected_scan_count = self._captured_raw_count + raw_lidar_missing_count
+        raw_lidar_loss_fraction = (
+            raw_lidar_missing_count / raw_lidar_expected_scan_count
+            if raw_lidar_expected_scan_count
+            else 0.0
+        )
+        raw_lidar_max_consecutive_missing = _max_consecutive_revision_run(loss_missing_raw)
+        raw_lidar_loss_within_tolerance = bool(
+            raw_lidar_missing_count
+            and raw_lidar_loss_fraction <= float(self._config.max_raw_lidar_missing_fraction)
+            and raw_lidar_max_consecutive_missing <= self._config.max_consecutive_raw_lidar_missing
+        )
+        integrity_warnings: list[str] = []
+
+        # A raw-LiDAR revision gap is observed immediately so triggered capture can
+        # still retain evidence. Final severity is decided only for the revisions
+        # that are actually part of the captured evidence window.
+        self._integrity_reasons.discard("RAW_LIDAR_REVISION_GAP")
+        self._integrity_reasons.discard("REFERENCED_RAW_LIDAR_MISSING")
+        if raw_lidar_missing_count:
+            if raw_lidar_loss_within_tolerance:
+                integrity_warnings.append("RAW_LIDAR_SPARSE_LOSS_TOLERATED")
+            else:
+                if gap_missing_raw:
+                    self._integrity_reasons.add("RAW_LIDAR_REVISION_GAP")
+                if missing_raw:
+                    self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
 
         complete = not self._integrity_reasons
         if self._fault_observed and status == "PASS":
@@ -956,6 +1001,7 @@ class McapCaptureConsumer:
         integrity = {
             "complete": complete,
             "integrity_reasons": sorted(self._integrity_reasons),
+            "integrity_warnings": integrity_warnings,
             "ingress_drop_count": ingress_drops,
             "observation_subscription": encode_value(subscription),
             "captured_tick_sequence_gaps": [
@@ -964,6 +1010,19 @@ class McapCaptureConsumer:
             ],
             "capacity_eviction_count": self._capacity_eviction_count,
             "raw_lidar_missing_revisions": list(missing_raw),
+            "raw_lidar_gap_missing_revisions": list(gap_missing_raw),
+            "raw_lidar_loss_missing_revisions": list(loss_missing_raw),
+            "raw_lidar_missing_count": raw_lidar_missing_count,
+            "raw_lidar_expected_scan_count": raw_lidar_expected_scan_count,
+            "raw_lidar_loss_fraction": raw_lidar_loss_fraction,
+            "raw_lidar_loss_tolerance_fraction": float(
+                self._config.max_raw_lidar_missing_fraction
+            ),
+            "raw_lidar_max_consecutive_missing": raw_lidar_max_consecutive_missing,
+            "raw_lidar_max_consecutive_missing_allowed": (
+                self._config.max_consecutive_raw_lidar_missing
+            ),
+            "raw_lidar_loss_within_tolerance": raw_lidar_loss_within_tolerance,
             "raw_lidar_duplicate_count": self._raw_duplicate_count,
             "raw_lidar_out_of_order_count": self._raw_out_of_order_count,
             "raw_lidar_revision_gaps": [
@@ -1096,6 +1155,39 @@ def _non_negative_int(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise CaptureEncodingError(f"{name} must be a non-negative integer")
     return value
+
+
+def _captured_gap_missing_revisions(
+    gaps: list[tuple[int, int]],
+    written_revisions: set[int],
+) -> tuple[int, ...]:
+    if not written_revisions:
+        return ()
+    first = min(written_revisions)
+    last = max(written_revisions)
+    missing: set[int] = set()
+    for before, after in gaps:
+        start = max(before + 1, first)
+        stop = min(after, last + 1)
+        if start < stop:
+            missing.update(range(start, stop))
+    missing.difference_update(written_revisions)
+    return tuple(sorted(missing))
+
+
+def _max_consecutive_revision_run(revisions: tuple[int, ...]) -> int:
+    if not revisions:
+        return 0
+    maximum = current = 1
+    previous = revisions[0]
+    for revision in revisions[1:]:
+        if revision == previous + 1:
+            current += 1
+            maximum = max(maximum, current)
+        else:
+            current = 1
+        previous = revision
+    return maximum
 
 
 def _looks_like_raw_lidar_topic(topic: str) -> bool:
