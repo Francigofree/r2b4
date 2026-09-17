@@ -58,7 +58,7 @@ def _normalize_legacy(argv: list[str]) -> list[str]:
     args = list(argv)
     if args == ["help"]:
         return ["--help"]
-    if len(args) >= 2 and args[0] in {"forward", "mozog", "wheels", "roomcruise", "explore", "faceperson"} and args[1] == "start":
+    if len(args) >= 2 and args[0] in {"forward", "mozog", "wheels", "roomcruise", "explore", "faceperson", "followperson"} and args[1] == "start":
         del args[1]
     args = ["--no-trigger" if token == "nocapture" else token for token in args]
     return args
@@ -78,6 +78,7 @@ def _parser() -> argparse.ArgumentParser:
             "  ./r2b4 teleop 0.15 -0.20\n"
             "  ./r2b4 roomcruise\n"
             "  ./r2b4 faceperson c full\n"
+            "  ./r2b4 followperson c full\n"
             "  ./r2b4 proba c full\n"
             "  ./r2b4 stop\n"
             "  ./r2b4 shutdown\n\n"
@@ -129,6 +130,11 @@ def _parser() -> argparse.ArgumentParser:
     faceperson = sub.add_parser("faceperson", help="rotate in place toward a tracked person")
     faceperson.add_argument("--max-omega", type=float, default=0.50)
     motion_flags(faceperson)
+
+    followperson = sub.add_parser("followperson", help="follow a tracked person with bounded local planning")
+    followperson.add_argument("--max-v", type=float, default=0.15)
+    followperson.add_argument("--max-omega", type=float, default=0.30)
+    motion_flags(followperson)
 
     panic = sub.add_parser("panic", help="stop motion and shut down the runtime")
     panic.add_argument("--quiet", action="store_true")
@@ -258,6 +264,13 @@ def main(argv: list[str] | None = None) -> int:
             controller.roomcruise(capture=not args.no_trigger, capture_mode=capture_mode)
         elif args.command == "faceperson":
             controller.faceperson(
+                max_omega_rad_s=args.max_omega,
+                capture=not args.no_trigger,
+                capture_mode=capture_mode,
+            )
+        elif args.command == "followperson":
+            controller.followperson(
+                max_v_mps=args.max_v,
                 max_omega_rad_s=args.max_omega,
                 capture=not args.no_trigger,
                 capture_mode=capture_mode,

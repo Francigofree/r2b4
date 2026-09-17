@@ -135,6 +135,14 @@ class MissionManager:
                 )
                 target_pose = None
                 velocity_target = None
+            elif command.mode is CommandMode.FOLLOW_PERSON:
+                _require_keys(
+                    values,
+                    required=frozenset(),
+                    optional=frozenset({"max_v_mps", "max_omega_rad_s"}),
+                )
+                target_pose = None
+                velocity_target = None
             else:
                 raise ValueError("unsupported command mode")
         except (KeyError, TypeError, ValueError):

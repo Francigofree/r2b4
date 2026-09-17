@@ -186,6 +186,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     faceperson.add_argument("--command-id")
     faceperson.add_argument("--max-omega-rad-s", type=float, default=0.50)
+
+    followperson = subcommands.add_parser(
+        "followperson",
+        help="heartbeat FOLLOW_PERSON: safely follow the selected person",
+    )
+    followperson.add_argument("--command-id")
+    followperson.add_argument("--max-v-mps", type=float, default=0.15)
+    followperson.add_argument("--max-omega-rad-s", type=float, default=0.30)
     return parser
 
 
@@ -236,9 +244,16 @@ def main(argv: list[str] | None = None) -> int:
                 max_omega_rad_s=args.max_omega_rad_s,
                 ttl_ns=ttl_ns,
             )
-        else:
+        elif args.operation == "faceperson":
             publish = lambda logical_id: client.publish_face_person(
                 logical_id,
+                max_omega_rad_s=args.max_omega_rad_s,
+                ttl_ns=ttl_ns,
+            )
+        else:
+            publish = lambda logical_id: client.publish_follow_person(
+                logical_id,
+                max_v_mps=args.max_v_mps,
                 max_omega_rad_s=args.max_omega_rad_s,
                 ttl_ns=ttl_ns,
             )

@@ -55,6 +55,7 @@ class CommandMode(str, Enum):
     NAVIGATE = "NAVIGATE"
     EXPLORE = "EXPLORE"
     FACE_PERSON = "FACE_PERSON"
+    FOLLOW_PERSON = "FOLLOW_PERSON"
     SERVICE = "SERVICE"
 
 
@@ -401,7 +402,11 @@ class MissionIntent:
                 self.velocity_target is None or self.target_pose is not None
             ):
                 raise ContractValidationError("active TELEOP mission requires only velocity_target")
-            if self.mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON) and (
+            if self.mode in (
+                CommandMode.EXPLORE,
+                CommandMode.FACE_PERSON,
+                CommandMode.FOLLOW_PERSON,
+            ) and (
                 self.target_pose is not None or self.velocity_target is not None
             ):
                 raise ContractValidationError(

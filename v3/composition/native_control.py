@@ -153,6 +153,12 @@ def v3_navigation_config_from_mapping(
         if face_person_value is None
         else _mapping(face_person_value, "v3_navigation.face_person")
     )
+    follow_person_value = root.get("follow_person")
+    follow_person = (
+        {}
+        if follow_person_value is None
+        else _mapping(follow_person_value, "v3_navigation.follow_person")
+    )
     exploration = _mapping(root.get("exploration"), "v3_navigation.exploration")
     rollout = _mapping(root.get("trajectory_rollout"), "v3_navigation.trajectory_rollout")
     async_value = root.get("async_l6")
@@ -269,6 +275,30 @@ def v3_navigation_config_from_mapping(
         face_person_release_tolerance_rad=_positive_float(
             face_person.get("release_tolerance_rad", 0.16),
             "v3_navigation.face_person.release_tolerance_rad",
+        ),
+        follow_person_min_confidence=_finite_float(
+            follow_person.get("minimum_confidence", 0.60),
+            "v3_navigation.follow_person.minimum_confidence",
+        ),
+        follow_person_align_tolerance_rad=_positive_float(
+            follow_person.get("align_tolerance_rad", 0.10),
+            "v3_navigation.follow_person.align_tolerance_rad",
+        ),
+        follow_person_release_tolerance_rad=_positive_float(
+            follow_person.get("release_tolerance_rad", 0.18),
+            "v3_navigation.follow_person.release_tolerance_rad",
+        ),
+        follow_person_stand_off_m=_positive_float(
+            follow_person.get("stand_off_m", 1.05),
+            "v3_navigation.follow_person.stand_off_m",
+        ),
+        follow_person_distance_deadband_m=_finite_float(
+            follow_person.get("distance_deadband_m", 0.15),
+            "v3_navigation.follow_person.distance_deadband_m",
+        ),
+        follow_person_min_safe_distance_m=_positive_float(
+            follow_person.get("min_safe_distance_m", 0.75),
+            "v3_navigation.follow_person.min_safe_distance_m",
         ),
         trajectory_replan_interval_ns=_positive_int(
             rollout.get("replan_interval_ns"),

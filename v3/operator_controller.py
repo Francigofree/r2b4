@@ -452,6 +452,47 @@ class OperatorController:
             capture_mode=mode,
         )
 
+    def followperson(
+        self,
+        *,
+        max_v_mps: float = 0.15,
+        max_omega_rad_s: float = 0.30,
+        capture: bool = True,
+        capture_mode: str = DEFAULT_CAPTURE_MODE,
+    ) -> MotionHandle:
+        max_v = self._finite(max_v_mps, "max_v_mps")
+        max_omega = self._finite(max_omega_rad_s, "max_omega_rad_s")
+        if max_v <= 0.0 or max_v > 0.50:
+            raise OperatorError("max_v_mps must be >0 and <=0.50")
+        if max_omega <= 0.0 or max_omega > 1.20:
+            raise OperatorError("max_omega_rad_s must be >0 and <=1.20")
+        command_id = f"operator-followperson-{time.time_ns()}-{os.getpid()}"
+        args = [
+            self.python,
+            "-m",
+            "v3.control_cli",
+            "followperson",
+            "--command-id",
+            command_id,
+            "--max-v-mps",
+            str(max_v),
+            "--max-omega-rad-s",
+            str(max_omega),
+        ]
+        pid, mode = self._start_motion(
+            "followperson",
+            capture,
+            capture_mode,
+            args,
+            require_real_motion=False,
+        )
+        return MotionHandle(
+            pid=pid,
+            label="followperson",
+            command_id=command_id,
+            capture_mode=mode,
+        )
+
     def wheel_targets_to_twist(
         self,
         left_mps: float,
