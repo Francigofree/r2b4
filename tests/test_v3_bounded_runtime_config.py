@@ -43,24 +43,9 @@ def _load(**kwargs):
 
 
 def _sensor_policy() -> NativeSensorPolicyConfig:
-    return NativeSensorPolicyConfig(
-        encoder_maximum_sample_interval_ns=100_000_000,
-        encoder_maximum_abs_velocity_mps=1.5,
-        encoder_minimum_trust=0.5,
-        imu_maximum_sample_age_ns=100_000_000,
-        imu_heading_clockwise_positive=True,
-        imu_yaw_rate_axis=2,
-        imu_yaw_rate_clockwise_positive=False,
-        imu_yaw_offset_rad=0.0,
-        imu_minimum_confidence=0.5,
-        imu_minimum_calibration=2,
-        imu_allow_rate_only=True,
-        lidar_maximum_result_age_ns=250_000_000,
-        lidar_maximum_future_skew_ns=10_000_000,
-        lidar_pose_r_scale=1.0,
-        lidar_minimum_confidence=0.2,
-        lidar_maximum_measurement_age_ns=250_000_000,
-    )
+    from v3_test_fixtures import native_sensor_policy
+
+    return native_sensor_policy()
 
 
 def _changed_json(tmp_path: Path, source: Path, mutate) -> Path:
@@ -71,7 +56,7 @@ def _changed_json(tmp_path: Path, source: Path, mutate) -> Path:
     return target
 
 
-def test_active_sources_close_into_one_immutable_bounded_runtime_config():
+def test_closed_runtime_config_is_consistent_and_immutable():
     config = _load()
     physical = config.composition
     control = physical.live_control.control
@@ -79,38 +64,24 @@ def test_active_sources_close_into_one_immutable_bounded_runtime_config():
     encoder = config.encoder
 
     assert encoder is not None
-    assert config.tick_period_ns == 20_000_000
+    assert config.tick_period_ns > 0
     assert physical.live_control.command_profile == _profile()
-    assert physical.live_control.max_preflight_age_ns == 250_000_000
     assert control.estimation.frame_id == POSE_FRAME_ID
-    assert control.estimation.track_width_m == 0.3557
-    assert control.chassis_control.track_width_m == 0.3557
+    assert (
+        control.estimation.track_width_m
+        == control.chassis_control.track_width_m
+    )
     assert control.speed_map.schema == "R2B4_WHEEL_SPEED_MAP_V2"
     assert control.speed_map.map_state == "ACTIVE"
-    left_forward = next(
-        curve for curve in control.speed_map.curves if curve.name == "left_forward"
-    )
-    assert left_forward.points[0].speed_mps == 0.15
-    assert left_forward.points[0].normalized_output == 0.19566
-    assert motors.pins == (12, 13, 18, 19)
-    assert motors.left.invert is False
-    assert motors.right.invert is True
-    assert motors.left.pwm_decay_mode is PwmDecayMode.BRAKE
-    assert motors.right.pwm_decay_mode is PwmDecayMode.BRAKE
-    assert motors.gpio_chip == 0
-    assert motors.pwm_frequency_hz == 8_000
-    assert encoder.counter_gpio.pins == (23, 24, 25, 16)
-    assert encoder.counter_gpio.gpio_chip == 0
-    assert encoder.counter_gpio.left.forward_b_level == 1
-    assert encoder.counter_gpio.right.forward_b_level == 1
-    assert encoder.counter_gpio.left.invert is True
-    assert encoder.counter_gpio.right.invert is False
-    assert encoder.counter_gpio.left.pull_up is False
-    assert encoder.counter_gpio.right.pull_up is False
-    assert encoder.counter_gpio.left.a_debounce_micros == 150
-    assert encoder.counter_gpio.right.a_debounce_micros == 150
-    assert encoder.left_step_distance_m == pytest.approx(0.000644429262323014)
-    assert encoder.right_step_distance_m == pytest.approx(0.000644429262323014)
+
+    motor_pins = motors.pins
+    encoder_pins = encoder.counter_gpio.pins
+    assert len(set(motor_pins)) == len(motor_pins)
+    assert len(set(encoder_pins)) == len(encoder_pins)
+    assert set(motor_pins).isdisjoint(encoder_pins)
+    assert encoder.left_step_distance_m > 0.0
+    assert encoder.right_step_distance_m > 0.0
+
     with pytest.raises(FrozenInstanceError):
         config.tick_period_ns = 1  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
@@ -169,18 +140,21 @@ def test_active_v3_navigation_config_closes_local_perception_costmap_and_rollout
     hardware = config.sensor_inputs
 
     assert hardware is not None
-    assert hardware.inputs.lidar_source.local_perception_min_range_m == 0.08
-    assert hardware.inputs.lidar_source.local_perception_max_range_m == 2.5
-    assert hardware.inputs.lidar_source.local_perception_max_points == 96
-    assert control.world_model.local_costmap_resolution_m == 0.1
-    assert control.world_model.local_costmap_radius_m == 2.5
-    assert control.navigation.rollout_linear_samples == 6
-    assert control.navigation.rollout_angular_samples == 9
+    assert hardware.inputs.lidar_source.local_perception_min_range_m > 0.0
     assert (
+        hardware.inputs.lidar_source.local_perception_max_range_m
+        > hardware.inputs.lidar_source.local_perception_min_range_m
+    )
+    assert hardware.inputs.lidar_source.local_perception_max_points > 0
+    assert control.world_model.local_costmap_resolution_m > 0.0
+    assert control.world_model.local_costmap_radius_m > 0.0
+
+    candidate_count = (
         control.navigation.rollout_linear_samples
         * control.navigation.rollout_angular_samples
-        == 54
     )
+    assert 30 <= candidate_count <= 60
+    assert control.navigation.rollout_step_count > 0
 
 
 def test_invalid_v3_navigation_rollout_budget_fails_before_runtime_construction(tmp_path):

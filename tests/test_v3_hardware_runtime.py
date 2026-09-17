@@ -280,28 +280,15 @@ class ResidentGateway:
         )
 
 
-def _policy() -> NativeSensorPolicyConfig:
-    return NativeSensorPolicyConfig(
-        encoder_maximum_sample_interval_ns=100_000_000,
-        encoder_maximum_abs_velocity_mps=1.5,
-        encoder_minimum_trust=0.5,
-        imu_maximum_sample_age_ns=100_000_000,
-        imu_heading_clockwise_positive=True,
-        imu_yaw_rate_axis=2,
-        imu_yaw_rate_clockwise_positive=False,
-        imu_yaw_offset_rad=0.0,
-        imu_minimum_confidence=0.5,
-        imu_minimum_calibration=2,
-        imu_allow_rate_only=True,
-        lidar_maximum_result_age_ns=250_000_000,
-        lidar_maximum_future_skew_ns=10_000_000,
-        lidar_pose_r_scale=1.0,
-        lidar_minimum_confidence=0.2,
-        lidar_maximum_measurement_age_ns=250_000_000,
-    )
+def _policy():
+    from v3_test_fixtures import native_sensor_policy
+
+    return native_sensor_policy()
 
 
 def _runtime_config():
+    from v3_test_fixtures import without_optional_perception
+
     runtime = load_bounded_physical_runtime_config(
         PROJECT_ROOT / "conf" / "hardver.json",
         PROJECT_ROOT / "conf" / "fizika.json",
@@ -317,14 +304,9 @@ def _runtime_config():
         ),
         sensor_policy=_policy(),
     )
-    # These tests validate fake core hardware. Never open the host camera here.
-    assert runtime.sensor_inputs is not None
-    sensor_inputs = replace(
-        runtime.sensor_inputs,
-        camera_device=None,
-        inputs=replace(runtime.sensor_inputs.inputs, camera_source=None),
-    )
-    return replace(runtime, sensor_inputs=sensor_inputs)
+    # Core-hardware tests disable the complete optional perception capability,
+    # not only the camera device half of that capability.
+    return without_optional_perception(runtime)
 
 
 def _ports(timestamps):

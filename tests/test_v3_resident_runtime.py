@@ -224,21 +224,12 @@ class SequenceGateway:
 
 
 def _policy():
-    return NativeSensorPolicyConfig(
+    from v3_test_fixtures import native_sensor_policy
+
+    return native_sensor_policy(
         encoder_maximum_sample_interval_ns=150_000_000,
-        encoder_maximum_abs_velocity_mps=1.5,
-        encoder_minimum_trust=0.5,
         imu_maximum_sample_age_ns=150_000_000,
-        imu_heading_clockwise_positive=True,
-        imu_yaw_rate_axis=2,
-        imu_yaw_rate_clockwise_positive=False,
-        imu_yaw_offset_rad=0.0,
-        imu_minimum_confidence=0.5,
-        imu_minimum_calibration=2,
-        imu_allow_rate_only=True,
         lidar_maximum_result_age_ns=150_000_000,
-        lidar_maximum_future_skew_ns=10_000_000,
-        lidar_pose_r_scale=1.0,
         lidar_minimum_confidence=0.5,
         lidar_maximum_measurement_age_ns=150_000_000,
     )

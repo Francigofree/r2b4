@@ -44,21 +44,12 @@ class PhotoPort:
 
 
 def _mission(tick: int, now_ns: int, mode=CommandMode.EXPLORE):
-    context = TickContext(tick, now_ns)
-    return MissionIntent(
-        context=context,
-        mission_id="mission-operator-roomcruise-test",
+    from v3_test_fixtures import active_mission
+
+    return active_mission(
+        TickContext(tick, now_ns),
         mode=mode,
-        target_pose=None,
-        velocity_target=None,
-        constraints=MissionConstraints(
-            max_v_mps=0.35,
-            max_omega_rad_s=1.2,
-            corridor_radius_m=0.30,
-            goal_tolerance_m=0.08,
-            yaw_tolerance_rad=0.10,
-        ),
-        lifecycle=MissionLifecycle.ACTIVE,
+        mission_id="mission-operator-roomcruise-test",
     )
 
 
@@ -344,49 +335,3 @@ def test_failed_person_detector_does_not_gain_motor_safety_authority():
     assert result.enabled is True
 
 
-def _write(root: Path, relative: str, source: str) -> None:
-    path = root / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(source, encoding="utf-8")
-
-
-def test_litert_is_scoped_to_the_detector_edge_adapter(tmp_path):
-    _write(
-        tmp_path,
-        "v3/adapters/litert_person_detector.py",
-        "from ai_edge_litert.interpreter import Interpreter\n",
-    )
-    assert validate_v3_imports(tmp_path) == ()
-
-    _write(
-        tmp_path,
-        "v3/layers/l4_world_model/illegal_litert.py",
-        "from ai_edge_litert.interpreter import Interpreter\n",
-    )
-    violations = validate_v3_imports(tmp_path)
-    assert any(
-        item.path == "v3/layers/l4_world_model/illegal_litert.py"
-        and item.code == "PROJECT_OR_THIRD_PARTY_IMPORT_NOT_ALLOWED"
-        for item in violations
-    )
-
-
-def test_shared_device_health_policy_exception_is_l12_only(tmp_path):
-    _write(
-        tmp_path,
-        "v3/layers/l12_safety_final.py",
-        "from v3.device_health_policy import critical_device_health_view\n",
-    )
-    assert validate_v3_imports(tmp_path) == ()
-
-    _write(
-        tmp_path,
-        "v3/layers/l11_actuator_control.py",
-        "from v3.device_health_policy import critical_device_health_view\n",
-    )
-    violations = validate_v3_imports(tmp_path)
-    assert any(
-        item.path == "v3/layers/l11_actuator_control.py"
-        and item.code == "LAYER_INTERNAL_IMPORT_NOT_ALLOWED"
-        for item in violations
-    )

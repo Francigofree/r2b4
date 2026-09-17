@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import ast
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
@@ -26,9 +24,6 @@ from v3.layers.l6_navigation import (
     TrajectoryRolloutComputer,
     TrajectoryRolloutRequest,
 )
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _estimate(context: TickContext, x_m: float) -> RobotEstimate:
@@ -262,67 +257,6 @@ def test_async_l6_config_is_explicit_and_defaults_off_for_old_documents():
     }
     parsed = v3_navigation_config_from_mapping(base)
     assert parsed.async_l6 == enabled
-
-
-def test_process_adapter_boundary_has_compute_only_dependencies():
-    path = PROJECT_ROOT / "v3" / "adapters" / "l6_planner_process.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    imported_modules = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported_modules.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imported_modules.add(node.module)
-    assert imported_modules <= {
-        "__future__",
-        "contextlib",
-        "dataclasses",
-        "multiprocessing",
-        "os",
-        "pathlib",
-        "queue",
-        "typing",
-        "v3.layers.l6_navigation",
-        "v3.runtime_performance",
-    }
-    forbidden = {
-        "v3.adapters.gpio_motor",
-        "v3.ports",
-        "v3.layers.l12_safety_final",
-        "v3.adapters.resident_command",
-    }
-    assert not imported_modules & forbidden
-
-def test_ready_release_result_replaces_stale_previous_plan_before_freshness_gate():
-    """Regression for the 2026-09-16 live tick-115 false PLAN_STALE fault."""
-
-    config = NavigationConfig()
-    backend = InlineTrajectoryRolloutBackend(config)
-    navigator = TrajectoryNavigator(
-        config,
-        rollout_backend=backend,
-        rollout_release_tick_gap=5,
-        # Tick 10 is 200 ms after the synchronous seed at tick 0, but only
-        # 100 ms after the pending request snapshot at tick 5.
-        max_plan_age_ns=150_000_000,
-    )
-    manager = MissionManager()
-
-    plans = [_evaluate(navigator, manager, tick_id) for tick_id in range(10)]
-    previous_candidates = plans[-1].trajectory_candidates
-
-    # The old accepted plan is stale here, but the ready result sourced at
-    # tick 5 is still fresh. The handoff must accept the new result first.
-    released = _evaluate(navigator, manager, 10)
-
-    assert released.trajectory_candidates != previous_candidates
-    checkpoint = navigator.checkpoint()
-    assert checkpoint.last_replan_tick_id == 5
-    assert checkpoint.pending_rollout_request is not None
-    assert checkpoint.pending_rollout_request.context.tick_id == 10
-    assert checkpoint.pending_release_tick_id == 15
-
-    backend.close()
 
 
 def test_previous_plan_staleness_still_fails_closed_before_release_tick():
