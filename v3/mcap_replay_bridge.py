@@ -7,6 +7,8 @@ immediately after replay. No persistent JSON capture is produced.
 
 The bridge prefers a checkpoint before the requested incident. That keeps
 agent-driven replay small while preserving current production state semantics.
+Long-run replay sweep callers may preflight/hash the immutable MCAP once and
+reuse that proof across bounded windows.
 """
 
 from __future__ import annotations
@@ -47,23 +49,37 @@ def replay_mcap(
     window: ReplayWindow | None = None,
     project_root: str | Path | None = None,
     capture_source_manifest_path: str | Path | None = None,
+    authority_sha256: str | None = None,
+    verify_authority_unchanged: bool = True,
+    verify_structure: bool = True,
+    verified_final_event: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Replay a bounded MCAP slice through the current canonical Replayer V3."""
+    """Replay a bounded MCAP slice through the current canonical Replayer V3.
 
-    # Imports stay local so inspect/agent-only usage has no dependency on the
-    # legacy JSON capture path and can run even while replay is being refactored.
+    Normal callers keep the default deep preflight and before/after authority
+    checks. A long-run replay sweep can perform those expensive checks once and
+    pass the verified ``authority_sha256`` into many bounded windows.
+    """
+
     from .capture import V3_CAPTURE_SCHEMA, payload_sha256
     from .replay import ReplaySelection, replay_capture, _payload_sha256
 
     try:
         reader = McapReader(capture_path)
-        structure = reader.inspect(verify_chunks=True)
-        if not structure.valid:
-            raise McapReplayBridgeError("MCAP structural/deep CRC preflight failed")
-        final = reader.capture_integrity()
+        if verify_structure:
+            structure = reader.inspect(verify_chunks=True)
+            if not structure.valid:
+                raise McapReplayBridgeError("MCAP structural/deep CRC preflight failed")
+        final = (
+            dict(verified_final_event)
+            if verified_final_event is not None
+            else reader.capture_integrity()
+        )
     except McapReadError as exc:
         raise McapReplayBridgeError("MCAP preflight failed: " + str(exc)) from exc
-    authority_sha256 = reader.sha256()
+
+    if authority_sha256 is None:
+        authority_sha256 = reader.sha256()
     requested = window or ReplayWindow()
     runtime_pair = reader.first_json(RUNTIME_TOPIC)
     if runtime_pair is None or not isinstance(runtime_pair[1], Mapping):
@@ -72,7 +88,11 @@ def replay_mcap(
 
     first_target_msg = None
     last_target_msg = None
-    for message in reader.iter_messages(topics=(TICK_TOPIC,)):
+    for message in reader.iter_messages(
+        topics=(TICK_TOPIC,),
+        start_ns=requested.requested_start_ns,
+        end_ns=requested.requested_end_ns,
+    ):
         if _selected_message(message.sequence, message.log_time_ns, requested):
             if first_target_msg is None:
                 first_target_msg = message
@@ -161,7 +181,6 @@ def replay_mcap(
             document["initial_state_checkpoint"] = dict(state)
 
     document["capture_sha256"] = payload_sha256(document)
-    # Include config, state and metadata in the disk budget, not only tick bytes.
     encoded_document = json.dumps(document, ensure_ascii=False, sort_keys=True,
                                   separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"
     if len(encoded_document) > requested.max_materialized_bytes:
@@ -182,7 +201,7 @@ def replay_mcap(
         os.close(fd)
         temporary_path = Path(name)
         temporary_path.write_bytes(encoded_document)
-        if reader.sha256() != authority_sha256:
+        if verify_authority_unchanged and reader.sha256() != authority_sha256:
             raise McapReplayBridgeError("authority MCAP changed during preflight")
         result = replay_capture(
             temporary_path,
@@ -190,7 +209,7 @@ def replay_mcap(
             project_root=project_root,
             capture_source_manifest_path=capture_source_manifest_path,
         )
-        if reader.sha256() != authority_sha256:
+        if verify_authority_unchanged and reader.sha256() != authority_sha256:
             raise McapReplayBridgeError("authority MCAP changed during replay")
         result = dict(result)
         result["mcap_bridge"] = {
@@ -202,6 +221,9 @@ def replay_mcap(
             "materialized_tick_count": len(decoded_ticks),
             "checkpoint_used": checkpoint_payload is not None,
             "replay_eligible": replay_eligible,
+            "authority_check_delegated": not verify_authority_unchanged,
+            "structure_check_delegated": not verify_structure,
+            "capture_integrity_check_delegated": verified_final_event is not None,
         }
         result["capture"] = {
             **result["capture"], "path": str(reader.path.resolve()),

@@ -22,7 +22,6 @@ from v3.adapters.resident_command import (
 from v3.capture import CaptureSink, CaptureWindowConfig, TriggeredCaptureWorker
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
-from v3.test_hub_v2 import diagnose_run
 from v3.adapters.native_lidar_port import (
     TimedPoseReference,
     load_native_lidar_port_config,
@@ -229,9 +228,10 @@ class McapCaptureSession:
         result = self.worker.finish(status, terminal=True)
         if result is None:
             return None
-        # finish has drained, checked RELIABLE integrity, fsynced and published MCAP.
-        self.evidence = diagnose_run(result.path, result.path.with_suffix(".evidence"),
-                                     replay_mode="incident", project_root=PROJECT_ROOT)
+        # Hardware ownership has ended and the MCAP is fully fsynced/published.
+        # Analysis is process-isolated behind a tiny stdlib-only handoff.
+        from v3.test_hub_runtime import postprocess_capture
+        self.evidence = postprocess_capture(result.path, project_root=PROJECT_ROOT)
         return result.path
 
 

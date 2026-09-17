@@ -307,7 +307,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if not arguments or arguments[0] in {"run", "view", "compare", "-h", "--help"}:
+    if not arguments or arguments[0] in {"run", "batch", "view", "compare", "test", "-h", "--help"}:
         from .test_hub_next import main as next_main
         return next_main(arguments)
     args = _parser().parse_args(arguments)
