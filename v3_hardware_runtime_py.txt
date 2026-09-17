@@ -389,7 +389,7 @@ class NativeHardwareSensorOwner:
             lidar = open_lidar_port(pose_feedback)
             if config.camera_device is not None:
                 with temporary_current_affinity(
-                    affinity.io_cpu if affinity.enabled else None,
+                    affinity.vision_cpu if affinity.enabled else None,
                     role="vision",
                     strict=affinity.strict,
                 ):
@@ -401,7 +401,7 @@ class NativeHardwareSensorOwner:
                         ),
                         monotonic_ns=monotonic_ns,
                     )
-                    # Camera/libcamera workers inherit the shared I/O/background CPU.
+                    # Camera/libcamera workers inherit the dedicated vision CPU.
                     # Camera remains non-critical for motor safety authority.
                     camera.start()
 
@@ -419,7 +419,7 @@ class NativeHardwareSensorOwner:
                 else:
                     detector: NativePersonDetector | None = None
                     with temporary_current_affinity(
-                        affinity.io_cpu if affinity.enabled else None,
+                        affinity.vision_cpu if affinity.enabled else None,
                         role="vision",
                         strict=affinity.strict,
                     ):
@@ -742,7 +742,7 @@ def run_native_hardware_resident_control(
         affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
         rollout_backend = ProcessTrajectoryRolloutBackend(
             config.composition.live_control.control.navigation,
-            worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
+            worker_cpu=(affinity.io_cpu if affinity.enabled else None),
             strict_affinity=(affinity.strict if affinity.enabled else False),
         )
     try:
