@@ -1,0 +1,141 @@
+{
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260917_225429_21785_capture.mcap",
+    "capture_name": "v3_20260917_225429_21785_capture.mcap",
+    "capture_sha256": "22169f81533750b687fa44cad9aaa6cdf8278ce1b243a5d51a139778debaac6b",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 11,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 106,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 503,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 1,
+      "first_tick": 1517,
+      "last_tick": 1517,
+      "layer": "L1",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "representative": {
+        "category": "DEVICE_HEALTH",
+        "evidence": {
+          "devices": [
+            {
+              "device_id": "CAMERA_FRONT",
+              "reason": "CAMERA_TIME_INVALID",
+              "state": "FAILED"
+            }
+          ]
+        },
+        "id": "device-1517",
+        "layer": "L1",
+        "monotonic_ns": 16726702998629,
+        "reason": "DEVICE_HEALTH_NON_OK",
+        "severity": "HIGH",
+        "tick_id": 1517
+      },
+      "severity": "HIGH"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 1,
+      "first_tick": 1517,
+      "group_index": 1,
+      "last_tick": 1517,
+      "path": "01_DEVICE_HEALTH_NON_OK.ndjson",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "rows": 21,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 8.314660105,
+      "end_tick": 1856,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 1446,
+      "stop_ticks": 0,
+      "tick_count": 411
+    },
+    {
+      "end_s": 8.336600032,
+      "end_tick": 1857,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 8.336600032,
+      "start_tick": 1857,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 10.340951839,
+      "end_tick": 1948,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 8.363969625,
+      "start_tick": 1858,
+      "stop_ticks": 91,
+      "tick_count": 91
+    }
+  ],
+  "pytest_result": null,
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_DEVICE_HEALTH_NON_OK.ndjson",
+      "raw_scan_count": 8,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "size_bytes": 85104,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "MATCH",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "MATCH",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}

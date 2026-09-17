@@ -1,0 +1,92 @@
+{
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260917_225600_22135_capture.mcap",
+    "capture_name": "v3_20260917_225600_22135_capture.mcap",
+    "capture_sha256": "33b82d1c82174fd5d738eef2325af905d8b4ef4ba9fdd7ad4af3561882ca7592",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 11,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 104,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 494,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "PASS",
+  "evidence_status": "PASS",
+  "incident_groups": [],
+  "incident_slices": [],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 8.068600479,
+      "end_tick": 501,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 101,
+      "stop_ticks": 0,
+      "tick_count": 401
+    },
+    {
+      "end_s": 8.095457884,
+      "end_tick": 502,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 8.095457884,
+      "start_tick": 502,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 10.187913957,
+      "end_tick": 594,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 8.127187765,
+      "start_tick": 503,
+      "stop_ticks": 92,
+      "tick_count": 92
+    }
+  ],
+  "pytest_result": null,
+  "raw_lidar_incident_slices": [],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "MATCH",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "MATCH",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "PASS",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}
