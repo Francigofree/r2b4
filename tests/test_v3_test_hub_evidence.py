@@ -195,7 +195,14 @@ def test_existing_evidence_is_preserved_and_not_reused_for_new_replay_scope(
     captured, _ = capture(tmp_path)
     destination = tmp_path / "next"
     run_default(captured.path, output_dir=destination, replay_mode="off")
-    original = {p.name: p.read_bytes() for p in destination.iterdir()}
+    def snapshot_tree(root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+
+    original = snapshot_tree(destination)
     with pytest.raises(HubError, match="absent or empty"):
         run_default(captured.path, output_dir=destination, replay_mode="full")
-    assert {p.name: p.read_bytes() for p in destination.iterdir()} == original
+    assert snapshot_tree(destination) == original

@@ -143,22 +143,25 @@ def run_default(
     if replay_sweep_enabled and replay_mode != "off":
         final_event = inspect_payload.get("final_event")
         structure = inspect_payload.get("structure")
+        integrity_verified = bool(
+            isinstance(structure, Mapping)
+            and structure.get("valid") is True
+            and structure.get("data_crc_ok") is True
+            and structure.get("summary_crc_ok") is True
+            and structure.get("chunk_crc_ok") is True
+            and inspect_payload.get("integrity_error") is None
+        )
         sweep = replay_sweep(
             capture,
             project_root=Path(__file__).resolve().parents[1],
             window_ticks=sweep_window_ticks,
             authority_sha256=capture_sha256,
             verified_final_event=(
-                final_event if isinstance(final_event, Mapping) else None
+                final_event
+                if integrity_verified and isinstance(final_event, Mapping)
+                else None
             ),
-            structure_already_verified=bool(
-                isinstance(structure, Mapping)
-                and structure.get("valid") is True
-                and structure.get("data_crc_ok") is True
-                and structure.get("summary_crc_ok") is True
-                and structure.get("chunk_crc_ok") is True
-                and inspect_payload.get("integrity_error") is None
-            ),
+            structure_already_verified=integrity_verified,
         )
         _write_json(destination / "replay_sweep.json", sweep)
 
@@ -174,8 +177,9 @@ def run_default(
     if pytest_payload is not None and pytest_payload.get("status") != "PASS":
         overall_status = "FAIL"
 
-    replay_status = (
-        sweep.get("status") if sweep is not None else base.get("replay_status")
+    replay_status = base.get("replay_status")
+    replay_sweep_status = (
+        sweep.get("status") if sweep is not None else "OFF"
     )
 
     agent_view_path = destination / "agent_view.json"
@@ -186,6 +190,7 @@ def run_default(
         "evidence_status": base.get("evidence_status"),
         "behavior_status": base.get("behavior_status"),
         "replay_status": replay_status,
+        "replay_sweep_status": replay_sweep_status,
         "authority": {
             "capture_name": capture.name,
             "capture_sha256": capture_sha256,
@@ -227,6 +232,7 @@ def run_default(
         "evidence_status": base.get("evidence_status"),
         "behavior_status": base.get("behavior_status"),
         "replay_status": replay_status,
+        "replay_sweep_status": replay_sweep_status,
         "capture": str(capture),
         "output_dir": str(destination.resolve()),
         "agent_view": str(agent_view_path.resolve()),
