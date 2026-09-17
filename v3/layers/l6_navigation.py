@@ -58,10 +58,13 @@ class NavigationConfig:
     face_person_release_tolerance_rad: float = 0.16
     follow_person_min_confidence: float = 0.60
     follow_person_align_tolerance_rad: float = 0.10
-    follow_person_release_tolerance_rad: float = 0.18
+    follow_person_release_tolerance_rad: float = 0.30
     follow_person_stand_off_m: float = 1.05
     follow_person_distance_deadband_m: float = 0.15
     follow_person_min_safe_distance_m: float = 0.75
+    follow_person_lost_hold_ns: int = 400_000_000
+    follow_person_pivot_enter_rad: float = 0.55
+    follow_person_slowdown_distance_m: float = 0.30
 
     def __post_init__(self) -> None:
         for name in (
@@ -212,6 +215,31 @@ class NavigationConfig:
             raise ValueError(
                 "follow person safe distance must stay below the stand-off deadband"
             )
+        if (
+            not isinstance(self.follow_person_lost_hold_ns, int)
+            or isinstance(self.follow_person_lost_hold_ns, bool)
+            or self.follow_person_lost_hold_ns <= 0
+        ):
+            raise ValueError("follow_person_lost_hold_ns must be a positive integer")
+        if (
+            not isinstance(self.follow_person_pivot_enter_rad, (int, float))
+            or isinstance(self.follow_person_pivot_enter_rad, bool)
+            or not math.isfinite(self.follow_person_pivot_enter_rad)
+            or self.follow_person_pivot_enter_rad <= 0.0
+            or self.follow_person_pivot_enter_rad >= math.pi
+        ):
+            raise ValueError("follow_person_pivot_enter_rad must be in (0, pi)")
+        if self.follow_person_pivot_enter_rad <= self.follow_person_release_tolerance_rad:
+            raise ValueError(
+                "follow_person_pivot_enter_rad must exceed release tolerance"
+            )
+        if (
+            not isinstance(self.follow_person_slowdown_distance_m, (int, float))
+            or isinstance(self.follow_person_slowdown_distance_m, bool)
+            or not math.isfinite(self.follow_person_slowdown_distance_m)
+            or self.follow_person_slowdown_distance_m <= 0.0
+        ):
+            raise ValueError("follow_person_slowdown_distance_m must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,6 +260,10 @@ class NavigationStateCheckpoint:
     pending_release_not_before_ns: int | None = None
     face_person_track_id: str | None = None
     face_person_aligned: bool = False
+    follow_person_track_id: str | None = None
+    follow_person_lost_since_ns: int | None = None
+    follow_person_pivoting: bool = False
+    follow_person_holding: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -396,6 +428,10 @@ class TrajectoryNavigator:
         "_config",
         "_face_person_aligned",
         "_face_person_track_id",
+        "_follow_person_holding",
+        "_follow_person_lost_since_ns",
+        "_follow_person_pivoting",
+        "_follow_person_track_id",
         "_coverage",
         "_goal_selected_ns",
         "_initial_distance_m",
@@ -474,6 +510,10 @@ class TrajectoryNavigator:
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
         self._face_person_track_id: str | None = None
         self._face_person_aligned = False
+        self._follow_person_track_id: str | None = None
+        self._follow_person_lost_since_ns: int | None = None
+        self._follow_person_pivoting = False
+        self._follow_person_holding = False
 
     def checkpoint(self) -> NavigationStateCheckpoint:
         return NavigationStateCheckpoint(
@@ -498,6 +538,10 @@ class TrajectoryNavigator:
             self._pending_release_not_before_ns,
             self._face_person_track_id,
             self._face_person_aligned,
+            self._follow_person_track_id,
+            self._follow_person_lost_since_ns,
+            self._follow_person_pivoting,
+            self._follow_person_holding,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -519,6 +563,10 @@ class TrajectoryNavigator:
         self._trajectory_candidates = checkpoint.trajectory_candidates
         self._face_person_track_id = checkpoint.face_person_track_id
         self._face_person_aligned = checkpoint.face_person_aligned
+        self._follow_person_track_id = checkpoint.follow_person_track_id
+        self._follow_person_lost_since_ns = checkpoint.follow_person_lost_since_ns
+        self._follow_person_pivoting = checkpoint.follow_person_pivoting
+        self._follow_person_holding = checkpoint.follow_person_holding
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
         pending = checkpoint.pending_rollout_request
@@ -712,6 +760,10 @@ class TrajectoryNavigator:
         self._static_planning_index = None
         self._face_person_track_id = None
         self._face_person_aligned = False
+        self._follow_person_track_id = None
+        self._follow_person_lost_since_ns = None
+        self._follow_person_pivoting = False
+        self._follow_person_holding = False
 
     def _face_person_plan(
         self,
@@ -802,16 +854,17 @@ class TrajectoryNavigator:
             if track.track_id.startswith("person-")
             and track.confidence >= self._config.follow_person_min_confidence
         )
-        previous_track_id = self._face_person_track_id
-        selected = next(
-            (
-                track
-                for track in eligible
-                if track.track_id == self._face_person_track_id
-            ),
-            None,
-        )
-        if selected is None and eligible:
+
+        # Acquire exactly once per FOLLOW_PERSON mission. Another visible person
+        # may not silently replace the locked target. A new command is re-acquire.
+        if self._follow_person_track_id is None:
+            if not eligible:
+                self._clear_trajectory_plan()
+                return self._inactive(
+                    mission,
+                    NavigationStatus.INVALIDATED,
+                    "PERSON_TARGET_NOT_AVAILABLE",
+                )
             selected = min(
                 eligible,
                 key=lambda track: (
@@ -820,20 +873,44 @@ class TrajectoryNavigator:
                     track.track_id,
                 ),
             )
-            if selected.track_id != previous_track_id:
-                self._clear_trajectory_plan()
-            self._face_person_track_id = selected.track_id
-            self._face_person_aligned = False
-
-        if selected is None:
-            self._face_person_track_id = None
-            self._face_person_aligned = False
+            self._follow_person_track_id = selected.track_id
+            self._follow_person_lost_since_ns = None
+            self._follow_person_pivoting = False
+            self._follow_person_holding = False
             self._clear_trajectory_plan()
-            return self._inactive(
-                mission,
-                NavigationStatus.INVALIDATED,
-                "PERSON_TARGET_NOT_AVAILABLE",
+        else:
+            selected = next(
+                (
+                    track
+                    for track in eligible
+                    if track.track_id == self._follow_person_track_id
+                ),
+                None,
             )
+            if selected is None:
+                if self._follow_person_lost_since_ns is None:
+                    self._follow_person_lost_since_ns = mission.context.monotonic_ns
+                    self._clear_trajectory_plan()
+                lost_ns = mission.context.monotonic_ns - self._follow_person_lost_since_ns
+                if lost_ns <= self._config.follow_person_lost_hold_ns:
+                    return NavigationPlan(
+                        context=mission.context,
+                        mission_id=mission.mission_id,
+                        route=(Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad),),
+                        velocity_target=None,
+                        constraints=mission.constraints,
+                        corridor_radius_m=0.0,
+                        progress=0.0,
+                        status=NavigationStatus.ACTIVE,
+                    )
+                return self._inactive(
+                    mission,
+                    NavigationStatus.INVALIDATED,
+                    "PERSON_TARGET_LOST",
+                )
+
+        assert selected is not None
+        self._follow_person_lost_since_ns = None
 
         dx = selected.x_m - estimate.x_m
         dy = selected.y_m - estimate.y_m
@@ -846,7 +923,8 @@ class TrajectoryNavigator:
             heading_error = _wrapped_angle(desired_yaw - estimate.yaw_rad)
 
         if distance_m <= self._config.follow_person_min_safe_distance_m:
-            self._face_person_aligned = False
+            self._follow_person_pivoting = False
+            self._follow_person_holding = True
             self._clear_trajectory_plan()
             return self._inactive(
                 mission,
@@ -855,13 +933,15 @@ class TrajectoryNavigator:
             )
 
         absolute_error = abs(heading_error)
-        if self._face_person_aligned:
-            if absolute_error > self._config.follow_person_release_tolerance_rad:
-                self._face_person_aligned = False
-        elif absolute_error <= self._config.follow_person_align_tolerance_rad:
-            self._face_person_aligned = True
+        if self._follow_person_pivoting:
+            if absolute_error <= self._config.follow_person_release_tolerance_rad:
+                self._follow_person_pivoting = False
+        elif absolute_error >= self._config.follow_person_pivot_enter_rad:
+            self._follow_person_pivoting = True
 
-        if not self._face_person_aligned:
+        # Large errors still pivot in place. Medium errors stay in the rollout,
+        # so the robot bends toward the person instead of stop-turn-start.
+        if self._follow_person_pivoting:
             self._clear_trajectory_plan()
             return NavigationPlan(
                 context=mission.context,
@@ -874,11 +954,18 @@ class TrajectoryNavigator:
                 status=NavigationStatus.ACTIVE,
             )
 
-        if (
-            distance_m
-            <= self._config.follow_person_stand_off_m
+        hold_enter_m = (
+            self._config.follow_person_stand_off_m
             + self._config.follow_person_distance_deadband_m
-        ):
+        )
+        hold_release_m = hold_enter_m + self._config.follow_person_distance_deadband_m
+        if self._follow_person_holding:
+            if distance_m >= hold_release_m:
+                self._follow_person_holding = False
+        elif distance_m <= hold_enter_m:
+            self._follow_person_holding = True
+
+        if self._follow_person_holding:
             self._clear_trajectory_plan()
             return NavigationPlan(
                 context=mission.context,
@@ -907,6 +994,37 @@ class TrajectoryNavigator:
                 "LOCAL_COSTMAP_STALE",
             )
 
+        # Human-specific speed shaping: slow before HOLD and while bending.
+        distance_factor = min(
+            1.0,
+            max(
+                0.0,
+                (distance_m - hold_enter_m)
+                / self._config.follow_person_slowdown_distance_m,
+            ),
+        )
+        if absolute_error <= self._config.follow_person_align_tolerance_rad:
+            heading_factor = 1.0
+        else:
+            heading_span = max(
+                self._config.follow_person_pivot_enter_rad
+                - self._config.follow_person_align_tolerance_rad,
+                1e-9,
+            )
+            ratio = min(
+                1.0,
+                max(
+                    0.0,
+                    (absolute_error - self._config.follow_person_align_tolerance_rad)
+                    / heading_span,
+                ),
+            )
+            heading_factor = 1.0 - 0.65 * ratio
+        follow_max_v_mps = mission.constraints.max_v_mps * min(
+            distance_factor,
+            heading_factor,
+        )
+
         self._accept_pending_rollout(mission.context)
         if self._replan_due(
             mission.context.monotonic_ns,
@@ -925,7 +1043,7 @@ class TrajectoryNavigator:
                 estimate,
                 world,
                 local_goal,
-                mission.constraints.max_v_mps,
+                follow_max_v_mps,
                 mission.constraints.max_omega_rad_s,
             )
 

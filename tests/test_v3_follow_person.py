@@ -228,7 +228,7 @@ def test_follow_person_requires_costmap_only_when_translation_is_needed():
     assert aligned_far.reason == "LOCAL_COSTMAP_MISSING"
 
 
-def test_follow_person_keeps_selected_track_until_it_is_lost():
+def test_follow_person_locks_target_and_never_silently_switches():
     navigator = TrajectoryNavigator(_production_navigation())
     command_id = "follow-sticky"
 
@@ -242,7 +242,7 @@ def test_follow_person_keeps_selected_track_until_it_is_lost():
             _person("person-2", 1.8, 0.0, 0.90),
         ),
     )
-    assert navigator.checkpoint().face_person_track_id == "person-2"
+    assert navigator.checkpoint().follow_person_track_id == "person-2"
 
     c2 = TickContext(11, 2_020_000_000)
     navigator.evaluate(
@@ -254,15 +254,35 @@ def test_follow_person_keeps_selected_track_until_it_is_lost():
             _person("person-2", 1.8, 0.0, 0.61),
         ),
     )
-    assert navigator.checkpoint().face_person_track_id == "person-2"
+    assert navigator.checkpoint().follow_person_track_id == "person-2"
 
     c3 = TickContext(12, 2_040_000_000)
-    navigator.evaluate(
+    hold = navigator.evaluate(
         _mission(c3, command_id=command_id),
         _estimate(c3),
         _world(c3, _person("person-1", 1.6, 0.0, 0.99)),
     )
-    assert navigator.checkpoint().face_person_track_id == "person-1"
+    assert hold.status is NavigationStatus.ACTIVE
+    assert navigator.checkpoint().follow_person_track_id == "person-2"
+
+    c4 = TickContext(13, 2_500_000_001)
+    lost = navigator.evaluate(
+        _mission(c4, command_id=command_id),
+        _estimate(c4),
+        _world(c4, _person("person-1", 1.6, 0.0, 0.99)),
+    )
+    assert lost.status is NavigationStatus.INVALIDATED
+    assert lost.reason == "PERSON_TARGET_LOST"
+    assert navigator.checkpoint().follow_person_track_id == "person-2"
+
+    c5 = TickContext(14, 2_520_000_000)
+    reacquired = navigator.evaluate(
+        _mission(c5, command_id=command_id),
+        _estimate(c5),
+        _world(c5, _person("person-2", 1.8, 0.0, 0.70)),
+    )
+    assert reacquired.status is NavigationStatus.ACTIVE
+    assert navigator.checkpoint().follow_person_track_id == "person-2"
 
 
 def test_follow_person_target_loss_is_fail_closed_but_reacquirable():
