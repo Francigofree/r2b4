@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from r2b4_voice.microphone import (
+from v3.adapters.microphone import (
     AudioFrame,
     AudioFramePort,
     MicrophoneIdentity,
@@ -131,10 +131,22 @@ def test_audio_port_is_bounded_and_drops_oldest_without_blocking():
     port.publish(_frame(1))
     port.publish(_frame(2))
     port.publish(_frame(3))
-    assert port.overrun_count == 1
+    assert port.overwrite_count == 1
     first_available = port.read_after(0, timeout_s=0)
     assert first_available is not None
     assert first_available.sequence == 2
+
+
+def test_ring_overwrite_is_not_itself_consumer_loss():
+    port = AudioFramePort(capacity_frames=2)
+    port.publish(_frame(1))
+    port.publish(_frame(2))
+    assert port.read_after(1, timeout_s=0).sequence == 2
+    port.publish(_frame(3))
+    assert port.overwrite_count == 1
+    next_frame = port.read_after(2, timeout_s=0)
+    assert next_frame is not None
+    assert next_frame.sequence == 3
 
 
 def test_audio_port_rejects_non_monotonic_sequence():

@@ -9,7 +9,7 @@ import struct
 import time
 from dataclasses import asdict
 
-from r2b4_voice.microphone import (
+from v3.adapters.microphone import (
     MicrophoneStreamConfig,
     NativeUsbMicrophone,
     resolve_usb_microphone,
@@ -71,7 +71,6 @@ def _capture(seconds: float) -> int:
             "PASS"
             if observed_frames > 0
             and sequence_gaps == 0
-            and health.queue_overrun_count == 0
             else "FAIL"
         ),
         "identity": asdict(owner.identity) if owner.identity is not None else None,
@@ -89,7 +88,7 @@ def _capture(seconds: float) -> int:
         "first_sequence": first_sequence,
         "last_sequence": last_sequence,
         "sequence_gaps": sequence_gaps,
-        "queue_overruns": health.queue_overrun_count,
+        "ring_overwrites": health.ring_overwrite_count,
         "peak_abs_s16": peak_abs_s16,
         "signal_seen": peak_abs_s16 > 0,
         "last_error": health.last_error,

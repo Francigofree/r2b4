@@ -1,11 +1,15 @@
-"""Native microphone HAL for the R2B4 voice-side data path.
+"""Native microphone hardware edge for R2B4 V3.
 
-The module intentionally lives outside ``v3``.  It follows the same architectural
-discipline without becoming a control-runtime layer:
+This adapter owns the physical USB/ALSA capture endpoint exactly once and keeps
+raw PCM on an edge-local bounded frame port.  Raw audio is not a V3 layer
+contract and must not be copied into DeviceSample.  A separate live-microphone
+adapter may project only bounded health/timing metadata into L0.
+
+Architectural rules:
 
 * exactly one owner of the physical capture device;
 * immutable typed boundary values;
-* bounded buffering;
+* bounded buffering with sequence-based loss detection;
 * monotonic lineage;
 * explicit device identity and health;
 * no hidden resampling, VAD, STT, network or robot-control work.
@@ -203,9 +207,29 @@ class MicrophoneHealth:
     state: MicrophoneState
     device_present: bool
     sequence: int
+    last_frame_monotonic_ns: int | None
     last_frame_age_ms: float | None
-    queue_overrun_count: int
+    ring_overwrite_count: int
     last_error: str | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, MicrophoneState):
+            raise TypeError("state must be MicrophoneState")
+        if type(self.device_present) is not bool:
+            raise TypeError("device_present must be bool")
+        _nonnegative_int(self.sequence, "sequence")
+        if self.last_frame_monotonic_ns is not None:
+            _nonnegative_int(self.last_frame_monotonic_ns, "last_frame_monotonic_ns")
+        if self.last_frame_age_ms is not None:
+            if (
+                isinstance(self.last_frame_age_ms, bool)
+                or not isinstance(self.last_frame_age_ms, (int, float))
+                or self.last_frame_age_ms < 0.0
+            ):
+                raise ValueError("last_frame_age_ms must be non-negative or None")
+        _nonnegative_int(self.ring_overwrite_count, "ring_overwrite_count")
+        if self.last_error is not None:
+            _nonempty_string(self.last_error, "last_error")
 
 
 class AudioFramePort:
@@ -215,22 +239,27 @@ class AudioFramePort:
     frame is dropped.  Consumers detect that loss through a sequence gap.
     """
 
-    __slots__ = ("_capacity", "_condition", "_frames", "_overruns")
+    __slots__ = ("_capacity", "_condition", "_frames", "_overwrites")
 
     def __init__(self, capacity_frames: int) -> None:
         self._capacity = _positive_int(capacity_frames, "capacity_frames")
         self._condition = threading.Condition()
         self._frames: deque[AudioFrame] = deque()
-        self._overruns = 0
+        self._overwrites = 0
 
     @property
     def capacity_frames(self) -> int:
         return self._capacity
 
     @property
-    def overrun_count(self) -> int:
+    def overwrite_count(self) -> int:
+        """Number of oldest-history frames evicted because the ring was full.
+
+        This is normal bounded-ring churn, not proof that any consumer lost
+        audio. Consumers detect real loss from a sequence gap.
+        """
         with self._condition:
-            return self._overruns
+            return self._overwrites
 
     def publish(self, frame: AudioFrame) -> None:
         if not isinstance(frame, AudioFrame):
@@ -240,7 +269,7 @@ class AudioFramePort:
                 raise ValueError("audio frame sequence must be strictly increasing")
             if len(self._frames) >= self._capacity:
                 self._frames.popleft()
-                self._overruns += 1
+                self._overwrites += 1
             self._frames.append(frame)
             self._condition.notify_all()
 
@@ -575,8 +604,9 @@ class NativeUsbMicrophone:
                 device_present=self._identity is not None
                 and self._state is not MicrophoneState.DISCONNECTED,
                 sequence=self._sequence,
+                last_frame_monotonic_ns=last,
                 last_frame_age_ms=age_ms,
-                queue_overrun_count=self._port.overrun_count,
+                ring_overwrite_count=self._port.overwrite_count,
                 last_error=self._last_error,
             )
 
