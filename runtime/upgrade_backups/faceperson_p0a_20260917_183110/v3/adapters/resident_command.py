@@ -186,9 +186,9 @@ class AtomicResidentCommandGateway:
         try:
             mode = CommandMode(mode_value)
         except (TypeError, ValueError) as exc:
-            raise ValueError("command mode must be STOP, TELEOP or EXPLORE, or FACE_PERSON") from exc
-        if mode not in (CommandMode.STOP, CommandMode.TELEOP, CommandMode.EXPLORE, CommandMode.FACE_PERSON):
-            raise ValueError("command mode must be STOP, TELEOP or EXPLORE, or FACE_PERSON")
+            raise ValueError("command mode must be STOP, TELEOP or EXPLORE") from exc
+        if mode not in (CommandMode.STOP, CommandMode.TELEOP, CommandMode.EXPLORE):
+            raise ValueError("command mode must be STOP, TELEOP or EXPLORE")
         common_keys = {
             "schema",
             "revision",
@@ -202,11 +202,7 @@ class AtomicResidentCommandGateway:
         expected_keys = common_keys | (
             motion_keys
             if mode is CommandMode.TELEOP
-            else limit_keys
-            if mode is CommandMode.EXPLORE
-            else {"max_omega_rad_s"}
-            if mode is CommandMode.FACE_PERSON
-            else set()
+            else limit_keys if mode is CommandMode.EXPLORE else set()
         )
         if set(payload) != expected_keys:
             raise ValueError("command mailbox fields do not match its mode")
@@ -247,21 +243,12 @@ class AtomicResidentCommandGateway:
                 expiry_tick=context.tick_id,
             )
 
-        max_omega_rad_s = _finite(payload.get("max_omega_rad_s"), "max_omega_rad_s")
-        if not 0.0 < max_omega_rad_s <= self._config.maximum_angular_speed_rad_s:
-            raise ValueError("max_omega_rad_s exceeds the resident process limit")
-        if mode is CommandMode.FACE_PERSON:
-            return CommandRequest(
-                context=context,
-                command_id=command_id,
-                mode=CommandMode.FACE_PERSON,
-                goal=(DataField("max_omega_rad_s", max_omega_rad_s),),
-                expiry_tick=context.tick_id,
-            )
-
         max_v_mps = _finite(payload.get("max_v_mps"), "max_v_mps")
+        max_omega_rad_s = _finite(payload.get("max_omega_rad_s"), "max_omega_rad_s")
         if not 0.0 < max_v_mps <= self._config.maximum_linear_speed_mps:
             raise ValueError("max_v_mps exceeds the resident process limit")
+        if not 0.0 < max_omega_rad_s <= self._config.maximum_angular_speed_rad_s:
+            raise ValueError("max_omega_rad_s exceeds the resident process limit")
         if mode is CommandMode.EXPLORE:
             return CommandRequest(
                 context=context,
@@ -363,20 +350,6 @@ class ResidentCommandClient:
             ttl_ns,
         )
 
-    def publish_face_person(
-        self,
-        command_id: str,
-        *,
-        max_omega_rad_s: float,
-        ttl_ns: int,
-    ) -> int:
-        return self._publish(
-            command_id,
-            CommandMode.FACE_PERSON,
-            {"max_omega_rad_s": max_omega_rad_s},
-            ttl_ns,
-        )
-
     def _publish(
         self,
         command_id: str,
@@ -385,8 +358,8 @@ class ResidentCommandClient:
         ttl_ns: int,
     ) -> int:
         require_token(command_id, "command_id")
-        if mode not in (CommandMode.STOP, CommandMode.TELEOP, CommandMode.EXPLORE, CommandMode.FACE_PERSON):
-            raise ValueError("client mode must be STOP, TELEOP or EXPLORE, or FACE_PERSON")
+        if mode not in (CommandMode.STOP, CommandMode.TELEOP, CommandMode.EXPLORE):
+            raise ValueError("client mode must be STOP, TELEOP or EXPLORE")
         ttl = _positive_int(ttl_ns, "ttl_ns")
         if ttl > self._config.maximum_ttl_ns:
             raise ValueError("command TTL exceeds maximum_ttl_ns")
@@ -421,8 +394,6 @@ class ResidentCommandClient:
             if mode is CommandMode.TELEOP
             else {"max_v_mps", "max_omega_rad_s"}
             if mode is CommandMode.EXPLORE
-            else {"max_omega_rad_s"}
-            if mode is CommandMode.FACE_PERSON
             else set()
         )
         if set(values) != expected:
@@ -430,14 +401,12 @@ class ResidentCommandClient:
         normalized = {key: _finite(value, key) for key, value in values.items()}
         if mode is CommandMode.STOP:
             return normalized
-        max_omega_rad_s = normalized["max_omega_rad_s"]
-        if not 0.0 < max_omega_rad_s <= self._config.maximum_angular_speed_rad_s:
-            raise ValueError("max_omega_rad_s exceeds the resident process limit")
-        if mode is CommandMode.FACE_PERSON:
-            return normalized
         max_v_mps = normalized["max_v_mps"]
+        max_omega_rad_s = normalized["max_omega_rad_s"]
         if not 0.0 < max_v_mps <= self._config.maximum_linear_speed_mps:
             raise ValueError("max_v_mps exceeds the resident process limit")
+        if not 0.0 < max_omega_rad_s <= self._config.maximum_angular_speed_rad_s:
+            raise ValueError("max_omega_rad_s exceeds the resident process limit")
         if mode is CommandMode.TELEOP and (
             abs(normalized["v_mps"]) > max_v_mps
             or abs(normalized["omega_rad_s"]) > max_omega_rad_s

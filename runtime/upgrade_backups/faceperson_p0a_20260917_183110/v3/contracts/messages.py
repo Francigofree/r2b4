@@ -54,7 +54,6 @@ class CommandMode(str, Enum):
     TELEOP = "TELEOP"
     NAVIGATE = "NAVIGATE"
     EXPLORE = "EXPLORE"
-    FACE_PERSON = "FACE_PERSON"
     SERVICE = "SERVICE"
 
 
@@ -401,12 +400,10 @@ class MissionIntent:
                 self.velocity_target is None or self.target_pose is not None
             ):
                 raise ContractValidationError("active TELEOP mission requires only velocity_target")
-            if self.mode in (CommandMode.EXPLORE, CommandMode.FACE_PERSON) and (
+            if self.mode is CommandMode.EXPLORE and (
                 self.target_pose is not None or self.velocity_target is not None
             ):
-                raise ContractValidationError(
-                    f"active {self.mode.value} mission cannot carry a fixed target"
-                )
+                raise ContractValidationError("active EXPLORE mission cannot carry a fixed target")
             if self.mode in (CommandMode.STOP, CommandMode.SERVICE):
                 raise ContractValidationError("STOP/SERVICE mission cannot be active")
         if self.mode is CommandMode.STOP and self.stop_reason is None:

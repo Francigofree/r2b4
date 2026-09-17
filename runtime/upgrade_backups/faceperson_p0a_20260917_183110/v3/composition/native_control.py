@@ -147,12 +147,6 @@ def v3_navigation_config_from_mapping(
     person_tracking_enabled = person_tracking.get("enabled", True)
     if type(person_tracking_enabled) is not bool:
         raise ValueError("v3_navigation.person_tracking.enabled must be bool")
-    face_person_value = root.get("face_person")
-    face_person = (
-        {}
-        if face_person_value is None
-        else _mapping(face_person_value, "v3_navigation.face_person")
-    )
     exploration = _mapping(root.get("exploration"), "v3_navigation.exploration")
     rollout = _mapping(root.get("trajectory_rollout"), "v3_navigation.trajectory_rollout")
     async_value = root.get("async_l6")
@@ -252,24 +246,8 @@ def v3_navigation_config_from_mapping(
             person_tracking.get("track_radius_m", 0.30),
             "v3_navigation.person_tracking.track_radius_m",
         ),
-        person_track_max_age_ns=_positive_int(
-            person_tracking.get("track_max_age_ns", 500_000_000),
-            "v3_navigation.person_tracking.track_max_age_ns",
-        ),
     )
     navigation = NavigationConfig(
-        face_person_min_confidence=_finite_float(
-            face_person.get("minimum_confidence", 0.60),
-            "v3_navigation.face_person.minimum_confidence",
-        ),
-        face_person_align_tolerance_rad=_positive_float(
-            face_person.get("align_tolerance_rad", 0.10),
-            "v3_navigation.face_person.align_tolerance_rad",
-        ),
-        face_person_release_tolerance_rad=_positive_float(
-            face_person.get("release_tolerance_rad", 0.16),
-            "v3_navigation.face_person.release_tolerance_rad",
-        ),
         trajectory_replan_interval_ns=_positive_int(
             rollout.get("replan_interval_ns"),
             "v3_navigation.trajectory_rollout.replan_interval_ns",

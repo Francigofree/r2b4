@@ -417,41 +417,6 @@ class OperatorController:
         pid, mode = self._start_motion("roomcruise", capture, capture_mode, args)
         return MotionHandle(pid=pid, label="roomcruise", command_id=command_id, capture_mode=mode)
 
-    def faceperson(
-        self,
-        *,
-        max_omega_rad_s: float = 0.50,
-        capture: bool = True,
-        capture_mode: str = DEFAULT_CAPTURE_MODE,
-    ) -> MotionHandle:
-        max_omega = self._finite(max_omega_rad_s, "max_omega_rad_s")
-        if max_omega <= 0.0 or max_omega > 1.20:
-            raise OperatorError("max_omega_rad_s must be >0 and <=1.20")
-        command_id = f"operator-faceperson-{time.time_ns()}-{os.getpid()}"
-        args = [
-            self.python,
-            "-m",
-            "v3.control_cli",
-            "faceperson",
-            "--command-id",
-            command_id,
-            "--max-omega-rad-s",
-            str(max_omega),
-        ]
-        pid, mode = self._start_motion(
-            "faceperson",
-            capture,
-            capture_mode,
-            args,
-            require_real_motion=False,
-        )
-        return MotionHandle(
-            pid=pid,
-            label="faceperson",
-            command_id=command_id,
-            capture_mode=mode,
-        )
-
     def wheel_targets_to_twist(
         self,
         left_mps: float,
@@ -691,8 +656,6 @@ class OperatorController:
         capture: bool,
         capture_mode: str,
         command: list[str],
-        *,
-        require_real_motion: bool = True,
     ) -> tuple[int, str]:
         requested = self._validate_capture_mode(capture_mode)
         self.ensure_runtime(requested)
@@ -710,26 +673,14 @@ class OperatorController:
         baseline = self._tick(status) if status else -1
         try:
             pid = self._spawn_control_process(command)
-            if require_real_motion:
-                accepted = self._wait_allow(pid, baseline, label)
-            else:
-                accepted = self._wait_allow(
-                    pid,
-                    baseline,
-                    label,
-                    require_real_motion=False,
-                )
-            if not accepted:
-                raise OperatorError(f"{label} did not reach ACTIVE ALLOW")
+            if not self._wait_allow(pid, baseline, label):
+                raise OperatorError(f"{label} did not reach motor ALLOW")
         except BaseException:
             self.stop(wait_idle=False)
             raise
 
         self._emit("info", f"{label}: STARTED")
-        if require_real_motion:
-            self._emit("info", "motor: ALLOW confirmed")
-        else:
-            self._emit("info", "command: ACTIVE/ALLOW confirmed (zero motion is valid)")
+        self._emit("info", "motor: ALLOW confirmed")
         if mode == "alap":
             if capture:
                 path = self.current_capture_path()
@@ -758,14 +709,7 @@ class OperatorController:
         self._write_private_text(self.command_pid_file, str(proc.pid))
         return proc.pid
 
-    def _wait_allow(
-        self,
-        pid: int,
-        baseline: int,
-        label: str,
-        *,
-        require_real_motion: bool = True,
-    ) -> bool:
+    def _wait_allow(self, pid: int, baseline: int, label: str) -> bool:
         last: Mapping[str, object] | None = None
         for _ in range(50):
             if not self._pid_matches(pid, ("v3.control_cli",)):
@@ -782,12 +726,7 @@ class OperatorController:
                 if self._status_is_fault(last):
                     self._failure_report(label, last)
                     return False
-                allowed = (
-                    self._status_has_real_allow(last)
-                    if require_real_motion
-                    else self._status_has_allow(last)
-                )
-                if allowed:
+                if self._status_has_real_allow(last):
                     return True
             time.sleep(0.05)
         self._failure_report(label, last)
@@ -1091,16 +1030,8 @@ class OperatorController:
         )
 
     @staticmethod
-    def _status_has_allow(status: Mapping[str, object]) -> bool:
-        return (
-            status.get("state") == "RUNNING"
-            and status.get("safety_decision") == "ALLOW"
-            and status.get("enabled") is True
-        )
-
-    @staticmethod
     def _status_has_real_allow(status: Mapping[str, object]) -> bool:
-        if not OperatorController._status_has_allow(status):
+        if status.get("state") != "RUNNING" or status.get("safety_decision") != "ALLOW" or status.get("enabled") is not True:
             return False
         left = status.get("left_output")
         right = status.get("right_output")

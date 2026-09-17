@@ -70,14 +70,12 @@ class WorldModelConfig:
     person_track_max_association_distance_m: float = 0.75
     person_track_max_speed_mps: float = 6.0
     person_track_radius_m: float = 0.30
-    person_track_max_age_ns: int = 500_000_000
 
     def __post_init__(self) -> None:
         for name in (
             "max_track_age_ns",
             "local_costmap_max_cell_age_ns",
             "person_lidar_max_skew_ns",
-            "person_track_max_age_ns",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -354,12 +352,7 @@ class ShadowWorldModel:
         expired = tuple(
             track_id
             for track_id, (_, captured_ns) in self._tracks.items()
-            if frame.context.monotonic_ns - captured_ns
-            > (
-                self._config.person_track_max_age_ns
-                if track_id.startswith("person-")
-                else self._config.max_track_age_ns
-            )
+            if frame.context.monotonic_ns - captured_ns > self._config.max_track_age_ns
         )
         for track_id in expired:
             del self._tracks[track_id]

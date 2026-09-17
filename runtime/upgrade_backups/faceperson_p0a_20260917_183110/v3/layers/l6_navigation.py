@@ -53,9 +53,6 @@ class NavigationConfig:
     clearance_weight: float = 0.25
     smoothness_weight: float = 0.15
     novelty_weight: float = 0.22
-    face_person_min_confidence: float = 0.60
-    face_person_align_tolerance_rad: float = 0.10
-    face_person_release_tolerance_rad: float = 0.16
 
     def __post_init__(self) -> None:
         for name in (
@@ -132,30 +129,6 @@ class NavigationConfig:
             raise ValueError("trajectory score weights must be finite and non-negative")
         if sum(weights) <= 0.0:
             raise ValueError("at least one trajectory score weight must be positive")
-        if (
-            not isinstance(self.face_person_min_confidence, (int, float))
-            or isinstance(self.face_person_min_confidence, bool)
-            or not math.isfinite(self.face_person_min_confidence)
-            or not 0.0 <= self.face_person_min_confidence <= 1.0
-        ):
-            raise ValueError("face_person_min_confidence must be in [0, 1]")
-        for name in (
-            "face_person_align_tolerance_rad",
-            "face_person_release_tolerance_rad",
-        ):
-            value = getattr(self, name)
-            if (
-                not isinstance(value, (int, float))
-                or isinstance(value, bool)
-                or not math.isfinite(value)
-                or value <= 0.0
-                or value >= math.pi
-            ):
-                raise ValueError(f"{name} must be in (0, pi)")
-        if self.face_person_release_tolerance_rad <= self.face_person_align_tolerance_rad:
-            raise ValueError(
-                "face_person_release_tolerance_rad must exceed align tolerance"
-            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,8 +147,6 @@ class NavigationStateCheckpoint:
     pending_goal_selected_ns: int | None = None
     pending_release_tick_id: int | None = None
     pending_release_not_before_ns: int | None = None
-    face_person_track_id: str | None = None
-    face_person_aligned: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,8 +309,6 @@ class TrajectoryNavigator:
     __slots__ = (
         "_completed",
         "_config",
-        "_face_person_aligned",
-        "_face_person_track_id",
         "_coverage",
         "_goal_selected_ns",
         "_initial_distance_m",
@@ -416,8 +385,6 @@ class TrajectoryNavigator:
         self._pending_release_not_before_ns: int | None = None
         self._static_planning_index: _StaticPlanningIndex | None = None
         self._trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
-        self._face_person_track_id: str | None = None
-        self._face_person_aligned = False
 
     def checkpoint(self) -> NavigationStateCheckpoint:
         return NavigationStateCheckpoint(
@@ -440,8 +407,6 @@ class TrajectoryNavigator:
             self._pending_goal_selected_ns,
             self._pending_release_tick_id,
             self._pending_release_not_before_ns,
-            self._face_person_track_id,
-            self._face_person_aligned,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -461,8 +426,6 @@ class TrajectoryNavigator:
         self._last_replan_ns = checkpoint.last_replan_ns
         self._last_replan_tick_id = checkpoint.last_replan_tick_id
         self._trajectory_candidates = checkpoint.trajectory_candidates
-        self._face_person_track_id = checkpoint.face_person_track_id
-        self._face_person_aligned = checkpoint.face_person_aligned
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
         pending = checkpoint.pending_rollout_request
@@ -525,8 +488,6 @@ class TrajectoryNavigator:
                 progress=0.0,
                 status=NavigationStatus.ACTIVE,
             )
-        if mission.mode is CommandMode.FACE_PERSON:
-            return self._face_person_plan(mission, estimate, world)
         if mission.mode is CommandMode.EXPLORE:
             return self._exploration_plan(mission, estimate, world)
 
@@ -652,81 +613,6 @@ class TrajectoryNavigator:
         self._last_replan_tick_id = None
         self._trajectory_candidates = ()
         self._static_planning_index = None
-        self._face_person_track_id = None
-        self._face_person_aligned = False
-
-    def _face_person_plan(
-        self,
-        mission: MissionIntent,
-        estimate: RobotEstimate,
-        world: WorldSnapshot,
-    ) -> NavigationPlan:
-        if self._mission_id != mission.mission_id:
-            self._reset()
-            self._mission_id = mission.mission_id
-
-        eligible = tuple(
-            track
-            for track in world.obstacle_tracks
-            if track.track_id.startswith("person-")
-            and track.confidence >= self._config.face_person_min_confidence
-        )
-        selected = next(
-            (
-                track
-                for track in eligible
-                if track.track_id == self._face_person_track_id
-            ),
-            None,
-        )
-        if selected is None and eligible:
-            selected = min(
-                eligible,
-                key=lambda track: (
-                    -track.confidence,
-                    math.hypot(track.x_m - estimate.x_m, track.y_m - estimate.y_m),
-                    track.track_id,
-                ),
-            )
-            self._face_person_track_id = selected.track_id
-            self._face_person_aligned = False
-
-        if selected is None:
-            self._face_person_track_id = None
-            self._face_person_aligned = False
-            return self._inactive(
-                mission,
-                NavigationStatus.INVALIDATED,
-                "PERSON_TARGET_NOT_AVAILABLE",
-            )
-
-        dx = selected.x_m - estimate.x_m
-        dy = selected.y_m - estimate.y_m
-        if math.hypot(dx, dy) <= 1e-9:
-            desired_yaw = estimate.yaw_rad
-            heading_error = 0.0
-        else:
-            desired_yaw = math.atan2(dy, dx)
-            heading_error = _wrapped_angle(desired_yaw - estimate.yaw_rad)
-
-        absolute_error = abs(heading_error)
-        if self._face_person_aligned:
-            if absolute_error > self._config.face_person_release_tolerance_rad:
-                self._face_person_aligned = False
-        elif absolute_error <= self._config.face_person_align_tolerance_rad:
-            self._face_person_aligned = True
-
-        target_yaw = estimate.yaw_rad if self._face_person_aligned else desired_yaw
-        return NavigationPlan(
-            context=mission.context,
-            mission_id=mission.mission_id,
-            route=(Waypoint(estimate.x_m, estimate.y_m, target_yaw),),
-            velocity_target=None,
-            constraints=mission.constraints,
-            corridor_radius_m=0.0,
-            progress=0.0,
-            status=NavigationStatus.ACTIVE,
-        )
 
     def _exploration_plan(
         self,
@@ -950,10 +836,7 @@ class TrajectoryNavigator:
         # Its immutable source snapshot, not scheduler jitter, defines freshness.
         result = backend.take(request_id)
         if result is None:
-            if release_not_before_ns is None:
-                raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
-            self._require_fresh_cached_plan(context)
-            return False
+            raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
         if result.source_context != source_context:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
         if (
@@ -976,13 +859,6 @@ class TrajectoryNavigator:
             result.trajectory_candidates,
         )
         return True
-
-    def _require_fresh_cached_plan(self, context: TickContext) -> None:
-        last_replan_ns = self._last_replan_ns
-        if last_replan_ns is None or not self._trajectory_candidates:
-            raise RuntimeError("async rollout has no authoritative cached plan")
-        if context.monotonic_ns - last_replan_ns > self._max_plan_age_ns:
-            raise RuntimeError("ASYNC_L6_PLAN_STALE")
 
     def _abandon_pending_rollout(self) -> None:
         request_id = self._pending_rollout_id
