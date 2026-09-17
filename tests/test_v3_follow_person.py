@@ -305,7 +305,7 @@ def test_follow_person_target_loss_is_fail_closed_but_reacquirable():
         _world(c2, _person("person-7", 1.7, 0.0)),
     )
     assert reacquired.status is NavigationStatus.ACTIVE
-    assert navigator.checkpoint().face_person_track_id == "person-7"
+    assert navigator.checkpoint().follow_person_track_id == "person-7"
 
 
 def test_resident_follow_person_command_roundtrip(tmp_path: Path):
