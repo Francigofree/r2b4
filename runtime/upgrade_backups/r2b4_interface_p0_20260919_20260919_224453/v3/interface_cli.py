@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import threading
 import time
@@ -201,16 +200,8 @@ def _print_json(value: object) -> None:
 def _status_line(interface: RobotInterface) -> dict[str, object]:
     data = interface.read("operator.status")
     assert isinstance(data, Mapping)
-    runtime_running = bool(data.get("runtime_running"))
-    runtime = "RUNNING" if runtime_running else "STOPPED"
-    status = None
-    if runtime_running:
-        try:
-            live = interface.read("v3.status")
-        except RobotInterfaceError:
-            live = None
-        if isinstance(live, Mapping):
-            status = live
+    status = data.get("status")
+    runtime = "RUNNING" if data.get("runtime_running") else "STOPPED"
     result: dict[str, object] = {
         "runtime": runtime,
         "pid": data.get("runtime_pid"),
@@ -279,11 +270,6 @@ def _run_timed_motion(
     seconds = _validate_seconds(args.seconds)
     action, parameters = _motion_request(args)
     parameters.update({"capture": not no_trigger, "capture_mode": capture_mode})
-    if seconds > 0.0:
-        # Timed sessions are owned by this interface process. The detached
-        # heartbeat producer cannot outlive a killed/hung launcher.
-        parameters["session_owner_pid"] = os.getpid()
-        parameters["session_watchdog_s"] = seconds + 5.0
 
     print(f"R2B4: {command} | {'continuous' if seconds == 0 else f'{seconds:g} s'} | capture {capture_mode}")
     try:

@@ -22,7 +22,7 @@ class V3ControlInterfaceAdapter:
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
         status = self.controller.status()
         runtime_running = bool(status.get("runtime_running"))
-        runtime_status = self.controller.live_runtime_status()
+        runtime_status = status.get("status")
         runtime_ready = bool(
             isinstance(runtime_status, Mapping)
             and runtime_status.get("state") == "RUNNING"
@@ -36,30 +36,30 @@ class V3ControlInterfaceAdapter:
             "v3.status": {
                 "kind": "read",
                 "supported": True,
-                "available": read_ready,
+                "available": True,
                 "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+                "reason": None if read_ready else "NO_RUNTIME_STATUS",
             },
             "v3.pose": {
                 "kind": "read",
                 "supported": True,
                 "available": read_ready,
                 "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+                "reason": None if read_ready else "NO_RUNTIME_STATUS",
             },
             "v3.safety": {
                 "kind": "read",
                 "supported": True,
                 "available": read_ready,
                 "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+                "reason": None if read_ready else "NO_RUNTIME_STATUS",
             },
             "v3.health": {
                 "kind": "read",
                 "supported": True,
                 "available": read_ready,
                 "ready": read_ready,
-                "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
+                "reason": None if read_ready else "NO_RUNTIME_STATUS",
             },
             "v3.command.stop": self._action(True, runtime_running, "STOP_IS_SAFE_NOOP_WHEN_IDLE"),
             "v3.command.forward": self._action(True, True, current),
@@ -82,11 +82,11 @@ class V3ControlInterfaceAdapter:
         }
 
     def read(self, resource: str) -> object:
-        status = self.controller.live_runtime_status()
-        if not isinstance(status, Mapping):
-            raise RuntimeError("live resident V3 status is unavailable")
+        status = self.controller.status().get("status")
         if resource == "v3.status":
             return status
+        if not isinstance(status, Mapping):
+            raise RuntimeError("resident V3 status is unavailable")
         if resource == "v3.pose":
             estimate = status.get("estimate")
             return dict(estimate) if isinstance(estimate, Mapping) else None
@@ -116,18 +116,14 @@ class V3ControlInterfaceAdapter:
 
         capture = bool(params.pop("capture", True))
         capture_mode = str(params.pop("capture_mode", DEFAULT_CAPTURE_MODE))
-        session = {
-            "session_owner_pid": params.pop("session_owner_pid", None),
-            "session_watchdog_s": params.pop("session_watchdog_s", None),
-        }
         if action == "v3.command.forward":
             speed = params.pop("speed_mps", 0.15)
             self._reject_unknown(params, set())
-            return self.controller.forward(speed, capture=capture, capture_mode=capture_mode, **session)
+            return self.controller.forward(speed, capture=capture, capture_mode=capture_mode)
         if action == "v3.command.backward":
             speed = params.pop("speed_mps", 0.15)
             self._reject_unknown(params, set())
-            return self.controller.backward(speed, capture=capture, capture_mode=capture_mode, **session)
+            return self.controller.backward(speed, capture=capture, capture_mode=capture_mode)
         if action == "v3.command.teleop":
             v_mps = self._required(params, "v_mps")
             omega_rad_s = self._required(params, "omega_rad_s")
@@ -135,30 +131,43 @@ class V3ControlInterfaceAdapter:
             max_omega = params.pop("max_omega_rad_s", 1.20)
             self._reject_unknown(params, set())
             return self.controller.start_teleop(
-                v_mps=v_mps, omega_rad_s=omega_rad_s, max_v_mps=max_v,
-                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, **session,
+                v_mps=v_mps,
+                omega_rad_s=omega_rad_s,
+                max_v_mps=max_v,
+                max_omega_rad_s=max_omega,
+                capture=capture,
+                capture_mode=capture_mode,
             )
         if action == "v3.command.wheels":
             left = self._required(params, "left_mps")
             right = self._required(params, "right_mps")
             self._reject_unknown(params, set())
-            return self.controller.wheels(left, right, capture=capture, capture_mode=capture_mode, **session)
+            return self.controller.wheels(
+                left,
+                right,
+                capture=capture,
+                capture_mode=capture_mode,
+            )
         if action == "v3.command.explore":
             self._reject_unknown(params, set())
-            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, **session)
+            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode)
         if action == "v3.command.face_person":
             max_omega = params.pop("max_omega_rad_s", 0.50)
             self._reject_unknown(params, set())
             return self.controller.faceperson(
-                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, **session,
+                max_omega_rad_s=max_omega,
+                capture=capture,
+                capture_mode=capture_mode,
             )
         if action == "v3.command.follow_person":
             max_v = params.pop("max_v_mps", 0.15)
             max_omega = params.pop("max_omega_rad_s", 0.30)
             self._reject_unknown(params, set())
             return self.controller.followperson(
-                max_v_mps=max_v, max_omega_rad_s=max_omega,
-                capture=capture, capture_mode=capture_mode, **session,
+                max_v_mps=max_v,
+                max_omega_rad_s=max_omega,
+                capture=capture,
+                capture_mode=capture_mode,
             )
         raise KeyError(action)
 

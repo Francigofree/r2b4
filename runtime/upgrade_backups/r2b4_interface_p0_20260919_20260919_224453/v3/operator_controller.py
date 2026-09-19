@@ -11,8 +11,6 @@ launcher so the same surface can be used by a CLI, GUI, agent or AI tool.
 
 from __future__ import annotations
 
-import fcntl
-import functools
 import json
 import math
 import os
@@ -22,7 +20,6 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
@@ -62,15 +59,6 @@ class OperatorSnapshot:
     status: Mapping[str, object] | None
 
 
-def _serialized_operator_transition(method):
-    @functools.wraps(method)
-    def wrapped(self, *args, **kwargs):
-        with self.operator_transition():
-            return method(self, *args, **kwargs)
-
-    return wrapped
-
-
 class OperatorController:
     """General R2B4 operator/session controller.
 
@@ -100,13 +88,9 @@ class OperatorController:
         self.movement_capture_file = self.runtime_dir / ".r2b4_movement_capture"
         self.runtime_log_file = self.runtime_dir / ".r2b4_runtime_log"
         self.command_log_file = self.runtime_dir / ".r2b4_command_log"
-        self.operator_lock_file = self.runtime_dir / ".r2b4_operator.lock"
         self.physics_file = self.root / "conf" / "fizika.json"
         self.python = python_executable or sys.executable
         self._event_sink = event_sink
-        self._transition_thread_lock = threading.RLock()
-        self._transition_depth = 0
-        self._transition_stream = None
 
     # ------------------------------------------------------------------
     # Public API: status / lifecycle
@@ -141,52 +125,6 @@ class OperatorController:
         result["command_log_tail"] = self._tail(command_log, 20) if command_log else []
         return result
 
-    def live_runtime_status(self, *, max_age_ns: int = 500_000_000) -> dict[str, object] | None:
-        """Return only status proven to belong to a currently live resident runtime."""
-        if not isinstance(max_age_ns, int) or isinstance(max_age_ns, bool) or max_age_ns <= 0:
-            raise ValueError("max_age_ns must be a positive integer")
-        if self._runtime_pid() is None:
-            return None
-        status = self._read_status_optional()
-        if status is None or status.get("state") != "RUNNING":
-            return None
-        stamp = status.get("monotonic_ns")
-        if not isinstance(stamp, int) or isinstance(stamp, bool):
-            return None
-        age = time.monotonic_ns() - stamp
-        if not 0 <= age < max_age_ns:
-            return None
-        return status
-
-    @contextmanager
-    def operator_transition(self):
-        """Cross-process serialization for host/session state transitions only."""
-        with self._transition_thread_lock:
-            if self._transition_depth > 0:
-                self._transition_depth += 1
-                try:
-                    yield
-                finally:
-                    self._transition_depth -= 1
-                return
-
-            self.runtime_dir.mkdir(parents=True, exist_ok=True)
-            stream = self.operator_lock_file.open("a+")
-            self.operator_lock_file.chmod(0o600)
-            try:
-                fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
-                self._transition_stream = stream
-                self._transition_depth = 1
-                try:
-                    yield
-                finally:
-                    self._transition_depth = 0
-                    self._transition_stream = None
-                    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
-            finally:
-                stream.close()
-
-    @_serialized_operator_transition
     def runtime_start(self, capture_mode: str = DEFAULT_CAPTURE_MODE) -> int:
         mode = self._validate_capture_mode(capture_mode)
         old = self._runtime_pid()
@@ -268,7 +206,6 @@ class OperatorController:
         self._emit("info", f"runtime log: {runtime_log}")
         return pid
 
-    @_serialized_operator_transition
     def ensure_runtime(self, capture_mode: str = DEFAULT_CAPTURE_MODE) -> int:
         requested = self._validate_capture_mode(capture_mode)
         pid = self._runtime_pid()
@@ -279,42 +216,32 @@ class OperatorController:
             self._emit("info", f"runtime: capture mode {current} -> {requested} requires safe restart")
         return self.runtime_start(requested)
 
-    def _preempt_motion_once(self) -> Exception | None:
-        error: Exception | None = None
+    def stop(self, *, wait_idle: bool = True) -> None:
+        producer_error: Exception | None = None
         try:
             self._stop_command_producers()
         except Exception as exc:
-            error = exc
+            producer_error = exc
         try:
             self._publish_stop()
         except Exception as exc:
-            if error is None:
-                error = exc
-        return error
-
-    def stop(self, *, wait_idle: bool = True) -> None:
-        # Request STOP before waiting for the orchestration lock, then repeat it
-        # under the lock so a concurrent ACTIVE transition cannot slip behind it.
-        producer_error = self._preempt_motion_once()
-        with self.operator_transition():
             if producer_error is None:
-                producer_error = self._preempt_motion_once()
-            try:
-                self._trigger_movement_capture_if_needed()
-            except Exception as exc:
-                self._emit("warning", f"movement capture trigger failed: {exc}")
-            finally:
-                self._unlink(self.movement_capture_file)
+                producer_error = exc
+        try:
+            self._trigger_movement_capture_if_needed()
+        except Exception as exc:
+            self._emit("warning", f"movement capture trigger failed: {exc}")
+        finally:
+            self._unlink(self.movement_capture_file)
 
-            if producer_error is not None:
-                self._emit("warning", "STOP could not be completed cleanly; requesting runtime shutdown")
-                self._runtime_kill()
-                raise OperatorError(str(producer_error))
+        if producer_error is not None:
+            self._emit("warning", "STOP could not be completed cleanly; requesting runtime shutdown")
+            self._runtime_kill()
+            raise OperatorError(str(producer_error))
 
-            if wait_idle and self._runtime_pid() is not None:
-                self.wait_idle()
+        if wait_idle and self._runtime_pid() is not None:
+            self.wait_idle()
 
-    @_serialized_operator_transition
     def runtime_stop(self) -> None:
         try:
             self.stop(wait_idle=False)
@@ -375,14 +302,16 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         speed = self._positive_speed(speed_mps)
         return self.start_teleop(
-            v_mps=speed, omega_rad_s=0.0, max_v_mps=speed, max_omega_rad_s=0.60,
-            label=f"forward {speed:g} m/s", capture=capture, capture_mode=capture_mode,
-            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
+            v_mps=speed,
+            omega_rad_s=0.0,
+            max_v_mps=speed,
+            max_omega_rad_s=0.60,
+            label=f"forward {speed:g} m/s",
+            capture=capture,
+            capture_mode=capture_mode,
         )
 
     def backward(
@@ -391,14 +320,16 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         speed = self._positive_speed(speed_mps)
         return self.start_teleop(
-            v_mps=-speed, omega_rad_s=0.0, max_v_mps=speed, max_omega_rad_s=0.60,
-            label=f"backward {speed:g} m/s", capture=capture, capture_mode=capture_mode,
-            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
+            v_mps=-speed,
+            omega_rad_s=0.0,
+            max_v_mps=speed,
+            max_omega_rad_s=0.60,
+            label=f"backward {speed:g} m/s",
+            capture=capture,
+            capture_mode=capture_mode,
         )
 
     def start_teleop(
@@ -411,8 +342,6 @@ class OperatorController:
         label: str = "teleop",
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         v = self._finite(v_mps, "v_mps")
         omega = self._finite(omega_rad_s, "omega_rad_s")
@@ -431,14 +360,22 @@ class OperatorController:
 
         command_id = f"operator-teleop-{time.time_ns()}-{os.getpid()}"
         args = [
-            self.python, "-m", "v3.control_cli", "teleop", "--command-id", command_id,
-            "--v-mps", str(v), "--omega-rad-s", str(omega),
-            "--max-v-mps", str(max_v), "--max-omega-rad-s", str(max_omega),
+            self.python,
+            "-m",
+            "v3.control_cli",
+            "teleop",
+            "--command-id",
+            command_id,
+            "--v-mps",
+            str(v),
+            "--omega-rad-s",
+            str(omega),
+            "--max-v-mps",
+            str(max_v),
+            "--max-omega-rad-s",
+            str(max_omega),
         ]
-        pid, mode = self._start_motion(
-            label, capture, capture_mode, args,
-            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
-        )
+        pid, mode = self._start_motion(label, capture, capture_mode, args)
         return MotionHandle(pid=pid, label=label, command_id=command_id, capture_mode=mode)
 
     def wheels(
@@ -448,17 +385,18 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         v, omega, max_v, max_omega, track = self.wheel_targets_to_twist(left_mps, right_mps)
         self._emit("info", f"wheel target: left={left_mps:g} m/s, right={right_mps:g} m/s")
         self._emit("info", f"canonical target: v={v:g} m/s, omega={omega:g} rad/s (track={track:g} m)")
         return self.start_teleop(
-            v_mps=v, omega_rad_s=omega, max_v_mps=max_v, max_omega_rad_s=max_omega,
-            label=f"wheels L={left_mps:g} R={right_mps:g} m/s", capture=capture,
-            capture_mode=capture_mode, session_owner_pid=session_owner_pid,
-            session_watchdog_s=session_watchdog_s,
+            v_mps=v,
+            omega_rad_s=omega,
+            max_v_mps=max_v,
+            max_omega_rad_s=max_omega,
+            label=f"wheels L={left_mps:g} R={right_mps:g} m/s",
+            capture=capture,
+            capture_mode=capture_mode,
         )
 
     def roomcruise(
@@ -466,15 +404,17 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         command_id = f"operator-roomcruise-{time.time_ns()}-{os.getpid()}"
-        args = [self.python, "-m", "v3.control_cli", "explore", "--command-id", command_id]
-        pid, mode = self._start_motion(
-            "roomcruise", capture, capture_mode, args,
-            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
-        )
+        args = [
+            self.python,
+            "-m",
+            "v3.control_cli",
+            "explore",
+            "--command-id",
+            command_id,
+        ]
+        pid, mode = self._start_motion("roomcruise", capture, capture_mode, args)
         return MotionHandle(pid=pid, label="roomcruise", command_id=command_id, capture_mode=mode)
 
     def faceperson(
@@ -483,22 +423,34 @@ class OperatorController:
         max_omega_rad_s: float = 0.50,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         max_omega = self._finite(max_omega_rad_s, "max_omega_rad_s")
         if max_omega <= 0.0 or max_omega > 1.20:
             raise OperatorError("max_omega_rad_s must be >0 and <=1.20")
         command_id = f"operator-faceperson-{time.time_ns()}-{os.getpid()}"
         args = [
-            self.python, "-m", "v3.control_cli", "faceperson", "--command-id", command_id,
-            "--max-omega-rad-s", str(max_omega),
+            self.python,
+            "-m",
+            "v3.control_cli",
+            "faceperson",
+            "--command-id",
+            command_id,
+            "--max-omega-rad-s",
+            str(max_omega),
         ]
         pid, mode = self._start_motion(
-            "faceperson", capture, capture_mode, args, require_real_motion=False,
-            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
+            "faceperson",
+            capture,
+            capture_mode,
+            args,
+            require_real_motion=False,
         )
-        return MotionHandle(pid=pid, label="faceperson", command_id=command_id, capture_mode=mode)
+        return MotionHandle(
+            pid=pid,
+            label="faceperson",
+            command_id=command_id,
+            capture_mode=mode,
+        )
 
     def followperson(
         self,
@@ -507,8 +459,6 @@ class OperatorController:
         max_omega_rad_s: float = 0.30,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         max_v = self._finite(max_v_mps, "max_v_mps")
         max_omega = self._finite(max_omega_rad_s, "max_omega_rad_s")
@@ -518,14 +468,30 @@ class OperatorController:
             raise OperatorError("max_omega_rad_s must be >0 and <=1.20")
         command_id = f"operator-followperson-{time.time_ns()}-{os.getpid()}"
         args = [
-            self.python, "-m", "v3.control_cli", "followperson", "--command-id", command_id,
-            "--max-v-mps", str(max_v), "--max-omega-rad-s", str(max_omega),
+            self.python,
+            "-m",
+            "v3.control_cli",
+            "followperson",
+            "--command-id",
+            command_id,
+            "--max-v-mps",
+            str(max_v),
+            "--max-omega-rad-s",
+            str(max_omega),
         ]
         pid, mode = self._start_motion(
-            "followperson", capture, capture_mode, args, require_real_motion=False,
-            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
+            "followperson",
+            capture,
+            capture_mode,
+            args,
+            require_real_motion=False,
         )
-        return MotionHandle(pid=pid, label="followperson", command_id=command_id, capture_mode=mode)
+        return MotionHandle(
+            pid=pid,
+            label="followperson",
+            command_id=command_id,
+            capture_mode=mode,
+        )
 
     def wheel_targets_to_twist(
         self,
@@ -577,7 +543,6 @@ class OperatorController:
             return None
         return Path(raw) if raw else None
 
-    @_serialized_operator_transition
     def capture_start(self, capture_mode: str | None = None) -> Path | None:
         if capture_mode is None:
             mode = self.current_capture_mode() if self._runtime_pid() is not None else DEFAULT_CAPTURE_MODE
@@ -594,7 +559,6 @@ class OperatorController:
             raise OperatorError("capture is OFF (nincs)")
         return self.current_capture_path()
 
-    @_serialized_operator_transition
     def capture_stop(self) -> dict[str, object]:
         path = self.current_capture_path()
         mode = self.current_capture_mode()
@@ -654,7 +618,6 @@ class OperatorController:
     # Public API: integrated physical test sequence
     # ------------------------------------------------------------------
 
-    @_serialized_operator_transition
     def run_proba(self, *, capture_mode: str = DEFAULT_CAPTURE_MODE) -> None:
         mode = self._validate_capture_mode(capture_mode)
         self.ensure_runtime(mode)
@@ -763,7 +726,6 @@ class OperatorController:
     # Internal motion/session helpers
     # ------------------------------------------------------------------
 
-    @_serialized_operator_transition
     def _start_motion(
         self,
         label: str,
@@ -772,8 +734,6 @@ class OperatorController:
         command: list[str],
         *,
         require_real_motion: bool = True,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
     ) -> tuple[int, str]:
         requested = self._validate_capture_mode(capture_mode)
         self.ensure_runtime(requested)
@@ -790,17 +750,16 @@ class OperatorController:
         status = self._read_status_optional()
         baseline = self._tick(status) if status else -1
         try:
-            if session_owner_pid is None and session_watchdog_s is None:
-                pid = self._spawn_control_process(command)
-            else:
-                pid = self._spawn_control_process(
-                    command, session_owner_pid=session_owner_pid,
-                    session_watchdog_s=session_watchdog_s,
-                )
+            pid = self._spawn_control_process(command)
             if require_real_motion:
                 accepted = self._wait_allow(pid, baseline, label)
             else:
-                accepted = self._wait_allow(pid, baseline, label, require_real_motion=False)
+                accepted = self._wait_allow(
+                    pid,
+                    baseline,
+                    label,
+                    require_real_motion=False,
+                )
             if not accepted:
                 raise OperatorError(f"{label} did not reach ACTIVE ALLOW")
         except BaseException:
@@ -824,36 +783,18 @@ class OperatorController:
             self._emit("info", "capture: OFF")
         return pid, mode
 
-    def _spawn_control_process(
-        self,
-        command: list[str],
-        *,
-        session_owner_pid: int | None = None,
-        session_watchdog_s: float | None = None,
-    ) -> int:
-        prepared = list(command)
-        cli_options: list[str] = []
-        if session_owner_pid is not None:
-            if not isinstance(session_owner_pid, int) or isinstance(session_owner_pid, bool) or session_owner_pid <= 0:
-                raise OperatorError("session_owner_pid must be a positive integer")
-            cli_options += ["--owner-pid", str(session_owner_pid)]
-        if session_watchdog_s is not None:
-            watchdog = self._finite(session_watchdog_s, "session_watchdog_s")
-            if watchdog <= 0.0:
-                raise OperatorError("session_watchdog_s must be > 0")
-            cli_options += ["--max-runtime-s", str(watchdog)]
-        if cli_options:
-            if len(prepared) < 4 or prepared[1:3] != ["-m", "v3.control_cli"]:
-                raise OperatorError("session watchdog requires canonical v3.control_cli producer")
-            prepared[3:3] = cli_options
-
+    def _spawn_control_process(self, command: list[str]) -> int:
         command_log = self._new_temp_log("r2b4-command.")
         self._write_private_text(self.command_log_file, str(command_log))
         with command_log.open("ab", buffering=0) as log:
             proc = subprocess.Popen(
-                prepared, cwd=self.root, stdin=subprocess.DEVNULL,
-                stdout=log, stderr=subprocess.STDOUT,
-                start_new_session=True, close_fds=True,
+                command,
+                cwd=self.root,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                close_fds=True,
             )
         self._write_private_text(self.command_pid_file, str(proc.pid))
         return proc.pid

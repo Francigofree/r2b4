@@ -56,6 +56,7 @@ Developer tools:
   r pytest [args...]            run python3 -m pytest in the repo
   r tools                       list repo Python tools
   r tool NAME [args...]         run tools/NAME.py or ROOT/NAME.py
+  r NAME [args...]              direct-run a matching repo tool if NAME.py exists
 
 RPi / Linux helpers:
   r cpu [SECONDS] [INTERVAL]    per-core CPU monitor; default 30 s / 1 s
@@ -155,41 +156,6 @@ find_tool() {
     return 1
 }
 
-is_hardware_tool() {
-    local base="${1##*/}"
-    base="${base%.py}"
-    case "$base" in
-        r2b4_voice_mic_test|v3_camera_test|v3_encoder_ab_probe|v3_person_detection_test|v3_sensor_measurement)
-            return 0 ;;
-    esac
-    return 1
-}
-
-hardware_guard() {
-    need_root || return $?
-    command -v flock >/dev/null 2>&1 || { printf 'ERROR: flock is required.\n' >&2; return 2; }
-    mkdir -p "$ROOT/runtime"
-    exec 9>"$ROOT/runtime/.r2b4_operator.lock"
-    chmod 600 "$ROOT/runtime/.r2b4_operator.lock"
-    flock -x 9 || return 2
-    cd "$ROOT" || return 2
-    python3 -c 'from pathlib import Path; from v3.operator_controller import OperatorController; raise SystemExit(3 if OperatorController(Path.cwd()).status().get("runtime_running") else 0)'
-    local rc=$?
-    if [[ $rc -eq 3 ]]; then
-        printf 'REFUSED: resident V3 runtime owns physical hardware. Stop it before this diagnostic.\n' >&2
-        flock -u 9 || true; exec 9>&-; return 3
-    fi
-    if [[ $rc -ne 0 ]]; then
-        printf 'ERROR: hardware ownership check failed.\n' >&2
-        flock -u 9 || true; exec 9>&-; return $rc
-    fi
-}
-
-release_hardware_guard() {
-    flock -u 9 2>/dev/null || true
-    exec 9>&-
-}
-
 run_tool() {
     need_root || return $?
     local name="${1:-}"
@@ -202,13 +168,6 @@ run_tool() {
         return 2
     }
     cd "$ROOT" || return 2
-    if is_hardware_tool "$name"; then
-        hardware_guard || return $?
-        python3 "$path" "$@"
-        local rc=$?
-        release_hardware_guard
-        return $rc
-    fi
     exec python3 "$path" "$@"
 }
 
@@ -439,21 +398,23 @@ case "$CMD" in
         fi
         ;;
     i2c)
-        hardware_guard || exit $?
         if command -v i2cdetect >/dev/null 2>&1; then
-            i2cdetect -y 1; rc=$?
+            i2cdetect -y 1
         else
-            printf 'i2cdetect is not installed (package: i2c-tools).\n' >&2; rc=1
+            printf 'i2cdetect is not installed (package: i2c-tools).\n' >&2
+            exit 1
         fi
-        release_hardware_guard
-        exit $rc
         ;;
     host)
         show_host
         ;;
     *)
-        # Unknown launcher words always go to the canonical robot interface.
-        # Repo tools are explicit via: r tool NAME ...
+        # Direct convenience path for repo tools: "r v3_sensor_measurement ..."
+        if TOOL_PATH="$(find_tool "$CMD" 2>/dev/null)"; then
+            cd "$ROOT" || exit 2
+            exec python3 "$TOOL_PATH" "$@"
+        fi
+        # Everything else remains on the existing canonical robot interface.
         need_root || exit $?
         cd "$ROOT" || exit 2
         exec python3 -m v3.interface_cli "$CMD" "$@"

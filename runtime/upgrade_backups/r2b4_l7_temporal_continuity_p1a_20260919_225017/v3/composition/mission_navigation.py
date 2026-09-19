@@ -18,7 +18,7 @@ from v3.contracts import (
 )
 from v3.layers.l5_command_mission import MissionConfig, MissionManager
 from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
-from v3.layers.l7_motion_selection import MotionSelector
+from v3.layers.l7_motion_selection import select_motion
 from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
 from v3.layers.l9_operational_constraints import (
     OperationalConstraintLayer,
@@ -66,14 +66,7 @@ class MissionNavigationTrace:
 class MissionNavigationComposition:
     """Evaluate L5 through L9 once each without any actuator or writer port."""
 
-    __slots__ = (
-        "_constraints",
-        "_last_context",
-        "_mission",
-        "_motion",
-        "_motion_selection",
-        "_navigation",
-    )
+    __slots__ = ("_constraints", "_last_context", "_mission", "_motion", "_navigation")
 
     def __init__(
         self,
@@ -85,7 +78,6 @@ class MissionNavigationComposition:
     ) -> None:
         self._mission = MissionManager(mission_config)
         self._navigation = TrajectoryNavigator(navigation_config)
-        self._motion_selection = MotionSelector()
         self._motion = MotionRealizer(motion_config)
         self._constraints = OperationalConstraintLayer(constraints_config)
         self._last_context: TickContext | None = None
@@ -100,7 +92,7 @@ class MissionNavigationComposition:
 
         mission = self._mission.evaluate(inputs.command)
         navigation = self._navigation.evaluate(mission, inputs.estimate, inputs.world)
-        objective = self._motion_selection.evaluate(navigation)
+        objective = select_motion(navigation)
         motion = self._motion.evaluate(objective, inputs.estimate, inputs.world)
         constrained = self._constraints.evaluate(motion, inputs.estimate)
         trace = MissionNavigationTrace(

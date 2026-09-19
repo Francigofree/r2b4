@@ -34,10 +34,7 @@ from v3.layers.l6_navigation import (
     NavigationStateCheckpoint,
     TrajectoryNavigator,
 )
-from v3.layers.l7_motion_selection import (
-    MotionSelectionStateCheckpoint,
-    MotionSelector,
-)
+from v3.layers.l7_motion_selection import select_motion
 from v3.layers.l8_motion_realization import (
     MotionRealizationConfig,
     MotionRealizationStateCheckpoint,
@@ -505,7 +502,6 @@ class NativeControlStateCheckpoint:
     actuator_control: WheelActuatorStateCheckpoint
     final_safety: FinalSafetyStateCheckpoint
     motion_realization: MotionRealizationStateCheckpoint = MotionRealizationStateCheckpoint()
-    motion_selection: MotionSelectionStateCheckpoint = MotionSelectionStateCheckpoint()
 
 
 class NativeControlComposition:
@@ -522,7 +518,6 @@ class NativeControlComposition:
         "_estimator",
         "_final_safety",
         "_mission",
-        "_motion_selection",
         "_motion_realization",
         "_navigation",
         "_operational_constraints",
@@ -562,7 +557,6 @@ class NativeControlComposition:
                 raise ValueError("trajectory rollout backend requires async_l6.enabled")
             backend = None
             navigation = TrajectoryNavigator(config.navigation)
-        motion_selection = MotionSelector()
         motion_realization = MotionRealizer(config.motion_realization)
         operational_constraints = OperationalConstraintLayer(
             config.operational_constraints
@@ -581,7 +575,6 @@ class NativeControlComposition:
         self._world_model = world_model
         self._mission = mission
         self._navigation = navigation
-        self._motion_selection = motion_selection
         self._rollout_backend = backend
         self._motion_realization = motion_realization
         self._operational_constraints = operational_constraints
@@ -595,7 +588,7 @@ class NativeControlComposition:
                 world_model=world_model,
                 command_mission=mission.evaluate,
                 navigation=navigation.evaluate,
-                motion_selection=motion_selection.evaluate,
+                motion_selection=select_motion,
                 motion_realization=motion_realization.evaluate,
                 constraints=operational_constraints.evaluate,
                 chassis_control=DifferentialDriveKinematics(config.chassis_control),
@@ -625,7 +618,6 @@ class NativeControlComposition:
             self._actuator_control.checkpoint(),
             self._final_safety.checkpoint(),
             self._motion_realization.checkpoint(),
-            self._motion_selection.checkpoint(),
         )
 
     def restore(self, checkpoint: NativeControlStateCheckpoint) -> None:
@@ -638,7 +630,6 @@ class NativeControlComposition:
         self._world_model.restore(checkpoint.world_model)
         self._mission.restore(checkpoint.mission)
         self._navigation.restore(checkpoint.navigation)
-        self._motion_selection.restore(checkpoint.motion_selection)
         self._motion_realization.restore(checkpoint.motion_realization)
         self._operational_constraints.restore(checkpoint.operational_constraints)
         self._actuator_control.restore(checkpoint.actuator_control)

@@ -1,0 +1,24 @@
+{
+  "upgrade": "R2B4 V3 L7 Temporal Continuity P1-A",
+  "source_commit": "48678c5798ecc0dd179a6aa18760dcf92353978e",
+  "strategy": "ID-HOLD",
+  "continuity_score_band": 0.005,
+  "modified_files": [
+    {
+      "path": "v3/layers/l7_motion_selection.py",
+      "expected_git_blob_sha": "583b28073c5e6a3ef3bac1c9ca2c9db9cc2628f8"
+    },
+    {
+      "path": "v3/composition/native_control.py",
+      "expected_git_blob_sha": "2b7242d7ac60993314a613a0ac0fc15510f0bde0"
+    },
+    {
+      "path": "v3/composition/mission_navigation.py",
+      "expected_git_blob_sha": "20423744b45e0b2e9c7bb3a2e3e920b6e5f57b88"
+    }
+  ],
+  "new_files": [
+    "tests/test_v3_l7_motion_continuity.py"
+  ],
+  "full_repo_sha_check": false
+}

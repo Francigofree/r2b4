@@ -39,25 +39,27 @@ class CameraInterfaceAdapter:
         raise KeyError(resource)
 
     def execute(self, action: str, **parameters: object) -> object:
-        with self.controller.operator_transition():
-            if self.controller.status().get("runtime_running"):
-                raise RuntimeError("camera is owned by the resident V3 runtime")
-            params = dict(parameters)
-            if action == "camera.photo":
-                output = self._required(params, "output")
-                warmup = params.pop("warmup_s", 2.0)
-                self._reject_unknown(params)
-                return capture_photo(str(output), warmup_s=float(warmup))
-            if action == "camera.video":
-                output = self._required(params, "output")
-                duration = self._required(params, "duration_s")
-                bitrate = params.pop("bitrate", 4_000_000)
-                warmup = params.pop("warmup_s", 1.0)
-                self._reject_unknown(params)
-                return capture_h264_video(
-                    str(output), float(duration), bitrate=int(bitrate), warmup_s=float(warmup),
-                )
-            raise KeyError(action)
+        if self.controller.status().get("runtime_running"):
+            raise RuntimeError("camera is owned by the resident V3 runtime")
+        params = dict(parameters)
+        if action == "camera.photo":
+            output = self._required(params, "output")
+            warmup = params.pop("warmup_s", 2.0)
+            self._reject_unknown(params)
+            return capture_photo(str(output), warmup_s=float(warmup))
+        if action == "camera.video":
+            output = self._required(params, "output")
+            duration = self._required(params, "duration_s")
+            bitrate = params.pop("bitrate", 4_000_000)
+            warmup = params.pop("warmup_s", 1.0)
+            self._reject_unknown(params)
+            return capture_h264_video(
+                str(output),
+                float(duration),
+                bitrate=int(bitrate),
+                warmup_s=float(warmup),
+            )
+        raise KeyError(action)
 
     @staticmethod
     def _required(parameters: dict[str, object], name: str) -> object:

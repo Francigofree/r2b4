@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import stat
 import sys
@@ -89,18 +88,6 @@ def _active_preflight(status_path: Path) -> None:
         raise ValueError("resident runtime is not ready for an ACTIVE command")
 
 
-def _pid_alive(pid: int) -> bool:
-    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 def _run_active(
     client: ResidentCommandClient,
     publish: Callable[[str], int],
@@ -108,26 +95,36 @@ def _run_active(
     command_id: str,
     ttl_ns: int,
     heartbeat_ns: int,
-    owner_pid: int | None = None,
-    max_runtime_s: float | None = None,
     sleep: Callable[[float], None] = time.sleep,
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
 ) -> int:
     if heartbeat_ns <= 0 or heartbeat_ns >= ttl_ns:
         raise ValueError("heartbeat interval must be positive and shorter than TTL")
-    if owner_pid is not None and (isinstance(owner_pid, bool) or owner_pid <= 0):
-        raise ValueError("owner_pid must be a positive process id")
-    watchdog_ns: int | None = None
-    if max_runtime_s is not None:
-        runtime_s = float(max_runtime_s)
-        if not math.isfinite(runtime_s) or runtime_s <= 0.0:
-            raise ValueError("max_runtime_s must be finite and > 0")
-        watchdog_ns = int(runtime_s * 1e9)
-
-    started_ns = monotonic_ns()
-    deadline_ns = started_ns + watchdog_ns if watchdog_ns is not None else None
-
-    def stop_with_reason(reason: str, returncode: int) -> int:
+    try:
+        next_heartbeat_ns = monotonic_ns() + heartbeat_ns
+        revision = publish(command_id)
+        print(
+            json.dumps(
+                _result(
+                    "ACTIVE",
+                    command_id=command_id,
+                    revision=revision,
+                ),
+                sort_keys=True,
+            ),
+            flush=True,
+        )
+        while True:
+            remaining_ns = next_heartbeat_ns - monotonic_ns()
+            if remaining_ns > 0:
+                sleep(remaining_ns / 1e9)
+            publish(command_id)
+            next_heartbeat_ns += heartbeat_ns
+            now_ns = monotonic_ns()
+            if next_heartbeat_ns <= now_ns:
+                missed = ((now_ns - next_heartbeat_ns) // heartbeat_ns) + 1
+                next_heartbeat_ns += missed * heartbeat_ns
+    except KeyboardInterrupt:
         stop_id = _logical_id("stop")
         revision = client.publish_stop(stop_id, ttl_ns=ttl_ns)
         print(
@@ -137,46 +134,13 @@ def _run_active(
                     command_id=stop_id,
                     revision=revision,
                     stopped_command_id=command_id,
-                    reason=reason,
+                    reason="KEYBOARD_INTERRUPT",
                 ),
                 sort_keys=True,
             ),
             flush=True,
         )
-        return returncode
-
-    def guard_reason() -> str | None:
-        if owner_pid is not None and not _pid_alive(owner_pid):
-            return "OWNER_EXITED"
-        if deadline_ns is not None and monotonic_ns() >= deadline_ns:
-            return "WATCHDOG_TIMEOUT"
-        return None
-
-    try:
-        reason = guard_reason()
-        if reason is not None:
-            return stop_with_reason(reason, 0)
-        next_heartbeat_ns = monotonic_ns() + heartbeat_ns
-        revision = publish(command_id)
-        print(json.dumps(_result("ACTIVE", command_id=command_id, revision=revision), sort_keys=True), flush=True)
-        while True:
-            reason = guard_reason()
-            if reason is not None:
-                return stop_with_reason(reason, 0)
-            remaining_ns = next_heartbeat_ns - monotonic_ns()
-            if remaining_ns > 0:
-                sleep(remaining_ns / 1e9)
-            reason = guard_reason()
-            if reason is not None:
-                return stop_with_reason(reason, 0)
-            publish(command_id)
-            next_heartbeat_ns += heartbeat_ns
-            now_ns = monotonic_ns()
-            if next_heartbeat_ns <= now_ns:
-                missed = ((now_ns - next_heartbeat_ns) // heartbeat_ns) + 1
-                next_heartbeat_ns += missed * heartbeat_ns
-    except KeyboardInterrupt:
-        return stop_with_reason("KEYBOARD_INTERRUPT", 130)
+        return 130
     except Exception:
         try:
             client.publish_stop(_logical_id("stop"), ttl_ns=ttl_ns)
@@ -189,8 +153,6 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Control the native resident V3 runtime")
     parser.add_argument("--command-path", default="runtime/v3_command.json")
     parser.add_argument("--status-path", default="runtime/v3_status.json")
-    parser.add_argument("--owner-pid", type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--max-runtime-s", type=float, help=argparse.SUPPRESS)
     parser.add_argument("--ttl-ms", type=int, default=DEFAULT_TTL_NS // 1_000_000)
     parser.add_argument(
         "--heartbeat-ms",
@@ -301,8 +263,6 @@ def main(argv: list[str] | None = None) -> int:
             command_id=command_id,
             ttl_ns=ttl_ns,
             heartbeat_ns=heartbeat_ns,
-            owner_pid=args.owner_pid,
-            max_runtime_s=args.max_runtime_s,
         )
     except Exception as exc:
         print(
