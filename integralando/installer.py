@@ -217,7 +217,6 @@ def main() -> int:
     root = find_root()
     print(f"repo: {root}")
     print("precondition: Behavior upgrade must already be installed")
-    require_behavior_upgrade(root)
 
     backups: dict[Path, bytes | None] = {}
     try:
