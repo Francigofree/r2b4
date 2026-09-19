@@ -60,6 +60,8 @@ Developer tools:
 RPi / Linux helpers:
   r cpu [SECONDS] [INTERVAL]    per-core CPU monitor; default 30 s / 1 s
                                 log: runtime/cpu/cpu_YYYYmmdd_HHMMSS.log
+  r cpu2 [SECONDS] [INTERVAL]   deep /proc runtime diag; default 30 s / 0.5 s
+                                writes cpu2 NDJSON + factual summary JSON
   r disc                        free disk + runtime/capture sizes (alias: disk)
   r mem                         memory usage
   r temp                        CPU temperature
@@ -411,6 +413,10 @@ case "$CMD" in
         ;;
     cpu)
         cpu_monitor "$@"
+        ;;
+    cpu2)
+        need_root || exit $?
+        exec python3 "$ROOT/tools/r2b4_cpu2.py" --root "$ROOT" "$@"
         ;;
     disc|disk)
         show_disc

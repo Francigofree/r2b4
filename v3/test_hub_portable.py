@@ -21,6 +21,7 @@ from pathlib import Path
 from .mcap_reader import McapReadError, McapReader, RAW_LIDAR_TOPIC, TICK_TOPIC
 from .mcap_replay_bridge import McapReplayBridgeError, ReplayWindow, replay_mcap
 from .test_hub_v2 import write_interesting_slice
+from .test_hub_runtime_correlation import slow_tick_correlation_from_inspect
 
 PORTABLE_SCHEMA = "R2B4_TEST_HUB_PORTABLE_V1"
 REPLAY_SWEEP_SCHEMA = "R2B4_REPLAY_SWEEP_V1"
@@ -586,7 +587,8 @@ def runtime_performance_summary(inspect_payload: Mapping[str, object]) -> dict[s
             "average_hz": average_hz,
         },
         "per_core_available": False,
-        "note": "This is capture-derived parent-process evidence only; no runtime scheduler instrumentation is added.",
+        "slow_tick_correlation": slow_tick_correlation_from_inspect(inspect_payload),
+        "note": "Capture-derived evidence only. Slow-tick correlation is descriptive association, not a causal layer-cost claim.",
     }
 
 
@@ -608,6 +610,7 @@ def run_pytest(
             "tests/test_v3_test_hub_cli.py",
             "tests/test_v3_test_hub_evidence.py",
             "tests/test_v3_test_hub_portable.py",
+            "tests/test_v3_runtime_correlation.py",
             "tests/test_v3_mcap_e2e.py",
         ]
     else:

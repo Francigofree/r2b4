@@ -1,0 +1,922 @@
+{
+  "note": "Capture-derived evidence only. Slow-tick correlation is descriptive association, not a causal layer-cost claim.",
+  "parent_process": {
+    "cpu_core_equivalent": 0.850777190764961,
+    "elapsed_ns": 20732210966,
+    "max_rss_bytes": 232390656,
+    "process_cpu_ns": 17638492204,
+    "write_duration_ns": 707495308
+  },
+  "per_core_available": false,
+  "runtime_tick": {
+    "average_hz": 27.239364614555885,
+    "average_period_ms": 36.7115758443804,
+    "completion_latency_max_ns": 131090653,
+    "completion_latency_sum_ns": 8181730413,
+    "period_count": 347,
+    "period_max_ns": 132084255,
+    "period_sum_ns": 12738916818,
+    "tick_count": 348
+  },
+  "schema": "R2B4_TEST_HUB_PORTABLE_V1",
+  "slow_tick_correlation": {
+    "associations": [
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": null,
+        "feature": "wheel_encoder_sequence_changed",
+        "unknown_count": 1,
+        "with_feature": {
+          "count": 346,
+          "over_captured_target_count": 298,
+          "over_captured_target_rate": 0.861271676300578,
+          "over_reference_50hz_count": 298,
+          "over_reference_50hz_rate": 0.861271676300578,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 36.766609,
+          "period_p50_ms": 35.658272,
+          "period_p95_ms": 62.368079
+        },
+        "without_feature": {
+          "count": 0,
+          "over_captured_target_count": 0,
+          "over_captured_target_rate": null,
+          "over_reference_50hz_count": 0,
+          "over_reference_50hz_rate": null,
+          "period_max_ms": null,
+          "period_mean_ms": null,
+          "period_p50_ms": null,
+          "period_p95_ms": null
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": null,
+        "feature": "imu_sequence_changed",
+        "unknown_count": 1,
+        "with_feature": {
+          "count": 346,
+          "over_captured_target_count": 298,
+          "over_captured_target_rate": 0.861271676300578,
+          "over_reference_50hz_count": 298,
+          "over_reference_50hz_rate": 0.861271676300578,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 36.766609,
+          "period_p50_ms": 35.658272,
+          "period_p95_ms": 62.368079
+        },
+        "without_feature": {
+          "count": 0,
+          "over_captured_target_count": 0,
+          "over_captured_target_rate": null,
+          "over_reference_50hz_count": 0,
+          "over_reference_50hz_rate": null,
+          "period_max_ms": null,
+          "period_mean_ms": null,
+          "period_p50_ms": null,
+          "period_p95_ms": null
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 5.976337999999998,
+        "feature": "lidar_sequence_changed",
+        "unknown_count": 1,
+        "with_feature": {
+          "count": 116,
+          "over_captured_target_count": 112,
+          "over_captured_target_rate": 0.9655172413793104,
+          "over_reference_50hz_count": 112,
+          "over_reference_50hz_rate": 0.9655172413793104,
+          "period_max_ms": 85.745967,
+          "period_mean_ms": 40.739319,
+          "period_p50_ms": 39.205508,
+          "period_p95_ms": 64.76884
+        },
+        "without_feature": {
+          "count": 230,
+          "over_captured_target_count": 186,
+          "over_captured_target_rate": 0.808695652173913,
+          "over_reference_50hz_count": 186,
+          "over_reference_50hz_rate": 0.808695652173913,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 34.762981,
+          "period_p50_ms": 30.527007,
+          "period_p95_ms": 60.665397
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 8.854864,
+        "feature": "camera_sequence_changed",
+        "unknown_count": 9,
+        "with_feature": {
+          "count": 229,
+          "over_captured_target_count": 210,
+          "over_captured_target_rate": 0.9170305676855895,
+          "over_reference_50hz_count": 210,
+          "over_reference_50hz_rate": 0.9170305676855895,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 39.704226,
+          "period_p50_ms": 39.028764,
+          "period_p95_ms": 64.297336
+        },
+        "without_feature": {
+          "count": 109,
+          "over_captured_target_count": 82,
+          "over_captured_target_rate": 0.7522935779816514,
+          "over_reference_50hz_count": 82,
+          "over_reference_50hz_rate": 0.7522935779816514,
+          "period_max_ms": 92.778749,
+          "period_mean_ms": 30.849362,
+          "period_p50_ms": 23.351684,
+          "period_p95_ms": 59.117847
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": -0.031340000000000146,
+        "feature": "person_detector_sequence_changed",
+        "unknown_count": 8,
+        "with_feature": {
+          "count": 131,
+          "over_captured_target_count": 107,
+          "over_captured_target_rate": 0.816793893129771,
+          "over_reference_50hz_count": 107,
+          "over_reference_50hz_rate": 0.816793893129771,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 37.093572,
+          "period_p50_ms": 35.068582,
+          "period_p95_ms": 63.256772
+        },
+        "without_feature": {
+          "count": 208,
+          "over_captured_target_count": 187,
+          "over_captured_target_rate": 0.8990384615384616,
+          "over_reference_50hz_count": 187,
+          "over_reference_50hz_rate": 0.8990384615384616,
+          "period_max_ms": 85.745967,
+          "period_mean_ms": 37.124912,
+          "period_p50_ms": 36.630207,
+          "period_p95_ms": 62.024834
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 12.510473000000005,
+        "feature": "l4_map_revision_changed",
+        "unknown_count": 1,
+        "with_feature": {
+          "count": 190,
+          "over_captured_target_count": 185,
+          "over_captured_target_rate": 0.9736842105263158,
+          "over_reference_50hz_count": 185,
+          "over_reference_50hz_rate": 0.9736842105263158,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 42.407169,
+          "period_p50_ms": 40.92791,
+          "period_p95_ms": 65.940332
+        },
+        "without_feature": {
+          "count": 156,
+          "over_captured_target_count": 113,
+          "over_captured_target_rate": 0.7243589743589743,
+          "over_reference_50hz_count": 113,
+          "over_reference_50hz_rate": 0.7243589743589743,
+          "period_max_ms": 67.302844,
+          "period_mean_ms": 29.896696,
+          "period_p50_ms": 21.113406,
+          "period_p95_ms": 58.013449
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 5.174344000000005,
+        "feature": "l4_costmap_revision_changed",
+        "unknown_count": 69,
+        "with_feature": {
+          "count": 189,
+          "over_captured_target_count": 184,
+          "over_captured_target_rate": 0.9735449735449735,
+          "over_reference_50hz_count": 184,
+          "over_reference_50hz_rate": 0.9735449735449735,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 42.520825,
+          "period_p50_ms": 40.939911,
+          "period_p95_ms": 65.940332
+        },
+        "without_feature": {
+          "count": 89,
+          "over_captured_target_count": 82,
+          "over_captured_target_rate": 0.9213483146067416,
+          "over_reference_50hz_count": 82,
+          "over_reference_50hz_rate": 0.9213483146067416,
+          "period_max_ms": 67.302844,
+          "period_mean_ms": 37.346481,
+          "period_p50_ms": 37.219582,
+          "period_p95_ms": 60.437544
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 12.118733999999996,
+        "feature": "l6_candidate_payload_changed",
+        "unknown_count": 1,
+        "with_feature": {
+          "count": 82,
+          "over_captured_target_count": 82,
+          "over_captured_target_rate": 1.0,
+          "over_reference_50hz_count": 82,
+          "over_reference_50hz_rate": 1.0,
+          "period_max_ms": 122.037667,
+          "period_mean_ms": 46.013273,
+          "period_p50_ms": 42.943742,
+          "period_p95_ms": 67.302844
+        },
+        "without_feature": {
+          "count": 264,
+          "over_captured_target_count": 216,
+          "over_captured_target_rate": 0.8181818181818182,
+          "over_reference_50hz_count": 216,
+          "over_reference_50hz_rate": 0.8181818181818182,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 33.894539,
+          "period_p50_ms": 30.968343,
+          "period_p95_ms": 58.342025
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 10.592350000000003,
+        "feature": "l7_selected_motion_changed",
+        "unknown_count": 1,
+        "with_feature": {
+          "count": 34,
+          "over_captured_target_count": 34,
+          "over_captured_target_rate": 1.0,
+          "over_reference_50hz_count": 34,
+          "over_reference_50hz_rate": 1.0,
+          "period_max_ms": 122.037667,
+          "period_mean_ms": 46.318092,
+          "period_p50_ms": 41.800363,
+          "period_p95_ms": 85.745967
+        },
+        "without_feature": {
+          "count": 312,
+          "over_captured_target_count": 264,
+          "over_captured_target_rate": 0.8461538461538461,
+          "over_reference_50hz_count": 264,
+          "over_reference_50hz_rate": 0.8461538461538461,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 35.725742,
+          "period_p50_ms": 34.102758,
+          "period_p95_ms": 61.798479
+        }
+      },
+      {
+        "causal_claim": false,
+        "descriptive_mean_period_delta_ms": 10.042387999999995,
+        "feature": "raw_lidar_scan_end_during_interval",
+        "unknown_count": 0,
+        "with_feature": {
+          "count": 117,
+          "over_captured_target_count": 113,
+          "over_captured_target_rate": 0.9658119658119658,
+          "over_reference_50hz_count": 113,
+          "over_reference_50hz_rate": 0.9658119658119658,
+          "period_max_ms": 132.084255,
+          "period_mean_ms": 43.367914,
+          "period_p50_ms": 41.22682,
+          "period_p95_ms": 66.11311
+        },
+        "without_feature": {
+          "count": 230,
+          "over_captured_target_count": 185,
+          "over_captured_target_rate": 0.8043478260869565,
+          "over_reference_50hz_count": 185,
+          "over_reference_50hz_rate": 0.8043478260869565,
+          "period_max_ms": 85.745967,
+          "period_mean_ms": 33.325526,
+          "period_p50_ms": 30.527007,
+          "period_p95_ms": 59.117847
+        }
+      }
+    ],
+    "captured_runtime_target": {
+      "hz": 50.0,
+      "period_ns": 20000000,
+      "sources": [
+        {
+          "period_ns": 20000000,
+          "source": "runtime_topic.tick_period_ns"
+        }
+      ],
+      "status": "PROVEN"
+    },
+    "claim_policy": {
+      "correlation_is_causation": false,
+      "root_cause_inferred": false,
+      "statement": "Feature comparisons are descriptive temporal associations only. No layer CPU cost or causal root cause is inferred."
+    },
+    "evidence_scope": {
+      "capture_complete": true,
+      "interval_count": 347,
+      "invalid_tick_payload_count": 0,
+      "raw_lidar_scan_end_timestamp_count": 118,
+      "scope": "FULL_CAPTURE",
+      "skipped_invalid_time_interval_count": 0,
+      "skipped_tick_gap_interval_count": 0,
+      "tick_count": 348,
+      "tick_log_time_equals_payload_monotonic_count": 348,
+      "tick_publish_time_equals_log_time_count": 0
+    },
+    "feature_semantics": {
+      "l4_revision_changed": "Captured L4 revision differs; no L4 duration is inferred.",
+      "l6_candidate_payload_changed": "Captured trajectory-candidate payload differs; with async L6 this is not called a planning CPU event.",
+      "l7_selected_motion_changed": "Captured selected-motion signature differs; no L7 CPU cost is inferred.",
+      "raw_lidar_scan_end_during_interval": "A captured raw-scan end timestamp falls inside the interval; temporal overlap only.",
+      "sequence_changed": "Captured device sequence differs from previous contiguous tick."
+    },
+    "period_summary": {
+      "count": 347,
+      "max_ms": 132.084255,
+      "mean_ms": 36.711576,
+      "over_captured_target_count": 298,
+      "over_captured_target_rate": 0.8587896253602305,
+      "over_reference_50hz_count": 298,
+      "over_reference_50hz_rate": 0.8587896253602305,
+      "p50_ms": 35.658272,
+      "p95_ms": 62.368079,
+      "p99_ms": 92.778749
+    },
+    "reference_50hz": {
+      "note": "Mathematical 50 Hz reference only; it is not labeled as the configured target unless captured target evidence independently proves that.",
+      "period_ms": 20.0,
+      "period_ns": 20000000
+    },
+    "schema": "R2B4_TEST_HUB_SLOW_TICK_CORRELATION_V1",
+    "status": "PASS",
+    "time_semantics": {
+      "mcap_message_times": "MCAP container log/publish timestamps; they are not treated as independent runtime-stage timings.",
+      "per_layer_duration_available": false,
+      "raw_lidar_scan_start_end": "Physical scan acquisition span; not LiDAR CPU time.",
+      "sensor_captured_monotonic_ns": "Sensor measurement/capture time; used for age only, never as source.read CPU time.",
+      "start_to_start_period": "tick[N+1].monotonic_ns - tick[N].monotonic_ns. It includes all work, waiting and scheduling between starts and is NOT an L1-L12 execution-duration measurement.",
+      "tick_payload_monotonic_ns": "V3 TickContext timestamp taken at resident tick start."
+    },
+    "top_slow_intervals": [
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 10.830395,
+            "PERSON_DETECTOR_FRONT": 60.817395,
+            "RPLIDAR_C1": 67.529381,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 290,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "person_detector_sequence_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 132.084255,
+        "preceding_tick_id": 289,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 0,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 13.360259,
+            "PERSON_DETECTOR_FRONT": 113.335259,
+            "RPLIDAR_C1": 35.254823,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 332,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "l7_selected_motion_changed",
+          "person_detector_sequence_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 122.037667,
+        "preceding_tick_id": 331,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 16.049321,
+            "PERSON_DETECTOR_FRONT": 116.022321,
+            "RPLIDAR_C1": 78.629219,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 201,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "person_detector_sequence_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 103.460157,
+        "preceding_tick_id": 200,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 43.289837,
+            "PERSON_DETECTOR_FRONT": 43.289837,
+            "RPLIDAR_C1": 53.963893,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 245,
+        "observed_features": [
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "person_detector_sequence_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 92.778749,
+        "preceding_tick_id": 244,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 24.402534,
+            "PERSON_DETECTOR_FRONT": 224.355534,
+            "RPLIDAR_C1": 0.0,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 171,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "l7_selected_motion_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 85.745967,
+        "preceding_tick_id": 170,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 24.756892,
+            "PERSON_DETECTOR_FRONT": 274.692892,
+            "RPLIDAR_C1": 5.61416,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 160,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 76.844371,
+        "preceding_tick_id": 159,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 33.807066,
+            "PERSON_DETECTOR_FRONT": 283.738066,
+            "RPLIDAR_C1": 41.443897,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 118,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 72.355481,
+        "preceding_tick_id": 117,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 1.60249,
+            "PERSON_DETECTOR_FRONT": 201.54649,
+            "RPLIDAR_C1": 13.253874,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 196,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "lidar_sequence_changed",
+          "person_detector_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 69.75342,
+        "preceding_tick_id": 195,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 12.422396,
+            "PERSON_DETECTOR_FRONT": 162.383396,
+            "RPLIDAR_C1": 31.134548,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 198,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "lidar_sequence_changed",
+          "person_detector_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 68.634058,
+        "preceding_tick_id": 197,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 35.09324,
+            "PERSON_DETECTOR_FRONT": 185.05524,
+            "RPLIDAR_C1": 45.13267,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 125,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l6_candidate_payload_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 67.302844,
+        "preceding_tick_id": 124,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 57.740433,
+            "PERSON_DETECTOR_FRONT": 207.695433,
+            "RPLIDAR_C1": 0.796248,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 252,
+        "observed_features": [
+          "imu_sequence_changed",
+          "l6_candidate_payload_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 66.11311,
+        "preceding_tick_id": 251,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 21.176276,
+            "PERSON_DETECTOR_FRONT": 171.138276,
+            "RPLIDAR_C1": 15.364855,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 177,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 65.940332,
+        "preceding_tick_id": 176,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 13.654992,
+            "PERSON_DETECTOR_FRONT": 163.615992,
+            "RPLIDAR_C1": 13.630433,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 190,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "l7_selected_motion_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 64.76884,
+        "preceding_tick_id": 189,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 20.157574,
+            "PERSON_DETECTOR_FRONT": 220.100574,
+            "RPLIDAR_C1": 31.779721,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 169,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 64.297336,
+        "preceding_tick_id": 168,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 26.524343,
+            "PERSON_DETECTOR_FRONT": 176.487343,
+            "RPLIDAR_C1": 71.142303,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 149,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "person_detector_sequence_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 63.256772,
+        "preceding_tick_id": 148,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 60.63357,
+            "PERSON_DETECTOR_FRONT": 110.61257,
+            "RPLIDAR_C1": 67.605106,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 155,
+        "observed_features": [
+          "imu_sequence_changed",
+          "l6_candidate_payload_changed",
+          "person_detector_sequence_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 63.118048,
+        "preceding_tick_id": 154,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 92.92165,
+            "PERSON_DETECTOR_FRONT": 192.90165,
+            "RPLIDAR_C1": 4.604892,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 291,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "l7_selected_motion_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 63.105676,
+        "preceding_tick_id": 290,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 6.838937,
+            "PERSON_DETECTOR_FRONT": 156.802937,
+            "RPLIDAR_C1": 46.402552,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 142,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 62.368079,
+        "preceding_tick_id": 141,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 0,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 65.634589,
+            "PERSON_DETECTOR_FRONT": 265.581589,
+            "RPLIDAR_C1": 5.895292,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 193,
+        "observed_features": [
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "raw_lidar_scan_end_during_interval",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 62.024834,
+        "preceding_tick_id": 192,
+        "unknown_features": []
+      },
+      {
+        "context": {
+          "l6_candidate_count": 54,
+          "l6_collision_candidate_count": 26,
+          "sample_age_ms_at_tick_start": {
+            "BNO055_IMU": 0.0,
+            "CAMERA_FRONT": 12.39468,
+            "PERSON_DETECTOR_FRONT": 212.34768,
+            "RPLIDAR_C1": 16.968684,
+            "WHEEL_ENCODERS": 0.0
+          }
+        },
+        "following_tick_id": 323,
+        "observed_features": [
+          "camera_sequence_changed",
+          "imu_sequence_changed",
+          "l4_costmap_revision_changed",
+          "l4_map_revision_changed",
+          "l6_candidate_payload_changed",
+          "lidar_sequence_changed",
+          "wheel_encoder_sequence_changed"
+        ],
+        "over_captured_target": true,
+        "over_reference_50hz": true,
+        "period_ms": 61.798479,
+        "preceding_tick_id": 322,
+        "unknown_features": []
+      }
+    ]
+  }
+}
