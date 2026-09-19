@@ -218,6 +218,7 @@ def main() -> int:
     print(f"repo: {root}")
     print("precondition: Behavior upgrade must already be installed")
 
+
     backups: dict[Path, bytes | None] = {}
     try:
         backups, touched = install_files(root)

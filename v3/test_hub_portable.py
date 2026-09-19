@@ -604,6 +604,7 @@ def run_pytest(
         targets = [
             "tests/test_v3_test_hub_analysis.py",
             "tests/test_v3_test_hub_behavior.py",
+            "tests/test_v3_test_hub_quality.py",
             "tests/test_v3_test_hub_cli.py",
             "tests/test_v3_test_hub_evidence.py",
             "tests/test_v3_test_hub_portable.py",

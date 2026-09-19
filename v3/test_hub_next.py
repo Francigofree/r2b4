@@ -17,6 +17,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from .test_hub_analysis import analyze_capture
+from .test_hub_motion_quality import (
+    compare_motion_quality_sources,
+    write_motion_quality,
+)
+from .test_hub_localization_quality import (
+    compare_localization_quality_sources,
+    write_localization_quality,
+)
 from .test_hub_behavior import build_behavior_evidence
 from .test_hub_v2 import diagnose_run
 from .test_hub_views import SUPPORTED_HZ, build_run_view, compare_views
@@ -184,6 +192,47 @@ def run_default(
         sweep.get("status") if sweep is not None else "OFF"
     )
 
+    behavior_episode_path = destination / "behavior_episodes.ndjson"
+    behavior_episode_source = behavior_episode_path if behavior_episode_path.is_file() else None
+
+    motion_quality_path = destination / "motion_quality.json"
+    motion_segments_path = destination / "motion_quality_segments.ndjson"
+    try:
+        motion_quality = write_motion_quality(
+            reader,
+            motion_quality_path,
+            motion_segments_path,
+            behavior_episodes_path=behavior_episode_source,
+        )
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        motion_quality = {
+            "schema": "R2B4_TEST_HUB_MOTION_QUALITY_V1",
+            "status": "ERROR",
+            "error": str(exc),
+            "findings": [],
+        }
+        _write_json(motion_quality_path, motion_quality)
+        motion_segments_path.write_text("", encoding="utf-8")
+
+    localization_quality_path = destination / "localization_quality.json"
+    localization_events_path = destination / "localization_events.ndjson"
+    try:
+        localization_quality = write_localization_quality(
+            reader,
+            localization_quality_path,
+            localization_events_path,
+            behavior_episodes_path=behavior_episode_source,
+        )
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        localization_quality = {
+            "schema": "R2B4_TEST_HUB_LOCALIZATION_QUALITY_V1",
+            "status": "ERROR",
+            "error": str(exc),
+            "findings": [],
+        }
+        _write_json(localization_quality_path, localization_quality)
+        localization_events_path.write_text("", encoding="utf-8")
+
     agent_view_path = destination / "agent_view.json"
     agent_view = {
         "schema": "R2B4_TEST_HUB_AGENT_V1",
@@ -214,6 +263,28 @@ def run_default(
         "incident_slices": exact_slices,
         "raw_lidar_incident_slices": raw_lidar_slices,
         "suppressed_agent_noise": view.get("suppressed_agent_noise"),
+        "quality": {
+            "motion": {
+                "status": motion_quality.get("status"),
+                "summary": motion_quality_path.name,
+                "details": motion_segments_path.name,
+                "finding_count": (
+                    len(motion_quality.get("findings", ()))
+                    if isinstance(motion_quality.get("findings"), Sequence)
+                    else 0
+                ),
+            },
+            "localization": {
+                "status": localization_quality.get("status"),
+                "summary": localization_quality_path.name,
+                "events": localization_events_path.name,
+                "finding_count": (
+                    len(localization_quality.get("findings", ()))
+                    if isinstance(localization_quality.get("findings"), Sequence)
+                    else 0
+                ),
+            },
+        },
         "remote_analysis_policy": {
             "normal_analysis_requires_mcap": False,
             "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": True,
@@ -245,6 +316,8 @@ def run_default(
         "exact_incident_slice_count": len(exact_slices),
         "raw_lidar_incident_slice_count": len(raw_lidar_slices),
         "pytest_status": pytest_payload.get("status") if pytest_payload else "OFF",
+        "motion_quality_status": motion_quality.get("status"),
+        "localization_quality_status": localization_quality.get("status"),
         "note": "One .evidence directory is the portable agent package; MCAP remains local authority.",
     }
 
@@ -437,6 +510,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _load_or_build_view(before_path, args.hz),
                 _load_or_build_view(after_path, args.hz),
             )
+            result = dict(result)
+            result["motion_quality"] = compare_motion_quality_sources(before_path, after_path)
+            result["localization_quality"] = compare_localization_quality_sources(before_path, after_path)
             if args.output:
                 out = Path(args.output)
                 out.parent.mkdir(parents=True, exist_ok=True)
