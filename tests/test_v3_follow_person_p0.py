@@ -103,7 +103,7 @@ def test_p0_config_is_production_bounded():
     assert config.follow_person_heading_min_factor == pytest.approx(0.75)
 
 
-def test_p0_lost_hold_ignores_other_people_and_then_fails_closed():
+def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
     nav = TrajectoryNavigator(_config())
     c1 = TickContext(1, 1_000_000_000)
     nav.evaluate(
@@ -129,8 +129,19 @@ def test_p0_lost_hold_ignores_other_people_and_then_fails_closed():
         _estimate(c3),
         _world(c3, _person("person-b", 1.5, 0.0, 0.99)),
     )
-    assert lost.status is NavigationStatus.INVALIDATED
-    assert lost.reason == "PERSON_TARGET_LOST"
+    assert lost.status is NavigationStatus.ACTIVE
+    assert len(lost.route) == 1
+    assert lost.route[0].yaw_rad == pytest.approx(0.0)
+    assert nav.checkpoint().follow_person_track_id == "person-a"
+
+    c4 = TickContext(4, 3_420_000_001)
+    expired = nav.evaluate(
+        _mission(c4),
+        _estimate(c4),
+        _world(c4, _person("person-b", 1.5, 0.0, 0.99)),
+    )
+    assert expired.status is NavigationStatus.INVALIDATED
+    assert expired.reason == "PERSON_TARGET_LOST"
     assert nav.checkpoint().follow_person_track_id == "person-a"
 
 
@@ -256,6 +267,7 @@ def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
     checkpoint = nav.checkpoint()
     assert checkpoint.follow_person_track_id == "person-a"
     assert checkpoint.follow_person_lost_since_ns == c2.monotonic_ns
+    assert checkpoint.follow_person_last_heading_rad == pytest.approx(0.0)
 
     restored = TrajectoryNavigator(config)
     restored.restore(checkpoint)
@@ -264,3 +276,4 @@ def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
     assert after.follow_person_lost_since_ns == c2.monotonic_ns
     assert after.follow_person_pivoting == checkpoint.follow_person_pivoting
     assert after.follow_person_holding == checkpoint.follow_person_holding
+    assert after.follow_person_last_heading_rad == checkpoint.follow_person_last_heading_rad

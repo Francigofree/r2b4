@@ -370,10 +370,6 @@ class ResidentLiveControlComposition:
             self._faulted = True
             self._active = False
             self._lifecycle = LifecycleState.FAULT
-        elif active and final.safety_decision is not SafetyDecision.ALLOW:
-            self._faulted = True
-            self._active = False
-            self._lifecycle = LifecycleState.FAULT
         else:
             self._active = active
             self._lifecycle = scheduled_lifecycle

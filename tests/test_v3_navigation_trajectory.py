@@ -9,6 +9,7 @@ from v3.contracts import (
     DataField,
     MotionObjectiveKind,
     NavigationStatus,
+    ObstacleTrack,
     RobotEstimate,
     RollingLocalCostmap,
     TickContext,
@@ -37,12 +38,13 @@ def _estimate(context: TickContext) -> RobotEstimate:
 def _world(
     context: TickContext,
     cells: tuple[CostmapCell, ...] = (),
+    tracks: tuple[ObstacleTrack, ...] = (),
 ) -> WorldSnapshot:
     return WorldSnapshot(
         context,
         "R2B4_BOOT_ROBOT_MAP",
         map_revision=1,
-        obstacle_tracks=(),
+        obstacle_tracks=tracks,
         freshness_ns=0,
         local_costmap=RollingLocalCostmap(
             "R2B4_BOOT_ROBOT_MAP",
@@ -166,6 +168,46 @@ def test_start_collision_fails_closed_without_exposing_internal_call_counts():
     objective = select_motion(plan)
     assert objective.kind is MotionObjectiveKind.STOP
     assert objective.selection_reason == "NO_COLLISION_FREE_TRAJECTORY"
+
+
+def test_local_escape_uses_pivot_or_short_straight_reverse_when_forward_is_bounded():
+    context = TickContext(0, 1_000_000_000)
+    obstacle = ObstacleTrack(
+        track_id="obstacle-front",
+        x_m=0.39,
+        y_m=0.0,
+        radius_m=0.05,
+        vx_mps=0.0,
+        vy_mps=0.0,
+        confidence=1.0,
+    )
+    config = NavigationConfig()
+    plan = TrajectoryNavigator(config).evaluate(
+        _mission(context, CommandMode.NAVIGATE),
+        _estimate(context),
+        _world(context, tracks=(obstacle,)),
+    )
+
+    expected_count = config.rollout_linear_samples * config.rollout_angular_samples
+    assert len(plan.trajectory_candidates) == expected_count
+    assert all(
+        item.candidate_id.startswith("escape-")
+        for item in plan.trajectory_candidates
+    )
+    assert any(item.v_mps < 0.0 for item in plan.trajectory_candidates)
+    assert all(
+        abs(item.omega_rad_s) <= 1e-12
+        for item in plan.trajectory_candidates
+        if item.v_mps < 0.0
+    )
+
+    objective = select_motion(plan)
+    assert objective.kind is MotionObjectiveKind.TRACK_TRAJECTORY
+    assert objective.trajectory is not None
+    assert (
+        abs(objective.trajectory.v_mps) > 1e-12
+        or abs(objective.trajectory.omega_rad_s) > 1e-12
+    )
 
 
 def test_generic_rollout_budget_is_bounded_not_hard_coded_to_one_tuning():

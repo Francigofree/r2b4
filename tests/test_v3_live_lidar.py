@@ -3,6 +3,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+import v3.adapters.live_lidar as live_lidar_module
 from v3.adapters.live_lidar import (
     LidarHealthReading,
     LidarMatcherDiagnostics,
@@ -217,3 +218,31 @@ def test_native_lidar_pose_contract_is_immutable_and_fail_closed():
         LidarPoseReading(0.0, 0.0, 0.0, r_scale=0.0)
     with pytest.raises(ValueError, match="pose_frame_id"):
         NativeLidarConfig("LIDAR", 0.3, 100, pose_frame_id="")
+
+
+def test_local_point_bound_preserves_nearest_angular_surface_and_density():
+    config = dataclasses.replace(
+        _config(),
+        local_perception_max_range_m=10.0,
+        local_perception_max_points=4,
+    )
+    points = (
+        LidarPointReading(1.0, 4.0, 5),
+        LidarPointReading(2.0, 1.0, 10),
+        LidarPointReading(91.0, 3.0, 5),
+        LidarPointReading(92.0, 0.7, 10),
+        LidarPointReading(181.0, 2.0, 5),
+        LidarPointReading(182.0, 0.8, 10),
+        LidarPointReading(271.0, 2.5, 5),
+        LidarPointReading(272.0, 0.9, 10),
+    )
+
+    selected = live_lidar_module._bounded_local_points(points, config)
+    reversed_selected = live_lidar_module._bounded_local_points(
+        tuple(reversed(points)),
+        config,
+    )
+
+    assert len(selected) == 4
+    assert selected == reversed_selected
+    assert tuple(point.angle_deg for point in selected) == (2.0, 92.0, 182.0, 272.0)

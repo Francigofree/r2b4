@@ -662,7 +662,58 @@ def _bounded_local_points(
     limit = config.local_perception_max_points
     if len(filtered) <= limit:
         return filtered
-    return tuple(filtered[index * len(filtered) // limit] for index in range(limit))
+
+    # Preserve angular observability first, then use any remaining budget for
+    # deterministic density. The previous list-index decimator could erase a
+    # narrow physical surface completely (including a camera-correlated person
+    # return) when it happened to fall between two selected indices.
+    bucket_width_deg = 360.0 / limit
+    selected_by_bucket: dict[int, int] = {}
+    for index, point in enumerate(filtered):
+        normalized_angle = point.angle_deg % 360.0
+        bucket = min(limit - 1, int(normalized_angle / bucket_width_deg))
+        previous_index = selected_by_bucket.get(bucket)
+        if previous_index is None:
+            selected_by_bucket[bucket] = index
+            continue
+        previous = filtered[previous_index]
+        candidate_key = (point.distance_m, -point.quality, normalized_angle, index)
+        previous_key = (
+            previous.distance_m,
+            -previous.quality,
+            previous.angle_deg % 360.0,
+            previous_index,
+        )
+        if candidate_key < previous_key:
+            selected_by_bucket[bucket] = index
+
+    selected_indices = set(selected_by_bucket.values())
+    remaining_indices = tuple(
+        index for index in range(len(filtered)) if index not in selected_indices
+    )
+    missing = limit - len(selected_indices)
+    if missing > 0 and remaining_indices:
+        if missing >= len(remaining_indices):
+            selected_indices.update(remaining_indices)
+        elif missing == 1:
+            selected_indices.add(remaining_indices[len(remaining_indices) // 2])
+        else:
+            last = len(remaining_indices) - 1
+            selected_indices.update(
+                remaining_indices[round(slot * last / (missing - 1))]
+                for slot in range(missing)
+            )
+
+    return tuple(
+        sorted(
+            (filtered[index] for index in selected_indices),
+            key=lambda point: (
+                point.angle_deg % 360.0,
+                point.distance_m,
+                -point.quality,
+            ),
+        )
+    )
 
 
 __all__ = [

@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from .test_hub_analysis import analyze_capture
+from .test_hub_behavior import build_behavior_evidence
 from .test_hub_v2 import diagnose_run
 from .test_hub_views import SUPPORTED_HZ, build_run_view, compare_views
 from .mcap_reader import McapReader
@@ -109,6 +110,7 @@ def run_default(
         triage = analyze_capture(McapReader(capture))
 
     reader = McapReader(capture)
+    behavior = build_behavior_evidence(reader, destination, triage=triage)
     capture_sha256 = reader.sha256()
 
     view_path = destination / f"overview_{hz}hz.ndjson"
@@ -189,6 +191,7 @@ def run_default(
         "diagnosis_status": base.get("diagnosis_status"),
         "evidence_status": base.get("evidence_status"),
         "behavior_status": base.get("behavior_status"),
+        "behavior": behavior,
         "replay_status": replay_status,
         "replay_sweep_status": replay_sweep_status,
         "authority": {

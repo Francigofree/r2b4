@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from v3.contracts import (
@@ -24,6 +24,14 @@ from v3.contracts import (
 
 _PLANNING_BUCKET_SIZE_M = 0.50
 _POINT_CLEARANCE_EPSILON_M = 1e-9
+# This is footprint-to-obstacle clearance, not LiDAR-origin range. 0.12 m
+# corresponds approximately to the production L12 front envelope after robot
+# half-length/cell radius are accounted for. It gives L6 room to replan before
+# L12 has to reject the same forward command repeatedly.
+_LOCAL_ESCAPE_TRIGGER_CLEARANCE_M = 0.12
+_LOCAL_ESCAPE_REVERSE_MAX_V_MPS = 0.12
+_MOTION_EPSILON = 1e-9
+_FOLLOW_PERSON_RECOVERY_TIMEOUT_NS = 2_000_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +288,7 @@ class NavigationStateCheckpoint:
     follow_person_lost_since_ns: int | None = None
     follow_person_pivoting: bool = False
     follow_person_holding: bool = False
+    follow_person_last_heading_rad: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,6 +457,7 @@ class TrajectoryNavigator:
         "_follow_person_lost_since_ns",
         "_follow_person_pivoting",
         "_follow_person_track_id",
+        "_follow_person_last_heading_rad",
         "_coverage",
         "_goal_selected_ns",
         "_initial_distance_m",
@@ -530,6 +540,7 @@ class TrajectoryNavigator:
         self._follow_person_lost_since_ns: int | None = None
         self._follow_person_pivoting = False
         self._follow_person_holding = False
+        self._follow_person_last_heading_rad: float | None = None
 
     def checkpoint(self) -> NavigationStateCheckpoint:
         return NavigationStateCheckpoint(
@@ -558,6 +569,7 @@ class TrajectoryNavigator:
             self._follow_person_lost_since_ns,
             self._follow_person_pivoting,
             self._follow_person_holding,
+            self._follow_person_last_heading_rad,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -583,6 +595,7 @@ class TrajectoryNavigator:
         self._follow_person_lost_since_ns = checkpoint.follow_person_lost_since_ns
         self._follow_person_pivoting = checkpoint.follow_person_pivoting
         self._follow_person_holding = checkpoint.follow_person_holding
+        self._follow_person_last_heading_rad = checkpoint.follow_person_last_heading_rad
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
         pending = checkpoint.pending_rollout_request
@@ -780,6 +793,7 @@ class TrajectoryNavigator:
         self._follow_person_lost_since_ns = None
         self._follow_person_pivoting = False
         self._follow_person_holding = False
+        self._follow_person_last_heading_rad = None
 
     def _face_person_plan(
         self,
@@ -919,6 +933,30 @@ class TrajectoryNavigator:
                         progress=0.0,
                         status=NavigationStatus.ACTIVE,
                     )
+                if (
+                    self._follow_person_last_heading_rad is not None
+                    and lost_ns
+                    <= self._config.follow_person_lost_hold_ns
+                    + _FOLLOW_PERSON_RECOVERY_TIMEOUT_NS
+                ):
+                    # Keep the locked identity. Recovery is rotation-only until
+                    # that exact track returns; no blind translation is allowed.
+                    return NavigationPlan(
+                        context=mission.context,
+                        mission_id=mission.mission_id,
+                        route=(
+                            Waypoint(
+                                estimate.x_m,
+                                estimate.y_m,
+                                self._follow_person_last_heading_rad,
+                            ),
+                        ),
+                        velocity_target=None,
+                        constraints=mission.constraints,
+                        corridor_radius_m=0.0,
+                        progress=0.0,
+                        status=NavigationStatus.ACTIVE,
+                    )
                 return self._inactive(
                     mission,
                     NavigationStatus.INVALIDATED,
@@ -937,6 +975,7 @@ class TrajectoryNavigator:
         else:
             desired_yaw = math.atan2(dy, dx)
             heading_error = _wrapped_angle(desired_yaw - estimate.yaw_rad)
+        self._follow_person_last_heading_rad = desired_yaw
 
         if distance_m <= self._config.follow_person_min_safe_distance_m:
             self._follow_person_pivoting = False
@@ -1491,6 +1530,54 @@ class TrajectoryNavigator:
                         start_clearance_m,
                     )
                 )
+        if any(
+            not candidate.collision and candidate.v_mps > _MOTION_EPSILON
+            for candidate in evaluations
+        ):
+            return tuple(evaluations)
+
+        evaluations = []
+        reverse_limit_mps = min(_LOCAL_ESCAPE_REVERSE_MAX_V_MPS, max_v_mps)
+        for linear_index in range(self._config.rollout_linear_samples):
+            v_mps = (
+                0.0
+                if linear_index == 0
+                else -reverse_limit_mps
+                * linear_index
+                / (self._config.rollout_linear_samples - 1)
+            )
+            for angular_index in range(self._config.rollout_angular_samples):
+                angular_ratio = (
+                    2.0 * angular_index
+                    / (self._config.rollout_angular_samples - 1)
+                    - 1.0
+                )
+                omega_rad_s = (
+                    max_omega_rad_s * angular_ratio
+                    if linear_index == 0
+                    else 0.0
+                )
+                candidate = self._evaluate_trajectory(
+                    linear_index,
+                    angular_index,
+                    v_mps,
+                    omega_rad_s,
+                    estimate,
+                    world,
+                    scene,
+                    goal,
+                    max_v_mps,
+                    max_omega_rad_s,
+                    start_clearance_m,
+                )
+                evaluations.append(
+                    _as_escape_candidate(
+                        candidate,
+                        linear_index,
+                        angular_index,
+                        reverse_limit_mps,
+                    )
+                )
         return tuple(evaluations)
 
     def _evaluate_trajectory(
@@ -1541,6 +1628,12 @@ class TrajectoryNavigator:
                 )
                 min_clearance = min(min_clearance, clearance)
                 collision = collision or clearance <= self._config.footprint_safety_margin_m
+
+        if (
+            v_mps > _MOTION_EPSILON
+            and min_clearance <= _LOCAL_ESCAPE_TRIGGER_CLEARANCE_M
+        ):
+            collision = True
 
         start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
         final_distance = math.hypot(goal.x_m - x_m, goal.y_m - y_m)
@@ -1670,6 +1763,56 @@ class TrajectoryRolloutComputer:
                         coverage,
                     )
                 )
+        if not any(
+            not candidate.collision and candidate.v_mps > _MOTION_EPSILON
+            for candidate in evaluations
+        ):
+            evaluations = []
+            reverse_limit_mps = min(
+                _LOCAL_ESCAPE_REVERSE_MAX_V_MPS,
+                request.max_v_mps,
+            )
+            for linear_index in range(config.rollout_linear_samples):
+                v_mps = (
+                    0.0
+                    if linear_index == 0
+                    else -reverse_limit_mps
+                    * linear_index
+                    / (config.rollout_linear_samples - 1)
+                )
+                for angular_index in range(config.rollout_angular_samples):
+                    angular_ratio = (
+                        2.0 * angular_index
+                        / (config.rollout_angular_samples - 1)
+                        - 1.0
+                    )
+                    omega_rad_s = (
+                        request.max_omega_rad_s * angular_ratio
+                        if linear_index == 0
+                        else 0.0
+                    )
+                    candidate = self._evaluate_candidate(
+                        linear_index,
+                        angular_index,
+                        v_mps,
+                        omega_rad_s,
+                        estimate,
+                        world,
+                        scene,
+                        goal,
+                        request.max_v_mps,
+                        request.max_omega_rad_s,
+                        start_clearance_m,
+                        coverage,
+                    )
+                    evaluations.append(
+                        _as_escape_candidate(
+                            candidate,
+                            linear_index,
+                            angular_index,
+                            reverse_limit_mps,
+                        )
+                    )
         return TrajectoryRolloutResult(request.context, tuple(evaluations))
 
     def _evaluate_candidate(
@@ -1727,6 +1870,11 @@ class TrajectoryRolloutComputer:
                     collision
                     or clearance <= config.footprint_safety_margin_m
                 )
+        if (
+            v_mps > _MOTION_EPSILON
+            and min_clearance <= _LOCAL_ESCAPE_TRIGGER_CLEARANCE_M
+        ):
+            collision = True
 
         start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
         final_distance = math.hypot(goal.x_m - x_m, goal.y_m - y_m)
@@ -1774,6 +1922,44 @@ class TrajectoryRolloutComputer:
             novelty_score=novelty,
             total_score=total_score,
         )
+
+
+def _as_escape_candidate(
+    candidate: TrajectoryEvaluation,
+    linear_index: int,
+    angular_index: int,
+    reverse_limit_mps: float,
+) -> TrajectoryEvaluation:
+    """Re-score a bounded candidate for clearance recovery, not goal progress."""
+
+    moving = (
+        abs(candidate.v_mps) > _MOTION_EPSILON
+        or abs(candidate.omega_rad_s) > _MOTION_EPSILON
+    )
+    pivot = (
+        abs(candidate.v_mps) <= _MOTION_EPSILON
+        and abs(candidate.omega_rad_s) > _MOTION_EPSILON
+    )
+    motion_bonus = 0.25 if pivot else (0.08 if moving else -1.0)
+    reverse_penalty = (
+        0.10
+        * abs(candidate.v_mps)
+        / max(reverse_limit_mps, _MOTION_EPSILON)
+        if candidate.v_mps < -_MOTION_EPSILON
+        else 0.0
+    )
+    escape_score = (
+        candidate.min_clearance_m
+        + 0.20 * candidate.novelty_score
+        + 0.10 * candidate.smoothness_score
+        + motion_bonus
+        - reverse_penalty
+    )
+    return replace(
+        candidate,
+        candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
+        total_score=escape_score,
+    )
 
 
 def hold_position(

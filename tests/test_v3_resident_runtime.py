@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,18 @@ class LidarBackend:
                 left_observation_count=20,
                 right_observation_count=20,
             ),
+        )
+
+
+class FrontBlockingLidarBackend(LidarBackend):
+    def read(self, context):
+        reading = super().read(context)
+        if context.tick_id != 1:
+            return reading
+        assert reading.scan is not None
+        return replace(
+            reading,
+            scan=replace(reading.scan, front_clearance_m=0.10),
         )
 
 
@@ -320,6 +333,33 @@ def test_resident_runtime_rearms_then_runs_active_and_signal_shutdown_tick():
     assert motor.busy == set()
     assert motor.levels == {12: 0, 13: 0, 18: 0, 19: 0}
     assert motor.calls[-1] == ("close", 4)
+
+
+def test_recoverable_l12_stop_keeps_active_session_alive_and_resumes():
+    motor = MotorGpio()
+    records = []
+
+    report = run_resident_physical_control(
+        *_sources(EncoderBackend(), FrontBlockingLidarBackend()),
+        SequenceGateway(active_ticks=(1, 2)),
+        motor,
+        _runtime_config(),
+        stop_requested=StopAfterCall(5),
+        monotonic_ns=StepClock(),
+        sleep=lambda _seconds: None,
+        record_observer=records.append,
+    )
+
+    assert report.status == RUN_OK
+    assert isinstance(records[1], ExecutionRecord)
+    assert records[1].inputs.lifecycle is LifecycleState.ACTIVE
+    assert records[1].result.final_actuation.safety_decision is SafetyDecision.STOP
+    assert records[1].result.final_actuation.reason == "LIDAR_CLEARANCE_LOW"
+    assert isinstance(records[2], ExecutionRecord)
+    assert records[2].inputs.lifecycle is LifecycleState.ACTIVE
+    assert records[2].result.final_actuation.safety_decision is SafetyDecision.ALLOW
+    assert report.final_lifecycle is LifecycleState.SHUTDOWN
+    assert report.termination_class == "SHUTDOWN_SAFE_LOW"
 
 
 def test_resident_runtime_rejects_active_first_tick_and_latches_fault_zero():
