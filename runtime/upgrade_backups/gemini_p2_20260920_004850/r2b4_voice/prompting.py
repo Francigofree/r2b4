@@ -8,7 +8,7 @@ from pathlib import Path
 from .conversation_contracts import ConversationMemoryTurn, RobotContextSnapshot, UserTextTurn
 
 
-PROMPT_VERSION = "R2B4_VOICE_LLM_SYSTEM_V2"
+PROMPT_VERSION = "R2B4_VOICE_LLM_SYSTEM_V1"
 
 
 class PromptAssembler:
@@ -44,10 +44,7 @@ class PromptAssembler:
                 "content": (
                     f"PROMPT_VERSION={PROMPT_VERSION}\n"
                     "Az alábbi ROBOT_CONTEXT_JSON friss, csak olvasható robotállapot. "
-                    "Kizárólag ebből állíts tényt a robot aktuális állapotáról. "
-                    "A runtime.state=STOPPED normál leállított állapot, nem hiba. "
-                    "A runtime.state=UNAVAILABLE csak azt jelenti, hogy nincs friss V3 live státusz; "
-                    "önmagában nem FAULT és nem üzemképtelenség. Hibát csak explicit FAULT/fault_layer alapján állíts.\n"
+                    "Kizárólag ebből állíts tényt a robot aktuális állapotáról.\n"
                     f"ROBOT_CONTEXT_JSON={context_json}"
                 ),
             },

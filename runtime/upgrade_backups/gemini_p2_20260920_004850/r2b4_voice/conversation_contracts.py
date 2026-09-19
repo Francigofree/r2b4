@@ -6,7 +6,7 @@ conversation path above RobotInterface.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
@@ -104,7 +104,6 @@ class RobotContextSnapshot:
     safety: Mapping[str, object] | None
     health: tuple[object, ...]
     available_actions: tuple[Mapping[str, object], ...]
-    host: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "schema", _nonempty(self.schema, "schema"))
@@ -119,12 +118,10 @@ class RobotContextSnapshot:
             "available_actions",
             tuple(MappingProxyType(dict(item)) for item in self.available_actions),
         )
-        object.__setattr__(self, "host", MappingProxyType(dict(self.host)))
 
     def to_jsonable(self) -> dict[str, object]:
         return {
             "schema": self.schema,
-            "host": dict(self.host),
             "runtime": dict(self.runtime),
             "pose": None if self.pose is None else dict(self.pose),
             "safety": None if self.safety is None else dict(self.safety),

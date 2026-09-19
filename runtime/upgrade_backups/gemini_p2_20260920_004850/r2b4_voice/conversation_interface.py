@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .conversation_journal import ConversationJournal
 from .conversation_service import ConversationService, ConversationServiceConfig
-from .llm_provider import build_llm_client
+from .groq_llm import GroqStructuredChatClient
 from .prompting import PromptAssembler
 from .robot_context import RobotContextBuilder
 
@@ -95,8 +95,6 @@ def build_voice_interface(
     project_root: Path | str | None = None,
     *,
     api_key: str | None = None,
-    provider: str | None = None,
-    model: str | None = None,
     service_config: ConversationServiceConfig = ConversationServiceConfig(),
 ) -> VoiceInterfaceBundle:
     """Build one RobotInterface facade that also exposes conversation.* capabilities.
@@ -116,7 +114,7 @@ def build_voice_interface(
     core_adapters = build_adapters(controller, root)
     core_interface = RobotInterface(project_root=root, controller=controller, adapters=core_adapters)
 
-    llm = build_llm_client(provider=provider, api_key=api_key, model=model)
+    llm = GroqStructuredChatClient(api_key=api_key)
     prompt = PromptAssembler(root / "conf" / "voice_llm_system.md", max_history_turns=service_config.max_history_turns)
     journal = ConversationJournal(root / "runtime" / "conversations")
     service = ConversationService(

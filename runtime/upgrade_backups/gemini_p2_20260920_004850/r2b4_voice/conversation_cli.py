@@ -10,22 +10,19 @@ import sys
 from pathlib import Path
 
 from .conversation_interface import build_voice_interface
-from .llm_provider import (
-    SUPPORTED_LLM_PROVIDERS,
-    default_model_for,
-    resolve_llm_provider,
-)
 
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _load_project_env(root: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
+def _load_project_secret(root: Path) -> str | None:
+    existing = os.environ.get("GROQ_API_KEY", "").strip()
+    if existing:
+        return existing
     path = root / "conf" / ".wake.env"
     if not path.is_file():
-        return values
+        return None
     try:
         mode = stat.S_IMODE(path.stat().st_mode)
         if mode & 0o077:
@@ -35,21 +32,12 @@ def _load_project_env(root: Path) -> dict[str, str]:
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            if key and value:
-                values[key] = value
+            if key.strip() == "GROQ_API_KEY":
+                value = value.strip().strip('"').strip("'")
+                return value or None
     except OSError as exc:
         raise RuntimeError(f"cannot read {path}: {exc}") from exc
-    return values
-
-
-def _setting(project_env: dict[str, str], name: str) -> str | None:
-    value = os.environ.get(name)
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    value = project_env.get(name)
-    return value.strip() if isinstance(value, str) and value.strip() else None
+    return None
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -57,60 +45,46 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--text", help="submit one text turn and print the completed result")
     parser.add_argument("--source", default="cli")
     parser.add_argument("--wait", type=float, default=25.0)
-    parser.add_argument("--check", action="store_true", help="check local config without contacting the LLM provider")
+    parser.add_argument("--check", action="store_true", help="check local config without contacting Groq")
     parser.add_argument("--interactive", action="store_true", help="interactive text-only conversation")
-    parser.add_argument("--provider", choices=SUPPORTED_LLM_PROVIDERS)
-    parser.add_argument("--model")
     return parser
 
 
-def _resolved_llm(args: argparse.Namespace, project_env: dict[str, str]) -> tuple[str, str, str | None]:
-    provider = resolve_llm_provider(args.provider or _setting(project_env, "R2B4_LLM_PROVIDER"))
-    model = args.model or _setting(project_env, "R2B4_LLM_MODEL") or default_model_for(provider)
-    key_name = "GEMINI_API_KEY" if provider == "gemini" else "GROQ_API_KEY"
-    return provider, model, _setting(project_env, key_name)
-
-
-def _check(root: Path, provider: str, model: str, key: str | None) -> int:
+def _check(root: Path, key: str | None) -> int:
     prompt = root / "conf" / "voice_llm_system.md"
     secret = root / "conf" / ".wake.env"
     result = {
         "project_root": str(root),
         "system_prompt": "PASS" if prompt.is_file() else "FAIL",
-        "llm_provider": provider,
-        "llm_model": model,
-        "llm_api_key": "PASS" if key else "FAIL",
+        "groq_api_key": "PASS" if key else "FAIL",
         "secret_file": str(secret),
         "action_mode": "SHADOW",
         "motor_action_execution": False,
-        "groq_stt_key_present": "PASS" if _setting(_load_project_env(root), "GROQ_API_KEY") else "FAIL",
+        "model": os.environ.get("R2B4_LLM_MODEL", "openai/gpt-oss-20b"),
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result["system_prompt"] == "PASS" and result["llm_api_key"] == "PASS" else 1
+    return 0 if result["system_prompt"] == "PASS" and result["groq_api_key"] == "PASS" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     root = _project_root()
     try:
-        project_env = _load_project_env(root)
-        provider, model, key = _resolved_llm(args, project_env)
-    except (RuntimeError, ValueError) as exc:
+        key = _load_project_secret(root)
+    except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-
     if args.check:
-        return _check(root, provider, model, key)
+        return _check(root, key)
     if not key:
-        key_name = "GEMINI_API_KEY" if provider == "gemini" else "GROQ_API_KEY"
-        print(f"ERROR: {key_name} is not configured in environment or conf/.wake.env", file=sys.stderr)
+        print("ERROR: GROQ_API_KEY is not configured in environment or conf/.wake.env", file=sys.stderr)
         return 2
     if not args.text and not args.interactive:
         print("ERROR: use --text TEXT, --interactive, or --check", file=sys.stderr)
         return 2
 
     try:
-        with build_voice_interface(root, api_key=key, provider=provider, model=model) as bundle:
+        with build_voice_interface(root, api_key=key) as bundle:
             interface = bundle.interface
             if args.text:
                 accepted = interface.execute("conversation.submit_text", text=args.text, source=args.source)

@@ -8,7 +8,7 @@ from typing import Protocol
 from .conversation_contracts import RobotContextSnapshot
 
 
-ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V2"
+ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V1"
 LLM_ACTION_ALLOWLIST = (
     "v3.command.stop",
     "v3.command.face_person",
@@ -32,44 +32,15 @@ class RobotContextBuilder:
         caps = raw_caps.get("capabilities") if isinstance(raw_caps, Mapping) else None
         caps = caps if isinstance(caps, Mapping) else {}
 
-        operator_status = self._read_if_available(caps, "operator.status")
-        runtime_running: bool | None = None
-        if isinstance(operator_status, Mapping) and isinstance(operator_status.get("runtime_running"), bool):
-            runtime_running = bool(operator_status.get("runtime_running"))
-
-        host = {
-            "operator_status_available": isinstance(operator_status, Mapping),
-            "runtime_running": runtime_running,
-            "runtime_state": (
-                "RUNNING" if runtime_running is True
-                else "STOPPED" if runtime_running is False
-                else "UNKNOWN"
-            ),
-        }
-
+        runtime: dict[str, object] = {"state": "UNAVAILABLE", "ready_for_active": False}
         status = self._read_if_available(caps, "v3.status")
         if isinstance(status, Mapping):
-            runtime: dict[str, object] = {
-                "live_status_available": True,
+            runtime = {
                 "state": status.get("state"),
                 "ready_for_active": status.get("ready_for_active"),
                 "tick_id": status.get("tick_id"),
                 "enabled": status.get("enabled"),
                 "fault_layer": status.get("fault_layer"),
-                "interpretation": "LIVE_STATUS",
-            }
-        else:
-            state = "STOPPED" if runtime_running is False else "UNAVAILABLE"
-            runtime = {
-                "live_status_available": False,
-                "state": state,
-                "ready_for_active": False,
-                "tick_id": None,
-                "enabled": False,
-                "fault_layer": None,
-                "interpretation": (
-                    "RUNTIME_STOPPED" if state == "STOPPED" else "LIVE_STATUS_UNAVAILABLE"
-                ),
             }
 
         pose = self._mapping_or_none(self._read_if_available(caps, "v3.pose"))
@@ -98,7 +69,6 @@ class RobotContextBuilder:
             safety=safety,
             health=health,
             available_actions=tuple(actions),
-            host=host,
         )
 
     def _read_if_available(self, caps: Mapping[str, object], name: str) -> object | None:
