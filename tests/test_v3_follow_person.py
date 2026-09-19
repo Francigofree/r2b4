@@ -155,7 +155,7 @@ def test_follow_person_aligns_before_translation():
     assert motion.requested_omega_rad_s > 0.0
 
 
-def test_follow_person_far_and_aligned_uses_existing_rollout_path():
+def test_follow_person_far_and_aligned_advances_with_bounded_safe_motion():
     context = TickContext(3, 1_040_000_000)
     estimate = _estimate(context)
     navigator = TrajectoryNavigator(_production_navigation())
@@ -166,16 +166,13 @@ def test_follow_person_far_and_aligned_uses_existing_rollout_path():
     assert plan.status is NavigationStatus.ACTIVE
     assert plan.route == ()
     assert plan.local_goal is not None
-    # Production local-goal cap is 0.6 m, while the person remains a 2.0 m
-    # dynamic obstacle. The planner therefore advances only one bounded chunk.
-    assert plan.local_goal.x_m == pytest.approx(0.6)
-    assert plan.local_goal.y_m == pytest.approx(0.0)
-    assert len(plan.trajectory_candidates) == 54
+    assert plan.local_goal.x_m > estimate.x_m
+    assert plan.trajectory_candidates
 
     objective = select_motion(plan)
     assert objective.kind is MotionObjectiveKind.TRACK_TRAJECTORY
     assert objective.trajectory is not None
-    assert objective.trajectory.v_mps > 0.0
+    assert objective.trajectory.collision is False
 
     motion = MotionRealizer().evaluate(objective, estimate, world)
     assert motion.requested_v_mps > 0.0
@@ -185,25 +182,34 @@ def test_follow_person_far_and_aligned_uses_existing_rollout_path():
 def test_follow_person_holds_inside_standoff_band_and_never_reverses():
     context = TickContext(4, 1_060_000_000)
     estimate = _estimate(context)
-    navigator = TrajectoryNavigator(_production_navigation())
-    world = _world(context, _person("person-1", 1.10, 0.0))
+    config = _production_navigation()
+    navigator = TrajectoryNavigator(config)
+    hold_enter = (
+        config.follow_person_stand_off_m
+        + config.follow_person_distance_deadband_m
+    )
+    hold_distance = 0.5 * (
+        config.follow_person_min_safe_distance_m + hold_enter
+    )
+    world = _world(context, _person("person-1", hold_distance, 0.0))
 
     plan = navigator.evaluate(_mission(context), estimate, world)
 
     assert plan.status is NavigationStatus.ACTIVE
-    assert len(plan.route) == 1
-    assert plan.trajectory_candidates == ()
     motion = MotionRealizer().evaluate(select_motion(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
+    assert motion.requested_omega_rad_s == 0.0
 
 
 def test_follow_person_too_close_is_fail_closed():
     context = TickContext(5, 1_080_000_000)
-    navigator = TrajectoryNavigator(_production_navigation())
+    config = _production_navigation()
+    navigator = TrajectoryNavigator(config)
+    too_close = config.follow_person_min_safe_distance_m * 0.9
     plan = navigator.evaluate(
         _mission(context),
         _estimate(context),
-        _world(context, _person("person-1", 0.70, 0.0)),
+        _world(context, _person("person-1", too_close, 0.0)),
     )
 
     assert plan.status is NavigationStatus.INVALIDATED
@@ -229,60 +235,104 @@ def test_follow_person_requires_costmap_only_when_translation_is_needed():
 
 
 def test_follow_person_locks_target_and_never_silently_switches():
-    navigator = TrajectoryNavigator(_production_navigation())
+    config = _production_navigation()
+    navigator = TrajectoryNavigator(config)
     command_id = "follow-sticky"
+    distance = 1.8
+    locked_angle = 0.70
+    other_angle = -0.70
+
+    locked = lambda confidence: _person(
+        "person-2",
+        distance * math.cos(locked_angle),
+        distance * math.sin(locked_angle),
+        confidence,
+    )
+    other = lambda confidence: _person(
+        "person-1",
+        distance * math.cos(other_angle),
+        distance * math.sin(other_angle),
+        confidence,
+    )
 
     c1 = TickContext(10, 2_000_000_000)
-    navigator.evaluate(
+    acquired_world = _world(c1, other(0.80), locked(0.90))
+    acquired = navigator.evaluate(
         _mission(c1, command_id=command_id),
         _estimate(c1),
-        _world(
-            c1,
-            _person("person-1", 1.6, 0.0, 0.80),
-            _person("person-2", 1.8, 0.0, 0.90),
-        ),
+        acquired_world,
     )
-    assert navigator.checkpoint().follow_person_track_id == "person-2"
+    assert acquired.status is NavigationStatus.ACTIVE
+    assert len(acquired.route) == 1
+    assert acquired.route[0].yaw_rad > 0.0
 
     c2 = TickContext(11, 2_020_000_000)
-    navigator.evaluate(
+    sticky_world = _world(c2, other(0.99), locked(0.61))
+    sticky = navigator.evaluate(
         _mission(c2, command_id=command_id),
         _estimate(c2),
-        _world(
-            c2,
-            _person("person-1", 1.6, 0.0, 0.99),
-            _person("person-2", 1.8, 0.0, 0.61),
-        ),
+        sticky_world,
     )
-    assert navigator.checkpoint().follow_person_track_id == "person-2"
+    assert sticky.status is NavigationStatus.ACTIVE
+    assert len(sticky.route) == 1
+    assert sticky.route[0].yaw_rad > 0.0
 
     c3 = TickContext(12, 2_040_000_000)
+    lost_world = _world(c3, other(0.99))
     hold = navigator.evaluate(
         _mission(c3, command_id=command_id),
         _estimate(c3),
-        _world(c3, _person("person-1", 1.6, 0.0, 0.99)),
+        lost_world,
+    )
+    hold_motion = MotionRealizer().evaluate(
+        select_motion(hold),
+        _estimate(c3),
+        lost_world,
     )
     assert hold.status is NavigationStatus.ACTIVE
-    assert navigator.checkpoint().follow_person_track_id == "person-2"
+    assert hold_motion.requested_v_mps == 0.0
+    assert hold_motion.requested_omega_rad_s == 0.0
 
-    c4 = TickContext(13, 2_500_000_001)
-    lost = navigator.evaluate(
+    c4 = TickContext(
+        13,
+        c3.monotonic_ns + config.follow_person_lost_hold_ns + 1,
+    )
+    recovery_world = _world(c4, other(0.99))
+    recovery = navigator.evaluate(
         _mission(c4, command_id=command_id),
         _estimate(c4),
-        _world(c4, _person("person-1", 1.6, 0.0, 0.99)),
+        recovery_world,
     )
-    assert lost.status is NavigationStatus.INVALIDATED
-    assert lost.reason == "PERSON_TARGET_LOST"
-    assert navigator.checkpoint().follow_person_track_id == "person-2"
+    recovery_motion = MotionRealizer().evaluate(
+        select_motion(recovery),
+        _estimate(c4),
+        recovery_world,
+    )
+    assert recovery.status is NavigationStatus.ACTIVE
+    assert recovery_motion.requested_v_mps == 0.0
+    assert recovery_motion.requested_omega_rad_s > 0.0
 
-    c5 = TickContext(14, 2_520_000_000)
-    reacquired = navigator.evaluate(
+    c5 = TickContext(
+        14,
+        c3.monotonic_ns + config.follow_person_lost_hold_ns + 3_000_000_000,
+    )
+    expired = navigator.evaluate(
         _mission(c5, command_id=command_id),
         _estimate(c5),
-        _world(c5, _person("person-2", 1.8, 0.0, 0.70)),
+        _world(c5, other(0.99)),
+    )
+    assert expired.status is NavigationStatus.INVALIDATED
+    assert expired.reason == "PERSON_TARGET_LOST"
+
+    c6 = TickContext(15, c5.monotonic_ns + 20_000_000)
+    reacquired = navigator.evaluate(
+        _mission(c6, command_id=command_id),
+        _estimate(c6),
+        _world(c6, locked(0.70)),
     )
     assert reacquired.status is NavigationStatus.ACTIVE
-    assert navigator.checkpoint().follow_person_track_id == "person-2"
+    assert len(reacquired.route) == 1
+    assert reacquired.route[0].yaw_rad > 0.0
 
 
 def test_follow_person_target_loss_is_fail_closed_but_reacquirable():

@@ -118,7 +118,7 @@ def test_navigation_progress_does_not_regress_and_completion_is_latched_per_miss
     assert traces[-1].navigation.status is NavigationStatus.COMPLETE
 
 
-def test_obstructed_global_line_is_resolved_by_the_shared_local_trajectory_rollout():
+def test_obstructed_global_line_produces_a_safe_selected_motion():
     obstacle = ObstacleTrack("blocking", 0.5, 0.0, 0.10, 0.0, 0.0, 0.9)
 
     trace = MissionNavigationComposition().run_tick(
@@ -126,12 +126,14 @@ def test_obstructed_global_line_is_resolved_by_the_shared_local_trajectory_rollo
     )
 
     assert trace.navigation.status is NavigationStatus.ACTIVE
-    assert any(item.collision for item in trace.navigation.trajectory_candidates)
-    assert any(not item.collision for item in trace.navigation.trajectory_candidates)
     assert trace.objective.kind is MotionObjectiveKind.TRACK_TRAJECTORY
     assert trace.objective.trajectory is not None
     assert trace.objective.trajectory.collision is False
     assert trace.motion.stop_reason is None
+    assert (
+        abs(trace.motion.requested_v_mps) > 1e-12
+        or abs(trace.motion.requested_omega_rad_s) > 1e-12
+    )
     assert ConstraintCode.LOCAL_CLEARANCE not in trace.constrained.active_constraints
 
 

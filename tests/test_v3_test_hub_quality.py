@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+from v3 import test_hub_next
+from v3 import test_hub_portable as portable
+from v3.test_hub_next import run_default
 
 from v3.test_hub_motion_quality import (
     MOTION_QUALITY_SCHEMA,
@@ -288,23 +293,177 @@ def test_no_motion_or_sensor_evidence_is_insufficient_data():
     assert localization["status"] == "INSUFFICIENT_DATA"
 
 
-def test_quality_is_wired_into_behavior_upgraded_test_hub():
-    root = Path(__file__).resolve().parents[1]
-    behavior = root / "v3/test_hub_behavior.py"
-    next_source = (root / "v3/test_hub_next.py").read_text(encoding="utf-8")
-    portable_source = (root / "v3/test_hub_portable.py").read_text(encoding="utf-8")
-    assert behavior.is_file(), "Quality upgrade must be installed after the Behavior upgrade"
-    behavior_source = behavior.read_text(encoding="utf-8")
-    assert "build_behavior_evidence" in next_source
-    for required in ("behavior_summary.json", "behavior_episodes.ndjson", "behavior_timeline.ndjson"):
-        assert required in behavior_source
-    for required in (
+def test_quality_is_emitted_by_behavior_upgraded_test_hub(monkeypatch, tmp_path):
+    ticks = [
+        _tick(tick, right_measured=0.14, actual_v=0.17)
+        for tick in range(80)
+    ]
+
+    class FakeReader:
+        def iter_json_messages(self, *, topics):
+            del topics
+            for payload in ticks:
+                tick_id = payload["tick_id"]
+                monotonic_ns = payload["monotonic_ns"]
+                yield SimpleNamespace(
+                    sequence=tick_id,
+                    log_time_ns=monotonic_ns,
+                ), payload
+
+        def first_json(self, topic):
+            del topic
+            return None
+
+        def sha256(self):
+            return "0" * 64
+
+    reader = FakeReader()
+    capture_path = tmp_path / "quality-test.mcap"
+    capture_path.write_bytes(b"offline-quality-fixture")
+    destination = tmp_path / "quality.evidence"
+
+    def fake_diagnose_once(_capture, output_dir, _replay_mode):
+        output_dir.mkdir(parents=True, exist_ok=False)
+        return {
+            "status": "PASS",
+            "diagnosis_status": "PASS",
+            "evidence_status": "PASS",
+            "behavior_status": "PASS",
+            "replay_status": "MATCH",
+        }
+
+    def fake_behavior(_reader, output_dir, *, triage):
+        del triage
+        (output_dir / "behavior_summary.json").write_text(
+            json.dumps({"status": "PASS"}) + "\n",
+            encoding="utf-8",
+        )
+        (output_dir / "behavior_episodes.ndjson").write_text(
+            json.dumps(
+                {
+                    "episode_id": "episode-1",
+                    "mission_id": "mission-1",
+                    "mode": "EXPLORE",
+                    "start_tick": 0,
+                    "end_tick": 79,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (output_dir / "behavior_timeline.ndjson").write_text("", encoding="utf-8")
+        return {
+            "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+            "summary": "behavior_summary.json",
+            "episodes": "behavior_episodes.ndjson",
+            "timeline": "behavior_timeline.ndjson",
+            "episode_count": 1,
+            "correlation_keys": ["command_id", "mission_id"],
+        }
+
+    def fake_build_run_view(_capture, *, hz, output_path, triage):
+        del hz, triage
+        output_path.write_text(
+            json.dumps({"row_type": "header", "effective_incidents": []}) + "\n",
+            encoding="utf-8",
+        )
+        return {
+            "effective_incidents": [],
+            "data_coverage": {},
+            "phases": [],
+            "suppressed_agent_noise": [],
+        }
+
+    def fake_write_lidar_summary(_capture, output_path, *, reader):
+        del reader
+        output_path.write_text("", encoding="utf-8")
+        return {"path": str(output_path), "scan_count": 0}, {}
+
+    def fake_write_manifest(output_dir, _capture, **_kwargs):
+        artifacts = sorted(
+            path.name for path in output_dir.iterdir() if path.is_file()
+        )
+        path = output_dir / "portable_manifest.json"
+        path.write_text(
+            json.dumps({"artifacts": artifacts}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    monkeypatch.setattr(test_hub_next, "McapReader", lambda _capture: reader)
+    monkeypatch.setattr(test_hub_next, "_diagnose_once", fake_diagnose_once)
+    monkeypatch.setattr(test_hub_next, "analyze_capture", lambda _reader: {})
+    monkeypatch.setattr(test_hub_next, "build_behavior_evidence", fake_behavior)
+    monkeypatch.setattr(test_hub_next, "build_run_view", fake_build_run_view)
+    monkeypatch.setattr(
+        test_hub_next,
+        "write_incident_slices",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        test_hub_next,
+        "write_lidar_summary",
+        fake_write_lidar_summary,
+    )
+    monkeypatch.setattr(
+        test_hub_next,
+        "write_raw_lidar_incident_slices",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(
+        test_hub_next,
+        "write_portable_manifest",
+        fake_write_manifest,
+    )
+
+    result = run_default(
+        capture_path,
+        output_dir=destination,
+        replay_mode="incident",
+        replay_sweep_enabled=False,
+    )
+
+    for name in (
+        "behavior_summary.json",
+        "behavior_episodes.ndjson",
+        "behavior_timeline.ndjson",
         "motion_quality.json",
         "motion_quality_segments.ndjson",
         "localization_quality.json",
         "localization_events.ndjson",
-        "compare_motion_quality_sources",
-        "compare_localization_quality_sources",
+        "agent_view.json",
+        "portable_manifest.json",
     ):
-        assert required in next_source
-    assert "tests/test_v3_test_hub_quality.py" in portable_source
+        assert (destination / name).is_file()
+
+    assert result["motion_quality_status"] != "ERROR"
+    assert result["localization_quality_status"] != "ERROR"
+
+    agent = json.loads(
+        (destination / "agent_view.json").read_text(encoding="utf-8")
+    )
+    assert agent["quality"]["motion"]["summary"] == "motion_quality.json"
+    assert agent["quality"]["motion"]["details"] == "motion_quality_segments.ndjson"
+    assert agent["quality"]["localization"]["summary"] == "localization_quality.json"
+    assert agent["quality"]["localization"]["events"] == "localization_events.ndjson"
+    assert agent["quality"]["motion"]["status"] == result["motion_quality_status"]
+    assert (
+        agent["quality"]["localization"]["status"]
+        == result["localization_quality_status"]
+    )
+
+
+def test_testhub_pytest_scope_executes_quality_tests(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0, stdout="pass", stderr="")
+
+    monkeypatch.setattr(portable.subprocess, "run", fake_run)
+
+    result = portable.run_pytest(tmp_path, scope="testhub")
+
+    assert result["status"] == "PASS"
+    assert "tests/test_v3_test_hub_quality.py" in result["command"]
+    assert calls

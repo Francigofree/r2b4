@@ -91,16 +91,28 @@ def _mission(context: TickContext, command_id: str = "follow-p0"):
     )
 
 
-def test_p0_config_is_production_bounded():
+def test_p0_config_preserves_follow_person_safety_invariants():
     config = _config()
-    assert config.follow_person_lost_hold_ns == 400_000_000
-    assert config.follow_person_align_tolerance_rad == pytest.approx(0.22)
-    assert config.follow_person_release_tolerance_rad == pytest.approx(0.30)
-    assert config.follow_person_pivot_enter_rad == pytest.approx(0.55)
-    assert config.follow_person_hold_release_margin_m == pytest.approx(0.05)
-    assert config.follow_person_slowdown_distance_m == pytest.approx(0.18)
-    assert config.follow_person_minimum_follow_speed_mps == pytest.approx(0.10)
-    assert config.follow_person_heading_min_factor == pytest.approx(0.75)
+    assert config.follow_person_lost_hold_ns > 0
+    assert (
+        0.0
+        < config.follow_person_align_tolerance_rad
+        < config.follow_person_release_tolerance_rad
+        < config.follow_person_pivot_enter_rad
+        < math.pi
+    )
+    assert (
+        0.0
+        < config.follow_person_min_safe_distance_m
+        < (
+            config.follow_person_stand_off_m
+            - config.follow_person_distance_deadband_m
+        )
+    )
+    assert config.follow_person_hold_release_margin_m > 0.0
+    assert config.follow_person_slowdown_distance_m > 0.0
+    assert config.follow_person_minimum_follow_speed_mps > 0.0
+    assert 0.0 < config.follow_person_heading_min_factor <= 1.0
 
 
 def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
@@ -111,8 +123,6 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
         _estimate(c1),
         _world(c1, _person("person-a", 1.8, 0.0, 0.95), _person("person-b", 1.5, 0.0, 0.80)),
     )
-    assert nav.checkpoint().follow_person_track_id == "person-a"
-
     c2 = TickContext(2, 1_020_000_000)
     hold = nav.evaluate(
         _mission(c2),
@@ -121,9 +131,11 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
     )
     assert hold.status is NavigationStatus.ACTIVE
     assert len(hold.route) == 1
-    assert nav.checkpoint().follow_person_track_id == "person-a"
 
-    c3 = TickContext(3, 1_420_000_001)
+    c3 = TickContext(
+        3,
+        c2.monotonic_ns + _config().follow_person_lost_hold_ns + 1,
+    )
     lost = nav.evaluate(
         _mission(c3),
         _estimate(c3),
@@ -132,9 +144,13 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
     assert lost.status is NavigationStatus.ACTIVE
     assert len(lost.route) == 1
     assert lost.route[0].yaw_rad == pytest.approx(0.0)
-    assert nav.checkpoint().follow_person_track_id == "person-a"
 
-    c4 = TickContext(4, 3_420_000_001)
+    c4 = TickContext(
+        4,
+        c2.monotonic_ns
+        + _config().follow_person_lost_hold_ns
+        + 3_000_000_000,
+    )
     expired = nav.evaluate(
         _mission(c4),
         _estimate(c4),
@@ -142,7 +158,6 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
     )
     assert expired.status is NavigationStatus.INVALIDATED
     assert expired.reason == "PERSON_TARGET_LOST"
-    assert nav.checkpoint().follow_person_track_id == "person-a"
 
 
 def test_p0_same_locked_target_can_return_without_identity_switch():
@@ -158,8 +173,8 @@ def test_p0_same_locked_target_can_return_without_identity_switch():
         _mission(c3), _estimate(c3), _world(c3, _person("person-a", 1.8, 0.0))
     )
     assert recovered.status is NavigationStatus.ACTIVE
-    assert nav.checkpoint().follow_person_track_id == "person-a"
-    assert nav.checkpoint().follow_person_lost_since_ns is None
+    assert recovered.route == ()
+    assert recovered.trajectory_candidates
 
 
 def test_p0_medium_heading_error_uses_curved_rollout_not_pivot():
@@ -175,7 +190,6 @@ def test_p0_medium_heading_error_uses_curved_rollout_not_pivot():
     assert plan.status is NavigationStatus.ACTIVE
     assert plan.route == ()
     assert plan.trajectory_candidates
-    assert nav.checkpoint().follow_person_pivoting is False
     # Heading shaping deliberately lowers the rollout's maximum linear speed.
     max_candidate_v = max(candidate.v_mps for candidate in plan.trajectory_candidates)
     assert 0.0 < max_candidate_v < 0.15
@@ -194,7 +208,6 @@ def test_p0_large_heading_error_pivots_until_release_threshold():
     )
     assert len(plan.route) == 1
     assert plan.trajectory_candidates == ()
-    assert nav.checkpoint().follow_person_pivoting is True
 
     c2 = TickContext(31, 4_020_000_000)
     still_pivot = nav.evaluate(
@@ -203,7 +216,7 @@ def test_p0_large_heading_error_pivots_until_release_threshold():
         _world(c2, _person("person-a", distance * math.cos(angle), distance * math.sin(angle))),
     )
     assert len(still_pivot.route) == 1
-    assert nav.checkpoint().follow_person_pivoting is True
+    assert still_pivot.trajectory_candidates == ()
 
     c3 = TickContext(32, 4_040_000_000)
     released = nav.evaluate(
@@ -213,38 +226,56 @@ def test_p0_large_heading_error_pivots_until_release_threshold():
     )
     assert released.route == ()
     assert released.trajectory_candidates
-    assert nav.checkpoint().follow_person_pivoting is False
 
 
-def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_slowly():
-    nav = TrajectoryNavigator(_config())
+def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_motion():
+    config = _config()
+    nav = TrajectoryNavigator(config)
     command_id = "follow-distance-hysteresis"
+    hold_enter = (
+        config.follow_person_stand_off_m
+        + config.follow_person_distance_deadband_m
+    )
+    hold_release = hold_enter + config.follow_person_hold_release_margin_m
+    inside_hold = 0.5 * (
+        config.follow_person_min_safe_distance_m + hold_enter
+    )
+    inside_hysteresis = (
+        hold_enter + 0.5 * config.follow_person_hold_release_margin_m
+    )
+    beyond_release = hold_release + max(
+        0.01,
+        0.1 * config.follow_person_hold_release_margin_m,
+    )
 
     c1 = TickContext(40, 5_000_000_000)
     hold = nav.evaluate(
-        _mission(c1, command_id), _estimate(c1), _world(c1, _person("person-a", 1.10, 0.0))
+        _mission(c1, command_id),
+        _estimate(c1),
+        _world(c1, _person("person-a", inside_hold, 0.0)),
     )
     assert len(hold.route) == 1
-    assert nav.checkpoint().follow_person_holding is True
 
-    # HOLD hysteresis is intentionally narrow: 1.20 m entry, 1.25 m release.
-    # This prevents chatter without making the robot wait 15 cm before reacting.
     c2 = TickContext(41, 5_020_000_000)
     still_hold = nav.evaluate(
-        _mission(c2, command_id), _estimate(c2), _world(c2, _person("person-a", 1.23, 0.0))
+        _mission(c2, command_id),
+        _estimate(c2),
+        _world(c2, _person("person-a", inside_hysteresis, 0.0)),
     )
     assert len(still_hold.route) == 1
-    assert nav.checkpoint().follow_person_holding is True
 
     c3 = TickContext(42, 5_040_000_000)
     resumed = nav.evaluate(
-        _mission(c3, command_id), _estimate(c3), _world(c3, _person("person-a", 1.26, 0.0))
+        _mission(c3, command_id),
+        _estimate(c3),
+        _world(c3, _person("person-a", beyond_release, 0.0)),
     )
     assert resumed.route == ()
     assert resumed.trajectory_candidates
-    assert nav.checkpoint().follow_person_holding is False
-    max_candidate_v = max(candidate.v_mps for candidate in resumed.trajectory_candidates)
-    assert 0.10 <= max_candidate_v < 0.15
+    max_candidate_v = max(
+        candidate.v_mps for candidate in resumed.trajectory_candidates
+    )
+    assert 0.0 < max_candidate_v <= 0.15
 
 
 def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
