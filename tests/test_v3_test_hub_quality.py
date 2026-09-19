@@ -294,8 +294,10 @@ def test_quality_is_wired_into_behavior_upgraded_test_hub():
     next_source = (root / "v3/test_hub_next.py").read_text(encoding="utf-8")
     portable_source = (root / "v3/test_hub_portable.py").read_text(encoding="utf-8")
     assert behavior.is_file(), "Quality upgrade must be installed after the Behavior upgrade"
+    behavior_source = behavior.read_text(encoding="utf-8")
+    assert "build_behavior_evidence" in next_source
     for required in ("behavior_summary.json", "behavior_episodes.ndjson", "behavior_timeline.ndjson"):
-        assert required in next_source
+        assert required in behavior_source
     for required in (
         "motion_quality.json",
         "motion_quality_segments.ndjson",

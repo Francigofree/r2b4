@@ -26,6 +26,10 @@ class FakeReader:
             monotonic_ns = payload["monotonic_ns"]
             yield SimpleNamespace(sequence=tick_id, log_time_ns=monotonic_ns), payload
 
+    def first_json(self, topic):
+        del topic
+        return None
+
     def sha256(self):
         return "0" * 64
 
