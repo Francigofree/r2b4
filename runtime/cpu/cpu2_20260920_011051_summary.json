@@ -1,0 +1,493 @@
+{
+  "artifacts": {
+    "samples_ndjson": "/home/alba/project_r2b4/runtime/cpu/cpu2_20260920_011051.ndjson",
+    "summary_json": "/home/alba/project_r2b4/runtime/cpu/cpu2_20260920_011051_summary.json"
+  },
+  "claim_policy": {
+    "root_cause_inferred": false,
+    "statement": "cpu2 reports Linux scheduler/process/thread facts only. These observations do not by themselves identify a V3 layer as the runtime-loop root cause."
+  },
+  "core_busy": {
+    "0": {
+      "max_pct": 100.0,
+      "mean_pct": 75.47802972180648
+    },
+    "1": {
+      "max_pct": 63.46153846153846,
+      "mean_pct": 12.710937010514984
+    },
+    "2": {
+      "max_pct": 72.54901960784314,
+      "mean_pct": 35.220658810210104
+    },
+    "3": {
+      "max_pct": 51.02040816326531,
+      "mean_pct": 28.62853473899891
+    }
+  },
+  "core_frequency": {
+    "0": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    },
+    "1": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    },
+    "2": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    },
+    "3": {
+      "max_mhz": 2400.0,
+      "mean_mhz": 2400.0,
+      "min_mhz": 2400.0
+    }
+  },
+  "descendant_processes": [
+    {
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "pid": 29071
+    },
+    {
+      "cpu_pct_max_one_core": 62.17145253057394,
+      "cpu_pct_mean_one_core": 28.095742594835013,
+      "pid": 29072
+    },
+    {
+      "cpu_pct_max_one_core": 43.5136579404065,
+      "cpu_pct_mean_one_core": 2.231678328709385,
+      "pid": 29135
+    }
+  ],
+  "limitations": [
+    "No Python/V3 layer execution duration is measured.",
+    "No causal root-cause classification is emitted.",
+    "Runqueue wait is Linux scheduler evidence, not layer attribution.",
+    "CPU percentages are interval deltas and may vary with sampling."
+  ],
+  "measurement": {
+    "actual_duration_s": 15.005227233999904,
+    "clock_ticks_per_second": 100,
+    "configured_runtime_affinity": {
+      "enabled": true,
+      "io_cpu": 0,
+      "lidar_cpu": 2,
+      "runtime_cpu": 3,
+      "strict": true,
+      "vision_cpu": 1
+    },
+    "interval_s": 0.5,
+    "monitor_affinity": {
+      "allowed_cpus": [
+        0
+      ],
+      "applied": true,
+      "attempted": true,
+      "cpu": 0
+    },
+    "requested_duration_s": 15.0,
+    "runtime_pid": 29066,
+    "runtime_pid_source": "runtime/.r2b4_runtime_pid",
+    "sample_count": 30
+  },
+  "runtime_main_task": {
+    "affinity_mismatch_sample_count": 0,
+    "allowed_cpu_sets_observed": [
+      "3"
+    ],
+    "expected_runtime_cpu": 3,
+    "nonvoluntary_ctxt_switches": 30569,
+    "processors_observed": [
+      3
+    ],
+    "runqueue_wait_ms": 287.27637,
+    "runqueue_wait_share": 0.07805623825278406,
+    "sched_runtime_ms": 3393.100451,
+    "voluntary_ctxt_switches": 7682
+  },
+  "runtime_process": {
+    "cpu_pct_max_one_core": 149.60005765169353,
+    "cpu_pct_mean_one_core": 103.90295999534477
+  },
+  "runtime_threads": [
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 86.17912286423135,
+      "cpu_pct_mean_one_core": 62.11178838916426,
+      "nonvoluntary_ctxt_switches": 14214,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 3491.197875,
+      "runqueue_wait_share": 0.32298582244552393,
+      "sched_runtime_ms": 7317.938726,
+      "tid": 29128,
+      "voluntary_ctxt_switches": 839
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "3"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 57.642026186012,
+      "cpu_pct_mean_one_core": 22.09535840658401,
+      "nonvoluntary_ctxt_switches": 30569,
+      "processors_observed": [
+        3
+      ],
+      "runqueue_wait_ms": 287.27637,
+      "runqueue_wait_share": 0.07805623825278406,
+      "sched_runtime_ms": 3393.100451,
+      "tid": 29066,
+      "voluntary_ctxt_switches": 7682
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 31.00066107746108,
+      "cpu_pct_mean_one_core": 14.568128328561166,
+      "nonvoluntary_ctxt_switches": 2522,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 2351.082326,
+      "runqueue_wait_share": 0.5113275307265098,
+      "sched_runtime_ms": 2246.914427,
+      "tid": 29069,
+      "voluntary_ctxt_switches": 4549
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "3"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 13.60000524106305,
+      "cpu_pct_mean_one_core": 3.8296784753809456,
+      "nonvoluntary_ctxt_switches": 273,
+      "processors_observed": [
+        3
+      ],
+      "runqueue_wait_ms": 993.537011,
+      "runqueue_wait_share": 0.6323986101255645,
+      "sched_runtime_ms": 577.524334,
+      "tid": 29129,
+      "voluntary_ctxt_switches": 114731
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "2"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 5.883160802969366,
+      "cpu_pct_mean_one_core": 3.43567885355103,
+      "nonvoluntary_ctxt_switches": 842,
+      "processors_observed": [
+        2
+      ],
+      "runqueue_wait_ms": 426.519749,
+      "runqueue_wait_share": 0.48347584802699256,
+      "sched_runtime_ms": 455.674782,
+      "tid": 29093,
+      "voluntary_ctxt_switches": 8876
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "python3",
+      "cpu_pct_max_one_core": 9.781964127978863,
+      "cpu_pct_mean_one_core": 2.207847522139564,
+      "nonvoluntary_ctxt_switches": 688,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 813.85759,
+      "runqueue_wait_share": 0.7001892230285373,
+      "sched_runtime_ms": 348.481908,
+      "tid": 29068,
+      "voluntary_ctxt_switches": 4389
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 3.917232857465061,
+      "cpu_pct_mean_one_core": 1.7913033940878933,
+      "nonvoluntary_ctxt_switches": 257,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 511.466225,
+      "runqueue_wait_share": 0.6922461939442175,
+      "sched_runtime_ms": 227.383955,
+      "tid": 29108,
+      "voluntary_ctxt_switches": 1846
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 3.884078805771164,
+      "cpu_pct_mean_one_core": 1.7804469617317604,
+      "nonvoluntary_ctxt_switches": 595,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 272.034999,
+      "runqueue_wait_share": 0.5557398479116935,
+      "sched_runtime_ms": 217.465619,
+      "tid": 29127,
+      "voluntary_ctxt_switches": 1261
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 3.917232857465061,
+      "cpu_pct_mean_one_core": 1.7569671897473953,
+      "nonvoluntary_ctxt_switches": 993,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 908.347054,
+      "runqueue_wait_share": 0.7690822572070772,
+      "sched_runtime_ms": 272.732142,
+      "tid": 29070,
+      "voluntary_ctxt_switches": 5879
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "2"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 3.942390680769548,
+      "cpu_pct_mean_one_core": 1.7180927101612562,
+      "nonvoluntary_ctxt_switches": 675,
+      "processors_observed": [
+        2
+      ],
+      "runqueue_wait_ms": 266.457982,
+      "runqueue_wait_share": 0.5422208390550298,
+      "sched_runtime_ms": 224.961681,
+      "tid": 29094,
+      "voluntary_ctxt_switches": 4442
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "3"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 4.877146651178687,
+      "cpu_pct_mean_one_core": 1.4461707756931985,
+      "nonvoluntary_ctxt_switches": 270,
+      "processors_observed": [
+        3
+      ],
+      "runqueue_wait_ms": 1480.682668,
+      "runqueue_wait_share": 0.8781588570283343,
+      "sched_runtime_ms": 205.43899,
+      "tid": 29130,
+      "voluntary_ctxt_switches": 26153
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 1.971195340384774,
+      "cpu_pct_mean_one_core": 1.1027310741419984,
+      "nonvoluntary_ctxt_switches": 495,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 186.413855,
+      "runqueue_wait_share": 0.57057910009927,
+      "sched_runtime_ms": 140.29607,
+      "tid": 29126,
+      "voluntary_ctxt_switches": 235
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 1.961678812332564,
+      "cpu_pct_mean_one_core": 0.4875844276602179,
+      "nonvoluntary_ctxt_switches": 318,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 237.355474,
+      "runqueue_wait_share": 0.7717221627068961,
+      "sched_runtime_ms": 70.210494,
+      "tid": 29111,
+      "voluntary_ctxt_switches": 1543
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "2"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 1.9582271340329274,
+      "cpu_pct_mean_one_core": 0.31135008532705366,
+      "nonvoluntary_ctxt_switches": 92,
+      "processors_observed": [
+        2
+      ],
+      "runqueue_wait_ms": 68.904217,
+      "runqueue_wait_share": 0.6058453481570015,
+      "sched_runtime_ms": 44.828136,
+      "tid": 29156,
+      "voluntary_ctxt_switches": 500
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 1.9552087904993998,
+      "cpu_pct_mean_one_core": 0.2540043677921729,
+      "nonvoluntary_ctxt_switches": 126,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 67.011847,
+      "runqueue_wait_share": 0.6686223939623894,
+      "sched_runtime_ms": 33.211908,
+      "tid": 29125,
+      "voluntary_ctxt_switches": 661
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "1"
+      ],
+      "comm": "r2b4-l6-result\n",
+      "cpu_pct_max_one_core": 3.91103117452425,
+      "cpu_pct_mean_one_core": 0.17777414429655683,
+      "nonvoluntary_ctxt_switches": 28,
+      "processors_observed": [
+        1
+      ],
+      "runqueue_wait_ms": 18.803648,
+      "runqueue_wait_share": 0.4406986183520943,
+      "sched_runtime_ms": 23.864169,
+      "tid": 29139,
+      "voluntary_ctxt_switches": 765
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtim-ust",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 0,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 0.0,
+      "runqueue_wait_share": null,
+      "sched_runtime_ms": 0.0,
+      "tid": 29101,
+      "voluntary_ctxt_switches": 0
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtim-ust",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 0,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 0.0,
+      "runqueue_wait_share": null,
+      "sched_runtime_ms": 0.0,
+      "tid": 29102,
+      "voluntary_ctxt_switches": 0
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 16,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 17.227558,
+      "runqueue_wait_share": 0.7707568907849999,
+      "sched_runtime_ms": 5.123923,
+      "tid": 29109,
+      "voluntary_ctxt_switches": 28
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "0"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 7,
+      "processors_observed": [
+        0
+      ],
+      "runqueue_wait_ms": 18.654887,
+      "runqueue_wait_share": 0.6113939683382857,
+      "sched_runtime_ms": 11.857169,
+      "tid": 29110,
+      "voluntary_ctxt_switches": 24
+    },
+    {
+      "allowed_cpu_sets_observed": [
+        "1"
+      ],
+      "comm": "r2b4-runtime\n",
+      "cpu_pct_max_one_core": 0.0,
+      "cpu_pct_mean_one_core": 0.0,
+      "nonvoluntary_ctxt_switches": 0,
+      "processors_observed": [
+        1
+      ],
+      "runqueue_wait_ms": 1.269278,
+      "runqueue_wait_share": 0.8970409785146022,
+      "sched_runtime_ms": 0.145683,
+      "tid": 29138,
+      "voluntary_ctxt_switches": 8
+    }
+  ],
+  "schema": "R2B4_CPU2_SUMMARY_V1",
+  "thermal": {
+    "temperature_max_c": 52.9,
+    "temperature_mean_c": 51.04833333333333,
+    "throttled_end": {
+      "available": true,
+      "flags": [],
+      "raw": "0x0",
+      "value": 0
+    },
+    "throttled_start": {
+      "available": true,
+      "flags": [],
+      "raw": "0x0",
+      "value": 0
+    }
+  }
+}
