@@ -216,14 +216,18 @@ class FinalSafetyGate:
         sample = matches[0]
         fields = {field.key: field.value for field in sample.values}
         try:
+            # Canonical safety freshness belongs to the final decision time.
+            # In the multi-rate live path the same immutable LiDAR snapshot may be
+            # reused by a later control tick, so a source-read-time age field is
+            # expected to differ from the age at this L12 decision.
             age_ns = max(0, context.monotonic_ns - sample.captured_monotonic_ns)
             declared_age_ns = fields["age_ns"]
             if (
                 not isinstance(declared_age_ns, int)
                 or isinstance(declared_age_ns, bool)
-                or declared_age_ns != age_ns
+                or declared_age_ns < 0
             ):
-                raise ValueError("invalid age lineage")
+                raise ValueError("invalid declared age")
             if sample.sequence <= 0:
                 raise ValueError("invalid scan lineage")
             if age_ns > config.maximum_sample_age_ns:
