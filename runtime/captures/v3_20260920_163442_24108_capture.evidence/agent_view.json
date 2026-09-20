@@ -1,0 +1,401 @@
+{
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260920_163442_24108_capture.mcap",
+    "capture_name": "v3_20260920_163442_24108_capture.mcap",
+    "capture_sha256": "b35204315a6f8183a0b036b35aa4b033cd4127e013c19f70ccd7ca3303f2ec19",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 4,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 43,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 1,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 416,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 1911,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 72,
+      "first_tick": 0,
+      "last_tick": 71,
+      "layer": "L1",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "representative": {
+        "category": "DEVICE_HEALTH",
+        "evidence": {
+          "devices": [
+            {
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_STALE",
+              "state": "DEGRADED"
+            },
+            {
+              "device_id": "CAMERA_FRONT",
+              "reason": "CAMERA_NO_FRAME",
+              "state": "UNKNOWN"
+            },
+            {
+              "device_id": "PERSON_DETECTOR_FRONT",
+              "reason": "PERSON_DETECTOR_NO_RESULT",
+              "state": "UNKNOWN"
+            }
+          ]
+        },
+        "id": "device-0",
+        "layer": "L1",
+        "monotonic_ns": 20071360020182,
+        "reason": "DEVICE_HEALTH_NON_OK",
+        "severity": "HIGH",
+        "tick_id": 0
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "TIMING",
+      "count": 1,
+      "first_tick": null,
+      "last_tick": null,
+      "layer": "Runtime",
+      "reason": "TICK_INTERVAL_OUTLIER",
+      "representative": {
+        "category": "TIMING",
+        "evidence": {
+          "delta_ms": 102.686462,
+          "median_ms": 20.0778845
+        },
+        "id": "timing-gap-1208",
+        "layer": "Runtime",
+        "monotonic_ns": null,
+        "reason": "TICK_INTERVAL_OUTLIER",
+        "severity": "HIGH",
+        "tick_id": null
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 73,
+      "last_tick": 73,
+      "layer": "L3",
+      "reason": "COVARIANCE_GROWTH",
+      "representative": {
+        "category": "LOCALIZATION",
+        "evidence": {
+          "first_trace": 0.0461,
+          "growth_ratio": 6.456541528719657,
+          "last_trace": 0.07394655377198103,
+          "max_trace": 0.2976465644739762,
+          "sample_count": 1911
+        },
+        "id": "covariance-growth-73",
+        "layer": "L3",
+        "monotonic_ns": 20072817697807,
+        "reason": "COVARIANCE_GROWTH",
+        "severity": "MEDIUM",
+        "tick_id": 73
+      },
+      "severity": "MEDIUM"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 54,
+      "first_tick": 89,
+      "last_tick": 203,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 267412274,
+              "reason": "STALE",
+              "source_device_id": "PERSON_DETECTOR_FRONT",
+              "source_sequence": 25
+            }
+          ]
+        },
+        "id": "l2-reject-89",
+        "layer": "L2",
+        "monotonic_ns": 20073158913274,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "MEDIUM",
+        "tick_id": 89
+      },
+      "severity": "MEDIUM"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 72,
+      "first_tick": 0,
+      "group_index": 1,
+      "last_tick": 71,
+      "path": "01_DEVICE_HEALTH_NON_OK.ndjson",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 73,
+      "group_index": 3,
+      "last_tick": 73,
+      "path": "03_COVARIANCE_GROWTH.ndjson",
+      "reason": "COVARIANCE_GROWTH",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 54,
+      "first_tick": 89,
+      "group_index": 4,
+      "last_tick": 203,
+      "path": "04_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 21,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 2.018204319,
+      "end_tick": 98,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 0,
+      "stop_ticks": 99,
+      "tick_count": 99
+    },
+    {
+      "end_s": 11.937656577,
+      "end_tick": 564,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 44,
+      "start_s": 2.057670473,
+      "start_tick": 99,
+      "stop_ticks": 0,
+      "tick_count": 466
+    },
+    {
+      "end_s": 11.957876008,
+      "end_tick": 565,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 11.957876008,
+      "start_tick": 565,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 12.157675438,
+      "end_tick": 573,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 11.977813549,
+      "start_tick": 566,
+      "stop_ticks": 8,
+      "tick_count": 8
+    },
+    {
+      "end_s": 34.737741874,
+      "end_tick": 1558,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 133,
+      "start_s": 12.182669897,
+      "start_tick": 574,
+      "stop_ticks": 0,
+      "tick_count": 985
+    },
+    {
+      "end_s": 34.757645007,
+      "end_tick": 1559,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 34.757645007,
+      "start_tick": 1559,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 36.117680239,
+      "end_tick": 1627,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 34.777637234,
+      "start_tick": 1560,
+      "stop_ticks": 68,
+      "tick_count": 68
+    },
+    {
+      "end_s": 36.541579684,
+      "end_tick": 1642,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 0,
+      "start_s": 36.203498975,
+      "start_tick": 1628,
+      "stop_ticks": 0,
+      "tick_count": 15
+    },
+    {
+      "end_s": 36.578665231,
+      "end_tick": 1643,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 36.578665231,
+      "start_tick": 1643,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 40.524564617,
+      "end_tick": 1814,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 36.638052666,
+      "start_tick": 1644,
+      "stop_ticks": 171,
+      "tick_count": 171
+    },
+    {
+      "end_s": 42.238696743,
+      "end_tick": 1889,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 0,
+      "start_s": 40.560883326,
+      "start_tick": 1815,
+      "stop_ticks": 0,
+      "tick_count": 75
+    },
+    {
+      "end_s": 42.259524308,
+      "end_tick": 1890,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 42.259524308,
+      "start_tick": 1890,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 42.737863492,
+      "end_tick": 1910,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 42.297715806,
+      "start_tick": 1891,
+      "stop_ticks": 20,
+      "tick_count": 20
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 2,
+      "status": "WARN",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 3,
+      "path": "03_COVARIANCE_GROWTH.ndjson",
+      "raw_scan_count": 4,
+      "reason": "COVARIANCE_GROWTH",
+      "size_bytes": 28656,
+      "truncated": false
+    },
+    {
+      "group_index": 4,
+      "path": "04_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 9,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 67228,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "MATCH",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "MATCH",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}
