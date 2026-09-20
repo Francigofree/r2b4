@@ -3,11 +3,10 @@
 Data path:
     NativeUsbMicrophone -> local energy utterance gate -> Groq STT
     -> RobotInterface conversation.submit_text -> Gemini/Groq LLM
-    -> LLMDecision proposal -> fresh VoiceActionExecutor gate -> canonical RobotInterface
-    -> Gemini TTS -> Linux/PipeWire speaker.
+    -> SHADOW-only LLMDecision -> Gemini TTS -> Linux/PipeWire speaker.
 
-The service is host-side orchestration only.  It never writes motor/GPIO state; optional
-LLM proposals can execute only through the fresh-state canonical RobotInterface gate.  One process owns the microphone
+The service is host-side orchestration only.  It never executes an LLM-proposed
+robot action and never writes motor/GPIO state.  One process owns the microphone
 for wake and conversation; microphone frames are deliberately not consumed while
 THINKING/SPEAKING and the capture tail is discarded before returning to LISTENING
 so Alba does not transcribe its own voice.
@@ -32,13 +31,11 @@ from typing import Callable, Mapping, Protocol
 
 from v3.adapters.microphone import MicrophoneHealth, MicrophoneState, NativeUsbMicrophone
 
-from .action_executor import VoiceActionExecutor
 from .conversation_interface import VoiceInterfaceBundle, build_voice_interface
 from .gemini_tts import GeminiTtsClient, GeminiTtsConfig
 from .groq_stt import GroqWakeTranscriber, WakeTranscriptionError
 from .llm_provider import default_model_for, resolve_llm_provider
 from .runtime_control import WakeRuntimeCoordinator, WakeRuntimeOutcome
-from .safety_intents import is_stop_intent
 from .speaker import ReadyWaveSpeaker
 from .voice_output import PcmWavePlayer
 from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActivityConfig
@@ -158,7 +155,6 @@ class VoiceConversationService:
         tts: TtsPort,
         playback: PlaybackPort,
         *,
-        action_executor: VoiceActionExecutor | None = None,
         config: VoiceServiceConfig = VoiceServiceConfig(),
         activity_config: WakeVoiceActivityConfig = WakeVoiceActivityConfig(),
         status_file: Path | str | None = None,
@@ -195,7 +191,6 @@ class VoiceConversationService:
         self._conversation = conversation
         self._tts = tts
         self._playback = playback
-        self._action_executor = action_executor
         self._config = config
         self._builder = EnergyUtteranceBuilder(activity_config)
         self._matcher = WakePhraseMatcher(config.keyword)
@@ -310,21 +305,6 @@ class VoiceConversationService:
         self._publish_status()
         print(f"voice: user={self._last_transcript!r}", flush=True)
 
-        # P0.1: deterministic STOP bypasses the network/LLM completely.
-        # It still enters only through the canonical RobotInterface command path.
-        if is_stop_intent(self._last_transcript):
-            try:
-                self._conversation_interface.execute("v3.command.stop")
-                self._last_action_status = "EXECUTED:VOICE_STOP_FAST_PATH"
-                print("voice: STOP fast-path executed via RobotInterface", flush=True)
-                self._last_error = None
-            except Exception as exc:
-                self._last_action_status = "STOP_FAILED"
-                self._last_error = f"voice STOP {type(exc).__name__}: {exc}"
-                print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
-            self._settle_and_discard()
-            return
-
         self._set_state(VoiceServiceState.THINKING)
         try:
             accepted = self._conversation_interface.execute(
@@ -349,24 +329,10 @@ class VoiceConversationService:
         self._last_action_status = str(result.get("action_status")) if result.get("action_status") is not None else None
         proposed = result.get("proposed_action")
         if proposed is not None:
-            mode = self._action_executor.mode.upper() if self._action_executor is not None else "PROPOSAL_ONLY"
             print(
-                f"voice: intent[{mode}]=" + json.dumps(proposed, ensure_ascii=False, sort_keys=True),
+                "voice: intent[SHADOW]=" + json.dumps(proposed, ensure_ascii=False, sort_keys=True),
                 flush=True,
             )
-            if self._action_executor is not None:
-                try:
-                    execution = self._action_executor.execute_proposal(proposed)
-                    self._last_action_status = execution.status
-                    print(
-                        f"voice: action={execution.action_name} status={execution.status}",
-                        flush=True,
-                    )
-                except Exception as exc:
-                    # Fail closed: executor failure never falls back to a direct action path.
-                    self._last_action_status = "REJECTED:EXECUTOR_ERROR"
-                    self._last_error = f"voice action {type(exc).__name__}: {exc}"
-                    print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
 
         error = result.get("error")
         if error:
@@ -575,8 +541,8 @@ def _diagnostic_check(root: Path) -> int:
         "tts_model": tts_model,
         "tts_voice": tts_voice,
         "tts_api_key": "PASS" if gemini_key else "FAIL",
-        "action_mode": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or "shadow").lower(),
-        "motor_action_execution": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or "shadow").lower() == "execute",
+        "action_mode": "SHADOW",
+        "motor_action_execution": False,
         "half_duplex_self_hearing_guard": True,
     }
     try:
@@ -623,8 +589,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--check", action="store_true", help="check mic/keys/LLM/TTS/speaker without network calls")
     parser.add_argument("--keyword", default="alba")
     parser.add_argument("--capture-mode", choices=("alap", "full", "nincs"), default="alap")
-    parser.add_argument("--action-mode", choices=("shadow", "execute"), default=None)
-    parser.add_argument("--action-watchdog-s", type=float, default=None)
     return parser
 
 
@@ -639,13 +603,6 @@ def main(argv: list[str] | None = None) -> int:
         groq_key = _setting(project_env, "GROQ_API_KEY")
         gemini_key = _setting(project_env, "GEMINI_API_KEY")
         provider, model, llm_key = _resolved_llm(project_env)
-        action_mode = (args.action_mode or _setting(project_env, "R2B4_VOICE_ACTION_MODE") or "shadow").strip().lower()
-        if action_mode not in {"shadow", "execute"}:
-            raise RuntimeError("R2B4_VOICE_ACTION_MODE must be shadow or execute")
-        watchdog_raw = args.action_watchdog_s if args.action_watchdog_s is not None else (_setting(project_env, "R2B4_VOICE_ACTION_WATCHDOG_S") or "30")
-        action_watchdog_s = float(watchdog_raw)
-        if not 1.0 <= action_watchdog_s <= 600.0:
-            raise RuntimeError("voice action watchdog must be within [1, 600] seconds")
         if not groq_key:
             raise RuntimeError("GROQ_API_KEY is required for STT")
         if not llm_key:
@@ -701,12 +658,6 @@ def main(argv: list[str] | None = None) -> int:
             bundle.conversation,
             tts,
             PcmWavePlayer(),
-            action_executor=VoiceActionExecutor(
-                bundle.interface,
-                mode=action_mode,
-                session_owner_pid=os.getpid(),
-                session_watchdog_s=action_watchdog_s,
-            ),
             config=VoiceServiceConfig(keyword=args.keyword, capture_mode=args.capture_mode),
             status_file=runtime / "wake_status.json",
             stop_event=stop_event,

@@ -27,13 +27,7 @@ from v3.adapters.native_lidar_port import (
     load_native_lidar_port_config,
     open_native_lidar_port,
 )
-from v3.contracts import (
-    AcquisitionFrame,
-    MissionIntent,
-    NavigationPlan,
-    RobotEstimate,
-    WorldSnapshot,
-)
+from v3.contracts import AcquisitionFrame, RobotEstimate
 from v3.composition.native_sensor_inputs import NativeSensorHardwareConfig
 from v3.engine import TickResult
 from v3.execution import CaptureRecord
@@ -294,9 +288,6 @@ def _tick_status(
         raise TypeError("ready_for_active must be bool")
     acquisition = _layer(result, "L1")
     estimate = _layer(result, "L3")
-    world = _layer(result, "L4")
-    mission = _layer(result, "L5")
-    navigation = _layer(result, "L6")
     health: list[dict[str, object]] = []
     if isinstance(acquisition, AcquisitionFrame):
         health = [
@@ -317,83 +308,6 @@ def _tick_status(
             "v_mps": estimate.v_mps,
             "omega_rad_s": estimate.omega_rad_s,
         }
-
-    world_payload: dict[str, object] | None = None
-    if isinstance(world, WorldSnapshot):
-        person_tracks = [
-            {
-                "track_id": track.track_id,
-                "x_m": track.x_m,
-                "y_m": track.y_m,
-                "radius_m": track.radius_m,
-                "vx_mps": track.vx_mps,
-                "vy_mps": track.vy_mps,
-                "confidence": track.confidence,
-            }
-            for track in world.obstacle_tracks
-            if track.track_id.startswith("person-")
-        ]
-        world_payload = {
-            "frame_id": world.frame_id,
-            "map_revision": world.map_revision,
-            "freshness_ns": world.freshness_ns,
-            "obstacle_track_count": len(world.obstacle_tracks),
-            "person_tracks": person_tracks,
-            "local_costmap": (
-                None
-                if world.local_costmap is None
-                else {
-                    "revision": world.local_costmap.revision,
-                    "occupied_cell_count": len(world.local_costmap.occupied_cells),
-                    "freshness_ns": world.local_costmap.freshness_ns,
-                    "radius_m": world.local_costmap.radius_m,
-                    "resolution_m": world.local_costmap.resolution_m,
-                }
-            ),
-        }
-
-    mission_payload: dict[str, object] | None = None
-    if isinstance(mission, MissionIntent):
-        mission_payload = {
-            "mission_id": mission.mission_id,
-            "mode": mission.mode.value,
-            "lifecycle": mission.lifecycle.value,
-            "stop_reason": mission.stop_reason,
-            "constraints": {
-                "max_v_mps": mission.constraints.max_v_mps,
-                "max_omega_rad_s": mission.constraints.max_omega_rad_s,
-            },
-            "target_pose": (
-                None
-                if mission.target_pose is None
-                else {
-                    "x_m": mission.target_pose.x_m,
-                    "y_m": mission.target_pose.y_m,
-                    "yaw_rad": mission.target_pose.yaw_rad,
-                }
-            ),
-        }
-
-    navigation_payload: dict[str, object] | None = None
-    if isinstance(navigation, NavigationPlan):
-        navigation_payload = {
-            "mission_id": navigation.mission_id,
-            "status": navigation.status.value,
-            "reason": navigation.reason,
-            "progress": navigation.progress,
-            "route_waypoint_count": len(navigation.route),
-            "trajectory_candidate_count": len(navigation.trajectory_candidates),
-            "local_goal": (
-                None
-                if navigation.local_goal is None
-                else {
-                    "x_m": navigation.local_goal.x_m,
-                    "y_m": navigation.local_goal.y_m,
-                    "yaw_rad": navigation.local_goal.yaw_rad,
-                }
-            ),
-        }
-
     final = result.final_actuation
     return {
         "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
@@ -409,9 +323,6 @@ def _tick_status(
         "ready_for_active": ready_for_active,
         "source_health": health,
         "estimate": estimate_payload,
-        "world": world_payload,
-        "mission": mission_payload,
-        "navigation": navigation_payload,
     }
 
 

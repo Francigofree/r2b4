@@ -1,0 +1,43 @@
+Combined upgrade baseline:
+  Francigofree/r2b4 main @ 47bfc7cc912517319297874048eccc88b93f696f
+
+Modified existing files (7):
+  conf/voice_llm_system.md
+  r2b4_voice/conversation_interface.py
+  r2b4_voice/conversation_service.py
+  r2b4_voice/prompting.py
+  r2b4_voice/robot_context.py
+  r2b4_voice/voice_service.py
+  v3_process_runtime.py
+
+New production files (5):
+  r2b4_voice/action_executor.py
+  r2b4_voice/safety_intents.py
+  r2b4_voice/self_knowledge.py
+  v3/external_gateway.py
+  v3_external_gateway.py
+
+New tests (6):
+  tests/test_v3_external_gateway.py
+  tests/test_voice_action_executor.py
+  tests/test_voice_conversation_completion_cache.py
+  tests/test_voice_safety_intents.py
+  tests/test_voice_self_knowledge.py
+  tests/test_voice_v3_context_projection.py
+
+Existing current-repo regression tests run by installer when present include:
+  tests/test_r2b4_conversation_service.py
+  tests/test_v3_process_runtime.py
+  tests/test_interface_p0_hardening.py
+  tests/test_v3_runtime_phase_timing.py
+
+Intentionally NOT modified by this package:
+  v3/engine.py
+  v3/composition/native_control.py
+  v3/composition/resident_live_control.py
+  v3/composition/resident_physical_control.py
+  v3/runtime_performance.py
+  v3_runtime.py
+  tools/v3_phase_timing_report.py
+
+FIX: Python 3.11 ExternalRequest dataclass default + restart-safe partial-install repair

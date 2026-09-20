@@ -11,7 +11,6 @@ from .conversation_service import ConversationService, ConversationServiceConfig
 from .llm_provider import build_llm_client
 from .prompting import PromptAssembler
 from .robot_context import RobotContextBuilder
-from .self_knowledge import SelfKnowledgeProvider
 
 
 class ConversationInterfaceAdapter:
@@ -50,7 +49,7 @@ class ConversationInterfaceAdapter:
                 "supported": True,
                 "available": True,
                 "ready": True,
-                "description": "Read the latest completed LLM turn, including any proposed robot intent.",
+                "description": "Read the latest completed LLM turn, including any shadow robot intent.",
             },
         }
 
@@ -74,7 +73,7 @@ class ConversationInterfaceAdapter:
         if not isinstance(source, str):
             raise ValueError("source must be a string")
         turn_id = self.service.submit_text(text, source=source)
-        return {"status": "ACCEPTED", "turn_id": turn_id, "action_mode": "PROPOSAL_ONLY"}
+        return {"status": "ACCEPTED", "turn_id": turn_id, "action_mode": "SHADOW"}
 
 
 @dataclass(slots=True)
@@ -100,11 +99,11 @@ def build_voice_interface(
     model: str | None = None,
     service_config: ConversationServiceConfig = ConversationServiceConfig(),
 ) -> VoiceInterfaceBundle:
-    """Build one RobotInterface facade with read-only self knowledge + conversation.
+    """Build one RobotInterface facade that also exposes conversation.* capabilities.
 
-    The LLM receives no direct V3 runtime/motor handle.  SelfKnowledgeProvider is
-    read-only and source-first; proposed robot actions remain separated from the
-    later VoiceActionExecutor safety/execution gate.
+    The conversation orchestrator reads robot state through a core RobotInterface
+    built from the same thin adapter instances. It never receives a direct V3
+    runtime/motor handle and this slice never executes an LLM-proposed action.
     """
 
     from v3.interface_adapters import build_adapters
@@ -125,7 +124,6 @@ def build_voice_interface(
         robot_context=RobotContextBuilder(core_interface),
         prompt_assembler=prompt,
         journal=journal,
-        self_knowledge=SelfKnowledgeProvider(root),
         config=service_config,
     )
     public_adapters = tuple(core_adapters) + (ConversationInterfaceAdapter(service),)

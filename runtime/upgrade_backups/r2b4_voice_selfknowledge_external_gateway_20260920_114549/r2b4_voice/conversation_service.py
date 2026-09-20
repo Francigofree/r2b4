@@ -6,7 +6,6 @@ import queue
 import threading
 import time
 import uuid
-from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -33,23 +32,16 @@ class LLMPort(Protocol):
     def complete(self, messages: Sequence[Mapping[str, str]]) -> LLMDecision: ...
 
 
-class SelfKnowledgePort(Protocol):
-    def build(self, query: str) -> Mapping[str, object]: ...
-
-
 @dataclass(frozen=True, slots=True)
 class ConversationServiceConfig:
     queue_size: int = 8
     max_history_turns: int = 8
-    completion_cache_size: int = 32
 
     def __post_init__(self) -> None:
         if not isinstance(self.queue_size, int) or isinstance(self.queue_size, bool) or self.queue_size <= 0:
             raise ValueError("queue_size must be a positive integer")
         if not isinstance(self.max_history_turns, int) or isinstance(self.max_history_turns, bool) or self.max_history_turns < 0:
             raise ValueError("max_history_turns must be non-negative")
-        if not isinstance(self.completion_cache_size, int) or isinstance(self.completion_cache_size, bool) or self.completion_cache_size <= 0:
-            raise ValueError("completion_cache_size must be a positive integer")
 
 
 class ConversationService:
@@ -61,27 +53,21 @@ class ConversationService:
         prompt_assembler: PromptAssembler,
         journal: ConversationJournal,
         validator: RobotActionValidator | None = None,
-        self_knowledge: SelfKnowledgePort | None = None,
         config: ConversationServiceConfig = ConversationServiceConfig(),
         monotonic_ns=time.monotonic_ns,
     ) -> None:
         if not callable(getattr(llm, "complete", None)):
             raise TypeError("llm must provide complete()")
-        if self_knowledge is not None and not callable(getattr(self_knowledge, "build", None)):
-            raise TypeError("self_knowledge must provide build()")
         self._llm = llm
         self._context = robot_context
         self._prompt = prompt_assembler
         self._journal = journal
         self._validator = validator or RobotActionValidator()
-        self._self_knowledge = self_knowledge
         self._config = config
         self._monotonic_ns = monotonic_ns
         self._queue: queue.Queue[UserTextTurn | None] = queue.Queue(maxsize=config.queue_size)
         self._history: list[ConversationMemoryTurn] = []
         self._lock = threading.Lock()
-        self._condition = threading.Condition(self._lock)
-        self._completed: OrderedDict[str, ConversationTurnResult] = OrderedDict()
         self._last_turn: ConversationTurnResult | None = None
         self._last_error: str | None = None
         self._closed = False
@@ -89,7 +75,7 @@ class ConversationService:
         self._worker.start()
         self._journal.append(
             "session_start",
-            {"prompt_version": PROMPT_VERSION, "model": self._llm.model, "action_mode": "PROPOSAL_ONLY"},
+            {"prompt_version": PROMPT_VERSION, "model": self._llm.model, "action_mode": "SHADOW"},
         )
 
     @property
@@ -106,6 +92,8 @@ class ConversationService:
             source=source,
             monotonic_ns=self._monotonic_ns(),
         )
+        # Journal the human input before making it visible to the worker so
+        # the append-only record preserves causal order even on a very fast LLM.
         self._journal.append(
             "user",
             {"turn_id": turn.turn_id, "source": turn.source, "text": turn.text},
@@ -133,10 +121,8 @@ class ConversationService:
                 "queue_capacity": self._config.queue_size,
                 "worker_alive": self._worker.is_alive(),
                 "last_turn_id": last_turn_id,
-                "completed_turns_cached": len(self._completed),
-                "completion_cache_capacity": self._config.completion_cache_size,
                 "last_error": self._last_error,
-                "action_mode": "PROPOSAL_ONLY",
+                "action_mode": "SHADOW",
                 "model": self._llm.model,
             }
 
@@ -145,27 +131,19 @@ class ConversationService:
             return None if self._last_turn is None else self._last_turn.to_jsonable()
 
     def wait_for_turn(self, turn_id: str, timeout_s: float = 20.0) -> dict[str, object] | None:
-        if not isinstance(turn_id, str) or not turn_id:
-            raise ValueError("turn_id must be non-empty")
-        if not isinstance(timeout_s, (int, float)) or isinstance(timeout_s, bool) or timeout_s <= 0:
-            raise ValueError("timeout_s must be positive")
-        deadline = time.monotonic() + float(timeout_s)
-        with self._condition:
-            while True:
-                result = self._completed.get(turn_id)
-                if result is not None:
-                    return result.to_jsonable()
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    return None
-                self._condition.wait(timeout=remaining)
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            item = self.last_turn()
+            if isinstance(item, dict) and item.get("turn_id") == turn_id:
+                return item
+            time.sleep(0.02)
+        return None
 
     def close(self, timeout_s: float = 2.0) -> None:
-        with self._condition:
+        with self._lock:
             if self._closed:
                 return
             self._closed = True
-            self._condition.notify_all()
         try:
             self._queue.put(None, timeout=max(0.01, timeout_s))
         except queue.Full:
@@ -183,29 +161,9 @@ class ConversationService:
             finally:
                 self._queue.task_done()
 
-    def _store_result(self, result: ConversationTurnResult, *, error: str | None) -> None:
-        with self._condition:
-            self._last_turn = result
-            self._last_error = error
-            self._completed[result.turn_id] = result
-            self._completed.move_to_end(result.turn_id)
-            while len(self._completed) > self._config.completion_cache_size:
-                self._completed.popitem(last=False)
-            self._condition.notify_all()
-
     def _process(self, turn: UserTextTurn) -> None:
         try:
             context = self._context.build()
-            knowledge: Mapping[str, object] | None = None
-            if self._self_knowledge is not None:
-                try:
-                    knowledge = self._self_knowledge.build(turn.text)
-                except Exception as exc:
-                    # Self-knowledge is informative only; failure must not break normal dialogue.
-                    self._journal.append(
-                        "self_knowledge_error",
-                        {"turn_id": turn.turn_id, "error": f"{type(exc).__name__}: {exc}"},
-                    )
             self._journal.append(
                 "llm_request_meta",
                 {
@@ -213,24 +171,11 @@ class ConversationService:
                     "prompt_version": PROMPT_VERSION,
                     "model": self._llm.model,
                     "robot_context": context.to_jsonable(),
-                    "self_knowledge_categories": (
-                        list(knowledge.get("matched_categories", []))
-                        if isinstance(knowledge, Mapping)
-                        else []
-                    ),
                 },
             )
             with self._lock:
                 history = tuple(self._history[-self._config.max_history_turns :])
-            if knowledge:
-                messages = self._prompt.build_messages(
-                    turn,
-                    context,
-                    history,
-                    self_knowledge=knowledge,
-                )
-            else:
-                messages = self._prompt.build_messages(turn, context, history)
+            messages = self._prompt.build_messages(turn, context, history)
             decision = self._llm.complete(messages)
 
             action_status = "NONE"
@@ -249,11 +194,12 @@ class ConversationService:
             )
             self._journal.append("assistant", result.to_jsonable())
             with self._lock:
+                self._last_turn = result
+                self._last_error = None
                 if decision.spoken_text:
                     self._history.append(ConversationMemoryTurn(turn.text, decision.spoken_text))
                     if len(self._history) > self._config.max_history_turns:
                         del self._history[: len(self._history) - self._config.max_history_turns]
-            self._store_result(result, error=None)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             result = ConversationTurnResult(
@@ -266,7 +212,9 @@ class ConversationService:
                 model=getattr(self._llm, "model", None),
             )
             self._journal.append("error", result.to_jsonable())
-            self._store_result(result, error=error)
+            with self._lock:
+                self._last_turn = result
+                self._last_error = error
 
 
 __all__ = [
@@ -274,5 +222,4 @@ __all__ = [
     "ConversationService",
     "ConversationServiceConfig",
     "LLMPort",
-    "SelfKnowledgePort",
 ]

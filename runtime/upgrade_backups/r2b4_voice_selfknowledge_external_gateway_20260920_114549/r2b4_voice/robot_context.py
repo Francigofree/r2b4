@@ -8,7 +8,7 @@ from typing import Protocol
 from .conversation_contracts import RobotContextSnapshot
 
 
-ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V3"
+ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V2"
 LLM_ACTION_ALLOWLIST = (
     "v3.command.stop",
     "v3.command.face_person",
@@ -37,28 +37,6 @@ class RobotContextBuilder:
         if isinstance(operator_status, Mapping) and isinstance(operator_status.get("runtime_running"), bool):
             runtime_running = bool(operator_status.get("runtime_running"))
 
-        status = self._read_if_available(caps, "v3.status")
-        environment: dict[str, object] = {
-            "world": None,
-            "person": {"available": False, "detected": None, "tracks": []},
-            "mission": None,
-            "navigation": None,
-        }
-        if isinstance(status, Mapping):
-            world = self._mapping_or_none(status.get("world"))
-            mission = self._mapping_or_none(status.get("mission"))
-            navigation = self._mapping_or_none(status.get("navigation"))
-            environment["world"] = world
-            environment["mission"] = mission
-            environment["navigation"] = navigation
-            if world is not None and isinstance(world.get("person_tracks"), list):
-                tracks = list(world.get("person_tracks", []))
-                environment["person"] = {
-                    "available": True,
-                    "detected": bool(tracks),
-                    "tracks": tracks,
-                }
-
         host = {
             "operator_status_available": isinstance(operator_status, Mapping),
             "runtime_running": runtime_running,
@@ -67,9 +45,9 @@ class RobotContextBuilder:
                 else "STOPPED" if runtime_running is False
                 else "UNKNOWN"
             ),
-            "environment": environment,
         }
 
+        status = self._read_if_available(caps, "v3.status")
         if isinstance(status, Mapping):
             runtime: dict[str, object] = {
                 "live_status_available": True,
@@ -99,10 +77,6 @@ class RobotContextBuilder:
         raw_health = self._read_if_available(caps, "v3.health")
         health = tuple(raw_health) if isinstance(raw_health, list) else ()
 
-        person = environment.get("person")
-        person_known = isinstance(person, Mapping) and person.get("available") is True
-        person_detected = isinstance(person, Mapping) and person.get("detected") is True
-
         actions: list[dict[str, object]] = []
         for name in LLM_ACTION_ALLOWLIST:
             raw = caps.get(name)
@@ -110,16 +84,11 @@ class RobotContextBuilder:
                 continue
             if raw.get("kind") != "action" or raw.get("supported") is not True:
                 continue
-            ready = raw.get("ready") is True
-            reason = raw.get("reason")
-            if name in {"v3.command.face_person", "v3.command.follow_person"} and person_known and not person_detected:
-                ready = False
-                reason = "PERSON_TARGET_UNAVAILABLE"
             actions.append({
                 "name": name,
                 "available": raw.get("available") is True,
-                "ready": ready,
-                "reason": reason,
+                "ready": raw.get("ready") is True,
+                "reason": raw.get("reason"),
             })
 
         return RobotContextSnapshot(
