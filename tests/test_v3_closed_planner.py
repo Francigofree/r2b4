@@ -2,6 +2,8 @@ from dataclasses import replace
 
 import pytest
 
+from v3.adapters.native_lidar_port import NativeRawLidarSnapshot
+from v3.adapters.rplidar_c1 import RplidarPoint
 from v3.composition.native_control import NativeControlComposition
 from v3.contracts import CommandMode, CommandRequest, DataField, DeviceSample, SafetyDecision
 from v3.execution import ExecutionRecord
@@ -38,6 +40,24 @@ class DelayedBackend:
         self.inner.close()
 
 
+def raw_lidar_snapshot(revision, monotonic_ns):
+    scan_start_ns = monotonic_ns - 20_000_000
+    measurement_ns = monotonic_ns - 10_000_000
+    return NativeRawLidarSnapshot(
+        raw_scan_id=revision,
+        raw_scan_timestamp=monotonic_ns / 1e9,
+        scan_start_monotonic_ns=scan_start_ns,
+        scan_end_monotonic_ns=monotonic_ns,
+        measurement_monotonic_ns=measurement_ns,
+        health="OK",
+        raw_scan=(
+            RplidarPoint(0.0, 1.0, 20),
+            RplidarPoint(90.0, 1.5, 21),
+        ),
+        summary={"revision": revision},
+    )
+
+
 def explore_inputs(count=20):
     for item in tick_inputs(count):
         context = item.context
@@ -72,6 +92,13 @@ def test_closed_worker_availability_matches_mcap_replay_and_test_hub(tmp_path, s
         result = production.run_tick(inputs)
         outputs.append(result)
         checkpoint = production.checkpoint() if inputs.context.tick_id == 3 and result.trace.fault_layer is None else None
+        hub.publish(
+            raw_lidar_snapshot(
+                inputs.context.tick_id + 1,
+                inputs.context.monotonic_ns,
+            ),
+            topic="v3.raw_lidar",
+        )
         hub.publish(ExecutionRecord(inputs, result, production.tick_evidence, checkpoint), topic="v3.capture_record")
         if result.final_actuation.safety_decision is SafetyDecision.FAULT:
             break

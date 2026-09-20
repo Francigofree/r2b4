@@ -35,12 +35,22 @@ Ezeket a garanciákat adminisztratív egyszerűsítés, diagnosztikai kényelmi 
 
 ## 2. Determinisztikus végrehajtás és passzív observation sík
 
-A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az owning layer az eredményt csak előre meghatározott, kizárólag a lezárt `TickContext` (`tick_id`, `monotonic_ns`) alapján determinisztikusan eldönthető tick-határon fogadhatja el; worker-hiány, deadline-miss, context-eltérés vagy túl öreg elfogadott terv fail-closed hiba. A checkpointnak az esetleges pending immutable kérést és a determinisztikus handoff-kritériumot is rögzítenie kell (új production módban például `not-before monotonic_ns`, legacy capture esetén release tick), hogy replay ugyanazon a determinisztikus handoff-határon tegye láthatóvá ugyanazt a pure számítást.
+A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az aszinkron completion **nem közvetlen layer-input**: a runtime/composition root a tick production végrehajtása előtt a pillanatnyilag látható completion eredményt, annak hiányát vagy completion/transport hibáját immutable, typed `TickInputs` részévé zárja. L1–L12 kizárólag ezt a lezárt inputot láthatja; layer nem kérdezheti le közvetlenül a workert, completion queue-t vagy faliórát, és egy completion nem válhat ugyanazon tick közben utólag láthatóvá. Az owning layer a lezárt completiont saját typed contractja és owned state-je szerint elfogadhatja vagy elutasíthatja; worker-hiány, deadline-miss, context-eltérés vagy túl öreg elfogadott terv fail-closed hiba. Stateful replay-slice esetén a checkpointnak a szükséges pending immutable kérést és production state-et kell rögzítenie; a completion adott tickbeli láthatóságát vagy hibáját nem checkpoint-időzítési szabályból kell újraszámítani, hanem a lezárt replay-inputból kell visszaadni.
+
+```text
+async completion / completion error
+              ↓
+runtime input closure
+              ↓
+immutable typed TickInputs
+              ↓
+single TickEngine → L1 → … → L12
+```
 
 Egy normál tick:
 
 1. `TickContext(tick_id, monotonic_ns)` létrejön.
-2. A device- és command-input lezárul.
+2. A device-, command- és runtime/adapter completion-input egy immutable typed `TickInputs` snapshotba lezárul.
 3. L1–L11 legfeljebb egyszer, rögzített sorrendben fut.
 4. Upstream hiba megszakítja a normál láncot; L12 egyszer, explicit fault okkal fut.
 5. L12 dönt és birtokolja az egyetlen normál `MotorWriter` capabilityt.
@@ -54,7 +64,7 @@ A live, replay és szimuláció közös végrehajtási határa:
 input source → production V3 → output sink
 ```
 
-Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, motor-, lifecycle- és safety-authority nélkül. Aszinkron driver vagy feldolgozás megengedett, ha eredménye a tick számára lezárt, immutable, időbélyegzett input.
+Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, motor-, lifecycle- és safety-authority nélkül. Aszinkron driver vagy feldolgozás megengedett, ha eredménye — beleértve a completion elérhetőségét vagy hibáját — a production rétegek futása előtt lezárt, immutable, időbélyegzett typed inputként jelenik meg.
 
 A fizikai live runtime-ban a szenzor I/O multi-rate edge ownerben futhat. A control tick L0 `DeviceReader.read()` útja nem végez blokkoló fizikai sensor I/O-t: kizárólag korábban publikált, bounded historyból választ olyan immutable snapshotot, amely a tick `monotonic_ns` idején már látható volt. A safety-kritikus és auxiliary acquisition külön worker lane-ben futhat; auxiliary késés vagy hiba nem blokkolhatja a kritikus acquisition lane-t és önmagában nem adhat egész-robot fault authorityt. A worker lane-ek CPU-affinityja operational runtime policy, nem production authority, és nem sértheti a control CPU izolációját. Replay/szimuláció továbbra is közvetlenül lezárt `RawDeviceBatch`/`TickInputs` értékből dolgozik, worker nélkül.
 
@@ -255,9 +265,9 @@ Capture csak indokolt replay/diagnosztikai evidence-et tartson; nincs „mindent
 
 ### 11.2 Canonical replay
 
-Replayhez kell a futtatandó lezárt `TickInputs`, tényleges config és minden olyan determinisztikus state/input, amely nélkül a scope nem reprodukálható.
+Replayhez kell a futtatandó lezárt `TickInputs`, tényleges config és minden olyan determinisztikus state/input, amely nélkül a scope nem reprodukálható. Ebbe explicit beletartozik az adott live tick input-closure pontján láthatóvá tett aszinkron completion eredmény, annak hiánya, valamint completion/transport hibája abban a typed formában, ahogy az a lezárt `TickInputs` részévé vált. A completion **láthatósága és hibaállapota replay-input**.
 
-A Replayer ugyanazt a canonical production composition/TickEngine utat futtatja offline; saját layer-logika tilos. Az első eltérő tick/réteg/mező közvetlenül megnevezendő.
+A Replayer ugyanazt a canonical production composition/TickEngine utat futtatja offline; saját layer-logika tilos. Replay nem futtathat vagy időzíthet újra aszinkron workert azért, hogy utólag kikövetkeztesse, melyik tickben lett volna látható az eredmény: az adott tick lezárt `TickInputs` értéke authority a completion láthatóságára/hibájára. Az első eltérő tick/réteg/mező közvetlenül megnevezendő.
 
 Production FAIL/FAULT futás is lehet teljes, MATCH replay evidence. Stateful slice csak megfelelő prefixből vagy bounded production-state checkpointból kaphat MATCH-et; checkpoint nem live authority és nem pótol hiányzó tick inputot.
 

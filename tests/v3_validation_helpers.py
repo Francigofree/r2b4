@@ -20,7 +20,7 @@ from v3.contracts import (
     TickContext,
 )
 from v3.engine import TickInputs
-from v3.execution import ExecutionBoundary, IterableInputSource
+from v3.execution import ClosingInputSource, ExecutionBoundary, IterableInputSource
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
 from v3.layers.l12_safety_final import LidarSafetyConfig
@@ -257,7 +257,11 @@ def create_explore_capture(tmp_path: Path, *, capture_id: str = "explore-v3") ->
         configuration=configuration_documents(),
         metadata={"purpose": "generic-navigation-explore-replay"},
     )
-    ExecutionBoundary(production).run(IterableInputSource(tuple(inputs)), capture_sink)
+    source = ClosingInputSource(
+        IterableInputSource(tuple(inputs)),
+        production.close_inputs,
+    )
+    ExecutionBoundary(production).run(source, capture_sink)
     path = tmp_path / f"{capture_id}.json"
     capture_sink.finalize("PASS", path)
     return path

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .contracts import DeviceHealth, LifecycleState, RawDeviceBatch, TickContext
 from .engine import TickInputs, TickResult
@@ -119,6 +119,40 @@ class IterableInputSource:
         return iter(self._inputs)
 
 
+class ClosingInputSource:
+    """Close each input immediately before the execution boundary consumes it.
+
+    Async completion transport belongs before the deterministic production
+    boundary. This wrapper makes that closure explicit without giving
+    ExecutionBoundary any authority to mutate already-closed TickInputs.
+    """
+
+    __slots__ = ("_source", "_close")
+
+    def __init__(
+        self,
+        source: InputSource,
+        close: Callable[[TickInputs], TickInputs],
+    ) -> None:
+        if not callable(getattr(source, "__iter__", None)):
+            raise TypeError("source must be iterable")
+        if not callable(close):
+            raise TypeError("close must be callable")
+        self._source = source
+        self._close = close
+
+    def __iter__(self) -> Iterator[TickInputs]:
+        for inputs in self._source:
+            if not isinstance(inputs, TickInputs):
+                raise TypeError("input source yielded a non-TickInputs value")
+            closed = self._close(inputs)
+            if not isinstance(closed, TickInputs):
+                raise TypeError("input closure returned a non-TickInputs value")
+            if closed.context != inputs.context:
+                raise ValueError("input closure changed TickContext")
+            yield closed
+
+
 class MemoryOutputSink:
     """Passive in-memory sink; it owns no production state or hardware capability."""
 
@@ -158,9 +192,6 @@ class ExecutionBoundary:
         for inputs in source:
             if not isinstance(inputs, TickInputs):
                 raise TypeError("input source yielded a non-TickInputs value")
-            close_inputs = getattr(self._production, "close_inputs", None)
-            if close_inputs is not None:
-                inputs = close_inputs(inputs)
             result = self._production.run_tick(inputs)
             if not isinstance(result, TickResult):
                 raise TypeError("production returned a non-TickResult value")
@@ -180,6 +211,7 @@ class ExecutionBoundary:
 __all__ = [
     "ExecutionBoundary",
     "CaptureRecord",
+    "ClosingInputSource",
     "EdgeFaultRecord",
     "ExecutionRecord",
     "ExecutionSummary",
