@@ -80,6 +80,8 @@ def _capture_sidecar_main(
                 kind = command[0]
                 if kind == "trigger":
                     consumer.trigger(command[1], command[2])
+                elif kind == "warmup":
+                    continue
                 elif kind == "finish":
                     finish_request = (str(command[1]), bool(command[2]), int(command[3]))
                 elif kind == "abort":
@@ -332,6 +334,7 @@ class ProcessMcapCaptureSession:
             self._worker_cpu, role="capture-feeder", strict=self._strict_affinity
         ):
             self._data_queue.put(("warmup", None), timeout=_SIDECAR_READY_TIMEOUT_S)
+            self._control_queue.put(("warmup",), timeout=_SIDECAR_READY_TIMEOUT_S)
 
     def _raise_early_error(self) -> None:
         try:

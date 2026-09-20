@@ -1,5 +1,6 @@
 import threading
 import time
+import os
 
 import pytest
 
@@ -7,7 +8,13 @@ from v3.adapters.resident_command import (
     AsyncResidentCommandGateway, AtomicResidentCommandGateway, ResidentCommandMailboxConfig,
 )
 from v3.contracts import CommandMode, TickContext
-from test_v3_resident_command import _payload, _write
+from test_v3_resident_command import _payload, _write as _write_file
+
+
+def _write(path, payload):
+    temporary = path.with_suffix(".tmp")
+    _write_file(temporary, payload)
+    os.replace(temporary, path)
 
 
 def _wait(predicate):

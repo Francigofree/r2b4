@@ -603,6 +603,7 @@ class ResidentCommandClient:
 
 __all__ = [
     "AtomicResidentCommandGateway",
+    "AsyncResidentCommandGateway",
     "RESIDENT_COMMAND_SCHEMA",
     "ResidentCommandClient",
     "ResidentCommandMailboxConfig",

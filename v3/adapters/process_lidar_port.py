@@ -154,7 +154,9 @@ class _SharedPoseHistory:
     def publish(self, pose: TimedPoseReference) -> None:
         if not isinstance(pose, TimedPoseReference):
             raise TypeError("pose must be TimedPoseReference")
-        with self._lock:
+        if not self._lock.acquire(timeout=0.05):
+            raise RuntimeError("LiDAR pose history publisher lock timed out")
+        try:
             sequence = int(self._sequence.value)
             index = sequence % self._capacity
             self._times[index] = int(pose.monotonic_ns)
@@ -163,6 +165,8 @@ class _SharedPoseHistory:
             self._values[base + 1] = float(pose.y_m)
             self._values[base + 2] = float(pose.yaw_rad)
             self._sequence.value = sequence + 1
+        finally:
+            self._lock.release()
 
     def lookup(self, monotonic_ns: int) -> TimedPoseReference | None:
         if not isinstance(monotonic_ns, int) or isinstance(monotonic_ns, bool) or monotonic_ns < 0:
@@ -407,6 +411,9 @@ class ProcessLidarPort:
         self._pending_poses: deque[TimedPoseReference] = deque(maxlen=_POSE_HISTORY_CAPACITY)
         self._collector: threading.Thread | None = None
         self._process.start()
+        # This process only receives state. Closing its unused writer lets a
+        # partial receive terminate on EOF if the child exits mid-message.
+        self._state_queue._writer.close()
         if not self._ready_event.wait(max(_READY_TIMEOUT_S, config.process_ready_timeout_s)):
             self.stop()
             raise RuntimeError("process-isolated LiDAR owner did not become ready")
@@ -460,6 +467,9 @@ class ProcessLidarPort:
                 newest = self._state_queue.get_nowait()
             except queue.Empty:
                 break
+            if newest[0] == "error":
+                self._fatal_error = f"{newest[1]}:{newest[2]}"
+                return
         if newest is None:
             if not self._process.is_alive() and not self._stopped:
                 self._fatal_error = self._fatal_error or "LIDAR_OWNER_PROCESS_EXITED"
