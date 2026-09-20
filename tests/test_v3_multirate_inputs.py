@@ -135,7 +135,7 @@ def test_missing_required_critical_source_is_rejected_before_runtime_start():
         )
 
 
-def test_worker_initializer_runs_for_critical_and_auxiliary_lanes():
+def test_worker_initializer_runs_for_per_source_critical_and_auxiliary_lanes():
     roles: list[str] = []
     config = MultiRateInputConfig(
         critical_default_period_ns=1_000_000_000,
@@ -150,7 +150,7 @@ def test_worker_initializer_runs_for_critical_and_auxiliary_lanes():
         worker_initializer=roles.append,
     )
     try:
-        assert sorted(roles) == ["l0-aux", "l0-critical"]
+        assert sorted(roles) == ["l0-aux", "l0-critical-ENC"]
     finally:
         reader.close()
 

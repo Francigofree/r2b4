@@ -134,6 +134,7 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
 
     source_rows = []
     acquisition_rows = []
+    liveness_rows = []
     control_thread_id = None
     last_control_start_ns = None
     l0_rows = []
@@ -272,6 +273,28 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
         # Multi-rate source acquisition is measured separately from this closure.
         wrap_reader(MultiRateLiveInputReader)
 
+        # R2B4_ASYNC_L0_LIVENESS_V1: passive evidence is sampled on the
+        # acquisition worker after publication, never by the control thread.
+        original_multirate_poll = MultiRateLiveInputReader._poll_state
+        def multirate_poll(self, state):
+            try:
+                return original_multirate_poll(self, state)
+            finally:
+                try:
+                    observed_ns = time.monotonic_ns()
+                    item = next(
+                        (value for value in self.liveness_snapshot(observed_ns)
+                         if value.device_id == state.device_id),
+                        None,
+                    )
+                    if item is not None:
+                        row = item.as_dict()
+                        row["observed_ns"] = observed_ns
+                        liveness_rows.append(row)
+                except Exception:
+                    pass
+        _set(MultiRateLiveInputReader, "_poll_state", multirate_poll)
+
         original_snapshot = AtomicResidentCommandGateway.snapshot
         def snapshot(self, context):
             tick_id = _tick_id(context)
@@ -352,6 +375,7 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
                 "profiled_ticks": sorted(profiled_ticks),
                 "source_rows": source_rows,
                 "acquisition_rows": acquisition_rows,
+                "liveness_rows": liveness_rows,
                 "source_timing_scope": "acquisition_is_not_control_tick",
                 "l0_rows": l0_rows,
                 "command_rows": command_rows,

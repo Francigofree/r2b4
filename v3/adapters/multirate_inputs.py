@@ -1,12 +1,15 @@
 """Multi-rate physical acquisition and deterministic V3 L0 snapshot closure.
 
-The physical live runtime may acquire devices at their natural rates on bounded
-background lanes.  The control TickEngine never calls those sources directly:
-``read()`` only closes snapshots that were completely published no later than
-the supplied control ``TickContext``.
+The physical live runtime acquires devices at their natural rates on bounded
+background workers. Critical devices own independent acquisition workers so one
+blocked critical peripheral cannot stall the other critical streams. Auxiliary
+sources remain on a bounded shared lane. The control TickEngine never calls
+physical sources directly: ``read()`` only closes snapshots that were completely
+published no later than the supplied control ``TickContext``.
 
-This adapter owns scheduling and bounded history only.  It does not own physical
-device lifetime and it has no command, mission, safety or motor authority.
+This adapter owns scheduling, bounded history and passive source-liveness
+telemetry only. It does not own physical device lifetime and it has no command,
+mission, safety or motor authority.
 """
 
 from __future__ import annotations
@@ -106,26 +109,37 @@ class MultiRateInputConfig:
         )
 
 
+def _deadline_advance(
+    current_due_ns: int,
+    started_ns: int,
+    visible_ns: int,
+    period_ns: int,
+) -> tuple[int, int, bool]:
+    """Return next source deadline, skipped slots and whether this read overran."""
+
+    anchor_ns = current_due_ns if current_due_ns > 0 else started_ns
+    next_due_ns = anchor_ns + period_ns
+    missed = 0
+    if next_due_ns <= visible_ns:
+        missed = ((visible_ns - next_due_ns) // period_ns) + 1
+        next_due_ns += missed * period_ns
+    return next_due_ns, missed, missed > 0
+
+
 def _next_period_deadline(
     current_due_ns: int,
     started_ns: int,
     visible_ns: int,
     period_ns: int,
 ) -> int:
-    """Advance one source on its acquisition phase without completion-time drift.
+    """Compatibility helper used by tests and callers that only need the deadline."""
 
-    The first deadline is anchored to the first acquisition start.  Later
-    deadlines advance from the previous scheduled deadline.  If a read overruns
-    one or more slots, missed slots are skipped instead of producing a catch-up
-    burst on the shared R2B4 worker lane.
-    """
-
-    anchor_ns = current_due_ns if current_due_ns > 0 else started_ns
-    next_due_ns = anchor_ns + period_ns
-    if next_due_ns <= visible_ns:
-        missed = ((visible_ns - next_due_ns) // period_ns) + 1
-        next_due_ns += missed * period_ns
-    return next_due_ns
+    return _deadline_advance(
+        current_due_ns,
+        started_ns,
+        visible_ns,
+        period_ns,
+    )[0]
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,14 +148,68 @@ class _PublishedSnapshot:
     snapshot: LiveDeviceSnapshot
 
 
+@dataclass(frozen=True, slots=True)
+class SourceLiveness:
+    """Passive immutable evidence for one acquisition stream at one observation time."""
+
+    device_id: str
+    critical: bool
+    period_ns: int
+    sequence: int
+    publication_count: int
+    last_started_ns: int | None
+    last_completed_ns: int | None
+    last_published_ns: int | None
+    last_measurement_ns: int | None
+    last_read_duration_ns: int | None
+    last_publication_latency_ns: int | None
+    measurement_age_ns: int | None
+    publication_age_ns: int | None
+    read_in_flight: bool
+    read_elapsed_ns: int | None
+    missed_period_count: int
+    deadline_overrun_count: int
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "device_id": self.device_id,
+            "critical": self.critical,
+            "period_ns": self.period_ns,
+            "sequence": self.sequence,
+            "publication_count": self.publication_count,
+            "last_started_ns": self.last_started_ns,
+            "last_completed_ns": self.last_completed_ns,
+            "last_published_ns": self.last_published_ns,
+            "last_measurement_ns": self.last_measurement_ns,
+            "last_read_duration_ns": self.last_read_duration_ns,
+            "last_publication_latency_ns": self.last_publication_latency_ns,
+            "measurement_age_ns": self.measurement_age_ns,
+            "publication_age_ns": self.publication_age_ns,
+            "read_in_flight": self.read_in_flight,
+            "read_elapsed_ns": self.read_elapsed_ns,
+            "missed_period_count": self.missed_period_count,
+            "deadline_overrun_count": self.deadline_overrun_count,
+        }
+
+
 class _SourceState:
     __slots__ = (
         "critical",
+        "deadline_overrun_count",
         "device_id",
+        "first_publication",
         "history",
+        "last_completed_ns",
+        "last_measurement_ns",
+        "last_publication_latency_ns",
+        "last_published_ns",
+        "last_read_duration_ns",
+        "last_started_ns",
         "lock",
+        "missed_period_count",
         "next_due_ns",
         "period_ns",
+        "publication_count",
         "sequence",
         "source",
     )
@@ -161,18 +229,28 @@ class _SourceState:
         self.period_ns = period_ns
         self.history: deque[_PublishedSnapshot] = deque(maxlen=history_size)
         self.lock = Lock()
+        self.first_publication = Event()
         self.sequence = 0
         self.next_due_ns = 0
+        self.publication_count = 0
+        self.last_started_ns: int | None = None
+        self.last_completed_ns: int | None = None
+        self.last_published_ns: int | None = None
+        self.last_measurement_ns: int | None = None
+        self.last_read_duration_ns: int | None = None
+        self.last_publication_latency_ns: int | None = None
+        self.missed_period_count = 0
+        self.deadline_overrun_count = 0
 
 
 class MultiRateLiveInputReader:
     """Deterministically close already-acquired measurements for one control tick.
 
-    Critical and auxiliary sources run on separate bounded worker lanes.  A lane
-    may be pinned by the runtime through ``worker_initializer``.  Source-level
-    I/O failures become explicit per-device health; scheduler/clock/worker
-    failures remain whole-L0 failures and therefore fail closed in the resident
-    composition.
+    Each critical source owns an independent bounded worker. Auxiliary sources
+    share a separate bounded lane. A worker may be pinned by the runtime through
+    ``worker_initializer``. Source-level I/O failures become explicit per-device
+    health; scheduler/clock/critical-worker failures remain whole-L0 failures and
+    therefore fail closed in the resident composition.
     """
 
     __slots__ = (
@@ -258,22 +336,26 @@ class MultiRateLiveInputReader:
             for source, device_id in zip(closed_sources, ids)
         )
 
-        # Prime before motor ownership opens.  Source I/O failures are converted
-        # to explicit health so tick 0 still goes through the canonical safety path.
-        for state in self._states:
-            self._poll_state(state)
-
+        critical_states = tuple(state for state in self._states if state.critical)
+        auxiliary_states = tuple(state for state in self._states if not state.critical)
         if start_workers:
-            critical_states = tuple(state for state in self._states if state.critical)
-            auxiliary_states = tuple(state for state in self._states if not state.critical)
             try:
-                self._start_lane("l0-critical", critical_states)
+                for state in critical_states:
+                    self._start_lane(
+                        f"l0-critical-{state.device_id}",
+                        (state,),
+                    )
                 self._start_lane("l0-aux", auxiliary_states)
+                self._wait_for_critical_prime(critical_states)
             except Exception:
                 self._stop.set()
                 self._join_workers(raise_on_alive=False)
                 self._closed = True
                 raise
+        else:
+            # Deterministic/offline mode: keep synchronous one-shot priming.
+            for state in self._states:
+                self._poll_state(state)
 
     def _clock_ns(self) -> int:
         value = self._clock()
@@ -327,9 +409,12 @@ class MultiRateLiveInputReader:
 
     def _poll_state(self, state: _SourceState) -> None:
         started_ns = self._clock_ns()
-        scheduled_due_ns = state.next_due_ns
-        context = TickContext(state.sequence, started_ns)
-        state.sequence += 1
+        with state.lock:
+            scheduled_due_ns = state.next_due_ns
+            state.last_started_ns = started_ns
+            sequence = state.sequence
+            state.sequence += 1
+        context = TickContext(sequence, started_ns)
         try:
             raw_snapshot = state.source.read(context)
         except Exception:
@@ -359,19 +444,51 @@ class MultiRateLiveInputReader:
                     f"L0_SOURCE_INVALID:{type(exc).__name__}",
                 )
 
-        next_due_ns = _next_period_deadline(
+        next_due_ns, missed_periods, overran = _deadline_advance(
             scheduled_due_ns,
             started_ns,
             visible_ns,
             state.period_ns,
         )
+        measurement_ns = max(
+            (sample.captured_monotonic_ns for sample in snapshot.samples),
+            default=None,
+        )
+
         # TickContext creation and publication share this short boundary.
         # Validation/source I/O must stay outside it.
         with self._publication_lock:
-            published = _PublishedSnapshot(self._clock_ns(), snapshot)
+            published_ns = self._clock_ns()
+            published = _PublishedSnapshot(published_ns, snapshot)
             with state.lock:
                 state.history.append(published)
                 state.next_due_ns = next_due_ns
+                state.publication_count += 1
+                state.last_completed_ns = visible_ns
+                state.last_published_ns = published_ns
+                state.last_measurement_ns = measurement_ns
+                state.last_read_duration_ns = visible_ns - started_ns
+                state.last_publication_latency_ns = published_ns - visible_ns
+                state.missed_period_count += missed_periods
+                if overran:
+                    state.deadline_overrun_count += 1
+            state.first_publication.set()
+
+    def _wait_for_critical_prime(
+        self,
+        states: tuple[_SourceState, ...],
+    ) -> None:
+        """Bound startup wait so no critical source can block constructor forever."""
+
+        deadline = time.monotonic() + float(self._config.worker_join_timeout_s)
+        for state in states:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0 or not state.first_publication.wait(timeout=remaining):
+                self._raise_worker_failure()
+                raise RuntimeError(
+                    "multi-rate critical source prime timed out: " + state.device_id
+                )
+            self._raise_worker_failure()
 
     def _start_lane(self, name: str, states: tuple[_SourceState, ...]) -> None:
         if not states:
@@ -442,6 +559,65 @@ class MultiRateLiveInputReader:
                     return item
         return None
 
+    def liveness_snapshot(self, monotonic_ns: int) -> tuple[SourceLiveness, ...]:
+        """Return passive per-source timing evidence without touching acquisition."""
+
+        if (
+            not isinstance(monotonic_ns, int)
+            or isinstance(monotonic_ns, bool)
+            or monotonic_ns < 0
+        ):
+            raise ValueError("monotonic_ns must be a non-negative integer")
+
+        result: list[SourceLiveness] = []
+        for state in self._states:
+            with state.lock:
+                last_started_ns = state.last_started_ns
+                last_completed_ns = state.last_completed_ns
+                last_published_ns = state.last_published_ns
+                last_measurement_ns = state.last_measurement_ns
+                in_flight = bool(
+                    last_started_ns is not None
+                    and (
+                        last_completed_ns is None
+                        or last_started_ns > last_completed_ns
+                    )
+                )
+                result.append(
+                    SourceLiveness(
+                        device_id=state.device_id,
+                        critical=state.critical,
+                        period_ns=state.period_ns,
+                        sequence=state.sequence,
+                        publication_count=state.publication_count,
+                        last_started_ns=last_started_ns,
+                        last_completed_ns=last_completed_ns,
+                        last_published_ns=last_published_ns,
+                        last_measurement_ns=last_measurement_ns,
+                        last_read_duration_ns=state.last_read_duration_ns,
+                        last_publication_latency_ns=state.last_publication_latency_ns,
+                        measurement_age_ns=(
+                            None
+                            if last_measurement_ns is None
+                            else max(0, monotonic_ns - last_measurement_ns)
+                        ),
+                        publication_age_ns=(
+                            None
+                            if last_published_ns is None
+                            else max(0, monotonic_ns - last_published_ns)
+                        ),
+                        read_in_flight=in_flight,
+                        read_elapsed_ns=(
+                            max(0, monotonic_ns - last_started_ns)
+                            if in_flight and last_started_ns is not None
+                            else None
+                        ),
+                        missed_period_count=state.missed_period_count,
+                        deadline_overrun_count=state.deadline_overrun_count,
+                    )
+                )
+        return tuple(result)
+
     def begin_tick(self, tick_id: int) -> TickContext:
         """Atomically stamp and freeze a control input against publication."""
         with self._publication_lock:
@@ -474,9 +650,24 @@ class MultiRateLiveInputReader:
             snapshot = published.snapshot
             samples.extend(snapshot.samples)
             if not state.critical and self._aux_failure is not None:
-                health.append(DeviceHealth(state.device_id, DeviceHealthState.FAILED, "L0_AUX_WORKER_FAILED"))
-            elif context.monotonic_ns - published.visible_monotonic_ns > self._config.max_snapshot_age_ns:
-                health.append(DeviceHealth(state.device_id, DeviceHealthState.UNKNOWN, "L0_STREAM_EXPIRED"))
+                health.append(
+                    DeviceHealth(
+                        state.device_id,
+                        DeviceHealthState.FAILED,
+                        "L0_AUX_WORKER_FAILED",
+                    )
+                )
+            elif (
+                context.monotonic_ns - published.visible_monotonic_ns
+                > self._config.max_snapshot_age_ns
+            ):
+                health.append(
+                    DeviceHealth(
+                        state.device_id,
+                        DeviceHealthState.UNKNOWN,
+                        "L0_STREAM_EXPIRED",
+                    )
+                )
             else:
                 health.append(snapshot.health)
         batch = RawDeviceBatch(context, tuple(samples), tuple(health))
@@ -484,11 +675,13 @@ class MultiRateLiveInputReader:
         return batch
 
     def _join_workers(self, *, raise_on_alive: bool) -> None:
-        alive: list[str] = []
+        # One global shutdown budget: adding independently isolated source workers
+        # must not multiply the maximum close latency by the number of devices.
+        deadline = time.monotonic() + float(self._config.worker_join_timeout_s)
         for thread in self._threads:
-            thread.join(timeout=self._config.worker_join_timeout_s)
-            if thread.is_alive():
-                alive.append(thread.name)
+            remaining = max(0.0, deadline - time.monotonic())
+            thread.join(timeout=remaining)
+        alive = [thread.name for thread in self._threads if thread.is_alive()]
         if alive and raise_on_alive:
             raise RuntimeError("multi-rate input workers did not stop: " + ",".join(alive))
 
@@ -503,6 +696,7 @@ class MultiRateLiveInputReader:
 __all__ = [
     "MultiRateInputConfig",
     "MultiRateLiveInputReader",
+    "SourceLiveness",
     "SourcePeriod",
     "WorkerInitializer",
 ]
