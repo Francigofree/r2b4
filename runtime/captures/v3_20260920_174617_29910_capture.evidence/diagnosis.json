@@ -1,0 +1,127 @@
+{
+  "behavior_status": "NOMINAL",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": false,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [
+      "RAW_LIDAR_REVISION_GAP"
+    ],
+    "integrity_warnings": [],
+    "message_stream_sha256": "3211b0f8d8d6f463d971fb30d3532163c9c4c0c4fb21e71b5120d98f77b89654",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 184,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 184,
+      "first_lost_sequence": null,
+      "high_water_mark": 7,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 184,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": true,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 35,
+    "raw_lidar_expected_scan_count": 27,
+    "raw_lidar_gap_missing_revisions": [
+      20,
+      21
+    ],
+    "raw_lidar_loss_fraction": 0.07407407407407407,
+    "raw_lidar_loss_missing_revisions": [
+      20,
+      21
+    ],
+    "raw_lidar_loss_tolerance_fraction": 0.05,
+    "raw_lidar_loss_within_tolerance": false,
+    "raw_lidar_max_consecutive_missing": 2,
+    "raw_lidar_max_consecutive_missing_allowed": 2,
+    "raw_lidar_missing_count": 2,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [
+      {
+        "after": 19,
+        "before": 22
+      }
+    ],
+    "raw_lidar_truncated_count": 0,
+    "session_start_short_pre_window": false,
+    "terminal_short_post_window": false
+  },
+  "capture_status": "FAULT",
+  "diagnosis_status": "FAIL",
+  "evidence_status": "FAIL",
+  "first_divergence": null,
+  "first_live_incident": null,
+  "incident_count": 113,
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 9.619175107286022,
+      "last_trace": 0.4434439724458856,
+      "max_trace": 0.4434439724458856,
+      "sample_count": 124
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 0.3155949057975388,
+      "requested_motion_tick_count": 30
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 33,
+      "FAULT": 1,
+      "STOP": 90,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 75,
+      "l2_actionable_rejection_count": 49,
+      "l2_duplicate_count": 258,
+      "l2_rejection_count": 307,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 258,
+        "STALE": 49
+      }
+    },
+    "ticks": {
+      "count": 124,
+      "first_monotonic_ns": 24366315035702,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 24369953687328,
+      "last_tick_id": 123
+    },
+    "timing": {
+      "max_ms": 131.765353,
+      "p50_ms": 20.053399,
+      "p95_ms": 62.077228,
+      "p99_ms": 84.18262,
+      "sample_count": 123
+    }
+  },
+  "physical_root_cause": null,
+  "replay_error": "MCAP preflight failed: CAPTURE_INCOMPLETE: required evidence is incomplete",
+  "replay_requested": true,
+  "replay_status": "ERROR",
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "FAIL",
+  "structure_valid": true
+}
