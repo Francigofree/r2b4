@@ -28,7 +28,7 @@ from v3.execution import (
     ExecutionRecord,
     WriterFailureRecord,
 )
-from v3.ports import CommandGateway
+from v3.ports import CommandGateway, DeviceReader
 
 from .native_control import (
     NativeControlComposition,
@@ -107,6 +107,7 @@ class ResidentLiveControlComposition:
         config: ResidentLiveControlConfig,
         *,
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
+        device_reader: DeviceReader | None = None,
         trajectory_rollout_backend: object | None = None,
     ) -> None:
         if not isinstance(encoder_source, NativeEncoderSource):
@@ -122,9 +123,17 @@ class ResidentLiveControlComposition:
 
         if not isinstance(auxiliary_sources, tuple):
             raise TypeError("auxiliary_sources must be tuple[LiveDeviceSource, ...]")
+        if device_reader is not None and not callable(
+            getattr(device_reader, "read", None)
+        ):
+            raise TypeError("device_reader must provide a callable read method")
 
-        self._reader = NativeLiveInputReader(
-            (encoder_source, imu_source, lidar_source, *auxiliary_sources)
+        self._reader = (
+            device_reader
+            if device_reader is not None
+            else NativeLiveInputReader(
+                (encoder_source, imu_source, lidar_source, *auxiliary_sources)
+            )
         )
         self._command_gateway = command_gateway
         self._control = NativeControlComposition(

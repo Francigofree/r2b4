@@ -727,6 +727,7 @@ def run_native_hardware_resident_control(
             operator_stopped=True,
         )
 
+    affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
     owner = NativeHardwareSensorOwner(
         counter_gpio_backend,
         open_imu_bus,
@@ -739,7 +740,6 @@ def run_native_hardware_resident_control(
     rollout_backend = None
     async_l6 = config.composition.live_control.control.async_l6
     if async_l6.enabled:
-        affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
         rollout_backend = ProcessTrajectoryRolloutBackend(
             config.composition.live_control.control.navigation,
             worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
@@ -768,6 +768,13 @@ def run_native_hardware_resident_control(
                 affinity_config is not None and affinity_config.enabled
             ),
             trajectory_rollout_backend=rollout_backend,
+            # Background acquisition must use the real monotonic clock.
+            # Synthetic test clocks stay on the deterministic synchronous path.
+            enable_multirate_inputs=(monotonic_ns is time.monotonic_ns),
+            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+            input_worker_strict_affinity=(
+                affinity.strict if affinity.enabled else False
+            ),
         )
     finally:
         if rollout_backend is not None:

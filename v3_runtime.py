@@ -11,6 +11,7 @@ from v3.adapters.live_encoder import NativeEncoderSource
 from v3.adapters.live_imu import NativeImuSource
 from v3.adapters.live_lidar import NativeLidarSource
 from v3.adapters.live_inputs import LiveDeviceSource
+from v3.adapters.multirate_inputs import MultiRateLiveInputReader
 from v3.composition.native_sensor_inputs import (
     NativeSensorHardwareConfig,
     NativeSensorInputOwner,
@@ -21,16 +22,18 @@ from v3.composition.resident_physical_control import (
     ResidentPhysicalControlConfig,
 )
 from v3.contracts import LifecycleState, SafetyDecision, TickContext
+from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.engine import TickExecutionError, TickResult
 from v3.execution import (
     CaptureRecord,
     ExecutionRecord,
     REPLAY_STATE_CHECKPOINT_INTERVAL_NS,
 )
-from v3.ports import CommandGateway
+from v3.ports import CommandGateway, DeviceReader
 from v3.runtime_performance import (
     RuntimeTimingAccumulator,
     RuntimeTimingEvidence,
+    apply_current_affinity,
 )
 from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, RUN_FAULT, RUN_OK
 
@@ -244,6 +247,7 @@ def run_resident_physical_control(
     config: ResidentPhysicalRuntimeConfig,
     *,
     auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
+    device_reader: DeviceReader | None = None,
     stop_requested: Callable[[], bool],
     monotonic_ns: Callable[[], int] = time.monotonic_ns,
     sleep: Callable[[float], None] = time.sleep,
@@ -266,6 +270,10 @@ def run_resident_physical_control(
             raise TypeError(f"{name} must be callable")
     if not callable(getattr(command_gateway, "snapshot", None)):
         raise TypeError("command_gateway must provide a callable snapshot method")
+    if device_reader is not None and not callable(
+        getattr(device_reader, "read", None)
+    ):
+        raise TypeError("device_reader must provide a callable read method")
     if tick_observer is not None and not callable(tick_observer):
         raise TypeError("tick_observer must be callable or None")
     if readiness_observer is not None and not callable(readiness_observer):
@@ -298,6 +306,7 @@ def run_resident_physical_control(
         gpio_backend,
         config.composition,
         auxiliary_sources=auxiliary_sources,
+        device_reader=device_reader,
         trajectory_rollout_backend=trajectory_rollout_backend,
     )
     if timing is not None:
@@ -432,18 +441,51 @@ def run_owned_resident_physical_control(
     record_observer: Callable[[CaptureRecord], None] | None = None,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
+    enable_multirate_inputs: bool = True,
+    input_worker_cpu: int | None = None,
+    input_worker_strict_affinity: bool = False,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
 
     if not isinstance(sensor_inputs, NativeSensorInputOwner):
         raise TypeError("sensor_inputs must be NativeSensorInputOwner")
+    if type(enable_multirate_inputs) is not bool:
+        raise TypeError("enable_multirate_inputs must be bool")
+    if input_worker_cpu is not None and (
+        not isinstance(input_worker_cpu, int)
+        or isinstance(input_worker_cpu, bool)
+        or input_worker_cpu < 0
+    ):
+        raise ValueError("input_worker_cpu must be non-negative or None")
+    if type(input_worker_strict_affinity) is not bool:
+        raise TypeError("input_worker_strict_affinity must be bool")
+
+    input_reader: MultiRateLiveInputReader | None = None
     try:
+        if enable_multirate_inputs:
+            worker_initializer: Callable[[str], None] | None = None
+            if input_worker_cpu is not None:
+                def _pin_input_worker(role: str) -> None:
+                    apply_current_affinity(
+                        input_worker_cpu,
+                        role=role,
+                        strict=input_worker_strict_affinity,
+                    )
+
+                worker_initializer = _pin_input_worker
+            input_reader = MultiRateLiveInputReader(
+                (*sensor_inputs.sources, *sensor_inputs.auxiliary_sources),
+                critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS,
+                monotonic_ns=monotonic_ns,
+                worker_initializer=worker_initializer,
+            )
         return run_resident_physical_control(
             *sensor_inputs.sources,
             command_gateway,
             gpio_backend,
             config,
             auxiliary_sources=sensor_inputs.auxiliary_sources,
+            device_reader=input_reader,
             stop_requested=stop_requested,
             monotonic_ns=monotonic_ns,
             sleep=sleep,
@@ -454,7 +496,11 @@ def run_owned_resident_physical_control(
             trajectory_rollout_backend=trajectory_rollout_backend,
         )
     finally:
-        sensor_inputs.close()
+        try:
+            if input_reader is not None:
+                input_reader.close()
+        finally:
+            sensor_inputs.close()
 
 
 __all__ = [

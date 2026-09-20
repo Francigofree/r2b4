@@ -56,6 +56,8 @@ input source → production V3 → output sink
 
 Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, motor-, lifecycle- és safety-authority nélkül. Aszinkron driver vagy feldolgozás megengedett, ha eredménye a tick számára lezárt, immutable, időbélyegzett input.
 
+A fizikai live runtime-ban a szenzor I/O multi-rate edge ownerben futhat. A control tick L0 `DeviceReader.read()` útja nem végez blokkoló fizikai sensor I/O-t: kizárólag korábban publikált, bounded historyból választ olyan immutable snapshotot, amely a tick `monotonic_ns` idején már látható volt. A safety-kritikus és auxiliary acquisition külön worker lane-ben futhat; auxiliary késés vagy hiba nem blokkolhatja a kritikus acquisition lane-t és önmagában nem adhat egész-robot fault authorityt. A worker lane-ek CPU-affinityja operational runtime policy, nem production authority, és nem sértheti a control CPU izolációját. Replay/szimuláció továbbra is közvetlenül lezárt `RawDeviceBatch`/`TickInputs` értékből dolgozik, worker nélkül.
+
 ### 2.1 Passzív observation/fan-out
 
 A productionból kifelé vezethet passzív observation/fan-out capture, telemetry, GUI vagy metrics felé. Ez **nem L13 és nem control layer**.
@@ -94,7 +96,7 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 
 | Réteg | Egyetlen felelősség és owned state | Typed output |
 | --- | --- | --- |
-| L0 Device HAL | eszközhandle, busz, fizikai read/write, lezárt device snapshot | `RawDeviceBatch` |
+| L0 Input Snapshot | edge-owner által már megszerzett measurementek determinisztikus tick-zárása, bounded published history és device/stream health | `RawDeviceBatch` |
 | L1 Acquisition | source sample-ek és I/O health zárása | `AcquisitionFrame` |
 | L2 Admission | freshness, sorrend, duplikáció, trust/alignment history | `AdmittedFrame` |
 | L3 State Estimation | pose, twist, covariance | `RobotEstimate` |
@@ -110,6 +112,8 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 | Composition/runtime root | tick, production lifecycle state, config snapshot és wiring | `TickResult` / completed execution record |
 
 Egy réteg nem módosíthat másik réteg state-jét és nem adhat át más komponens által írható shared mutable state-et. Read-only vagy egyértelmű ownershipű bounded buffer/view megengedett. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
+
+A fizikai device handle/busz/driver lifetime az edge/device owner felelőssége; ez nem külön control layer. L0 csak a már megszerzett, publikált input bounded történetét és determinisztikus tick-zárását birtokolhatja.
 
 A host/operator controller a production L0–L12 és a composition/runtime root fölötti orchestration komponens; nem L13 és nem production robotréteg. Saját state-je kizárólag host/session state lehet, például process supervision, parancsproducer-életciklus, capture-session, tesztfázis vagy felhasználói művelet állapota. Production lifecycle-, navigation-, motion-, actuator- vagy safety-state-et nem birtokolhat.
 
@@ -163,6 +167,8 @@ STOP/FAULT hardveroldalon fizikailag inaktív, igazolható állapotot jelent. `D
 ## 7. Szenzoradat és capability-függetlenség
 
 Külön kezelendő: (1) fizikai device/stream health, (2) measurement validity/freshness/trust, (3) egyes feldolgozási ágak minősége. Egy ág degradationje csak közös fizikai vagy contract-szintű ok esetén terjedhet másik ágra.
+
+Live multi-rate acquisitionnél a source `TickContext` az acquisition saját monoton időpontja, nem egy későbbi control tick kölcsönvett ideje. A measurement timestamp és a snapshot publication/visibility idő külön fogalom; egy measurement csak olyan control tickben válhat láthatóvá, amelynek döntési ideje nem korábbi a publikációnál.
 
 ### 7.1 Encoder
 

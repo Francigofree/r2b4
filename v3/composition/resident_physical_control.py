@@ -13,7 +13,7 @@ from v3.adapters.live_inputs import LiveDeviceSource
 from v3.contracts import LifecycleState, TickContext
 from v3.engine import TickResult
 from v3.execution import CaptureRecord
-from v3.ports import CommandGateway
+from v3.ports import CommandGateway, DeviceReader
 
 from .motor_output import NativeMotorOutputComposition
 from .resident_live_control import (
@@ -52,6 +52,7 @@ class ResidentPhysicalControlComposition:
         config: ResidentPhysicalControlConfig,
         *,
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
+        device_reader: DeviceReader | None = None,
         trajectory_rollout_backend: object | None = None,
     ) -> None:
         if not isinstance(config, ResidentPhysicalControlConfig):
@@ -69,6 +70,7 @@ class ResidentPhysicalControlComposition:
                 motor_output,
                 config.live_control,
                 auxiliary_sources=auxiliary_sources,
+                device_reader=device_reader,
                 trajectory_rollout_backend=trajectory_rollout_backend,
             )
         except Exception:
