@@ -180,7 +180,7 @@ class NativeBno055ImuBackend:
         )
         confidence = calibration / 3.0 if timing_valid else 0.0
         return ImuHeadingReading(
-            sequence=context.tick_id,
+            sequence=_nonnegative_int(sample.get("sequence", context.tick_id), "sequence"),
             captured_monotonic_ns=captured_ns,
             yaw_rad=yaw_rad,
             omega_rad_s=omega_rad_s,

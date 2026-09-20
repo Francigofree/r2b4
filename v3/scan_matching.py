@@ -1,5 +1,6 @@
 import math
 import time
+from itertools import islice, product
 from typing import Callable, Dict, List, Tuple, Optional, Any, Sequence
 
 import numpy as np
@@ -172,6 +173,33 @@ def _cost_kdtree(
     return float(metrics["cost"])
 
 
+def _scan_cost_batch(tree, cur_pts, poses, *, inlier_distance_m, trim_fraction):
+    """Score at most 32 poses with the identical trimmed nearest-point cost.
+
+    One bounded native query avoids a Python/NumPy/SciPy dispatch per pose.
+    Search order, tie-breaking and all confidence/integrity checks stay intact.
+    """
+    if not poses:
+        return ()
+    if len(poses) > 32:
+        raise ValueError("scan cost batch exceeds 32 poses")
+    cosine = np.array([math.cos(p[2]) for p in poses])[:, None]
+    sine = np.array([math.sin(p[2]) for p in poses])[:, None]
+    x = np.array([p[0] for p in poses])[:, None]
+    y = np.array([p[1] for p in poses])[:, None]
+    tx = cosine * cur_pts[:, 0] - sine * cur_pts[:, 1] + x
+    ty = sine * cur_pts[:, 0] + cosine * cur_pts[:, 1] + y
+    points = np.stack((tx, ty), axis=-1)
+    distances, _ = tree.query(points.reshape(-1, 2), k=1, workers=1)
+    distances = distances.reshape(len(poses), len(cur_pts))
+    cutoff = max(1e-4, float(inlier_distance_m))
+    bounded = np.where(np.isfinite(distances), np.minimum(distances, cutoff), cutoff)
+    fraction = _clamp_scalar(float(trim_fraction), 0.50, 1.0)
+    count = max(3, min(len(cur_pts), int(math.ceil(len(cur_pts) * fraction))))
+    kept = np.partition(bounded, count - 1, axis=1)[:, :count]
+    return tuple(float(cost) for cost in np.mean(kept * kept, axis=1))
+
+
 def _normalize_angle_rad(angle: float) -> float:
     return float((float(angle) + math.pi) % (2.0 * math.pi) - math.pi)
 
@@ -189,6 +217,7 @@ def _refine_local_pose(
     max_iters: int = 6,
     deadline_monotonic: Optional[float] = None,
     objective_fn: Optional[Callable[[float, float, float], float]] = None,
+    prefetch_fn: Optional[Callable[[Sequence[Tuple[float, float, float]]], None]] = None,
 ) -> Tuple[float, float, float, float]:
     """
     Local deterministic refinement around grid optimum.
@@ -218,6 +247,12 @@ def _refine_local_pose(
         improved = False
         candidate_cost = best_cost
         candidate_x, candidate_y, candidate_t = best_x, best_y, best_t
+        if prefetch_fn is not None:
+            prefetch_fn([
+                (float(best_x + ddx), float(best_y + ddy), _normalize_angle_rad(best_t + ddt))
+                for ddx, ddy, ddt in product((0.0, -sx, sx), (0.0, -sy, sy), (0.0, -st, st))
+                if ddx != 0.0 or ddy != 0.0 or ddt != 0.0
+            ])
         for ddx in (0.0, -sx, sx):
             for ddy in (0.0, -sy, sy):
                 for ddt in (0.0, -st, st):
@@ -429,6 +464,25 @@ def match_scan_to_map(
     trim_fraction = _clamp_scalar(float(robust_trim_fraction), 0.50, 1.0)
     sector_count = max(4, int(confidence_sector_count))
     candidate_samples: List[Dict[str, Any]] = []
+    # Bounded to the most recent batch. Long relocalization grids cannot grow
+    # a second unbounded candidate cache.
+    cost_cache: Dict[Tuple[float, float, float], float] = {}
+
+    def prefetch(poses):
+        cost_cache.clear()
+        cost_cache.update(zip(poses, _scan_cost_batch(
+            map_tree, cur_pts, poses,
+            inlier_distance_m=inlier_distance_m, trim_fraction=trim_fraction,
+        )))
+
+    def scan_cost(x, y, theta):
+        key = (float(x), float(y), float(theta))
+        if key in cost_cache:
+            return cost_cache[key]
+        return _scan_cost_batch(
+            map_tree, cur_pts, (key,),
+            inlier_distance_m=inlier_distance_m, trim_fraction=trim_fraction,
+        )[0]
 
     def deadline_reached(stage: str) -> bool:
         nonlocal timed_out, deadline_stage
@@ -456,24 +510,13 @@ def match_scan_to_map(
         stage: str = "search",
     ) -> float:
         nonlocal evaluated_candidates
-        metrics = _robust_match_metrics(
-            map_tree,
-            cur_pts,
-            float(x),
-            float(y),
-            float(theta),
-            inlier_distance_m=inlier_distance_m,
-            trim_fraction=trim_fraction,
-            sector_count=sector_count,
-            include_support=False,
-        )
-        scan_cost = float(metrics["cost"])
+        residual_cost = scan_cost(x, y, theta)
         prior_cost = seed_prior_cost(float(x), float(y), float(theta))
         candidate_samples.append(
             {
-                "scan_cost": float(scan_cost),
+                "scan_cost": float(residual_cost),
                 "prior_cost": float(prior_cost),
-                "objective_cost": float(scan_cost + prior_cost),
+                "objective_cost": float(residual_cost + prior_cost),
                 "x": float(x),
                 "y": float(y),
                 "theta": _normalize_angle_rad(float(theta)),
@@ -481,7 +524,7 @@ def match_scan_to_map(
             }
         )
         evaluated_candidates += 1
-        return float(scan_cost + prior_cost)
+        return float(residual_cost + prior_cost)
 
     def search_grid(
         x0: float,
@@ -519,22 +562,17 @@ def match_scan_to_map(
             float(best_t),
             stage=f"{stage}_seed",
         )
-        for x in x_vals:
-            for y in y_vals:
-                for theta in t_vals:
-                    if deadline_reached(stage):
-                        return best_cost, best_x, best_y, best_t
-                    cost = objective(
-                        float(x),
-                        float(y),
-                        float(theta),
-                        stage=stage,
-                    )
-                    if cost < best_cost:
-                        best_cost = float(cost)
-                        best_x = float(x)
-                        best_y = float(y)
-                        best_t = float(theta)
+        poses = product(map(float, x_vals), map(float, y_vals), map(float, t_vals))
+        while batch := tuple(islice(poses, 32)):
+            if deadline_reached(stage):
+                return best_cost, best_x, best_y, best_t
+            prefetch(batch)
+            for x, y, theta in batch:
+                if deadline_reached(stage):
+                    return best_cost, best_x, best_y, best_t
+                cost = objective(x, y, theta, stage=stage)
+                if cost < best_cost:
+                    best_cost, best_x, best_y, best_t = cost, x, y, theta
         return best_cost, best_x, best_y, best_t
 
     best_cost, best_x, best_y, best_t = search_grid(
@@ -596,6 +634,7 @@ def match_scan_to_map(
                 theta,
                 stage="winner_refine",
             ),
+            prefetch_fn=prefetch,
         )
         deadline_reached("winner_refine")
 

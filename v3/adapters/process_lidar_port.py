@@ -10,11 +10,13 @@ from __future__ import annotations
 import math
 import multiprocessing
 import queue
+import threading
 import time
+from collections import deque
 from collections.abc import Mapping
 from typing import Any, Callable
 
-from v3.runtime_performance import apply_current_affinity
+from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
 from .latest_lidar import (
     MATCHER_CONFIDENCE_MODEL,
@@ -330,6 +332,9 @@ class ProcessLidarPort:
         "_status",
         "_stop_event",
         "_stopped",
+        "_collector",
+        "_collector_stop",
+        "_pending_poses",
     )
 
     def __init__(
@@ -398,6 +403,9 @@ class ProcessLidarPort:
         }
         self._fatal_error = ""
         self._stopped = False
+        self._collector_stop = threading.Event()
+        self._pending_poses: deque[TimedPoseReference] = deque(maxlen=_POSE_HISTORY_CAPACITY)
+        self._collector: threading.Thread | None = None
         self._process.start()
         if not self._ready_event.wait(max(_READY_TIMEOUT_S, config.process_ready_timeout_s)):
             self.stop()
@@ -407,20 +415,47 @@ class ProcessLidarPort:
             self.stop()
             raise RuntimeError(f"process-isolated LiDAR startup failed: {self._fatal_error}")
         if not self._process.is_alive():
+            self.stop()
             raise RuntimeError("process-isolated LiDAR owner exited during startup")
+        self._collector = threading.Thread(
+            target=self._collect_state,
+            name="r2b4-lidar-ipc",
+            daemon=True,
+        )
+        with temporary_current_affinity(
+            worker_cpu, role="lidar-ipc", strict=strict_affinity
+        ):
+            self._collector.start()
 
     @property
     def config(self) -> NativeLidarPortConfig:
         return self._config
 
     def publish_pose_reference(self, pose: TimedPoseReference) -> None:
+        if not isinstance(pose, TimedPoseReference):
+            raise TypeError("pose must be TimedPoseReference")
         if self._stopped:
             return
-        self._pose_history.publish(pose)
+        # The control observer never waits for the child-held pose-history lock.
+        self._pending_poses.append(pose)
+
+    def _collect_state(self) -> None:
+        try:
+            while not self._collector_stop.is_set():
+                for _ in range(_POSE_HISTORY_CAPACITY):
+                    try:
+                        pose = self._pending_poses.popleft()
+                    except IndexError:
+                        break
+                    self._pose_history.publish(pose)
+                self._drain_state()
+                self._collector_stop.wait(0.005)
+        except Exception as exc:
+            self._fatal_error = f"LIDAR_COLLECTOR_FAILED:{type(exc).__name__}:{exc}"
 
     def _drain_state(self) -> None:
         newest: object | None = None
-        while True:
+        for _ in range(_STATE_QUEUE_CAPACITY):
             try:
                 newest = self._state_queue.get_nowait()
             except queue.Empty:
@@ -446,15 +481,12 @@ class ProcessLidarPort:
         self._status = status
 
     def get_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
-        self._drain_state()
         return self._raw_snapshot
 
     def get_matcher_result(self) -> NativeMatcherResult | None:
-        self._drain_state()
         return self._matcher_result
 
     def get_runtime_status(self) -> dict[str, object]:
-        self._drain_state()
         status = dict(self._status)
         alive = self._process.is_alive() and not self._stopped
         status["owner_process_alive"] = alive
@@ -472,6 +504,7 @@ class ProcessLidarPort:
         if self._stopped:
             return
         self._stopped = True
+        self._collector_stop.set()
         self._stop_event.set()
         self._process.join(timeout=_STOP_TIMEOUT_S)
         if self._process.is_alive():
@@ -479,6 +512,10 @@ class ProcessLidarPort:
             self._process.join(timeout=_STOP_TIMEOUT_S)
         if self._process.is_alive():
             raise RuntimeError("process-isolated LiDAR owner did not stop")
+        if self._collector is not None:
+            self._collector.join(timeout=_STOP_TIMEOUT_S)
+            if self._collector.is_alive():
+                raise RuntimeError("LiDAR state collector did not stop")
         close = getattr(self._state_queue, "close", None)
         if callable(close):
             close()

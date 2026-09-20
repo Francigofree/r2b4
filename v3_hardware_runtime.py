@@ -13,7 +13,9 @@ from typing import Protocol
 from v3.adapters.bno055_device import (
     Bno055RegisterBus,
     NativeBno055Device,
+    NativeBno055DeviceConfig,
 )
+from v3.adapters.bno055_imu import Bno055SamplePort
 from v3.adapters.gpio_counter import GpioCounterBackend
 from v3.adapters.gpio_motor import PwmGpioBackend
 from v3.adapters.latest_lidar import LatestMatcherResultPort
@@ -355,6 +357,7 @@ class NativeHardwareSensorOwner:
         config: NativeSensorHardwareConfig,
         *,
         open_camera: Picamera2Factory = default_picamera2_factory,
+        open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
         affinity_config: RuntimeAffinityConfig | None = None,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         sleep: Callable[[float], None] = time.sleep,
@@ -377,7 +380,7 @@ class NativeHardwareSensorOwner:
                 raise TypeError(f"{name} must be callable")
 
         bus: Bno055RegisterBus | None = None
-        imu: NativeBno055Device | None = None
+        imu: Bno055SamplePort | None = None
         lidar: LatestMatcherResultPort | None = None
         camera: NativePicamera2Camera | None = None
         person_detection_port: PersonDetectionPort | None = None
@@ -385,14 +388,14 @@ class NativeHardwareSensorOwner:
         inputs: NativeSensorInputOwner | None = None
         pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
         try:
-            bus = open_imu_bus(config.imu_device.bus_number)
-            imu = NativeBno055Device(
-                bus,
-                config.imu_device,
-                monotonic_ns=monotonic_ns,
-                sleep=sleep,
-            )
-            imu.initialize()
+            if open_imu_device is not None:
+                imu = open_imu_device(config.imu_device)
+            else:
+                bus = open_imu_bus(config.imu_device.bus_number)
+                imu = NativeBno055Device(
+                    bus, config.imu_device, monotonic_ns=monotonic_ns, sleep=sleep,
+                )
+                imu.initialize()
             lidar = open_lidar_port(pose_feedback)
             if config.camera_device is not None:
                 with temporary_current_affinity(
@@ -707,6 +710,7 @@ def run_native_hardware_resident_control(
     raw_lidar_observer: Callable[[object | None], None] | None = None,
     affinity_config: RuntimeAffinityConfig | None = None,
     enable_multirate_inputs: bool = True,
+    open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
 ) -> ResidentRuntimeReport:
     """Own all hardware for one resident session behind an explicit cutover gate."""
 
@@ -758,6 +762,7 @@ def run_native_hardware_resident_control(
         open_lidar_port,
         config.sensor_inputs,
         affinity_config=affinity_config,
+        open_imu_device=open_imu_device,
         monotonic_ns=monotonic_ns,
         sleep=sleep,
     )

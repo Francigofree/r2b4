@@ -11,12 +11,14 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 from v3.adapters.bounded_command import BoundedTeleopProfile
 from v3.adapters.resident_command import (
     AtomicResidentCommandGateway,
+    AsyncResidentCommandGateway,
     ResidentCommandMailboxConfig,
 )
 from v3.capture import CaptureSink, CaptureWindowConfig, TriggeredCaptureWorker
@@ -28,6 +30,7 @@ from v3.adapters.native_lidar_port import (
     open_native_lidar_port,
 )
 from v3.adapters.process_lidar_port import open_process_lidar_port
+from v3.adapters.process_imu_device import ProcessBno055Device
 from v3.process_sidecars import (
     ProcessMcapCaptureSession,
     ProcessResidentStatusPublisher,
@@ -551,6 +554,7 @@ def run_v3_resident_process(
     capture_session: _PassiveCaptureSession | TriggeredCaptureSession | McapCaptureSession | ProcessMcapCaptureSession | None = None,
     capture_trigger_requested: Callable[[], bool] | None = None,
     affinity_config: RuntimeAffinityConfig | None = None,
+    open_imu_device: Callable | None = None,
     run_hardware: Callable[..., ResidentRuntimeReport] = run_native_hardware_resident_control,
 ) -> ResidentRuntimeReport:
     """Run one process ownership session and stop if status publication fails."""
@@ -612,6 +616,8 @@ def run_v3_resident_process(
         return value or status_publisher.failed
 
     try:
+        if isinstance(command_gateway, AsyncResidentCommandGateway):
+            command_gateway.start()
         with temporary_current_affinity(
             affinity.io_cpu if affinity.enabled else None,
             role="io-start",
@@ -625,6 +631,8 @@ def run_v3_resident_process(
         }
         if affinity_config is not None:
             hardware_kwargs["affinity_config"] = affinity_config
+        if open_imu_device is not None:
+            hardware_kwargs["open_imu_device"] = open_imu_device
         if isinstance(capture_session, McapCaptureSession):
             hub = capture_session.hub
             hardware_kwargs["record_observer"] = lambda record: hub.publish(record, topic="v3.capture_record")
@@ -646,6 +654,11 @@ def run_v3_resident_process(
     except BaseException as exc:
         caught = exc
     finally:
+        if isinstance(command_gateway, AsyncResidentCommandGateway):
+            try:
+                command_gateway.close()
+            except BaseException as exc:
+                caught = caught or exc
         # Publication has ended even if status finalization fails.
         if isinstance(capture_session, McapCaptureSession):
             capture_session.hub.close()
@@ -883,8 +896,10 @@ def main(argv: list[str] | None = None) -> int:
         affinity_config = load_runtime_affinity_config(
             PROJECT_ROOT / "conf" / "vezerles.json"
         )
-        command_gateway = AtomicResidentCommandGateway(
-            ResidentCommandMailboxConfig(path=command_path)
+        command_gateway = AsyncResidentCommandGateway(
+            ResidentCommandMailboxConfig(path=command_path),
+            worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
+            strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
         # P0_CONTROL_PROCESS_ISOLATION_20260920: status formatting/I/O is out-of-process.
         status_publisher = ProcessResidentStatusPublisher(
@@ -935,6 +950,12 @@ def main(argv: list[str] | None = None) -> int:
             runtime_config.sensor_inputs,
             affinity_config=affinity_config,
         )
+        open_imu_device = partial(
+            ProcessBno055Device,
+            open_bus=smbus2.SMBus,
+            worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
+            strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
+        )
 
         report = run_v3_resident_process(
             lgpio,
@@ -951,6 +972,7 @@ def main(argv: list[str] | None = None) -> int:
                 capture_trigger.consume if capture_session is not None else None
             ),
             affinity_config=affinity_config,
+            open_imu_device=open_imu_device,
         )
         output = report.as_dict()
         if capture_session is not None:

@@ -7,6 +7,7 @@ import json
 import math
 import os
 import stat
+import threading
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from typing import Callable
 
 from v3.contracts import CommandMode, CommandRequest, DataField, TickContext
 from v3.contracts.base import require_token
+from v3.runtime_performance import temporary_current_affinity
 
 
 RESIDENT_COMMAND_SCHEMA = "R2B4_V3_RESIDENT_COMMAND_V2"
@@ -126,7 +128,8 @@ class AtomicResidentCommandGateway:
 
     def _read_trusted_bytes(self) -> bytes | None:
         path = self._config.path
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        flags = (os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+                 | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
         try:
             descriptor = os.open(path, flags)
         except FileNotFoundError:
@@ -300,6 +303,58 @@ class AtomicResidentCommandGateway:
             ),
             expiry_tick=context.tick_id,
         )
+
+
+class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
+    """Acquire trusted immutable mailbox bytes outside the tick.
+
+    The inherited gateway still owns revision, digest, limits and TTL validation.
+    A stalled reader cannot refresh command expiry, and a read failure is sticky.
+    """
+
+    def __init__(self, config: ResidentCommandMailboxConfig, *,
+                 monotonic_ns: Callable[[], int] = time.monotonic_ns,
+                 worker_cpu: int | None = None, strict_affinity: bool = False) -> None:
+        super().__init__(config, monotonic_ns=monotonic_ns)
+        self._worker_cpu = worker_cpu
+        self._strict_affinity = strict_affinity
+        self._mailbox: bytes | None = None
+        self._read_error: Exception | None = None
+        self._stop_reader = threading.Event()
+        self._reader: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._reader is not None:
+            raise RuntimeError("command reader already started")
+        self._reader = threading.Thread(
+            target=self._acquire, name="r2b4-command", daemon=True
+        )
+        with temporary_current_affinity(
+            self._worker_cpu, role="command", strict=self._strict_affinity
+        ):
+            self._reader.start()
+
+    def _acquire(self) -> None:
+        try:
+            while not self._stop_reader.is_set():
+                self._mailbox = super()._read_trusted_bytes()
+                self._stop_reader.wait(0.005)
+        except Exception as exc:
+            self._read_error = exc
+
+    def _read_trusted_bytes(self) -> bytes | None:
+        if self._read_error is not None:
+            raise ValueError("asynchronous command mailbox read failed") from self._read_error
+        if self._reader is None or self._stop_reader.is_set():
+            return None
+        return self._mailbox
+
+    def close(self) -> None:
+        self._stop_reader.set()
+        if self._reader is not None:
+            self._reader.join(timeout=1.0)
+            if self._reader.is_alive():
+                raise RuntimeError("command mailbox reader did not stop")
 
 
 class ResidentCommandClient:

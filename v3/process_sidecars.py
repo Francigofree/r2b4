@@ -18,7 +18,7 @@ from v3.engine import TickResult
 from v3.execution import CaptureRecord
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
-from v3.runtime_performance import apply_current_affinity
+from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
 
 _SPAWN_METHOD = "spawn"
@@ -108,6 +108,8 @@ def _capture_sidecar_main(
                 kind, payload = data_queue.get(timeout=0.01)
             except queue.Empty:
                 continue
+            if kind == "warmup":
+                continue
             if kind == "record":
                 hub.publish(payload, topic="v3.capture_record")
             elif kind == "raw_lidar":
@@ -190,6 +192,8 @@ def _status_sidecar_main(
             try:
                 result, ready_for_active = tick_queue.get(timeout=0.02)
             except queue.Empty:
+                continue
+            if result is None:  # startup-only feeder warmup
                 continue
             _atomic_private_json(
                 target,
@@ -322,6 +326,12 @@ class ProcessMcapCaptureSession:
         self._raise_early_error()
         if not self._process.is_alive():
             raise RuntimeError("capture sidecar exited during startup")
+        # Queue feeders are created by the first put, not by Process.start().
+        # Start serialization off the control CPU before accepting observations.
+        with temporary_current_affinity(
+            self._worker_cpu, role="capture-feeder", strict=self._strict_affinity
+        ):
+            self._data_queue.put(("warmup", None), timeout=_SIDECAR_READY_TIMEOUT_S)
 
     def _raise_early_error(self) -> None:
         try:
@@ -489,6 +499,10 @@ class ProcessResidentStatusPublisher:
         self._poll_error()
         if self._error_text is not None:
             raise RuntimeError(f"status sidecar failed: {self._error_text}")
+        with temporary_current_affinity(
+            self._worker_cpu, role="status-feeder", strict=self._strict_affinity
+        ):
+            self._tick_queue.put((None, False), timeout=_SIDECAR_READY_TIMEOUT_S)
 
     def publish_tick(self, result: TickResult, ready_for_active: bool = False) -> None:
         if not isinstance(result, TickResult):
