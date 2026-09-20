@@ -18,7 +18,7 @@ class StoppedInterface:
 
 def test_stopped_runtime_is_not_reported_as_unavailable_or_faulted():
     context = RobotContextBuilder(StoppedInterface()).build().to_jsonable()
-    assert context["schema"] == ROBOT_CONTEXT_SCHEMA == "R2B4_ROBOT_CONTEXT_V2"
+    assert context["schema"] == ROBOT_CONTEXT_SCHEMA == "R2B4_ROBOT_CONTEXT_V3"
     assert context["host"]["runtime_running"] is False
     assert context["host"]["runtime_state"] == "STOPPED"
     assert context["runtime"]["state"] == "STOPPED"

@@ -4,7 +4,9 @@ from pathlib import Path
 def test_voice_prompt_does_not_overclaim_all_sensor_health():
     root = Path(__file__).resolve().parents[1]
     text = (root / "conf" / "voice_llm_system.md").read_text(encoding="utf-8")
-    assert 'Ne mondd általánosan, hogy "minden szenzor rendben van"' in text
+    assert "minden szenzor rendben van" in text
+    assert "minden releváns jelentett health forrás" in text
+    assert "explicit OK" in text
     assert "SHADOW" in text
 
 

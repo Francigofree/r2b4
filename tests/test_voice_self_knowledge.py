@@ -46,3 +46,15 @@ def test_self_knowledge_is_source_first_bounded_and_never_reads_secret(tmp_path:
     assert "runtime_average_hz" in rendered_runs
     assert "49.1" in rendered_runs
     assert "runtime_period_p99_ms" in rendered_runs
+
+    # Natural Hungarian suffixes must still route to the right source-first surfaces.
+    inflected_config = provider.build("Mit tudsz a kamerádról és motorodról?")
+    assert "configuration" in inflected_config["matched_categories"]
+
+    inflected_architecture = provider.build("Mesélj a rétegrendedről és forrásfájljaidról.")
+    categories = set(inflected_architecture["matched_categories"])
+    assert "architecture" in categories
+    assert "source" in categories
+
+    inflected_runs = provider.build("Milyenek voltak a futásaid?")
+    assert "evidence" in inflected_runs["matched_categories"]

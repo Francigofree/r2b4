@@ -19,6 +19,6 @@ def test_conversation_adapter_exposes_submit_and_reads():
     caps = adapter.capabilities()
     assert caps["conversation.submit_text"]["kind"] == "action"
     result = adapter.execute("conversation.submit_text", text="Szia", source="stt")
-    assert result == {"status": "ACCEPTED", "turn_id": "turn123", "action_mode": "SHADOW"}
+    assert result == {"status": "ACCEPTED", "turn_id": "turn123", "action_mode": "PROPOSAL_ONLY"}
     assert service.submitted == [("Szia", "stt")]
     assert adapter.read("conversation.last_turn") == {"turn_id": "last"}

@@ -63,6 +63,27 @@ def _tokens(text: str) -> set[str]:
     }
 
 
+_ALL_HINTS = frozenset(_CONFIG_HINTS | _ARCH_HINTS | _SOURCE_HINTS | _EVIDENCE_HINTS)
+
+
+def _expand_query_tokens(tokens: set[str]) -> set[str]:
+    """Add stable hint stems for common Hungarian/English suffix forms.
+
+    This is intentionally small and deterministic, not a language model or fuzzy
+    matcher.  For example ``kameradrol`` adds ``kamera`` and ``futasaid`` adds
+    ``futas`` so source/config/evidence routing remains useful with natural speech.
+    Short hints (PI, L1, Hz...) remain exact-only to avoid accidental matches.
+    """
+
+    expanded = set(tokens)
+    for hint in _ALL_HINTS:
+        if hint in expanded or len(hint) < 4:
+            continue
+        if any(token.startswith(hint) for token in tokens):
+            expanded.add(hint)
+    return expanded
+
+
 def _json_safe_read(path: Path, *, max_bytes: int = 128_000) -> object | None:
     try:
         if not path.is_file() or path.stat().st_size > max_bytes:
@@ -112,7 +133,7 @@ class SelfKnowledgeProvider:
         self.max_recent_runs = max(1, min(int(max_recent_runs), 50))
 
     def build(self, query: str) -> dict[str, object]:
-        query_tokens = _tokens(query)
+        query_tokens = _expand_query_tokens(_tokens(query))
         lowered = _fold(query)
         categories = {
             "configuration": bool(query_tokens & _CONFIG_HINTS),
@@ -121,7 +142,7 @@ class SelfKnowledgeProvider:
             "evidence": bool(query_tokens & _EVIDENCE_HINTS),
         }
         # Generic self-questions should search all authoritative surfaces.
-        if any(word in lowered for word in ("magad", "sajat", "önmag", "alba", "robotod")) and not any(categories.values()):
+        if any(word in lowered for word in ("magad", "sajat", "onmag", "alba", "robotod")) and not any(categories.values()):
             categories = {key: True for key in categories}
 
         payload: dict[str, object] = {

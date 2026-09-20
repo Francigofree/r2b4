@@ -33,7 +33,7 @@ def _raising(*_args, **_kwargs):
         ("L4", "ShadowWorldModel", "__call__"),
         ("L5", "MissionManager", "evaluate"),
         ("L6", "TrajectoryNavigator", "evaluate"),
-        ("L7", None, "select_motion"),
+        ("L7", "MotionSelector", "evaluate"),
         ("L8", "MotionRealizer", "evaluate"),
         ("L9", "OperationalConstraintLayer", "evaluate"),
         ("L10", "DifferentialDriveKinematics", "__call__"),

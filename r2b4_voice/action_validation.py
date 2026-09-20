@@ -1,4 +1,4 @@
-"""Validation of LLM-proposed robot actions before any future execution step."""
+"""Side-effect-free validation of LLM-proposed high-level robot actions."""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ class ActionValidation:
 class RobotActionValidator:
     """Validate only high-level allowlisted intents.
 
-    This slice is SHADOW-only: validation never executes an action.
+    Validation itself is side-effect-free.  Physical execution, when explicitly
+    enabled, belongs to ``VoiceActionExecutor`` and performs a separate fresh-state
+    gate immediately before delegating to the canonical ``RobotInterface``.
     """
 
     _LIMITS = {
