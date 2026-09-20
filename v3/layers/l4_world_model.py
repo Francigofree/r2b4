@@ -1,4 +1,9 @@
-"""L4 deterministic rolling world state with LiDAR-backed person tracking."""
+"""L4 deterministic temporal realtime world model.
+
+TEMPORAL-1 keeps the public V3 L4 boundary unchanged while making the owned
+world state measurement-time aware: bounded pose/scan histories, temporal
+occupancy with free-space clearing, and bounded current-time track projection.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,23 @@ from v3.contracts import (
     RobotEstimate,
     RollingLocalCostmap,
     WorldSnapshot,
+)
+from v3.layers.l4_temporal_history import (
+    LidarScanSnapshot,
+    PoseHistory,
+    PoseHistoryCheckpoint,
+    PoseSample,
+    ScanHistory,
+    ScanHistoryCheckpoint,
+)
+from v3.layers.l4_temporal_occupancy import (
+    TemporalOccupancyCheckpoint,
+    TemporalOccupancyGrid,
+)
+from v3.layers.l4_temporal_tracking import (
+    PersonMeasurement,
+    TemporalTrackCheckpoint,
+    TemporalTrackStore,
 )
 
 
@@ -52,8 +74,13 @@ def _unit_number(values: dict[str, object], key: str) -> float:
     return result
 
 
+def _wrapped_angle(value: float) -> float:
+    return math.atan2(math.sin(value), math.cos(value))
+
+
 @dataclass(frozen=True, slots=True)
 class WorldModelConfig:
+    # Existing fields stay first and in their original order for compatibility.
     max_track_age_ns: int = 500_000_000
     local_costmap_resolution_m: float = 0.10
     local_costmap_radius_m: float = 2.50
@@ -72,16 +99,43 @@ class WorldModelConfig:
     person_track_radius_m: float = 0.30
     person_track_max_age_ns: int = 500_000_000
 
+    # TEMPORAL-1 private implementation bounds. No public contract changes.
+    pose_history_max_age_ns: int = 2_000_000_000
+    pose_history_max_samples: int = 128
+    pose_lookup_max_skew_ns: int = 250_000_000
+    scan_history_max_age_ns: int = 1_000_000_000
+    scan_history_max_scans: int = 32
+    occupancy_hit_increment: int = 1
+    occupancy_free_decrement: int = 1
+    occupancy_max_score: int = 8
+    person_track_alpha: float = 0.85
+    person_track_beta: float = 0.35
+    person_track_prediction_max_age_ns: int = 350_000_000
+
     def __post_init__(self) -> None:
         for name in (
             "max_track_age_ns",
             "local_costmap_max_cell_age_ns",
             "person_lidar_max_skew_ns",
             "person_track_max_age_ns",
+            "pose_history_max_age_ns",
+            "scan_history_max_age_ns",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if (
+            not isinstance(self.pose_lookup_max_skew_ns, int)
+            or isinstance(self.pose_lookup_max_skew_ns, bool)
+            or self.pose_lookup_max_skew_ns < 0
+        ):
+            raise ValueError("pose_lookup_max_skew_ns must be a non-negative integer")
+        if (
+            not isinstance(self.person_track_prediction_max_age_ns, int)
+            or isinstance(self.person_track_prediction_max_age_ns, bool)
+            or self.person_track_prediction_max_age_ns < 0
+        ):
+            raise ValueError("person_track_prediction_max_age_ns must be a non-negative integer")
         for name in (
             "local_costmap_resolution_m",
             "local_costmap_radius_m",
@@ -102,6 +156,11 @@ class WorldModelConfig:
             "local_costmap_max_cells",
             "local_costmap_max_points_per_scan",
             "person_lidar_min_points",
+            "pose_history_max_samples",
+            "scan_history_max_scans",
+            "occupancy_hit_increment",
+            "occupancy_free_decrement",
+            "occupancy_max_score",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -120,6 +179,15 @@ class WorldModelConfig:
             or not 0.0 <= self.person_lidar_angular_margin_rad < math.pi / 2.0
         ):
             raise ValueError("person_lidar_angular_margin_rad is outside its valid range")
+        for name in ("person_track_alpha", "person_track_beta"):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or not 0.0 < float(value) <= 1.0
+            ):
+                raise ValueError(f"{name} must be in (0, 1]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,12 +195,14 @@ class WorldModelStateCheckpoint:
     last_lidar_measurement_ns: int | None
     last_lidar_sequence: int | None
     map_revision: int
-    tracks: tuple[tuple[ObstacleTrack, int], ...]
+    tracks: TemporalTrackCheckpoint
     last_local_measurement_ns: int | None
     last_local_sequence: int | None
     last_local_values: tuple[DataField, ...] | None
     costmap_revision: int
-    cells: tuple[tuple[int, int, int, int], ...]
+    cells: TemporalOccupancyCheckpoint
+    pose_history: PoseHistoryCheckpoint
+    scan_history: ScanHistoryCheckpoint
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,19 +220,21 @@ class _PersonSpatialMeasurement:
 
 
 class ShadowWorldModel:
-    """Own LiDAR revision, obstacle/person history and one rolling local costmap."""
+    """Own one bounded temporal world model and emit the unchanged WorldSnapshot."""
 
     __slots__ = (
         "_config",
         "_costmap_revision",
-        "_cells",
         "_last_lidar_measurement_ns",
         "_last_lidar_sequence",
         "_last_local_measurement_ns",
         "_last_local_sequence",
         "_last_local_values",
         "_map_revision",
-        "_tracks",
+        "_occupancy",
+        "_pose_history",
+        "_scan_history",
+        "_track_store",
     )
 
     def __init__(self, config: WorldModelConfig = WorldModelConfig()) -> None:
@@ -170,29 +242,48 @@ class ShadowWorldModel:
         self._last_lidar_measurement_ns: int | None = None
         self._last_lidar_sequence: int | None = None
         self._map_revision = 0
-        self._tracks: dict[str, tuple[ObstacleTrack, int]] = {}
         self._last_local_measurement_ns: int | None = None
         self._last_local_sequence: int | None = None
         self._last_local_values: tuple[DataField, ...] | None = None
         self._costmap_revision = 0
-        self._cells: dict[tuple[int, int], tuple[int, int]] = {}
+        self._pose_history = PoseHistory(
+            config.pose_history_max_age_ns,
+            config.pose_history_max_samples,
+            config.pose_lookup_max_skew_ns,
+        )
+        self._scan_history = ScanHistory(
+            config.scan_history_max_age_ns,
+            config.scan_history_max_scans,
+        )
+        self._occupancy = TemporalOccupancyGrid(
+            resolution_m=config.local_costmap_resolution_m,
+            radius_m=config.local_costmap_radius_m,
+            max_age_ns=config.local_costmap_max_cell_age_ns,
+            max_cells=config.local_costmap_max_cells,
+            hit_increment=config.occupancy_hit_increment,
+            free_decrement=config.occupancy_free_decrement,
+            max_score=config.occupancy_max_score,
+        )
+        self._track_store = TemporalTrackStore(
+            alpha=config.person_track_alpha,
+            beta=config.person_track_beta,
+            prediction_max_age_ns=config.person_track_prediction_max_age_ns,
+            max_speed_mps=config.person_track_max_speed_mps,
+        )
 
     def checkpoint(self) -> WorldModelStateCheckpoint:
         return WorldModelStateCheckpoint(
             self._last_lidar_measurement_ns,
             self._last_lidar_sequence,
             self._map_revision,
-            tuple(self._tracks[key] for key in sorted(self._tracks)),
+            self._track_store.checkpoint(),
             self._last_local_measurement_ns,
             self._last_local_sequence,
             self._last_local_values,
             self._costmap_revision,
-            tuple(
-                (x_index, y_index, count, captured_ns)
-                for (x_index, y_index), (count, captured_ns) in sorted(
-                    self._cells.items()
-                )
-            ),
+            self._occupancy.checkpoint(),
+            self._pose_history.checkpoint(),
+            self._scan_history.checkpoint(),
         )
 
     def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
@@ -201,58 +292,35 @@ class ShadowWorldModel:
         self._last_lidar_measurement_ns = checkpoint.last_lidar_measurement_ns
         self._last_lidar_sequence = checkpoint.last_lidar_sequence
         self._map_revision = checkpoint.map_revision
-        self._tracks = {
-            track.track_id: (track, captured_ns)
-            for track, captured_ns in checkpoint.tracks
-        }
+        self._track_store.restore(checkpoint.tracks)
         self._last_local_measurement_ns = checkpoint.last_local_measurement_ns
         self._last_local_sequence = checkpoint.last_local_sequence
         self._last_local_values = checkpoint.last_local_values
         self._costmap_revision = checkpoint.costmap_revision
-        self._cells = {
-            (x_index, y_index): (count, captured_ns)
-            for x_index, y_index, count, captured_ns in checkpoint.cells
-        }
+        self._occupancy.restore(checkpoint.cells)
+        self._pose_history.restore(checkpoint.pose_history)
+        self._scan_history.restore(checkpoint.scan_history)
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
         if frame.context != estimate.context:
             raise ValueError("L4 inputs must use the same tick context")
 
-        lidar = tuple(item for item in frame.accepted if item.kind == "lidar_health")
-        if len(lidar) > 1:
-            raise ValueError("L4 accepts at most one lidar_health observation per tick")
-        if lidar:
-            values = _values(lidar[0])
-            age_ns = _number(values, "age_ns")
-            if "point_count" in values:
-                point_count = _number(values, "point_count")
-                quality_valid = point_count >= 0.0
-                measurement_ns = lidar[0].captured_monotonic_ns
-            else:
-                confidence = _number(values, "confidence")
-                quality_valid = 0.0 <= confidence <= 1.0
-                measurement_ns = max(
-                    0,
-                    lidar[0].captured_monotonic_ns - int(round(age_ns)),
-                )
-            if age_ns < 0.0 or not quality_valid:
-                raise ValueError("lidar health values are outside their physical range")
-            if (
-                self._last_lidar_sequence is not None
-                and lidar[0].source_sequence < self._last_lidar_sequence
-            ):
-                raise ValueError("L4 lidar sequence must not move backwards")
-            if (
-                self._last_lidar_measurement_ns is not None
-                and measurement_ns < self._last_lidar_measurement_ns
-            ):
-                raise ValueError("L4 lidar measurement time must not move backwards")
-            if self._last_lidar_sequence is None or (
-                lidar[0].source_sequence > self._last_lidar_sequence
-            ):
-                self._map_revision += 1
-                self._last_lidar_sequence = lidar[0].source_sequence
-                self._last_lidar_measurement_ns = measurement_ns
+        frame_changed = self._pose_history.add(estimate)
+        if frame_changed:
+            # A coordinate-frame discontinuity invalidates spatial state. Source
+            # ordering continues independently, but old geometry must not leak.
+            self._scan_history.clear()
+            had_occupancy = self._occupancy.clear()
+            had_tracks = self._track_store.clear()
+            had_world = had_occupancy or had_tracks
+            self._last_local_measurement_ns = None
+            self._last_local_sequence = None
+            self._last_local_values = None
+            if had_world:
+                self._costmap_revision += 1
+            self._map_revision += 1
+
+        self._update_lidar_health(frame)
 
         changed_tracks = False
         for observation in frame.accepted:
@@ -262,82 +330,20 @@ class ShadowWorldModel:
             track_id = values.get("track_id")
             if not isinstance(track_id, str) or not track_id:
                 raise ValueError("obstacle_track.track_id must be a non-empty string")
-            track = ObstacleTrack(
-                track_id=track_id,
-                x_m=_number(values, "x_m"),
-                y_m=_number(values, "y_m"),
-                radius_m=_number(values, "radius_m"),
-                vx_mps=_number(values, "vx_mps"),
-                vy_mps=_number(values, "vy_mps"),
-                confidence=_number(values, "confidence"),
-            )
-            self._tracks[track_id] = (track, observation.captured_monotonic_ns)
-            changed_tracks = True
+            changed_tracks = self._track_store.upsert_external(
+                ObstacleTrack(
+                    track_id=track_id,
+                    x_m=_number(values, "x_m"),
+                    y_m=_number(values, "y_m"),
+                    radius_m=_number(values, "radius_m"),
+                    vx_mps=_number(values, "vx_mps"),
+                    vy_mps=_number(values, "vy_mps"),
+                    confidence=_number(values, "confidence"),
+                ),
+                observation.captured_monotonic_ns,
+            ) or changed_tracks
 
-        local = tuple(
-            item for item in frame.accepted if item.kind == "lidar_local_points"
-        )
-        if len(local) > 1:
-            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
-        costmap_changed = False
-        if local:
-            observation = local[0]
-            values = _values(observation)
-            if values.get("frame_id") != "ROBOT_BASE":
-                raise ValueError("lidar local points must use the ROBOT_BASE frame")
-            point_count = _integer(values, "point_count")
-            if point_count > self._config.local_costmap_max_points_per_scan:
-                raise ValueError("lidar local point_count exceeds the configured bound")
-            expected_keys = {"frame_id", "point_count"}
-            expected_keys.update(
-                f"point_{index:03d}_{suffix}"
-                for index in range(point_count)
-                for suffix in ("x_m", "y_m", "quality")
-            )
-            if set(values) != expected_keys:
-                raise ValueError("lidar local point fields do not match point_count")
-            if (
-                self._last_local_sequence is not None
-                and observation.source_sequence < self._last_local_sequence
-            ):
-                raise ValueError("L4 local perception sequence must not move backwards")
-            if (
-                self._last_local_measurement_ns is not None
-                and observation.captured_monotonic_ns
-                < self._last_local_measurement_ns
-            ):
-                raise ValueError("L4 local perception time must not move backwards")
-            repeated_sequence = observation.source_sequence == self._last_local_sequence
-            if repeated_sequence and (
-                observation.captured_monotonic_ns != self._last_local_measurement_ns
-                or observation.values != self._last_local_values
-            ):
-                raise ValueError("L4 local perception sequence was rewritten")
-            if not repeated_sequence:
-                yaw_cos = math.cos(estimate.yaw_rad)
-                yaw_sin = math.sin(estimate.yaw_rad)
-                observed_cells: set[tuple[int, int]] = set()
-                for index in range(point_count):
-                    local_x = _number(values, f"point_{index:03d}_x_m")
-                    local_y = _number(values, f"point_{index:03d}_y_m")
-                    _integer(values, f"point_{index:03d}_quality")
-                    world_x = estimate.x_m + yaw_cos * local_x - yaw_sin * local_y
-                    world_y = estimate.y_m + yaw_sin * local_x + yaw_cos * local_y
-                    if math.hypot(world_x - estimate.x_m, world_y - estimate.y_m) > (
-                        self._config.local_costmap_radius_m
-                    ):
-                        continue
-                    observed_cells.add(self._grid_key(world_x, world_y))
-                for key in sorted(observed_cells):
-                    previous_count = self._cells.get(key, (0, 0))[0]
-                    self._cells[key] = (
-                        previous_count + 1,
-                        observation.captured_monotonic_ns,
-                    )
-                self._last_local_sequence = observation.source_sequence
-                self._last_local_measurement_ns = observation.captured_monotonic_ns
-                self._last_local_values = observation.values
-                costmap_changed = True
+        costmap_changed = self._update_local_scan(frame, estimate)
 
         if self._config.person_tracking_enabled:
             person_observations = tuple(
@@ -346,75 +352,40 @@ class ShadowWorldModel:
             if len(person_observations) > 1:
                 raise ValueError("L4 accepts at most one person_detection observation per tick")
             if person_observations:
-                changed_tracks = (
-                    self._update_person_tracks(person_observations[0], estimate)
-                    or changed_tracks
-                )
+                changed_tracks = self._update_person_tracks(person_observations[0], estimate) or changed_tracks
 
-        expired = tuple(
-            track_id
-            for track_id, (_, captured_ns) in self._tracks.items()
-            if frame.context.monotonic_ns - captured_ns
-            > (
-                self._config.person_track_max_age_ns
-                if track_id.startswith("person-")
-                else self._config.max_track_age_ns
-            )
+        expired_tracks = self._track_store.expire(
+            frame.context.monotonic_ns,
+            person_max_age_ns=self._config.person_track_max_age_ns,
+            other_max_age_ns=self._config.max_track_age_ns,
         )
-        for track_id in expired:
-            del self._tracks[track_id]
-        if changed_tracks or expired:
+        if changed_tracks or expired_tracks:
             self._map_revision += 1
 
-        expired_cells = tuple(
-            key
-            for key, (_, captured_ns) in self._cells.items()
-            if frame.context.monotonic_ns - captured_ns
-            > self._config.local_costmap_max_cell_age_ns
-            or self._cell_distance_m(key, estimate.x_m, estimate.y_m)
-            > self._config.local_costmap_radius_m
-        )
-        for key in expired_cells:
-            del self._cells[key]
-        if len(self._cells) > self._config.local_costmap_max_cells:
-            keep = set(
-                sorted(
-                    self._cells,
-                    key=lambda key: (
-                        -self._cells[key][1],
-                        self._cell_distance_m(key, estimate.x_m, estimate.y_m),
-                        key,
-                    ),
-                )[: self._config.local_costmap_max_cells]
-            )
-            for key in tuple(self._cells):
-                if key not in keep:
-                    del self._cells[key]
-                    costmap_changed = True
-        if costmap_changed or expired_cells:
+        if self._occupancy.prune(
+            now_ns=frame.context.monotonic_ns,
+            center_x_m=estimate.x_m,
+            center_y_m=estimate.y_m,
+        ):
+            costmap_changed = True
+        if costmap_changed:
             self._costmap_revision += 1
             self._map_revision += 1
 
         if self._last_lidar_measurement_ns is None:
             raise ValueError("L4 requires an admitted lidar_health observation before output")
-        freshness_ns = max(
-            0,
-            frame.context.monotonic_ns - self._last_lidar_measurement_ns,
-        )
-        tracks = tuple(self._tracks[key][0] for key in sorted(self._tracks))
+        freshness_ns = max(0, frame.context.monotonic_ns - self._last_lidar_measurement_ns)
+        tracks = self._track_store.projected_tracks(frame.context.monotonic_ns)
         local_costmap = None
-        if (
-            self._last_local_measurement_ns is not None
-            and self._last_local_sequence is not None
-        ):
+        if self._last_local_measurement_ns is not None and self._last_local_sequence is not None:
             local_costmap = RollingLocalCostmap(
                 frame_id=estimate.frame_id,
                 revision=self._costmap_revision,
                 resolution_m=self._config.local_costmap_resolution_m,
                 radius_m=self._config.local_costmap_radius_m,
                 occupied_cells=tuple(
-                    CostmapCell(key[0], key[1], self._cells[key][0])
-                    for key in sorted(self._cells)
+                    CostmapCell(grid_x, grid_y, count)
+                    for grid_x, grid_y, count in self._occupancy.occupied_cells()
                 ),
                 source_sequence=self._last_local_sequence,
                 freshness_ns=max(
@@ -431,29 +402,139 @@ class ShadowWorldModel:
             local_costmap=local_costmap,
         )
 
-    def _update_person_tracks(
-        self,
-        observation: Observation,
-        estimate: RobotEstimate,
-    ) -> bool:
-        if self._last_local_measurement_ns is None or self._last_local_values is None:
+    def _update_lidar_health(self, frame: AdmittedFrame) -> None:
+        lidar = tuple(item for item in frame.accepted if item.kind == "lidar_health")
+        if len(lidar) > 1:
+            raise ValueError("L4 accepts at most one lidar_health observation per tick")
+        if not lidar:
+            return
+        observation = lidar[0]
+        values = _values(observation)
+        age_ns = _number(values, "age_ns")
+        if "point_count" in values:
+            point_count = _number(values, "point_count")
+            quality_valid = point_count >= 0.0
+            measurement_ns = observation.captured_monotonic_ns
+        else:
+            confidence = _number(values, "confidence")
+            quality_valid = 0.0 <= confidence <= 1.0
+            measurement_ns = max(0, observation.captured_monotonic_ns - int(round(age_ns)))
+        if age_ns < 0.0 or not quality_valid:
+            raise ValueError("lidar health values are outside their physical range")
+        if self._last_lidar_sequence is not None and observation.source_sequence < self._last_lidar_sequence:
+            raise ValueError("L4 lidar sequence must not move backwards")
+        if self._last_lidar_measurement_ns is not None and measurement_ns < self._last_lidar_measurement_ns:
+            raise ValueError("L4 lidar measurement time must not move backwards")
+        if self._last_lidar_sequence is None or observation.source_sequence > self._last_lidar_sequence:
+            self._map_revision += 1
+            self._last_lidar_sequence = observation.source_sequence
+            self._last_lidar_measurement_ns = measurement_ns
+
+    def _update_local_scan(self, frame: AdmittedFrame, estimate: RobotEstimate) -> bool:
+        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
+        if len(local) > 1:
+            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
+        if not local:
             return False
-        if abs(observation.captured_monotonic_ns - self._last_local_measurement_ns) > (
-            self._config.person_lidar_max_skew_ns
+        observation = local[0]
+        values = _values(observation)
+        if values.get("frame_id") != "ROBOT_BASE":
+            raise ValueError("lidar local points must use the ROBOT_BASE frame")
+        point_count = _integer(values, "point_count")
+        if point_count > self._config.local_costmap_max_points_per_scan:
+            raise ValueError("lidar local point_count exceeds the configured bound")
+        expected_keys = {"frame_id", "point_count"}
+        expected_keys.update(
+            f"point_{index:03d}_{suffix}"
+            for index in range(point_count)
+            for suffix in ("x_m", "y_m", "quality")
+        )
+        if set(values) != expected_keys:
+            raise ValueError("lidar local point fields do not match point_count")
+        if self._last_local_sequence is not None and observation.source_sequence < self._last_local_sequence:
+            raise ValueError("L4 local perception sequence must not move backwards")
+        if (
+            self._last_local_measurement_ns is not None
+            and observation.captured_monotonic_ns < self._last_local_measurement_ns
         ):
+            raise ValueError("L4 local perception time must not move backwards")
+        repeated_sequence = observation.source_sequence == self._last_local_sequence
+        if repeated_sequence and (
+            observation.captured_monotonic_ns != self._last_local_measurement_ns
+            or observation.values != self._last_local_values
+        ):
+            raise ValueError("L4 local perception sequence was rewritten")
+        if repeated_sequence:
+            return False
+
+        pose = self._pose_history.lookup(observation.captured_monotonic_ns, estimate.frame_id)
+        if pose is None:
+            raise ValueError("L4 cannot align local perception to pose history")
+        yaw_cos = math.cos(pose.yaw_rad)
+        yaw_sin = math.sin(pose.yaw_rad)
+        endpoints: list[tuple[float, float]] = []
+        for index in range(point_count):
+            local_x = _number(values, f"point_{index:03d}_x_m")
+            local_y = _number(values, f"point_{index:03d}_y_m")
+            _integer(values, f"point_{index:03d}_quality")
+            if math.hypot(local_x, local_y) > self._config.local_costmap_radius_m:
+                continue
+            endpoints.append(
+                (
+                    pose.x_m + yaw_cos * local_x - yaw_sin * local_y,
+                    pose.y_m + yaw_sin * local_x + yaw_cos * local_y,
+                )
+            )
+        self._occupancy.integrate_scan(
+            origin_x_m=pose.x_m,
+            origin_y_m=pose.y_m,
+            endpoints=tuple(endpoints),
+            captured_ns=observation.captured_monotonic_ns,
+        )
+        self._scan_history.add(
+            LidarScanSnapshot(
+                observation.source_sequence,
+                observation.captured_monotonic_ns,
+                estimate.frame_id,
+                observation.values,
+                pose,
+            )
+        )
+        self._last_local_sequence = observation.source_sequence
+        self._last_local_measurement_ns = observation.captured_monotonic_ns
+        self._last_local_values = observation.values
+        # Preserve the historic revision meaning: every accepted new local scan
+        # advances the local costmap revision even when it contains zero hits.
+        return True
+
+    def _update_person_tracks(self, observation: Observation, estimate: RobotEstimate) -> bool:
+        scan = self._scan_history.nearest(
+            observation.captured_monotonic_ns,
+            self._config.person_lidar_max_skew_ns,
+            estimate.frame_id,
+        )
+        if scan is None:
+            return False
+        detection_pose = self._pose_history.lookup(
+            observation.captured_monotonic_ns,
+            estimate.frame_id,
+        )
+        if detection_pose is None:
             return False
         image_detections = self._person_image_detections(observation)
         if not image_detections:
             return False
-        spatial = self._localize_people(image_detections, estimate)
+        spatial = self._localize_people(image_detections, scan, detection_pose)
         if not spatial:
             return False
-        return self._associate_person_tracks(spatial, observation.captured_monotonic_ns)
+        return self._track_store.associate_people(
+            tuple(PersonMeasurement(item.confidence, item.x_m, item.y_m) for item in spatial),
+            captured_ns=observation.captured_monotonic_ns,
+            radius_m=self._config.person_track_radius_m,
+            max_association_distance_m=self._config.person_track_max_association_distance_m,
+        )
 
-    def _person_image_detections(
-        self,
-        observation: Observation,
-    ) -> tuple[_PersonImageDetection, ...]:
+    def _person_image_detections(self, observation: Observation) -> tuple[_PersonImageDetection, ...]:
         values = _values(observation)
         detected = _boolean(values, "person_detected")
         if not detected:
@@ -481,26 +562,30 @@ class ShadowWorldModel:
     def _localize_people(
         self,
         detections: tuple[_PersonImageDetection, ...],
-        estimate: RobotEstimate,
+        scan: LidarScanSnapshot,
+        detection_pose: PoseSample,
     ) -> tuple[_PersonSpatialMeasurement, ...]:
-        assert self._last_local_values is not None
-        values = {field.key: field.value for field in self._last_local_values}
+        values = {field.key: field.value for field in scan.values}
         point_count = _integer(values, "point_count")
+        scan_cos = math.cos(scan.pose.yaw_rad)
+        scan_sin = math.sin(scan.pose.yaw_rad)
         lidar_points: list[tuple[int, float, float, float, float]] = []
         for index in range(point_count):
-            x_m = _number(values, f"point_{index:03d}_x_m")
-            y_m = _number(values, f"point_{index:03d}_y_m")
+            local_x = _number(values, f"point_{index:03d}_x_m")
+            local_y = _number(values, f"point_{index:03d}_y_m")
             _integer(values, f"point_{index:03d}_quality")
-            range_m = math.hypot(x_m, y_m)
+            world_x = scan.pose.x_m + scan_cos * local_x - scan_sin * local_y
+            world_y = scan.pose.y_m + scan_sin * local_x + scan_cos * local_y
+            dx = world_x - detection_pose.x_m
+            dy = world_y - detection_pose.y_m
+            range_m = math.hypot(dx, dy)
             if range_m <= 0.0:
                 continue
-            bearing = math.atan2(y_m, x_m)
-            lidar_points.append((index, x_m, y_m, range_m, bearing))
+            bearing = _wrapped_angle(math.atan2(dy, dx) - detection_pose.yaw_rad)
+            lidar_points.append((index, world_x, world_y, range_m, bearing))
 
         used_points: set[int] = set()
         result: list[_PersonSpatialMeasurement] = []
-        yaw_cos = math.cos(estimate.yaw_rad)
-        yaw_sin = math.sin(estimate.yaw_rad)
         for detection in detections:
             left = self._pixel_bearing(detection.xmin)
             right = self._pixel_bearing(detection.xmax)
@@ -524,104 +609,21 @@ class ShadowWorldModel:
                 continue
             for point in cluster:
                 used_points.add(point[0])
-            local_x = sum(point[1] for point in cluster) / len(cluster)
-            local_y = sum(point[2] for point in cluster) / len(cluster)
-            world_x = estimate.x_m + yaw_cos * local_x - yaw_sin * local_y
-            world_y = estimate.y_m + yaw_sin * local_x + yaw_cos * local_y
-            result.append(
-                _PersonSpatialMeasurement(detection.confidence, world_x, world_y)
-            )
+            world_x = sum(point[1] for point in cluster) / len(cluster)
+            world_y = sum(point[2] for point in cluster) / len(cluster)
+            result.append(_PersonSpatialMeasurement(detection.confidence, world_x, world_y))
         return tuple(result)
 
     def _pixel_bearing(self, normalized_x: float) -> float:
         focal = 0.5 / math.tan(self._config.person_camera_horizontal_fov_rad * 0.5)
-        return self._config.person_camera_yaw_offset_rad + math.atan2(
-            0.5 - normalized_x,
-            focal,
-        )
+        return self._config.person_camera_yaw_offset_rad + math.atan2(0.5 - normalized_x, focal)
 
-    def _associate_person_tracks(
-        self,
-        measurements: tuple[_PersonSpatialMeasurement, ...],
-        captured_ns: int,
-    ) -> bool:
-        available = {
-            track_id: value
-            for track_id, value in self._tracks.items()
-            if track_id.startswith("person-")
-        }
-        used_track_ids: set[str] = set()
-        changed = False
-        for measurement in measurements:
-            best: tuple[float, str, ObstacleTrack, int] | None = None
-            for track_id in sorted(available):
-                if track_id in used_track_ids:
-                    continue
-                previous, previous_ns = available[track_id]
-                dt_ns = captured_ns - previous_ns
-                if dt_ns <= 0:
-                    continue
-                distance_m = math.hypot(
-                    measurement.x_m - previous.x_m,
-                    measurement.y_m - previous.y_m,
-                )
-                if distance_m > self._config.person_track_max_association_distance_m:
-                    continue
-                speed_mps = distance_m / (dt_ns / 1e9)
-                if speed_mps > self._config.person_track_max_speed_mps:
-                    continue
-                candidate = (distance_m, track_id, previous, previous_ns)
-                if best is None or candidate[:2] < best[:2]:
-                    best = candidate
-
-            if best is None:
-                track_id = self._allocate_person_track_id()
-                vx_mps = 0.0
-                vy_mps = 0.0
-            else:
-                _, track_id, previous, previous_ns = best
-                used_track_ids.add(track_id)
-                dt_s = (captured_ns - previous_ns) / 1e9
-                vx_mps = (measurement.x_m - previous.x_m) / dt_s
-                vy_mps = (measurement.y_m - previous.y_m) / dt_s
-
-            self._tracks[track_id] = (
-                ObstacleTrack(
-                    track_id=track_id,
-                    x_m=measurement.x_m,
-                    y_m=measurement.y_m,
-                    radius_m=self._config.person_track_radius_m,
-                    vx_mps=vx_mps,
-                    vy_mps=vy_mps,
-                    confidence=measurement.confidence,
-                ),
-                captured_ns,
-            )
-            changed = True
-        return changed
-
-    def _allocate_person_track_id(self) -> str:
-        used: set[int] = set()
-        for track_id in self._tracks:
-            if not track_id.startswith("person-"):
-                continue
-            suffix = track_id[len("person-") :]
-            if suffix.isdigit():
-                used.add(int(suffix))
-        candidate = 1
-        while candidate in used:
-            candidate += 1
-        return f"person-{candidate}"
-
+    # Kept as compatibility helpers for tests/tools that may inspect L4 directly.
     def _grid_key(self, x_m: float, y_m: float) -> tuple[int, int]:
-        resolution = self._config.local_costmap_resolution_m
-        return math.floor(x_m / resolution), math.floor(y_m / resolution)
+        return self._occupancy.grid_key(x_m, y_m)
 
     def _cell_distance_m(self, key: tuple[int, int], x_m: float, y_m: float) -> float:
-        resolution = self._config.local_costmap_resolution_m
-        center_x = (key[0] + 0.5) * resolution
-        center_y = (key[1] + 0.5) * resolution
-        return math.hypot(center_x - x_m, center_y - y_m)
+        return self._occupancy.cell_distance_m(key, x_m, y_m)
 
 
 def build_empty_world(frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
