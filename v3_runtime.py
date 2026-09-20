@@ -451,6 +451,7 @@ def run_owned_resident_physical_control(
     trajectory_rollout_backend: object | None = None,
     enable_multirate_inputs: bool = True,
     input_worker_cpu: int | None = None,
+    lidar_input_worker_cpu: int | None = None,
     input_worker_strict_affinity: bool = False,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
@@ -465,6 +466,12 @@ def run_owned_resident_physical_control(
         or input_worker_cpu < 0
     ):
         raise ValueError("input_worker_cpu must be non-negative or None")
+    if lidar_input_worker_cpu is not None and (
+        not isinstance(lidar_input_worker_cpu, int)
+        or isinstance(lidar_input_worker_cpu, bool)
+        or lidar_input_worker_cpu < 0
+    ):
+        raise ValueError("lidar_input_worker_cpu must be non-negative or None")
     if type(input_worker_strict_affinity) is not bool:
         raise TypeError("input_worker_strict_affinity must be bool")
 
@@ -472,10 +479,20 @@ def run_owned_resident_physical_control(
     try:
         if enable_multirate_inputs:
             worker_initializer: Callable[[str], None] | None = None
-            if input_worker_cpu is not None:
+            if input_worker_cpu is not None or lidar_input_worker_cpu is not None:
                 def _pin_input_worker(role: str) -> None:
+                    worker_cpu = (
+                        lidar_input_worker_cpu
+                        if (
+                            role == "l0-critical-RPLIDAR_C1"
+                            and lidar_input_worker_cpu is not None
+                        )
+                        else input_worker_cpu
+                    )
+                    if worker_cpu is None:
+                        return
                     apply_current_affinity(
-                        input_worker_cpu,
+                        worker_cpu,
                         role=role,
                         strict=input_worker_strict_affinity,
                     )

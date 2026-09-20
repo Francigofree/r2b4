@@ -770,7 +770,10 @@ def run_native_hardware_resident_control(
             ),
             trajectory_rollout_backend=rollout_backend,
             enable_multirate_inputs=enable_multirate_inputs,
-            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None), 
+            lidar_input_worker_cpu=(
+                affinity.lidar_cpu if affinity.enabled else None
+            ),
             input_worker_strict_affinity=(
                 affinity.strict if affinity.enabled else False
             ),
