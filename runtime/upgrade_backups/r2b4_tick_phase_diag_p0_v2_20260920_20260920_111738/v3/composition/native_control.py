@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
@@ -610,13 +609,6 @@ class NativeControlComposition:
         """Expose only bounded diagnostic facts produced by the last L3 call."""
 
         return self._estimator.last_update_evidence
-
-    def set_timing_observer(
-        self, observer: Callable[[str, int], None] | None
-    ) -> None:
-        """Forward passive layer timing to the deterministic engine."""
-
-        self._engine.set_timing_observer(observer)
 
     def checkpoint(self) -> NativeControlStateCheckpoint:
         context = self._engine.checkpoint()

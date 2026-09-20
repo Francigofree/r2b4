@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from v3.adapters.gpio_motor import GpioMotorFrameSinkConfig, PwmGpioBackend
@@ -94,13 +93,6 @@ class ResidentPhysicalControlComposition:
 
     def checkpoint(self) -> NativeControlStateCheckpoint:
         return self._live_control.checkpoint()
-
-    def set_timing_observer(
-        self, observer: Callable[[str, int], None] | None
-    ) -> None:
-        """Forward passive resident timing to the live-control composition."""
-
-        self._live_control.set_timing_observer(observer)
 
     def tick(self, context: TickContext) -> TickResult:
         if self._shutdown:

@@ -1,6 +1,7 @@
 {
-  "upgrade_id": "r2b4_tick_phase_diag_p0_20260920",
-  "base_commit": "5f6a93177ed98981e102c988a577bea99ab92dfc",
+  "upgrade_id": "r2b4_tick_phase_diag_p0_v2_20260920",
+  "source_observed_at_commit": "68cd4d9a3719c5f1658c20b19f46787c2dfae767",
+  "installer_source_checks": false,
   "purpose": "Passive fixed-memory runtime.tick_execution phase timing for 50 Hz root-cause localization",
   "modified_files": [
     "v3/engine.py",
@@ -14,15 +15,6 @@
   "new_files": [
     "tests/test_v3_runtime_phase_timing.py",
     "tools/v3_phase_timing_report.py"
-  ],
-  "does_not_change": [
-    "V3 layer contracts",
-    "layer decisions",
-    "motor authority",
-    "L12 safety authority",
-    "replay state",
-    "MCAP capture schema",
-    "scheduler target period"
   ],
   "measurement_semantics": {
     "clock": "time.perf_counter_ns",

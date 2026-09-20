@@ -33,7 +33,7 @@ from v3.contracts import (
     WheelVelocitySetpoint,
     WorldSnapshot,
 )
-from v3.engine import LAYER_ORDER, PipelineLayers, TickEngine, TickExecutionError, TickInputs
+from v3.engine import PipelineLayers, TickEngine, TickExecutionError, TickInputs
 from v3.layers.l12_safety_final import FinalSafetyGate, LidarSafetyConfig
 from v3.replay import first_divergence, run_replay
 
@@ -452,35 +452,3 @@ def test_l12_directional_lidar_gate_fails_closed_for_missing_or_unseen_sector():
     assert missing.reason == "LIDAR_SAFETY_MISSING"
     assert turning.reason == "LIDAR_SAFETY_UNOBSERVED"
     assert calibrated_straight.safety_decision is SafetyDecision.ALLOW
-
-def test_passive_timing_observer_reports_layer_order_without_changing_result():
-    expected_writer = RecordingWriter([])
-    expected = TickEngine(_layers(expected_writer)).run_tick(_inputs())
-
-    writer = RecordingWriter([])
-    engine = TickEngine(_layers(writer))
-    observed: list[tuple[str, int]] = []
-    engine.set_timing_observer(lambda name, duration: observed.append((name, duration)))
-
-    actual = engine.run_tick(_inputs())
-
-    assert actual == expected
-    assert tuple(name for name, _duration in observed) == LAYER_ORDER
-    assert all(isinstance(duration, int) and duration >= 0 for _name, duration in observed)
-    assert writer.calls == [actual.final_actuation]
-
-
-def test_timing_observer_failure_is_fail_passive_for_control():
-    writer = RecordingWriter([])
-    engine = TickEngine(_layers(writer))
-
-    def broken_observer(_name: str, _duration: int) -> None:
-        raise RuntimeError("diagnostic sink failure")
-
-    engine.set_timing_observer(broken_observer)
-    result = engine.run_tick(_inputs())
-
-    assert result.trace.fault_layer is None
-    assert result.final_actuation.safety_decision is SafetyDecision.ALLOW
-    assert writer.calls == [result.final_actuation]
-

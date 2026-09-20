@@ -280,16 +280,6 @@ def apply_process_affinity_layout(config: RuntimeAffinityConfig) -> tuple[Affini
 _HISTOGRAM_STEP_NS = 100_000  # 0.1 ms resolution
 _HISTOGRAM_MAX_NS = 100_000_000  # 100 ms + overflow bin
 
-# These are code-region elapsed-time labels, not V3 contracts or replay state.
-# PIPELINE_TOTAL intentionally overlaps L1-L12.
-CONTROL_PHASE_ORDER = (
-    "L0_READ",
-    "COMMAND_SNAPSHOT",
-    "PIPELINE_TOTAL",
-    *(f"L{index}" for index in range(1, 13)),
-    "POST_CONTROL",
-)
-
 
 class _TimingHistogram:
     __slots__ = ("_buckets", "_count", "_sum", "_max")
@@ -337,33 +327,6 @@ class _TimingHistogram:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimePhaseTimingEvidence:
-    name: str
-    count: int
-    mean_ns: int
-    p50_ns: int
-    p95_ns: int
-    p99_ns: int
-    max_ns: int
-    over_5ms_count: int
-    over_10ms_count: int
-    over_20ms_count: int
-
-    def as_dict(self) -> dict[str, int]:
-        return {
-            "count": self.count,
-            "mean_ns": self.mean_ns,
-            "p50_ns": self.p50_ns,
-            "p95_ns": self.p95_ns,
-            "p99_ns": self.p99_ns,
-            "max_ns": self.max_ns,
-            "over_5ms_count": self.over_5ms_count,
-            "over_10ms_count": self.over_10ms_count,
-            "over_20ms_count": self.over_20ms_count,
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class RuntimeTimingEvidence:
     target_period_ns: int
     tick_count: int
@@ -385,60 +348,9 @@ class RuntimeTimingEvidence:
     work_p99_ns: int
     work_max_ns: int
     work_over_period_count: int
-    control_phases: tuple[RuntimePhaseTimingEvidence, ...] = ()
 
-    def as_dict(self) -> dict[str, object]:
-        payload: dict[str, object] = {
-            name: int(getattr(self, name))
-            for name in self.__dataclass_fields__
-            if name != "control_phases"
-        }
-        if self.control_phases:
-            payload["control_phase_timing"] = {
-                "schema": "R2B4_RUNTIME_PHASE_TIMING_V1",
-                "clock": "time.perf_counter_ns",
-                "scope": "NORMAL_TICKS_ONLY",
-                "causal_claim": False,
-                "pipeline_total_overlaps_layers": True,
-                "note": (
-                    "Elapsed wall-clock code-region timing. Scheduler preemption may "
-                    "contribute; values are not process CPU time and do not by "
-                    "themselves prove root cause."
-                ),
-                "phases": {item.name: item.as_dict() for item in self.control_phases},
-            }
-        return payload
-
-
-class _RuntimePhaseAccumulator:
-    __slots__ = ("histogram", "over_5ms", "over_10ms", "over_20ms")
-
-    def __init__(self) -> None:
-        self.histogram = _TimingHistogram()
-        self.over_5ms = 0
-        self.over_10ms = 0
-        self.over_20ms = 0
-
-    def add(self, duration_ns: int) -> None:
-        duration = max(0, int(duration_ns))
-        self.histogram.add(duration)
-        self.over_5ms += int(duration > 5_000_000)
-        self.over_10ms += int(duration > 10_000_000)
-        self.over_20ms += int(duration > 20_000_000)
-
-    def snapshot(self, name: str) -> RuntimePhaseTimingEvidence:
-        return RuntimePhaseTimingEvidence(
-            name=name,
-            count=self.histogram.count,
-            mean_ns=self.histogram.mean,
-            p50_ns=self.histogram.percentile(0.50),
-            p95_ns=self.histogram.percentile(0.95),
-            p99_ns=self.histogram.percentile(0.99),
-            max_ns=self.histogram.maximum,
-            over_5ms_count=self.over_5ms,
-            over_10ms_count=self.over_10ms,
-            over_20ms_count=self.over_20ms,
-        )
+    def as_dict(self) -> dict[str, int]:
+        return {name: int(getattr(self, name)) for name in self.__dataclass_fields__}
 
 
 class RuntimeTimingAccumulator:
@@ -457,7 +369,6 @@ class RuntimeTimingAccumulator:
         "_period_over_40",
         "_lateness_over_2",
         "_work_over_period",
-        "_control_phases",
     )
 
     def __init__(self, target_period_ns: int) -> None:
@@ -479,9 +390,6 @@ class RuntimeTimingAccumulator:
         self._period_over_40 = 0
         self._lateness_over_2 = 0
         self._work_over_period = 0
-        self._control_phases = {
-            name: _RuntimePhaseAccumulator() for name in CONTROL_PHASE_ORDER
-        }
 
     def observe_tick_start(self, now_ns: int, deadline_ns: int) -> None:
         now = int(now_ns)
@@ -499,12 +407,6 @@ class RuntimeTimingAccumulator:
 
     def observe_control(self, duration_ns: int) -> None:
         self._control.add(duration_ns)
-
-    def observe_control_phase(self, name: str, duration_ns: int) -> None:
-        phase = self._control_phases.get(name)
-        if phase is None:
-            raise ValueError(f"unknown control timing phase: {name}")
-        phase.add(duration_ns)
 
     def observe_observer(self, duration_ns: int) -> None:
         self._observer.add(duration_ns)
@@ -536,18 +438,12 @@ class RuntimeTimingAccumulator:
             work_p99_ns=self._work.percentile(0.99),
             work_max_ns=self._work.maximum,
             work_over_period_count=self._work_over_period,
-            control_phases=tuple(
-                self._control_phases[name].snapshot(name)
-                for name in CONTROL_PHASE_ORDER
-                if self._control_phases[name].histogram.count
-            ),
         )
 
 
 __all__ = [
     "AffinityEvidence",
     "RuntimeAffinityConfig",
-    "RuntimePhaseTimingEvidence",
     "RuntimeTimingAccumulator",
     "RuntimeTimingEvidence",
     "apply_current_affinity",

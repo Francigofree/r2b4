@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from v3.adapters.live_encoder import NativeEncoderSource
@@ -93,7 +91,6 @@ class ResidentLiveControlComposition:
         "_reader",
         "_rearm_pending",
         "_shutdown",
-        "_timing_observer",
         "_write_failed",
     )
 
@@ -142,33 +139,6 @@ class ResidentLiveControlComposition:
         self._faulted = False
         self._write_failed = False
         self._shutdown = False
-        self._timing_observer: Callable[[str, int], None] | None = None
-
-    def set_timing_observer(
-        self, observer: Callable[[str, int], None] | None
-    ) -> None:
-        """Install passive edge + L1-L12 timing without changing authority."""
-
-        if observer is not None and not callable(observer):
-            raise TypeError("timing observer must be callable or None")
-        self._timing_observer = observer
-        self._control.set_timing_observer(observer)
-
-    def _phase_started(self) -> int | None:
-        return time.perf_counter_ns() if self._timing_observer is not None else None
-
-    def _finish_phase(self, name: str, started_ns: int | None) -> None:
-        if started_ns is None:
-            return
-        observer = self._timing_observer
-        if observer is None:
-            return
-        try:
-            observer(name, max(0, time.perf_counter_ns() - started_ns))
-        except Exception:
-            # Diagnostics are fail-passive: control/safety must remain untouched.
-            self._timing_observer = None
-            self._control.set_timing_observer(None)
 
     @property
     def lifecycle(self) -> LifecycleState:
@@ -329,18 +299,13 @@ class ResidentLiveControlComposition:
                 "ResidentLiveControl",
             )
 
-        phase_started_ns = self._phase_started()
         try:
             batch = self._reader.read(context)
         except Exception:
-            self._finish_phase("L0_READ", phase_started_ns)
             return self._run_fault_tick(context, "L0_ERROR", "L0")
-        self._finish_phase("L0_READ", phase_started_ns)
-        phase_started_ns = self._phase_started()
         try:
             command = self._command_gateway.snapshot(context)
         except Exception:
-            self._finish_phase("COMMAND_SNAPSHOT", phase_started_ns)
             return self._run_fault_tick(
                 context,
                 "COMMAND_GATEWAY_ERROR",
@@ -348,7 +313,6 @@ class ResidentLiveControlComposition:
                 batch.device_health,
                 batch,
             )
-        self._finish_phase("COMMAND_SNAPSHOT", phase_started_ns)
         if not isinstance(command, CommandRequest) or command.context != context:
             return self._run_fault_tick(
                 context,
@@ -385,11 +349,9 @@ class ResidentLiveControlComposition:
             command=command,
             lifecycle=scheduled_lifecycle,
         )
-        phase_started_ns = self._phase_started()
         try:
             result = self._control.run_tick(inputs)
         except TickExecutionError as exc:
-            self._finish_phase("PIPELINE_TOTAL", phase_started_ns)
             self._write_failed = True
             self._lifecycle = LifecycleState.FAULT
             exc.capture_record = WriterFailureRecord(
@@ -401,9 +363,7 @@ class ResidentLiveControlComposition:
                 raw_devices=batch,
             )
             raise
-        self._finish_phase("PIPELINE_TOTAL", phase_started_ns)
 
-        phase_started_ns = self._phase_started()
         final = result.final_actuation
         was_active = self._active
         if final.safety_decision is SafetyDecision.FAULT:
@@ -427,9 +387,7 @@ class ResidentLiveControlComposition:
                 self._reset_preflight()
             else:
                 self._reset_preflight()
-        record = ExecutionRecord(inputs, result, self._control.tick_evidence)
-        self._finish_phase("POST_CONTROL", phase_started_ns)
-        return result, record
+        return result, ExecutionRecord(inputs, result, self._control.tick_evidence)
 
     def shutdown(self, context: TickContext) -> TickResult:
         """Commit one command-source-independent zero tick and latch SHUTDOWN."""

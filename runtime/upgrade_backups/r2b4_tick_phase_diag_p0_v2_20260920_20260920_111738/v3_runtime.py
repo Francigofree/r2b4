@@ -300,8 +300,6 @@ def run_resident_physical_control(
         auxiliary_sources=auxiliary_sources,
         trajectory_rollout_backend=trajectory_rollout_backend,
     )
-    if timing is not None:
-        runtime.set_timing_observer(timing.observe_control_phase)
     previous_clock_ns = first_deadline_ns
     previous_tick_ns: int | None = None
     next_deadline_ns = first_deadline_ns
@@ -326,10 +324,6 @@ def run_resident_physical_control(
                 raise RuntimeError("monotonic clock did not advance between ticks")
             context = TickContext(tick_id, now_ns)
             if shutdown_requested:
-                # Keep phase counts aligned with normal_tick_count; shutdown has
-                # separate safety semantics and is excluded from coarse control timing.
-                if timing is not None:
-                    runtime.set_timing_observer(None)
                 try:
                     last_result, record = runtime.shutdown_execution(context)
                 except TickExecutionError as exc:

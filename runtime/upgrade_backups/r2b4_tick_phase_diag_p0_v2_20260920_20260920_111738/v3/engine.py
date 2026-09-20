@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import Callable, Protocol, TypeVar
 
@@ -134,30 +133,6 @@ class TickEngine:
     def __init__(self, layers: PipelineLayers) -> None:
         self._layers = layers
         self._last_context: TickContext | None = None
-        self._timing_observer: Callable[[str, int], None] | None = None
-
-    def set_timing_observer(
-        self, observer: Callable[[str, int], None] | None
-    ) -> None:
-        """Install passive per-layer elapsed-time observation.
-
-        The observer is diagnostic only. If it fails during a tick, timing is
-        disabled so diagnostics can never change control or safety behavior.
-        """
-
-        if observer is not None and not callable(observer):
-            raise TypeError("timing observer must be callable or None")
-        self._timing_observer = observer
-
-    def _observe_timing(self, name: str, duration_ns: int) -> None:
-        observer = self._timing_observer
-        if observer is None:
-            return
-        try:
-            observer(name, max(0, int(duration_ns)))
-        except Exception:
-            # Diagnostic failure must never affect L1-L12 behavior.
-            self._timing_observer = None
 
     def checkpoint(self) -> TickContext | None:
         return self._last_context
@@ -332,45 +307,36 @@ class TickEngine:
         records: list[LayerRecord],
         fault_layer: str | None,
     ) -> TickResult:
-        timing_started_ns = (
-            time.perf_counter_ns() if self._timing_observer is not None else None
-        )
         try:
-            try:
-                final = self._layers.final_safety.finalize(
-                    context,
-                    request,
-                    critical_health,
-                    lifecycle,
-                    upstream_fault,
-                    safety_samples,
-                    wheel_setpoint,
-                )
-            except Exception as exc:
-                attempted = getattr(exc, "attempted_actuation", None)
-                if not isinstance(attempted, FinalActuation):
-                    attempted = None
-                raise TickExecutionError(
-                    "L12 final safety could not complete",
-                    context=context,
-                    attempted_actuation=attempted,
-                ) from exc
-            if not isinstance(final, FinalActuation) or final.context != context:
-                raise TickExecutionError(
-                    "L12 returned an invalid final contract",
-                    context=context,
-                )
-            records.append(LayerRecord("L12", final))
-            self._last_context = context
-            return TickResult(
-                final_actuation=final,
-                trace=TickTrace(context, tuple(records), fault_layer),
+            final = self._layers.final_safety.finalize(
+                context,
+                request,
+                critical_health,
+                lifecycle,
+                upstream_fault,
+                safety_samples,
+                wheel_setpoint,
             )
-        finally:
-            if timing_started_ns is not None:
-                self._observe_timing(
-                    "L12", time.perf_counter_ns() - timing_started_ns
-                )
+        except Exception as exc:
+            attempted = getattr(exc, "attempted_actuation", None)
+            if not isinstance(attempted, FinalActuation):
+                attempted = None
+            raise TickExecutionError(
+                "L12 final safety could not complete",
+                context=context,
+                attempted_actuation=attempted,
+            ) from exc
+        if not isinstance(final, FinalActuation) or final.context != context:
+            raise TickExecutionError(
+                "L12 returned an invalid final contract",
+                context=context,
+            )
+        records.append(LayerRecord("L12", final))
+        self._last_context = context
+        return TickResult(
+            final_actuation=final,
+            trace=TickTrace(context, tuple(records), fault_layer),
+        )
 
     def _tick_order_fault(self, context: TickContext) -> str | None:
         previous = self._last_context
@@ -386,8 +352,8 @@ class TickEngine:
     def _next_layer_name(records: list[LayerRecord]) -> str:
         return f"L{len(records) + 1}"
 
+    @staticmethod
     def _evaluate(
-        self,
         records: list[LayerRecord],
         name: str,
         expected_type: type[_T],
@@ -395,25 +361,16 @@ class TickEngine:
         function: Callable[..., _T],
         *args: object,
     ) -> _T:
-        timing_started_ns = (
-            time.perf_counter_ns() if self._timing_observer is not None else None
-        )
-        try:
-            value = function(*args)
-            if not isinstance(value, expected_type):
-                raise TypeError(
-                    f"{name} returned {type(value).__name__}, "
-                    f"expected {expected_type.__name__}"
-                )
-            if value.context != context:
-                raise ValueError(f"{name} returned a value from a different tick")
-            records.append(LayerRecord(name, value))
-            return value
-        finally:
-            if timing_started_ns is not None:
-                self._observe_timing(
-                    name, time.perf_counter_ns() - timing_started_ns
-                )
+        value = function(*args)
+        if not isinstance(value, expected_type):
+            raise TypeError(
+                f"{name} returned {type(value).__name__}, "
+                f"expected {expected_type.__name__}"
+            )
+        if value.context != context:
+            raise ValueError(f"{name} returned a value from a different tick")
+        records.append(LayerRecord(name, value))
+        return value
 
 
 __all__ = [
