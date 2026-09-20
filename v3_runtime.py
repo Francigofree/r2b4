@@ -333,7 +333,13 @@ def run_resident_physical_control(
 
             if previous_tick_ns is not None and now_ns <= previous_tick_ns:
                 raise RuntimeError("monotonic clock did not advance between ticks")
-            context = TickContext(tick_id, now_ns)
+            begin_tick = getattr(device_reader, "begin_tick", None)
+            if begin_tick is not None and not shutdown_requested:
+                context = begin_tick(tick_id)
+                now_ns = context.monotonic_ns
+                previous_clock_ns = now_ns
+            else:
+                context = TickContext(tick_id, now_ns)
             if shutdown_requested:
                 # Keep phase counts aligned with normal_tick_count; shutdown has
                 # separate safety semantics and is excluded from coarse control timing.
@@ -419,10 +425,12 @@ def run_resident_physical_control(
                     timing=(timing.snapshot() if timing is not None else None),
                 )
             tick_id += 1
-            next_deadline_ns = max(
-                next_deadline_ns + config.tick_period_ns,
-                now_ns + 1,
-            )
+            completed_ns = _read_monotonic_ns(monotonic_ns, previous_clock_ns)
+            previous_clock_ns = completed_ns
+            next_deadline_ns += config.tick_period_ns
+            if next_deadline_ns <= completed_ns:
+                missed = (completed_ns - next_deadline_ns) // config.tick_period_ns + 1
+                next_deadline_ns += missed * config.tick_period_ns
     finally:
         runtime.close()
 

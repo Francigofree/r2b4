@@ -231,6 +231,7 @@ class BoundedLiveControlComposition:
             lifecycle=scheduled_lifecycle,
         )
         try:
+            inputs = self._control.close_inputs(inputs)
             result = self._control.run_tick(inputs)
         except TickExecutionError:
             self._write_failed = True

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from v3.contracts import (
     ActuatorRequest,
     AdmittedFrame,
+    Observation,
+    RejectionReason,
     TickContext,
     WheelVelocitySetpoint,
 )
@@ -189,6 +191,7 @@ class WheelPiConfig:
     max_normalized_output: float
     max_control_gap_ns: int = 250_000_000
     max_feedback_uncertainty_ns: int = 100_000_000
+    max_feedback_age_ns: int = 250_000_000
 
     def __post_init__(self) -> None:
         for name in ("kp", "ki", "integrator_limit", "max_normalized_output"):
@@ -197,7 +200,7 @@ class WheelPiConfig:
                 raise ValueError(f"{name} cannot be negative")
         if not 0.0 < self.max_normalized_output <= 1.0:
             raise ValueError("max_normalized_output must be in (0, 1]")
-        for name in ("max_control_gap_ns", "max_feedback_uncertainty_ns"):
+        for name in ("max_control_gap_ns", "max_feedback_uncertainty_ns", "max_feedback_age_ns"):
             value = getattr(self, name)
             if type(value) is not int or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
@@ -214,6 +217,7 @@ class WheelActuatorStateCheckpoint:
     left_uncertain_since_ns: int | None = None
     right_uncertain_since_ns: int | None = None
     feedback_uncertain_since_ns: int | None = None
+    last_feedback: Observation | None = None
 
 
 class _PIState:
@@ -272,6 +276,7 @@ class WheelActuatorController:
         "_left_uncertain_since_ns",
         "_right_uncertain_since_ns",
         "_feedback_uncertain_since_ns",
+        "_last_feedback",
     )
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
@@ -284,6 +289,7 @@ class WheelActuatorController:
         self._left_uncertain_since_ns: int | None = None
         self._right_uncertain_since_ns: int | None = None
         self._feedback_uncertain_since_ns: int | None = None
+        self._last_feedback: Observation | None = None
 
     def reset(self) -> None:
         self._left_pi.reset()
@@ -293,6 +299,7 @@ class WheelActuatorController:
         self._left_uncertain_since_ns = None
         self._right_uncertain_since_ns = None
         self._feedback_uncertain_since_ns = None
+        self._last_feedback = None
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
@@ -305,6 +312,7 @@ class WheelActuatorController:
             self._left_uncertain_since_ns,
             self._right_uncertain_since_ns,
             self._feedback_uncertain_since_ns,
+            self._last_feedback,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
@@ -331,6 +339,9 @@ class WheelActuatorController:
             if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{name} must be non-negative integer or None")
 
+        if checkpoint.last_feedback is not None and not isinstance(checkpoint.last_feedback, Observation):
+            raise ValueError("invalid cached wheel feedback")
+        self._last_feedback = checkpoint.last_feedback
         self._last_context = checkpoint.last_context
         self._left_pi._integral = checkpoint.left_integral
         self._right_pi._integral = checkpoint.right_integral
@@ -348,14 +359,37 @@ class WheelActuatorController:
     ) -> ActuatorRequest:
         if frame.context != wheels.context:
             raise ValueError("L11 inputs must use the same tick context")
+        fresh = tuple(item for item in frame.accepted if item.kind == WHEEL_FEEDBACK_KIND)
+        if len(fresh) > 1:
+            raise ValueError("L11 requires at most one new wheel observation")
+        if fresh:
+            self._last_feedback = fresh[0]
         dt_s = self._control_dt_s(wheels.context)
         if dt_s == 0.0:
             self._left_pi.reset()
             self._right_pi.reset()
 
         if abs(wheels.left_mps) <= 1e-12 and abs(wheels.right_mps) <= 1e-12:
+            feedback = self._last_feedback
             self.reset()
+            self._last_feedback = feedback
             return ActuatorRequest(wheels.context, 0.0, 0.0)
+
+        feedback = self._last_feedback
+        if feedback is None:
+            raise ValueError("L11 requires exactly one admitted wheel_velocity observation")
+        age_ns = wheels.context.monotonic_ns - feedback.captured_monotonic_ns
+        if not 0 <= age_ns <= self._config.max_feedback_age_ns:
+            raise ValueError("L11 wheel feedback is stale or from the future")
+        if not fresh:
+            if feedback.source_device_id in frame.degraded_sources or any(
+                item.source_device_id == feedback.source_device_id
+                and item.reason is not RejectionReason.DUPLICATE
+                for item in frame.rejected
+            ):
+                self._last_feedback = None
+                raise ValueError("L11 cached feedback invalidated by source evidence")
+            frame = replace(frame, accepted=frame.accepted + (feedback,))
 
         required_left = abs(wheels.left_mps) > 1e-9
         required_right = abs(wheels.right_mps) > 1e-9

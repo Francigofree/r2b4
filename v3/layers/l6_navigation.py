@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass, replace
 from typing import Protocol
 
+from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult
+
 from v3.contracts import (
     CommandMode,
     MissionIntent,
@@ -291,61 +293,6 @@ class NavigationStateCheckpoint:
     follow_person_last_heading_rad: float | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class TrajectoryRolloutRequest:
-    """Immutable pure-computation snapshot handed to the rollout worker."""
-
-    context: TickContext
-    estimate: RobotEstimate
-    world: WorldSnapshot
-    goal: Waypoint
-    max_v_mps: float
-    max_omega_rad_s: float
-    coverage: tuple[tuple[int, int, int], ...]
-
-    def __post_init__(self) -> None:
-        if self.estimate.context != self.context or self.world.context != self.context:
-            raise ValueError("rollout request inputs must share one TickContext")
-        if not isinstance(self.goal, Waypoint):
-            raise TypeError("goal must be Waypoint")
-        for name in ("max_v_mps", "max_omega_rad_s"):
-            value = getattr(self, name)
-            if (
-                not isinstance(value, (int, float))
-                or isinstance(value, bool)
-                or not math.isfinite(value)
-                or value < 0.0
-            ):
-                raise ValueError(f"{name} must be finite and non-negative")
-        if any(
-            not isinstance(item, tuple)
-            or len(item) != 3
-            or any(not isinstance(value, int) or isinstance(value, bool) for value in item)
-            or item[2] < 0
-            for item in self.coverage
-        ):
-            raise ValueError("coverage must contain integer (x, y, visits) tuples")
-
-
-@dataclass(frozen=True, slots=True)
-class TrajectoryRolloutResult:
-    source_context: TickContext
-    trajectory_candidates: tuple[TrajectoryEvaluation, ...]
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.source_context, TickContext):
-            raise TypeError("source_context must be TickContext")
-        if (
-            not isinstance(self.trajectory_candidates, tuple)
-            or not self.trajectory_candidates
-            or any(
-                not isinstance(item, TrajectoryEvaluation)
-                for item in self.trajectory_candidates
-            )
-        ):
-            raise ValueError("trajectory_candidates must be a non-empty tuple")
-
-
 class TrajectoryRolloutBackend(Protocol):
     """Authority-free compute port injected by the composition root."""
 
@@ -360,12 +307,18 @@ class AsyncL6PlannerConfig:
     """Deterministic handoff policy; process placement is not layer state."""
 
     enabled: bool = False
+    completion_inputs: bool = False
+    request_timeout_ns: int = 300_000_000
     # Legacy replay compatibility. New production handoffs use release_delay_ns.
     release_tick_gap: int = 5
     max_plan_age_ns: int = 350_000_000
     release_delay_ns: int | None = None
 
     def __post_init__(self) -> None:
+        if type(self.completion_inputs) is not bool:
+            raise TypeError("completion_inputs must be bool")
+        if type(self.request_timeout_ns) is not int or self.request_timeout_ns <= 0:
+            raise ValueError("request_timeout_ns must be positive integer")
         if type(self.enabled) is not bool:
             raise TypeError("enabled must be bool")
         for value, name in (
@@ -450,6 +403,9 @@ class TrajectoryNavigator:
 
     __slots__ = (
         "_completed",
+        "_completion_inputs",
+        "_closed_completion",
+        "_request_timeout_ns",
         "_config",
         "_face_person_aligned",
         "_face_person_track_id",
@@ -487,6 +443,8 @@ class TrajectoryNavigator:
         rollout_release_tick_gap: int = 5,
         rollout_release_delay_ns: int | None = None,
         max_plan_age_ns: int = 350_000_000,
+        completion_inputs: bool = False,
+        request_timeout_ns: int = 300_000_000,
     ) -> None:
         if rollout_backend is not None:
             for method_name in ("submit", "take", "abandon", "close"):
@@ -513,6 +471,11 @@ class TrajectoryNavigator:
                 raise ValueError(
                     "rollout_release_delay_ns must be shorter than max_plan_age_ns"
                 )
+        self._completion_inputs = completion_inputs
+        self._closed_completion: PlannerInput | None = None
+        self._request_timeout_ns = request_timeout_ns
+        if completion_inputs and rollout_backend is not None:
+            raise ValueError("closed-input navigation cannot own a worker backend")
         self._config = config
         self._rollout_backend = rollout_backend
         self._rollout_release_tick_gap = rollout_release_tick_gap
@@ -599,6 +562,11 @@ class TrajectoryNavigator:
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
         pending = checkpoint.pending_rollout_request
+        if pending is not None and self._completion_inputs:
+            self._pending_rollout_id = pending.context.tick_id + 1
+            self._pending_rollout_request = pending
+            self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns
+            return
         if pending is not None:
             backend = self._rollout_backend
             if backend is None:
@@ -628,7 +596,11 @@ class TrajectoryNavigator:
         mission: MissionIntent,
         estimate: RobotEstimate,
         world: WorldSnapshot,
+        planner_input: PlannerInput | None = None,
     ) -> NavigationPlan:
+        if planner_input is not None and planner_input.context != mission.context:
+            raise ValueError("planner input context mismatch")
+        self._closed_completion = planner_input
         if mission.context != estimate.context or mission.context != world.context:
             return self._inactive(mission, NavigationStatus.INVALIDATED, "CONTEXT_MISMATCH")
         if mission.lifecycle is not MissionLifecycle.ACTIVE:
@@ -727,6 +699,8 @@ class TrajectoryNavigator:
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
+            if self._completion_inputs and self._pending_rollout_request is not None:
+                return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
             raise RuntimeError("trajectory plan cache is empty after replanning")
         return NavigationPlan(
             context=mission.context,
@@ -1132,6 +1106,8 @@ class TrajectoryNavigator:
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
+            if self._completion_inputs and self._pending_rollout_request is not None:
+                return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
             raise RuntimeError("follow-person trajectory cache is empty after replanning")
         return NavigationPlan(
             context=mission.context,
@@ -1204,6 +1180,8 @@ class TrajectoryNavigator:
         goal = self._local_goal
         candidates = self._trajectory_candidates
         if goal is None or not candidates:
+            if self._completion_inputs and self._pending_rollout_request is not None:
+                return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
             raise RuntimeError("trajectory plan cache is empty after replanning")
         return NavigationPlan(
             context=mission.context,
@@ -1252,7 +1230,7 @@ class TrajectoryNavigator:
         # already bounds work to one rollout, so a second tick-count gate would
         # only turn runtime jitter into planner latency. Legacy tick-mode replay
         # and the synchronous planner retain the historic cooldown.
-        if self._rollout_backend is not None and self._rollout_release_delay_ns is not None:
+        if self._completion_inputs or (self._rollout_backend is not None and self._rollout_release_delay_ns is not None):
             return True
         return (
             tick_id - previous_tick_id
@@ -1274,7 +1252,7 @@ class TrajectoryNavigator:
         backend = self._rollout_backend
         # Every new mission gets one synchronous seed. This avoids an ACTIVE
         # planner-warmup STOP and moves all recurring heavy replans off CPU3.
-        if backend is None or not self._trajectory_candidates:
+        if not self._completion_inputs and (backend is None or not self._trajectory_candidates):
             planning_scene = scene or self._build_planning_scene(world)
             candidates = self._trajectory_rollout(
                 estimate,
@@ -1309,6 +1287,11 @@ class TrajectoryNavigator:
                 )
             ),
         )
+        if self._completion_inputs:
+            self._pending_rollout_id = context.tick_id + 1
+            self._pending_rollout_request = request
+            self._pending_goal_selected_ns = goal_selected_ns
+            return
         request_id = backend.submit(request)
         if not isinstance(request_id, int) or isinstance(request_id, bool) or request_id <= 0:
             raise RuntimeError("async rollout backend returned invalid request id")
@@ -1329,7 +1312,42 @@ class TrajectoryNavigator:
                 context.monotonic_ns + self._rollout_release_delay_ns
             )
 
+    @property
+    def pending_rollout_request(self) -> TrajectoryRolloutRequest | None:
+        return self._pending_rollout_request
+
+    def _accept_closed_rollout(self, context: TickContext) -> bool:
+        request = self._pending_rollout_request
+        if request is None:
+            if self._trajectory_candidates:
+                self._require_fresh_cached_plan(context)
+            return False
+        if context.monotonic_ns - request.context.monotonic_ns > self._request_timeout_ns:
+            raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
+        event = self._closed_completion
+        if event is None or event.request_context is None or event.request_context.tick_id < request.context.tick_id:
+            if self._trajectory_candidates:
+                self._require_fresh_cached_plan(context)
+            return False
+        if event.request_context != request.context:
+            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
+        if event.error is not None:
+            raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{event.error}")
+        result = event.result
+        if result is None or result.source_context != request.context:
+            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
+        if context.monotonic_ns - request.context.monotonic_ns > self._max_plan_age_ns:
+            raise RuntimeError("ASYNC_L6_PLAN_STALE")
+        if self._pending_goal_selected_ns is not None:
+            self._goal_selected_ns = self._pending_goal_selected_ns
+        self._store_trajectory_plan(request.context.monotonic_ns, request.context.tick_id,
+                                    request.goal, result.trajectory_candidates)
+        self._abandon_pending_rollout()
+        return True
+
     def _accept_pending_rollout(self, context: TickContext) -> bool:
+        if self._completion_inputs:
+            return self._accept_closed_rollout(context)
         request_id = self._pending_rollout_id
         if request_id is None:
             return False

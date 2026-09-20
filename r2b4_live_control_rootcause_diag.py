@@ -11,7 +11,7 @@ temporary sitecustomize.py inherited through PYTHONPATH. No repository source
 file is modified.
 
 Primary measurement is deliberately low-perturbation:
-  - one perf_counter_ns() pair around the original NativeLiveInputReader.read()
+  - one perf_counter_ns() pair around the active input reader closure
   - one perf_counter_ns() pair around each original production source.read()
   - the existing RuntimeTimingAccumulator values are copied with list.append()
   - command mode is recorded per tick
@@ -133,6 +133,9 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
     SCHEMA = "R2B4_V3_LIVE_CONTROL_ROOTCAUSE_RAW_V1"
 
     source_rows = []
+    acquisition_rows = []
+    control_thread_id = None
+    last_control_start_ns = None
     l0_rows = []
     command_rows = []
     phase_rows = []
@@ -167,6 +170,21 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
         original = cls.read
         def wrapped(self, context):
             tick_id = _tick_id(context)
+            if threading.get_native_id() != control_thread_id:
+                started = time.monotonic_ns()
+                cpu_started = time.thread_time_ns()
+                result = None
+                try:
+                    result = original(self, context)
+                    return result
+                finally:
+                    completed = time.monotonic_ns()
+                    acquisition_rows.append({
+                        "source": role, "acquisition_sequence": tick_id,
+                        "started_ns": started, "completed_ns": completed,
+                        "thread_cpu_ns": time.thread_time_ns() - cpu_started,
+                        "measurement_ns": [sample.captured_monotonic_ns for sample in getattr(result, "samples", ())],
+                    })
             detailed = (
                 tick_id is not None
                 and MECHANISM_EVERY > 0
@@ -217,6 +235,8 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
         from v3.adapters.live_camera import NativeCameraSource
         from v3.adapters.live_person_detection import NativePersonDetectionSource
         from v3.adapters.live_inputs import NativeLiveInputReader
+        from v3.adapters.multirate_inputs import MultiRateLiveInputReader
+        from v3.composition.resident_live_control import ResidentLiveControlComposition
         from v3.adapters.resident_command import AtomicResidentCommandGateway
         from v3.observation import ObservationHub
         from v3.runtime_performance import RuntimeTimingAccumulator
@@ -227,17 +247,30 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
         _wrap_source(NativeCameraSource, "CAMERA")
         _wrap_source(NativePersonDetectionSource, "PERSON")
 
-        original_reader = NativeLiveInputReader.read
-        def reader_read(self, context):
-            global current_tick_id
-            tick_id = _tick_id(context)
-            current_tick_id = tick_id
-            start = time.perf_counter_ns()
-            try:
-                return original_reader(self, context)
-            finally:
-                l0_rows.append((tick_id, max(0, time.perf_counter_ns() - start)))
-        _set(NativeLiveInputReader, "read", reader_read)
+        original_tick = ResidentLiveControlComposition.tick_execution
+        def tick_execution(self, context):
+            global current_tick_id, control_thread_id
+            global last_control_start_ns
+            current_tick_id = context.tick_id
+            if last_control_start_ns is not None:
+                runtime_rows.append((current_tick_id, "PERIOD", context.monotonic_ns - last_control_start_ns))
+            last_control_start_ns = context.monotonic_ns
+            control_thread_id = threading.get_native_id()
+            return original_tick(self, context)
+        _set(ResidentLiveControlComposition, "tick_execution", tick_execution)
+
+        def wrap_reader(cls):
+            original = cls.read
+            def read(self, context):
+                start = time.perf_counter_ns()
+                try:
+                    return original(self, context)
+                finally:
+                    l0_rows.append((context.tick_id, max(0, time.perf_counter_ns() - start)))
+            _set(cls, "read", read)
+        wrap_reader(NativeLiveInputReader)
+        # Multi-rate source acquisition is measured separately from this closure.
+        wrap_reader(MultiRateLiveInputReader)
 
         original_snapshot = AtomicResidentCommandGateway.snapshot
         def snapshot(self, context):
@@ -318,6 +351,8 @@ if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") 
                 "mechanism_every": MECHANISM_EVERY,
                 "profiled_ticks": sorted(profiled_ticks),
                 "source_rows": source_rows,
+                "acquisition_rows": acquisition_rows,
+                "source_timing_scope": "acquisition_is_not_control_tick",
                 "l0_rows": l0_rows,
                 "command_rows": command_rows,
                 "phase_rows": phase_rows,
@@ -476,6 +511,8 @@ def analyze(raw: Mapping[str, Any], runtime_status: Mapping[str, Any] | None) ->
 
         residuals = []
         for tick, l0 in l0_map.items():
+            if raw.get("source_timing_scope") == "acquisition_is_not_control_tick":
+                continue
             residuals.append(max(0, l0 - sum(source_by_tick.get(tick, {}).values())))
 
         phases = aggregate_rows(
@@ -614,9 +651,9 @@ def analyze(raw: Mapping[str, Any], runtime_status: Mapping[str, Any] | None) ->
 
     confidence = "INCOMPLETE"
     if len(active_ticks) >= 100:
-        confidence = "HIGH_CONFIDENCE_LIVE"
+        confidence = "INDICATED"
     if len(active_ticks) >= 300 and residual_pct <= 3.0:
-        confidence = "VERY_HIGH_CONFIDENCE_LIVE"
+        confidence = "INDICATED"
 
     baseline_sources = baseline["sources"]
     source_delta = {}
@@ -630,6 +667,8 @@ def analyze(raw: Mapping[str, Any], runtime_status: Mapping[str, Any] | None) ->
         }
 
     return {
+        "acquisition_timing_scope": "Independent source sequence/time; not attributed to control ticks",
+        "acquisition_sample_count": len(raw.get("acquisition_rows", [])),
         "confidence": confidence,
         "active_interval": (
             None if interval is None else {"first_tick": interval[0], "last_tick": interval[1]}

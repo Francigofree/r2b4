@@ -71,6 +71,7 @@ class MultiRateInputConfig:
     critical_default_period_ns: int = 20_000_000
     auxiliary_default_period_ns: int = 50_000_000
     history_size: int = 8
+    max_snapshot_age_ns: int = 250_000_000
     worker_join_timeout_s: float = 2.0
     source_periods: tuple[SourcePeriod, ...] = _DEFAULT_SOURCE_PERIODS
 
@@ -78,6 +79,7 @@ class MultiRateInputConfig:
         _positive_int(self.critical_default_period_ns, "critical_default_period_ns")
         _positive_int(self.auxiliary_default_period_ns, "auxiliary_default_period_ns")
         _positive_int(self.history_size, "history_size")
+        _positive_int(self.max_snapshot_age_ns, "max_snapshot_age_ns")
         if (
             isinstance(self.worker_join_timeout_s, bool)
             or not isinstance(self.worker_join_timeout_s, (int, float))
@@ -175,6 +177,9 @@ class MultiRateLiveInputReader:
 
     __slots__ = (
         "_clock",
+        "_publication_lock",
+        "_closed_batch",
+        "_aux_failure",
         "_closed",
         "_config",
         "_critical_device_ids",
@@ -227,6 +232,9 @@ class MultiRateLiveInputReader:
                 "missing critical live sources: " + ",".join(sorted(missing_critical))
             )
 
+        self._publication_lock = Lock()
+        self._closed_batch: RawDeviceBatch | None = None
+        self._aux_failure: BaseException | None = None
         self._clock = monotonic_ns
         self._config = config
         self._critical_device_ids = critical_device_ids
@@ -357,10 +365,13 @@ class MultiRateLiveInputReader:
             visible_ns,
             state.period_ns,
         )
-        published = _PublishedSnapshot(visible_ns, snapshot)
-        with state.lock:
-            state.history.append(published)
-            state.next_due_ns = next_due_ns
+        # TickContext creation and publication share this short boundary.
+        # Validation/source I/O must stay outside it.
+        with self._publication_lock:
+            published = _PublishedSnapshot(self._clock_ns(), snapshot)
+            with state.lock:
+                state.history.append(published)
+                state.next_due_ns = next_due_ns
 
     def _start_lane(self, name: str, states: tuple[_SourceState, ...]) -> None:
         if not states:
@@ -401,7 +412,10 @@ class MultiRateLiveInputReader:
         try:
             self._lane_loop(states)
         except BaseException as exc:
-            self._set_worker_failure(exc)
+            if name == "l0-aux":
+                self._aux_failure = exc
+            else:
+                self._set_worker_failure(exc)
 
     def _lane_loop(self, states: tuple[_SourceState, ...]) -> None:
         while not self._stop.is_set():
@@ -428,12 +442,21 @@ class MultiRateLiveInputReader:
                     return item
         return None
 
+    def begin_tick(self, tick_id: int) -> TickContext:
+        """Atomically stamp and freeze a control input against publication."""
+        with self._publication_lock:
+            context = TickContext(tick_id, self._clock_ns())
+            self._closed_batch = self.read(context)
+            return context
+
     def read(self, context: TickContext) -> RawDeviceBatch:
         if self._closed:
             raise RuntimeError("multi-rate live input reader is closed")
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
         self._raise_worker_failure()
+        if self._closed_batch is not None and self._closed_batch.context == context:
+            return self._closed_batch
 
         samples = []
         health = []
@@ -450,8 +473,15 @@ class MultiRateLiveInputReader:
                 continue
             snapshot = published.snapshot
             samples.extend(snapshot.samples)
-            health.append(snapshot.health)
-        return RawDeviceBatch(context, tuple(samples), tuple(health))
+            if not state.critical and self._aux_failure is not None:
+                health.append(DeviceHealth(state.device_id, DeviceHealthState.FAILED, "L0_AUX_WORKER_FAILED"))
+            elif context.monotonic_ns - published.visible_monotonic_ns > self._config.max_snapshot_age_ns:
+                health.append(DeviceHealth(state.device_id, DeviceHealthState.UNKNOWN, "L0_STREAM_EXPIRED"))
+            else:
+                health.append(snapshot.health)
+        batch = RawDeviceBatch(context, tuple(samples), tuple(health))
+        self._closed_batch = batch
+        return batch
 
     def _join_workers(self, *, raise_on_alive: bool) -> None:
         alive: list[str] = []

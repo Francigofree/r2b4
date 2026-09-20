@@ -902,6 +902,10 @@ def _run_native_replay(
     for entry in entries:
         try:
             if entry.inputs is not None:
+                try:
+                    composition.verify_planner_input(entry.inputs)
+                except ValueError as exc:
+                    raise V3ReplayError(str(exc)) from exc
                 result = composition.run_tick(entry.inputs)
             else:
                 if entry.reason is None or entry.fault_layer is None:

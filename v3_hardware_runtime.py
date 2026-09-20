@@ -683,6 +683,7 @@ def run_native_hardware_resident_control(
     record_observer: Callable[[CaptureRecord], None] | None = None,
     raw_lidar_observer: Callable[[object | None], None] | None = None,
     affinity_config: RuntimeAffinityConfig | None = None,
+    enable_multirate_inputs: bool = True,
 ) -> ResidentRuntimeReport:
     """Own all hardware for one resident session behind an explicit cutover gate."""
 
@@ -739,13 +740,13 @@ def run_native_hardware_resident_control(
     )
     rollout_backend = None
     async_l6 = config.composition.live_control.control.async_l6
-    if async_l6.enabled:
-        rollout_backend = ProcessTrajectoryRolloutBackend(
-            config.composition.live_control.control.navigation,
-            worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
-            strict_affinity=(affinity.strict if affinity.enabled else False),
-        )
     try:
+        if async_l6.enabled:
+            rollout_backend = ProcessTrajectoryRolloutBackend(
+                config.composition.live_control.control.navigation,
+                worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
+                strict_affinity=(affinity.strict if affinity.enabled else False),
+            )
         def observe(result: TickResult) -> None:
             owner.publish_tick_result(result)
             if raw_lidar_observer is not None:
@@ -768,18 +769,18 @@ def run_native_hardware_resident_control(
                 affinity_config is not None and affinity_config.enabled
             ),
             trajectory_rollout_backend=rollout_backend,
-            # Background acquisition must use the real monotonic clock.
-            # Synthetic test clocks stay on the deterministic synchronous path.
-            enable_multirate_inputs=(monotonic_ns is time.monotonic_ns),
+            enable_multirate_inputs=enable_multirate_inputs,
             input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),
             input_worker_strict_affinity=(
                 affinity.strict if affinity.enabled else False
             ),
         )
     finally:
-        if rollout_backend is not None:
-            rollout_backend.close()
-        owner.close()
+        try:
+            if rollout_backend is not None:
+                rollout_backend.close()
+        finally:
+            owner.close()
 
 
 __all__ = [

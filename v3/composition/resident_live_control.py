@@ -396,6 +396,7 @@ class ResidentLiveControlComposition:
         )
         phase_started_ns = self._phase_started()
         try:
+            inputs = self._control.close_inputs(inputs)
             result = self._control.run_tick(inputs)
         except TickExecutionError as exc:
             self._finish_phase("PIPELINE_TOTAL", phase_started_ns)
@@ -483,6 +484,7 @@ class ResidentLiveControlComposition:
             lifecycle=LifecycleState.SHUTDOWN,
         )
         try:
+            inputs = self._control.close_inputs(inputs)
             result = self._control.run_tick(inputs)
         except TickExecutionError as exc:
             self._write_failed = True

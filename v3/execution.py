@@ -158,6 +158,9 @@ class ExecutionBoundary:
         for inputs in source:
             if not isinstance(inputs, TickInputs):
                 raise TypeError("input source yielded a non-TickInputs value")
+            close_inputs = getattr(self._production, "close_inputs", None)
+            if close_inputs is not None:
+                inputs = close_inputs(inputs)
             result = self._production.run_tick(inputs)
             if not isinstance(result, TickResult):
                 raise TypeError("production returned a non-TickResult value")

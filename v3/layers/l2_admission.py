@@ -91,7 +91,9 @@ class InputAdmission:
             if not measurement_timing_valid or measurement_stale:
                 degraded.add(sample.device_id)
 
-            if previous_sequence is not None and sample.sequence == previous_sequence:
+            if age_ns > self._config.max_sample_age_ns:
+                reason = RejectionReason.STALE
+            elif previous_sequence is not None and sample.sequence == previous_sequence:
                 reason = RejectionReason.DUPLICATE
             elif previous_sequence is not None and sample.sequence < previous_sequence:
                 reason = RejectionReason.OUT_OF_ORDER

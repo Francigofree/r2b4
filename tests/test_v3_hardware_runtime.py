@@ -526,6 +526,7 @@ def test_resident_hardware_surface_owns_all_edges_and_signal_shutdowns_zero():
         approval=RESIDENT_PHYSICAL_RUN_APPROVAL,
         stop_requested=StopAfterCall(6),
         monotonic_ns=StepClock(),
+        enable_multirate_inputs=False,
         sleep=lambda _seconds: None,
         tick_observer=observed.append,
         record_observer=records.append,

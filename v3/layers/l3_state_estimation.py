@@ -221,6 +221,7 @@ class NativeStateEstimatorConfig:
     frame_id: str
     track_width_m: float
     max_dt_ns: int = 250_000_000
+    max_measurement_age_ns: int = 250_000_000
     process_noise: tuple[float, ...] = (
         0.001,
         0.001,
@@ -252,6 +253,8 @@ class NativeStateEstimatorConfig:
         if not isinstance(self.frame_id, str) or not self.frame_id:
             raise ValueError("frame_id must be non-empty")
         _finite_positive(self.track_width_m, "track_width_m")
+        if type(self.max_measurement_age_ns) is not int or self.max_measurement_age_ns <= 0:
+            raise ValueError("max_measurement_age_ns must be positive integer")
         if (
             not isinstance(self.max_dt_ns, int)
             or isinstance(self.max_dt_ns, bool)
@@ -332,11 +335,32 @@ class EkfUpdateEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class EncoderAnchor:
+    source_id: str
+    captured_ns: int
+    left_m: float
+    right_m: float
+
+
+@dataclass(frozen=True, slots=True)
+class OdometryPrediction:
+    start_ns: int
+    end_ns: int
+    yaw_rad: float
+    dx_m: float
+    dy_m: float
+
+
+@dataclass(frozen=True, slots=True)
 class NativeEstimatorStateCheckpoint:
     state: tuple[float, ...]
     covariance: tuple[tuple[float, ...], ...]
     last_context: TickContext | None
     last_omega: float
+    last_wheel_ns: int | None = None
+    last_heading_ns: int | None = None
+    encoder_anchor: EncoderAnchor | None = None
+    odometry_predictions: tuple[OdometryPrediction, ...] = ()
 
     def __post_init__(self) -> None:
         if len(self.state) != 5 or any(not math.isfinite(value) for value in self.state):
@@ -378,6 +402,10 @@ class NativeStateEstimator:
         "_last_context",
         "_last_omega",
         "_last_update_evidence",
+        "_last_wheel_ns",
+        "_last_heading_ns",
+        "_encoder_anchor",
+        "_odometry_predictions",
         "_state",
     )
 
@@ -395,6 +423,10 @@ class NativeStateEstimator:
         ]
         self._last_context = None
         self._last_omega = 0.0
+        self._last_wheel_ns: int | None = None
+        self._last_heading_ns: int | None = None
+        self._encoder_anchor: EncoderAnchor | None = None
+        self._odometry_predictions: list[OdometryPrediction] = []
         self._last_update_evidence: list[EkfUpdateEvidence] = []
 
     @property
@@ -407,6 +439,10 @@ class NativeStateEstimator:
             tuple(tuple(row) for row in self._covariance),
             self._last_context,
             self._last_omega,
+            self._last_wheel_ns,
+            self._last_heading_ns,
+            self._encoder_anchor,
+            tuple(self._odometry_predictions),
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -416,6 +452,11 @@ class NativeStateEstimator:
         self._covariance = [list(row) for row in checkpoint.covariance]
         self._last_context = checkpoint.last_context
         self._last_omega = checkpoint.last_omega
+        legacy_ns = checkpoint.last_context.monotonic_ns if checkpoint.last_context else None
+        self._last_wheel_ns = checkpoint.last_wheel_ns if checkpoint.last_wheel_ns is not None else legacy_ns
+        self._last_heading_ns = checkpoint.last_heading_ns if checkpoint.last_heading_ns is not None else legacy_ns
+        self._encoder_anchor = checkpoint.encoder_anchor
+        self._odometry_predictions = list(checkpoint.odometry_predictions)
         self._last_update_evidence = []
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
@@ -433,6 +474,19 @@ class NativeStateEstimator:
             raise ValueError(
                 "L3 bootstrap requires admitted wheel_velocity and ekf_heading observations"
             )
+
+        for observation, name in ((wheel, "wheel"), (heading, "heading")):
+            previous_ns = getattr(self, f"_last_{name}_ns")
+            if observation is not None:
+                measured_ns = observation.captured_monotonic_ns
+                if measured_ns > frame.context.monotonic_ns or (
+                    previous_ns is not None and measured_ns < previous_ns
+                ):
+                    raise ValueError(f"L3 {name} measurement time is invalid")
+                setattr(self, f"_last_{name}_ns", measured_ns)
+                previous_ns = measured_ns
+            if previous_ns is None or frame.context.monotonic_ns - previous_ns > self._config.max_measurement_age_ns:
+                raise ValueError(f"L3 {name} measurement expired")
 
         left_mps = 0.0
         right_mps = 0.0
@@ -480,6 +534,8 @@ class NativeStateEstimator:
                 and not encoder_stale
             )
             wheel_distance_delta = _optional_wheel_distance_delta(wheel)
+            if self._encoder_totals(wheel) is not None:
+                wheel_distance_delta = None
             if not 0.0 <= encoder_trust <= 1.0:
                 raise ValueError("wheel_velocity.trust must be in [0, 1]")
             if max(abs(left_mps), abs(right_mps)) > self._config.max_abs_wheel_velocity_mps:
@@ -533,7 +589,16 @@ class NativeStateEstimator:
                 prediction_omega = self._last_omega + self._state[self._GYRO_BIAS]
 
             if dt_s > 0.0:
+                before_x, before_y, before_yaw = self._state[:3]
                 self._predict(prediction_omega, dt_s, wheel_distance_delta)
+                if self._encoder_anchor is not None:
+                    self._odometry_predictions.append(OdometryPrediction(
+                        self._last_context.monotonic_ns, frame.context.monotonic_ns,
+                        before_yaw, self._state[self._X] - before_x, self._state[self._Y] - before_y,
+                    ))
+                    if len(self._odometry_predictions) > 128:
+                        raise ValueError("L3 encoder prediction history exhausted")
+
 
             quality_floor = self._config.minimum_measurement_quality
             if wheel is not None and velocity_feedback_valid:
@@ -566,6 +631,9 @@ class NativeStateEstimator:
                     update_type="YAW",
                 )
 
+        if wheel is not None:
+            self._reconcile_encoder(wheel, frame.context)
+
         if lidar_pose is not None:
             self._update_lidar(lidar_pose)
 
@@ -585,6 +653,66 @@ class NativeStateEstimator:
         # No fresh IMU rate means deliberately conservative omega uncertainty;
         # the state/omega value itself remains continuous through _last_omega.
         return self._estimate(frame, omega_confidence if heading is not None else 0.0)
+
+    @staticmethod
+    def _encoder_totals(wheel: Observation) -> tuple[float, float] | None:
+        values = {item.key: item.value for item in wheel.values}
+        keys = ("raw_left_distance_m", "raw_right_distance_m")
+        if not any(key in values for key in keys):
+            return None  # Older captures may carry only acquisition deltas.
+        return tuple(_numeric_value(wheel, key) for key in keys)
+
+    def _reconcile_encoder(self, wheel: Observation, context: TickContext) -> None:
+        totals = self._encoder_totals(wheel)
+        if totals is None:
+            if self._encoder_anchor is not None:
+                raise ValueError("L3 cumulative encoder measurement disappeared")
+            return
+        current = EncoderAnchor(wheel.source_device_id, wheel.captured_monotonic_ns, *totals)
+        previous = self._encoder_anchor
+        if previous is None:
+            self._encoder_anchor = current
+            # Bootstrap establishes pose at the first physical measurement.
+            if current.captured_ns < context.monotonic_ns:
+                self._odometry_predictions = [OdometryPrediction(
+                    current.captured_ns, context.monotonic_ns, self._state[self._YAW], 0.0, 0.0,
+                )]
+            return
+        if current.source_id != previous.source_id or current.captured_ns <= previous.captured_ns:
+            raise ValueError("L3 cumulative encoder source/time changed")
+        span_ns = current.captured_ns - previous.captured_ns
+        distance = 0.5 * (current.left_m - previous.left_m + current.right_m - previous.right_m)
+        if max(abs(current.left_m - previous.left_m), abs(current.right_m - previous.right_m)) > (
+            self._config.max_abs_wheel_velocity_mps * span_ns / 1e9 + 1e-9
+        ):
+            raise ValueError("L3 cumulative encoder displacement exceeds physical bound")
+        dx = dy = 0.0
+        covered_ns = 0
+        remaining = []
+        for segment in self._odometry_predictions:
+            end = min(segment.end_ns, current.captured_ns)
+            start = max(segment.start_ns, previous.captured_ns)
+            overlap = max(0, end - start)
+            if overlap:
+                fraction = overlap / (segment.end_ns - segment.start_ns)
+                # Replace only the provisional displacement over the measurement
+                # interval; preserve later prediction and absolute pose corrections.
+                dx += distance * overlap / span_ns * math.cos(segment.yaw_rad) - fraction * segment.dx_m
+                dy += distance * overlap / span_ns * math.sin(segment.yaw_rad) - fraction * segment.dy_m
+                covered_ns += overlap
+            if segment.end_ns > current.captured_ns:
+                tail_start = max(segment.start_ns, current.captured_ns)
+                fraction = (segment.end_ns - tail_start) / (segment.end_ns - segment.start_ns)
+                remaining.append(OdometryPrediction(
+                    tail_start, segment.end_ns, segment.yaw_rad,
+                    fraction * segment.dx_m, fraction * segment.dy_m,
+                ))
+        if covered_ns != span_ns:
+            raise ValueError("L3 encoder interval is outside prediction history")
+        self._state[self._X] += dx
+        self._state[self._Y] += dy
+        self._encoder_anchor = current
+        self._odometry_predictions = remaining
 
     def _cross_check_wheels(
         self,

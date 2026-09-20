@@ -90,13 +90,13 @@ def test_snapshot_is_not_visible_before_its_publication_time():
         start_workers=False,
     )
     try:
-        # Prime starts at 1000 and becomes visible at 1010.
+        # Prime starts at 1000 and completes at 1010, publishes at 1020.
         early = reader.read(TickContext(1, 1_005))
         assert early.samples == ()
         assert early.device_health[0].state is DeviceHealthState.UNKNOWN
         assert early.device_health[0].reason == "L0_NO_VISIBLE_SNAPSHOT"
 
-        visible = reader.read(TickContext(2, 1_010))
+        visible = reader.read(TickContext(2, 1_020))
         assert len(visible.samples) == 1
         assert visible.device_health[0].state is DeviceHealthState.OK
     finally:

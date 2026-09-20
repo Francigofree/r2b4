@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from v3.contracts.planner import PlannerInput
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
 from v3.engine import PipelineLayers, TickEngine, TickInputs, TickResult
 from v3.layers.l1_acquisition import acquire
@@ -34,6 +35,7 @@ from v3.layers.l6_navigation import (
     NavigationConfig,
     NavigationStateCheckpoint,
     TrajectoryNavigator,
+    TrajectoryRolloutComputer,
 )
 from v3.layers.l7_motion_selection import (
     MotionSelectionStateCheckpoint,
@@ -185,6 +187,8 @@ def v3_navigation_config_from_mapping(
     )
     async_l6 = AsyncL6PlannerConfig(
         enabled=async_enabled,
+        completion_inputs=async_mapping.get("completion_inputs", False),
+        request_timeout_ns=_positive_int(async_mapping.get("request_timeout_ns", 300_000_000), "async_l6.request_timeout_ns"),
         release_tick_gap=_positive_int(
             async_mapping.get("release_tick_gap", 5),
             "v3_navigation.async_l6.release_tick_gap",
@@ -528,6 +532,11 @@ class NativeControlComposition:
         "_navigation",
         "_operational_constraints",
         "_rollout_backend",
+        "_closed_planner_mode",
+        "_planner_config",
+        "_transport_request",
+        "_transport_id",
+        "_transport_error",
         "_world_model",
     )
 
@@ -553,7 +562,9 @@ class NativeControlComposition:
                 backend = InlineTrajectoryRolloutBackend(config.navigation)
             navigation = TrajectoryNavigator(
                 config.navigation,
-                rollout_backend=backend,
+                rollout_backend=None if config.async_l6.completion_inputs else backend,
+                completion_inputs=config.async_l6.completion_inputs,
+                request_timeout_ns=config.async_l6.request_timeout_ns,
                 rollout_release_tick_gap=config.async_l6.release_tick_gap,
                 rollout_release_delay_ns=config.async_l6.release_delay_ns,
                 max_plan_age_ns=config.async_l6.max_plan_age_ns,
@@ -583,6 +594,11 @@ class NativeControlComposition:
         self._mission = mission
         self._navigation = navigation
         self._motion_selection = motion_selection
+        self._closed_planner_mode = config.async_l6.enabled and config.async_l6.completion_inputs
+        self._planner_config = config.navigation
+        self._transport_request = None
+        self._transport_id = None
+        self._transport_error = None
         self._rollout_backend = backend
         self._motion_realization = motion_realization
         self._operational_constraints = operational_constraints
@@ -596,6 +612,7 @@ class NativeControlComposition:
                 world_model=world_model,
                 command_mission=mission.evaluate,
                 navigation=navigation.evaluate,
+                navigation_with_completion=navigation.evaluate if self._closed_planner_mode else None,
                 motion_selection=motion_selection.evaluate,
                 motion_realization=motion_realization.evaluate,
                 constraints=operational_constraints.evaluate,
@@ -652,6 +669,51 @@ class NativeControlComposition:
         self._actuator_control.restore(checkpoint.actuator_control)
         self._final_safety.restore(checkpoint.final_safety)
         self._engine.restore(checkpoint.engine_last_context)
+
+    def close_inputs(self, inputs: TickInputs) -> TickInputs:
+        """Runtime input closure; never called from a production layer or replay.
+
+        Dispatch only L6's immutable pending request. The resulting availability
+        or transport error is frozen in the returned input before L1 executes.
+        """
+        if not self._closed_planner_mode or inputs.planner_input is not None:
+            return inputs
+        event = PlannerInput(inputs.context)
+        request = self._navigation.pending_rollout_request
+        backend = self._rollout_backend
+        if request != self._transport_request:
+            if self._transport_id is not None and backend is not None:
+                backend.abandon(self._transport_id)
+            self._transport_request = request
+            self._transport_id = None
+            self._transport_error = None
+            if request is not None:
+                try:
+                    if backend is None:
+                        raise RuntimeError("ASYNC_L6_BACKEND_MISSING")
+                    self._transport_id = backend.submit(request)
+                except Exception as exc:
+                    self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
+        if request is not None:
+            result = None
+            if self._transport_error is None:
+                try:
+                    result = backend.take(self._transport_id)
+                except Exception as exc:
+                    self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
+            if result is not None or self._transport_error is not None:
+                self._transport_id = None
+                event = PlannerInput(inputs.context, request.context, result, self._transport_error)
+        return replace(inputs, planner_input=event)
+
+    def verify_planner_input(self, inputs: TickInputs) -> None:
+        """Offline kernel check independent of recorded arrival scheduling."""
+        event = inputs.planner_input
+        request = self._navigation.pending_rollout_request
+        if event is not None and event.result is not None and request is not None and event.request_context == request.context:
+            expected = TrajectoryRolloutComputer(self._planner_config).compute(request)
+            if event.result != expected:
+                raise ValueError("PLANNER_PURE_RESULT_MISMATCH")
 
     def run_tick(self, inputs: TickInputs) -> TickResult:
         if not isinstance(inputs, TickInputs):

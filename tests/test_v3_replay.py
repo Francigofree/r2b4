@@ -107,7 +107,10 @@ def test_general_replay_matches_generic_explore_trajectory_through_l4_l8(tmp_pat
 
     payload = json.loads(capture.read_text(encoding="utf-8"))
     ticks = payload["ticks"]
-    active_ticks = ticks[1:7]
+    pending = ticks[1]["expected"]["layers"]
+    assert pending["L6"]["reason"] == "PLANNER_PENDING"
+    assert pending["L12"]["left_output"] == pending["L12"]["right_output"] == 0
+    active_ticks = ticks[2:7]
     active = active_ticks[0]["expected"]["layers"]
     navigation = control_config().navigation
     expected_count = (

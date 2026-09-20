@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Protocol, TypeVar
 
+from .contracts.planner import PlannerInput
+
 from .contracts import (
     AcquisitionFrame,
     ActuatorRequest,
@@ -74,6 +76,7 @@ class PipelineLayers:
     chassis_control: Callable[[ConstrainedMotion], WheelVelocitySetpoint]
     actuator_control: Callable[[WheelVelocitySetpoint, AdmittedFrame], ActuatorRequest]
     final_safety: FinalSafety
+    navigation_with_completion: Callable[[MissionIntent, RobotEstimate, WorldSnapshot, PlannerInput | None], NavigationPlan] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,8 +85,11 @@ class TickInputs:
     raw_devices: RawDeviceBatch
     command: CommandRequest
     lifecycle: LifecycleState
+    planner_input: PlannerInput | None = None
 
     def __post_init__(self) -> None:
+        if self.planner_input is not None and (not isinstance(self.planner_input, PlannerInput) or self.planner_input.context != self.context):
+            raise ValueError("planner input must use the tick context")
         if self.raw_devices.context != self.context:
             raise ValueError("raw device input must use the tick context")
         if self.command.context != self.context:
@@ -224,10 +230,11 @@ class TickEngine:
                     "L6",
                     NavigationPlan,
                     inputs.context,
-                    self._layers.navigation,
+                    self._layers.navigation_with_completion or self._layers.navigation,
                     mission,
                     estimate,
                     world,
+                    *((inputs.planner_input,) if self._layers.navigation_with_completion else ()),
                 )
                 objective = self._evaluate(
                     records,
