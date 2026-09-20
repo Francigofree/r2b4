@@ -1,0 +1,406 @@
+{
+  "anomaly_events": {
+    "count": 0,
+    "file": "localization_events.ndjson"
+  },
+  "behavior_episode_tagging": true,
+  "configuration": {
+    "track_width_m": 0.3557,
+    "track_width_source": "capture_runtime_configuration"
+  },
+  "cross_sensor": {
+    "encoder_minus_ekf_omega_rad_s": {
+      "count": 153,
+      "mae": 0.023428712248997535,
+      "max": 0.3016586794644538,
+      "max_abs": 0.3016586794644538,
+      "mean": 0.002019009018258455,
+      "min": -0.19690822461464763,
+      "p50_abs": 0.0010974462291504497,
+      "p95_abs": 0.12896364227445029,
+      "p99_abs": 0.2336640798559777,
+      "rms": 0.05545914662309672
+    },
+    "encoder_minus_imu_omega_rad_s": {
+      "count": 153,
+      "mae": 0.03225806612697319,
+      "max": 0.30164854282156756,
+      "max_abs": 0.30164854282156756,
+      "mean": -0.0015086637549247843,
+      "min": -0.267745322909742,
+      "p50_abs": 0.002181661564992912,
+      "p95_abs": 0.16563315701355144,
+      "p99_abs": 0.2704385061886402,
+      "rms": 0.0683573825965413
+    },
+    "encoder_vs_ekf_accumulated_yaw_rad": 0.021875627902547767,
+    "encoder_vs_imu_accumulated_yaw_rad": 0.011751928767438191,
+    "imu_minus_ekf_omega_rad_s": {
+      "count": 153,
+      "mae": 0.008887317497817668,
+      "max": 0.267745322909742,
+      "max_abs": 0.267745322909742,
+      "mean": 0.0035276727731832404,
+      "min": -0.2157065881713653,
+      "p50_abs": 1.468663255615348e-05,
+      "p95_abs": 0.044783681145498896,
+      "p99_abs": 0.22256864754096994,
+      "rms": 0.03998308106587689
+    },
+    "wheel_mean_minus_ekf_v_mps": {
+      "count": 153,
+      "mae": 0.0008791064307240717,
+      "max": 0.012326263194971453,
+      "max_abs": 0.012326263194971453,
+      "mean": 0.00022117038447240682,
+      "min": -0.005912716672188942,
+      "p50_abs": 0.0,
+      "p95_abs": 0.004431645593029691,
+      "p99_abs": 0.010307082900110478,
+      "rms": 0.0021398269375894154
+    }
+  },
+  "ekf": {
+    "covariance": {
+      "gyro_bias_variance": {
+        "count": 153,
+        "max": 0.12225266539798205,
+        "mean": 0.03161057113032773,
+        "min": 0.0061,
+        "p10": 0.006290624199112709,
+        "p50": 0.007230576648887677,
+        "p95": 0.12161325508911645,
+        "p99": 0.12206324494832857
+      },
+      "trace": {
+        "count": 153,
+        "max": 0.6430793762671898,
+        "mean": 0.26151353335724636,
+        "min": 0.0461,
+        "p10": 0.08064511563010847,
+        "p50": 0.23080219104192454,
+        "p95": 0.5252317519466355,
+        "p99": 0.5891504788181002
+      },
+      "trace_growth_ratio": 11.568947149841355,
+      "velocity_variance": {
+        "count": 153,
+        "max": 0.07870678499999999,
+        "mean": 0.004770619186172751,
+        "min": 0.0015919249295574009,
+        "p10": 0.0016141902248617845,
+        "p50": 0.001716516595389553,
+        "p95": 0.020082434822221294,
+        "p99": 0.06351244129999989
+      },
+      "x_variance": {
+        "count": 153,
+        "max": 0.254854532655009,
+        "mean": 0.10733087217280174,
+        "min": 0.01,
+        "p10": 0.02522809372479303,
+        "p50": 0.0880601822328653,
+        "p95": 0.2374849508559812,
+        "p99": 0.2516410842084721
+      },
+      "y_variance": {
+        "count": 153,
+        "max": 0.2546948489457371,
+        "mean": 0.10723485107609855,
+        "min": 0.01,
+        "p10": 0.025165511527707112,
+        "p50": 0.08798529176416324,
+        "p95": 0.23732455479880094,
+        "p99": 0.2514810400370978
+      },
+      "yaw_variance": {
+        "count": 153,
+        "max": 0.014812578201085001,
+        "mean": 0.010566619791845632,
+        "min": 0.0079724351590873,
+        "p10": 0.008287010280707097,
+        "p50": 0.01,
+        "p95": 0.013995468839519385,
+        "p99": 0.014538293504945982
+      }
+    },
+    "lidar_correction_sign_flips": 0,
+    "lidar_innovation_x_m": {
+      "count": 0
+    },
+    "lidar_innovation_y_m": {
+      "count": 0
+    },
+    "lidar_innovation_yaw_rad": {
+      "count": 0
+    },
+    "updates": {
+      "VELOCITY": {
+        "accepted_count": 141,
+        "count": 141,
+        "innovation": {
+          "count": 141,
+          "mae": 0.007448570598090033,
+          "max": 0.06268899689207044,
+          "max_abs": 0.06843759440516758,
+          "mean": 0.00019143554461002258,
+          "min": -0.06843759440516758,
+          "p50_abs": 0.0,
+          "p95_abs": 0.03816289654715111,
+          "p99_abs": 0.061548413544362274,
+          "rms": 0.015886189523157197
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 141,
+          "max": 0.1287421130036749,
+          "mean": 0.00787930548230805,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.05193019991296924,
+          "p99": 0.11752011425281195
+        },
+        "nis_over_threshold_ratio": {
+          "count": 141,
+          "max": 0.007152339611315273,
+          "mean": 0.0004377391934615583,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.002885011106276069,
+          "p99": 0.00652889523626733
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "YAW": {
+        "accepted_count": 119,
+        "count": 119,
+        "innovation": {
+          "count": 119,
+          "mae": 0.0021439922131084184,
+          "max": 0.011335268729081971,
+          "max_abs": 0.013867728430039692,
+          "mean": 0.0001236336952693456,
+          "min": -0.013867728430039692,
+          "p50_abs": 9.284914464569029e-05,
+          "p95_abs": 0.010406060320598598,
+          "p99_abs": 0.012698114999701597,
+          "rms": 0.0041990250906806005
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 119,
+          "max": 0.001439925480841747,
+          "mean": 0.00013096763604630068,
+          "min": 2.60385983093108e-10,
+          "p10": 1.0839846273615002e-09,
+          "p50": 6.642234358945234e-08,
+          "p95": 0.0007990591908110069,
+          "p99": 0.0011963592689554089
+        },
+        "nis_over_threshold_ratio": {
+          "count": 119,
+          "max": 4.1140728024049915e-05,
+          "mean": 3.741932458465732e-06,
+          "min": 7.439599516945942e-12,
+          "p10": 3.097098935318571e-11,
+          "p50": 1.897781245412924e-09,
+          "p95": 2.2830262594600202e-05,
+          "p99": 3.418169339872596e-05
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "ZUPT": {
+        "accepted_count": 90,
+        "count": 90,
+        "innovation": {
+          "count": 90,
+          "mae": 0.0011968635893892592,
+          "max": 0.0,
+          "max_abs": 0.044218722242019295,
+          "mean": -0.0011968635893892592,
+          "min": -0.044218722242019295,
+          "p50_abs": 0.0,
+          "p95_abs": 0.0,
+          "p99_abs": 0.037845181492497666,
+          "rms": 0.006689714662912435
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 90,
+          "max": 0.2513204678666842,
+          "mean": 0.0058020584901115925,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.18623459334669062
+        },
+        "nis_over_threshold_ratio": {
+          "count": 0
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      }
+    }
+  },
+  "encoder": {
+    "left_velocity_minus_raw_distance_m": 0.1697252042362654,
+    "raw_distance_delta_sample_count": 152,
+    "raw_left_distance_sum_m": 0.11664169648046549,
+    "raw_right_distance_sum_m": 0.07990922852805368,
+    "right_velocity_minus_raw_distance_m": 0.1574806674724986,
+    "straight_left_distance_m": 0.02706602901756659,
+    "straight_right_distance_m": 0.025132741230597548,
+    "velocity_integrated_left_m": 0.2863669007167309,
+    "velocity_integrated_right_m": 0.23738989600055227
+  },
+  "findings": [
+    {
+      "code": "LIDAR_MATCHER_TIMEOUT_FREQUENT",
+      "evidence": {
+        "ratio": 0.8352941176470589
+      },
+      "severity": "WARN"
+    },
+    {
+      "code": "LIDAR_MATCHER_DEGENERATE_FREQUENT",
+      "evidence": {
+        "ratio": 0.8235294117647058
+      },
+      "severity": "WARN"
+    },
+    {
+      "code": "LIDAR_LOW_OBSERVABILITY",
+      "evidence": {
+        "observability_p10": 0.0
+      },
+      "severity": "WARN"
+    },
+    {
+      "code": "EKF_COVARIANCE_GROWTH",
+      "evidence": {
+        "first": 0.0461,
+        "growth_ratio": 11.568947149841355,
+        "last": 0.5333284636076865,
+        "max": 0.6430793762671898
+      },
+      "severity": "WARN"
+    }
+  ],
+  "imu": {
+    "integrated_omega_vs_heading_delta_rad": -0.016138474351568483,
+    "stationary_omega_rad_s": {
+      "count": 95,
+      "mae": 0.004420735276433006,
+      "max": 0.003272492347489368,
+      "max_abs": 0.24434609527920614,
+      "mean": -0.003180632913173877,
+      "min": -0.24434609527920614,
+      "p50_abs": 0.001090830782496456,
+      "p95_abs": 0.003272492347489368,
+      "p99_abs": 0.07823438372064623,
+      "rms": 0.026057412027983937
+    }
+  },
+  "lidar_matcher": {
+    "ambiguity_margin": {
+      "count": 85,
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "p10": 1.0,
+      "p50": 1.0,
+      "p95": 1.0,
+      "p99": 1.0
+    },
+    "confidence": {
+      "count": 85,
+      "max": 0.9078837441903,
+      "mean": 0.1549319219438686,
+      "min": 0.0,
+      "p10": 0.0,
+      "p50": 0.0,
+      "p95": 0.8938796668665345,
+      "p99": 0.9014214693280672
+    },
+    "degenerate_count": 70,
+    "degenerate_ratio": 0.8235294117647058,
+    "inlier_ratio": {
+      "count": 85,
+      "max": 1.0,
+      "mean": 0.9522058823529413,
+      "min": 0.9166666666666666,
+      "p10": 0.9166666666666665,
+      "p50": 0.9583333333333334,
+      "p95": 0.9958333333333332,
+      "p99": 1.0
+    },
+    "observability": {
+      "count": 85,
+      "max": 0.9238693849402011,
+      "mean": 0.40656774736206797,
+      "min": 0.0,
+      "p10": 0.0,
+      "p50": 0.0,
+      "p95": 0.9210252400925808,
+      "p99": 0.9238693849402011
+    },
+    "queue_delay_ms": {
+      "count": 85,
+      "max": 135.178133,
+      "mean": 35.49288759999999,
+      "min": 5.370862,
+      "p10": 8.21084,
+      "p50": 22.793641,
+      "p95": 90.99497,
+      "p99": 135.178133
+    },
+    "robust_rmse_m": {
+      "count": 85,
+      "max": 0.040249858939368686,
+      "mean": 0.029415391094501347,
+      "min": 0.01922311641929473,
+      "p10": 0.023069393990424236,
+      "p50": 0.029692186426704438,
+      "p95": 0.03759372232461543,
+      "p99": 0.040249858939368686
+    },
+    "runtime_ms": {
+      "count": 85,
+      "max": 121.22692800039658,
+      "mean": 47.29720667104737,
+      "min": 39.09728399958112,
+      "p10": 43.201157001021784,
+      "p50": 46.135247001075186,
+      "p95": 50.76392000046326,
+      "p99": 62.03800128045235
+    },
+    "sample_count": 85,
+    "timeout_count": 71,
+    "timeout_ratio": 0.8352941176470589,
+    "tracking_not_ready_count": 83
+  },
+  "limitations": [
+    "Onboard consistency diagnostics cannot prove absolute world-frame accuracy when all onboard sources share the same bias.",
+    "Track-width dependent encoder yaw metrics are omitted if the capture runtime configuration does not expose track width."
+  ],
+  "schema": "R2B4_TEST_HUB_LOCALIZATION_QUALITY_V1",
+  "status": "WARN",
+  "thresholds": {
+    "ekf_covariance_growth_warn_ratio": 5.0,
+    "ekf_nis_p95_warn_fraction_of_gate": 0.8,
+    "ekf_rejection_warn_ratio": 0.1,
+    "encoder_distance_velocity_mismatch_ratio": 0.05,
+    "encoder_imu_omega_warn_mae_rad_s": 0.12,
+    "encoder_straight_distance_bias_ratio": 0.04,
+    "imu_rate_yaw_warn_rad": 0.15,
+    "imu_stationary_rate_warn_rad_s": 0.03,
+    "lidar_degenerate_warn_ratio": 0.15,
+    "lidar_timeout_warn_ratio": 0.05
+  },
+  "tick_count": 153
+}

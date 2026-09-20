@@ -1,0 +1,532 @@
+"""Process-isolated passive runtime observers for the production V3 control path.
+
+The control process may enqueue immutable TickResult/CaptureRecord values, but it
+never performs status file I/O, MCAP encoding, hashing, compression, fsync or Test
+Hub post-processing.  Sidecars own no command, mission, safety or motor authority.
+"""
+
+from __future__ import annotations
+
+import multiprocessing
+import queue
+import time
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+from v3.engine import TickResult
+from v3.execution import CaptureRecord
+from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
+from v3.observation import ObservationHub
+from v3.runtime_performance import apply_current_affinity
+
+
+_SPAWN_METHOD = "spawn"
+_CAPTURE_LOCAL_CAPACITY = 4096
+_CAPTURE_TRANSPORT_MIN_CAPACITY = 512
+_SIDECAR_READY_TIMEOUT_S = 10.0
+_SIDECAR_FINISH_TIMEOUT_S = 120.0
+
+
+def _capture_sidecar_main(
+    capture_id: str,
+    output_path: str,
+    configuration: Mapping[str, object],
+    metadata: Mapping[str, object],
+    config: McapCaptureConfig,
+    data_queue: Any,
+    control_queue: Any,
+    result_queue: Any,
+    ready_event: Any,
+    failed_event: Any,
+    project_root: str,
+    worker_cpu: int | None,
+    strict_affinity: bool,
+) -> None:
+    try:
+        if worker_cpu is not None:
+            apply_current_affinity(
+                worker_cpu,
+                role="observer-sidecar",
+                strict=strict_affinity,
+            )
+        hub = ObservationHub()
+        subscription = hub.subscribe_reliable(
+            "capture-process",
+            capacity=_CAPTURE_LOCAL_CAPACITY,
+            required=True,
+            topics=("v3.capture_record", "v3.raw_lidar"),
+        )
+        consumer = McapCaptureConsumer(
+            capture_id,
+            Path(output_path),
+            subscription=subscription,
+            configuration=configuration,
+            metadata=metadata,
+            config=config,
+        )
+        consumer.start()
+        ready_event.set()
+
+        processed = 0
+        finish_request: tuple[str, bool, int] | None = None
+        running = True
+        while running:
+            while True:
+                try:
+                    command = control_queue.get_nowait()
+                except queue.Empty:
+                    break
+                kind = command[0]
+                if kind == "trigger":
+                    consumer.trigger(command[1], command[2])
+                elif kind == "finish":
+                    finish_request = (str(command[1]), bool(command[2]), int(command[3]))
+                elif kind == "abort":
+                    raise RuntimeError("observer sidecar aborted by parent")
+                else:
+                    raise RuntimeError(f"unknown observer sidecar command: {kind!r}")
+
+            if finish_request is not None and processed >= finish_request[2]:
+                hub.close()
+                result = consumer.finish(finish_request[0], terminal=finish_request[1])
+                evidence: dict[str, object] | None = None
+                result_path: str | None = None
+                if result is not None:
+                    result_path = str(result.path)
+                    from v3.test_hub_runtime import postprocess_capture
+
+                    evidence = postprocess_capture(
+                        result.path,
+                        project_root=Path(project_root),
+                    )
+                result_queue.put(("done", result_path, evidence))
+                running = False
+                continue
+
+            try:
+                kind, payload = data_queue.get(timeout=0.01)
+            except queue.Empty:
+                continue
+            if kind == "record":
+                hub.publish(payload, topic="v3.capture_record")
+            elif kind == "raw_lidar":
+                if payload is not None:
+                    hub.publish(payload, topic="v3.raw_lidar")
+            else:
+                raise RuntimeError(f"unknown observer data kind: {kind!r}")
+            processed += 1
+    except BaseException as exc:
+        failed_event.set()
+        try:
+            result_queue.put(("error", type(exc).__name__, str(exc)))
+        except BaseException:
+            pass
+        ready_event.set()
+
+
+def _status_sidecar_main(
+    path: str,
+    file_mode: int,
+    tick_queue: Any,
+    control_queue: Any,
+    result_queue: Any,
+    ready_event: Any,
+    failed_event: Any,
+    worker_cpu: int | None,
+    strict_affinity: bool,
+) -> None:
+    try:
+        if worker_cpu is not None:
+            apply_current_affinity(
+                worker_cpu,
+                role="status-sidecar",
+                strict=strict_affinity,
+            )
+        # Local import avoids a parent-side circular import with v3_process_runtime.
+        from v3_process_runtime import (
+            RESIDENT_PROCESS_STATUS_SCHEMA,
+            _atomic_private_json,
+            _tick_status,
+        )
+
+        target = Path(path)
+        _atomic_private_json(
+            target,
+            {
+                "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
+                "state": "BOOTING",
+                "monotonic_ns": time.monotonic_ns(),
+            },
+            file_mode,
+        )
+        ready_event.set()
+
+        finishing = False
+        while not finishing:
+            try:
+                command = control_queue.get_nowait()
+            except queue.Empty:
+                command = None
+            if command is not None:
+                kind = command[0]
+                if kind != "finish":
+                    raise RuntimeError(f"unknown status sidecar command: {kind!r}")
+                report_payload = command[1]
+                error_type = command[2]
+                error_text = command[3]
+                payload: dict[str, object] = {
+                    "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
+                    "state": "STOPPED" if error_type is None else "ERROR",
+                    "monotonic_ns": time.monotonic_ns(),
+                    "report": report_payload,
+                    "error_type": error_type,
+                    "error": error_text,
+                }
+                _atomic_private_json(target, payload, file_mode)
+                finishing = True
+                continue
+
+            try:
+                result, ready_for_active = tick_queue.get(timeout=0.02)
+            except queue.Empty:
+                continue
+            _atomic_private_json(
+                target,
+                _tick_status(result, bool(ready_for_active)),
+                file_mode,
+            )
+        result_queue.put(("done",))
+    except BaseException as exc:
+        failed_event.set()
+        try:
+            result_queue.put(("error", type(exc).__name__, str(exc)))
+        except BaseException:
+            pass
+        ready_event.set()
+
+
+class ProcessMcapCaptureSession:
+    """Production MCAP capture whose expensive work lives outside control process."""
+
+    __slots__ = (
+        "_capture_id",
+        "_config",
+        "_configuration",
+        "_control_queue",
+        "_data_queue",
+        "_drop_count",
+        "_enqueued_count",
+        "_failed_event",
+        "_metadata",
+        "_output_path",
+        "_process",
+        "_project_root",
+        "_ready_event",
+        "_result_queue",
+        "_started",
+        "_strict_affinity",
+        "_transport_capacity",
+        "_worker_cpu",
+        "evidence",
+    )
+
+    def __init__(
+        self,
+        capture_id: str,
+        output_path: str | Path,
+        *,
+        configuration: Mapping[str, object],
+        metadata: Mapping[str, object] | None = None,
+        config: McapCaptureConfig | None = None,
+        capacity: int = 256,
+        project_root: str | Path,
+        worker_cpu: int | None = None,
+        strict_affinity: bool = False,
+    ) -> None:
+        identifier = str(capture_id or "").strip()
+        if not identifier:
+            raise ValueError("capture_id must be non-empty")
+        target = Path(output_path)
+        if not target.is_absolute() or target.suffix.lower() != ".mcap":
+            raise ValueError("output_path must be an absolute .mcap path")
+        if not isinstance(configuration, Mapping):
+            raise TypeError("configuration must be a mapping")
+        if metadata is not None and not isinstance(metadata, Mapping):
+            raise TypeError("metadata must be a mapping or None")
+        if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity <= 0:
+            raise ValueError("capacity must be a positive integer")
+        if worker_cpu is not None and (
+            not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0
+        ):
+            raise ValueError("worker_cpu must be non-negative or None")
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
+
+        context = multiprocessing.get_context(_SPAWN_METHOD)
+        self._capture_id = identifier
+        self._output_path = target
+        self._configuration = dict(configuration)
+        self._metadata = dict(metadata or {})
+        self._config = config or McapCaptureConfig()
+        self._transport_capacity = max(_CAPTURE_TRANSPORT_MIN_CAPACITY, capacity * 2)
+        self._data_queue = context.Queue(maxsize=self._transport_capacity)
+        self._control_queue = context.Queue(maxsize=16)
+        self._result_queue = context.Queue(maxsize=4)
+        self._ready_event = context.Event()
+        self._failed_event = context.Event()
+        self._project_root = Path(project_root)
+        self._worker_cpu = worker_cpu
+        self._strict_affinity = strict_affinity
+        self._process = context.Process(
+            target=_capture_sidecar_main,
+            args=(
+                self._capture_id,
+                str(self._output_path),
+                self._configuration,
+                self._metadata,
+                self._config,
+                self._data_queue,
+                self._control_queue,
+                self._result_queue,
+                self._ready_event,
+                self._failed_event,
+                str(self._project_root),
+                self._worker_cpu,
+                self._strict_affinity,
+            ),
+            name="v3-observer-capture",
+            daemon=False,
+        )
+        self._started = False
+        self._enqueued_count = 0
+        self._drop_count = 0
+        self.evidence: dict[str, object] | None = None
+
+    @property
+    def failed(self) -> bool:
+        return bool(self._failed_event.is_set() or self._drop_count)
+
+    @property
+    def transport_drop_count(self) -> int:
+        return self._drop_count
+
+    def start(self) -> None:
+        if self._started:
+            return
+        self._process.start()
+        self._started = True
+        if not self._ready_event.wait(_SIDECAR_READY_TIMEOUT_S):
+            self._terminate()
+            raise RuntimeError("capture sidecar did not become ready")
+        self._raise_early_error()
+        if not self._process.is_alive():
+            raise RuntimeError("capture sidecar exited during startup")
+
+    def _raise_early_error(self) -> None:
+        try:
+            message = self._result_queue.get_nowait()
+        except queue.Empty:
+            return
+        if message and message[0] == "error":
+            raise RuntimeError(f"capture sidecar failed: {message[1]}:{message[2]}")
+        self._result_queue.put(message)
+
+    def _enqueue(self, kind: str, payload: object) -> None:
+        if not self._started:
+            self.start()
+        try:
+            self._data_queue.put_nowait((kind, payload))
+        except queue.Full:
+            self._drop_count += 1
+        else:
+            self._enqueued_count += 1
+
+    def observe(self, record: CaptureRecord) -> None:
+        self._enqueue("record", record)
+
+    def observe_raw_lidar(self, snapshot: object | None) -> None:
+        if snapshot is not None:
+            self._enqueue("raw_lidar", snapshot)
+
+    def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
+        if not self._started:
+            self.start()
+        try:
+            self._control_queue.put_nowait(("trigger", str(reason), monotonic_ns))
+        except queue.Full:
+            self._drop_count += 1
+
+    def finalize(self, report: object | None, *, error: BaseException | None = None) -> Path | None:
+        if not self._started:
+            self.start()
+        status = "PASS" if error is None and getattr(report, "status", 1) == 0 else "FAULT"
+        self._control_queue.put(
+            ("finish", status, True, self._enqueued_count),
+            timeout=2.0,
+        )
+        self._process.join(_SIDECAR_FINISH_TIMEOUT_S)
+        if self._process.is_alive():
+            self._terminate()
+            raise RuntimeError("capture sidecar did not stop")
+        try:
+            message = self._result_queue.get(timeout=2.0)
+        except queue.Empty as exc:
+            raise RuntimeError("capture sidecar returned no result") from exc
+        if message[0] == "error":
+            raise RuntimeError(f"capture sidecar failed: {message[1]}:{message[2]}")
+        result_path = Path(message[1]) if message[1] is not None else None
+        evidence = message[2]
+        if isinstance(evidence, dict):
+            self.evidence = dict(evidence)
+            if self._drop_count:
+                self.evidence["status"] = "FAIL"
+                self.evidence["process_transport_drop_count"] = self._drop_count
+                self.evidence["process_transport_integrity"] = "FAIL"
+        return result_path
+
+    def _terminate(self) -> None:
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=2.0)
+
+
+class ProcessResidentStatusPublisher:
+    """Status formatting and file I/O sidecar; control callback is enqueue-only."""
+
+    __slots__ = (
+        "_config",
+        "_control_queue",
+        "_drop_count",
+        "_failed_event",
+        "_process",
+        "_ready_event",
+        "_result_queue",
+        "_started",
+        "_strict_affinity",
+        "_tick_queue",
+        "_worker_cpu",
+        "_error_text",
+    )
+
+    def __init__(
+        self,
+        config: object,
+        *,
+        worker_cpu: int | None = None,
+        strict_affinity: bool = False,
+    ) -> None:
+        path = getattr(config, "path", None)
+        file_mode = getattr(config, "file_mode", None)
+        if not isinstance(path, Path) or not path.is_absolute():
+            raise TypeError("config must provide absolute Path path")
+        if file_mode != 0o600:
+            raise ValueError("status file_mode must be 0o600")
+        context = multiprocessing.get_context(_SPAWN_METHOD)
+        self._config = config
+        self._tick_queue = context.Queue(maxsize=2)
+        self._control_queue = context.Queue(maxsize=4)
+        self._result_queue = context.Queue(maxsize=4)
+        self._ready_event = context.Event()
+        self._failed_event = context.Event()
+        self._worker_cpu = worker_cpu
+        self._strict_affinity = strict_affinity
+        self._process = context.Process(
+            target=_status_sidecar_main,
+            args=(
+                str(path),
+                int(file_mode),
+                self._tick_queue,
+                self._control_queue,
+                self._result_queue,
+                self._ready_event,
+                self._failed_event,
+                worker_cpu,
+                strict_affinity,
+            ),
+            name="v3-observer-status",
+            daemon=False,
+        )
+        self._started = False
+        self._drop_count = 0
+        self._error_text: str | None = None
+
+    @property
+    def failed(self) -> bool:
+        self._poll_error()
+        return bool(self._failed_event.is_set())
+
+    @property
+    def error(self) -> BaseException | None:
+        self._poll_error()
+        return RuntimeError(self._error_text) if self._error_text is not None else None
+
+    @property
+    def drop_count(self) -> int:
+        return self._drop_count
+
+    def _poll_error(self) -> None:
+        if self._error_text is not None:
+            return
+        while True:
+            try:
+                message = self._result_queue.get_nowait()
+            except queue.Empty:
+                return
+            if message and message[0] == "error":
+                self._error_text = f"{message[1]}:{message[2]}"
+                return
+
+    def start(self) -> None:
+        if self._started:
+            raise RuntimeError("status publisher is already started")
+        self._process.start()
+        self._started = True
+        if not self._ready_event.wait(_SIDECAR_READY_TIMEOUT_S):
+            self._process.terminate()
+            self._process.join(timeout=2.0)
+            raise RuntimeError("status sidecar did not become ready")
+        self._poll_error()
+        if self._error_text is not None:
+            raise RuntimeError(f"status sidecar failed: {self._error_text}")
+
+    def publish_tick(self, result: TickResult, ready_for_active: bool = False) -> None:
+        if not isinstance(result, TickResult):
+            raise TypeError("result must be TickResult")
+        if type(ready_for_active) is not bool:
+            raise TypeError("ready_for_active must be bool")
+        if not self._started:
+            raise RuntimeError("status publisher is not started")
+        try:
+            self._tick_queue.put_nowait((result, ready_for_active))
+        except queue.Full:
+            # Status is explicitly latest/best-effort and has no safety authority.
+            self._drop_count += 1
+
+    def finish(self, *, report: object | None = None, error: BaseException | None = None) -> None:
+        if not self._started:
+            return
+        if report is not None and error is not None:
+            raise ValueError("finish accepts report or error, not both")
+        report_payload = report.as_dict() if report is not None else None
+        self._control_queue.put(
+            (
+                "finish",
+                report_payload,
+                type(error).__name__ if error is not None else None,
+                str(error) if error is not None else None,
+            ),
+            timeout=2.0,
+        )
+        self._process.join(timeout=10.0)
+        if self._process.is_alive():
+            self._process.terminate()
+            self._process.join(timeout=2.0)
+            raise RuntimeError("status sidecar did not stop")
+        self._poll_error()
+
+
+__all__ = [
+    "ProcessMcapCaptureSession",
+    "ProcessResidentStatusPublisher",
+]

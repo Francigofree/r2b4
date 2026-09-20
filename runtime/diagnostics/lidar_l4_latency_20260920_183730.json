@@ -1,0 +1,75 @@
+{
+  "command": [
+    "r",
+    "rc",
+    "30",
+    "c",
+    "full"
+  ],
+  "command_returncode": 130,
+  "complete_A_to_E_count": 41,
+  "csv_file": "/home/alba/project_r2b4/runtime/diagnostics/lidar_l4_latency_20260920_183730.csv",
+  "event_count": 403,
+  "event_file": "/home/alba/project_r2b4/runtime/diagnostics/lidar_l4_latency_20260920_183730.events.ndjson",
+  "generated_at": "2026-09-20T18:37:53",
+  "probe_hook_errors": [],
+  "repo_root": "/home/alba/project_r2b4",
+  "row_count": 55,
+  "schema": "R2B4_LIDAR_L4_LATENCY_PROBE_V1",
+  "segments": {
+    "A_measurement_to_scan_complete": {
+      "count": 55,
+      "max_ms": 90.050742,
+      "mean_ms": 47.33923218181818,
+      "p50_ms": 47.600028,
+      "p95_ms": 77.529464,
+      "p99_ms": 90.050742
+    },
+    "B_scan_complete_to_snapshot": {
+      "count": 55,
+      "max_ms": 53.651616,
+      "mean_ms": 10.669580454545455,
+      "p50_ms": 7.109352,
+      "p95_ms": 37.326789,
+      "p99_ms": 53.651616
+    },
+    "C_snapshot_to_publication": {
+      "count": 50,
+      "max_ms": 152.704858,
+      "mean_ms": 51.35869226,
+      "p50_ms": 43.269357,
+      "p95_ms": 106.019872,
+      "p99_ms": 152.704858
+    },
+    "D_publication_to_l2": {
+      "count": 41,
+      "max_ms": 127.101279,
+      "mean_ms": 21.694034926829268,
+      "p50_ms": 10.97652,
+      "p95_ms": 62.476476,
+      "p99_ms": 127.101279
+    },
+    "E_l2_to_l4": {
+      "count": 41,
+      "max_ms": 12.939013,
+      "mean_ms": 2.976185097560976,
+      "p50_ms": 2.075011,
+      "p95_ms": 6.621054,
+      "p99_ms": 12.939013
+    },
+    "TOTAL_measurement_to_l4": {
+      "count": 41,
+      "max_ms": 227.206259,
+      "mean_ms": 130.8603426097561,
+      "p50_ms": 132.157306,
+      "p95_ms": 203.864322,
+      "p99_ms": 227.206259
+    }
+  },
+  "thresholds": {
+    "total_over_200ms_count": 3,
+    "total_over_250ms_count": 0,
+    "total_over_300ms_count": 0
+  },
+  "tool_version": 1
+}

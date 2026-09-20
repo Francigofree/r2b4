@@ -338,7 +338,14 @@ class NativePoseFeedback:
 class NativeHardwareSensorOwner:
     """Acquire/release core sensors plus the optional native camera capability."""
 
-    __slots__ = ("_closed", "_inputs", "_person_evidence", "_pose_feedback")
+    # P0_CONTROL_PROCESS_ISOLATION_20260920: retain port only for tiny pose-ring publication.
+    __slots__ = (
+        "_closed",
+        "_inputs",
+        "_lidar_port",
+        "_person_evidence",
+        "_pose_feedback",
+    )
 
     def __init__(
         self,
@@ -491,7 +498,9 @@ class NativeHardwareSensorOwner:
                     except Exception:
                         pass
             raise
+        assert lidar is not None
         self._inputs = inputs
+        self._lidar_port = lidar
         self._pose_feedback = pose_feedback
         self._person_evidence = person_evidence
         self._closed = False
@@ -514,6 +523,20 @@ class NativeHardwareSensorOwner:
         estimate = _layer_output(result, "L3")
         if isinstance(estimate, RobotEstimate):
             self._pose_feedback.publish(estimate)
+            publish_pose_reference = getattr(
+                self._lidar_port,
+                "publish_pose_reference",
+                None,
+            )
+            if callable(publish_pose_reference):
+                publish_pose_reference(
+                    TimedPoseReference(
+                        estimate.context.monotonic_ns,
+                        estimate.x_m,
+                        estimate.y_m,
+                        estimate.yaw_rad,
+                    )
+                )
         admitted = _layer_output(result, "L2")
         mission = _layer_output(result, "L5")
         if (

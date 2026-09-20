@@ -27,6 +27,11 @@ from v3.adapters.native_lidar_port import (
     load_native_lidar_port_config,
     open_native_lidar_port,
 )
+from v3.adapters.process_lidar_port import open_process_lidar_port
+from v3.process_sidecars import (
+    ProcessMcapCaptureSession,
+    ProcessResidentStatusPublisher,
+)
 from v3.contracts import (
     AcquisitionFrame,
     MissionIntent,
@@ -539,11 +544,11 @@ def run_v3_resident_process(
     motor_gpio_backend: object,
     command_gateway: AtomicResidentCommandGateway,
     runtime_config: ResidentPhysicalRuntimeConfig,
-    status_publisher: AsyncResidentStatusPublisher,
+    status_publisher: AsyncResidentStatusPublisher | ProcessResidentStatusPublisher,
     *,
     approval: str,
     stop_requested: Callable[[], bool],
-    capture_session: _PassiveCaptureSession | TriggeredCaptureSession | McapCaptureSession | None = None,
+    capture_session: _PassiveCaptureSession | TriggeredCaptureSession | McapCaptureSession | ProcessMcapCaptureSession | None = None,
     capture_trigger_requested: Callable[[], bool] | None = None,
     affinity_config: RuntimeAffinityConfig | None = None,
     run_hardware: Callable[..., ResidentRuntimeReport] = run_native_hardware_resident_control,
@@ -554,15 +559,23 @@ def run_v3_resident_process(
         raise TypeError("command_gateway must be AtomicResidentCommandGateway")
     if not isinstance(runtime_config, ResidentPhysicalRuntimeConfig):
         raise TypeError("runtime_config must be ResidentPhysicalRuntimeConfig")
-    if not isinstance(status_publisher, AsyncResidentStatusPublisher):
-        raise TypeError("status_publisher must be AsyncResidentStatusPublisher")
+    if not isinstance(
+        status_publisher,
+        (AsyncResidentStatusPublisher, ProcessResidentStatusPublisher),
+    ):
+        raise TypeError("status_publisher must be a resident status publisher")
     if not callable(stop_requested):
         raise TypeError("stop_requested must be callable")
     if not callable(run_hardware):
         raise TypeError("run_hardware must be callable")
     if capture_session is not None and not isinstance(
         capture_session,
-        (_PassiveCaptureSession, TriggeredCaptureSession, McapCaptureSession),
+        (
+            _PassiveCaptureSession,
+            TriggeredCaptureSession,
+            McapCaptureSession,
+            ProcessMcapCaptureSession,
+        ),
     ):
         raise TypeError("capture_session must be a process capture session or None")
     if capture_trigger_requested is not None and not callable(capture_trigger_requested):
@@ -740,6 +753,39 @@ def native_lidar_factory(
     return open_lidar
 
 
+def process_lidar_factory(
+    sensors: NativeSensorHardwareConfig,
+    project_root: Path = PROJECT_ROOT,
+    affinity_config: RuntimeAffinityConfig | None = None,
+) -> Callable[[Callable[[int], TimedPoseReference | None]], object]:
+    """Close LiDAR config in parent and move serial/driver ownership to child."""
+
+    if not isinstance(sensors, NativeSensorHardwareConfig):
+        raise TypeError("sensors must be NativeSensorHardwareConfig")
+    if affinity_config is not None and not isinstance(
+        affinity_config, RuntimeAffinityConfig
+    ):
+        raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
+    affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
+    lidar_config = load_native_lidar_port_config(
+        project_root / "conf" / "hardver.json",
+        project_root / "conf" / "vezerles.json",
+        danger_zone_m=sensors.lidar_danger_zone_m,
+    )
+
+    def open_lidar(
+        pose_provider: Callable[[int], TimedPoseReference | None],
+    ) -> object:
+        return open_process_lidar_port(
+            lidar_config,
+            pose_provider,
+            worker_cpu=(affinity.lidar_cpu if affinity.enabled else None),
+            strict_affinity=(affinity.strict if affinity.enabled else False),
+        )
+
+    return open_lidar
+
+
 def _runtime_owned_path(value: str, project_root: Path) -> Path:
     path = Path(value)
     if not path.is_absolute():
@@ -840,11 +886,14 @@ def main(argv: list[str] | None = None) -> int:
         command_gateway = AtomicResidentCommandGateway(
             ResidentCommandMailboxConfig(path=command_path)
         )
-        status_publisher = AsyncResidentStatusPublisher(
-            ResidentStatusConfig(path=status_path)
+        # P0_CONTROL_PROCESS_ISOLATION_20260920: status formatting/I/O is out-of-process.
+        status_publisher = ProcessResidentStatusPublisher(
+            ResidentStatusConfig(path=status_path),
+            worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
+            strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
         capture_session = (
-            McapCaptureSession(
+            ProcessMcapCaptureSession(
                 capture_path.stem,
                 capture_path,
                 configuration=_capture_configuration(PROJECT_ROOT, runtime_config),
@@ -864,20 +913,26 @@ def main(argv: list[str] | None = None) -> int:
                     max_session_records=args.capture_max_session_records,
                     mode=args.capture_mode,
                 ),
+                project_root=PROJECT_ROOT,
+                worker_cpu=(
+                    affinity_config.io_cpu if affinity_config.enabled else None
+                ),
+                strict_affinity=(
+                    affinity_config.strict if affinity_config.enabled else False
+                ),
             )
             if capture_path is not None
             else None
         )
 
         import lgpio
-        import serial
         import smbus2
 
         if runtime_config.sensor_inputs is None:
             raise ValueError("resident runtime did not close native sensor inputs")
-        open_lidar = native_lidar_factory(
+        # P0_CONTROL_PROCESS_ISOLATION_20260920: serial/driver/pump live in child.
+        open_lidar = process_lidar_factory(
             runtime_config.sensor_inputs,
-            serial.Serial,
             affinity_config=affinity_config,
         )
 
@@ -935,11 +990,14 @@ __all__ = [
     "SignalStop",
     "TriggeredCaptureSession",
     "McapCaptureSession",
+    "ProcessMcapCaptureSession",
+    "ProcessResidentStatusPublisher",
     "_PassiveCaptureSession",
     "_capture_configuration",
     "load_resident_runtime_config",
     "main",
     "native_lidar_factory",
+    "process_lidar_factory",
     "native_sensor_policy",
     "run_v3_resident_process",
 ]
