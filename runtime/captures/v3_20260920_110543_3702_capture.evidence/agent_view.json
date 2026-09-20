@@ -1,0 +1,520 @@
+{
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260920_110543_3702_capture.mcap",
+    "capture_name": "v3_20260920_110543_3702_capture.mcap",
+    "capture_sha256": "9ca72d26617756a8f6e6f5219acc85dfba3d1715fd02419dcd93e097a353b42a",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 15,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 1,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 135,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 407,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "PRODUCTION_FAULT",
+      "count": 1,
+      "first_tick": 406,
+      "last_tick": 406,
+      "layer": "L11",
+      "reason": "L11_ERROR",
+      "representative": {
+        "category": "PRODUCTION_FAULT",
+        "evidence": {
+          "signals": {
+            "L12": {
+              "latch_state": "FAULT",
+              "left_output": 0.0,
+              "reason": "L11_ERROR",
+              "right_output": 0.0,
+              "safety_decision": "FAULT"
+            },
+            "L2": {
+              "rejected[0].age_ns": 107429500,
+              "rejected[0].reason": "DUPLICATE",
+              "rejected[1].age_ns": 50809089,
+              "rejected[1].reason": "DUPLICATE"
+            },
+            "L3": {
+              "omega_rad_s": 0.5920877068461181,
+              "v_mps": 0.11674631503117815
+            },
+            "L4": {
+              "freshness_ns": 107429500,
+              "local_costmap.freshness_ns": 107429500,
+              "local_costmap.revision": 230,
+              "map_revision": 430
+            },
+            "L5": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "lifecycle": "ACTIVE",
+              "mode": "EXPLORE",
+              "stop_reason": null
+            },
+            "L6": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "progress": 0.021484375,
+              "reason": null,
+              "status": "ACTIVE"
+            },
+            "L7": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "expiry_tick": 407,
+              "selection_reason": "BEST_TRAJECTORY:escape-00-07",
+              "trajectory.min_clearance_m": 0.05049774851539232,
+              "trajectory.omega_rad_s": 0.44999999999999996,
+              "trajectory.progress_score": 0.0,
+              "trajectory.v_mps": 0.0
+            },
+            "L8": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "requested_omega_rad_s": 0.4144780732884704,
+              "requested_v_mps": 0.0,
+              "stop_reason": null
+            },
+            "L9": {
+              "active_constraints": [],
+              "allowed_omega_rad_s": 0.4144780732884704,
+              "allowed_v_mps": 0.0,
+              "requested_omega_rad_s": 0.4144780732884704,
+              "requested_v_mps": 0.0
+            }
+          }
+        },
+        "id": "fault-layer-406",
+        "layer": "L11",
+        "monotonic_ns": 346142897089,
+        "reason": "L11_ERROR",
+        "severity": "CRITICAL",
+        "tick_id": 406
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "SAFETY",
+      "count": 1,
+      "first_tick": 406,
+      "last_tick": 406,
+      "layer": "L12",
+      "reason": "L11_ERROR",
+      "representative": {
+        "category": "SAFETY",
+        "evidence": {
+          "signals": {
+            "L12": {
+              "latch_state": "FAULT",
+              "left_output": 0.0,
+              "reason": "L11_ERROR",
+              "right_output": 0.0,
+              "safety_decision": "FAULT"
+            },
+            "L2": {
+              "rejected[0].age_ns": 107429500,
+              "rejected[0].reason": "DUPLICATE",
+              "rejected[1].age_ns": 50809089,
+              "rejected[1].reason": "DUPLICATE"
+            },
+            "L3": {
+              "omega_rad_s": 0.5920877068461181,
+              "v_mps": 0.11674631503117815
+            },
+            "L4": {
+              "freshness_ns": 107429500,
+              "local_costmap.freshness_ns": 107429500,
+              "local_costmap.revision": 230,
+              "map_revision": 430
+            },
+            "L5": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "lifecycle": "ACTIVE",
+              "mode": "EXPLORE",
+              "stop_reason": null
+            },
+            "L6": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "progress": 0.021484375,
+              "reason": null,
+              "status": "ACTIVE"
+            },
+            "L7": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "expiry_tick": 407,
+              "selection_reason": "BEST_TRAJECTORY:escape-00-07",
+              "trajectory.min_clearance_m": 0.05049774851539232,
+              "trajectory.omega_rad_s": 0.44999999999999996,
+              "trajectory.progress_score": 0.0,
+              "trajectory.v_mps": 0.0
+            },
+            "L8": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "requested_omega_rad_s": 0.4144780732884704,
+              "requested_v_mps": 0.0,
+              "stop_reason": null
+            },
+            "L9": {
+              "active_constraints": [],
+              "allowed_omega_rad_s": 0.4144780732884704,
+              "allowed_v_mps": 0.0,
+              "requested_omega_rad_s": 0.4144780732884704,
+              "requested_v_mps": 0.0
+            }
+          }
+        },
+        "id": "safety-fault-406",
+        "layer": "L12",
+        "monotonic_ns": 346142897089,
+        "reason": "L11_ERROR",
+        "severity": "CRITICAL",
+        "tick_id": 406
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 77,
+      "first_tick": 0,
+      "last_tick": 401,
+      "layer": "L1",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "representative": {
+        "category": "DEVICE_HEALTH",
+        "evidence": {
+          "devices": [
+            {
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_STALE",
+              "state": "DEGRADED"
+            },
+            {
+              "device_id": "CAMERA_FRONT",
+              "reason": "CAMERA_NO_FRAME",
+              "state": "UNKNOWN"
+            },
+            {
+              "device_id": "PERSON_DETECTOR_FRONT",
+              "reason": "PERSON_DETECTOR_NO_RESULT",
+              "state": "UNKNOWN"
+            }
+          ]
+        },
+        "id": "device-0",
+        "layer": "L1",
+        "monotonic_ns": 331537110195,
+        "reason": "DEVICE_HEALTH_NON_OK",
+        "severity": "HIGH",
+        "tick_id": 0
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 11,
+      "first_tick": 145,
+      "last_tick": 382,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:TIME_ALIGNMENT_FAILED",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 0,
+              "reason": "TIME_ALIGNMENT_FAILED",
+              "source_device_id": "RPLIDAR_C1",
+              "source_sequence": 28
+            }
+          ]
+        },
+        "id": "l2-reject-145",
+        "layer": "L2",
+        "monotonic_ns": 335455370087,
+        "reason": "OBSERVATION_REJECTED:TIME_ALIGNMENT_FAILED",
+        "severity": "HIGH",
+        "tick_id": 145
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "TIMING",
+      "count": 1,
+      "first_tick": null,
+      "last_tick": null,
+      "layer": "Runtime",
+      "reason": "TICK_INTERVAL_OUTLIER",
+      "representative": {
+        "category": "TIMING",
+        "evidence": {
+          "delta_ms": 108.495047,
+          "median_ms": 34.6581465
+        },
+        "id": "timing-gap-251",
+        "layer": "Runtime",
+        "monotonic_ns": null,
+        "reason": "TICK_INTERVAL_OUTLIER",
+        "severity": "HIGH",
+        "tick_id": null
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 162,
+      "last_tick": 162,
+      "layer": "L3",
+      "reason": "COVARIANCE_GROWTH",
+      "representative": {
+        "category": "LOCALIZATION",
+        "evidence": {
+          "first_trace": 0.0461,
+          "growth_ratio": 5.7078393870341815,
+          "last_trace": 0.2628431097365793,
+          "max_trace": 0.2631313957422758,
+          "sample_count": 407
+        },
+        "id": "covariance-growth-162",
+        "layer": "L3",
+        "monotonic_ns": 336235044624,
+        "reason": "COVARIANCE_GROWTH",
+        "severity": "MEDIUM",
+        "tick_id": 162
+      },
+      "severity": "MEDIUM"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 1,
+      "first_tick": 212,
+      "last_tick": 212,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 255324707,
+              "reason": "STALE",
+              "source_device_id": "PERSON_DETECTOR_FRONT",
+              "source_sequence": 78
+            }
+          ]
+        },
+        "id": "l2-reject-212",
+        "layer": "L2",
+        "monotonic_ns": 338499578707,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "MEDIUM",
+        "tick_id": 212
+      },
+      "severity": "MEDIUM"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "PRODUCTION_FAULT",
+      "count": 1,
+      "first_tick": 406,
+      "group_index": 1,
+      "last_tick": 406,
+      "path": "01_L11_ERROR.ndjson",
+      "reason": "L11_ERROR",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "category": "SAFETY",
+      "count": 1,
+      "first_tick": 406,
+      "group_index": 2,
+      "last_tick": 406,
+      "path": "02_L11_ERROR.ndjson",
+      "reason": "L11_ERROR",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 77,
+      "first_tick": 0,
+      "group_index": 3,
+      "last_tick": 401,
+      "path": "03_DEVICE_HEALTH_NON_OK.ndjson",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 11,
+      "first_tick": 145,
+      "group_index": 4,
+      "last_tick": 382,
+      "path": "04_OBSERVATION_REJECTED_TIME_ALIGNMENT_FAILED.ndjson",
+      "reason": "OBSERVATION_REJECTED:TIME_ALIGNMENT_FAILED",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 162,
+      "group_index": 6,
+      "last_tick": 162,
+      "path": "06_COVARIANCE_GROWTH.ndjson",
+      "reason": "COVARIANCE_GROWTH",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 1,
+      "first_tick": 212,
+      "group_index": 7,
+      "last_tick": 212,
+      "path": "07_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 21,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 2.048721626,
+      "end_tick": 99,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 0,
+      "stop_ticks": 100,
+      "tick_count": 100
+    },
+    {
+      "end_s": 14.605786894,
+      "end_tick": 406,
+      "fault_ticks": 1,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 307,
+      "start_s": 2.073988357,
+      "start_tick": 100,
+      "stop_ticks": 0,
+      "tick_count": 307
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 2,
+      "status": "WARN",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 1,
+      "status": "WARN",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_L11_ERROR.ndjson",
+      "raw_scan_count": 6,
+      "reason": "L11_ERROR",
+      "size_bytes": 61297,
+      "truncated": false
+    },
+    {
+      "group_index": 2,
+      "path": "02_L11_ERROR.ndjson",
+      "raw_scan_count": 6,
+      "reason": "L11_ERROR",
+      "size_bytes": 61297,
+      "truncated": false
+    },
+    {
+      "group_index": 4,
+      "path": "04_OBSERVATION_REJECTED_TIME_ALIGNMENT_FAILED.ndjson",
+      "raw_scan_count": 10,
+      "reason": "OBSERVATION_REJECTED:TIME_ALIGNMENT_FAILED",
+      "size_bytes": 101643,
+      "truncated": false
+    },
+    {
+      "group_index": 6,
+      "path": "06_COVARIANCE_GROWTH.ndjson",
+      "raw_scan_count": 11,
+      "reason": "COVARIANCE_GROWTH",
+      "size_bytes": 110472,
+      "truncated": false
+    },
+    {
+      "group_index": 7,
+      "path": "07_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 10,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 100119,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "MATCH",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "MATCH",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}
