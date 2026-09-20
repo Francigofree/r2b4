@@ -272,11 +272,18 @@ def main() -> int:
     print(f"Repo: {root}")
     print("Precondition: SHA is checked only for files modified by this upgrade.")
 
-    for relative in EXPECTED_GIT_BLOBS:
+    for relative, expected in EXPECTED_GIT_BLOBS.items():
         path = root / relative
         if not path.is_file():
             fail(f"missing target file: {relative}")
-
+        actual = git_blob(root, relative)
+        if actual != expected:
+            fail(
+                f"source precondition mismatch: {relative}\n"
+                f"  expected git blob {expected}\n"
+                f"  actual   git blob {actual}\n"
+                "No files were changed."
+            )
     for relative in NEW_FILES:
         if (root / relative).exists():
             fail(f"new-file target already exists: {relative}")
