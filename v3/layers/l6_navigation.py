@@ -1322,8 +1322,10 @@ class TrajectoryNavigator:
             if self._trajectory_candidates:
                 self._require_fresh_cached_plan(context)
             return False
-        if context.monotonic_ns - request.context.monotonic_ns > self._request_timeout_ns:
-            raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
+        # In closed-completion mode the async boundary owns transport timing.
+        # Charging request-source time here would consume deadline before the
+        # request was physically submitted and would make runtime jitter a
+        # hidden second timeout authority.
         event = self._closed_completion
         if event is None or event.request_context is None or event.request_context.tick_id < request.context.tick_id:
             if self._trajectory_candidates:
@@ -1332,6 +1334,8 @@ class TrajectoryNavigator:
         if event.request_context != request.context:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
         if event.error is not None:
+            if event.error == "ASYNC_L6_DEADLINE_MISSED":
+                raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
             raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{event.error}")
         result = event.result
         if result is None or result.source_context != request.context:

@@ -537,6 +537,8 @@ class NativeControlComposition:
         "_transport_request",
         "_transport_id",
         "_transport_error",
+        "_transport_started_ns",
+        "_transport_timeout_ns",
         "_world_model",
     )
 
@@ -599,6 +601,8 @@ class NativeControlComposition:
         self._transport_request = None
         self._transport_id = None
         self._transport_error = None
+        self._transport_started_ns = None
+        self._transport_timeout_ns = config.async_l6.request_timeout_ns
         self._rollout_backend = backend
         self._motion_realization = motion_realization
         self._operational_constraints = operational_constraints
@@ -671,10 +675,12 @@ class NativeControlComposition:
         self._engine.restore(checkpoint.engine_last_context)
 
     def close_inputs(self, inputs: TickInputs) -> TickInputs:
-        """Runtime input closure; never called from a production layer or replay.
+        """Close async planner completion before L1 without borrowing pre-submit time.
 
-        Dispatch only L6's immutable pending request. The resulting availability
-        or transport error is frozen in the returned input before L1 executes.
+        The transport deadline starts only after the request has actually been
+        submitted to the worker. Completion visibility, transport failure and
+        deadline expiry are all frozen into ``PlannerInput`` so canonical replay
+        never re-evaluates worker scheduling.
         """
         if not self._closed_planner_mode or inputs.planner_input is not None:
             return inputs
@@ -687,23 +693,42 @@ class NativeControlComposition:
             self._transport_request = request
             self._transport_id = None
             self._transport_error = None
+            self._transport_started_ns = None
             if request is not None:
                 try:
                     if backend is None:
                         raise RuntimeError("ASYNC_L6_BACKEND_MISSING")
                     self._transport_id = backend.submit(request)
+                    # This tick is the first point at which the request actually
+                    # exists outside L6. Do not charge earlier scheduler/closure
+                    # latency against the worker's bounded completion budget.
+                    self._transport_started_ns = inputs.context.monotonic_ns
                 except Exception as exc:
                     self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
         if request is not None:
             result = None
             if self._transport_error is None:
-                try:
-                    result = backend.take(self._transport_id)
-                except Exception as exc:
-                    self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
+                started_ns = self._transport_started_ns
+                if started_ns is None:
+                    self._transport_error = "ASYNC_L6_TRANSPORT_STATE_INVALID"
+                elif inputs.context.monotonic_ns - started_ns > self._transport_timeout_ns:
+                    if self._transport_id is not None and backend is not None:
+                        backend.abandon(self._transport_id)
+                    self._transport_id = None
+                    self._transport_error = "ASYNC_L6_DEADLINE_MISSED"
+                else:
+                    try:
+                        result = backend.take(self._transport_id)
+                    except Exception as exc:
+                        self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
             if result is not None or self._transport_error is not None:
                 self._transport_id = None
-                event = PlannerInput(inputs.context, request.context, result, self._transport_error)
+                event = PlannerInput(
+                    inputs.context,
+                    request.context,
+                    result,
+                    self._transport_error,
+                )
         return replace(inputs, planner_input=event)
 
     def verify_planner_input(self, inputs: TickInputs) -> None:

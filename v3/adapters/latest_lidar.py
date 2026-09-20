@@ -145,7 +145,7 @@ class LatestLidarBackendConfig:
 class NativeLatestLidarBackend:
     """Close one latest matcher result into the native lidar contract."""
 
-    __slots__ = ("_config", "_port")
+    __slots__ = ("_config", "_port", "_raw_point_cache_key", "_raw_point_cache")
 
     def __init__(
         self,
@@ -164,6 +164,8 @@ class NativeLatestLidarBackend:
                 raise TypeError(f"port must provide a callable {method_name} method")
         self._port = port
         self._config = config
+        self._raw_point_cache_key: tuple[int, int] | None = None
+        self._raw_point_cache: tuple[LidarPointReading, ...] = ()
 
     @property
     def port(self) -> LatestMatcherResultPort:
@@ -281,21 +283,34 @@ class NativeLatestLidarBackend:
                 or measurement_age_ns > self._config.maximum_result_age_ns
             )
         )
-        raw_points = tuple(getattr(snapshot, "raw_scan", ()) or ())
-        local_points = tuple(
-            LidarPointReading(
-                angle_deg=_finite(getattr(point, "angle_deg", None), "raw_scan.angle_deg"),
-                distance_m=_finite(
-                    getattr(point, "distance_m", None),
-                    "raw_scan.distance_m",
-                ),
-                quality=_nonnegative_int(
-                    getattr(point, "quality", None),
-                    "raw_scan.quality",
-                ),
+        # Raw scan geometry is immutable for one physical revision. The LiDAR
+        # source is polled faster than the scanner produces revisions, so avoid
+        # rebuilding hundreds of Python point objects for duplicate polls.
+        # Freshness/health below are still recomputed from the current context.
+        cache_key = (revision, captured_ns)
+        if self._raw_point_cache_key == cache_key:
+            local_points = self._raw_point_cache
+        else:
+            raw_points = tuple(getattr(snapshot, "raw_scan", ()) or ())
+            local_points = tuple(
+                LidarPointReading(
+                    angle_deg=_finite(
+                        getattr(point, "angle_deg", None),
+                        "raw_scan.angle_deg",
+                    ),
+                    distance_m=_finite(
+                        getattr(point, "distance_m", None),
+                        "raw_scan.distance_m",
+                    ),
+                    quality=_nonnegative_int(
+                        getattr(point, "quality", None),
+                        "raw_scan.quality",
+                    ),
+                )
+                for point in raw_points
             )
-            for point in raw_points
-        )
+            self._raw_point_cache_key = cache_key
+            self._raw_point_cache = local_points
         return LidarScanReading(
             revision=revision,
             captured_monotonic_ns=captured_ns,

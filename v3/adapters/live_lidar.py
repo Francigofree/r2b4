@@ -349,7 +349,7 @@ class LidarHealthBackend(Protocol):
 class NativeLidarSource:
     """Split one acquired scan into independent native V3 capabilities."""
 
-    __slots__ = ("_backend", "_config")
+    __slots__ = ("_backend", "_config", "_local_points_cache_key", "_local_points_cache")
 
     def __init__(
         self,
@@ -360,6 +360,8 @@ class NativeLidarSource:
             raise TypeError("config must be NativeLidarConfig")
         self._backend = backend
         self._config = config
+        self._local_points_cache_key: tuple[int, int] | None = None
+        self._local_points_cache: DeviceSample | None = None
 
     @property
     def device_id(self) -> str:
@@ -453,36 +455,44 @@ class NativeLidarSource:
                     ),
                 )
             )
-            local_points = _bounded_local_points(scan.local_points, self._config)
-            local_values: list[DataField] = [
-                DataField("frame_id", "ROBOT_BASE"),
-                DataField("point_count", len(local_points)),
-            ]
-            for index, point in enumerate(local_points):
-                angle_rad = math.radians(point.angle_deg)
-                # RPLIDAR angles are clockwise-positive; V3 robot/map Y is left.
-                local_values.extend(
-                    (
-                        DataField(
-                            f"point_{index:03d}_x_m",
-                            point.distance_m * math.cos(angle_rad),
-                        ),
-                        DataField(
-                            f"point_{index:03d}_y_m",
-                            -point.distance_m * math.sin(angle_rad),
-                        ),
-                        DataField(f"point_{index:03d}_quality", point.quality),
+            # The geometry payload is immutable for one physical revision. Reuse
+            # the already-built typed sample on duplicate 20 ms polls instead of
+            # rebuilding ~3 DataFields per retained point. Dynamic age/stale and
+            # health samples above remain freshly constructed every poll.
+            cache_key = (scan.revision, scan.captured_monotonic_ns)
+            local_sample = self._local_points_cache
+            if self._local_points_cache_key != cache_key or local_sample is None:
+                local_points = _bounded_local_points(scan.local_points, self._config)
+                local_values: list[DataField] = [
+                    DataField("frame_id", "ROBOT_BASE"),
+                    DataField("point_count", len(local_points)),
+                ]
+                for index, point in enumerate(local_points):
+                    angle_rad = math.radians(point.angle_deg)
+                    # RPLIDAR angles are clockwise-positive; V3 robot/map Y is left.
+                    local_values.extend(
+                        (
+                            DataField(
+                                f"point_{index:03d}_x_m",
+                                point.distance_m * math.cos(angle_rad),
+                            ),
+                            DataField(
+                                f"point_{index:03d}_y_m",
+                                -point.distance_m * math.sin(angle_rad),
+                            ),
+                            DataField(f"point_{index:03d}_quality", point.quality),
+                        )
                     )
-                )
-            samples.append(
-                DeviceSample(
+                local_sample = DeviceSample(
                     device_id=self.device_id,
                     kind="lidar_local_points",
                     sequence=scan.revision,
                     captured_monotonic_ns=scan.captured_monotonic_ns,
                     values=tuple(local_values),
                 )
-            )
+                self._local_points_cache_key = cache_key
+                self._local_points_cache = local_sample
+            samples.append(local_sample)
         localization_usable = bool(
             reading.pose is not None
             and reading.timing_valid

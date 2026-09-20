@@ -454,16 +454,23 @@ def _build_rows(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         admission_ns = _effective_event_ns(admission) if admission else None
         l4_ns = _effective_event_ns(l4) if l4 else None
 
-        # Pick the publication that could have fed this first accepted L2 event:
-        # latest publication for this revision no later than L2 execution.
+        # Pick the publication that could actually have been visible to this
+        # control tick. L0 closes against TickContext.monotonic_ns, not against
+        # the later wall-clock time at which L2 happened to execute. A duplicate
+        # publication after the tick cutoff cannot have fed this L2 admission.
         publication = None
         if pubs:
+            cutoff_ns = (
+                admission.get("tick_monotonic_ns")
+                if admission and isinstance(admission.get("tick_monotonic_ns"), int)
+                else None
+            )
             candidates = [
                 p for p in pubs
                 if isinstance(p.get("publication_monotonic_ns"), int)
-                and (admission_ns is None or p["publication_monotonic_ns"] <= admission_ns)
+                and (cutoff_ns is None or p["publication_monotonic_ns"] <= cutoff_ns)
             ]
-            publication = candidates[-1] if candidates else pubs[0]
+            publication = candidates[-1] if candidates else None
         publication_ns = (
             int(publication["publication_monotonic_ns"])
             if publication and isinstance(publication.get("publication_monotonic_ns"), int)
