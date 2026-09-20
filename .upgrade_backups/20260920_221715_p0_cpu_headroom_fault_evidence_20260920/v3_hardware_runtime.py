@@ -399,7 +399,7 @@ class NativeHardwareSensorOwner:
             lidar = open_lidar_port(pose_feedback)
             if config.camera_device is not None:
                 with temporary_current_affinity(
-                    affinity.vision_cpu if affinity.enabled else None,
+                    affinity.io_cpu if affinity.enabled else None,
                     role="vision",
                     strict=affinity.strict,
                 ):
@@ -411,7 +411,7 @@ class NativeHardwareSensorOwner:
                         ),
                         monotonic_ns=monotonic_ns,
                     )
-                    # Camera/libcamera workers inherit the dedicated vision CPU.
+                    # Camera/libcamera workers inherit the shared I/O/background CPU.
                     # Camera remains non-critical for motor safety authority.
                     camera.start()
 
@@ -429,7 +429,7 @@ class NativeHardwareSensorOwner:
                 else:
                     detector: NativePersonDetector | None = None
                     with temporary_current_affinity(
-                        affinity.vision_cpu if affinity.enabled else None,
+                        affinity.io_cpu if affinity.enabled else None,
                         role="vision",
                         strict=affinity.strict,
                     ):
@@ -798,9 +798,7 @@ def run_native_hardware_resident_control(
             ),
             trajectory_rollout_backend=rollout_backend,
             enable_multirate_inputs=enable_multirate_inputs,
-            # Critical encoder/IMU acquisition stays on the dedicated I/O CPU;
-            # camera/person inference is isolated on vision_cpu so it cannot starve it.
-            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None), 
             lidar_input_worker_cpu=(
                 affinity.lidar_cpu if affinity.enabled else None
             ),

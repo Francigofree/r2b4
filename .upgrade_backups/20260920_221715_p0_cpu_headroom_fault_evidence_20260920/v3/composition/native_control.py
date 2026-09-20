@@ -628,9 +628,9 @@ class NativeControlComposition:
 
     @property
     def tick_evidence(self) -> tuple[object, ...]:
-        """Expose bounded EKF facts plus any caught L1-L11 exception detail."""
+        """Expose only bounded diagnostic facts produced by the last L3 call."""
 
-        return self._estimator.last_update_evidence + self._engine.fault_evidence
+        return self._estimator.last_update_evidence
 
     def set_timing_observer(
         self, observer: Callable[[str, int], None] | None

@@ -115,28 +115,6 @@ class TickResult:
     trace: TickTrace
 
 
-@dataclass(frozen=True, slots=True)
-class LayerFaultEvidence:
-    """Bounded diagnostic detail for one caught L1-L11 exception."""
-
-    context: TickContext
-    layer: str
-    error_type: str
-    message: str
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.context, TickContext):
-            raise TypeError("LayerFaultEvidence.context must be TickContext")
-        if self.layer not in LAYER_ORDER[:-1]:
-            raise ValueError("LayerFaultEvidence.layer must be L1-L11")
-        if not isinstance(self.error_type, str) or not self.error_type.strip():
-            raise ValueError("LayerFaultEvidence.error_type must be non-empty")
-        if not isinstance(self.message, str):
-            raise TypeError("LayerFaultEvidence.message must be str")
-        if len(self.message) > 256:
-            raise ValueError("LayerFaultEvidence.message must be bounded to 256 characters")
-
-
 class TickExecutionError(RuntimeError):
     """The L12 stage could not safely finish its single commit."""
 
@@ -162,15 +140,7 @@ class TickEngine:
     def __init__(self, layers: PipelineLayers) -> None:
         self._layers = layers
         self._last_context: TickContext | None = None
-        self._last_fault_evidence: LayerFaultEvidence | None = None
         self._timing_observer: Callable[[str, int], None] | None = None
-
-    @property
-    def fault_evidence(self) -> tuple[LayerFaultEvidence, ...]:
-        """Expose bounded detail for the last caught L1-L11 exception only."""
-
-        value = self._last_fault_evidence
-        return () if value is None else (value,)
 
     def set_timing_observer(
         self, observer: Callable[[str, int], None] | None
@@ -204,7 +174,6 @@ class TickEngine:
         self._last_context = last_context
 
     def run_tick(self, inputs: TickInputs) -> TickResult:
-        self._last_fault_evidence = None
         records: list[LayerRecord] = []
         request: ActuatorRequest | None = None
         fault_layer: str | None = None
@@ -312,15 +281,9 @@ class TickEngine:
                     wheels,
                     admitted,
                 )
-        except Exception as exc:
+        except Exception:
             fault_layer = self._next_layer_name(records)
             upstream_fault = f"{fault_layer}_ERROR"
-            self._last_fault_evidence = LayerFaultEvidence(
-                context=inputs.context,
-                layer=fault_layer,
-                error_type=type(exc).__name__,
-                message=str(exc)[:256],
-            )
 
         if upstream_fault == "INVALID_TICK_ORDER":
             fault_layer = "TickEngine"
@@ -347,7 +310,6 @@ class TickEngine:
     ) -> TickResult:
         """Commit the one L12 fail-closed decision when input closure failed."""
 
-        self._last_fault_evidence = None
         order_fault = self._tick_order_fault(context)
         if order_fault is not None:
             reason = order_fault
@@ -463,7 +425,6 @@ class TickEngine:
 
 __all__ = [
     "LAYER_ORDER",
-    "LayerFaultEvidence",
     "LayerRecord",
     "LayerValue",
     "PipelineLayers",
