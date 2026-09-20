@@ -104,6 +104,28 @@ class MultiRateInputConfig:
         )
 
 
+def _next_period_deadline(
+    current_due_ns: int,
+    started_ns: int,
+    visible_ns: int,
+    period_ns: int,
+) -> int:
+    """Advance one source on its acquisition phase without completion-time drift.
+
+    The first deadline is anchored to the first acquisition start.  Later
+    deadlines advance from the previous scheduled deadline.  If a read overruns
+    one or more slots, missed slots are skipped instead of producing a catch-up
+    burst on the shared R2B4 worker lane.
+    """
+
+    anchor_ns = current_due_ns if current_due_ns > 0 else started_ns
+    next_due_ns = anchor_ns + period_ns
+    if next_due_ns <= visible_ns:
+        missed = ((visible_ns - next_due_ns) // period_ns) + 1
+        next_due_ns += missed * period_ns
+    return next_due_ns
+
+
 @dataclass(frozen=True, slots=True)
 class _PublishedSnapshot:
     visible_monotonic_ns: int
@@ -297,6 +319,7 @@ class MultiRateLiveInputReader:
 
     def _poll_state(self, state: _SourceState) -> None:
         started_ns = self._clock_ns()
+        scheduled_due_ns = state.next_due_ns
         context = TickContext(state.sequence, started_ns)
         state.sequence += 1
         try:
@@ -328,10 +351,16 @@ class MultiRateLiveInputReader:
                     f"L0_SOURCE_INVALID:{type(exc).__name__}",
                 )
 
+        next_due_ns = _next_period_deadline(
+            scheduled_due_ns,
+            started_ns,
+            visible_ns,
+            state.period_ns,
+        )
         published = _PublishedSnapshot(visible_ns, snapshot)
         with state.lock:
             state.history.append(published)
-            state.next_due_ns = visible_ns + state.period_ns
+            state.next_due_ns = next_due_ns
 
     def _start_lane(self, name: str, states: tuple[_SourceState, ...]) -> None:
         if not states:

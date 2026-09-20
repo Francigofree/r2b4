@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R2B4 V3 LIVE control-loop root-cause diagnostic.
+R2B4 V3 LIVE control-loop root-cause diagnostic V2.
 
 This tool starts the NORMAL production resident runtime through OperatorController,
 with real motors, real encoders, real IMU/LiDAR/camera/person, real L0-L12,
@@ -50,7 +50,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA = "R2B4_V3_LIVE_CONTROL_ROOTCAUSE_DIAG_V1"
+SCHEMA = "R2B4_V3_LIVE_CONTROL_ROOTCAUSE_DIAG_V2"
 
 SOURCE_TARGETS = {
     "ENCODER": [
@@ -125,6 +125,10 @@ from pathlib import Path
 
 if any(arg == "v3_process_runtime.py" or arg.endswith("/v3_process_runtime.py") for arg in sys.argv):
     RAW_PATH = Path(os.environ["R2B4_LIVE_DIAG_RAW"])
+    REPO_PATH = Path(os.environ["R2B4_LIVE_DIAG_REPO"]).resolve()
+    repo_text = str(REPO_PATH)
+    if repo_text not in sys.path:
+        sys.path.insert(0, repo_text)
     MECHANISM_EVERY = int(os.environ.get("R2B4_LIVE_DIAG_MECHANISM_EVERY", "50"))
     SCHEMA = "R2B4_V3_LIVE_CONTROL_ROOTCAUSE_RAW_V1"
 
@@ -697,30 +701,59 @@ def monitor_motion(
     started = time.monotonic()
     active_seen = False
     idle_since = None
-    last_print = None
 
     while True:
         if max_wait_s > 0 and time.monotonic() - started > max_wait_s:
             return "MAX_WAIT"
-        status = read_json(status_path)
-        if status and status.get("state") == "RUNNING":
-            mission = status.get("mission")
-            mode = mission.get("mode") if isinstance(mission, dict) else None
-            enabled = status.get("enabled") is True
-            is_active = mode in ACTIVE_MODES or enabled
-            if is_active:
-                if not active_seen:
-                    print(f"LIVE MOTION DETECTED: mode={mode or 'UNKNOWN'}", flush=True)
-                active_seen = True
-                idle_since = None
-            elif active_seen:
-                if idle_since is None:
-                    idle_since = time.monotonic()
-                    print("motion returned to IDLE/STOP; collecting tail...", flush=True)
-                elif time.monotonic() - idle_since >= post_idle_s:
-                    return "MOTION_COMPLETE"
-        time.sleep(poll_s)
 
+        status = read_json(status_path)
+        if status:
+            state = status.get("state")
+            if state == "RUNNING":
+                mission = status.get("mission")
+                mode = mission.get("mode") if isinstance(mission, dict) else None
+                enabled = status.get("enabled") is True
+                is_active = mode in ACTIVE_MODES or enabled
+
+                if is_active:
+                    if not active_seen:
+                        print(
+                            f"LIVE MOTION DETECTED: mode={mode or 'UNKNOWN'}",
+                            flush=True,
+                        )
+                    active_seen = True
+                    idle_since = None
+                elif active_seen:
+                    if idle_since is None:
+                        idle_since = time.monotonic()
+                        print(
+                            "motion returned to IDLE/STOP; collecting tail...",
+                            flush=True,
+                        )
+                    elif time.monotonic() - idle_since >= post_idle_s:
+                        return "MOTION_COMPLETE"
+
+            elif state == "STOPPED":
+                report = status.get("report")
+                if isinstance(report, dict):
+                    reason = (
+                        report.get("final_reason")
+                        or report.get("exit_reason")
+                        or report.get("status")
+                    )
+                    fault = report.get("fault_layer")
+                    print(
+                        "runtime stopped during diagnostic: "
+                        f"reason={reason or '-'} fault={fault or '-'}",
+                        flush=True,
+                    )
+                return (
+                    "RUNTIME_STOPPED_AFTER_MOTION"
+                    if active_seen
+                    else "RUNTIME_STOPPED_BEFORE_MOTION"
+                )
+
+        time.sleep(poll_s)
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -784,17 +817,19 @@ def main() -> int:
     old_pythonpath = os.environ.get("PYTHONPATH")
     old_raw = os.environ.get("R2B4_LIVE_DIAG_RAW")
     old_every = os.environ.get("R2B4_LIVE_DIAG_MECHANISM_EVERY")
+    old_repo_env = os.environ.get("R2B4_LIVE_DIAG_REPO")
     injected_path = str(inject_dir)
     if old_pythonpath:
         injected_path += os.pathsep + old_pythonpath
     os.environ["PYTHONPATH"] = injected_path
     os.environ["R2B4_LIVE_DIAG_RAW"] = str(raw_path)
+    os.environ["R2B4_LIVE_DIAG_REPO"] = str(repo)
     os.environ["R2B4_LIVE_DIAG_MECHANISM_EVERY"] = str(args.mechanism_every)
 
     pid = None
     stop_reason = None
     try:
-        print("R2B4 LIVE CONTROL ROOT-CAUSE DIAG")
+        print("R2B4 LIVE CONTROL ROOT-CAUSE DIAG V2")
         print(f"repo:             {repo}")
         print(f"capture mode:     {args.capture_mode}")
         print(f"mechanism sample: every {args.mechanism_every} ticks")
@@ -818,12 +853,25 @@ def main() -> int:
             os.environ.pop("R2B4_LIVE_DIAG_MECHANISM_EVERY", None)
         else:
             os.environ["R2B4_LIVE_DIAG_MECHANISM_EVERY"] = old_every
+        if old_repo_env is None:
+            os.environ.pop("R2B4_LIVE_DIAG_REPO", None)
+        else:
+            os.environ["R2B4_LIVE_DIAG_REPO"] = old_repo_env
 
         wait_for_ready(
             runtime_dir / "v3_status.json",
             runtime_dir / ".r2b4_runtime_pid",
             args.ready_timeout_s,
         )
+
+        # On instrumentation startup failure, sitecustomize writes the error
+        # immediately. Successful runs only write RAW at normal process exit.
+        startup_diag = read_json(raw_path) if raw_path.is_file() else None
+        if isinstance(startup_diag, dict) and startup_diag.get("instrumentation_error"):
+            raise RuntimeError(
+                "live instrumentation failed at startup: "
+                + str(startup_diag["instrumentation_error"])
+            )
 
         print()
         print("READY FOR LIVE RUN")
@@ -861,6 +909,10 @@ def main() -> int:
             os.environ.pop("R2B4_LIVE_DIAG_MECHANISM_EVERY", None)
         else:
             os.environ["R2B4_LIVE_DIAG_MECHANISM_EVERY"] = old_every
+        if old_repo_env is None:
+            os.environ.pop("R2B4_LIVE_DIAG_REPO", None)
+        else:
+            os.environ["R2B4_LIVE_DIAG_REPO"] = old_repo_env
 
         try:
             if controller.snapshot().runtime_running:

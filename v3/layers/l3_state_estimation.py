@@ -420,72 +420,124 @@ class NativeStateEstimator:
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
         self._last_update_evidence = []
-        wheel = _single_observation(frame, "wheel_velocity")
-        heading = _single_observation(frame, "ekf_heading")
+        wheel = _optional_observation(frame, "wheel_velocity")
+        heading = _optional_observation(frame, "ekf_heading")
         lidar_pose = _optional_observation(frame, "lidar_pose")
-        left_mps = _numeric_value(wheel, "left_mps")
-        right_mps = _numeric_value(wheel, "right_mps")
-        encoder_trust = _numeric_value(wheel, "trust")
-        wheel_values = {field.key: field.value for field in wheel.values}
-        encoder_rejection_code = wheel_values.get("rejection_code", "NONE")
-        if not isinstance(encoder_rejection_code, str):
-            raise ValueError("wheel_velocity.rejection_code must be a string")
-        encoder_timing_valid = wheel_values.get("measurement_timing_valid", True)
-        encoder_stale = wheel_values.get("measurement_stale", False)
-        if type(encoder_timing_valid) is not bool or type(encoder_stale) is not bool:
-            raise ValueError("wheel_velocity timing flags must be bool")
-        velocity_feedback_valid = (
-            encoder_rejection_code == "NONE"
-            and encoder_timing_valid
-            and not encoder_stale
-        )
-        wheel_distance_delta = _optional_wheel_distance_delta(wheel)
-        measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
-        measured_omega = _numeric_value(heading, "omega_rad_s")
-        heading_confidence = _numeric_value(heading, "confidence")
-        omega_confidence = _optional_numeric_value(
-            heading,
-            "omega_confidence",
-            heading_confidence,
-        )
-        if not 0.0 <= encoder_trust <= 1.0:
-            raise ValueError("wheel_velocity.trust must be in [0, 1]")
-        if not 0.0 <= heading_confidence <= 1.0:
-            raise ValueError("ekf_heading.confidence must be in [0, 1]")
-        if not 0.0 <= omega_confidence <= 1.0:
-            raise ValueError("ekf_heading.omega_confidence must be in [0, 1]")
-        if max(abs(left_mps), abs(right_mps)) > self._config.max_abs_wheel_velocity_mps:
-            raise ValueError("wheel_velocity exceeds the configured physical range")
 
-        if omega_confidence > 0.0:
-            left_mps, right_mps = self._cross_check_wheels(
-                left_mps,
-                right_mps,
-                measured_omega,
+        # The native EKF needs one closed wheel+IMU pair to establish its initial
+        # yaw/velocity reference.  After bootstrap, L2 event semantics are
+        # intentionally multi-rate: a control tick may contain no *new* sample
+        # from one or more sources because repeated sequences are DUPLICATE and
+        # must not be applied to the EKF a second time.
+        if self._last_context is None and (wheel is None or heading is None):
+            raise ValueError(
+                "L3 bootstrap requires admitted wheel_velocity and ekf_heading observations"
             )
-        else:
-            measured_omega = (
+
+        left_mps = 0.0
+        right_mps = 0.0
+        encoder_trust = 0.0
+        velocity_feedback_valid = False
+        wheel_distance_delta: tuple[float, float] | None = None
+        measured_velocity: float | None = None
+        wheel_omega: float | None = None
+        still = False
+
+        measured_yaw: float | None = None
+        measured_omega: float | None = None
+        heading_confidence = 0.0
+        omega_confidence = 0.0
+
+        if heading is not None:
+            measured_yaw = _normalize_angle(_numeric_value(heading, "yaw_rad"))
+            measured_omega = _numeric_value(heading, "omega_rad_s")
+            heading_confidence = _numeric_value(heading, "confidence")
+            omega_confidence = _optional_numeric_value(
+                heading,
+                "omega_confidence",
+                heading_confidence,
+            )
+            if not 0.0 <= heading_confidence <= 1.0:
+                raise ValueError("ekf_heading.confidence must be in [0, 1]")
+            if not 0.0 <= omega_confidence <= 1.0:
+                raise ValueError("ekf_heading.omega_confidence must be in [0, 1]")
+
+        if wheel is not None:
+            left_mps = _numeric_value(wheel, "left_mps")
+            right_mps = _numeric_value(wheel, "right_mps")
+            encoder_trust = _numeric_value(wheel, "trust")
+            wheel_values = {field.key: field.value for field in wheel.values}
+            encoder_rejection_code = wheel_values.get("rejection_code", "NONE")
+            if not isinstance(encoder_rejection_code, str):
+                raise ValueError("wheel_velocity.rejection_code must be a string")
+            encoder_timing_valid = wheel_values.get("measurement_timing_valid", True)
+            encoder_stale = wheel_values.get("measurement_stale", False)
+            if type(encoder_timing_valid) is not bool or type(encoder_stale) is not bool:
+                raise ValueError("wheel_velocity timing flags must be bool")
+            velocity_feedback_valid = (
+                encoder_rejection_code == "NONE"
+                and encoder_timing_valid
+                and not encoder_stale
+            )
+            wheel_distance_delta = _optional_wheel_distance_delta(wheel)
+            if not 0.0 <= encoder_trust <= 1.0:
+                raise ValueError("wheel_velocity.trust must be in [0, 1]")
+            if max(abs(left_mps), abs(right_mps)) > self._config.max_abs_wheel_velocity_mps:
+                raise ValueError("wheel_velocity exceeds the configured physical range")
+
+            # Preserve the established R2B4 cross-check exactly when a fresh,
+            # trusted gyro-rate observation exists on the same tick.  When IMU
+            # has no fresh event, wheel yaw-rate is the bounded fallback.
+            if heading is not None and omega_confidence > 0.0:
+                assert measured_omega is not None
+                left_mps, right_mps = self._cross_check_wheels(
+                    left_mps,
+                    right_mps,
+                    measured_omega,
+                )
+            wheel_omega = (
                 right_mps - left_mps
             ) / self._config.track_width_m
-        measured_velocity = 0.5 * (left_mps + right_mps)
-        still = (
-            velocity_feedback_valid
-            and abs(left_mps) < self._config.still_velocity_threshold_mps
-            and abs(right_mps) < self._config.still_velocity_threshold_mps
-        )
+            measured_velocity = 0.5 * (left_mps + right_mps)
+            still = (
+                velocity_feedback_valid
+                and abs(left_mps) < self._config.still_velocity_threshold_mps
+                and abs(right_mps) < self._config.still_velocity_threshold_mps
+            )
 
         if self._last_context is None:
+            # Bootstrap guard above proves both values exist here.
+            assert measured_yaw is not None
+            assert measured_velocity is not None
+            assert wheel_omega is not None
+            assert measured_omega is not None
             self._state[self._YAW] = measured_yaw
             if velocity_feedback_valid:
                 self._state[self._VELOCITY] = measured_velocity
         else:
             dt_s = self._dt_s(frame)
-            if dt_s > 0.0:
-                if omega_confidence > 0.0:
+
+            # Prediction runs at the control rate even when no new measurement
+            # event is admitted.  Prefer a fresh trusted IMU rate, then a fresh
+            # wheel-derived rate; if neither is new, coast with the last
+            # bias-corrected angular rate.  Reconstructing +bias in the coast
+            # path is required because _predict() subtracts gyro bias internally.
+            if heading is not None and omega_confidence > 0.0:
+                assert measured_omega is not None
+                prediction_omega = measured_omega
+                if dt_s > 0.0 and wheel is not None:
                     self._adapt_stationary_bias(measured_omega, dt_s, still)
-                self._predict(measured_omega, dt_s, wheel_distance_delta)
+            elif wheel_omega is not None:
+                prediction_omega = wheel_omega
+            else:
+                prediction_omega = self._last_omega + self._state[self._GYRO_BIAS]
+
+            if dt_s > 0.0:
+                self._predict(prediction_omega, dt_s, wheel_distance_delta)
+
             quality_floor = self._config.minimum_measurement_quality
-            if velocity_feedback_valid:
+            if wheel is not None and velocity_feedback_valid:
+                assert measured_velocity is not None
                 self._update_scalar(
                     self._VELOCITY,
                     measured_velocity,
@@ -502,26 +554,37 @@ class NativeStateEstimator:
                         nis_max=None,
                         update_type="ZUPT",
                     )
-            self._update_scalar(
-                self._YAW,
-                measured_yaw,
-                self._config.yaw_measurement_variance
-                / max(quality_floor, heading_confidence),
-                nis_max=self._config.yaw_nis_max,
-                angular=True,
-                update_type="YAW",
-            )
+            if heading is not None:
+                assert measured_yaw is not None
+                self._update_scalar(
+                    self._YAW,
+                    measured_yaw,
+                    self._config.yaw_measurement_variance
+                    / max(quality_floor, heading_confidence),
+                    nis_max=self._config.yaw_nis_max,
+                    angular=True,
+                    update_type="YAW",
+                )
+
         if lidar_pose is not None:
             self._update_lidar(lidar_pose)
 
+        # Preserve the established R2B4 output semantics: trusted gyro rate is
+        # bias-corrected after every measurement correction (including lidar,
+        # which may couple into gyro bias through covariance).  A fresh wheel
+        # fallback is already a body yaw-rate estimate.  With no fresh angular
+        # evidence, keep the previous _last_omega.
+        if heading is not None and omega_confidence > 0.0:
+            assert measured_omega is not None
+            self._last_omega = measured_omega - self._state[self._GYRO_BIAS]
+        elif wheel_omega is not None:
+            self._last_omega = wheel_omega
+
         self._last_context = frame.context
-        self._last_omega = (
-            measured_omega - self._state[self._GYRO_BIAS]
-            if omega_confidence > 0.0
-            else measured_omega
-        )
         self._stabilize_covariance()
-        return self._estimate(frame, omega_confidence)
+        # No fresh IMU rate means deliberately conservative omega uncertainty;
+        # the state/omega value itself remains continuous through _last_omega.
+        return self._estimate(frame, omega_confidence if heading is not None else 0.0)
 
     def _cross_check_wheels(
         self,

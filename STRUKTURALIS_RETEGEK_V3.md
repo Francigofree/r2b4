@@ -170,6 +170,8 @@ Külön kezelendő: (1) fizikai device/stream health, (2) measurement validity/f
 
 Live multi-rate acquisitionnél a source `TickContext` az acquisition saját monoton időpontja, nem egy későbbi control tick kölcsönvett ideje. A measurement timestamp és a snapshot publication/visibility idő külön fogalom; egy measurement csak olyan control tickben válhat láthatóvá, amelynek döntési ideje nem korábbi a publikációnál.
 
+A multi-rate út event-szemantikájú: ugyanazon `(device_id, kind, sequence)` ismételt snapshotja ugyanaz a measurement, ezért L2 `DUPLICATE` és nem alkalmazható újra csak azért, hogy kitöltse a control tick frekvenciáját. A natív L3 EKF bootstrapkor egy friss `wheel_velocity` + `ekf_heading` párból indul; bootstrap után control tickenként forrásonként `0..1` friss admitted measurement érkezhet. L3 minden érvényes control tickben predikál, de encoder-, IMU- és LiDAR measurement correctiont kizárólag friss admitted observationre végez. Egyetlen tickben hiányzó új measurement önmagában nem exception/fault; a tartós hiány, stale állapot és fizikai device health továbbra is L1/L2/L12 freshness/safety contract szerint fail-closed kezelendő.
+
 ### 7.1 Encoder
 
 A fizikai count/delta és közvetlen elmozdulás RAW measurement; control-output vagy velocity filter nem írhatja át. Velocity estimation lehet stateful/időablakos, de bounded és determinisztikus. Pulse-window, debounce, CPR és tuning source/config, nem architektúra.
