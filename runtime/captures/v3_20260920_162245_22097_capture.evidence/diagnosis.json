@@ -1,0 +1,192 @@
+{
+  "behavior_status": "NOMINAL",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [
+      {
+        "after": 1415,
+        "before": 1519
+      }
+    ],
+    "complete": false,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 207,
+    "integrity_reasons": [
+      "CAPTURED_TICK_SEQUENCE_GAP",
+      "OBSERVATION_RELIABLE_LOSS",
+      "RAW_LIDAR_REVISION_GAP",
+      "REFERENCED_RAW_LIDAR_MISSING"
+    ],
+    "integrity_warnings": [],
+    "message_stream_sha256": "091dc4a3678b34a39df545a5b0afaa9fd84d94bc95fa196b9b13f561b049a48b",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 3655,
+      "capacity": 256,
+      "closed": true,
+      "consumed_count": 3655,
+      "first_lost_sequence": 2759,
+      "high_water_mark": 256,
+      "last_lost_sequence": 2987,
+      "lost_count": 207,
+      "matched_count": 3862,
+      "mode": "RELIABLE",
+      "name": "capture",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": true,
+    "pre_window_complete": true,
+    "raw_lidar_duplicate_count": 1358,
+    "raw_lidar_expected_scan_count": 466,
+    "raw_lidar_gap_missing_revisions": [
+      157,
+      318,
+      341,
+      342,
+      343,
+      344,
+      345,
+      346,
+      347,
+      348,
+      349,
+      350,
+      351,
+      352,
+      353,
+      354,
+      355,
+      356,
+      357,
+      358,
+      359,
+      360
+    ],
+    "raw_lidar_loss_fraction": 0.04721030042918455,
+    "raw_lidar_loss_missing_revisions": [
+      157,
+      318,
+      341,
+      342,
+      343,
+      344,
+      345,
+      346,
+      347,
+      348,
+      349,
+      350,
+      351,
+      352,
+      353,
+      354,
+      355,
+      356,
+      357,
+      358,
+      359,
+      360
+    ],
+    "raw_lidar_loss_tolerance_fraction": 0.05,
+    "raw_lidar_loss_within_tolerance": false,
+    "raw_lidar_max_consecutive_missing": 20,
+    "raw_lidar_max_consecutive_missing_allowed": 2,
+    "raw_lidar_missing_count": 22,
+    "raw_lidar_missing_revisions": [
+      157,
+      318
+    ],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [
+      {
+        "after": 156,
+        "before": 158
+      },
+      {
+        "after": 317,
+        "before": 319
+      },
+      {
+        "after": 340,
+        "before": 361
+      }
+    ],
+    "raw_lidar_truncated_count": 0,
+    "session_start_short_pre_window": false,
+    "terminal_short_post_window": false
+  },
+  "capture_status": "FAIL",
+  "diagnosis_status": "FAIL",
+  "evidence_status": "FAIL",
+  "first_divergence": null,
+  "first_live_incident": null,
+  "incident_count": 128,
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 5.9216345993921315,
+      "last_trace": 0.0779403827030053,
+      "max_trace": 0.2729873550319773,
+      "sample_count": 1853
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 1.2825489581499077,
+      "requested_motion_tick_count": 341
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 19402120550538,
+        "progress_span": 0.0,
+        "tick_id": 1955,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 1589,
+      "FAULT": 0,
+      "STOP": 264,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 62,
+      "l2_actionable_rejection_count": 852,
+      "l2_duplicate_count": 5038,
+      "l2_rejection_count": 5890,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 5038,
+        "STALE": 852
+      }
+    },
+    "ticks": {
+      "count": 1853,
+      "first_monotonic_ns": 19354837195588,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 19402120550538,
+      "last_tick_id": 1955
+    },
+    "timing": {
+      "max_ms": 2090.715057,
+      "p50_ms": 20.441153,
+      "p95_ms": 43.60282,
+      "p99_ms": 66.481747,
+      "sample_count": 1852
+    }
+  },
+  "physical_root_cause": null,
+  "replay_error": "MCAP preflight failed: CAPTURE_INCOMPLETE: captured tick gap",
+  "replay_requested": true,
+  "replay_status": "ERROR",
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: captured tick gap"
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "FAIL",
+  "structure_valid": true
+}
