@@ -1,0 +1,510 @@
+{
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260920_175410_31621_capture.mcap",
+    "capture_name": "v3_20260920_175410_31621_capture.mcap",
+    "capture_sha256": "7b5040a35f4846b6dc3759cfe0f69408399e6e9fbf5ac8e4f71348a44b8ff375",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 15,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 1,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 130,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 339,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "FAIL",
+  "evidence_status": "FAIL",
+  "incident_groups": [
+    {
+      "category": "PRODUCTION_FAULT",
+      "count": 1,
+      "first_tick": 338,
+      "last_tick": 338,
+      "layer": "L6",
+      "reason": "L6_ERROR",
+      "representative": {
+        "category": "PRODUCTION_FAULT",
+        "evidence": {
+          "signals": {
+            "L12": {
+              "latch_state": "FAULT",
+              "left_output": 0.0,
+              "reason": "L6_ERROR",
+              "right_output": 0.0,
+              "safety_decision": "FAULT"
+            },
+            "L2": {
+              "rejected[0].age_ns": 139857204,
+              "rejected[0].reason": "DUPLICATE",
+              "rejected[1].age_ns": 374846951,
+              "rejected[1].reason": "STALE",
+              "rejected[2].age_ns": 386264214,
+              "rejected[2].reason": "STALE"
+            },
+            "L3": {
+              "omega_rad_s": 0.10889269153521858,
+              "v_mps": 0.2709026570992186
+            },
+            "L4": {
+              "freshness_ns": 139857204,
+              "local_costmap.freshness_ns": 139857204,
+              "local_costmap.revision": 178,
+              "map_revision": 310
+            },
+            "L5": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "lifecycle": "ACTIVE",
+              "mode": "EXPLORE",
+              "stop_reason": null
+            }
+          }
+        },
+        "id": "fault-layer-338",
+        "layer": "L6",
+        "monotonic_ns": 24854310823214,
+        "reason": "L6_ERROR",
+        "severity": "CRITICAL",
+        "tick_id": 338
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "SAFETY",
+      "count": 1,
+      "first_tick": 338,
+      "last_tick": 338,
+      "layer": "L12",
+      "reason": "L6_ERROR",
+      "representative": {
+        "category": "SAFETY",
+        "evidence": {
+          "signals": {
+            "L12": {
+              "latch_state": "FAULT",
+              "left_output": 0.0,
+              "reason": "L6_ERROR",
+              "right_output": 0.0,
+              "safety_decision": "FAULT"
+            },
+            "L2": {
+              "rejected[0].age_ns": 139857204,
+              "rejected[0].reason": "DUPLICATE",
+              "rejected[1].age_ns": 374846951,
+              "rejected[1].reason": "STALE",
+              "rejected[2].age_ns": 386264214,
+              "rejected[2].reason": "STALE"
+            },
+            "L3": {
+              "omega_rad_s": 0.10889269153521858,
+              "v_mps": 0.2709026570992186
+            },
+            "L4": {
+              "freshness_ns": 139857204,
+              "local_costmap.freshness_ns": 139857204,
+              "local_costmap.revision": 178,
+              "map_revision": 310
+            },
+            "L5": {
+              "constraints.max_omega_rad_s": 0.6,
+              "constraints.max_v_mps": 0.3,
+              "lifecycle": "ACTIVE",
+              "mode": "EXPLORE",
+              "stop_reason": null
+            }
+          }
+        },
+        "id": "safety-fault-338",
+        "layer": "L12",
+        "monotonic_ns": 24854310823214,
+        "reason": "L6_ERROR",
+        "severity": "CRITICAL",
+        "tick_id": 338
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "count": 1,
+      "first_tick": null,
+      "last_tick": null,
+      "layer": "Capture",
+      "reason": "RAW_LIDAR_REVISION_GAP,REFERENCED_RAW_LIDAR_MISSING",
+      "representative": {
+        "category": "CAPTURE_INTEGRITY",
+        "evidence": {
+          "integrity": {
+            "capacity_eviction_count": 0,
+            "captured_tick_sequence_gaps": [],
+            "complete": false,
+            "digest_scope": "all MCAP messages before capture_finalized event",
+            "ingress_drop_count": 0,
+            "integrity_reasons": [
+              "RAW_LIDAR_REVISION_GAP",
+              "REFERENCED_RAW_LIDAR_MISSING"
+            ],
+            "integrity_warnings": [],
+            "message_stream_sha256": "8fcc12a895f2d72e4241188314086aaa94669cfa9c5db8cd9f960bc36b2384d5",
+            "post_window_complete": true,
+            "pre_window_complete": true,
+            "raw_lidar_duplicate_count": 140,
+            "raw_lidar_expected_scan_count": 139,
+            "raw_lidar_gap_missing_revisions": [
+              18,
+              31,
+              37,
+              52,
+              96,
+              101,
+              106,
+              108,
+              131
+            ],
+            "raw_lidar_loss_fraction": 0.06474820143884892,
+            "raw_lidar_loss_missing_revisions": [
+              18,
+              31,
+              37,
+              52,
+              96,
+              101,
+              106,
+              108,
+              131
+            ],
+            "raw_lidar_loss_tolerance_fraction": 0.05,
+            "raw_lidar_loss_within_tolerance": false,
+            "raw_lidar_max_consecutive_missing": 1,
+            "raw_lidar_max_consecutive_missing_allowed": 2,
+            "raw_lidar_missing_count": 9,
+            "raw_lidar_missing_revisions": [
+              31,
+              52,
+              101,
+              106,
+              108,
+              131
+            ],
+            "raw_lidar_out_of_order_count": 0,
+            "raw_lidar_revision_gaps": [
+              {
+                "after": 17,
+                "before": 19
+              },
+              {
+                "after": 30,
+                "before": 32
+              },
+              {
+                "after": 36,
+                "before": 38
+              },
+              {
+                "after": 51,
+                "before": 53
+              },
+              {
+                "after": 95,
+                "before": 97
+              },
+              {
+                "after": 100,
+                "before": 102
+              },
+              {
+                "after": 105,
+                "before": 107
+              },
+              {
+                "after": 107,
+                "before": 109
+              },
+              {
+                "after": 130,
+                "before": 132
+              }
+            ],
+            "raw_lidar_truncated_count": 0
+          }
+        },
+        "id": "capture-integrity",
+        "layer": "Capture",
+        "monotonic_ns": null,
+        "reason": "RAW_LIDAR_REVISION_GAP,REFERENCED_RAW_LIDAR_MISSING",
+        "severity": "CRITICAL",
+        "tick_id": null
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 69,
+      "first_tick": 0,
+      "last_tick": 68,
+      "layer": "L1",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "representative": {
+        "category": "DEVICE_HEALTH",
+        "evidence": {
+          "devices": [
+            {
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_STALE",
+              "state": "DEGRADED"
+            },
+            {
+              "device_id": "CAMERA_FRONT",
+              "reason": "CAMERA_NO_FRAME",
+              "state": "UNKNOWN"
+            },
+            {
+              "device_id": "PERSON_DETECTOR_FRONT",
+              "reason": "PERSON_DETECTOR_NO_RESULT",
+              "state": "UNKNOWN"
+            }
+          ]
+        },
+        "id": "device-0",
+        "layer": "L1",
+        "monotonic_ns": 24839208334323,
+        "reason": "DEVICE_HEALTH_NON_OK",
+        "severity": "HIGH",
+        "tick_id": 0
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "count": 1,
+      "first_tick": 241,
+      "last_tick": 241,
+      "layer": "L12",
+      "reason": "LIDAR_SAFETY_UNOBSERVED",
+      "representative": {
+        "category": "MOTION_BLOCKED",
+        "evidence": {
+          "constrained": {
+            "omega_rad_s": 0.44463927337684717,
+            "v_mps": 0.0
+          },
+          "requested": {
+            "omega_rad_s": 0.44463927337684717,
+            "v_mps": 0.0
+          },
+          "safety_decision": "STOP"
+        },
+        "id": "motion-blocked-l12-241",
+        "layer": "L12",
+        "monotonic_ns": 24848987401653,
+        "reason": "LIDAR_SAFETY_UNOBSERVED",
+        "severity": "HIGH",
+        "tick_id": 241
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 55,
+      "first_tick": 86,
+      "last_tick": 157,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 258148697,
+              "reason": "STALE",
+              "source_device_id": "PERSON_DETECTOR_FRONT",
+              "source_sequence": 25
+            }
+          ]
+        },
+        "id": "l2-reject-86",
+        "layer": "L2",
+        "monotonic_ns": 24840986173697,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "MEDIUM",
+        "tick_id": 86
+      },
+      "severity": "MEDIUM"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "PRODUCTION_FAULT",
+      "count": 1,
+      "first_tick": 338,
+      "group_index": 1,
+      "last_tick": 338,
+      "path": "01_L6_ERROR.ndjson",
+      "reason": "L6_ERROR",
+      "rows": 8,
+      "truncated": true
+    },
+    {
+      "category": "SAFETY",
+      "count": 1,
+      "first_tick": 338,
+      "group_index": 2,
+      "last_tick": 338,
+      "path": "02_L6_ERROR.ndjson",
+      "reason": "L6_ERROR",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 69,
+      "first_tick": 0,
+      "group_index": 4,
+      "last_tick": 68,
+      "path": "04_DEVICE_HEALTH_NON_OK.ndjson",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "rows": 11,
+      "truncated": false
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "count": 1,
+      "first_tick": 241,
+      "group_index": 5,
+      "last_tick": 241,
+      "path": "05_LIDAR_SAFETY_UNOBSERVED.ndjson",
+      "reason": "LIDAR_SAFETY_UNOBSERVED",
+      "rows": 21,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 55,
+      "first_tick": 86,
+      "group_index": 6,
+      "last_tick": 157,
+      "path": "06_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 21,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 1.998567698,
+      "end_tick": 95,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 0,
+      "stop_ticks": 96,
+      "tick_count": 96
+    },
+    {
+      "end_s": 15.102488891,
+      "end_tick": 338,
+      "fault_ticks": 1,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 222,
+      "start_s": 2.020994863,
+      "start_tick": 96,
+      "stop_ticks": 1,
+      "tick_count": 243
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 2,
+      "status": "WARN",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_L6_ERROR.ndjson",
+      "raw_scan_count": 8,
+      "reason": "L6_ERROR",
+      "size_bytes": 85994,
+      "truncated": false
+    },
+    {
+      "group_index": 2,
+      "path": "02_L6_ERROR.ndjson",
+      "raw_scan_count": 8,
+      "reason": "L6_ERROR",
+      "size_bytes": 85994,
+      "truncated": false
+    },
+    {
+      "group_index": 5,
+      "path": "05_LIDAR_SAFETY_UNOBSERVED.ndjson",
+      "raw_scan_count": 11,
+      "reason": "LIDAR_SAFETY_UNOBSERVED",
+      "size_bytes": 114515,
+      "truncated": false
+    },
+    {
+      "group_index": 6,
+      "path": "06_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 9,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 68268,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "ERROR",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "ERROR",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FAIL",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}

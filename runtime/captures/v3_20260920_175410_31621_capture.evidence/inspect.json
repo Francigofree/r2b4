@@ -1,0 +1,234 @@
+{
+  "capture_metadata": {
+    "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+    "capture_id": "v3_20260920_175410_31621_capture",
+    "clock_epoch": "linux_monotonic_boot",
+    "compression": "none",
+    "container": "MCAP v0",
+    "message_encoding": "json"
+  },
+  "capture_path": "/home/alba/project_r2b4/runtime/captures/v3_20260920_175410_31621_capture.mcap",
+  "final_event": {
+    "capture_id": "v3_20260920_175410_31621_capture",
+    "capture_mode": "append_only",
+    "captured_checkpoint_count": 15,
+    "captured_event_count_before_final": 0,
+    "captured_raw_lidar_count": 130,
+    "captured_tick_count": 339,
+    "event_type": "capture_finalized",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "RAW_LIDAR_REVISION_GAP",
+        "REFERENCED_RAW_LIDAR_MISSING"
+      ],
+      "integrity_warnings": [],
+      "message_stream_sha256": "8fcc12a895f2d72e4241188314086aaa94669cfa9c5db8cd9f960bc36b2384d5",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 609,
+        "capacity": 256,
+        "closed": true,
+        "consumed_count": 609,
+        "first_lost_sequence": null,
+        "high_water_mark": 4,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 609,
+        "mode": "RELIABLE",
+        "name": "capture",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_lidar_duplicate_count": 140,
+      "raw_lidar_expected_scan_count": 139,
+      "raw_lidar_gap_missing_revisions": [
+        18,
+        31,
+        37,
+        52,
+        96,
+        101,
+        106,
+        108,
+        131
+      ],
+      "raw_lidar_loss_fraction": 0.06474820143884892,
+      "raw_lidar_loss_missing_revisions": [
+        18,
+        31,
+        37,
+        52,
+        96,
+        101,
+        106,
+        108,
+        131
+      ],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 1,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 9,
+      "raw_lidar_missing_revisions": [
+        31,
+        52,
+        101,
+        106,
+        108,
+        131
+      ],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [
+        {
+          "after": 17,
+          "before": 19
+        },
+        {
+          "after": 30,
+          "before": 32
+        },
+        {
+          "after": 36,
+          "before": 38
+        },
+        {
+          "after": 51,
+          "before": 53
+        },
+        {
+          "after": 95,
+          "before": 97
+        },
+        {
+          "after": 100,
+          "before": 102
+        },
+        {
+          "after": 105,
+          "before": 107
+        },
+        {
+          "after": 107,
+          "before": 109
+        },
+        {
+          "after": 130,
+          "before": 132
+        }
+      ],
+      "raw_lidar_truncated_count": 0,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false
+    },
+    "metrics": {
+      "bytes_before_finalization": 42344519,
+      "elapsed_ns": 18889923238,
+      "process_cpu_ns": 19463210940,
+      "process_max_rss_bytes": 236290048,
+      "runtime_tick_timing": {
+        "completion_latency_max_ns": 86899694,
+        "completion_latency_sum_ns": 4327313102,
+        "period_count": 338,
+        "period_max_ns": 124579661,
+        "period_sum_ns": 15102488891,
+        "tick_count": 339
+      },
+      "subscription_high_water_mark": 4,
+      "write_duration_ns": 652609472
+    },
+    "status": "FAULT",
+    "trigger_monotonic_ns": null,
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "final_metadata": {
+    "capture_id": "v3_20260920_175410_31621_capture",
+    "checkpoint_count": "15",
+    "complete": "false",
+    "integrity_reasons": "[\"RAW_LIDAR_REVISION_GAP\",\"REFERENCED_RAW_LIDAR_MISSING\"]",
+    "message_stream_sha256": "8fcc12a895f2d72e4241188314086aaa94669cfa9c5db8cd9f960bc36b2384d5",
+    "raw_lidar_count": "130",
+    "status": "FAULT",
+    "tick_count": "339",
+    "trigger_monotonic_ns": "0",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "integrity_error": "CAPTURE_INCOMPLETE: required evidence is incomplete",
+  "runtime": {
+    "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+    "capture_id": "v3_20260920_175410_31621_capture",
+    "clock_epoch": "linux_monotonic_boot"
+  },
+  "schema": "R2B4_TEST_HUB_V2",
+  "status": "FAIL",
+  "structure": {
+    "channel_count": 5,
+    "chunk_count": 45,
+    "chunk_crc_ok": true,
+    "data_crc_ok": true,
+    "errors": [],
+    "file_size": 43372197,
+    "library": "R2B4 McapCaptureConsumer stdlib/1",
+    "message_count": 486,
+    "message_end_time": 24854310823214,
+    "message_start_time": 24839208334323,
+    "metadata_count": 2,
+    "profile": "r2b4-v3",
+    "summary_crc_ok": true,
+    "valid": true
+  },
+  "topics": {
+    "/r2b4/checkpoint": {
+      "channel_id": 3,
+      "encoding": "json",
+      "message_count": 15,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/event": {
+      "channel_id": 4,
+      "encoding": "json",
+      "message_count": 1,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/raw_lidar": {
+      "channel_id": 2,
+      "encoding": "json",
+      "message_count": 130,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/runtime": {
+      "channel_id": 5,
+      "encoding": "json",
+      "message_count": 1,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/tick": {
+      "channel_id": 1,
+      "encoding": "json",
+      "message_count": 339,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    }
+  }
+}
