@@ -1,0 +1,440 @@
+{
+  "anomaly_events": {
+    "count": 0,
+    "file": "localization_events.ndjson"
+  },
+  "behavior_episode_tagging": false,
+  "configuration": {
+    "track_width_m": 0.3557,
+    "track_width_source": "capture_runtime_configuration"
+  },
+  "cross_sensor": {
+    "encoder_minus_ekf_omega_rad_s": {
+      "count": 373,
+      "mae": 0.0011050910105054033,
+      "max": 0.004403811483987482,
+      "max_abs": 0.004403811483987482,
+      "mean": 0.00011774295504169154,
+      "min": -0.003518791937795286,
+      "p50_abs": 0.0010527079237794394,
+      "p95_abs": 0.002414000431486385,
+      "p99_abs": 0.003385226241765857,
+      "rms": 0.0014166755754287004
+    },
+    "encoder_minus_imu_omega_rad_s": {
+      "count": 373,
+      "mae": 0.0010849818238771666,
+      "max": 0.004363323129985824,
+      "max_abs": 0.004363323129985824,
+      "mean": 0.00010235677583746909,
+      "min": -0.003272492347489368,
+      "p50_abs": 0.001090830782496456,
+      "p95_abs": 0.002181661564992912,
+      "p99_abs": 0.003272492347489368,
+      "rms": 0.001427754041260048
+    },
+    "encoder_vs_ekf_accumulated_yaw_rad": 0.004470294164231836,
+    "encoder_vs_imu_accumulated_yaw_rad": 0.0,
+    "imu_minus_ekf_omega_rad_s": {
+      "count": 373,
+      "mae": 0.00011533526219676992,
+      "max": 0.0006072998886149155,
+      "max_abs": 0.0006072998886149155,
+      "mean": 1.5386179204222525e-05,
+      "min": -0.0003685312353524496,
+      "p50_abs": 8.123819169797841e-05,
+      "p95_abs": 0.00034245144864550976,
+      "p99_abs": 0.0004836338473973986,
+      "rms": 0.00015951286289637702
+    },
+    "wheel_mean_minus_ekf_v_mps": {
+      "count": 373,
+      "mae": 0.0,
+      "max": 0.0,
+      "max_abs": 0.0,
+      "mean": 0.0,
+      "min": 0.0,
+      "p50_abs": 0.0,
+      "p95_abs": 0.0,
+      "p99_abs": 0.0,
+      "rms": 0.0
+    }
+  },
+  "ekf": {
+    "covariance": {
+      "gyro_bias_variance": {
+        "count": 373,
+        "max": 0.008946096974644543,
+        "mean": 0.007720793886408554,
+        "min": 0.0061,
+        "p10": 0.0064699015862262,
+        "p50": 0.007819827485432746,
+        "p95": 0.008867567621458261,
+        "p99": 0.008926081885273687
+      },
+      "trace": {
+        "count": 373,
+        "max": 0.17819728598691198,
+        "mean": 0.0727542204147846,
+        "min": 0.0461,
+        "p10": 0.05368905222576431,
+        "p50": 0.061047640835879255,
+        "p95": 0.14033586427024336,
+        "p99": 0.1702536793054412
+      },
+      "trace_growth_ratio": 1.3288612620439162,
+      "velocity_variance": {
+        "count": 373,
+        "max": 0.0888250395,
+        "mean": 0.00276045228437428,
+        "min": 0.0015127810336407305,
+        "p10": 0.0015706864689071197,
+        "p50": 0.0016149131568419764,
+        "p95": 0.0016888807982527844,
+        "p99": 0.05162074739999972
+      },
+      "x_variance": {
+        "count": 373,
+        "max": 0.08105964080000001,
+        "mean": 0.027924152374325092,
+        "min": 0.01,
+        "p10": 0.019221811364763166,
+        "p50": 0.022523657218428673,
+        "p95": 0.06228229605999999,
+        "p99": 0.07716276313999998
+      },
+      "y_variance": {
+        "count": 373,
+        "max": 0.08105964080000001,
+        "mean": 0.027924152374325092,
+        "min": 0.01,
+        "p10": 0.019221811364763166,
+        "p50": 0.022523657218428673,
+        "p95": 0.06228229605999999,
+        "p99": 0.07716276313999998
+      },
+      "yaw_variance": {
+        "count": 373,
+        "max": 0.01,
+        "mean": 0.006424669495351731,
+        "min": 0.004995362594948615,
+        "p10": 0.005461635578993306,
+        "p50": 0.006098721721187729,
+        "p95": 0.00813917742945877,
+        "p99": 0.009090350209721118
+      }
+    },
+    "lidar_correction_sign_flips": 0,
+    "lidar_innovation_x_m": {
+      "count": 56,
+      "mae": 0.00027548086329679444,
+      "max": 0.0075,
+      "max_abs": 0.0075,
+      "mean": -1.8184860395046e-06,
+      "min": -0.00375,
+      "p50_abs": 0.0,
+      "p95_abs": 0.00112425247403753,
+      "p99_abs": 0.00543750000000001,
+      "rms": 0.0012280518712648142
+    },
+    "lidar_innovation_y_m": {
+      "count": 56,
+      "mae": 0.001272001452958678,
+      "max": 0.0075000000000000015,
+      "max_abs": 0.0075000000000000015,
+      "mean": -3.733620792379625e-05,
+      "min": -0.007500000000000001,
+      "p50_abs": 3.3610267347050637e-18,
+      "p95_abs": 0.0075,
+      "p99_abs": 0.0075000000000000015,
+      "rms": 0.0025720299251733476
+    },
+    "lidar_innovation_yaw_rad": {
+      "count": 56,
+      "mae": 0.008942459879765228,
+      "max": 0.0159365449229405,
+      "max_abs": 0.0296115325265891,
+      "mean": -0.0029267541227698734,
+      "min": -0.0296115325265891,
+      "p50_abs": 0.007875302390474515,
+      "p95_abs": 0.015993798189441244,
+      "p99_abs": 0.02223067077463197,
+      "rms": 0.011317364659964153
+    },
+    "updates": {
+      "LIDAR_POSE": {
+        "accepted_count": 56,
+        "count": 56,
+        "innovation": {
+          "count": 168,
+          "mae": 0.003496647398673566,
+          "max": 0.0159365449229405,
+          "max_abs": 0.0296115325265891,
+          "mean": -0.000988636272244391,
+          "min": -0.0296115325265891,
+          "p50_abs": 2.4764109696779e-05,
+          "p95_abs": 0.015456023949403284,
+          "p99_abs": 0.016071175495534974,
+          "rms": 0.006738105376169915
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 56,
+          "max": 0.02169193644591349,
+          "mean": 0.0032471570224134948,
+          "min": 2.2008783924750613e-07,
+          "p10": 1.616925094163666e-05,
+          "p50": 0.00155808945611179,
+          "p95": 0.006433254754093121,
+          "p99": 0.013341675463124179
+        },
+        "nis_over_threshold_ratio": {
+          "count": 56,
+          "max": 0.0006197696127403854,
+          "mean": 9.277591492609981e-05,
+          "min": 6.288223978500175e-09,
+          "p10": 4.61978598332476e-07,
+          "p50": 4.4516841603194e-05,
+          "p95": 0.00018380727868837486,
+          "p99": 0.00038119072751783363
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "VELOCITY": {
+        "accepted_count": 364,
+        "count": 364,
+        "innovation": {
+          "count": 364,
+          "mae": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p50_abs": 0.0,
+          "p95_abs": 0.0,
+          "p99_abs": 0.0,
+          "rms": 0.0
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 364,
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "nis_over_threshold_ratio": {
+          "count": 364,
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "YAW": {
+        "accepted_count": 372,
+        "count": 372,
+        "innovation": {
+          "count": 372,
+          "mae": 0.0017441507491224605,
+          "max": 0.007576265004404671,
+          "max_abs": 0.007576265004404671,
+          "mean": 0.0011775350732820926,
+          "min": -0.0032360513684126513,
+          "p50_abs": 0.0014001241028592792,
+          "p95_abs": 0.005149408864868709,
+          "p99_abs": 0.006917045310730008,
+          "rms": 0.00243522129425999
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 372,
+          "max": 0.00045643167990988114,
+          "mean": 4.692736380375389e-05,
+          "min": 0.0,
+          "p10": 7.878261224967815e-08,
+          "p50": 1.5447798334930623e-05,
+          "p95": 0.00020979660507355018,
+          "p99": 0.00037917674705452816
+        },
+        "nis_over_threshold_ratio": {
+          "count": 372,
+          "max": 1.3040905140282318e-05,
+          "mean": 1.340781822964398e-06,
+          "min": 0.0,
+          "p10": 2.250931778562233e-09,
+          "p50": 4.4136566671230356e-07,
+          "p95": 5.994188716387148e-06,
+          "p99": 1.083362134441509e-05
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "ZUPT": {
+        "accepted_count": 364,
+        "count": 364,
+        "innovation": {
+          "count": 364,
+          "mae": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p50_abs": 0.0,
+          "p95_abs": 0.0,
+          "p99_abs": 0.0,
+          "rms": 0.0
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 364,
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "nis_over_threshold_ratio": {
+          "count": 0
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      }
+    }
+  },
+  "encoder": {
+    "left_velocity_minus_raw_distance_m": 0.0,
+    "raw_distance_delta_sample_count": 372,
+    "raw_left_distance_sum_m": 0.0,
+    "raw_right_distance_sum_m": 0.0,
+    "right_velocity_minus_raw_distance_m": 0.0,
+    "straight_left_distance_m": null,
+    "straight_right_distance_m": null,
+    "velocity_integrated_left_m": 0.0,
+    "velocity_integrated_right_m": 0.0
+  },
+  "findings": [],
+  "imu": {
+    "integrated_omega_vs_heading_delta_rad": 0.0006608369272008027,
+    "stationary_omega_rad_s": {
+      "count": 373,
+      "mae": 0.0010849818238771666,
+      "max": 0.003272492347489368,
+      "max_abs": 0.004363323129985824,
+      "mean": -0.00010235677583746909,
+      "min": -0.004363323129985824,
+      "p50_abs": 0.001090830782496456,
+      "p95_abs": 0.002181661564992912,
+      "p99_abs": 0.003272492347489368,
+      "rms": 0.001427754041260048
+    }
+  },
+  "lidar_matcher": {
+    "ambiguity_margin": {
+      "count": 301,
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "p10": 1.0,
+      "p50": 1.0,
+      "p95": 1.0,
+      "p99": 1.0
+    },
+    "confidence": {
+      "count": 301,
+      "max": 0.9304605711756349,
+      "mean": 0.8847054078830539,
+      "min": 0.0,
+      "p10": 0.8604553292569916,
+      "p50": 0.9017687655273088,
+      "p95": 0.9238655706207073,
+      "p99": 0.9304605711756349
+    },
+    "degenerate_count": 4,
+    "degenerate_ratio": 0.013289036544850499,
+    "inlier_ratio": {
+      "count": 301,
+      "max": 1.0,
+      "mean": 0.9601620329894512,
+      "min": 0.8958333333333334,
+      "p10": 0.9375,
+      "p50": 0.9583333333333334,
+      "p95": 1.0,
+      "p99": 1.0
+    },
+    "observability": {
+      "count": 301,
+      "max": 0.9396729208379807,
+      "mean": 0.8982733614722238,
+      "min": 0.0,
+      "p10": 0.8718040489757646,
+      "p50": 0.9114853232131942,
+      "p95": 0.9347243489425878,
+      "p99": 0.9396729208379807
+    },
+    "queue_delay_ms": {
+      "count": 301,
+      "max": 88.308753,
+      "mean": 11.294425830564785,
+      "min": 1.693807,
+      "p10": 2.782554,
+      "p50": 10.151358,
+      "p95": 22.820137,
+      "p99": 43.526947
+    },
+    "robust_rmse_m": {
+      "count": 301,
+      "max": 0.0348228857011443,
+      "mean": 0.024818458017275453,
+      "min": 0.016277990800435318,
+      "p10": 0.020470326794985,
+      "p50": 0.02488157294399424,
+      "p95": 0.030210919227817348,
+      "p99": 0.0348228857011443
+    },
+    "runtime_ms": {
+      "count": 301,
+      "max": 172.62764899987815,
+      "mean": 39.529619006609444,
+      "min": 32.894031000068935,
+      "p10": 34.48843000023771,
+      "p50": 35.860123000020394,
+      "p95": 44.69360199982475,
+      "p99": 166.7703180000899
+    },
+    "sample_count": 301,
+    "timeout_count": 10,
+    "timeout_ratio": 0.03322259136212625,
+    "tracking_not_ready_count": 22
+  },
+  "limitations": [
+    "Onboard consistency diagnostics cannot prove absolute world-frame accuracy when all onboard sources share the same bias.",
+    "Track-width dependent encoder yaw metrics are omitted if the capture runtime configuration does not expose track width."
+  ],
+  "schema": "R2B4_TEST_HUB_LOCALIZATION_QUALITY_V1",
+  "status": "OK",
+  "thresholds": {
+    "ekf_covariance_growth_warn_ratio": 5.0,
+    "ekf_nis_p95_warn_fraction_of_gate": 0.8,
+    "ekf_rejection_warn_ratio": 0.1,
+    "encoder_distance_velocity_mismatch_ratio": 0.05,
+    "encoder_imu_omega_warn_mae_rad_s": 0.12,
+    "encoder_straight_distance_bias_ratio": 0.04,
+    "imu_rate_yaw_warn_rad": 0.15,
+    "imu_stationary_rate_warn_rad_s": 0.03,
+    "lidar_degenerate_warn_ratio": 0.15,
+    "lidar_timeout_warn_ratio": 0.05
+  },
+  "tick_count": 373
+}

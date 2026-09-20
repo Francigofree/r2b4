@@ -1,0 +1,1501 @@
+{
+  "analysis": {
+    "confidence": "DIRECT_L0_ACCOUNTING",
+    "dominant": {
+      "mean_blocked_or_gil_source": "L0_SOURCE:IMU",
+      "mean_thread_cpu_source": "L0_SOURCE:LIDAR",
+      "mean_wall_source": "L0_SOURCE:IMU",
+      "p99_wall_source": "L0_SOURCE:IMU"
+    },
+    "fix_targets": {
+      "COMMAND_SNAPSHOT_DIRECT": [
+        "v3/adapters/resident_command.py"
+      ],
+      "L0_READER_NON_SOURCE": [
+        "v3/adapters/live_inputs.py"
+      ],
+      "L0_SOURCE:CAMERA": [
+        "v3/adapters/live_camera.py",
+        "v3/adapters/picamera2_camera.py"
+      ],
+      "L0_SOURCE:ENCODER": [
+        "v3/adapters/gpio_encoder.py",
+        "v3/adapters/counter_encoder.py",
+        "v3/adapters/gpio_counter.py"
+      ],
+      "L0_SOURCE:IMU": [
+        "v3/adapters/bno055_device.py",
+        "v3/adapters/bno055_imu.py",
+        "v3/adapters/live_imu.py"
+      ],
+      "L0_SOURCE:LIDAR": [
+        "v3/adapters/latest_lidar.py",
+        "v3/adapters/live_lidar.py",
+        "v3/adapters/native_lidar_port.py"
+      ],
+      "L0_SOURCE:PERSON": [
+        "v3/adapters/live_person_detection.py",
+        "v3/adapters/person_detection.py",
+        "v3/adapters/litert_person_detector.py"
+      ],
+      "OBSERVER_HUB_PUBLISH:v3.capture_record": [
+        "v3/observation.py",
+        "v3_process_runtime.py",
+        "v3/mcap_capture.py"
+      ],
+      "OBSERVER_STATUS_PUBLISH": [
+        "v3_process_runtime.py"
+      ]
+    },
+    "interpretation": {
+      "blocked_or_gil": "wall - thread_cpu - runqueue_wait. Can include blocking I/O, GIL/futex wait, condition wait or other sleeping; it is not automatically equivalent to I/O.",
+      "process_cpu": "CPU consumed by the whole process during the span. If much larger than thread_cpu, other runtime threads were consuming CPU concurrently.",
+      "runqueue_wait": "Linux schedstat time runnable but waiting for CPU.",
+      "thread_cpu": "Actual CPU time consumed by the instrumented Python thread."
+    },
+    "l0_accounting": {
+      "accounted_mean_ms": 13.636044,
+      "accounting_error_percent": 0.0,
+      "deadline_miss_count": 1,
+      "deadline_miss_ticks": [
+        {
+          "l0_ms": 25.317545,
+          "largest_source": "IMU",
+          "largest_source_ms": 9.341854,
+          "sources_ms": {
+            "CAMERA": 0.089871,
+            "ENCODER": 0.461484,
+            "IMU": 9.341854,
+            "LIDAR": 6.827467,
+            "PERSON": 0.052093
+          },
+          "tick_id": 155
+        }
+      ],
+      "non_source_mean_ms": 2.40033,
+      "reader_total": {
+        "count": 7,
+        "max_ms": 25.317545,
+        "max_ns": 25317545,
+        "mean_ms": 13.636044,
+        "mean_ns": 13636044,
+        "p50_ms": 12.267983,
+        "p50_ns": 12267983,
+        "p95_ms": 25.317545,
+        "p95_ns": 25317545,
+        "p99_ms": 25.317545,
+        "p99_ns": 25317545
+      },
+      "residual_mean_ms": 0.0,
+      "source_mean_ms": {
+        "CAMERA": 0.074458,
+        "ENCODER": 0.34888,
+        "IMU": 7.140925,
+        "LIDAR": 3.627943,
+        "PERSON": 0.043508
+      },
+      "source_sum_mean_ms": 11.235714
+    },
+    "raw": {
+      "COMMAND_SNAPSHOT_DIRECT": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          140352,
+          4128667,
+          136149,
+          122111,
+          137111,
+          160778,
+          124406,
+          109518
+        ],
+        "runqueue_wait_ns": [
+          0,
+          0,
+          0,
+          0,
+          12130,
+          0,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          134444,
+          126982,
+          133519,
+          120074,
+          134889,
+          156814,
+          117296,
+          107463
+        ],
+        "tick_id": [
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          132871,
+          111871,
+          132130,
+          118964,
+          133742,
+          154723,
+          116297,
+          106519
+        ]
+      },
+      "L0_READER_TOTAL": {
+        "blocked_or_gil_ns": [
+          8896641,
+          4972225,
+          7608855,
+          7398667,
+          14396247,
+          7181682,
+          5877192
+        ],
+        "process_cpu_ns": [
+          19845407,
+          14809762,
+          18235796,
+          16821892,
+          35983116,
+          18122280,
+          16346611
+        ],
+        "runqueue_wait_ns": [
+          127722,
+          60075,
+          69610,
+          68424,
+          4218353,
+          0,
+          21426
+        ],
+        "thread_cpu_ns": [
+          4602684,
+          4974909,
+          4589518,
+          5003189,
+          6702945,
+          4436519,
+          4245426
+        ],
+        "tick_id": [
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          13627047,
+          10007209,
+          12267983,
+          12470280,
+          25317545,
+          11618201,
+          10144044
+        ]
+      },
+      "L0_SOURCE:CAMERA": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          67574,
+          109908,
+          80055,
+          75815,
+          95871,
+          65185,
+          62981
+        ],
+        "runqueue_wait_ns": [
+          0,
+          0,
+          11241,
+          0,
+          0,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          65093,
+          105963,
+          76518,
+          72723,
+          91278,
+          62870,
+          54186
+        ],
+        "tick_id": [
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          63871,
+          104575,
+          75686,
+          71871,
+          89871,
+          62038,
+          53296
+        ]
+      },
+      "L0_SOURCE:ENCODER": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          1167834,
+          307426,
+          331222,
+          319167,
+          470130,
+          339519,
+          359148
+        ],
+        "runqueue_wait_ns": [
+          0,
+          0,
+          33222,
+          0,
+          0,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          343370,
+          305574,
+          328352,
+          317463,
+          464963,
+          337352,
+          356759
+        ],
+        "tick_id": [
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          341854,
+          304539,
+          326872,
+          316261,
+          461484,
+          335557,
+          355595
+        ]
+      },
+      "L0_SOURCE:IMU": {
+        "blocked_or_gil_ns": [
+          7329972,
+          4713569,
+          7308473,
+          7148988,
+          7502039,
+          7042544,
+          5291980
+        ],
+        "process_cpu_ns": [
+          4854316,
+          5692039,
+          9329499,
+          8008669,
+          13131689,
+          9751687,
+          9553611
+        ],
+        "runqueue_wait_ns": [
+          0,
+          0,
+          4703,
+          2186,
+          940888,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          275797,
+          341388,
+          305241,
+          284945,
+          898927,
+          315242,
+          279592
+        ],
+        "tick_id": [
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          7605769,
+          5054957,
+          7618417,
+          7436119,
+          9341854,
+          7357786,
+          5571572
+        ]
+      },
+      "L0_SOURCE:LIDAR": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          14337,
+          598631,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          2965742,
+          7197185,
+          3188704,
+          7332205,
+          9654689,
+          7071481,
+          5464444
+        ],
+        "runqueue_wait_ns": [
+          0,
+          27389,
+          20444,
+          58053,
+          2850483,
+          0,
+          21426
+        ],
+        "thread_cpu_ns": [
+          2911037,
+          3128741,
+          3019500,
+          3551799,
+          3378353,
+          3018333,
+          2882740
+        ],
+        "tick_id": [
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          2908703,
+          3124168,
+          3014778,
+          3624189,
+          6827467,
+          3015537,
+          2880758
+        ]
+      },
+      "L0_SOURCE:PERSON": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          42166,
+          54815,
+          48389,
+          44278,
+          122166,
+          40982,
+          38574
+        ],
+        "runqueue_wait_ns": [
+          0,
+          0,
+          0,
+          0,
+          14482,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          40204,
+          52593,
+          45852,
+          42351,
+          53130,
+          39315,
+          36963
+        ],
+        "tick_id": [
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          39445,
+          51593,
+          45018,
+          41575,
+          52093,
+          38611,
+          36223
+        ]
+      },
+      "OBSERVER_HUB_PUBLISH:v3.capture_record": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          68111,
+          68074,
+          84259,
+          85185,
+          89186,
+          71908,
+          137038,
+          68333
+        ],
+        "runqueue_wait_ns": [
+          0,
+          433018,
+          10592,
+          45037,
+          1543241,
+          8074,
+          144333,
+          1074
+        ],
+        "thread_cpu_ns": [
+          55741,
+          58000,
+          67111,
+          69574,
+          60278,
+          58241,
+          68870,
+          57148
+        ],
+        "tick_id": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "wall_ns": [
+          54667,
+          56760,
+          65964,
+          67668,
+          67556,
+          57222,
+          67093,
+          56167
+        ]
+      },
+      "OBSERVER_HUB_PUBLISH:v3.raw_lidar": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          170222,
+          141778,
+          65517,
+          87927,
+          120592,
+          84833,
+          136593,
+          243129
+        ],
+        "runqueue_wait_ns": [
+          0,
+          3704,
+          9537,
+          6963,
+          52500,
+          10352,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          138204,
+          55556,
+          54444,
+          47555,
+          99148,
+          62870,
+          111908,
+          174092
+        ],
+        "tick_id": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "wall_ns": [
+          131835,
+          54408,
+          53037,
+          46408,
+          97260,
+          71908,
+          109353,
+          170149
+        ]
+      },
+      "OBSERVER_STATUS_PUBLISH": {
+        "blocked_or_gil_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "process_cpu_ns": [
+          120166,
+          43741,
+          49722,
+          42814,
+          56611,
+          51574,
+          99315,
+          52222
+        ],
+        "runqueue_wait_ns": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "thread_cpu_ns": [
+          112500,
+          41055,
+          46667,
+          40259,
+          51889,
+          48000,
+          93148,
+          48445
+        ],
+        "tick_id": [
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157
+        ],
+        "wall_ns": [
+          109519,
+          40315,
+          45481,
+          39482,
+          50815,
+          47149,
+          92131,
+          47426
+        ]
+      }
+    },
+    "runtime_report": {
+      "exit_reason": "RUNTIME_FAULT",
+      "fault_layer": "L11",
+      "final_lifecycle": "FAULT",
+      "final_reason": "L11_ERROR",
+      "final_safety_decision": "FAULT",
+      "last_tick_id": 157,
+      "normal_tick_count": 158,
+      "operator_stopped": false,
+      "run_status": 1,
+      "schema": "R2B4_V3_RESIDENT_RUNTIME_REPORT_V2",
+      "status": "FAULT",
+      "termination_class": "FAULT_SAFE_LOW",
+      "tick_count": 158
+    },
+    "scalar_summaries": {
+      "L0_RAW_BATCH_CONSTRUCTION": {
+        "count": 7,
+        "max_ms": 0.020445,
+        "max_ns": 20445,
+        "mean_ms": 0.014051,
+        "mean_ns": 14051,
+        "p50_ms": 0.012241,
+        "p50_ns": 12241,
+        "p95_ms": 0.020445,
+        "p95_ns": 20445,
+        "p99_ms": 0.020445,
+        "p99_ns": 20445
+      },
+      "L0_READER_NON_SOURCE": {
+        "count": 7,
+        "max_ms": 8.544776,
+        "max_ns": 8544776,
+        "mean_ms": 2.40033,
+        "mean_ns": 2400330,
+        "p50_ms": 1.2466,
+        "p50_ns": 1246600,
+        "p95_ms": 8.544776,
+        "p95_ns": 8544776,
+        "p99_ms": 8.544776,
+        "p99_ns": 8544776
+      }
+    },
+    "summaries": {
+      "COMMAND_SNAPSHOT_DIRECT": {
+        "blocked_or_gil": {
+          "count": 8,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 8,
+          "max_ms": 4.128667,
+          "max_ns": 4128667,
+          "mean_ms": 0.632386,
+          "mean_ns": 632386,
+          "p50_ms": 0.136149,
+          "p50_ns": 136149,
+          "p95_ms": 4.128667,
+          "p95_ns": 4128667,
+          "p99_ms": 4.128667,
+          "p99_ns": 4128667
+        },
+        "runqueue_wait": {
+          "count": 8,
+          "max_ms": 0.01213,
+          "max_ns": 12130,
+          "mean_ms": 0.001516,
+          "mean_ns": 1516,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.01213,
+          "p95_ns": 12130,
+          "p99_ms": 0.01213,
+          "p99_ns": 12130
+        },
+        "thread_cpu": {
+          "count": 8,
+          "max_ms": 0.156814,
+          "max_ns": 156814,
+          "mean_ms": 0.128935,
+          "mean_ns": 128935,
+          "p50_ms": 0.126982,
+          "p50_ns": 126982,
+          "p95_ms": 0.156814,
+          "p95_ns": 156814,
+          "p99_ms": 0.156814,
+          "p99_ns": 156814
+        },
+        "thread_names": {
+          "MainThread": 8
+        },
+        "wall": {
+          "count": 8,
+          "max_ms": 0.154723,
+          "max_ns": 154723,
+          "mean_ms": 0.12589,
+          "mean_ns": 125890,
+          "p50_ms": 0.118964,
+          "p50_ns": 118964,
+          "p95_ms": 0.154723,
+          "p95_ns": 154723,
+          "p99_ms": 0.154723,
+          "p99_ns": 154723
+        }
+      },
+      "L0_READER_TOTAL": {
+        "blocked_or_gil": {
+          "count": 7,
+          "max_ms": 14.396247,
+          "max_ns": 14396247,
+          "mean_ms": 8.047358,
+          "mean_ns": 8047358,
+          "p50_ms": 7.398667,
+          "p50_ns": 7398667,
+          "p95_ms": 14.396247,
+          "p95_ns": 14396247,
+          "p99_ms": 14.396247,
+          "p99_ns": 14396247
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 7,
+          "max_ms": 35.983116,
+          "max_ns": 35983116,
+          "mean_ms": 20.023552,
+          "mean_ns": 20023552,
+          "p50_ms": 18.12228,
+          "p50_ns": 18122280,
+          "p95_ms": 35.983116,
+          "p95_ns": 35983116,
+          "p99_ms": 35.983116,
+          "p99_ns": 35983116
+        },
+        "runqueue_wait": {
+          "count": 7,
+          "max_ms": 4.218353,
+          "max_ns": 4218353,
+          "mean_ms": 0.65223,
+          "mean_ns": 652230,
+          "p50_ms": 0.068424,
+          "p50_ns": 68424,
+          "p95_ms": 4.218353,
+          "p95_ns": 4218353,
+          "p99_ms": 4.218353,
+          "p99_ns": 4218353
+        },
+        "thread_cpu": {
+          "count": 7,
+          "max_ms": 6.702945,
+          "max_ns": 6702945,
+          "mean_ms": 4.936456,
+          "mean_ns": 4936456,
+          "p50_ms": 4.602684,
+          "p50_ns": 4602684,
+          "p95_ms": 6.702945,
+          "p95_ns": 6702945,
+          "p99_ms": 6.702945,
+          "p99_ns": 6702945
+        },
+        "thread_names": {
+          "MainThread": 7
+        },
+        "wall": {
+          "count": 7,
+          "max_ms": 25.317545,
+          "max_ns": 25317545,
+          "mean_ms": 13.636044,
+          "mean_ns": 13636044,
+          "p50_ms": 12.267983,
+          "p50_ns": 12267983,
+          "p95_ms": 25.317545,
+          "p95_ns": 25317545,
+          "p99_ms": 25.317545,
+          "p99_ns": 25317545
+        }
+      },
+      "L0_SOURCE:CAMERA": {
+        "blocked_or_gil": {
+          "count": 7,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 7,
+          "max_ms": 0.109908,
+          "max_ns": 109908,
+          "mean_ms": 0.079627,
+          "mean_ns": 79627,
+          "p50_ms": 0.075815,
+          "p50_ns": 75815,
+          "p95_ms": 0.109908,
+          "p95_ns": 109908,
+          "p99_ms": 0.109908,
+          "p99_ns": 109908
+        },
+        "runqueue_wait": {
+          "count": 7,
+          "max_ms": 0.011241,
+          "max_ns": 11241,
+          "mean_ms": 0.001606,
+          "mean_ns": 1606,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.011241,
+          "p95_ns": 11241,
+          "p99_ms": 0.011241,
+          "p99_ns": 11241
+        },
+        "thread_cpu": {
+          "count": 7,
+          "max_ms": 0.105963,
+          "max_ns": 105963,
+          "mean_ms": 0.075519,
+          "mean_ns": 75519,
+          "p50_ms": 0.072723,
+          "p50_ns": 72723,
+          "p95_ms": 0.105963,
+          "p95_ns": 105963,
+          "p99_ms": 0.105963,
+          "p99_ns": 105963
+        },
+        "thread_names": {
+          "MainThread": 7
+        },
+        "wall": {
+          "count": 7,
+          "max_ms": 0.104575,
+          "max_ns": 104575,
+          "mean_ms": 0.074458,
+          "mean_ns": 74458,
+          "p50_ms": 0.071871,
+          "p50_ns": 71871,
+          "p95_ms": 0.104575,
+          "p95_ns": 104575,
+          "p99_ms": 0.104575,
+          "p99_ns": 104575
+        }
+      },
+      "L0_SOURCE:ENCODER": {
+        "blocked_or_gil": {
+          "count": 7,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 7,
+          "max_ms": 1.167834,
+          "max_ns": 1167834,
+          "mean_ms": 0.470635,
+          "mean_ns": 470635,
+          "p50_ms": 0.339519,
+          "p50_ns": 339519,
+          "p95_ms": 1.167834,
+          "p95_ns": 1167834,
+          "p99_ms": 1.167834,
+          "p99_ns": 1167834
+        },
+        "runqueue_wait": {
+          "count": 7,
+          "max_ms": 0.033222,
+          "max_ns": 33222,
+          "mean_ms": 0.004746,
+          "mean_ns": 4746,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.033222,
+          "p95_ns": 33222,
+          "p99_ms": 0.033222,
+          "p99_ns": 33222
+        },
+        "thread_cpu": {
+          "count": 7,
+          "max_ms": 0.464963,
+          "max_ns": 464963,
+          "mean_ms": 0.350548,
+          "mean_ns": 350548,
+          "p50_ms": 0.337352,
+          "p50_ns": 337352,
+          "p95_ms": 0.464963,
+          "p95_ns": 464963,
+          "p99_ms": 0.464963,
+          "p99_ns": 464963
+        },
+        "thread_names": {
+          "MainThread": 7
+        },
+        "wall": {
+          "count": 7,
+          "max_ms": 0.461484,
+          "max_ns": 461484,
+          "mean_ms": 0.34888,
+          "mean_ns": 348880,
+          "p50_ms": 0.335557,
+          "p50_ns": 335557,
+          "p95_ms": 0.461484,
+          "p95_ns": 461484,
+          "p99_ms": 0.461484,
+          "p99_ns": 461484
+        }
+      },
+      "L0_SOURCE:IMU": {
+        "blocked_or_gil": {
+          "count": 7,
+          "max_ms": 7.502039,
+          "max_ns": 7502039,
+          "mean_ms": 6.619652,
+          "mean_ns": 6619652,
+          "p50_ms": 7.148988,
+          "p50_ns": 7148988,
+          "p95_ms": 7.502039,
+          "p95_ns": 7502039,
+          "p99_ms": 7.502039,
+          "p99_ns": 7502039
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 7,
+          "max_ms": 13.131689,
+          "max_ns": 13131689,
+          "mean_ms": 8.617359,
+          "mean_ns": 8617359,
+          "p50_ms": 9.329499,
+          "p50_ns": 9329499,
+          "p95_ms": 13.131689,
+          "p95_ns": 13131689,
+          "p99_ms": 13.131689,
+          "p99_ns": 13131689
+        },
+        "runqueue_wait": {
+          "count": 7,
+          "max_ms": 0.940888,
+          "max_ns": 940888,
+          "mean_ms": 0.135397,
+          "mean_ns": 135397,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.940888,
+          "p95_ns": 940888,
+          "p99_ms": 0.940888,
+          "p99_ns": 940888
+        },
+        "thread_cpu": {
+          "count": 7,
+          "max_ms": 0.898927,
+          "max_ns": 898927,
+          "mean_ms": 0.385876,
+          "mean_ns": 385876,
+          "p50_ms": 0.305241,
+          "p50_ns": 305241,
+          "p95_ms": 0.898927,
+          "p95_ns": 898927,
+          "p99_ms": 0.898927,
+          "p99_ns": 898927
+        },
+        "thread_names": {
+          "MainThread": 7
+        },
+        "wall": {
+          "count": 7,
+          "max_ms": 9.341854,
+          "max_ns": 9341854,
+          "mean_ms": 7.140925,
+          "mean_ns": 7140925,
+          "p50_ms": 7.436119,
+          "p50_ns": 7436119,
+          "p95_ms": 9.341854,
+          "p95_ns": 9341854,
+          "p99_ms": 9.341854,
+          "p99_ns": 9341854
+        }
+      },
+      "L0_SOURCE:LIDAR": {
+        "blocked_or_gil": {
+          "count": 7,
+          "max_ms": 0.598631,
+          "max_ns": 598631,
+          "mean_ms": 0.087567,
+          "mean_ns": 87567,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.598631,
+          "p95_ns": 598631,
+          "p99_ms": 0.598631,
+          "p99_ns": 598631
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 7,
+          "max_ms": 9.654689,
+          "max_ns": 9654689,
+          "mean_ms": 6.124921,
+          "mean_ns": 6124921,
+          "p50_ms": 7.071481,
+          "p50_ns": 7071481,
+          "p95_ms": 9.654689,
+          "p95_ns": 9654689,
+          "p99_ms": 9.654689,
+          "p99_ns": 9654689
+        },
+        "runqueue_wait": {
+          "count": 7,
+          "max_ms": 2.850483,
+          "max_ns": 2850483,
+          "mean_ms": 0.425399,
+          "mean_ns": 425399,
+          "p50_ms": 0.021426,
+          "p50_ns": 21426,
+          "p95_ms": 2.850483,
+          "p95_ns": 2850483,
+          "p99_ms": 2.850483,
+          "p99_ns": 2850483
+        },
+        "thread_cpu": {
+          "count": 7,
+          "max_ms": 3.551799,
+          "max_ns": 3551799,
+          "mean_ms": 3.127215,
+          "mean_ns": 3127215,
+          "p50_ms": 3.0195,
+          "p50_ns": 3019500,
+          "p95_ms": 3.551799,
+          "p95_ns": 3551799,
+          "p99_ms": 3.551799,
+          "p99_ns": 3551799
+        },
+        "thread_names": {
+          "MainThread": 7
+        },
+        "wall": {
+          "count": 7,
+          "max_ms": 6.827467,
+          "max_ns": 6827467,
+          "mean_ms": 3.627943,
+          "mean_ns": 3627943,
+          "p50_ms": 3.015537,
+          "p50_ns": 3015537,
+          "p95_ms": 6.827467,
+          "p95_ns": 6827467,
+          "p99_ms": 6.827467,
+          "p99_ns": 6827467
+        }
+      },
+      "L0_SOURCE:PERSON": {
+        "blocked_or_gil": {
+          "count": 7,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 7,
+          "max_ms": 0.122166,
+          "max_ns": 122166,
+          "mean_ms": 0.05591,
+          "mean_ns": 55910,
+          "p50_ms": 0.044278,
+          "p50_ns": 44278,
+          "p95_ms": 0.122166,
+          "p95_ns": 122166,
+          "p99_ms": 0.122166,
+          "p99_ns": 122166
+        },
+        "runqueue_wait": {
+          "count": 7,
+          "max_ms": 0.014482,
+          "max_ns": 14482,
+          "mean_ms": 0.002069,
+          "mean_ns": 2069,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.014482,
+          "p95_ns": 14482,
+          "p99_ms": 0.014482,
+          "p99_ns": 14482
+        },
+        "thread_cpu": {
+          "count": 7,
+          "max_ms": 0.05313,
+          "max_ns": 53130,
+          "mean_ms": 0.044344,
+          "mean_ns": 44344,
+          "p50_ms": 0.042351,
+          "p50_ns": 42351,
+          "p95_ms": 0.05313,
+          "p95_ns": 53130,
+          "p99_ms": 0.05313,
+          "p99_ns": 53130
+        },
+        "thread_names": {
+          "MainThread": 7
+        },
+        "wall": {
+          "count": 7,
+          "max_ms": 0.052093,
+          "max_ns": 52093,
+          "mean_ms": 0.043508,
+          "mean_ns": 43508,
+          "p50_ms": 0.041575,
+          "p50_ns": 41575,
+          "p95_ms": 0.052093,
+          "p95_ns": 52093,
+          "p99_ms": 0.052093,
+          "p99_ns": 52093
+        }
+      },
+      "OBSERVER_HUB_PUBLISH:v3.capture_record": {
+        "blocked_or_gil": {
+          "count": 8,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 8,
+          "max_ms": 0.137038,
+          "max_ns": 137038,
+          "mean_ms": 0.084012,
+          "mean_ns": 84012,
+          "p50_ms": 0.071908,
+          "p50_ns": 71908,
+          "p95_ms": 0.137038,
+          "p95_ns": 137038,
+          "p99_ms": 0.137038,
+          "p99_ns": 137038
+        },
+        "runqueue_wait": {
+          "count": 8,
+          "max_ms": 1.543241,
+          "max_ns": 1543241,
+          "mean_ms": 0.273171,
+          "mean_ns": 273171,
+          "p50_ms": 0.010592,
+          "p50_ns": 10592,
+          "p95_ms": 1.543241,
+          "p95_ns": 1543241,
+          "p99_ms": 1.543241,
+          "p99_ns": 1543241
+        },
+        "thread_cpu": {
+          "count": 8,
+          "max_ms": 0.069574,
+          "max_ns": 69574,
+          "mean_ms": 0.06187,
+          "mean_ns": 61870,
+          "p50_ms": 0.058241,
+          "p50_ns": 58241,
+          "p95_ms": 0.069574,
+          "p95_ns": 69574,
+          "p99_ms": 0.069574,
+          "p99_ns": 69574
+        },
+        "thread_names": {
+          "MainThread": 8
+        },
+        "wall": {
+          "count": 8,
+          "max_ms": 0.067668,
+          "max_ns": 67668,
+          "mean_ms": 0.061637,
+          "mean_ns": 61637,
+          "p50_ms": 0.057222,
+          "p50_ns": 57222,
+          "p95_ms": 0.067668,
+          "p95_ns": 67668,
+          "p99_ms": 0.067668,
+          "p99_ns": 67668
+        }
+      },
+      "OBSERVER_HUB_PUBLISH:v3.raw_lidar": {
+        "blocked_or_gil": {
+          "count": 8,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 8,
+          "max_ms": 0.243129,
+          "max_ns": 243129,
+          "mean_ms": 0.131324,
+          "mean_ns": 131324,
+          "p50_ms": 0.120592,
+          "p50_ns": 120592,
+          "p95_ms": 0.243129,
+          "p95_ns": 243129,
+          "p99_ms": 0.243129,
+          "p99_ns": 243129
+        },
+        "runqueue_wait": {
+          "count": 8,
+          "max_ms": 0.0525,
+          "max_ns": 52500,
+          "mean_ms": 0.010382,
+          "mean_ns": 10382,
+          "p50_ms": 0.003704,
+          "p50_ns": 3704,
+          "p95_ms": 0.0525,
+          "p95_ns": 52500,
+          "p99_ms": 0.0525,
+          "p99_ns": 52500
+        },
+        "thread_cpu": {
+          "count": 8,
+          "max_ms": 0.174092,
+          "max_ns": 174092,
+          "mean_ms": 0.092972,
+          "mean_ns": 92972,
+          "p50_ms": 0.06287,
+          "p50_ns": 62870,
+          "p95_ms": 0.174092,
+          "p95_ns": 174092,
+          "p99_ms": 0.174092,
+          "p99_ns": 174092
+        },
+        "thread_names": {
+          "MainThread": 8
+        },
+        "wall": {
+          "count": 8,
+          "max_ms": 0.170149,
+          "max_ns": 170149,
+          "mean_ms": 0.091795,
+          "mean_ns": 91795,
+          "p50_ms": 0.071908,
+          "p50_ns": 71908,
+          "p95_ms": 0.170149,
+          "p95_ns": 170149,
+          "p99_ms": 0.170149,
+          "p99_ns": 170149
+        }
+      },
+      "OBSERVER_STATUS_PUBLISH": {
+        "blocked_or_gil": {
+          "count": 8,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "native_tids": [
+          10088
+        ],
+        "process_cpu": {
+          "count": 8,
+          "max_ms": 0.120166,
+          "max_ns": 120166,
+          "mean_ms": 0.064521,
+          "mean_ns": 64521,
+          "p50_ms": 0.051574,
+          "p50_ns": 51574,
+          "p95_ms": 0.120166,
+          "p95_ns": 120166,
+          "p99_ms": 0.120166,
+          "p99_ns": 120166
+        },
+        "runqueue_wait": {
+          "count": 8,
+          "max_ms": 0.0,
+          "max_ns": 0,
+          "mean_ms": 0.0,
+          "mean_ns": 0,
+          "p50_ms": 0.0,
+          "p50_ns": 0,
+          "p95_ms": 0.0,
+          "p95_ns": 0,
+          "p99_ms": 0.0,
+          "p99_ns": 0
+        },
+        "thread_cpu": {
+          "count": 8,
+          "max_ms": 0.1125,
+          "max_ns": 112500,
+          "mean_ms": 0.060245,
+          "mean_ns": 60245,
+          "p50_ms": 0.048,
+          "p50_ns": 48000,
+          "p95_ms": 0.1125,
+          "p95_ns": 112500,
+          "p99_ms": 0.1125,
+          "p99_ns": 112500
+        },
+        "thread_names": {
+          "MainThread": 8
+        },
+        "wall": {
+          "count": 8,
+          "max_ms": 0.109519,
+          "max_ns": 109519,
+          "mean_ms": 0.05904,
+          "mean_ns": 59040,
+          "p50_ms": 0.047149,
+          "p50_ns": 47149,
+          "p95_ms": 0.109519,
+          "p95_ns": 109519,
+          "p99_ms": 0.109519,
+          "p99_ns": 109519
+        }
+      }
+    }
+  },
+  "configuration": {
+    "heartbeat_s": 0.08,
+    "max_omega_rad_s": 0.8,
+    "max_v_mps": 0.25,
+    "measure_s": 20.0,
+    "runtime_affinity": {
+      "enabled": true,
+      "io_cpu": 0,
+      "lidar_cpu": 2,
+      "runtime_cpu": 3,
+      "strict": true,
+      "vision_cpu": 1
+    },
+    "target_hz": 50.0,
+    "target_period_ns": 20000000,
+    "warmup_s": 3.0
+  },
+  "generated_local": "2026-09-20T12:58:11.956482+02:00",
+  "motor_safety_evidence": {
+    "all_null_sinks_closed": true,
+    "null_sink_instance_count": 1,
+    "null_sink_write_count": 158,
+    "physical_gpio_write_capability_created": false
+  },
+  "repo": "/home/alba/project_r2b4",
+  "schema": "R2B4_V3_CONTROL_ROOTCAUSE_DIAG_V1",
+  "scope": {
+    "canonical_resident_runtime": true,
+    "important_limit": "The diagnostic executes the full control workload but the robot does not physically move. Movement-dependent encoder callback load is therefore not reproduced.",
+    "mode": "explore",
+    "motor_sink": "NULL",
+    "physical_motion": false,
+    "physical_motor_gpio_opened": false,
+    "production_camera_person_when_configured": true,
+    "production_capture_enabled": true,
+    "production_command_mailbox": true,
+    "production_l0_l12": true,
+    "production_planner": true,
+    "production_sensors": true
+  }
+}
