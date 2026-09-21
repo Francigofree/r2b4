@@ -48,6 +48,29 @@ def test_lidar_control_wire_is_bounded_but_capture_wire_keeps_full_scan():
     assert restored.summary["raw_safety_valid_point_count"] == 360
 
 
+def test_direct_and_compact_lidar_paths_close_identical_typed_samples():
+    from v3.adapters.latest_lidar import LatestLidarBackendConfig, NativeLatestLidarBackend
+    from v3.adapters.live_lidar import NativeLidarConfig, NativeLidarSource
+    from v3.contracts import TickContext
+    from test_v3_latest_lidar_backend import Port, RawSnapshot
+
+    raw = RawSnapshot(raw_scan=_raw_snapshot().raw_scan)
+    compact = _unwire_raw(_wire_control_raw(
+        raw, minimum_range_m=.08, maximum_range_m=2.5, maximum_points=96,
+    ))
+    config = NativeLidarConfig(
+        "RPLIDAR_C1", minimum_confidence=.3, maximum_measurement_age_ns=500_000_000,
+        local_perception_min_range_m=.08, local_perception_max_range_m=2.5,
+        local_perception_max_points=96,
+    )
+    sources = [NativeLidarSource(
+        NativeLatestLidarBackend(Port(raw=snapshot), LatestLidarBackendConfig(500_000_000)),
+        config,
+    ) for snapshot in (raw, compact)]
+    for context in (TickContext(7, 1_000_000_000), TickContext(8, 2_000_000_000)):
+        assert sources[0].read(context) == sources[1].read(context)
+
+
 def test_vision_wire_contains_metadata_not_image_bytes():
     status = CameraRuntimeStatus(True, 4, 0, None, "imx708", 2_000_000)
     frame = SimpleNamespace(
@@ -172,3 +195,42 @@ def test_external_lidar_evidence_queue_is_never_read_by_control():
     port._external_raw_queue = True
     # No queue exists on this proxy: even attempting to drain would fail.
     assert port.get_capture_raw_scan_snapshot() is None
+
+
+def test_lidar_owner_death_is_fail_closed_even_with_a_cached_scan():
+    from v3.adapters.process_lidar_port import ProcessLidarPort
+    port = ProcessLidarPort.__new__(ProcessLidarPort)
+    port._state_queue = queue.Queue(maxsize=2)
+    port._process = SimpleNamespace(is_alive=lambda: False)
+    port._fatal_error = ""
+    port._stopped = False
+    port._status = {"running": True}
+    port._capture_raw_revision = 0
+    port._raw_snapshot = _raw_snapshot()
+    port._drain_state()
+    status = port.get_runtime_status()
+    assert status["running"] is False
+    assert status["driver_connected"] is False
+    assert status["health"] == "ERROR"
+    assert status["fatal_error"] == "LIDAR_OWNER_PROCESS_EXITED"
+
+
+def test_lidar_shutdown_keeps_collector_alive_until_producer_has_flushed():
+    from v3.adapters.process_lidar_port import ProcessLidarPort
+    port = ProcessLidarPort.__new__(ProcessLidarPort)
+    port._stopped = False
+    port._stop_event = threading.Event()
+    port._collector_stop = threading.Event()
+    port._collector = None
+    port._external_raw_queue = True
+    closed = []
+    port._state_queue = SimpleNamespace(close=lambda: closed.append("state"))
+
+    def join(timeout):
+        assert port._stop_event.is_set()
+        assert not port._collector_stop.is_set()
+
+    port._process = SimpleNamespace(join=join, is_alive=lambda: False)
+    port.stop()
+    assert port._collector_stop.is_set()
+    assert closed == ["state"]

@@ -487,7 +487,7 @@ class ProcessLidarPort:
         self._pending_poses: deque[TimedPoseReference] = deque(maxlen=_POSE_HISTORY_CAPACITY)
         self._collector: threading.Thread | None = None
         self._process.start()
-        # Parent only receives from both queues.
+        # Parent receives only compact state when evidence is sent to a sidecar.
         try:
             self._state_queue._writer.close()
             if not self._external_raw_queue:
@@ -628,19 +628,24 @@ class ProcessLidarPort:
         if self._stopped:
             return
         self._stopped = True
-        self._collector_stop.set()
         self._stop_event.set()
+        # Keep draining compact state while the child flushes its queue feeders.
+        # Stopping the reader first can strand the child in Queue finalization.
         self._process.join(timeout=_STOP_TIMEOUT_S)
         if self._process.is_alive():
             self._process.terminate()
             self._process.join(timeout=_STOP_TIMEOUT_S)
+        self._collector_stop.set()
         if self._process.is_alive():
             raise RuntimeError("process-isolated LiDAR owner did not stop")
         if self._collector is not None:
             self._collector.join(timeout=_STOP_TIMEOUT_S)
             if self._collector.is_alive():
                 raise RuntimeError("LiDAR state collector did not stop")
-        owned_queues = (self._state_queue,) if self._external_raw_queue else (self._state_queue, self._raw_queue)
+        owned_queues = (
+            (self._state_queue,) if self._external_raw_queue
+            else (self._state_queue, self._raw_queue)
+        )
         for item in owned_queues:
             try:
                 item.close()

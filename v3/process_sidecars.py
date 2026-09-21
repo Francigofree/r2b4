@@ -426,7 +426,7 @@ class ProcessMcapCaptureSession:
 
 
 class ProcessResidentStatusPublisher:
-    """Status formatting and file I/O sidecar; control callback is enqueue-only."""
+    """Compact status projection followed by sidecar-owned encoding/file I/O."""
 
     __slots__ = (
         "_config",

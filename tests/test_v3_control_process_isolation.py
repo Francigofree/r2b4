@@ -102,7 +102,7 @@ def test_real_sidecars_warm_feeders_off_control_cpu_and_drain_to_replay(tmp_path
     from v3.mcap_capture import McapCaptureConfig
     from v3.mcap_reader import McapReader
     from v3.mcap_replay_bridge import replay_mcap
-    from test_v3_mcap_e2e import records, raw
+    from test_v3_mcap_e2e import records
 
     cpus = sorted(os.sched_getaffinity(0))
     if len(cpus) < 2:
