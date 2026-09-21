@@ -7,14 +7,6 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
-class ScanCellEvidence:
-    """One scan reduced to deterministic occupied/free grid evidence."""
-
-    hit_keys: tuple[tuple[int, int], ...]
-    free_keys: tuple[tuple[int, int], ...]
-
-
-@dataclass(frozen=True, slots=True)
 class TemporalCell:
     score: int
     observation_count: int
@@ -77,13 +69,14 @@ class TemporalOccupancyGrid:
         center_y = (key[1] + 0.5) * self._resolution_m
         return math.hypot(center_x - x_m, center_y - y_m)
 
-    def scan_evidence(
+    def integrate_scan(
         self,
         *,
         origin_x_m: float,
         origin_y_m: float,
         endpoints: tuple[tuple[float, float], ...],
-    ) -> ScanCellEvidence:
+        captured_ns: int,
+    ) -> bool:
         hit_keys = {
             self.grid_key(x_m, y_m)
             for x_m, y_m in endpoints
@@ -96,29 +89,9 @@ class TemporalOccupancyGrid:
             for key in ray[1:-1]:
                 if key not in hit_keys:
                     free_keys.add(key)
-        return ScanCellEvidence(tuple(sorted(hit_keys)), tuple(sorted(free_keys)))
 
-    def integrate_scan(
-        self,
-        *,
-        origin_x_m: float,
-        origin_y_m: float,
-        endpoints: tuple[tuple[float, float], ...],
-        captured_ns: int,
-    ) -> ScanCellEvidence:
-        evidence = self.scan_evidence(
-            origin_x_m=origin_x_m,
-            origin_y_m=origin_y_m,
-            endpoints=endpoints,
-        )
-        self.integrate_evidence(evidence, captured_ns=captured_ns)
-        return evidence
-
-    def integrate_evidence(self, evidence: ScanCellEvidence, *, captured_ns: int) -> bool:
-        if not isinstance(evidence, ScanCellEvidence):
-            raise TypeError("evidence must be ScanCellEvidence")
         changed = False
-        for key in evidence.free_keys:
+        for key in sorted(free_keys):
             previous = self._cells.get(key)
             if previous is None:
                 continue
@@ -129,7 +102,7 @@ class TemporalOccupancyGrid:
                 self._cells[key] = TemporalCell(score, previous.observation_count, captured_ns)
             changed = True
 
-        for key in evidence.hit_keys:
+        for key in sorted(hit_keys):
             previous = self._cells.get(key)
             if previous is None:
                 self._cells[key] = TemporalCell(
@@ -221,7 +194,6 @@ class TemporalOccupancyGrid:
 
 
 __all__ = [
-    "ScanCellEvidence",
     "TemporalCell",
     "TemporalOccupancyCheckpoint",
     "TemporalOccupancyGrid",

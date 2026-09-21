@@ -1,9 +1,8 @@
 """L4 deterministic temporal realtime world model.
 
-TEMPORAL-2 keeps the public V3 L4 boundary unchanged while adding bounded
-structural local memory behind the existing RollingLocalCostmap contract.
-Fresh measurement-time-aligned LiDAR evidence always outranks remembered
-geometry; no navigation, persistence or I/O authority is added to L4.
+TEMPORAL-1 keeps the public V3 L4 boundary unchanged while making the owned
+world state measurement-time aware: bounded pose/scan histories, temporal
+occupancy with free-space clearing, and bounded current-time track projection.
 """
 
 from __future__ import annotations
@@ -20,10 +19,6 @@ from v3.contracts import (
     RobotEstimate,
     RollingLocalCostmap,
     WorldSnapshot,
-)
-from v3.layers.l4_structural_memory import (
-    StructuralMemoryCheckpoint,
-    StructuralMemoryGrid,
 )
 from v3.layers.l4_temporal_history import (
     LidarScanSnapshot,
@@ -117,24 +112,6 @@ class WorldModelConfig:
     person_track_beta: float = 0.35
     person_track_prediction_max_age_ns: int = 350_000_000
 
-    # TEMPORAL-2 structural local-memory bounds. Still L4-private.
-    structural_memory_enabled: bool = True
-    structural_max_age_ns: int = 30_000_000_000
-    structural_max_cells: int = 4_096
-    structural_hit_increment: int = 1
-    structural_free_decrement: int = 1
-    structural_max_score: int = 12
-    structural_confirm_score: int = 8
-    structural_confirm_min_hits: int = 8
-    structural_confirm_min_span_ns: int = 1_000_000_000
-    structural_clear_score: int = 1
-    structural_max_position_variance: float = 0.20
-    structural_max_yaw_variance: float = 0.15
-    continuity_translation_base_m: float = 0.25
-    continuity_translation_rate_mps: float = 1.50
-    continuity_yaw_base_rad: float = 0.35
-    continuity_yaw_rate_rad_s: float = 4.0
-
     def __post_init__(self) -> None:
         for name in (
             "max_track_age_ns",
@@ -143,15 +120,22 @@ class WorldModelConfig:
             "person_track_max_age_ns",
             "pose_history_max_age_ns",
             "scan_history_max_age_ns",
-            "structural_max_age_ns",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        for name in ("pose_lookup_max_skew_ns", "person_track_prediction_max_age_ns", "structural_confirm_min_span_ns"):
-            value = getattr(self, name)
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                raise ValueError(f"{name} must be a non-negative integer")
+        if (
+            not isinstance(self.pose_lookup_max_skew_ns, int)
+            or isinstance(self.pose_lookup_max_skew_ns, bool)
+            or self.pose_lookup_max_skew_ns < 0
+        ):
+            raise ValueError("pose_lookup_max_skew_ns must be a non-negative integer")
+        if (
+            not isinstance(self.person_track_prediction_max_age_ns, int)
+            or isinstance(self.person_track_prediction_max_age_ns, bool)
+            or self.person_track_prediction_max_age_ns < 0
+        ):
+            raise ValueError("person_track_prediction_max_age_ns must be a non-negative integer")
         for name in (
             "local_costmap_resolution_m",
             "local_costmap_radius_m",
@@ -159,12 +143,6 @@ class WorldModelConfig:
             "person_track_max_association_distance_m",
             "person_track_max_speed_mps",
             "person_track_radius_m",
-            "structural_max_position_variance",
-            "structural_max_yaw_variance",
-            "continuity_translation_base_m",
-            "continuity_translation_rate_mps",
-            "continuity_yaw_base_rad",
-            "continuity_yaw_rate_rad_s",
         ):
             value = getattr(self, name)
             if (
@@ -183,30 +161,12 @@ class WorldModelConfig:
             "occupancy_hit_increment",
             "occupancy_free_decrement",
             "occupancy_max_score",
-            "structural_max_cells",
-            "structural_hit_increment",
-            "structural_free_decrement",
-            "structural_max_score",
-            "structural_confirm_score",
-            "structural_confirm_min_hits",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        if (
-            not isinstance(self.structural_clear_score, int)
-            or isinstance(self.structural_clear_score, bool)
-            or self.structural_clear_score < 0
-        ):
-            raise ValueError("structural_clear_score must be a non-negative integer")
-        if self.structural_confirm_score > self.structural_max_score:
-            raise ValueError("structural_confirm_score cannot exceed structural_max_score")
-        if self.structural_clear_score >= self.structural_confirm_score:
-            raise ValueError("structural_clear_score must be below structural_confirm_score")
         if type(self.person_tracking_enabled) is not bool:
             raise TypeError("person_tracking_enabled must be bool")
-        if type(self.structural_memory_enabled) is not bool:
-            raise TypeError("structural_memory_enabled must be bool")
         if (
             not math.isfinite(self.person_camera_horizontal_fov_rad)
             or not 0.0 < self.person_camera_horizontal_fov_rad < math.pi
@@ -243,9 +203,6 @@ class WorldModelStateCheckpoint:
     cells: TemporalOccupancyCheckpoint
     pose_history: PoseHistoryCheckpoint
     scan_history: ScanHistoryCheckpoint
-    structural_memory: StructuralMemoryCheckpoint | None = None
-    last_continuity_pose: PoseSample | None = None
-    structural_recall_ready: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,7 +225,6 @@ class ShadowWorldModel:
     __slots__ = (
         "_config",
         "_costmap_revision",
-        "_last_continuity_pose",
         "_last_lidar_measurement_ns",
         "_last_lidar_sequence",
         "_last_local_measurement_ns",
@@ -278,8 +234,6 @@ class ShadowWorldModel:
         "_occupancy",
         "_pose_history",
         "_scan_history",
-        "_structural_memory",
-        "_structural_recall_ready",
         "_track_store",
     )
 
@@ -292,8 +246,6 @@ class ShadowWorldModel:
         self._last_local_sequence: int | None = None
         self._last_local_values: tuple[DataField, ...] | None = None
         self._costmap_revision = 0
-        self._last_continuity_pose: PoseSample | None = None
-        self._structural_recall_ready = False
         self._pose_history = PoseHistory(
             config.pose_history_max_age_ns,
             config.pose_history_max_samples,
@@ -311,18 +263,6 @@ class ShadowWorldModel:
             hit_increment=config.occupancy_hit_increment,
             free_decrement=config.occupancy_free_decrement,
             max_score=config.occupancy_max_score,
-        )
-        self._structural_memory = StructuralMemoryGrid(
-            resolution_m=config.local_costmap_resolution_m,
-            max_age_ns=config.structural_max_age_ns,
-            max_cells=config.structural_max_cells,
-            hit_increment=config.structural_hit_increment,
-            free_decrement=config.structural_free_decrement,
-            max_score=config.structural_max_score,
-            confirm_score=config.structural_confirm_score,
-            confirm_min_hits=config.structural_confirm_min_hits,
-            confirm_min_span_ns=config.structural_confirm_min_span_ns,
-            clear_score=config.structural_clear_score,
         )
         self._track_store = TemporalTrackStore(
             alpha=config.person_track_alpha,
@@ -344,9 +284,6 @@ class ShadowWorldModel:
             self._occupancy.checkpoint(),
             self._pose_history.checkpoint(),
             self._scan_history.checkpoint(),
-            self._structural_memory.checkpoint(),
-            self._last_continuity_pose,
-            self._structural_recall_ready,
         )
 
     def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
@@ -363,30 +300,25 @@ class ShadowWorldModel:
         self._occupancy.restore(checkpoint.cells)
         self._pose_history.restore(checkpoint.pose_history)
         self._scan_history.restore(checkpoint.scan_history)
-        if checkpoint.structural_memory is None:
-            self._structural_memory.clear()
-        else:
-            self._structural_memory.restore(checkpoint.structural_memory)
-        self._last_continuity_pose = checkpoint.last_continuity_pose
-        self._structural_recall_ready = checkpoint.structural_recall_ready
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
         if frame.context != estimate.context:
             raise ValueError("L4 inputs must use the same tick context")
 
-        continuity_broken = self._pose_discontinuity(estimate)
-        if continuity_broken:
-            self._pose_history.clear()
         frame_changed = self._pose_history.add(estimate)
-        if frame_changed or continuity_broken:
-            self._reset_spatial_state()
-        self._last_continuity_pose = PoseSample(
-            estimate.frame_id,
-            estimate.context.monotonic_ns,
-            estimate.x_m,
-            estimate.y_m,
-            estimate.yaw_rad,
-        )
+        if frame_changed:
+            # A coordinate-frame discontinuity invalidates spatial state. Source
+            # ordering continues independently, but old geometry must not leak.
+            self._scan_history.clear()
+            had_occupancy = self._occupancy.clear()
+            had_tracks = self._track_store.clear()
+            had_world = had_occupancy or had_tracks
+            self._last_local_measurement_ns = None
+            self._last_local_sequence = None
+            self._last_local_values = None
+            if had_world:
+                self._costmap_revision += 1
+            self._map_revision += 1
 
         self._update_lidar_health(frame)
 
@@ -453,7 +385,7 @@ class ShadowWorldModel:
                 radius_m=self._config.local_costmap_radius_m,
                 occupied_cells=tuple(
                     CostmapCell(grid_x, grid_y, count)
-                    for grid_x, grid_y, count in self._assembled_occupied_cells(estimate)
+                    for grid_x, grid_y, count in self._occupancy.occupied_cells()
                 ),
                 source_sequence=self._last_local_sequence,
                 freshness_ns=max(
@@ -469,81 +401,6 @@ class ShadowWorldModel:
             freshness_ns=freshness_ns,
             local_costmap=local_costmap,
         )
-
-    def _reset_spatial_state(self) -> None:
-        self._scan_history.clear()
-        had_occupancy = self._occupancy.clear()
-        had_structural = self._structural_memory.clear()
-        had_tracks = self._track_store.clear()
-        self._last_local_measurement_ns = None
-        self._last_local_sequence = None
-        self._last_local_values = None
-        self._structural_recall_ready = False
-        if had_occupancy or had_structural or had_tracks:
-            self._costmap_revision += 1
-        self._map_revision += 1
-
-    def _pose_discontinuity(self, estimate: RobotEstimate) -> bool:
-        previous = self._last_continuity_pose
-        if previous is None or previous.frame_id != estimate.frame_id:
-            return False
-        elapsed_ns = estimate.context.monotonic_ns - previous.monotonic_ns
-        if elapsed_ns <= 0:
-            return False
-        dt_s = elapsed_ns / 1_000_000_000.0
-        translation_limit = (
-            self._config.continuity_translation_base_m
-            + self._config.continuity_translation_rate_mps * dt_s
-        )
-        yaw_limit = (
-            self._config.continuity_yaw_base_rad
-            + self._config.continuity_yaw_rate_rad_s * dt_s
-        )
-        translation = math.hypot(estimate.x_m - previous.x_m, estimate.y_m - previous.y_m)
-        yaw_delta = abs(_wrapped_angle(estimate.yaw_rad - previous.yaw_rad))
-        return translation > translation_limit or yaw_delta > yaw_limit
-
-    def _structural_quality_ok(self, estimate: RobotEstimate) -> bool:
-        covariance = estimate.covariance_5x5
-        return (
-            covariance[0] <= self._config.structural_max_position_variance
-            and covariance[6] <= self._config.structural_max_position_variance
-            and covariance[12] <= self._config.structural_max_yaw_variance
-        )
-
-    def _assembled_occupied_cells(self, estimate: RobotEstimate) -> tuple[tuple[int, int, int], ...]:
-        fast_all = self._occupancy.occupied_cells()
-        structural_active = (
-            self._config.structural_memory_enabled
-            and self._structural_recall_ready
-            and self._structural_quality_ok(estimate)
-        )
-        if not structural_active:
-            return fast_all[: self._config.local_costmap_max_cells]
-
-        # A trustworthy current ray that traverses a cell is stronger evidence
-        # than either the short temporal accumulator or the long memory. Keep
-        # the internal scores for hysteresis, but do not expose that cell as an
-        # obstacle in the current planner snapshot.
-        current_free = frozenset(self._structural_memory.current_free_keys)
-        fast = tuple(
-            cell for cell in fast_all if (cell[0], cell[1]) not in current_free
-        )
-        if len(fast) >= self._config.local_costmap_max_cells:
-            return fast[: self._config.local_costmap_max_cells]
-
-        result = list(fast)
-        used = {(grid_x, grid_y) for grid_x, grid_y, _ in fast}
-        excluded = frozenset((*used, *current_free))
-        remembered = self._structural_memory.confirmed_cells(
-            center_x_m=estimate.x_m,
-            center_y_m=estimate.y_m,
-            radius_m=self._config.local_costmap_radius_m,
-            excluded_keys=excluded,
-        )
-        remaining = self._config.local_costmap_max_cells - len(result)
-        result.extend(remembered[:remaining])
-        return tuple(result)
 
     def _update_lidar_health(self, frame: AdmittedFrame) -> None:
         lidar = tuple(item for item in frame.accepted if item.kind == "lidar_health")
@@ -628,25 +485,12 @@ class ShadowWorldModel:
                     pose.y_m + yaw_sin * local_x + yaw_cos * local_y,
                 )
             )
-        evidence = self._occupancy.integrate_scan(
+        self._occupancy.integrate_scan(
             origin_x_m=pose.x_m,
             origin_y_m=pose.y_m,
             endpoints=tuple(endpoints),
             captured_ns=observation.captured_monotonic_ns,
         )
-        if self._config.structural_memory_enabled:
-            if self._structural_quality_ok(estimate):
-                self._structural_memory.integrate(
-                    evidence,
-                    captured_ns=observation.captured_monotonic_ns,
-                )
-                self._structural_memory.prune(now_ns=observation.captured_monotonic_ns)
-                self._structural_recall_ready = True
-            else:
-                # Do not learn or clear long-lived geometry from a spatially
-                # uncertain scan. Recall remains disabled until the next good
-                # local scan closes a trustworthy structural observation.
-                self._structural_recall_ready = False
         self._scan_history.add(
             LidarScanSnapshot(
                 observation.source_sequence,
