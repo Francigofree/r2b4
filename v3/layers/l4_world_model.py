@@ -1,7 +1,7 @@
 """L4 deterministic temporal realtime world model.
 
-TEMPORAL-2 keeps the public V3 L4 boundary unchanged while adding bounded
-structural local memory behind the existing RollingLocalCostmap contract.
+TEMPORAL-2.1 keeps the public V3 L4 boundary unchanged while hardening
+structural local memory with dynamic masking and measurement-time quality.
 Fresh measurement-time-aligned LiDAR evidence always outranks remembered
 geometry; no navigation, persistence or I/O authority is added to L4.
 """
@@ -34,6 +34,7 @@ from v3.layers.l4_temporal_history import (
     ScanHistoryCheckpoint,
 )
 from v3.layers.l4_temporal_occupancy import (
+    ScanCellEvidence,
     TemporalOccupancyCheckpoint,
     TemporalOccupancyGrid,
 )
@@ -125,9 +126,13 @@ class WorldModelConfig:
     structural_free_decrement: int = 1
     structural_max_score: int = 12
     structural_confirm_score: int = 8
+    structural_deconfirm_score: int | None = None
     structural_confirm_min_hits: int = 8
     structural_confirm_min_span_ns: int = 1_000_000_000
     structural_clear_score: int = 1
+    structural_dynamic_mask_margin_m: float = 0.15
+    structural_dynamic_mask_min_speed_mps: float = 0.05
+    structural_dynamic_mask_max_tracks: int = 32
     structural_max_position_variance: float = 0.20
     structural_max_yaw_variance: float = 0.15
     continuity_translation_base_m: float = 0.25
@@ -161,6 +166,8 @@ class WorldModelConfig:
             "person_track_radius_m",
             "structural_max_position_variance",
             "structural_max_yaw_variance",
+            "structural_dynamic_mask_margin_m",
+            "structural_dynamic_mask_min_speed_mps",
             "continuity_translation_base_m",
             "continuity_translation_rate_mps",
             "continuity_yaw_base_rad",
@@ -189,6 +196,7 @@ class WorldModelConfig:
             "structural_max_score",
             "structural_confirm_score",
             "structural_confirm_min_hits",
+            "structural_dynamic_mask_max_tracks",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -201,8 +209,27 @@ class WorldModelConfig:
             raise ValueError("structural_clear_score must be a non-negative integer")
         if self.structural_confirm_score > self.structural_max_score:
             raise ValueError("structural_confirm_score cannot exceed structural_max_score")
-        if self.structural_clear_score >= self.structural_confirm_score:
-            raise ValueError("structural_clear_score must be below structural_confirm_score")
+        if self.structural_deconfirm_score is not None and (
+            not isinstance(self.structural_deconfirm_score, int)
+            or isinstance(self.structural_deconfirm_score, bool)
+        ):
+            raise ValueError("structural_deconfirm_score must be an integer or None")
+        effective_deconfirm_score = (
+            max(
+                self.structural_clear_score,
+                (self.structural_clear_score + self.structural_confirm_score) // 2,
+            )
+            if self.structural_deconfirm_score is None
+            else self.structural_deconfirm_score
+        )
+        if not (
+            self.structural_clear_score
+            <= effective_deconfirm_score
+            < self.structural_confirm_score
+        ):
+            raise ValueError(
+                "structural scores must satisfy clear <= deconfirm < confirm"
+            )
         if type(self.person_tracking_enabled) is not bool:
             raise TypeError("person_tracking_enabled must be bool")
         if type(self.structural_memory_enabled) is not bool:
@@ -320,6 +347,7 @@ class ShadowWorldModel:
             free_decrement=config.structural_free_decrement,
             max_score=config.structural_max_score,
             confirm_score=config.structural_confirm_score,
+            deconfirm_score=config.structural_deconfirm_score,
             confirm_min_hits=config.structural_confirm_min_hits,
             confirm_min_span_ns=config.structural_confirm_min_span_ns,
             clear_score=config.structural_clear_score,
@@ -386,6 +414,9 @@ class ShadowWorldModel:
             estimate.x_m,
             estimate.y_m,
             estimate.yaw_rad,
+            estimate.covariance_5x5[0],
+            estimate.covariance_5x5[6],
+            estimate.covariance_5x5[12],
         )
 
         self._update_lidar_health(frame)
@@ -505,11 +536,98 @@ class ShadowWorldModel:
 
     def _structural_quality_ok(self, estimate: RobotEstimate) -> bool:
         covariance = estimate.covariance_5x5
-        return (
-            covariance[0] <= self._config.structural_max_position_variance
-            and covariance[6] <= self._config.structural_max_position_variance
-            and covariance[12] <= self._config.structural_max_yaw_variance
+        return self._structural_variance_ok(covariance[0], covariance[6], covariance[12])
+
+    def _structural_pose_quality_ok(self, pose: PoseSample) -> bool:
+        return self._structural_variance_ok(
+            pose.position_variance_x,
+            pose.position_variance_y,
+            pose.yaw_variance,
         )
+
+    def _structural_variance_ok(self, x_variance: float, y_variance: float, yaw_variance: float) -> bool:
+        return (
+            x_variance <= self._config.structural_max_position_variance
+            and y_variance <= self._config.structural_max_position_variance
+            and yaw_variance <= self._config.structural_max_yaw_variance
+        )
+
+    def _dynamic_structural_hit_keys(
+        self,
+        frame: AdmittedFrame,
+        *,
+        captured_ns: int,
+        evidence: ScanCellEvidence,
+    ) -> frozenset[tuple[int, int]]:
+        if not evidence.hit_keys:
+            return frozenset()
+
+        projection_limit_ns = self._config.person_track_prediction_max_age_ns
+        tracks: dict[str, ObstacleTrack] = {}
+        for state in self._track_store.checkpoint().states:
+            if (
+                not state.track.track_id.startswith("person-")
+                or state.captured_ns > captured_ns
+            ):
+                continue
+            projected_ns = min(captured_ns - state.captured_ns, projection_limit_ns)
+            dt_s = projected_ns / 1_000_000_000.0
+            track = state.track
+            tracks[track.track_id] = ObstacleTrack(
+                track_id=track.track_id,
+                x_m=track.x_m + track.vx_mps * dt_s,
+                y_m=track.y_m + track.vy_mps * dt_s,
+                radius_m=track.radius_m,
+                vx_mps=track.vx_mps,
+                vy_mps=track.vy_mps,
+                confidence=track.confidence,
+            )
+        for observation in frame.accepted:
+            if observation.kind != "obstacle_track" or observation.captured_monotonic_ns > captured_ns:
+                continue
+            values = _values(observation)
+            track_id = values.get("track_id")
+            if not isinstance(track_id, str) or not track_id:
+                raise ValueError("obstacle_track.track_id must be a non-empty string")
+            vx_mps = _number(values, "vx_mps")
+            vy_mps = _number(values, "vy_mps")
+            speed_mps = math.hypot(vx_mps, vy_mps)
+            if (
+                not track_id.startswith("person-")
+                and speed_mps < self._config.structural_dynamic_mask_min_speed_mps
+            ):
+                continue
+            dt_ns = min(captured_ns - observation.captured_monotonic_ns, projection_limit_ns)
+            dt_s = dt_ns / 1_000_000_000.0
+            tracks[track_id] = ObstacleTrack(
+                track_id=track_id,
+                x_m=_number(values, "x_m") + vx_mps * dt_s,
+                y_m=_number(values, "y_m") + vy_mps * dt_s,
+                radius_m=_number(values, "radius_m"),
+                vx_mps=vx_mps,
+                vy_mps=vy_mps,
+                confidence=_number(values, "confidence"),
+            )
+
+        ordered_tracks = tuple(tracks[key] for key in sorted(tracks))[
+            : self._config.structural_dynamic_mask_max_tracks
+        ]
+        if not ordered_tracks:
+            return frozenset()
+
+        resolution_m = self._config.local_costmap_resolution_m
+        cell_radius_m = resolution_m / math.sqrt(2.0)
+        ignored: set[tuple[int, int]] = set()
+        for key in evidence.hit_keys:
+            cell_x = (key[0] + 0.5) * resolution_m
+            cell_y = (key[1] + 0.5) * resolution_m
+            if any(
+                math.hypot(cell_x - track.x_m, cell_y - track.y_m)
+                <= track.radius_m + self._config.structural_dynamic_mask_margin_m + cell_radius_m
+                for track in ordered_tracks
+            ):
+                ignored.add(key)
+        return frozenset(ignored)
 
     def _assembled_occupied_cells(self, estimate: RobotEstimate) -> tuple[tuple[int, int, int], ...]:
         fast_all = self._occupancy.occupied_cells()
@@ -635,10 +753,16 @@ class ShadowWorldModel:
             captured_ns=observation.captured_monotonic_ns,
         )
         if self._config.structural_memory_enabled:
-            if self._structural_quality_ok(estimate):
+            if self._structural_pose_quality_ok(pose):
+                ignored_hit_keys = self._dynamic_structural_hit_keys(
+                    frame,
+                    captured_ns=observation.captured_monotonic_ns,
+                    evidence=evidence,
+                )
                 self._structural_memory.integrate(
                     evidence,
                     captured_ns=observation.captured_monotonic_ns,
+                    ignored_hit_keys=ignored_hit_keys,
                 )
                 self._structural_memory.prune(now_ns=observation.captured_monotonic_ns)
                 self._structural_recall_ready = True

@@ -24,6 +24,9 @@ class PoseSample:
     x_m: float
     y_m: float
     yaw_rad: float
+    position_variance_x: float = 0.0
+    position_variance_y: float = 0.0
+    yaw_variance: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +59,9 @@ class PoseHistory:
             estimate.x_m,
             estimate.y_m,
             estimate.yaw_rad,
+            estimate.covariance_5x5[0],
+            estimate.covariance_5x5[6],
+            estimate.covariance_5x5[12],
         )
         frame_changed = bool(self._samples and self._samples[-1].frame_id != sample.frame_id)
         if frame_changed:
@@ -110,6 +116,9 @@ class PoseHistory:
                 before.x_m + ratio * (after.x_m - before.x_m),
                 before.y_m + ratio * (after.y_m - before.y_m),
                 _wrap_angle(before.yaw_rad + ratio * yaw_delta),
+                max(before.position_variance_x, after.position_variance_x),
+                max(before.position_variance_y, after.position_variance_y),
+                max(before.yaw_variance, after.yaw_variance),
             )
         return None
 
