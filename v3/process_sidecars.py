@@ -15,15 +15,22 @@ from pathlib import Path
 from typing import Any
 
 from v3.engine import TickResult
+from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.resident_status import (
+    RESIDENT_PROCESS_STATUS_SCHEMA,
+    _atomic_private_json,
+    _tick_status,
+)
 
 
 _SPAWN_METHOD = "spawn"
 _CAPTURE_LOCAL_CAPACITY = 4096
 _CAPTURE_TRANSPORT_MIN_CAPACITY = 512
+_RAW_LIDAR_CAPACITY = 64
 _SIDECAR_READY_TIMEOUT_S = 10.0
 _SIDECAR_FINISH_TIMEOUT_S = 120.0
 
@@ -35,6 +42,7 @@ def _capture_sidecar_main(
     metadata: Mapping[str, object],
     config: McapCaptureConfig,
     data_queue: Any,
+    raw_lidar_queue: Any,
     control_queue: Any,
     result_queue: Any,
     ready_event: Any,
@@ -72,6 +80,18 @@ def _capture_sidecar_main(
         finish_request: tuple[str, bool, int] | None = None
         running = True
         while running:
+            # The LiDAR producer sends full scans directly here. The control
+            # interpreter never unpickles/rebuilds/re-pickles raw geometry.
+            for _ in range(_RAW_LIDAR_CAPACITY):
+                try:
+                    raw_kind, raw_wire = raw_lidar_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if raw_kind != "raw":
+                    raise RuntimeError(f"unknown LiDAR evidence kind: {raw_kind!r}")
+                snapshot = _unwire_raw(raw_wire)
+                if snapshot is not None:
+                    hub.publish(snapshot, topic="v3.raw_lidar")
             while True:
                 try:
                     command = control_queue.get_nowait()
@@ -147,13 +167,6 @@ def _status_sidecar_main(
                 role="status-sidecar",
                 strict=strict_affinity,
             )
-        # Local import avoids a parent-side circular import with v3_process_runtime.
-        from v3_process_runtime import (
-            RESIDENT_PROCESS_STATUS_SCHEMA,
-            _atomic_private_json,
-            _tick_status,
-        )
-
         target = Path(path)
         _atomic_private_json(
             target,
@@ -192,14 +205,14 @@ def _status_sidecar_main(
                 continue
 
             try:
-                result, ready_for_active = tick_queue.get(timeout=0.02)
+                snapshot = tick_queue.get(timeout=0.02)
             except queue.Empty:
                 continue
-            if result is None:  # startup-only feeder warmup
+            if snapshot is None:  # startup-only feeder warmup
                 continue
             _atomic_private_json(
                 target,
-                _tick_status(result, bool(ready_for_active)),
+                snapshot,
                 file_mode,
             )
         result_queue.put(("done",))
@@ -221,6 +234,7 @@ class ProcessMcapCaptureSession:
         "_configuration",
         "_control_queue",
         "_data_queue",
+        "_raw_lidar_queue",
         "_drop_count",
         "_enqueued_count",
         "_failed_event",
@@ -277,6 +291,7 @@ class ProcessMcapCaptureSession:
         self._config = config or McapCaptureConfig()
         self._transport_capacity = max(_CAPTURE_TRANSPORT_MIN_CAPACITY, capacity * 2)
         self._data_queue = context.Queue(maxsize=self._transport_capacity)
+        self._raw_lidar_queue = context.Queue(maxsize=_RAW_LIDAR_CAPACITY)
         self._control_queue = context.Queue(maxsize=16)
         self._result_queue = context.Queue(maxsize=4)
         self._ready_event = context.Event()
@@ -293,6 +308,7 @@ class ProcessMcapCaptureSession:
                 self._metadata,
                 self._config,
                 self._data_queue,
+                self._raw_lidar_queue,
                 self._control_queue,
                 self._result_queue,
                 self._ready_event,
@@ -308,6 +324,11 @@ class ProcessMcapCaptureSession:
         self._enqueued_count = 0
         self._drop_count = 0
         self.evidence: dict[str, object] | None = None
+
+    @property
+    def raw_lidar_queue(self) -> Any:
+        """Spawn-time producer → sidecar evidence lane; never a control input."""
+        return self._raw_lidar_queue
 
     @property
     def failed(self) -> bool:
@@ -505,7 +526,7 @@ class ProcessResidentStatusPublisher:
         with temporary_current_affinity(
             self._worker_cpu, role="status-feeder", strict=self._strict_affinity
         ):
-            self._tick_queue.put((None, False), timeout=_SIDECAR_READY_TIMEOUT_S)
+            self._tick_queue.put(None, timeout=_SIDECAR_READY_TIMEOUT_S)
 
     def publish_tick(self, result: TickResult, ready_for_active: bool = False) -> None:
         if not isinstance(result, TickResult):
@@ -515,7 +536,9 @@ class ProcessResidentStatusPublisher:
         if not self._started:
             raise RuntimeError("status publisher is not started")
         try:
-            self._tick_queue.put_nowait((result, ready_for_active))
+            # Project before IPC: the status consumer needs counts and scalars,
+            # not the full L1-L12 graph/costmap serialized by a control-GIL feeder.
+            self._tick_queue.put_nowait(_tick_status(result, ready_for_active))
         except queue.Full:
             # Status is explicitly latest/best-effort and has no safety authority.
             self._drop_count += 1

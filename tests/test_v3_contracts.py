@@ -45,6 +45,35 @@ from v3.contracts import (
 )
 
 
+def test_rejection_identity_preserves_distinct_reasons_for_one_source_revision():
+    stale = RejectedObservation("lidar", 60, RejectionReason.STALE, 384_680_281)
+    duplicate = RejectedObservation("lidar", 60, RejectionReason.DUPLICATE, 230_789_068)
+    frame = AdmittedFrame(TickContext(253, 4298832040810), (), (stale, duplicate))
+    assert frame.rejected == (stale, duplicate)
+    with pytest.raises(ContractValidationError, match="duplicates"):
+        AdmittedFrame(frame.context, (), (stale, stale))
+
+
+@pytest.mark.parametrize("value", [None, False, True, 60, 1.25, "LIDAR_STALE"])
+def test_scalar_capture_leaf_pickle_preserves_value_type_and_immutability(value, monkeypatch):
+    import dataclasses
+    import pickle
+
+    field = DataField("measurement", value)
+    for protocol in range(2, pickle.HIGHEST_PROTOCOL + 1):
+        restored = pickle.loads(pickle.dumps(field, protocol=protocol))
+        assert restored == field
+        assert type(restored.value) is type(value)
+        with pytest.raises(FrozenInstanceError):
+            restored.value = None
+    # Existing list-based dataclass pickles remain readable as well.
+    with monkeypatch.context() as old:
+        old.setattr(DataField, "__reduce__", object.__reduce__)
+        old.setattr(DataField, "__getstate__", dataclasses._dataclass_getstate)
+        wire = pickle.dumps(field)
+    assert pickle.loads(wire) == field
+
+
 def contract_instances() -> tuple[object, ...]:
     context = TickContext(7, 2_000)
     sample = DeviceSample(

@@ -4,6 +4,7 @@ import pytest
 
 from v3.adapters.multirate_inputs import _next_period_deadline
 from v3.contracts import (
+    AcquisitionFrame,
     DataField,
     DeviceHealth,
     DeviceHealthState,
@@ -203,3 +204,19 @@ def test_multirate_deadline_is_phase_anchored_not_completion_anchored():
 
     # Prime is anchored to acquisition start, not publication/completion time.
     assert _next_period_deadline(0, 200_000_000, 203_000_000, 20_000_000) == 220_000_000
+
+
+def test_lidar_revision_can_be_stale_on_raw_branch_and_duplicate_on_matcher_branch():
+    # Capture 20260921_191906, tick 253: physical scan and matcher completion
+    # share revision 60, but have independent timestamps and freshness.
+    admission = _admission()
+    raw = DeviceSample("RPLIDAR_C1", "lidar_health", 60, 4298447360529, ())
+    matcher = DeviceSample("RPLIDAR_C1", "lidar_localization_health", 60, 4298601251742, ())
+    health = (DeviceHealth("RPLIDAR_C1", DeviceHealthState.DEGRADED, "LIDAR_STALE"),)
+    admission(AcquisitionFrame(TickContext(252, 4298798699783), (raw, matcher), health))
+    frame = admission(AcquisitionFrame(TickContext(253, 4298832040810), (raw, matcher), health))
+    assert frame.accepted == ()
+    assert [(item.source_sequence, item.reason, item.age_ns) for item in frame.rejected] == [
+        (60, RejectionReason.STALE, 384680281),
+        (60, RejectionReason.DUPLICATE, 230789068),
+    ]

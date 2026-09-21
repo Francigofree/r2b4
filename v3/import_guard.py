@@ -16,6 +16,8 @@ LAYER_PREFIX = "v3.layers."
 # dependencies. They are allowed only at the named edge adapters; the same
 # imports remain forbidden everywhere else in V3.
 EDGE_THIRD_PARTY_ROOTS: dict[str, frozenset[str]] = {
+    "v3.adapters.process_encoder_backend": frozenset({"lgpio"}),
+    "v3.adapters.process_lidar_port": frozenset({"serial"}),
     "v3.adapters.picamera2_camera": frozenset({"libcamera", "picamera2"}),
     "v3.adapters.camera_media": frozenset({"picamera2"}),
     "v3.adapters.litert_person_detector": frozenset({"ai_edge_litert"}),
@@ -111,7 +113,10 @@ def _check_import(
         return violations
     source_layer = _source_layer(importer)
     target_layer = _target_layer(imported)
-    if source_layer and target_layer and source_layer != target_layer:
+    if (
+        source_layer and target_layer
+        and source_layer.split("_", 1)[0] != target_layer.split("_", 1)[0]
+    ):
         violations.append(
             ImportViolation(
                 path,

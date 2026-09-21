@@ -146,6 +146,20 @@ def test_layer_cannot_import_another_layer_or_an_adapter(tmp_path):
     assert "LAYER_INTERNAL_IMPORT_NOT_ALLOWED" in codes
 
 
+def test_helpers_of_the_same_numbered_layer_are_not_cross_layer_imports(tmp_path):
+    _write(tmp_path, "v3/layers/l4_world_model.py",
+           "from v3.layers.l4_temporal_occupancy import ScanCellEvidence\n")
+    assert validate_v3_imports(tmp_path) == ()
+
+
+def test_process_device_imports_stay_confined_to_named_edges(tmp_path):
+    _write(tmp_path, "v3/adapters/process_encoder_backend.py", "import lgpio\n")
+    _write(tmp_path, "v3/adapters/process_lidar_port.py", "import serial\n")
+    assert validate_v3_imports(tmp_path) == ()
+    _write(tmp_path, "v3/layers/l3_state_estimation.py", "import lgpio\nimport serial\n")
+    assert {item.imported_module for item in validate_v3_imports(tmp_path)} == {"lgpio", "serial"}
+
+
 def test_only_l12_can_import_the_final_writer_port(tmp_path):
     _write(
         tmp_path,

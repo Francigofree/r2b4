@@ -200,7 +200,12 @@ class AdmittedFrame:
     def __post_init__(self) -> None:
         accepted_keys = tuple((item.source_device_id, item.kind, item.source_sequence) for item in self.accepted)
         _require_unique(self.accepted, accepted_keys, "AdmittedFrame.accepted")
-        rejected_keys = tuple((item.source_device_id, item.source_sequence) for item in self.rejected)
+        # L2 coalesces diagnostics by source/revision/reason. Independent
+        # capabilities can share a revision but have different ages/rejections.
+        rejected_keys = tuple(
+            (item.source_device_id, item.source_sequence, item.reason)
+            for item in self.rejected
+        )
         _require_unique(self.rejected, rejected_keys, "AdmittedFrame.rejected")
         if len(set(self.degraded_sources)) != len(self.degraded_sources):
             raise ContractValidationError("AdmittedFrame.degraded_sources must be unique")

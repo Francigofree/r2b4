@@ -57,6 +57,12 @@ class DataField:
     key: str
     value: ScalarValue
 
+    def __reduce__(self) -> tuple[object, tuple[str, ScalarValue]]:
+        # Capture checkpoints contain thousands of these immutable leaves.
+        # Avoid dataclasses.fields/list allocation for each IPC pickle leaf;
+        # reconstruct and validate the same typed value in the consumer.
+        return DataField, (self.key, self.value)
+
     def __post_init__(self) -> None:
         require_token(self.key, "DataField.key")
         if isinstance(self.value, float):

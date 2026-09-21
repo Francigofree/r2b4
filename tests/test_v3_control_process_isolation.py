@@ -15,6 +15,15 @@ from v3.adapters.process_lidar_port import ProcessLidarPort
 from v3.process_sidecars import ProcessMcapCaptureSession, ProcessResidentStatusPublisher
 
 
+def _raw_evidence_producer(target, times):
+    from v3.adapters.process_lidar_port import _wire_raw
+    from test_v3_mcap_e2e import raw
+    for revision, monotonic_ns in enumerate(times, 1):
+        target.put(("raw", _wire_raw(raw(revision, monotonic_ns, points=360))), timeout=2.0)
+    target.close()
+    target.join_thread()
+
+
 def test_shared_pose_history_preserves_exact_and_interpolated_scan_time_pose():
     context = multiprocessing.get_context("spawn")
     lock = context.Lock()
@@ -116,15 +125,26 @@ def test_real_sidecars_warm_feeders_off_control_cpu_and_drain_to_replay(tmp_path
         status.start()
         for feeder in (capture._data_queue._thread, status._tick_queue._thread):
             assert os.sched_getaffinity(feeder.native_id) == {io_cpu}
+        producer = multiprocessing.get_context("spawn").Process(
+            target=_raw_evidence_producer,
+            args=(capture.raw_lidar_queue, tuple(r.inputs.context.monotonic_ns for r in values)),
+        )
+        producer.start()
         for record in values:
             capture.observe(record)
-            capture.observe_raw_lidar(raw(record.inputs.context.tick_id + 1,
-                                          record.inputs.context.monotonic_ns))
             status.publish_tick(record.result)
+        producer.join(5.0)
+        assert producer.exitcode == 0
         status.finish()
         path = capture.finalize(SimpleNamespace(status=0))
         assert capture.transport_drop_count == 0
         assert McapReader(path).capture_integrity()["captured_tick_count"] == 6
+        raw_rows = [row for _, row in McapReader(path).iter_json_messages(topics=("/r2b4/raw_lidar",))]
+        assert [row["revision"] for row in raw_rows] == list(range(1, 7))
+        assert all(row["source_point_count"] == 360 for row in raw_rows)
+        assert [row["measurement_monotonic_ns"] for row in raw_rows] == [
+            record.inputs.context.monotonic_ns for record in values
+        ]
         assert replay_mcap(path, project_root=Path(process.__file__).parent)["status"] == "MATCH"
     finally:
         os.sched_setaffinity(0, original)
@@ -132,3 +152,27 @@ def test_real_sidecars_warm_feeders_off_control_cpu_and_drain_to_replay(tmp_path
             if sidecar._process.is_alive():
                 sidecar._process.terminate()
                 sidecar._process.join(2.0)
+
+
+def test_status_ipc_contains_compact_projection_and_remains_bounded(tmp_path):
+    import pickle
+    import queue
+    from test_v3_mcap_e2e import records
+    from v3.resident_status import _tick_status
+
+    _, values = records(1)
+    result = values[0].result
+    publisher = ProcessResidentStatusPublisher(process.ResidentStatusConfig(tmp_path / "status.json"))
+    publisher._tick_queue.close()
+    publisher._tick_queue = queue.Queue(maxsize=1)
+    publisher._started = True
+    publisher.publish_tick(result, True)
+    publisher.publish_tick(result, False)
+    assert publisher.drop_count == 1
+    snapshot = publisher._tick_queue.get_nowait()
+    assert snapshot == _tick_status(result, True)
+    wire = pickle.dumps(snapshot)
+    assert b"TickResult" not in wire
+    assert b"DataField" not in wire
+    assert b"CostmapCell" not in wire
+    assert pickle.loads(wire)["tick_id"] == result.trace.context.tick_id

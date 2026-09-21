@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import queue
+import threading
 from types import SimpleNamespace
 
 from v3.adapters.process_lidar_port import _unwire_raw, _wire_control_raw, _wire_raw
@@ -85,3 +87,88 @@ def test_encoder_owner_imports_lgpio_only_in_child_entry():
     # No module-level lgpio import: importing the control side must not open/own GPIO.
     prefix = source[: source.index("def _encoder_process_main")]
     assert "import lgpio" not in prefix
+
+
+def test_lidar_matcher_update_supersedes_scan_update_without_losing_scan(monkeypatch):
+    import sys
+    from v3.adapters import process_lidar_port as module
+
+    raw0 = _raw_snapshot()
+    raw1 = _raw_snapshot()
+    raw1.raw_scan_id = 8
+    raw1.raw_scan_timestamp = 1.2
+    raw1.scan_start_monotonic_ns += 100_000_000
+    raw1.scan_end_monotonic_ns += 100_000_000
+    raw1.measurement_monotonic_ns += 100_000_000
+    raw1.observed_monotonic_ns += 100_000_000
+    scans = iter((raw0, raw1, raw1))
+    matcher = SimpleNamespace(
+        matcher_result_id=8, candidate_id=8, source_raw_scan_id=8,
+        source_raw_scan_timestamp=raw1.raw_scan_timestamp,
+        scan_start_monotonic_ns=raw1.scan_start_monotonic_ns,
+        scan_end_monotonic_ns=raw1.scan_end_monotonic_ns,
+        measurement_monotonic_ns=raw1.measurement_monotonic_ns,
+        pose_reference_monotonic_ns=raw1.measurement_monotonic_ns,
+        timestamp=1.3, summary={},
+    )
+    matches = iter((None, None, matcher))
+    source = SimpleNamespace(
+        get_raw_scan_snapshot=lambda: next(scans), get_matcher_result=lambda: next(matches),
+        get_runtime_status=lambda: {"running": True}, stop=lambda: None,
+    )
+    class TwoIterations:
+        count = 0
+        def is_set(self):
+            return self.count == 2
+        def wait(self, timeout):
+            self.count += 1
+
+    monkeypatch.setitem(sys.modules, "serial", SimpleNamespace(Serial=object))
+    monkeypatch.setattr(module, "open_native_lidar_port", lambda *args: source)
+    states, raw_queue = queue.Queue(maxsize=2), queue.Queue(maxsize=2)
+    module._lidar_owner_process_main(
+        None, None, None, None, None, states, raw_queue,
+        threading.Event(), TwoIterations(), None, False, 0.08, 2.5, 96,
+    )
+    port = module.ProcessLidarPort.__new__(module.ProcessLidarPort)
+    port._raw_snapshot = raw0
+    port._state_queue = states
+    port._process = SimpleNamespace(is_alive=lambda: True)
+    port._fatal_error = ""
+    port._stopped = False
+    port._drain_state()
+    assert port._raw_snapshot.raw_scan_id == 8
+    assert port._raw_snapshot.scan_end_monotonic_ns == raw1.scan_end_monotonic_ns
+    assert port._raw_snapshot.measurement_monotonic_ns == raw1.measurement_monotonic_ns
+    assert len(port._raw_snapshot.raw_scan) <= 96
+    assert port._matcher_result.source_raw_scan_id == 8
+    # Repeated heartbeat does not rebuild even the bounded geometry in control.
+    snapshot = port._raw_snapshot
+    states.put(("state", module._wire_control_raw(raw1, minimum_range_m=.08,
+                 maximum_range_m=2.5, maximum_points=96), module._wire_matcher(matcher), {}))
+    port._drain_state()
+    assert port._raw_snapshot is snapshot
+
+
+def test_lidar_transport_error_is_not_hidden_by_a_later_state():
+    from v3.adapters.process_lidar_port import ProcessLidarPort
+    port = ProcessLidarPort.__new__(ProcessLidarPort)
+    port._raw_snapshot = None
+    port._state_queue = queue.Queue(maxsize=2)
+    port._state_queue.put(("error", "OSError", "disconnected"))
+    port._state_queue.put(("state", None, None, {"running": True}))
+    port._process = SimpleNamespace(is_alive=lambda: True)
+    port._fatal_error = ""
+    port._stopped = False
+    port._capture_raw_revision = 0
+    port._drain_state()
+    assert port.get_runtime_status()["running"] is False
+    assert port.get_runtime_status()["fatal_error"] == "OSError:disconnected"
+
+
+def test_external_lidar_evidence_queue_is_never_read_by_control():
+    from v3.adapters.process_lidar_port import ProcessLidarPort
+    port = ProcessLidarPort.__new__(ProcessLidarPort)
+    port._external_raw_queue = True
+    # No queue exists on this proxy: even attempting to drain would fail.
+    assert port.get_capture_raw_scan_snapshot() is None
