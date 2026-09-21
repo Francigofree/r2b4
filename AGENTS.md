@@ -38,6 +38,8 @@ Ne vezess be új A/C/O számozott rétegrendet vagy `L13`-at; az egyetlen produc
 
 A célzott teszt az alapértelmezett.
 
+A pytest célzott scope-jainak egyetlen forrása a `v3/pytest_profiles.py`; ugyanezeket a profilokat használja a Test Hub. A `gate` legyen az első gyors kapu, majd a változás természetének megfelelő `contract`/`async`/`runtime`/`replay`/`control`/`perception` profil következzen. A `full` nem helyettesíti a célzott tesztet.
+
 Releváns capture esetén használd a natív Replayer/Test Hub utat a V3 contractok szerint.
 
 Async/process boundary módosításnál a célzott teszteknek szükség szerint bizonyítaniuk kell:

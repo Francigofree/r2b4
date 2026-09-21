@@ -124,12 +124,13 @@ def test_pytest_is_a_test_hub_command_not_a_runtime_dependency(monkeypatch, tmp_
         return SimpleNamespace(returncode=0, stdout="7 passed in 0.10s\n", stderr="")
 
     monkeypatch.setattr(portable.subprocess, "run", fake_run)
-    result = portable.run_pytest(tmp_path, scope="testhub")
+    project_root = Path(__file__).resolve().parents[1]
+    result = portable.run_pytest(project_root, scope="testhub")
     assert result["status"] == "PASS"
     assert result["scope"] == "testhub"
     assert result["command"][:4] == [portable.sys.executable, "-m", "pytest", "-q"]
     assert "tests/test_v3_test_hub_portable.py" in result["command"]
-    assert calls[0][1]["cwd"] == tmp_path.resolve()
+    assert calls[0][1]["cwd"] == project_root
 
 
 def test_public_test_hub_routes_test_command_to_unified_cli(monkeypatch):
