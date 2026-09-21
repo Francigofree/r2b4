@@ -97,6 +97,10 @@ class ResidentPhysicalControlComposition:
     def checkpoint(self) -> NativeControlStateCheckpoint:
         return self._live_control.checkpoint()
 
+    def dispatch_pending_planner_request(self, monotonic_ns: int) -> bool:
+        """Dispatch a post-tick L6 request without changing layer authority."""
+        return self._live_control.dispatch_pending_planner_request(monotonic_ns)
+
     def set_timing_observer(
         self, observer: Callable[[str, int], None] | None
     ) -> None:

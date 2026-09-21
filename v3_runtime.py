@@ -387,7 +387,28 @@ def run_resident_physical_control(
             control_completed_ns = time.perf_counter_ns()
             if timing is not None:
                 timing.observe_control(control_completed_ns - control_started_ns)
-            observer_started_ns = control_completed_ns
+
+            # L6 may have created a new immutable rollout request during this
+            # completed tick. Dispatch it now, before observation callbacks and
+            # before the scheduler sleep. The worker still has no navigation
+            # authority and its result remains invisible until a later input
+            # closure freezes it into PlannerInput.
+            if (
+                last_result.trace.fault_layer is None
+                and last_result.final_actuation.safety_decision is not SafetyDecision.FAULT
+            ):
+                dispatch_ns = _read_monotonic_ns(monotonic_ns, previous_clock_ns)
+                previous_clock_ns = dispatch_ns
+                dispatch_started_ns = time.perf_counter_ns()
+                dispatched = runtime.dispatch_pending_planner_request(dispatch_ns)
+                dispatch_completed_ns = time.perf_counter_ns()
+                if timing is not None and dispatched:
+                    timing.observe_control_phase(
+                        "ASYNC_L6_DISPATCH",
+                        dispatch_completed_ns - dispatch_started_ns,
+                    )
+
+            observer_started_ns = time.perf_counter_ns()
             if record_observer is not None:
                 if (
                     isinstance(record, ExecutionRecord)

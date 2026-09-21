@@ -1,40 +1,72 @@
-# R2B4 capture refactor P0 upgrade
+# R2B4 async L6 dispatch P0 upgrade — 2026-09-21
 
-Source-first base inspected: `6c785ec4497944481c285578240277528fa6a18c` (2026-09-21).
+Base inspected: `3154b98a9bb4cc544710150f0f96904d07a3b6a1`.
 
-## Scope
+## Root cause addressed
 
-- full `CaptureRecord` is no longer the production control -> capture IPC payload;
-- a bounded `CaptureCoreFrame` projection crosses IPC;
-- repeated L4 occupied-cell geometry and same-tick L7-selected L6 trajectory are reference-compacted for IPC and reconstructed in the sidecar;
-- raw LiDAR remains direct producer -> capture sidecar;
-- raw transport gets explicit supersede accounting plus terminal `raw_end` marker;
-- integrity is split into `replay_complete`, `raw_evidence_complete`, and overall `complete`;
-- any raw loss makes raw evidence incomplete even when diagnostic loss tolerance says the loss is sparse;
-- shared ring byte pressure evicts raw evidence before replay-core evidence;
-- resolved capture policy is written into MCAP metadata;
-- replay may proceed from a raw-incomplete capture only if replay-core integrity is complete.
+Two live FULL captures independently reproduced the same failure: tick 149 and the newer tick 558 both ended in L6 fault while the closed `PlannerInput` contained no request/result/error. The newer capture replay is also MATCH. Therefore the cached accepted
+plan expired while its replacement was still pending.
 
-No L0-L12 authority, command path, safety path, motor path, or canonical MCAP authority is replaced.
+Current production creates the immutable L6 rollout request inside tick N, but
+submits it to the process worker only at tick N+1 `close_inputs`. That needlessly
+puts observer/capture/sleep/wakeup delay in front of worker execution.
 
-## Apply
+This upgrade adds a post-tick runtime dispatch edge:
 
-From `/home/alba/project_r2b4`:
-
-```bash
-python3 /path/to/r2b4_capture_refactor_p0_20260921/apply_upgrade.py
+```
+L6 creates immutable request in tick N
+        ↓
+L0-L12 completes
+        ↓
+post-tick runtime dispatch (before observers/sleep)
+        ↓
+planner process computes
+        ↓
+result collector
+        ↓
+NEXT input closure freezes result/error into PlannerInput
+        ↓
+L6 may accept/reject it
 ```
 
-The apply script refuses modified target files, keeps a temporary rollback copy under `/tmp`, and does not start the robot.
+Layer authority, stale limit, request timeout, L12 safety, motor writer and replay
+semantics are unchanged.
 
-If HEAD moved after the inspected base, do not blindly force it. Re-review first. `--allow-newer` exists only for a source-reviewed newer tree whose exact patch anchors still match.
+## Files modified
 
-## Validate
+- `v3/composition/native_control.py`
+- `v3/composition/resident_live_control.py`
+- `v3/composition/resident_physical_control.py`
+- `v3/runtime_performance.py`
+- `v3_runtime.py`
+- `tests/test_v3_async_completion_boundary_fix.py`
+
+## Install
 
 ```bash
-bash /path/to/r2b4_capture_refactor_p0_20260921/verify_upgrade.sh
+cd /home/alba/project_r2b4
+python3 /PATH/TO/r2b4_async_l6_dispatch_p0_upgrade_20260921/installer.py
 ```
 
-It runs the repository-defined `gate -> contract -> async -> replay -> testhub` profiles and dedicated P0 capture tests. It does not initiate robot movement.
+The installer intentionally performs **no checks, tests, gates, preflight,
+validation, or rollback**. It applies the modifications directly.
 
-The physical acceptance item **capture ON causes no new live control deadline miss/jitter regression** cannot be truthfully certified away from the Raspberry Pi. The package leaves that as the final live gate after all offline gates pass.
+Optional manual full test after installation:
+
+```bash
+cd /home/alba/project_r2b4 && python3 -m pytest -q
+```
+
+## What is deliberately NOT changed
+
+- `max_plan_age_ns=350ms`
+- `request_timeout_ns=300ms`
+- L6 navigation ownership
+- completion/input-closure rule
+- planner result visibility rule
+- L12 / safety / motor path
+- CPU affinity layout
+
+The package does not claim that sustained planner latency above the continuity
+budget is solved. The included simulation demonstrates both the fixed delay and
+the remaining performance boundary.

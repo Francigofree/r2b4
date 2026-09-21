@@ -11,9 +11,11 @@ class DelayedBackend:
         self.inner = InlineTrajectoryRolloutBackend(config)
         self.delay_calls = delay_calls
         self.calls = 0
+        self.submit_count = 0
 
     def submit(self, request):
         self.calls = 0
+        self.submit_count += 1
         return self.inner.submit(request)
 
     def take(self, request_id):
@@ -107,6 +109,34 @@ def test_pre_submit_scheduler_delay_does_not_consume_worker_timeout_budget():
     result = production.run_tick(production.close_inputs(ready))
     assert result.trace.fault_layer is None
     assert result.final_actuation.safety_decision.value != "FAULT"
+    production.close()
+
+
+def test_post_tick_dispatch_submits_pending_request_before_next_input_closure():
+    config = control_config()
+    backend = DelayedBackend(config.navigation, delay_calls=1)
+    production = NativeControlComposition(
+        RecordingMotorSink(),
+        config,
+        trajectory_rollout_backend=backend,
+    )
+    values = _explore_values()
+
+    production.run_tick(production.close_inputs(values[0]))
+    active = production.close_inputs(values[1])
+    result = production.run_tick(active)
+    assert result.trace.fault_layer is None
+    assert backend.submit_count == 0
+
+    source_ns = values[1].context.monotonic_ns
+    assert production.dispatch_pending_planner_request(source_ns + 1_000_000)
+    assert backend.submit_count == 1
+
+    next_tick = _retime(values[2], source_ns + 20_000_000)
+    closed = production.close_inputs(next_tick)
+    assert backend.submit_count == 1
+    assert closed.planner_input is not None
+    assert closed.planner_input.error is None
     production.close()
 
 

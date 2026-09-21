@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from v3.contracts.planner import PlannerInput
+from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
 from v3.engine import PipelineLayers, TickEngine, TickInputs, TickResult
 from v3.layers.l1_acquisition import acquire
@@ -674,6 +674,52 @@ class NativeControlComposition:
         self._final_safety.restore(checkpoint.final_safety)
         self._engine.restore(checkpoint.engine_last_context)
 
+    def _sync_planner_transport(
+        self,
+        request: TrajectoryRolloutRequest | None,
+        started_ns: int,
+    ) -> bool:
+        """Synchronize the authority-free worker transport with L6-owned request state."""
+        if request == self._transport_request:
+            return False
+        backend = self._rollout_backend
+        if self._transport_id is not None and backend is not None:
+            backend.abandon(self._transport_id)
+        self._transport_request = request
+        self._transport_id = None
+        self._transport_error = None
+        self._transport_started_ns = None
+        if request is None:
+            return False
+        try:
+            if backend is None:
+                raise RuntimeError("ASYNC_L6_BACKEND_MISSING")
+            self._transport_id = backend.submit(request)
+            self._transport_started_ns = started_ns
+        except Exception as exc:
+            self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
+        return True
+
+    def dispatch_pending_planner_request(self, monotonic_ns: int) -> bool:
+        """Dispatch a request created by the completed tick without exposing a completion.
+
+        L6 remains the sole navigation-state owner. This method only advances the
+        runtime transport edge after L1-L12 has completed; worker output can still
+        become visible only through a later ``close_inputs`` call.
+        """
+        if not self._closed_planner_mode:
+            return False
+        if (
+            not isinstance(monotonic_ns, int)
+            or isinstance(monotonic_ns, bool)
+            or monotonic_ns < 0
+        ):
+            raise ValueError("planner dispatch monotonic_ns must be non-negative int")
+        request = self._navigation.pending_rollout_request
+        if request is not None and monotonic_ns < request.context.monotonic_ns:
+            raise ValueError("planner dispatch cannot precede request source time")
+        return self._sync_planner_transport(request, monotonic_ns)
+
     def close_inputs(self, inputs: TickInputs) -> TickInputs:
         """Close async planner completion before L1 without borrowing pre-submit time.
 
@@ -686,25 +732,11 @@ class NativeControlComposition:
             return inputs
         event = PlannerInput(inputs.context)
         request = self._navigation.pending_rollout_request
+        # Live production normally dispatches immediately after the tick that
+        # created this immutable request. Keep this fallback for replay/tests and
+        # any caller that does not own an explicit post-tick runtime edge.
+        self._sync_planner_transport(request, inputs.context.monotonic_ns)
         backend = self._rollout_backend
-        if request != self._transport_request:
-            if self._transport_id is not None and backend is not None:
-                backend.abandon(self._transport_id)
-            self._transport_request = request
-            self._transport_id = None
-            self._transport_error = None
-            self._transport_started_ns = None
-            if request is not None:
-                try:
-                    if backend is None:
-                        raise RuntimeError("ASYNC_L6_BACKEND_MISSING")
-                    self._transport_id = backend.submit(request)
-                    # This tick is the first point at which the request actually
-                    # exists outside L6. Do not charge earlier scheduler/closure
-                    # latency against the worker's bounded completion budget.
-                    self._transport_started_ns = inputs.context.monotonic_ns
-                except Exception as exc:
-                    self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
         if request is not None:
             result = None
             if self._transport_error is None:

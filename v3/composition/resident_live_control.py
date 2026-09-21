@@ -215,6 +215,10 @@ class ResidentLiveControlComposition:
     def close(self) -> None:
         self._control.close()
 
+    def dispatch_pending_planner_request(self, monotonic_ns: int) -> bool:
+        """Forward authority-free post-tick planner dispatch to the runtime edge."""
+        return self._control.dispatch_pending_planner_request(monotonic_ns)
+
     def _preflight_is_fresh_for(self, context: TickContext) -> bool:
         previous = self._preflight_context
         if (

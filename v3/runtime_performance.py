@@ -288,6 +288,7 @@ CONTROL_PHASE_ORDER = (
     "PIPELINE_TOTAL",
     *(f"L{index}" for index in range(1, 13)),
     "POST_CONTROL",
+    "ASYNC_L6_DISPATCH",
 )
 
 
