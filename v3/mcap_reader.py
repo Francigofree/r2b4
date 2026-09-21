@@ -250,7 +250,7 @@ class McapReader:
             errors=tuple(errors),
         )
 
-    def capture_integrity(self) -> dict[str, object]:
+    def capture_integrity(self, *, require_raw_evidence: bool = True) -> dict[str, object]:
         """Verify the finalized capture claim against its complete message stream.
 
         Container CRC validation must precede this semantic integrity gate.
@@ -305,9 +305,19 @@ class McapReader:
             and subscription.get("lost_count") == 0
             and subscription.get("accepted_count") == subscription.get("consumed_count")
         )
-        if (integrity.get("complete") is not True or metadata.get("complete") != "true"
-                or integrity.get("integrity_reasons") or not subscription_ok
-                or not counts.get(TICK_TOPIC)):
+        replay_complete = (
+            integrity.get("replay_complete", integrity.get("complete")) is True
+            and metadata.get("replay_complete", metadata.get("complete")) == "true"
+        )
+        raw_complete = (
+            integrity.get("raw_evidence_complete", integrity.get("complete")) is True
+            and metadata.get("raw_evidence_complete", metadata.get("complete")) == "true"
+        )
+        required_complete = replay_complete and (raw_complete if require_raw_evidence else True)
+        replay_reasons = integrity.get(
+            "replay_integrity_reasons", integrity.get("integrity_reasons")
+        )
+        if not required_complete or replay_reasons or not subscription_ok or not counts.get(TICK_TOPIC):
             raise McapReadError("CAPTURE_INCOMPLETE: required evidence is incomplete")
         return final
 

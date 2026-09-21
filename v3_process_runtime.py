@@ -756,6 +756,7 @@ def main(argv: list[str] | None = None) -> int:
                     max_raw_lidar_points_per_scan=args.capture_max_raw_points,
                     max_session_records=args.capture_max_session_records,
                     mode=args.capture_mode,
+                    require_raw_lidar_transport_end=True,
                 ),
                 project_root=PROJECT_ROOT,
                 worker_cpu=(
@@ -764,6 +765,7 @@ def main(argv: list[str] | None = None) -> int:
                 strict_affinity=(
                     affinity_config.strict if affinity_config.enabled else False
                 ),
+                expect_raw_lidar_end=True,
             )
             if capture_path is not None
             else None

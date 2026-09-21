@@ -309,6 +309,46 @@ def _put_latest(target: Any, payload: object) -> None:
         pass
 
 
+def _put_raw_evidence(target: Any, payload: object, superseded_count: int) -> int:
+    try:
+        target.put_nowait(payload)
+        return superseded_count
+    except queue.Full:
+        pass
+    try:
+        target.get_nowait()
+    except queue.Empty:
+        pass
+    else:
+        superseded_count += 1
+    try:
+        target.put_nowait(payload)
+    except queue.Full:
+        superseded_count += 1
+    return superseded_count
+
+
+def _put_raw_end(target: Any, *, last_revision: int, produced_count: int,
+                 superseded_count: int) -> None:
+    marker = ("raw_end", int(last_revision), int(produced_count), int(superseded_count))
+    try:
+        target.put(marker, timeout=0.5)
+        return
+    except queue.Full:
+        pass
+    try:
+        target.get_nowait()
+    except queue.Empty:
+        pass
+    else:
+        superseded_count += 1
+    marker = ("raw_end", int(last_revision), int(produced_count), int(superseded_count))
+    try:
+        target.put(marker, timeout=0.5)
+    except queue.Full:
+        return
+
+
 def _lidar_owner_process_main(
     config: NativeLidarPortConfig,
     pose_lock: Any,
@@ -326,6 +366,9 @@ def _lidar_owner_process_main(
     control_maximum_points: int,
 ) -> None:
     port = None
+    raw_produced_count = 0
+    raw_superseded_count = 0
+    last_raw_revision = 0
     try:
         if worker_cpu is not None:
             apply_current_affinity(worker_cpu, role="lidar-owner-process", strict=strict_affinity)
@@ -352,7 +395,10 @@ def _lidar_owner_process_main(
             ),
         )
         if initial_raw is not None:
-            _put_latest(raw_queue, ("raw", _wire_raw(initial_raw)))
+            raw_produced_count += 1
+            raw_superseded_count = _put_raw_evidence(
+                raw_queue, ("raw", _wire_raw(initial_raw)), raw_superseded_count
+            )
         ready_event.set()
         last_raw_revision = int(getattr(initial_raw, "raw_scan_id", 0) or 0)
         last_matcher_revision = int(getattr(initial_matcher, "matcher_result_id", 0) or 0)
@@ -365,7 +411,10 @@ def _lidar_owner_process_main(
             matcher_revision = int(getattr(matcher, "matcher_result_id", 0) or 0)
             raw_changed = raw_revision != last_raw_revision
             if raw_changed and raw is not None:
-                _put_latest(raw_queue, ("raw", _wire_raw(raw)))
+                raw_produced_count += 1
+                raw_superseded_count = _put_raw_evidence(
+                    raw_queue, ("raw", _wire_raw(raw)), raw_superseded_count
+                )
                 control_raw = _wire_control_raw(
                     raw,
                     minimum_range_m=control_minimum_range_m,
@@ -399,6 +448,12 @@ def _lidar_owner_process_main(
                 port.stop()
             except BaseException as exc:
                 _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
+        _put_raw_end(
+            raw_queue,
+            last_revision=last_raw_revision,
+            produced_count=raw_produced_count,
+            superseded_count=raw_superseded_count,
+        )
 
 
 class ProcessLidarPort:
@@ -587,7 +642,18 @@ class ProcessLidarPort:
                 break
         if newest is None:
             return
-        if not isinstance(newest, tuple) or len(newest) != 2 or newest[0] != "raw":
+        if not isinstance(newest, tuple) or not newest:
+            self._fatal_error = "LIDAR_RAW_TRANSPORT_INVALID"
+            return
+        if newest[0] == "raw_end":
+            if len(newest) == 4:
+                self._status["capture_raw_transport_end"] = True
+                self._status["capture_raw_produced_count"] = int(newest[2])
+                self._status["capture_raw_superseded_count"] = int(newest[3])
+                return
+            self._fatal_error = "LIDAR_RAW_TRANSPORT_INVALID"
+            return
+        if len(newest) != 2 or newest[0] != "raw":
             self._fatal_error = "LIDAR_RAW_TRANSPORT_INVALID"
             return
         snapshot = _unwire_raw(newest[1])

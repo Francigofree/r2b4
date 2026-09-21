@@ -27,6 +27,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
+from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .capture_encoding import (
     CaptureEncodingError,
     encode_capture_record,
@@ -84,6 +85,7 @@ class McapCaptureConfig:
     max_referenced_revisions_per_tick: int = 16
     max_raw_lidar_missing_fraction: float = 0.05
     max_consecutive_raw_lidar_missing: int = 2
+    require_raw_lidar_transport_end: bool = False
 
     def __post_init__(self) -> None:
         for name in (
@@ -115,6 +117,9 @@ class McapCaptureConfig:
             or not 0.0 <= float(missing_fraction) <= 1.0
         ):
             raise ValueError("max_raw_lidar_missing_fraction must be in [0.0, 1.0]")
+
+        if type(self.require_raw_lidar_transport_end) is not bool:
+            raise TypeError("require_raw_lidar_transport_end must be bool")
 
         if self.mode not in {"triggered", "append_only"}:
             raise ValueError("mode must be triggered or append_only")
@@ -157,6 +162,8 @@ class CaptureResult:
     hub_sequence_gap_count: int
     tick_sequence_gap_count: int
     raw_lidar_missing_revisions: tuple[int, ...]
+    replay_complete: bool
+    raw_evidence_complete: bool
 
 
 class McapCaptureConsumer:
@@ -195,6 +202,9 @@ class McapCaptureConsumer:
         "_ring_raw_count",
         "_capacity_eviction_count",
         "_latest_capacity_eviction_ns",
+        "_raw_capacity_eviction_count",
+        "_core_capacity_eviction_count",
+        "_latest_raw_capacity_eviction_ns",
         "_first_seen_ns",
         "_last_seen_ns",
         "_captured_tick_gaps",
@@ -215,6 +225,9 @@ class McapCaptureConsumer:
         "_raw_revision_gaps",
         "_raw_truncated_count",
         "_last_raw_revision",
+        "_raw_transport_end",
+        "_raw_transport_produced_count",
+        "_raw_transport_superseded_count",
         "_captured_tick_count",
         "_captured_raw_count",
         "_captured_checkpoint_count",
@@ -246,6 +259,8 @@ class McapCaptureConsumer:
 
         encoded_configuration = encode_value(configuration)
         encoded_metadata = encode_value(metadata or {})
+        if isinstance(encoded_metadata, dict):
+            encoded_metadata = {**encoded_metadata, "capture_policy": encode_value(settings)}
         if not isinstance(encoded_configuration, dict) or not isinstance(encoded_metadata, dict):
             raise TypeError("configuration and metadata must encode as mappings")
 
@@ -287,6 +302,9 @@ class McapCaptureConsumer:
         self._ring_raw_count = 0
         self._capacity_eviction_count = 0
         self._latest_capacity_eviction_ns: int | None = None
+        self._raw_capacity_eviction_count = 0
+        self._core_capacity_eviction_count = 0
+        self._latest_raw_capacity_eviction_ns: int | None = None
 
         self._first_seen_ns: int | None = None
         self._last_seen_ns: int | None = None
@@ -311,6 +329,9 @@ class McapCaptureConsumer:
         self._raw_revision_gaps: list[tuple[int, int]] = []
         self._raw_truncated_count = 0
         self._last_raw_revision: int | None = None
+        self._raw_transport_end = False
+        self._raw_transport_produced_count = 0
+        self._raw_transport_superseded_count = 0
 
         self._captured_tick_count = 0
         self._captured_raw_count = 0
@@ -448,6 +469,7 @@ class McapCaptureConsumer:
         if self._seen_records > self._config.max_session_records:
             self._integrity_reasons.add("SESSION_RECORD_LIMIT")
             return
+        self._consume_transport_integrity(item)
         encoded = self._encode_observation(item)
         for record in encoded:
             if len(record.payload) > self._config.max_record_bytes:
@@ -487,10 +509,50 @@ class McapCaptureConsumer:
             self._fault_observed = True
             self._activate_trigger(self._last_seen_ns, _payload_trigger_reason(item.payload))
 
+    def _consume_transport_integrity(self, item: ObservationFrame) -> None:
+        payload = item.payload
+        if _looks_like_capture_transport_topic(item.topic):
+            if isinstance(payload, Mapping):
+                drops = payload.get("drop_count", 0)
+                if isinstance(drops, int) and not isinstance(drops, bool) and drops > 0:
+                    self._integrity_reasons.add("CORE_TRANSPORT_LOSS")
+            return
+        if not _looks_like_raw_lidar_transport_topic(item.topic):
+            return
+        if not isinstance(payload, Mapping):
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
+            return
+        if payload.get("event_type") != "raw_lidar_transport_end":
+            return
+        self._raw_transport_end = True
+        produced = payload.get("produced_count", 0)
+        superseded = payload.get("superseded_count", 0)
+        if isinstance(produced, int) and not isinstance(produced, bool) and produced >= 0:
+            self._raw_transport_produced_count = produced
+        else:
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
+        if isinstance(superseded, int) and not isinstance(superseded, bool) and superseded >= 0:
+            self._raw_transport_superseded_count = superseded
+            if superseded:
+                self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_SUPERSEDE")
+        else:
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
+
     def _encode_observation(self, item: ObservationFrame) -> tuple[EncodedRecord, ...]:
         payload = item.payload
-        if isinstance(payload, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
+        checkpoint: object | None = None
+        if item.topic == "v3.capture_record" and isinstance(payload, Mapping):
+            row = dict(payload)
+            checkpoint = row.pop(IPC_CHECKPOINT_KEY, None)
+            row.pop(IPC_TRIGGER_REASON_KEY, None)
+        elif isinstance(payload, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
             row = encode_capture_record(payload)
+            if isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
+                checkpoint = encode_value(payload.state_checkpoint_after)
+        else:
+            row = None
+
+        if row is not None:
             tick_id = _non_negative_int(row.get("tick_id"), "tick_id")
             monotonic_ns = _non_negative_int(row.get("monotonic_ns"), "monotonic_ns")
             referenced = tuple(sorted(_referenced_lidar_revisions(row)))
@@ -508,8 +570,7 @@ class McapCaptureConsumer:
                 referenced_lidar_revisions=referenced,
             )
             records: list[EncodedRecord] = [tick]
-            if isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
-                checkpoint = encode_value(payload.state_checkpoint_after)
+            if checkpoint is not None:
                 if not isinstance(checkpoint, dict):
                     raise CaptureEncodingError("state checkpoint must encode as an object")
                 checkpoint_row = {
@@ -630,13 +691,16 @@ class McapCaptureConsumer:
 
     def _enforce_capacities(self) -> None:
         while self._ring_tick_count > self._config.max_tick_count:
-            self._drop_oldest_matching(TICK_TOPIC)
+            self._drop_oldest_matching(TICK_TOPIC, capacity=True)
         while self._ring_raw_count > self._config.max_raw_lidar_scans:
-            self._drop_oldest_matching(RAW_LIDAR_TOPIC)
+            self._drop_oldest_matching(RAW_LIDAR_TOPIC, capacity=True)
         while self._ring_bytes > self._config.max_byte_capacity:
-            self._drop_oldest(capacity=True)
+            if self._ring_raw_count:
+                self._drop_oldest_matching(RAW_LIDAR_TOPIC, capacity=True)
+            else:
+                self._drop_oldest(capacity=True)
 
-    def _drop_oldest_matching(self, topic: str) -> None:
+    def _drop_oldest_matching(self, topic: str, *, capacity: bool = False) -> None:
         # Count limits are per stream. Do not evict unrelated tick evidence just
         # because the raw-LiDAR stream reached its own count bound (or vice versa).
         for index, item in enumerate(self._ring):
@@ -648,8 +712,14 @@ class McapCaptureConsumer:
                 self._ring_tick_count -= 1
             elif topic == RAW_LIDAR_TOPIC:
                 self._ring_raw_count -= 1
-            self._capacity_eviction_count += 1
-            self._latest_capacity_eviction_ns = item.monotonic_ns
+            if capacity:
+                self._capacity_eviction_count += 1
+                if topic == RAW_LIDAR_TOPIC:
+                    self._raw_capacity_eviction_count += 1
+                    self._latest_raw_capacity_eviction_ns = item.monotonic_ns
+                else:
+                    self._core_capacity_eviction_count += 1
+                    self._latest_capacity_eviction_ns = item.monotonic_ns
             return
         raise RuntimeError(f"ring count inconsistent for {topic}")
 
@@ -664,7 +734,12 @@ class McapCaptureConsumer:
             self._ring_raw_count -= 1
         if capacity:
             self._capacity_eviction_count += 1
-            self._latest_capacity_eviction_ns = item.monotonic_ns
+            if item.mcap_topic == RAW_LIDAR_TOPIC:
+                self._raw_capacity_eviction_count += 1
+                self._latest_raw_capacity_eviction_ns = item.monotonic_ns
+            else:
+                self._core_capacity_eviction_count += 1
+                self._latest_capacity_eviction_ns = item.monotonic_ns
 
     def _activate_trigger(self, requested_ns: object, reason: str) -> None:
         if self._trigger_ns is not None or self._config.mode == "append_only":
@@ -980,15 +1055,32 @@ class McapCaptureConsumer:
         self._integrity_reasons.discard("RAW_LIDAR_REVISION_GAP")
         self._integrity_reasons.discard("REFERENCED_RAW_LIDAR_MISSING")
         if raw_lidar_missing_count:
+            self._integrity_reasons.add("RAW_LIDAR_EVIDENCE_INCOMPLETE")
             if raw_lidar_loss_within_tolerance:
                 integrity_warnings.append("RAW_LIDAR_SPARSE_LOSS_TOLERATED")
-            else:
-                if gap_missing_raw:
-                    self._integrity_reasons.add("RAW_LIDAR_REVISION_GAP")
-                if missing_raw:
-                    self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
+            if gap_missing_raw:
+                self._integrity_reasons.add("RAW_LIDAR_REVISION_GAP")
+            if missing_raw:
+                self._integrity_reasons.add("REFERENCED_RAW_LIDAR_MISSING")
 
-        complete = not self._integrity_reasons
+        if self._config.require_raw_lidar_transport_end and not self._raw_transport_end:
+            self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_END_MISSING")
+        raw_capacity_missing = bool(
+            self._latest_raw_capacity_eviction_ns is not None
+            and self._latest_raw_capacity_eviction_ns >= lower
+        )
+        if raw_capacity_missing:
+            self._integrity_reasons.add("RAW_LIDAR_CAPACITY_EVICTION")
+
+        raw_integrity_reasons = sorted(
+            reason for reason in self._integrity_reasons if _is_raw_integrity_reason(reason)
+        )
+        replay_integrity_reasons = sorted(
+            reason for reason in self._integrity_reasons if not _is_raw_integrity_reason(reason)
+        )
+        replay_complete = not replay_integrity_reasons
+        raw_evidence_complete = not raw_integrity_reasons
+        complete = replay_complete and raw_evidence_complete
         if self._fault_observed and status == "PASS":
             status = "FAULT"
         if not complete and status == "PASS":
@@ -1000,6 +1092,10 @@ class McapCaptureConsumer:
         )
         integrity = {
             "complete": complete,
+            "replay_complete": replay_complete,
+            "raw_evidence_complete": raw_evidence_complete,
+            "replay_integrity_reasons": replay_integrity_reasons,
+            "raw_integrity_reasons": raw_integrity_reasons,
             "integrity_reasons": sorted(self._integrity_reasons),
             "integrity_warnings": integrity_warnings,
             "ingress_drop_count": ingress_drops,
@@ -1009,6 +1105,11 @@ class McapCaptureConsumer:
                 for before, after in self._captured_tick_gaps
             ],
             "capacity_eviction_count": self._capacity_eviction_count,
+            "core_capacity_eviction_count": self._core_capacity_eviction_count,
+            "raw_capacity_eviction_count": self._raw_capacity_eviction_count,
+            "raw_transport_end": self._raw_transport_end,
+            "raw_transport_produced_count": self._raw_transport_produced_count,
+            "raw_transport_superseded_count": self._raw_transport_superseded_count,
             "raw_lidar_missing_revisions": list(missing_raw),
             "raw_lidar_gap_missing_revisions": list(gap_missing_raw),
             "raw_lidar_loss_missing_revisions": list(loss_missing_raw),
@@ -1075,6 +1176,8 @@ class McapCaptureConsumer:
                 "trigger_reason": str(self._trigger_reason or ""),
                 "trigger_monotonic_ns": str(self._trigger_ns or 0),
                 "complete": "true" if complete else "false",
+                "replay_complete": "true" if replay_complete else "false",
+                "raw_evidence_complete": "true" if raw_evidence_complete else "false",
                 "message_stream_sha256": digest,
                 "integrity_reasons": json.dumps(sorted(self._integrity_reasons), separators=(",", ":")),
                 "tick_count": str(self._captured_tick_count),
@@ -1107,6 +1210,8 @@ class McapCaptureConsumer:
             hub_sequence_gap_count=0,
             tick_sequence_gap_count=len(self._captured_tick_gaps),
             raw_lidar_missing_revisions=missing_raw,
+            replay_complete=replay_complete,
+            raw_evidence_complete=raw_evidence_complete,
         )
 
 
@@ -1190,6 +1295,18 @@ def _max_consecutive_revision_run(revisions: tuple[int, ...]) -> int:
     return maximum
 
 
+def _looks_like_capture_transport_topic(topic: str) -> bool:
+    return topic.strip().lower().replace("-", "_") in {"v3.capture_transport", "capture_transport"}
+
+
+def _looks_like_raw_lidar_transport_topic(topic: str) -> bool:
+    return topic.strip().lower().replace("-", "_") in {"v3.raw_lidar_transport", "raw_lidar_transport"}
+
+
+def _is_raw_integrity_reason(reason: str) -> bool:
+    return reason.startswith("RAW_LIDAR_") or reason == "REFERENCED_RAW_LIDAR_MISSING"
+
+
 def _looks_like_raw_lidar_topic(topic: str) -> bool:
     normalized = topic.strip().lower().replace("-", "_")
     return normalized in {
@@ -1214,6 +1331,9 @@ def _looks_like_checkpoint_topic(topic: str) -> bool:
 
 
 def _payload_triggers_capture(payload: object) -> bool:
+    if isinstance(payload, Mapping):
+        reason = payload.get(IPC_TRIGGER_REASON_KEY)
+        return isinstance(reason, str) and bool(reason.strip())
     if isinstance(payload, (EdgeFaultRecord, WriterFailureRecord)):
         return True
     if not isinstance(payload, ExecutionRecord):
@@ -1225,6 +1345,10 @@ def _payload_triggers_capture(payload: object) -> bool:
 
 
 def _payload_trigger_reason(payload: object) -> str:
+    if isinstance(payload, Mapping):
+        reason = payload.get(IPC_TRIGGER_REASON_KEY)
+        if isinstance(reason, str) and reason.strip():
+            return reason
     if isinstance(payload, (EdgeFaultRecord, WriterFailureRecord)):
         return payload.reason
     if isinstance(payload, ExecutionRecord):

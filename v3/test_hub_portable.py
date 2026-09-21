@@ -455,7 +455,7 @@ def replay_sweep(
             }
     if verified_final_event is None:
         try:
-            verified_final = reader.capture_integrity()
+            verified_final = reader.capture_integrity(require_raw_evidence=False)
         except (McapReadError, OSError, TypeError, ValueError) as exc:
             return {
                 "schema": REPLAY_SWEEP_SCHEMA,

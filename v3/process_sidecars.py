@@ -142,7 +142,6 @@ def _capture_sidecar_main(
             if (
                 finish_request is not None
                 and processed >= finish_request[2]
-                and raw_end_received
             ):
                 if finish_request[3]:
                     hub.publish(
@@ -172,7 +171,7 @@ def _capture_sidecar_main(
             if kind == "warmup":
                 continue
             if kind == "core":
-                hub.publish(expander.expand(payload), topic="v3.capture_record")
+                hub.publish(expander.expand_transport(payload), topic="v3.capture_record")
             elif kind == "record":
                 hub.publish(payload, topic="v3.capture_record")
             elif kind == "raw_lidar":
@@ -344,6 +343,9 @@ class ProcessMcapCaptureSession:
         self._project_root = Path(project_root)
         self._worker_cpu = worker_cpu
         self._strict_affinity = strict_affinity
+        self._projector = CaptureCoreProjector()
+        self._projection_drop_count = 0
+        self._expect_raw_lidar_end = bool(expect_raw_lidar_end)
         self._process = context.Process(
             target=_capture_sidecar_main,
             args=(
@@ -358,6 +360,7 @@ class ProcessMcapCaptureSession:
                 self._result_queue,
                 self._ready_event,
                 self._failed_event,
+                self._expect_raw_lidar_end,
                 str(self._project_root),
                 self._worker_cpu,
                 self._strict_affinity,
@@ -377,7 +380,7 @@ class ProcessMcapCaptureSession:
 
     @property
     def failed(self) -> bool:
-        return bool(self._failed_event.is_set() or self._drop_count)
+        return bool(self._failed_event.is_set() or self._drop_count or self._projection_drop_count)
 
     @property
     def transport_drop_count(self) -> int:
@@ -411,18 +414,26 @@ class ProcessMcapCaptureSession:
             raise RuntimeError(f"capture sidecar failed: {message[1]}:{message[2]}")
         self._result_queue.put(message)
 
-    def _enqueue(self, kind: str, payload: object) -> None:
+    def _enqueue(self, kind: str, payload: object) -> bool:
         if not self._started:
             self.start()
         try:
             self._data_queue.put_nowait((kind, payload))
         except queue.Full:
             self._drop_count += 1
+            return False
         else:
             self._enqueued_count += 1
+            return True
 
     def observe(self, record: CaptureRecord) -> None:
-        self._enqueue("record", record)
+        try:
+            projected = self._projector.project(record)
+        except CaptureIpcProjectionError:
+            self._projection_drop_count += 1
+            return
+        if self._enqueue("core", projected):
+            self._projector.commit(projected)
 
     def observe_raw_lidar(self, snapshot: object | None) -> None:
         if snapshot is not None:
@@ -441,7 +452,7 @@ class ProcessMcapCaptureSession:
             self.start()
         status = "PASS" if error is None and getattr(report, "status", 1) == 0 else "FAULT"
         self._control_queue.put(
-            ("finish", status, True, self._enqueued_count),
+            ("finish", status, True, self._enqueued_count, self._drop_count + self._projection_drop_count),
             timeout=2.0,
         )
         self._process.join(_SIDECAR_FINISH_TIMEOUT_S)
@@ -461,6 +472,10 @@ class ProcessMcapCaptureSession:
             if self._drop_count:
                 self.evidence["status"] = "FAIL"
                 self.evidence["process_transport_drop_count"] = self._drop_count
+                self.evidence["process_transport_integrity"] = "FAIL"
+            if self._projection_drop_count:
+                self.evidence["status"] = "FAIL"
+                self.evidence["process_projection_drop_count"] = self._projection_drop_count
                 self.evidence["process_transport_integrity"] = "FAIL"
         return result_path
 
