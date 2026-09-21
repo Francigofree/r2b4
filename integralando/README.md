@@ -1,55 +1,40 @@
-# R2B4 pytest refactor completion patch — 2026-09-21
+# R2B4 capture refactor P0 upgrade
 
-This is a **narrow completion patch** for the partially applied pytest/Test Hub refactor currently present on `main`.
+Source-first base inspected: `6c785ec4497944481c285578240277528fa6a18c` (2026-09-21).
 
-It changes only:
+## Scope
 
-1. `tests/test_v3_test_hub_portable.py`
-   - the pytest runner test now resolves the real repository root before calling `run_pytest()`;
-   - only the cwd assertion inside that specific test is changed;
-   - the separate runtime-handoff test keeps its legitimate `tmp_path.resolve()` assertion.
+- full `CaptureRecord` is no longer the production control -> capture IPC payload;
+- a bounded `CaptureCoreFrame` projection crosses IPC;
+- repeated L4 occupied-cell geometry and same-tick L7-selected L6 trajectory are reference-compacted for IPC and reconstructed in the sidecar;
+- raw LiDAR remains direct producer -> capture sidecar;
+- raw transport gets explicit supersede accounting plus terminal `raw_end` marker;
+- integrity is split into `replay_complete`, `raw_evidence_complete`, and overall `complete`;
+- any raw loss makes raw evidence incomplete even when diagnostic loss tolerance says the loss is sparse;
+- shared ring byte pressure evicts raw evidence before replay-core evidence;
+- resolved capture policy is written into MCAP metadata;
+- replay may proceed from a raw-incomplete capture only if replay-core integrity is complete.
 
-2. `AGENTS.md`
-   - adds the shared pytest-profile/Test Hub validation policy after `A célzott teszt az alapértelmezett.`
-
-3. `integralando/apply_pytest_refactor.py`
-   - repairs the old ambiguous global anchor;
-   - future reruns scope the replacement to `test_pytest_is_a_test_hub_command_not_a_runtime_dependency`.
-
-## Not changed
-
-- no L0–L12 production source;
-- no runtime/capture/log data;
-- no `v3/import_guard.py` policy;
-- no commit/push.
-
-The current `gate` failure from V3 import-boundary violations is a separate architecture/source-contract issue. This package deliberately does not make the guard permissive just to obtain a green gate.
+No L0-L12 authority, command path, safety path, motor path, or canonical MCAP authority is replaced.
 
 ## Apply
 
+From `/home/alba/project_r2b4`:
+
 ```bash
-cd /home/alba/project_r2b4
-python3 /PATH/TO/r2b4_pytest_completion_20260921/apply_pytest_completion.py /home/alba/project_r2b4
+python3 /path/to/r2b4_capture_refactor_p0_20260921/apply_upgrade.py
 ```
+
+The apply script refuses modified target files, keeps a temporary rollback copy under `/tmp`, and does not start the robot.
+
+If HEAD moved after the inspected base, do not blindly force it. Re-review first. `--allow-newer` exists only for a source-reviewed newer tree whose exact patch anchors still match.
 
 ## Validate
 
 ```bash
-cd /home/alba/project_r2b4
-/PATH/TO/r2b4_pytest_completion_20260921/validate_after_apply.sh /home/alba/project_r2b4
+bash /path/to/r2b4_capture_refactor_p0_20260921/verify_upgrade.sh
 ```
 
-Equivalent manual validation:
+It runs the repository-defined `gate -> contract -> async -> replay -> testhub` profiles and dedicated P0 capture tests. It does not initiate robot movement.
 
-```bash
-git diff --check
-python3 -m pytest -q \
-  tests/test_v3_pytest_profiles.py \
-  tests/test_v3_test_hub_portable.py \
-  tests/test_v3_test_hub_behavior.py \
-  tests/test_v3_test_hub_quality.py
-python3 -m v3.test_hub test --scope testhub
-python3 -m v3.test_hub test --scope async
-```
-
-The patch is idempotent: rerunning it on the already completed state is a no-op.
+The physical acceptance item **capture ON causes no new live control deadline miss/jitter regression** cannot be truthfully certified away from the Raspberry Pi. The package leaves that as the final live gate after all offline gates pass.

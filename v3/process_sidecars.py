@@ -17,6 +17,9 @@ from typing import Any
 from v3.engine import TickResult
 from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
+from v3.capture_ipc import (
+    CaptureCoreExpander, CaptureCoreProjector, CaptureIpcProjectionError,
+)
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
@@ -47,6 +50,7 @@ def _capture_sidecar_main(
     result_queue: Any,
     ready_event: Any,
     failed_event: Any,
+    expect_raw_lidar_end: bool,
     project_root: str,
     worker_cpu: int | None,
     strict_affinity: bool,
@@ -63,7 +67,10 @@ def _capture_sidecar_main(
             "capture-process",
             capacity=_CAPTURE_LOCAL_CAPACITY,
             required=True,
-            topics=("v3.capture_record", "v3.raw_lidar"),
+            topics=(
+                "v3.capture_record", "v3.raw_lidar",
+                "v3.raw_lidar_transport", "v3.capture_transport",
+            ),
         )
         consumer = McapCaptureConsumer(
             capture_id,
@@ -74,24 +81,45 @@ def _capture_sidecar_main(
             config=config,
         )
         consumer.start()
+        expander = CaptureCoreExpander()
         ready_event.set()
 
         processed = 0
-        finish_request: tuple[str, bool, int] | None = None
+        raw_end_received = not expect_raw_lidar_end
+        finish_request: tuple[str, bool, int, int] | None = None
         running = True
         while running:
             # The LiDAR producer sends full scans directly here. The control
             # interpreter never unpickles/rebuilds/re-pickles raw geometry.
             for _ in range(_RAW_LIDAR_CAPACITY):
                 try:
-                    raw_kind, raw_wire = raw_lidar_queue.get_nowait()
+                    raw_message = raw_lidar_queue.get_nowait()
                 except queue.Empty:
                     break
-                if raw_kind != "raw":
+                if not isinstance(raw_message, tuple) or not raw_message:
+                    raise RuntimeError("invalid LiDAR evidence message")
+                raw_kind = raw_message[0]
+                if raw_kind == "raw":
+                    if len(raw_message) < 2:
+                        raise RuntimeError("raw LiDAR evidence lacks payload")
+                    snapshot = _unwire_raw(raw_message[1])
+                    if snapshot is not None:
+                        hub.publish(snapshot, topic="v3.raw_lidar")
+                elif raw_kind == "raw_end":
+                    if len(raw_message) != 4:
+                        raise RuntimeError("invalid raw LiDAR end marker")
+                    raw_end_received = True
+                    hub.publish(
+                        {
+                            "event_type": "raw_lidar_transport_end",
+                            "last_revision": int(raw_message[1]),
+                            "produced_count": int(raw_message[2]),
+                            "superseded_count": int(raw_message[3]),
+                        },
+                        topic="v3.raw_lidar_transport",
+                    )
+                else:
                     raise RuntimeError(f"unknown LiDAR evidence kind: {raw_kind!r}")
-                snapshot = _unwire_raw(raw_wire)
-                if snapshot is not None:
-                    hub.publish(snapshot, topic="v3.raw_lidar")
             while True:
                 try:
                     command = control_queue.get_nowait()
@@ -103,13 +131,24 @@ def _capture_sidecar_main(
                 elif kind == "warmup":
                     continue
                 elif kind == "finish":
-                    finish_request = (str(command[1]), bool(command[2]), int(command[3]))
+                    finish_request = (
+                        str(command[1]), bool(command[2]), int(command[3]), int(command[4])
+                    )
                 elif kind == "abort":
                     raise RuntimeError("observer sidecar aborted by parent")
                 else:
                     raise RuntimeError(f"unknown observer sidecar command: {kind!r}")
 
-            if finish_request is not None and processed >= finish_request[2]:
+            if (
+                finish_request is not None
+                and processed >= finish_request[2]
+                and raw_end_received
+            ):
+                if finish_request[3]:
+                    hub.publish(
+                        {"event_type": "capture_core_transport_loss", "drop_count": finish_request[3]},
+                        topic="v3.capture_transport",
+                    )
                 hub.close()
                 result = consumer.finish(finish_request[0], terminal=finish_request[1])
                 evidence: dict[str, object] | None = None
@@ -132,7 +171,9 @@ def _capture_sidecar_main(
                 continue
             if kind == "warmup":
                 continue
-            if kind == "record":
+            if kind == "core":
+                hub.publish(expander.expand(payload), topic="v3.capture_record")
+            elif kind == "record":
                 hub.publish(payload, topic="v3.capture_record")
             elif kind == "raw_lidar":
                 if payload is not None:
@@ -248,6 +289,9 @@ class ProcessMcapCaptureSession:
         "_strict_affinity",
         "_transport_capacity",
         "_worker_cpu",
+        "_projector",
+        "_projection_drop_count",
+        "_expect_raw_lidar_end",
         "evidence",
     )
 
@@ -263,6 +307,7 @@ class ProcessMcapCaptureSession:
         project_root: str | Path,
         worker_cpu: int | None = None,
         strict_affinity: bool = False,
+        expect_raw_lidar_end: bool = False,
     ) -> None:
         identifier = str(capture_id or "").strip()
         if not identifier:

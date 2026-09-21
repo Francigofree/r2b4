@@ -1,0 +1,33 @@
+{
+  "name": "r2b4_capture_refactor_p0_20260921",
+  "base_commit": "6c785ec4497944481c285578240277528fa6a18c",
+  "authority_docs": [
+    "STRUKTURALIS_RETEGEK_V3.md",
+    "ASZINKRON_RUNTIME_CONTRACT_V3.md"
+  ],
+  "new_files": [
+    "v3/capture_ipc.py",
+    "tests/test_v3_capture_refactor_p0.py"
+  ],
+  "modified_files": [
+    "v3/process_sidecars.py",
+    "v3/adapters/process_lidar_port.py",
+    "v3/mcap_capture.py",
+    "v3/mcap_reader.py",
+    "v3/mcap_replay_bridge.py",
+    "v3/test_hub_portable.py",
+    "v3_process_runtime.py"
+  ],
+  "robot_motion_started": false,
+  "offline_validation_available": true,
+  "live_timing_gate_requires_rpi5": true,
+  "p0_invariants": {
+    "raw_lidar_enters_control_process": false,
+    "full_capture_record_is_production_ipc_payload": false,
+    "capture_ipc_frame_is_bounded": true,
+    "raw_transport_loss_is_explicit": true,
+    "replay_and_raw_integrity_are_separate": true,
+    "raw_pressure_precedes_core_eviction": true,
+    "raw_incomplete_replay_allowed_only_when_core_complete": true
+  }
+}
