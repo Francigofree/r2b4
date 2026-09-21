@@ -374,7 +374,7 @@ def test_testhub_pytest_scope_contains_behavior_tests(monkeypatch, tmp_path):
         return SimpleNamespace(returncode=0, stdout="pass", stderr="")
 
     monkeypatch.setattr(portable.subprocess, "run", fake_run)
-    result = portable.run_pytest(tmp_path, scope="testhub")
+    result = portable.run_pytest(Path(__file__).resolve().parents[1], scope="testhub")
     assert result["status"] == "PASS"
     assert "tests/test_v3_test_hub_behavior.py" in result["command"]
     assert calls

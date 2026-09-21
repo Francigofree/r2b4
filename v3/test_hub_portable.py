@@ -18,6 +18,7 @@ from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from .pytest_profiles import get_pytest_profile, resolve_pytest_files, resolve_pytest_targets
 from .mcap_reader import McapReadError, McapReader, RAW_LIDAR_TOPIC, TICK_TOPIC
 from .mcap_replay_bridge import McapReplayBridgeError, ReplayWindow, replay_mcap
 from .test_hub_v2 import write_interesting_slice
@@ -598,25 +599,20 @@ def run_pytest(
     scope: str = "testhub",
     timeout_s: int | None = None,
 ) -> dict[str, object]:
-    """Run pytest under the Test Hub umbrella without coupling it to robot runtime."""
+    """Run one named R2B4 pytest profile under the offline Test Hub umbrella."""
     root = Path(project_root).resolve()
-    if scope not in {"testhub", "full"}:
-        raise ValueError("pytest scope must be testhub or full")
-    if scope == "testhub":
-        targets = [
-            "tests/test_v3_test_hub_analysis.py",
-            "tests/test_v3_test_hub_behavior.py",
-            "tests/test_v3_test_hub_quality.py",
-            "tests/test_v3_test_hub_cli.py",
-            "tests/test_v3_test_hub_evidence.py",
-            "tests/test_v3_test_hub_portable.py",
-            "tests/test_v3_runtime_correlation.py",
-            "tests/test_v3_mcap_e2e.py",
-        ]
-    else:
-        targets = []
+    profile = get_pytest_profile(scope)
+    files = resolve_pytest_files(root, scope)
+    targets = resolve_pytest_targets(root, scope)
     command = [sys.executable, "-m", "pytest", "-q", *targets]
     started = time.monotonic()
+    metadata = {
+        "schema": PYTEST_SCHEMA,
+        "scope": scope,
+        "profile_marker": profile.marker,
+        "profile_description": profile.description,
+        "test_file_count": len(files),
+    }
     try:
         completed = subprocess.run(
             command,
@@ -628,9 +624,8 @@ def run_pytest(
         )
         status = "PASS" if completed.returncode == 0 else "FAIL"
         return {
-            "schema": PYTEST_SCHEMA,
+            **metadata,
             "status": status,
-            "scope": scope,
             "exit_code": completed.returncode,
             "duration_s": time.monotonic() - started,
             "command": command,
@@ -639,9 +634,8 @@ def run_pytest(
         }
     except subprocess.TimeoutExpired as exc:
         return {
-            "schema": PYTEST_SCHEMA,
+            **metadata,
             "status": "ERROR",
-            "scope": scope,
             "exit_code": None,
             "duration_s": time.monotonic() - started,
             "command": command,
@@ -649,7 +643,6 @@ def run_pytest(
             "stdout_tail": (exc.stdout or "")[-50_000:] if isinstance(exc.stdout, str) else "",
             "stderr_tail": (exc.stderr or "")[-50_000:] if isinstance(exc.stderr, str) else "",
         }
-
 
 def write_portable_manifest(
     destination: str | Path,

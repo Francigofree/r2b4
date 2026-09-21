@@ -462,7 +462,7 @@ def test_testhub_pytest_scope_executes_quality_tests(monkeypatch, tmp_path):
 
     monkeypatch.setattr(portable.subprocess, "run", fake_run)
 
-    result = portable.run_pytest(tmp_path, scope="testhub")
+    result = portable.run_pytest(Path(__file__).resolve().parents[1], scope="testhub")
 
     assert result["status"] == "PASS"
     assert "tests/test_v3_test_hub_quality.py" in result["command"]

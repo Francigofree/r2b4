@@ -16,6 +16,7 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from .pytest_profiles import pytest_profile_names
 from .test_hub_analysis import analyze_capture
 from .test_hub_motion_quality import (
     compare_motion_quality_sources,
@@ -107,8 +108,9 @@ def run_default(
     """Create one self-contained agent evidence bundle for a finished MCAP."""
     if hz not in SUPPORTED_HZ:
         raise ValueError(f"hz must be one of {SUPPORTED_HZ}")
-    if pytest_scope not in {"off", "testhub", "full"}:
-        raise ValueError("pytest_scope must be off, testhub or full")
+    if pytest_scope != "off" and pytest_scope not in pytest_profile_names():
+        allowed = ", ".join(pytest_profile_names())
+        raise ValueError(f"pytest_scope must be off or one of: {allowed}")
 
     capture = resolve_capture(str(capture))
     destination = output_dir or default_output_dir(capture)
@@ -438,7 +440,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--replay", choices=("off", "incident", "full"), default="incident")
     run.add_argument("--no-sweep", action="store_true", help="skip full-run bounded replay sweep")
     run.add_argument("--sweep-window-ticks", type=int, default=DEFAULT_REPLAY_WINDOW_TICKS)
-    run.add_argument("--pytest", choices=("off", "testhub", "full"), default="off")
+    run.add_argument("--pytest", choices=("off", *pytest_profile_names()), default="off")
 
     view = commands.add_parser("view", help="cheap readable view only")
     view.add_argument("capture", nargs="?", help="default: newest runtime/captures/*.mcap")
@@ -458,7 +460,7 @@ def _parser() -> argparse.ArgumentParser:
     compare.add_argument("--output")
 
     tests = commands.add_parser("test", help="run pytest under the Test Hub umbrella")
-    tests.add_argument("--scope", choices=("testhub", "full"), default="testhub")
+    tests.add_argument("--scope", choices=pytest_profile_names(), default="testhub")
     tests.add_argument("--output")
     return parser
 
