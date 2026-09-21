@@ -38,8 +38,6 @@ from v3.composition.live_inputs import (
     LiveInputCompositionConfig,
 )
 from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
-from v3.adapters.process_encoder_backend import ProcessEncoderSource
-from v3.adapters.process_vision_port import ProcessVisionPort, UnavailableVisionPort
 from v3.composition.native_sensor_inputs import (
     NativeSensorHardwareConfig,
     NativeSensorInputOwner,
@@ -384,11 +382,10 @@ class NativeHardwareSensorOwner:
         bus: Bno055RegisterBus | None = None
         imu: Bno055SamplePort | None = None
         lidar: LatestMatcherResultPort | None = None
-        camera: object | None = None
+        camera: NativePicamera2Camera | None = None
         person_detection_port: PersonDetectionPort | None = None
         person_evidence: PersonPhotoEvidenceRecorder | None = None
         inputs: NativeSensorInputOwner | None = None
-        encoder_source_override: ProcessEncoderSource | None = None
         pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
         try:
             if open_imu_device is not None:
@@ -400,35 +397,7 @@ class NativeHardwareSensorOwner:
                 )
                 imu.initialize()
             lidar = open_lidar_port(pose_feedback)
-
-            # CONTROL_PROCESS_STERILE_1: the concrete production lgpio owner,
-            # callbacks and velocity backend live in a separate interpreter.
-            if getattr(counter_gpio_backend, "__name__", "") == "lgpio":
-                encoder_source_override = ProcessEncoderSource(
-                    config.inputs.encoder_counter,
-                    config.inputs.encoder_backend,
-                    config.inputs.encoder_source,
-                    worker_cpu=(affinity.io_cpu if affinity.enabled else None),
-                    strict_affinity=(affinity.strict if affinity.enabled else False),
-                )
-
-            # Camera + detector share one child so frame bytes never cross IPC.
-            if config.camera_device is not None and open_camera is default_picamera2_factory:
-                try:
-                    camera = ProcessVisionPort(
-                        config.camera_device,
-                        config.person_detection_backend,
-                        worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
-                        strict_affinity=(affinity.strict if affinity.enabled else False),
-                    )
-                except Exception as exc:
-                    camera = UnavailableVisionPort(f"{type(exc).__name__}:{exc}")
-                if config.person_detection_backend is not None:
-                    person_detection_port = camera  # type: ignore[assignment]
-
-            if config.camera_device is not None and not isinstance(
-                camera, (ProcessVisionPort, UnavailableVisionPort)
-            ):
+            if config.camera_device is not None:
                 with temporary_current_affinity(
                     affinity.vision_cpu if affinity.enabled else None,
                     role="vision",
@@ -446,10 +415,7 @@ class NativeHardwareSensorOwner:
                     # Camera remains non-critical for motor safety authority.
                     camera.start()
 
-            if (
-                config.person_detection_backend is not None
-                and person_detection_port is None
-            ):
+            if config.person_detection_backend is not None:
                 assert config.inputs.person_detection_source is not None
                 if camera is None or not camera.get_runtime_status().running:
                     camera_error = (
@@ -502,9 +468,8 @@ class NativeHardwareSensorOwner:
                 imu,
                 lidar,
                 config.inputs,
-                camera_port=camera,  # type: ignore[arg-type]
+                camera_port=camera,
                 person_detection_port=person_detection_port,
-                encoder_source=encoder_source_override,
             )
         except Exception:
             if inputs is not None:
@@ -518,11 +483,6 @@ class NativeHardwareSensorOwner:
                 if camera is not None:
                     try:
                         camera.stop()
-                    except Exception:
-                        pass
-                if encoder_source_override is not None:
-                    try:
-                        encoder_source_override.close()
                     except Exception:
                         pass
                 if lidar is not None:

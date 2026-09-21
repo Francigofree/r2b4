@@ -171,13 +171,9 @@ class NativeSensorInputOwner:
         *,
         camera_port: CameraFramePort | None = None,
         person_detection_port: PersonDetectionPort | None = None,
-        encoder_source: NativeEncoderSource | None = None,  # encoder_source_override_sterile
     ) -> None:
         if not isinstance(config, NativeSensorInputConfig):
             raise TypeError("config must be NativeSensorInputConfig")
-
-        if encoder_source is not None and not callable(getattr(encoder_source, "close", None)):
-            raise TypeError("encoder_source override must provide close")
 
         if (config.camera_source is None) != (camera_port is None):
             raise ValueError("camera port and source config must be enabled together")
@@ -195,13 +191,12 @@ class NativeSensorInputOwner:
         try:
             imu_backend = NativeBno055ImuBackend(imu_device, config.imu_backend)
             lidar_backend = NativeLatestLidarBackend(lidar_port, config.lidar_backend)
-            if encoder_source is None:
-                encoder_source = NativeGpioEncoderSource(
-                    counter_gpio_backend,
-                    config.encoder_counter,
-                    config.encoder_backend,
-                    config.encoder_source,
-                )
+            encoder_source = NativeGpioEncoderSource(
+                counter_gpio_backend,
+                config.encoder_counter,
+                config.encoder_backend,
+                config.encoder_source,
+            )
             imu_source = NativeImuSource(imu_backend, config.imu_source)
             lidar_source = NativeLidarSource(lidar_backend, config.lidar_source)
             camera_source = (
@@ -293,9 +288,7 @@ class NativeSensorInputOwner:
 
         if self._closed:
             return None
-        getter = getattr(self._lidar_port, "get_capture_raw_scan_snapshot", None)
-        if not callable(getter):
-            getter = getattr(self._lidar_port, "get_raw_scan_snapshot", None)
+        getter = getattr(self._lidar_port, "get_raw_scan_snapshot", None)
         return getter() if callable(getter) else None
 
     def close(self) -> None:

@@ -68,10 +68,6 @@ Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, m
 
 A fizikai live runtime-ban a szenzor I/O multi-rate edge ownerben futhat. A control tick L0 `DeviceReader.read()` útja nem végez blokkoló fizikai sensor I/O-t: kizárólag korábban publikált, bounded historyból választ olyan immutable snapshotot, amely a tick `monotonic_ns` idején már látható volt. A safety-kritikus és auxiliary acquisition külön worker lane-ben futhat; auxiliary késés vagy hiba nem blokkolhatja a kritikus acquisition lane-t és önmagában nem adhat egész-robot fault authorityt. A worker lane-ek CPU-affinityja operational runtime policy, nem production authority, és nem sértheti a control CPU izolációját. Replay/szimuláció továbbra is közvetlenül lezárt `RawDeviceBatch`/`TickInputs` értékből dolgozik, worker nélkül.
 
-### 2.0 Control-process sterility
-
-Production ACTIVE futásban a control processz szenzoroldali feladata bounded, már elkészült snapshotok átvétele és tick-zárása. Szenzor GPIO-callback, CPU-intenzív Python feldolgozás, raw kamera-frame payload, teljes raw LiDAR-geometria ismételt felépítése, illetve nagy payload serializálás/deserializálás nem konkurálhat az L1–L12 végrehajtással ugyanabban a Python interpreterben. Ezek runtime/adapter edge worker-process tulajdonai. A final L12 motor writer ettől függetlenül továbbra is az egyetlen engedélyezett normál actuation capability. A processhatár nem változtat measurement-időt, source sequence/revisiont, freshness/trust jelentést vagy layer authorityt; a control oldal kizárólag bounded, immutable, már elkészült szemantikai snapshotot zárhat `TickInputs`-ba.
-
 ### 2.1 Passzív observation/fan-out
 
 A productionból kifelé vezethet passzív observation/fan-out capture, telemetry, GUI vagy metrics felé. Ez **nem L13 és nem control layer**.

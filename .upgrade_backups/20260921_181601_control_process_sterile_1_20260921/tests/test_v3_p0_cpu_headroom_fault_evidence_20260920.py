@@ -27,16 +27,16 @@ def _load_tick_engine_helpers():
     return module
 
 
-def test_vision_workers_are_process_isolated():
+def test_vision_workers_are_isolated_from_critical_io_cpu():
     source = (ROOT / "v3_hardware_runtime.py").read_text(encoding="utf-8")
-    start = source.index("            # Camera + detector share one child")
+    start = source.index("            if config.camera_device is not None:")
     end = source.index("            inputs = NativeSensorInputOwner(", start)
     vision_region = source[start:end]
 
-    assert "ProcessVisionPort(" in vision_region
-    assert "affinity.vision_cpu if affinity.enabled else None" in vision_region
+    assert vision_region.count(
+        "affinity.vision_cpu if affinity.enabled else None"
+    ) == 2
     assert "affinity.io_cpu if affinity.enabled else None" not in vision_region
-    assert "person_detection_port = camera" in vision_region
 
 
 def test_encoder_imu_lane_stays_on_io_cpu_and_lidar_stays_on_lidar_cpu():

@@ -1,11 +1,10 @@
-"""Process-isolated production LiDAR owner with compact control transport.
+"""Process-isolated production LiDAR owner with a latest-only parent proxy.
 
-The child owns pyserial, the RPLIDAR driver, scan pump and matcher.  Two bounded
-transport lanes are exposed:
-- compact control state: safety/localization plus <= configured local points;
-- full raw scan: revision-only evidence lane for passive capture.
-The control reader never needs to receive/rebuild the full physical scan.
+The child owns pyserial, the RPLIDAR driver, the native pump thread and the
+existing matcher process.  The control process only publishes completed L3 pose
+references into a tiny shared-memory ring and reads immutable latest snapshots.
 """
+
 from __future__ import annotations
 
 import math
@@ -19,7 +18,11 @@ from typing import Any, Callable
 
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
-from .latest_lidar import MATCHER_CONFIDENCE_MODEL, MATCHER_CONTRACT_ID, MATCHER_TRANSPORT
+from .latest_lidar import (
+    MATCHER_CONFIDENCE_MODEL,
+    MATCHER_CONTRACT_ID,
+    MATCHER_TRANSPORT,
+)
 from .native_lidar_port import (
     NativeLidarPortConfig,
     NativeMatcherResult,
@@ -29,10 +32,10 @@ from .native_lidar_port import (
 )
 from .rplidar_c1 import RplidarPoint
 
+
 _PROCESS_START_METHOD = "spawn"
 _POSE_HISTORY_CAPACITY = 64
 _STATE_QUEUE_CAPACITY = 2
-_RAW_QUEUE_CAPACITY = 2
 _STATE_HEARTBEAT_NS = 100_000_000
 _READY_TIMEOUT_S = 12.0
 _STOP_TIMEOUT_S = 3.0
@@ -46,58 +49,6 @@ def _plain(value: object) -> object:
     return value
 
 
-def _bounded_control_points(
-    points: tuple[RplidarPoint, ...],
-    *,
-    minimum_range_m: float,
-    maximum_range_m: float,
-    maximum_points: int,
-) -> tuple[RplidarPoint, ...]:
-    filtered = tuple(
-        sorted(
-            (
-                point
-                for point in points
-                if minimum_range_m <= float(point.distance_m) <= maximum_range_m
-            ),
-            key=lambda point: (float(point.angle_deg) % 360.0, float(point.distance_m), -int(point.quality)),
-        )
-    )
-    if len(filtered) <= maximum_points:
-        return filtered
-    bucket_width_deg = 360.0 / maximum_points
-    selected: dict[int, int] = {}
-    for index, point in enumerate(filtered):
-        angle = float(point.angle_deg) % 360.0
-        bucket = min(maximum_points - 1, int(angle / bucket_width_deg))
-        previous = selected.get(bucket)
-        if previous is None:
-            selected[bucket] = index
-            continue
-        old = filtered[previous]
-        if (float(point.distance_m), -int(point.quality), angle, index) < (
-            float(old.distance_m), -int(old.quality), float(old.angle_deg) % 360.0, previous
-        ):
-            selected[bucket] = index
-    selected_indices = set(selected.values())
-    if len(selected_indices) < maximum_points:
-        remaining = [index for index in range(len(filtered)) if index not in selected_indices]
-        missing = maximum_points - len(selected_indices)
-        if missing >= len(remaining):
-            selected_indices.update(remaining)
-        elif missing == 1:
-            selected_indices.add(remaining[len(remaining) // 2])
-        elif remaining:
-            last = len(remaining) - 1
-            selected_indices.update(remaining[round(slot * last / (missing - 1))] for slot in range(missing))
-    return tuple(
-        sorted(
-            (filtered[index] for index in selected_indices),
-            key=lambda point: (float(point.angle_deg) % 360.0, float(point.distance_m), -int(point.quality)),
-        )
-    )
-
-
 def _wire_raw(snapshot: NativeRawLidarSnapshot | None) -> object | None:
     if snapshot is None:
         return None
@@ -109,34 +60,6 @@ def _wire_raw(snapshot: NativeRawLidarSnapshot | None) -> object | None:
         snapshot.measurement_monotonic_ns,
         snapshot.health,
         tuple((p.angle_deg, p.distance_m, p.quality) for p in snapshot.raw_scan),
-        _plain(snapshot.summary),
-        snapshot.observed_monotonic_ns,
-    )
-
-
-def _wire_control_raw(
-    snapshot: NativeRawLidarSnapshot | None,
-    *,
-    minimum_range_m: float,
-    maximum_range_m: float,
-    maximum_points: int,
-) -> object | None:
-    if snapshot is None:
-        return None
-    bounded = _bounded_control_points(
-        tuple(snapshot.raw_scan),
-        minimum_range_m=minimum_range_m,
-        maximum_range_m=maximum_range_m,
-        maximum_points=maximum_points,
-    )
-    return (
-        snapshot.raw_scan_id,
-        snapshot.raw_scan_timestamp,
-        snapshot.scan_start_monotonic_ns,
-        snapshot.scan_end_monotonic_ns,
-        snapshot.measurement_monotonic_ns,
-        snapshot.health,
-        tuple((p.angle_deg, p.distance_m, p.quality) for p in bounded),
         _plain(snapshot.summary),
         snapshot.observed_monotonic_ns,
     )
@@ -266,7 +189,8 @@ class _SharedPoseHistory:
                 )
         if not poses or monotonic_ns < poses[0].monotonic_ns or monotonic_ns > poses[-1].monotonic_ns:
             return None
-        lo, hi = 0, len(poses)
+        lo = 0
+        hi = len(poses)
         while lo < hi:
             mid = (lo + hi) // 2
             if poses[mid].monotonic_ns < monotonic_ns:
@@ -278,12 +202,16 @@ class _SharedPoseHistory:
             return poses[index]
         if index == 0 or index >= len(poses):
             return None
-        before, after = poses[index - 1], poses[index]
+        before = poses[index - 1]
+        after = poses[index]
         span = after.monotonic_ns - before.monotonic_ns
         if span <= 0:
             return None
         fraction = (monotonic_ns - before.monotonic_ns) / span
-        yaw_delta = math.atan2(math.sin(after.yaw_rad - before.yaw_rad), math.cos(after.yaw_rad - before.yaw_rad))
+        yaw_delta = math.atan2(
+            math.sin(after.yaw_rad - before.yaw_rad),
+            math.cos(after.yaw_rad - before.yaw_rad),
+        )
         yaw = before.yaw_rad + fraction * yaw_delta
         return TimedPoseReference(
             monotonic_ns,
@@ -316,22 +244,28 @@ def _lidar_owner_process_main(
     pose_times: Any,
     pose_values: Any,
     state_queue: Any,
-    raw_queue: Any,
     ready_event: Any,
     stop_event: Any,
     worker_cpu: int | None,
     strict_affinity: bool,
-    control_minimum_range_m: float,
-    control_maximum_range_m: float,
-    control_maximum_points: int,
 ) -> None:
     port = None
     try:
         if worker_cpu is not None:
-            apply_current_affinity(worker_cpu, role="lidar-owner-process", strict=strict_affinity)
+            apply_current_affinity(
+                worker_cpu,
+                role="lidar-owner-process",
+                strict=strict_affinity,
+            )
         import serial
 
-        pose_history = _SharedPoseHistory(_POSE_HISTORY_CAPACITY, pose_lock, pose_sequence, pose_times, pose_values)
+        pose_history = _SharedPoseHistory(
+            _POSE_HISTORY_CAPACITY,
+            pose_lock,
+            pose_sequence,
+            pose_times,
+            pose_values,
+        )
         port = open_native_lidar_port(config, pose_history.lookup, serial.Serial)
         initial_raw = port.get_raw_scan_snapshot()
         initial_matcher = port.get_matcher_result()
@@ -340,21 +274,16 @@ def _lidar_owner_process_main(
             state_queue,
             (
                 "state",
-                _wire_control_raw(
-                    initial_raw,
-                    minimum_range_m=control_minimum_range_m,
-                    maximum_range_m=control_maximum_range_m,
-                    maximum_points=control_maximum_points,
-                ),
+                _wire_raw(initial_raw),
                 _wire_matcher(initial_matcher),
                 initial_status,
             ),
         )
-        if initial_raw is not None:
-            _put_latest(raw_queue, ("raw", _wire_raw(initial_raw)))
         ready_event.set()
         last_raw_revision = int(getattr(initial_raw, "raw_scan_id", 0) or 0)
-        last_matcher_revision = int(getattr(initial_matcher, "matcher_result_id", 0) or 0)
+        last_matcher_revision = int(
+            getattr(initial_matcher, "matcher_result_id", 0) or 0
+        )
         last_status_ns = time.monotonic_ns()
         while not stop_event.is_set():
             raw = port.get_raw_scan_snapshot()
@@ -362,25 +291,17 @@ def _lidar_owner_process_main(
             now_ns = time.monotonic_ns()
             raw_revision = int(getattr(raw, "raw_scan_id", 0) or 0)
             matcher_revision = int(getattr(matcher, "matcher_result_id", 0) or 0)
-            raw_changed = raw_revision != last_raw_revision
-            if raw_changed and raw is not None:
-                _put_latest(raw_queue, ("raw", _wire_raw(raw)))
-            if raw_changed or matcher_revision != last_matcher_revision or now_ns - last_status_ns >= _STATE_HEARTBEAT_NS:
+            if (
+                raw_revision != last_raw_revision
+                or matcher_revision != last_matcher_revision
+                or now_ns - last_status_ns >= _STATE_HEARTBEAT_NS
+            ):
                 status = dict(port.get_runtime_status())
                 _put_latest(
                     state_queue,
                     (
                         "state",
-                        (
-                            _wire_control_raw(
-                                raw,
-                                minimum_range_m=control_minimum_range_m,
-                                maximum_range_m=control_maximum_range_m,
-                                maximum_points=control_maximum_points,
-                            )
-                            if raw_changed
-                            else None
-                        ),
+                        _wire_raw(raw),
                         _wire_matcher(matcher),
                         status,
                     ),
@@ -401,13 +322,23 @@ def _lidar_owner_process_main(
 
 
 class ProcessLidarPort:
-    """Latest compact-control proxy plus revision-only full-raw capture lane."""
+    """Read-only latest-result proxy for a fully separate LiDAR owner process."""
 
     __slots__ = (
-        "_config", "_fatal_error", "_matcher_result", "_pose_history", "_process",
-        "_raw_snapshot", "_capture_raw_snapshot", "_capture_raw_revision",
-        "_ready_event", "_state_queue", "_raw_queue", "_status", "_stop_event",
-        "_stopped", "_collector", "_collector_stop", "_pending_poses",
+        "_config",
+        "_fatal_error",
+        "_matcher_result",
+        "_pose_history",
+        "_process",
+        "_raw_snapshot",
+        "_ready_event",
+        "_state_queue",
+        "_status",
+        "_stop_event",
+        "_stopped",
+        "_collector",
+        "_collector_stop",
+        "_pending_poses",
     )
 
     def __init__(
@@ -417,51 +348,52 @@ class ProcessLidarPort:
         *,
         worker_cpu: int | None = None,
         strict_affinity: bool = False,
-        control_minimum_range_m: float = 0.08,
-        control_maximum_range_m: float = 2.5,
-        control_maximum_points: int = 96,
     ) -> None:
         if not isinstance(config, NativeLidarPortConfig):
             raise TypeError("config must be NativeLidarPortConfig")
         if not callable(pose_provider):
             raise TypeError("pose_provider must be callable")
-        if worker_cpu is not None and (not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0):
+        if worker_cpu is not None and (
+            not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0
+        ):
             raise ValueError("worker_cpu must be non-negative or None")
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
-        for value, name in ((control_minimum_range_m, "control_minimum_range_m"), (control_maximum_range_m, "control_maximum_range_m")):
-            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
-                raise ValueError(f"{name} must be finite")
-        if control_minimum_range_m < 0 or control_maximum_range_m <= control_minimum_range_m:
-            raise ValueError("control range must be increasing")
-        if not isinstance(control_maximum_points, int) or isinstance(control_maximum_points, bool) or control_maximum_points <= 0:
-            raise ValueError("control_maximum_points must be positive")
 
         context = multiprocessing.get_context(_PROCESS_START_METHOD)
         pose_lock = context.Lock()
         pose_sequence = context.RawValue("Q", 0)
         pose_times = context.RawArray("q", _POSE_HISTORY_CAPACITY)
         pose_values = context.RawArray("d", _POSE_HISTORY_CAPACITY * 3)
-        self._pose_history = _SharedPoseHistory(_POSE_HISTORY_CAPACITY, pose_lock, pose_sequence, pose_times, pose_values)
+        self._pose_history = _SharedPoseHistory(
+            _POSE_HISTORY_CAPACITY,
+            pose_lock,
+            pose_sequence,
+            pose_times,
+            pose_values,
+        )
         self._config = config
         self._state_queue = context.Queue(maxsize=_STATE_QUEUE_CAPACITY)
-        self._raw_queue = context.Queue(maxsize=_RAW_QUEUE_CAPACITY)
         self._ready_event = context.Event()
         self._stop_event = context.Event()
         self._process = context.Process(
             target=_lidar_owner_process_main,
             args=(
-                config, pose_lock, pose_sequence, pose_times, pose_values,
-                self._state_queue, self._raw_queue, self._ready_event, self._stop_event,
-                worker_cpu, strict_affinity,
-                float(control_minimum_range_m), float(control_maximum_range_m), int(control_maximum_points),
+                config,
+                pose_lock,
+                pose_sequence,
+                pose_times,
+                pose_values,
+                self._state_queue,
+                self._ready_event,
+                self._stop_event,
+                worker_cpu,
+                strict_affinity,
             ),
             name="v3-lidar-owner-process",
             daemon=False,
         )
         self._raw_snapshot: NativeRawLidarSnapshot | None = None
-        self._capture_raw_snapshot: NativeRawLidarSnapshot | None = None
-        self._capture_raw_revision = 0
         self._matcher_result: NativeMatcherResult | None = None
         self._status: dict[str, object] = {
             "matcher_contract_id": MATCHER_CONTRACT_ID,
@@ -472,7 +404,6 @@ class ProcessLidarPort:
             "driver_connected": False,
             "health": "STALE",
             "process_isolated": True,
-            "compact_control_transport": True,
         }
         self._fatal_error = ""
         self._stopped = False
@@ -480,41 +411,27 @@ class ProcessLidarPort:
         self._pending_poses: deque[TimedPoseReference] = deque(maxlen=_POSE_HISTORY_CAPACITY)
         self._collector: threading.Thread | None = None
         self._process.start()
-        # Parent only receives from both queues.
-        try:
-            self._state_queue._writer.close()
-            self._raw_queue._writer.close()
-        except (AttributeError, OSError):
-            pass
-        ready_timeout = max(_READY_TIMEOUT_S, config.process_ready_timeout_s)
-        if not self._ready_event.wait(ready_timeout):
+        # This process only receives state. Closing its unused writer lets a
+        # partial receive terminate on EOF if the child exits mid-message.
+        self._state_queue._writer.close()
+        if not self._ready_event.wait(max(_READY_TIMEOUT_S, config.process_ready_timeout_s)):
             self.stop()
             raise RuntimeError("process-isolated LiDAR owner did not become ready")
-        try:
-            first = self._state_queue.get(timeout=ready_timeout)
-        except queue.Empty:
-            first = None
-        if first is not None:
-            if first[0] == "error":
-                self._fatal_error = f"{first[1]}:{first[2]}"
-            elif first[0] == "state":
-                self._raw_snapshot = _unwire_raw(first[1])
-                self._matcher_result = _unwire_matcher(first[2])
-                self._status = dict(first[3])
-                self._status["process_isolated"] = True
-                self._status["compact_control_transport"] = True
-            else:
-                self._fatal_error = "UNKNOWN_LIDAR_PROCESS_MESSAGE"
         self._drain_state()
         if self._fatal_error:
-            error = self._fatal_error
             self.stop()
-            raise RuntimeError(f"process-isolated LiDAR startup failed: {error}")
+            raise RuntimeError(f"process-isolated LiDAR startup failed: {self._fatal_error}")
         if not self._process.is_alive():
             self.stop()
             raise RuntimeError("process-isolated LiDAR owner exited during startup")
-        self._collector = threading.Thread(target=self._collect_state, name="r2b4-lidar-ipc", daemon=True)
-        with temporary_current_affinity(worker_cpu, role="lidar-ipc", strict=strict_affinity):
+        self._collector = threading.Thread(
+            target=self._collect_state,
+            name="r2b4-lidar-ipc",
+            daemon=True,
+        )
+        with temporary_current_affinity(
+            worker_cpu, role="lidar-ipc", strict=strict_affinity
+        ):
             self._collector.start()
 
     @property
@@ -524,8 +441,10 @@ class ProcessLidarPort:
     def publish_pose_reference(self, pose: TimedPoseReference) -> None:
         if not isinstance(pose, TimedPoseReference):
             raise TypeError("pose must be TimedPoseReference")
-        if not self._stopped:
-            self._pending_poses.append(pose)
+        if self._stopped:
+            return
+        # The control observer never waits for the child-held pose-history lock.
+        self._pending_poses.append(pose)
 
     def _collect_state(self) -> None:
         try:
@@ -548,50 +467,31 @@ class ProcessLidarPort:
                 newest = self._state_queue.get_nowait()
             except queue.Empty:
                 break
+            if newest[0] == "error":
+                self._fatal_error = f"{newest[1]}:{newest[2]}"
+                return
         if newest is None:
             if not self._process.is_alive() and not self._stopped:
                 self._fatal_error = self._fatal_error or "LIDAR_OWNER_PROCESS_EXITED"
             return
-        if newest[0] == "error":  # type: ignore[index]
+        kind = newest[0]  # type: ignore[index]
+        if kind == "error":
             self._fatal_error = f"{newest[1]}:{newest[2]}"  # type: ignore[index]
             return
-        if newest[0] != "state":  # type: ignore[index]
-            self._fatal_error = f"UNKNOWN_LIDAR_PROCESS_MESSAGE:{newest[0]}"  # type: ignore[index]
+        if kind != "state":
+            self._fatal_error = f"UNKNOWN_LIDAR_PROCESS_MESSAGE:{kind}"
             return
-        if newest[1] is not None:  # type: ignore[index]
-            self._raw_snapshot = _unwire_raw(newest[1])  # type: ignore[index]
-        self._matcher_result = _unwire_matcher(newest[2])  # type: ignore[index]
+        raw = _unwire_raw(newest[1])  # type: ignore[index]
+        matcher = _unwire_matcher(newest[2])  # type: ignore[index]
         status = dict(newest[3])  # type: ignore[index]
         status["process_isolated"] = True
-        status["compact_control_transport"] = True
         status["owner_process_alive"] = self._process.is_alive()
+        self._raw_snapshot = raw
+        self._matcher_result = matcher
         self._status = status
 
-    def _drain_capture_raw(self) -> None:
-        newest: object | None = None
-        for _ in range(_RAW_QUEUE_CAPACITY):
-            try:
-                newest = self._raw_queue.get_nowait()
-            except queue.Empty:
-                break
-        if newest is None:
-            return
-        if not isinstance(newest, tuple) or len(newest) != 2 or newest[0] != "raw":
-            self._fatal_error = "LIDAR_RAW_TRANSPORT_INVALID"
-            return
-        snapshot = _unwire_raw(newest[1])
-        if snapshot is not None:
-            self._capture_raw_snapshot = snapshot
-            self._capture_raw_revision = int(snapshot.raw_scan_id)
-
     def get_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
-        """Compact physical scan used by control/local perception only."""
         return self._raw_snapshot
-
-    def get_capture_raw_scan_snapshot(self) -> NativeRawLidarSnapshot | None:
-        """Full latest physical scan for passive capture; never used by L0 control."""
-        self._drain_capture_raw()
-        return self._capture_raw_snapshot
 
     def get_matcher_result(self) -> NativeMatcherResult | None:
         return self._matcher_result
@@ -600,7 +500,6 @@ class ProcessLidarPort:
         status = dict(self._status)
         alive = self._process.is_alive() and not self._stopped
         status["owner_process_alive"] = alive
-        status["capture_raw_revision"] = self._capture_raw_revision
         if not alive:
             status["running"] = False
             status["matcher_process_alive"] = False
@@ -627,11 +526,9 @@ class ProcessLidarPort:
             self._collector.join(timeout=_STOP_TIMEOUT_S)
             if self._collector.is_alive():
                 raise RuntimeError("LiDAR state collector did not stop")
-        for item in (self._state_queue, self._raw_queue):
-            try:
-                item.close()
-            except (OSError, ValueError):
-                pass
+        close = getattr(self._state_queue, "close", None)
+        if callable(close):
+            close()
 
 
 def open_process_lidar_port(
@@ -640,19 +537,18 @@ def open_process_lidar_port(
     *,
     worker_cpu: int | None = None,
     strict_affinity: bool = False,
-    control_minimum_range_m: float = 0.08,
-    control_maximum_range_m: float = 2.5,
-    control_maximum_points: int = 96,
 ) -> ProcessLidarPort:
+    """Open the production LiDAR process proxy or fail closed."""
+
     return ProcessLidarPort(
         config,
         pose_provider,
         worker_cpu=worker_cpu,
         strict_affinity=strict_affinity,
-        control_minimum_range_m=control_minimum_range_m,
-        control_maximum_range_m=control_maximum_range_m,
-        control_maximum_points=control_maximum_points,
     )
 
 
-__all__ = ["ProcessLidarPort", "open_process_lidar_port"]
+__all__ = [
+    "ProcessLidarPort",
+    "open_process_lidar_port",
+]

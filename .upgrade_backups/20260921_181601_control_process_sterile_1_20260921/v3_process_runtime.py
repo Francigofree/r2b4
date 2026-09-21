@@ -794,9 +794,6 @@ def process_lidar_factory(
             pose_provider,
             worker_cpu=(affinity.lidar_cpu if affinity.enabled else None),
             strict_affinity=(affinity.strict if affinity.enabled else False),
-            control_minimum_range_m=sensors.inputs.lidar_source.local_perception_min_range_m,
-            control_maximum_range_m=sensors.inputs.lidar_source.local_perception_max_range_m,
-            control_maximum_points=sensors.inputs.lidar_source.local_perception_max_points,
         )
 
     return open_lidar

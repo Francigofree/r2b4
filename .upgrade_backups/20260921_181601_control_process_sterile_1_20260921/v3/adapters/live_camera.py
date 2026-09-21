@@ -108,8 +108,7 @@ class NativeCameraSource:
                 DataField("frame_duration_ns", frame.frame_duration_ns),
                 DataField("focus_state", frame.focus_state),
                 DataField("lens_position", frame.lens_position),
-                # Process vision exposes metadata only; raw image bytes stay child-owned.
-                DataField("payload_bytes", frame.frame_size_bytes),
+                DataField("payload_bytes", len(frame.image_bytes)),
                 DataField("camera_model", status.camera_model),
             ),
         )
