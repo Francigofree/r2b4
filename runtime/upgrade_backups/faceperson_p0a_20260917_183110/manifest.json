@@ -1,0 +1,22 @@
+{
+  "upgrade": "R2B4_FACE_PERSON_P0A_V1",
+  "changed_files": [
+    "v3/contracts/messages.py",
+    "v3/layers/l4_world_model.py",
+    "v3/layers/l5_command_mission.py",
+    "v3/layers/l6_navigation.py",
+    "v3/adapters/resident_command.py",
+    "v3/control_cli.py",
+    "v3/operator_controller.py",
+    "v3/operator_cli.py",
+    "v3/composition/native_control.py",
+    "conf/vezerles.json",
+    "tests/test_v3_async_l6_planner.py",
+    "tests/test_v3_face_person.py"
+  ],
+  "p0a": {
+    "production_monotonic_late_result": "keep fresh cached plan",
+    "legacy_tick_gate": "hard deadline unchanged",
+    "max_plan_age_ns": 350000000
+  }
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=R2B4 Alba wake service
+Wants=network-online.target
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/project_r2b4
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-%h/.config/r2b4/wake.env
+ExecStart=/usr/bin/python3 -m r2b4_voice.wake_service
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target
