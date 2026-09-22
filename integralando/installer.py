@@ -2,10 +2,9 @@
 from pathlib import Path
 import re
 
-ROOT = Path.cwd()
-if not (ROOT / "v3").exists():
-    ROOT = Path(__file__).resolve().parent
-FILES = Path(__file__).resolve().parent / "files"
+INSTALL_DIR = Path(__file__).resolve().parent
+ROOT = INSTALL_DIR.parent
+FILES = INSTALL_DIR / "files"
 
 def overwrite(rel):
     src = FILES / rel

@@ -17,6 +17,7 @@ from collections import deque
 from collections.abc import Mapping
 from typing import Any, Callable
 
+from v3.async_capability import TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
 from .latest_lidar import MATCHER_CONFIDENCE_MODEL, MATCHER_CONTRACT_ID, MATCHER_TRANSPORT
@@ -459,6 +460,8 @@ def _lidar_owner_process_main(
 class ProcessLidarPort:
     """Latest compact-control proxy plus revision-only full-raw capture lane."""
 
+    transport_semantics = TransportSemantics.LATEST_STATE
+
     __slots__ = (
         "_config", "_fatal_error", "_matcher_result", "_pose_history", "_process",
         "_raw_snapshot", "_capture_raw_snapshot", "_capture_raw_revision",
@@ -674,6 +677,30 @@ class ProcessLidarPort:
 
     def get_matcher_result(self) -> NativeMatcherResult | None:
         return self._matcher_result
+
+    def capability_snapshot(
+        self,
+        observed_monotonic_ns: int,
+        *,
+        stale_after_ns: int = 250_000_000,
+    ):
+        raw = self._raw_snapshot
+        status = self.get_runtime_status()
+        source_sequence = None if raw is None else int(raw.raw_scan_id)
+        source_ns = None if raw is None else int(raw.scan_end_monotonic_ns)
+        error = self._fatal_error or (
+            "LIDAR_NOT_RUNNING" if status.get("health") == "ERROR" else None
+        )
+        return latest_state_snapshot(
+            name="lidar.control",
+            observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=source_sequence,
+            source_monotonic_ns=source_ns,
+            stale_after_ns=stale_after_ns,
+            running=bool(status.get("running", False)),
+            error=error,
+            degraded=status.get("health") == "DEGRADED",
+        )
 
     def get_runtime_status(self) -> dict[str, object]:
         status = dict(self._status)

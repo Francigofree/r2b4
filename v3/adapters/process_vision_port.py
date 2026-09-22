@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from v3.async_capability import TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
 from .litert_person_detector import LiteRtPersonDetectorConfig, LiteRtSsdPersonDetector
@@ -232,6 +233,8 @@ def _vision_process_main(
 class ProcessVisionPort:
     """Small parent proxy implementing camera, detection and photo request ports."""
 
+    transport_semantics = TransportSemantics.LATEST_STATE
+
     __slots__ = (
         "_camera_edge",
         "_closed",
@@ -394,6 +397,52 @@ class ProcessVisionPort:
         except BaseException as exc:
             if not self._closed:
                 self._set_failed(f"VISION_COLLECTOR_FAILED:{type(exc).__name__}:{exc}")
+
+    def capability_snapshot(
+        self,
+        observed_monotonic_ns: int,
+        *,
+        stale_after_ns: int = 250_000_000,
+    ):
+        with self._condition:
+            edge = self._camera_edge
+            error = self._fatal_error or edge.status.last_error
+        frame = edge.frame
+        return latest_state_snapshot(
+            name="vision.camera",
+            observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if frame is None else int(frame.sequence),
+            source_monotonic_ns=(
+                None if frame is None else int(frame.measurement_monotonic_ns)
+            ),
+            stale_after_ns=stale_after_ns,
+            running=bool(edge.status.running),
+            error=error or None,
+        )
+
+    def detection_capability_snapshot(
+        self,
+        observed_monotonic_ns: int,
+        *,
+        stale_after_ns: int = 400_000_000,
+    ):
+        with self._condition:
+            detection = self._detection
+            status = self._detection_status
+            error = self._fatal_error or status.last_error
+        return latest_state_snapshot(
+            name="vision.person_detection",
+            observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if detection is None else int(detection.sequence),
+            source_monotonic_ns=(
+                None
+                if detection is None
+                else int(detection.measurement_monotonic_ns)
+            ),
+            stale_after_ns=stale_after_ns,
+            running=bool(status.running),
+            error=error or None,
+        )
 
     def get_edge_snapshot(self) -> CameraEdgeSnapshot:
         with self._condition:

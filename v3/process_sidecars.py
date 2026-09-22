@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from v3.async_capability import TransportSemantics
 from v3.engine import TickResult
 from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
@@ -267,6 +268,8 @@ def _status_sidecar_main(
 
 class ProcessMcapCaptureSession:
     """Production MCAP capture whose expensive work lives outside control process."""
+
+    transport_semantics = TransportSemantics.EVIDENCE_STREAM
 
     __slots__ = (
         "_capture_id",
