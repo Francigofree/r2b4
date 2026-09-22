@@ -18,7 +18,9 @@ from v3.async_capability import TransportSemantics
 from v3.engine import TickResult
 from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
-from v3.capture_ipc import CaptureCoreExpander
+from v3.capture_ipc import (
+    CaptureCoreExpander, CaptureCoreProjector, CaptureIpcProjectionError,
+)
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
@@ -289,6 +291,8 @@ class ProcessMcapCaptureSession:
         "_strict_affinity",
         "_transport_capacity",
         "_worker_cpu",
+        "_projector",
+        "_projection_drop_count",
         "_expect_raw_lidar_end",
         "evidence",
     )
@@ -342,6 +346,8 @@ class ProcessMcapCaptureSession:
         self._project_root = Path(project_root)
         self._worker_cpu = worker_cpu
         self._strict_affinity = strict_affinity
+        self._projector = CaptureCoreProjector()
+        self._projection_drop_count = 0
         self._expect_raw_lidar_end = bool(expect_raw_lidar_end)
         self._process = context.Process(
             target=_capture_sidecar_main,
@@ -377,7 +383,7 @@ class ProcessMcapCaptureSession:
 
     @property
     def failed(self) -> bool:
-        return bool(self._failed_event.is_set() or self._drop_count)
+        return bool(self._failed_event.is_set() or self._drop_count or self._projection_drop_count)
 
     @property
     def transport_drop_count(self) -> int:
@@ -424,9 +430,13 @@ class ProcessMcapCaptureSession:
             return True
 
     def observe(self, record: CaptureRecord) -> None:
-        # Typed immutable handoff only. Recursive encoding/projection belongs
-        # to the already isolated capture sidecar.
-        self._enqueue("record", record)
+        try:
+            projected = self._projector.project(record)
+        except CaptureIpcProjectionError:
+            self._projection_drop_count += 1
+            return
+        if self._enqueue("core", projected):
+            self._projector.commit(projected)
 
     def observe_raw_lidar(self, snapshot: object | None) -> None:
         if snapshot is not None:
@@ -445,7 +455,7 @@ class ProcessMcapCaptureSession:
             self.start()
         status = "PASS" if error is None and getattr(report, "status", 1) == 0 else "FAULT"
         self._control_queue.put(
-            ("finish", status, True, self._enqueued_count, self._drop_count),
+            ("finish", status, True, self._enqueued_count, self._drop_count + self._projection_drop_count),
             timeout=2.0,
         )
         self._process.join(_SIDECAR_FINISH_TIMEOUT_S)
@@ -465,6 +475,10 @@ class ProcessMcapCaptureSession:
             if self._drop_count:
                 self.evidence["status"] = "FAIL"
                 self.evidence["process_transport_drop_count"] = self._drop_count
+                self.evidence["process_transport_integrity"] = "FAIL"
+            if self._projection_drop_count:
+                self.evidence["status"] = "FAIL"
+                self.evidence["process_projection_drop_count"] = self._projection_drop_count
                 self.evidence["process_transport_integrity"] = "FAIL"
         return result_path
 

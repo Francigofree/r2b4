@@ -410,8 +410,6 @@ def run_resident_physical_control(
 
             observer_started_ns = time.perf_counter_ns()
             if record_observer is not None:
-                checkpoint_started_ns = time.perf_counter_ns()
-                checkpoint_created = False
                 if (
                     isinstance(record, ExecutionRecord)
                     and record.result.trace.fault_layer is None
@@ -426,19 +424,7 @@ def run_resident_physical_control(
                         state_checkpoint_after=runtime.checkpoint(),
                     )
                     last_checkpoint_ns = context.monotonic_ns
-                    checkpoint_created = True
-                if timing is not None and checkpoint_created:
-                    timing.observe_control_phase(
-                        "CAPTURE_CHECKPOINT",
-                        time.perf_counter_ns() - checkpoint_started_ns,
-                    )
-                capture_started_ns = time.perf_counter_ns()
                 record_observer(record)
-                if timing is not None:
-                    timing.observe_control_phase(
-                        "CAPTURE_TAP",
-                        time.perf_counter_ns() - capture_started_ns,
-                    )
             if tick_observer is not None:
                 tick_observer(last_result)
             if readiness_observer is not None:

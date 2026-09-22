@@ -7,43 +7,44 @@ from pathlib import Path
 import pytest
 
 import v3_process_runtime as process
-from v3.execution import CaptureRecord
+from v3.capture_ipc import CaptureCoreExpander, CaptureCoreFrame, CaptureCoreProjector
 from v3.mcap_capture import EncodedRecord, McapCaptureConfig, RAW_LIDAR_TOPIC, TICK_TOPIC
 from v3.mcap_reader import McapReadError, McapReader
 from v3.process_sidecars import ProcessMcapCaptureSession
 
 
-def test_capture_process_ipc_handoff_is_typed_record_without_control_projection(tmp_path):
+def test_capture_process_ipc_uses_projected_frame_not_capture_record(tmp_path):
     from test_v3_mcap_e2e import records
 
     _, values = records(1)
     session = ProcessMcapCaptureSession(
-        "typed-handoff",
-        tmp_path / "typed-handoff.mcap",
+        "projected",
+        tmp_path / "projected.mcap",
         configuration={"x": 1},
         project_root=Path(process.__file__).parent,
     )
     session._data_queue.close()
     session._data_queue = queue.Queue(maxsize=4)
     session._started = True
-
     session.observe(values[0])
     kind, payload = session._data_queue.get_nowait()
-
-    assert kind == "record"
-    assert isinstance(payload, CaptureRecord)
+    assert kind == "core"
+    assert isinstance(payload, CaptureCoreFrame)
+    assert not isinstance(payload, type(values[0]))
+    assert payload.estimated_bytes <= 4 * 1024 * 1024
     assert pickle.loads(pickle.dumps(payload)) == payload
 
 
-def test_production_session_no_longer_owns_capture_core_projector():
-    source = Path(process.__file__).parent.joinpath("v3/process_sidecars.py").read_text(
-        encoding="utf-8"
-    )
-    class_source = source.split("class ProcessMcapCaptureSession:", 1)[1]
-    assert "CaptureCoreProjector" not in class_source
-    assert "CaptureIpcProjectionError" not in class_source
-    assert "self._projector" not in class_source
-    assert 'self._enqueue("record", record)' in class_source
+def test_capture_projection_roundtrip_restores_canonical_row():
+    from test_v3_mcap_e2e import records
+    from v3.capture_encoding import encode_capture_record
+
+    _, values = records(2)
+    projector = CaptureCoreProjector()
+    expander = CaptureCoreExpander()
+    for record in values:
+        projected = projector.project(record)
+        assert expander.expand(projected) == encode_capture_record(record)
 
 
 def test_total_ring_byte_pressure_evicts_raw_before_core(tmp_path):
@@ -57,15 +58,9 @@ def test_total_ring_byte_pressure_evicts_raw_before_core(tmp_path):
         tmp_path / "ring.mcap",
         subscription=sub,
         configuration={"x": 1},
-        config=McapCaptureConfig(
-            max_byte_capacity=4096,
-            max_tick_count=8,
-            max_raw_lidar_scans=8,
-        ),
+        config=McapCaptureConfig(max_byte_capacity=4096, max_tick_count=8, max_raw_lidar_scans=8),
     )
-    core = EncodedRecord(
-        1, "v3.capture_record", TICK_TOPIC, 10, 1, b"x" * 100, tick_id=1
-    )
+    core = EncodedRecord(1, "v3.capture_record", TICK_TOPIC, 10, 1, b"x" * 100, tick_id=1)
     raw = EncodedRecord(
         2,
         "v3.raw_lidar",
