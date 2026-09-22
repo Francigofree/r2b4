@@ -289,6 +289,8 @@ CONTROL_PHASE_ORDER = (
     *(f"L{index}" for index in range(1, 13)),
     "POST_CONTROL",
     "ASYNC_L6_DISPATCH",
+    "CAPTURE_CHECKPOINT",
+    "CAPTURE_TAP",
 )
 
 
