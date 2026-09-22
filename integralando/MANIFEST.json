@@ -1,0 +1,24 @@
+{
+  "name": "r2b4_capture_economy_refactor_20260922",
+  "target_repo": "Francigofree/r2b4",
+  "target_head": "bc188d1895d334dd9d10bd5b57fb8798522494bc",
+  "production_changes": [
+    "v3/capture_compaction.py",
+    "v3/mcap_capture.py",
+    "v3/mcap_reader.py",
+    "v3/mcap_replay_bridge.py"
+  ],
+  "tests": [
+    "tests/test_v3_capture_compaction.py"
+  ],
+  "tools": [
+    "tools/r2b4_capture_size_audit.py"
+  ],
+  "measured_authority_capture": "v3_20260922_222500_14887_capture.mcap",
+  "projected_payload_saving_bytes": 10839983,
+  "projected_payload_saving_fraction": 0.198731,
+  "lossless_roundtrip_verified": {
+    "tick_rows": 376,
+    "checkpoint_rows": 9
+  }
+}
