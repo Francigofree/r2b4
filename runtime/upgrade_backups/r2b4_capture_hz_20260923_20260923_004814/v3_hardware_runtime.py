@@ -754,7 +754,6 @@ def run_native_hardware_resident_control(
     tick_observer: Callable[[TickResult], None] | None = None,
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
-    record_observer_hz: int = 50,
     raw_lidar_observer: Callable[[object | None], None] | None = None,
     affinity_config: RuntimeAffinityConfig | None = None,
     enable_multirate_inputs: bool = True,
@@ -841,7 +840,6 @@ def run_native_hardware_resident_control(
             tick_observer=observe,
             readiness_observer=readiness_observer,
             record_observer=record_observer,
-            record_observer_hz=record_observer_hz,
             timing_enabled=bool(
                 affinity_config is not None and affinity_config.enabled
             ),

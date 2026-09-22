@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Mapping
 
 from .capture_compaction import compact_checkpoint_row, compact_tick_row
-from .capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .capture_encoding import (
     CaptureEncodingError,
@@ -88,7 +87,6 @@ class McapCaptureConfig:
     max_raw_lidar_missing_fraction: float = 0.05
     max_consecutive_raw_lidar_missing: int = 2
     require_raw_lidar_transport_end: bool = False
-    tick_sample_hz: int = CONTROL_CAPTURE_HZ
 
     def __post_init__(self) -> None:
         for name in (
@@ -123,7 +121,6 @@ class McapCaptureConfig:
 
         if type(self.require_raw_lidar_transport_end) is not bool:
             raise TypeError("require_raw_lidar_transport_end must be bool")
-        validate_capture_hz(self.tick_sample_hz)
 
         if self.mode not in {"triggered", "append_only"}:
             raise ValueError("mode must be triggered or append_only")
@@ -862,7 +859,6 @@ class McapCaptureConsumer:
                 "container": "MCAP v0",
                 "message_encoding": "json",
                 "compression": "none",
-                "tick_sample_hz": str(self._config.tick_sample_hz),
             },
         )
         self._writer = writer
@@ -889,13 +885,9 @@ class McapCaptureConsumer:
         if item.mcap_topic == TICK_TOPIC:
             tick_id = int(item.tick_id or 0)
             previous = self._captured_last_tick_id
-            if previous is not None and tick_id <= previous:
+            if previous is not None and tick_id != previous + 1:
                 self._captured_tick_gaps.append((previous, tick_id))
-                self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_NON_MONOTONIC")
-            elif previous is not None and tick_id != previous + 1:
-                self._captured_tick_gaps.append((previous, tick_id))
-                if self._config.tick_sample_hz == CONTROL_CAPTURE_HZ:
-                    self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_GAP")
+                self._integrity_reasons.add("CAPTURED_TICK_SEQUENCE_GAP")
             self._captured_last_tick_id = tick_id
             self._captured_tick_count += 1
             self._referenced_raw_revisions.update(item.referenced_lidar_revisions)
@@ -1088,13 +1080,9 @@ class McapCaptureConsumer:
         replay_integrity_reasons = sorted(
             reason for reason in self._integrity_reasons if not _is_raw_integrity_reason(reason)
         )
-        sample_complete = not replay_integrity_reasons
-        sampled_tick_stream = self._config.tick_sample_hz != CONTROL_CAPTURE_HZ
-        replay_complete = sample_complete and not sampled_tick_stream
+        replay_complete = not replay_integrity_reasons
         raw_evidence_complete = not raw_integrity_reasons
-        complete = sample_complete and raw_evidence_complete
-        if sampled_tick_stream:
-            integrity_warnings.append("TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE")
+        complete = replay_complete and raw_evidence_complete
         if self._fault_observed and status == "PASS":
             status = "FAULT"
         if not complete and status == "PASS":
@@ -1106,8 +1094,6 @@ class McapCaptureConsumer:
         )
         integrity = {
             "complete": complete,
-            "sample_complete": sample_complete,
-            "tick_sample_hz": self._config.tick_sample_hz,
             "replay_complete": replay_complete,
             "raw_evidence_complete": raw_evidence_complete,
             "replay_integrity_reasons": replay_integrity_reasons,
@@ -1166,7 +1152,6 @@ class McapCaptureConsumer:
             "captured_event_count_before_final": self._captured_event_count,
             "integrity": integrity,
             "capture_mode": self._config.mode,
-            "capture_hz": self._config.tick_sample_hz,
             "metrics": {
                 "subscription_high_water_mark": subscription.high_water_mark,
                 "write_duration_ns": self._write_duration_ns,
@@ -1193,8 +1178,6 @@ class McapCaptureConsumer:
                 "trigger_reason": str(self._trigger_reason or ""),
                 "trigger_monotonic_ns": str(self._trigger_ns or 0),
                 "complete": "true" if complete else "false",
-                "sample_complete": "true" if sample_complete else "false",
-                "tick_sample_hz": str(self._config.tick_sample_hz),
                 "replay_complete": "true" if replay_complete else "false",
                 "raw_evidence_complete": "true" if raw_evidence_complete else "false",
                 "message_stream_sha256": digest,

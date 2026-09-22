@@ -17,7 +17,6 @@ import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent
 from v3.robot_interface import RobotInterface, RobotInterfaceError
 
@@ -63,66 +62,33 @@ def _event_printer(event: OperatorEvent) -> None:
     print(event.message, file=stream, flush=True)
 
 
-def _extract_capture_selector(argv: Sequence[str]) -> tuple[list[str], str, int, bool]:
+def _extract_capture_selector(argv: Sequence[str]) -> tuple[list[str], str, bool]:
     clean: list[str] = []
     mode = DEFAULT_CAPTURE_MODE
-    capture_hz = DEFAULT_CAPTURE_HZ
     no_trigger = False
-    mode_explicit = False
-    hz_explicit = False
+    explicit = False
     i = 0
     values = list(argv)
-
-    def set_selector(value: str) -> None:
-        nonlocal mode, capture_hz, mode_explicit, hz_explicit
-        if value in CAPTURE_MODES:
-            if mode_explicit:
-                raise ValueError("capture mode may be specified only once")
-            mode = value
-            mode_explicit = True
-            return
-        if hz_explicit:
-            raise ValueError("capture Hz may be specified only once")
-        capture_hz = validate_capture_hz(value)
-        hz_explicit = True
-
     while i < len(values):
         token = values[i]
-        if token in {"c", "--capture", "--capture-hz", "--capture-mode"}:
+        if token in {"c", "--capture"}:
+            if explicit:
+                raise ValueError("capture selector may be specified only once")
             if i + 1 >= len(values):
-                raise ValueError("capture selector requires: 50, 10, 5, 1, alap, full or nincs")
-            value = values[i + 1]
-            if token == "--capture-hz":
-                if hz_explicit:
-                    raise ValueError("capture Hz may be specified only once")
-                capture_hz = validate_capture_hz(value)
-                hz_explicit = True
-            elif token == "--capture-mode":
-                if mode_explicit or value not in CAPTURE_MODES:
-                    raise ValueError("capture mode must be one of: alap, full, nincs")
-                mode = value
-                mode_explicit = True
-            else:
-                set_selector(value)
+                raise ValueError("capture selector requires: alap, full or nincs")
+            mode = values[i + 1]
+            if mode not in CAPTURE_MODES:
+                raise ValueError("capture mode must be one of: alap, full, nincs")
+            explicit = True
             i += 2
             continue
-        if token.startswith("--capture-hz="):
-            if hz_explicit:
-                raise ValueError("capture Hz may be specified only once")
-            capture_hz = validate_capture_hz(token.split("=", 1)[1])
-            hz_explicit = True
-            i += 1
-            continue
-        if token.startswith("--capture-mode="):
-            value = token.split("=", 1)[1]
-            if mode_explicit or value not in CAPTURE_MODES:
-                raise ValueError("capture mode must be one of: alap, full, nincs")
-            mode = value
-            mode_explicit = True
-            i += 1
-            continue
         if token.startswith("--capture="):
-            set_selector(token.split("=", 1)[1])
+            if explicit:
+                raise ValueError("capture selector may be specified only once")
+            mode = token.split("=", 1)[1]
+            if mode not in CAPTURE_MODES:
+                raise ValueError("capture mode must be one of: alap, full, nincs")
+            explicit = True
             i += 1
             continue
         if token in {"nc", "nocapture", "--no-trigger"}:
@@ -131,7 +97,7 @@ def _extract_capture_selector(argv: Sequence[str]) -> tuple[list[str], str, int,
             continue
         clean.append(token)
         i += 1
-    return clean, mode, capture_hz, no_trigger
+    return clean, mode, no_trigger
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -147,8 +113,7 @@ def _parser() -> argparse.ArgumentParser:
             "  ./r m 8 0.10 0.20      wheel targets for 8 s\n"
             "  ./r t 12 0.15 -0.20    TELEOP 12 s\n\n"
             "Use 0 seconds to leave a command running: ./r rc 0\n"
-            "Capture Hz: c 50 | c 10 | c 5 | c 1   (default: 10 Hz)\n"
-            "Legacy capture mode: c alap | c full | c nincs\n"
+            "Capture anywhere: c alap | c full | c nincs   (or --capture MODE)\n"
             "Skip movement trigger: nc   (runtime shutdown may still finalize its capture slot)\n"
             "Useful: s=status, d=diag, x=STOP, th=Test Hub, cap=capture, rt=runtime."
         ),
@@ -250,7 +215,6 @@ def _status_line(interface: RobotInterface) -> dict[str, object]:
         "runtime": runtime,
         "pid": data.get("runtime_pid"),
         "capture_mode": data.get("capture_mode"),
-        "capture_hz": data.get("capture_hz"),
     }
     if isinstance(status, Mapping):
         result.update({
@@ -273,11 +237,7 @@ def _print_short_status(interface: RobotInterface) -> dict[str, object]:
         f" | safety {result.get('safety') or '-'}"
         f" | tick {result.get('tick') if result.get('tick') is not None else '-'}"
     )
-    print(
-        f"capture {result.get('capture_mode') or '-'}"
-        f" @ {result.get('capture_hz') if result.get('capture_hz') is not None else '-'} Hz"
-        f" | pid {result.get('pid') or '-'}"
-    )
+    print(f"capture {result.get('capture_mode') or '-'} | pid {result.get('pid') or '-'}")
     return result
 
 
@@ -313,27 +273,19 @@ def _run_timed_motion(
     args: argparse.Namespace,
     *,
     capture_mode: str,
-    capture_hz: int,
     no_trigger: bool,
 ) -> dict[str, object]:
     command = _canonical(args.command)
     seconds = _validate_seconds(args.seconds)
     action, parameters = _motion_request(args)
-    parameters.update({
-        "capture": not no_trigger,
-        "capture_mode": capture_mode,
-        "capture_hz": capture_hz,
-    })
+    parameters.update({"capture": not no_trigger, "capture_mode": capture_mode})
     if seconds > 0.0:
         # Timed sessions are owned by this interface process. The detached
         # heartbeat producer cannot outlive a killed/hung launcher.
         parameters["session_owner_pid"] = os.getpid()
         parameters["session_watchdog_s"] = seconds + 5.0
 
-    print(
-        f"R2B4: {command} | {'continuous' if seconds == 0 else f'{seconds:g} s'}"
-        f" | capture {capture_mode} @ {capture_hz} Hz"
-    )
+    print(f"R2B4: {command} | {'continuous' if seconds == 0 else f'{seconds:g} s'} | capture {capture_mode}")
     try:
         handle = interface.execute(action, **parameters)
     except BaseException:
@@ -534,7 +486,7 @@ def _run_testhub_with_progress(
 def main(argv: Sequence[str] | None = None) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     try:
-        clean, capture_mode, capture_hz, no_trigger = _extract_capture_selector(raw)
+        clean, capture_mode, no_trigger = _extract_capture_selector(raw)
         args = _parser().parse_args(clean)
         command = _canonical(args.command)
         interface = RobotInterface(event_sink=_event_printer)
@@ -544,7 +496,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 interface,
                 args,
                 capture_mode=capture_mode,
-                capture_hz=capture_hz,
                 no_trigger=no_trigger,
             )
         elif command == "status":
@@ -564,14 +515,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = interface.execute("operator.panic")
             print("robot: STOP + runtime shutdown requested")
         elif command == "proba":
-            output = interface.execute(
-                "operator.proba", capture_mode=capture_mode, capture_hz=capture_hz
-            )
+            output = interface.execute("operator.proba", capture_mode=capture_mode)
         elif command == "runtime":
             if args.operation == "start":
-                output = interface.execute(
-                    "operator.runtime.start", capture_mode=capture_mode, capture_hz=capture_hz
-                )
+                output = interface.execute("operator.runtime.start", capture_mode=capture_mode)
             elif args.operation == "stop":
                 output = _shutdown_with_testhub_progress(interface, capture_mode=None)
             elif args.operation == "status":
@@ -581,9 +528,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _print_json(output)
         elif command == "capture":
             if args.operation == "start":
-                output = interface.execute(
-                    "capture.start", capture_mode=capture_mode, capture_hz=capture_hz
-                )
+                output = interface.execute("capture.start", capture_mode=capture_mode)
             elif args.operation == "stop":
                 output = interface.execute("capture.stop")
             else:

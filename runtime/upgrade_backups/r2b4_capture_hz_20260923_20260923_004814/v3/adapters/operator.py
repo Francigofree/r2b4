@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
 
@@ -69,13 +68,8 @@ class OperatorInterfaceAdapter:
         params = dict(parameters)
         if action == "operator.runtime.start":
             mode = str(params.pop("capture_mode", DEFAULT_CAPTURE_MODE))
-            hz = validate_capture_hz(params.pop("capture_hz", DEFAULT_CAPTURE_HZ))
             self._reject_unknown(params)
-            return {
-                "pid": self.controller.ensure_runtime(mode, hz),
-                "capture_mode": mode,
-                "capture_hz": hz,
-            }
+            return {"pid": self.controller.ensure_runtime(mode), "capture_mode": mode}
         if action in {"operator.runtime.stop", "operator.shutdown"}:
             self._reject_unknown(params)
             self.controller.runtime_stop()
@@ -86,21 +80,16 @@ class OperatorInterfaceAdapter:
             return {"status": "STOPPED"}
         if action == "capture.start":
             mode = params.pop("capture_mode", None)
-            hz_raw = params.pop("capture_hz", None)
-            hz = None if hz_raw is None else validate_capture_hz(hz_raw)
             self._reject_unknown(params)
-            path = self.controller.capture_start(
-                None if mode is None else str(mode), hz
-            )
+            path = self.controller.capture_start(None if mode is None else str(mode))
             return {"status": "STARTED", "path": str(path) if path else None}
         if action == "capture.stop":
             self._reject_unknown(params)
             return self.controller.capture_stop()
         if action == "operator.proba":
             mode = str(params.pop("capture_mode", DEFAULT_CAPTURE_MODE))
-            hz = validate_capture_hz(params.pop("capture_hz", DEFAULT_CAPTURE_HZ))
             self._reject_unknown(params)
-            self.controller.run_proba(capture_mode=mode, capture_hz=hz)
+            self.controller.run_proba(capture_mode=mode)
             return {"status": "PASS"}
         raise KeyError(action)
 

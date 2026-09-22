@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
 
@@ -117,7 +116,6 @@ class V3ControlInterfaceAdapter:
 
         capture = bool(params.pop("capture", True))
         capture_mode = str(params.pop("capture_mode", DEFAULT_CAPTURE_MODE))
-        capture_hz = validate_capture_hz(params.pop("capture_hz", DEFAULT_CAPTURE_HZ))
         session = {
             "session_owner_pid": params.pop("session_owner_pid", None),
             "session_watchdog_s": params.pop("session_watchdog_s", None),
@@ -125,11 +123,11 @@ class V3ControlInterfaceAdapter:
         if action == "v3.command.forward":
             speed = params.pop("speed_mps", 0.15)
             self._reject_unknown(params, set())
-            return self.controller.forward(speed, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+            return self.controller.forward(speed, capture=capture, capture_mode=capture_mode, **session)
         if action == "v3.command.backward":
             speed = params.pop("speed_mps", 0.15)
             self._reject_unknown(params, set())
-            return self.controller.backward(speed, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+            return self.controller.backward(speed, capture=capture, capture_mode=capture_mode, **session)
         if action == "v3.command.teleop":
             v_mps = self._required(params, "v_mps")
             omega_rad_s = self._required(params, "omega_rad_s")
@@ -138,21 +136,21 @@ class V3ControlInterfaceAdapter:
             self._reject_unknown(params, set())
             return self.controller.start_teleop(
                 v_mps=v_mps, omega_rad_s=omega_rad_s, max_v_mps=max_v,
-                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, **session,
             )
         if action == "v3.command.wheels":
             left = self._required(params, "left_mps")
             right = self._required(params, "right_mps")
             self._reject_unknown(params, set())
-            return self.controller.wheels(left, right, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+            return self.controller.wheels(left, right, capture=capture, capture_mode=capture_mode, **session)
         if action == "v3.command.explore":
             self._reject_unknown(params, set())
-            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, **session)
         if action == "v3.command.face_person":
             max_omega = params.pop("max_omega_rad_s", 0.50)
             self._reject_unknown(params, set())
             return self.controller.faceperson(
-                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, **session,
             )
         if action == "v3.command.follow_person":
             max_v = params.pop("max_v_mps", 0.15)
@@ -160,7 +158,7 @@ class V3ControlInterfaceAdapter:
             self._reject_unknown(params, set())
             return self.controller.followperson(
                 max_v_mps=max_v, max_omega_rad_s=max_omega,
-                capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                capture=capture, capture_mode=capture_mode, **session,
             )
         raise KeyError(action)
 

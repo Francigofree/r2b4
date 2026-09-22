@@ -259,14 +259,6 @@ class McapReader:
         No global fan-out sequence continuity is assumed.
         """
         digest = hashlib.sha256()
-        capture_meta = self.latest_metadata("r2b4.capture") or {}
-        try:
-            tick_sample_hz = int(capture_meta.get("tick_sample_hz", "50"))
-        except (TypeError, ValueError) as exc:
-            raise McapReadError("invalid tick_sample_hz metadata") from exc
-        if tick_sample_hz not in {1, 5, 10, 50}:
-            raise McapReadError("invalid tick_sample_hz metadata")
-        sampled_tick_stream = tick_sample_hz != 50
         final: dict[str, object] | None = None
         counts: dict[str, int] = {}
         last_tick: int | None = None
@@ -283,13 +275,7 @@ class McapReader:
                 tick = value.get("tick_id") if isinstance(value, dict) else None
                 if type(tick) is not int or tick < 0 or tick & 0xFFFFFFFF != message.sequence:
                     raise McapReadError("invalid tick message identity")
-                if last_tick is not None and tick <= last_tick:
-                    raise McapReadError("CAPTURE_INCOMPLETE: non-monotonic captured tick")
-                if (
-                    last_tick is not None
-                    and not sampled_tick_stream
-                    and tick != last_tick + 1
-                ):
+                if last_tick is not None and tick != last_tick + 1:
                     raise McapReadError("CAPTURE_INCOMPLETE: captured tick gap")
                 last_tick = tick
             counts[message.topic] = counts.get(message.topic, 0) + 1
@@ -325,20 +311,11 @@ class McapReader:
             integrity.get("replay_complete", integrity.get("complete")) is True
             and metadata.get("replay_complete", metadata.get("complete")) == "true"
         )
-        sample_complete = (
-            integrity.get("sample_complete", integrity.get("complete")) is True
-            and metadata.get("sample_complete", metadata.get("complete")) == "true"
-        )
-        if integrity.get("tick_sample_hz", tick_sample_hz) != tick_sample_hz:
-            raise McapReadError("capture tick_sample_hz mismatch")
-        if metadata.get("tick_sample_hz", str(tick_sample_hz)) != str(tick_sample_hz):
-            raise McapReadError("capture tick_sample_hz mismatch")
         raw_complete = (
             integrity.get("raw_evidence_complete", integrity.get("complete")) is True
             and metadata.get("raw_evidence_complete", metadata.get("complete")) == "true"
         )
-        core_complete = sample_complete if sampled_tick_stream else replay_complete
-        required_complete = core_complete and (raw_complete if require_raw_evidence else True)
+        required_complete = replay_complete and (raw_complete if require_raw_evidence else True)
         replay_reasons = integrity.get(
             "replay_integrity_reasons", integrity.get("integrity_reasons")
         )

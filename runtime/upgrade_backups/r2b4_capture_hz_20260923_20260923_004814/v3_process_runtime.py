@@ -21,7 +21,6 @@ from v3.adapters.resident_command import (
     ResidentCommandMailboxConfig,
 )
 from v3.capture import CaptureSink, CaptureWindowConfig, TriggeredCaptureWorker
-from v3.capture_rate import CAPTURE_HZ_VALUES, CONTROL_CAPTURE_HZ, DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.adapters.native_lidar_port import (
@@ -379,7 +378,6 @@ def run_v3_resident_process(
     affinity_config: RuntimeAffinityConfig | None = None,
     open_imu_device: Callable | None = None,
     run_hardware: Callable[..., ResidentRuntimeReport] = run_native_hardware_resident_control,
-    capture_hz: int = CONTROL_CAPTURE_HZ,
 ) -> ResidentRuntimeReport:
     """Run one process ownership session and stop if status publication fails."""
 
@@ -396,7 +394,6 @@ def run_v3_resident_process(
         raise TypeError("stop_requested must be callable")
     if not callable(run_hardware):
         raise TypeError("run_hardware must be callable")
-    resolved_capture_hz = validate_capture_hz(capture_hz)
     if capture_session is not None and not isinstance(
         capture_session,
         (
@@ -458,8 +455,6 @@ def run_v3_resident_process(
             hardware_kwargs["affinity_config"] = affinity_config
         if open_imu_device is not None:
             hardware_kwargs["open_imu_device"] = open_imu_device
-        if capture_session is not None:
-            hardware_kwargs["record_observer_hz"] = resolved_capture_hz
         if isinstance(capture_session, McapCaptureSession):
             hub = capture_session.hub
             hardware_kwargs["record_observer"] = lambda record: hub.publish(record, topic="v3.capture_record")
@@ -675,9 +670,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--capture-pre-event-ns", type=int, default=5_000_000_000)
     parser.add_argument("--capture-post-event-ns", type=int, default=2_000_000_000)
     parser.add_argument("--capture-ingress-capacity", type=int, default=256)
-    parser.add_argument(
-        "--capture-hz", type=int, choices=CAPTURE_HZ_VALUES, default=DEFAULT_CAPTURE_HZ
-    )
     parser.add_argument("--capture-max-ticks", type=int, default=512)
     parser.add_argument("--capture-max-bytes", type=int, default=64 * 1024 * 1024)
     parser.add_argument("--capture-max-raw-scans", type=int, default=64)
@@ -765,7 +757,6 @@ def main(argv: list[str] | None = None) -> int:
                     max_session_records=args.capture_max_session_records,
                     mode=args.capture_mode,
                     require_raw_lidar_transport_end=True,
-                    tick_sample_hz=args.capture_hz,
                 ),
                 project_root=PROJECT_ROOT,
                 worker_cpu=(
@@ -814,7 +805,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
             affinity_config=affinity_config,
             open_imu_device=open_imu_device,
-            capture_hz=args.capture_hz,
         )
         output = report.as_dict()
         if capture_session is not None:

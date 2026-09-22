@@ -159,9 +159,6 @@ def _capture_sidecar_main(
                     evidence = postprocess_capture(
                         result.path,
                         project_root=Path(project_root),
-                        replay_mode=(
-                            "incident" if config.tick_sample_hz == 50 else "off"
-                        ),
                     )
                 result_queue.put(("done", result_path, evidence))
                 running = False

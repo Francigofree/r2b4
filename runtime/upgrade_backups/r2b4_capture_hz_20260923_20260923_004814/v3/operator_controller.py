@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.control_cli import RESIDENT_PROCESS_STATUS_SCHEMA, _read_status
 from v3.mcap_reader import McapReadError, McapReader
 
@@ -98,7 +97,6 @@ class OperatorController:
         self.capture_path_file = self.runtime_dir / ".r2b4_capture_path"
         self.capture_used_file = self.runtime_dir / ".r2b4_capture_triggered"
         self.capture_mode_file = self.runtime_dir / ".r2b4_capture_mode"
-        self.capture_hz_file = self.runtime_dir / ".r2b4_capture_hz"
         self.movement_capture_file = self.runtime_dir / ".r2b4_movement_capture"
         self.runtime_log_file = self.runtime_dir / ".r2b4_runtime_log"
         self.command_log_file = self.runtime_dir / ".r2b4_command_log"
@@ -130,7 +128,6 @@ class OperatorController:
             "runtime_running": snap.runtime_running,
             "runtime_pid": snap.runtime_pid,
             "capture_mode": snap.capture_mode,
-            "capture_hz": self.current_capture_hz(),
             "status": dict(snap.status) if snap.status is not None else None,
         }
 
@@ -190,11 +187,8 @@ class OperatorController:
                 stream.close()
 
     @_serialized_operator_transition
-    def runtime_start(
-        self, capture_mode: str = DEFAULT_CAPTURE_MODE, capture_hz: int = DEFAULT_CAPTURE_HZ
-    ) -> int:
+    def runtime_start(self, capture_mode: str = DEFAULT_CAPTURE_MODE) -> int:
         mode = self._validate_capture_mode(capture_mode)
-        hz = self._validate_capture_hz(capture_hz)
         old = self._runtime_pid()
         if old is not None:
             self._emit("info", "runtime: existing instance -> STOP")
@@ -212,7 +206,6 @@ class OperatorController:
         capture = self._new_capture_path()
         self._write_private_text(self.capture_path_file, str(capture))
         self._write_private_text(self.capture_mode_file, mode)
-        self._write_private_text(self.capture_hz_file, str(hz))
         self._unlink(self.capture_used_file)
         self._unlink(self.movement_capture_file)
 
@@ -231,8 +224,6 @@ class OperatorController:
                     str(capture),
                     "--capture-mode",
                     mode,
-                    "--capture-hz",
-                    str(hz),
                 ],
                 cwd=self.root,
                 stdin=subprocess.DEVNULL,
@@ -267,14 +258,10 @@ class OperatorController:
 
         self._emit("info", f"runtime: STARTED (PID {pid})")
         if mode == "alap":
-            self._emit(
-                "info", f"capture: ARMED (ALAP, native MCAP 8+2 bounded ring, {hz} Hz)"
-            )
+            self._emit("info", "capture: ARMED (ALAP, native MCAP 8+2 bounded ring)")
             self._emit("info", f"capture file: {self._display_path(capture)}")
         elif mode == "full":
-            self._emit(
-                "info", f"capture: RECORDING (FULL append-only, {hz} Hz until runtime shutdown)"
-            )
+            self._emit("info", "capture: RECORDING (FULL append-only until runtime shutdown)")
             self._emit("info", f"capture file: {self._display_path(capture)}")
         else:
             self._emit("info", "capture: OFF (no native capture consumer/writer)")
@@ -282,23 +269,15 @@ class OperatorController:
         return pid
 
     @_serialized_operator_transition
-    def ensure_runtime(
-        self, capture_mode: str = DEFAULT_CAPTURE_MODE, capture_hz: int = DEFAULT_CAPTURE_HZ
-    ) -> int:
+    def ensure_runtime(self, capture_mode: str = DEFAULT_CAPTURE_MODE) -> int:
         requested = self._validate_capture_mode(capture_mode)
-        requested_hz = self._validate_capture_hz(capture_hz)
         pid = self._runtime_pid()
         if pid is not None:
             current = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
-            current_hz = self.current_capture_hz() or DEFAULT_CAPTURE_HZ
-            if current == requested and current_hz == requested_hz:
+            if current == requested:
                 return pid
-            self._emit(
-                "info",
-                f"runtime: capture {current}@{current_hz}Hz -> "
-                f"{requested}@{requested_hz}Hz requires safe restart",
-            )
-        return self.runtime_start(requested, requested_hz)
+            self._emit("info", f"runtime: capture mode {current} -> {requested} requires safe restart")
+        return self.runtime_start(requested)
 
     def _preempt_motion_once(self) -> Exception | None:
         error: Exception | None = None
@@ -396,14 +375,13 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         speed = self._positive_speed(speed_mps)
         return self.start_teleop(
             v_mps=speed, omega_rad_s=0.0, max_v_mps=speed, max_omega_rad_s=0.60,
-            label=f"forward {speed:g} m/s", capture=capture, capture_mode=capture_mode, capture_hz=capture_hz,
+            label=f"forward {speed:g} m/s", capture=capture, capture_mode=capture_mode,
             session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
         )
 
@@ -413,14 +391,13 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
         speed = self._positive_speed(speed_mps)
         return self.start_teleop(
             v_mps=-speed, omega_rad_s=0.0, max_v_mps=speed, max_omega_rad_s=0.60,
-            label=f"backward {speed:g} m/s", capture=capture, capture_mode=capture_mode, capture_hz=capture_hz,
+            label=f"backward {speed:g} m/s", capture=capture, capture_mode=capture_mode,
             session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
         )
 
@@ -434,7 +411,6 @@ class OperatorController:
         label: str = "teleop",
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
@@ -461,8 +437,7 @@ class OperatorController:
         ]
         pid, mode = self._start_motion(
             label, capture, capture_mode, args,
-            capture_hz=capture_hz, session_owner_pid=session_owner_pid,
-            session_watchdog_s=session_watchdog_s,
+            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
         )
         return MotionHandle(pid=pid, label=label, command_id=command_id, capture_mode=mode)
 
@@ -473,7 +448,6 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
@@ -483,8 +457,7 @@ class OperatorController:
         return self.start_teleop(
             v_mps=v, omega_rad_s=omega, max_v_mps=max_v, max_omega_rad_s=max_omega,
             label=f"wheels L={left_mps:g} R={right_mps:g} m/s", capture=capture,
-            capture_mode=capture_mode, capture_hz=capture_hz,
-            session_owner_pid=session_owner_pid,
+            capture_mode=capture_mode, session_owner_pid=session_owner_pid,
             session_watchdog_s=session_watchdog_s,
         )
 
@@ -493,7 +466,6 @@ class OperatorController:
         *,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
@@ -501,8 +473,7 @@ class OperatorController:
         args = [self.python, "-m", "v3.control_cli", "explore", "--command-id", command_id]
         pid, mode = self._start_motion(
             "roomcruise", capture, capture_mode, args,
-            capture_hz=capture_hz, session_owner_pid=session_owner_pid,
-            session_watchdog_s=session_watchdog_s,
+            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
         )
         return MotionHandle(pid=pid, label="roomcruise", command_id=command_id, capture_mode=mode)
 
@@ -512,7 +483,6 @@ class OperatorController:
         max_omega_rad_s: float = 0.50,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
@@ -526,8 +496,7 @@ class OperatorController:
         ]
         pid, mode = self._start_motion(
             "faceperson", capture, capture_mode, args, require_real_motion=False,
-            capture_hz=capture_hz, session_owner_pid=session_owner_pid,
-            session_watchdog_s=session_watchdog_s,
+            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
         )
         return MotionHandle(pid=pid, label="faceperson", command_id=command_id, capture_mode=mode)
 
@@ -538,7 +507,6 @@ class OperatorController:
         max_omega_rad_s: float = 0.30,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
@@ -555,8 +523,7 @@ class OperatorController:
         ]
         pid, mode = self._start_motion(
             "followperson", capture, capture_mode, args, require_real_motion=False,
-            capture_hz=capture_hz, session_owner_pid=session_owner_pid,
-            session_watchdog_s=session_watchdog_s,
+            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
         )
         return MotionHandle(pid=pid, label="followperson", command_id=command_id, capture_mode=mode)
 
@@ -603,15 +570,6 @@ class OperatorController:
             return DEFAULT_CAPTURE_MODE
         return None
 
-    def current_capture_hz(self) -> int | None:
-        try:
-            raw = self.capture_hz_file.read_text(encoding="utf-8").strip()
-            return self._validate_capture_hz(raw)
-        except (OSError, OperatorError, ValueError):
-            if self._runtime_pid() is not None:
-                return DEFAULT_CAPTURE_HZ
-            return None
-
     def current_capture_path(self) -> Path | None:
         try:
             raw = self.capture_path_file.read_text(encoding="utf-8").strip()
@@ -620,20 +578,13 @@ class OperatorController:
         return Path(raw) if raw else None
 
     @_serialized_operator_transition
-    def capture_start(
-        self, capture_mode: str | None = None, capture_hz: int | None = None
-    ) -> Path | None:
+    def capture_start(self, capture_mode: str | None = None) -> Path | None:
         if capture_mode is None:
             mode = self.current_capture_mode() if self._runtime_pid() is not None else DEFAULT_CAPTURE_MODE
         else:
             mode = self._validate_capture_mode(capture_mode)
-        hz = (
-            self.current_capture_hz() if capture_hz is None and self._runtime_pid() is not None
-            else DEFAULT_CAPTURE_HZ if capture_hz is None
-            else self._validate_capture_hz(capture_hz)
-        )
-        assert mode is not None and hz is not None
-        self.ensure_runtime(mode, hz)
+        assert mode is not None
+        self.ensure_runtime(mode)
         if mode == "alap":
             self._ensure_fresh_capture_slot()
             self._trigger_current_capture("manual")
@@ -647,19 +598,18 @@ class OperatorController:
     def capture_stop(self) -> dict[str, object]:
         path = self.current_capture_path()
         mode = self.current_capture_mode()
-        hz = self.current_capture_hz()
         if path is None:
             raise OperatorError("capture is not armed")
         if mode == "nincs":
-            return {"state": "OFF", "mode": mode, "hz": hz, "path": str(path)}
+            return {"state": "OFF", "mode": mode, "path": str(path)}
         if mode == "full":
             self._emit("info", "capture: FULL remains continuous until runtime stop/shutdown")
-            return {"state": "RECORDING", "mode": mode, "hz": hz, "path": str(path)}
+            return {"state": "RECORDING", "mode": mode, "path": str(path)}
 
         if self.movement_capture_file.exists() and not self.capture_used_file.exists() and not path.exists():
             self._trigger_current_capture("capture-stop")
         if not self.capture_used_file.exists() and not path.exists():
-            return {"state": "ARMED", "mode": mode, "hz": hz, "path": str(path)}
+            return {"state": "ARMED", "mode": mode, "path": str(path)}
         for _ in range(70):
             if self._capture_ready(path):
                 break
@@ -669,11 +619,10 @@ class OperatorController:
     def capture_status(self) -> dict[str, object]:
         path = self.current_capture_path()
         mode = self.current_capture_mode()
-        hz = self.current_capture_hz()
         if mode == "nincs":
-            return {"state": "OFF", "mode": mode, "hz": hz, "path": str(path) if path else None}
+            return {"state": "OFF", "mode": mode, "path": str(path) if path else None}
         if path is None:
-            return {"state": "NOT_ARMED", "mode": mode, "hz": hz, "path": None}
+            return {"state": "NOT_ARMED", "mode": mode, "path": None}
         if path.is_file():
             try:
                 final = self._verified_capture_final(path)
@@ -699,19 +648,16 @@ class OperatorController:
             state = "ARMED_FOR_MOVEMENT"
         else:
             state = "ARMED"
-        return {"state": state, "mode": mode, "hz": hz, "path": str(path)}
+        return {"state": state, "mode": mode, "path": str(path)}
 
     # ------------------------------------------------------------------
     # Public API: integrated physical test sequence
     # ------------------------------------------------------------------
 
     @_serialized_operator_transition
-    def run_proba(
-        self, *, capture_mode: str = DEFAULT_CAPTURE_MODE, capture_hz: int = DEFAULT_CAPTURE_HZ
-    ) -> None:
+    def run_proba(self, *, capture_mode: str = DEFAULT_CAPTURE_MODE) -> None:
         mode = self._validate_capture_mode(capture_mode)
-        hz = self._validate_capture_hz(capture_hz)
-        self.ensure_runtime(mode, hz)
+        self.ensure_runtime(mode)
         self.stop()
         if mode == "alap":
             self._ensure_fresh_capture_slot()
@@ -754,15 +700,10 @@ class OperatorController:
     # Internal worker API used by operator_cli.  Not a motor bypass.
     # ------------------------------------------------------------------
 
-    def run_runtime_session(
-        self, capture: Path, mode: str, capture_hz: int = DEFAULT_CAPTURE_HZ
-    ) -> int:
+    def run_runtime_session(self, capture: Path, mode: str) -> int:
         mode = self._validate_capture_mode(mode)
-        hz = self._validate_capture_hz(capture_hz)
         capture = Path(capture).resolve()
         command = [self.python, "v3_process_runtime.py", "--approval", "native-resident-v3"]
-        if mode != "nincs":
-            command += ["--capture-hz", str(hz)]
         if mode == "alap":
             command += [
                 "--capture-path", self._display_path(capture),
@@ -830,14 +771,12 @@ class OperatorController:
         capture_mode: str,
         command: list[str],
         *,
-        capture_hz: int = DEFAULT_CAPTURE_HZ,
         require_real_motion: bool = True,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> tuple[int, str]:
         requested = self._validate_capture_mode(capture_mode)
-        hz = self._validate_capture_hz(capture_hz)
-        self.ensure_runtime(requested, hz)
+        self.ensure_runtime(requested)
         self.stop()
 
         mode = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
@@ -876,15 +815,11 @@ class OperatorController:
         if mode == "alap":
             if capture:
                 path = self.current_capture_path()
-                self._emit(
-                    "info",
-                    f"capture: ALAP {hz} Hz armed for STOP/FAULT -> "
-                    f"{self._display_path(path) if path else '-'}",
-                )
+                self._emit("info", f"capture: ALAP armed for STOP/FAULT -> {self._display_path(path) if path else '-'}")
             else:
                 self._emit("info", "capture: movement trigger skipped by nocapture")
         elif mode == "full":
-            self._emit("info", f"capture: FULL continuous recording @ {hz} Hz")
+            self._emit("info", "capture: FULL continuous recording")
         else:
             self._emit("info", "capture: OFF")
         return pid, mode
@@ -1060,7 +995,7 @@ class OperatorController:
         if self.current_capture_mode() != "alap" or not self._capture_used():
             return
         self._emit("info", "capture: previous bounded slot used -> re-arm requires runtime restart")
-        self.runtime_start("alap", self.current_capture_hz() or DEFAULT_CAPTURE_HZ)
+        self.runtime_start("alap")
         self._wait_ready()
 
     def _trigger_current_capture(self, origin: str) -> None:
@@ -1444,13 +1379,6 @@ class OperatorController:
         if mode not in CAPTURE_MODES:
             raise OperatorError("capture mode must be one of: alap, full, nincs")
         return mode
-
-    @staticmethod
-    def _validate_capture_hz(value: object) -> int:
-        try:
-            return validate_capture_hz(value)
-        except ValueError as exc:
-            raise OperatorError(str(exc)) from exc
 
     def _display_path(self, path: Path | None) -> str:
         if path is None:

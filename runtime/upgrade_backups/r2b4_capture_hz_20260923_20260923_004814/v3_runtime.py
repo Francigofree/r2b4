@@ -21,7 +21,6 @@ from v3.composition.resident_physical_control import (
     ResidentPhysicalControlComposition,
     ResidentPhysicalControlConfig,
 )
-from v3.capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
 from v3.contracts import LifecycleState, SafetyDecision, TickContext
 from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.engine import TickExecutionError, TickResult
@@ -255,7 +254,6 @@ def run_resident_physical_control(
     tick_observer: Callable[[TickResult], None] | None = None,
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
-    record_observer_hz: int = CONTROL_CAPTURE_HZ,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
 ) -> ResidentRuntimeReport:
@@ -282,8 +280,6 @@ def run_resident_physical_control(
         raise TypeError("readiness_observer must be callable or None")
     if record_observer is not None and not callable(record_observer):
         raise TypeError("record_observer must be callable or None")
-    resolved_record_hz = validate_capture_hz(record_observer_hz)
-    record_period_ns = 1_000_000_000 // resolved_record_hz
     if type(timing_enabled) is not bool:
         raise TypeError("timing_enabled must be bool")
     timing = (
@@ -321,7 +317,6 @@ def run_resident_physical_control(
     tick_id = 0
     normal_tick_count = 0
     last_checkpoint_ns: int | None = None
-    next_record_observer_ns: int | None = None
     last_result: TickResult | None = None
     try:
         while True:
@@ -414,19 +409,7 @@ def run_resident_physical_control(
                     )
 
             observer_started_ns = time.perf_counter_ns()
-            force_capture_record = bool(
-                last_result.trace.fault_layer is not None
-                or last_result.final_actuation.safety_decision is SafetyDecision.FAULT
-            )
-            scheduled_capture_record = bool(
-                record_observer is not None
-                and (
-                    resolved_record_hz == CONTROL_CAPTURE_HZ
-                    or next_record_observer_ns is None
-                    or context.monotonic_ns >= next_record_observer_ns
-                )
-            )
-            if record_observer is not None and (scheduled_capture_record or force_capture_record):
+            if record_observer is not None:
                 checkpoint_started_ns = time.perf_counter_ns()
                 checkpoint_created = False
                 if (
@@ -456,12 +439,6 @@ def run_resident_physical_control(
                         "CAPTURE_TAP",
                         time.perf_counter_ns() - capture_started_ns,
                     )
-                if scheduled_capture_record and resolved_record_hz != CONTROL_CAPTURE_HZ:
-                    if next_record_observer_ns is None:
-                        next_record_observer_ns = context.monotonic_ns + record_period_ns
-                    else:
-                        missed = max(0, context.monotonic_ns - next_record_observer_ns) // record_period_ns
-                        next_record_observer_ns += (missed + 1) * record_period_ns
             if tick_observer is not None:
                 tick_observer(last_result)
             if readiness_observer is not None:
@@ -575,7 +552,6 @@ def run_owned_resident_physical_control(
             tick_observer=tick_observer,
             readiness_observer=readiness_observer,
             record_observer=record_observer,
-            record_observer_hz=record_observer_hz,
             timing_enabled=timing_enabled,
             trajectory_rollout_backend=trajectory_rollout_backend,
         )

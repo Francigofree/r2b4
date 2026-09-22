@@ -17,14 +17,10 @@ def postprocess_capture(
     capture_path: str | Path,
     *,
     project_root: str | Path,
-    replay_mode: str = "incident",
 ) -> dict[str, object]:
     capture = Path(capture_path).resolve()
     root = Path(project_root).resolve()
     output_dir = capture.with_suffix(".evidence")
-    replay = str(replay_mode).strip().lower()
-    if replay not in {"off", "incident", "full"}:
-        raise ValueError("replay_mode must be off, incident or full")
     command = [
         sys.executable,
         "-m",
@@ -34,7 +30,7 @@ def postprocess_capture(
         "--output-dir",
         str(output_dir),
         "--replay",
-        replay,
+        "incident",
         "--pytest",
         "off",
     ]

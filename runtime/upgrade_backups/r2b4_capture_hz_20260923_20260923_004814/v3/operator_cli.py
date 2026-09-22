@@ -8,7 +8,6 @@ import signal
 import sys
 from pathlib import Path
 
-from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ
 from v3.operator_controller import (
     CAPTURE_MODES,
     DEFAULT_CAPTURE_MODE,
@@ -143,7 +142,6 @@ def _parser() -> argparse.ArgumentParser:
     worker = sub.add_parser("__runtime-session")
     worker.add_argument("--capture-path", required=True)
     worker.add_argument("--capture-mode", choices=tuple(sorted(CAPTURE_MODES)), required=True)
-    worker.add_argument("--capture-hz", type=int, choices=CAPTURE_HZ_VALUES, default=DEFAULT_CAPTURE_HZ)
     return parser
 
 
@@ -214,9 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         controller = OperatorController(event_sink=_event_printer)
 
         if args.command == "__runtime-session":
-            return controller.run_runtime_session(
-                Path(args.capture_path), args.capture_mode, args.capture_hz
-            )
+            return controller.run_runtime_session(Path(args.capture_path), args.capture_mode)
 
         if args.command == "status":
             _print_status(controller, diagnostic=False)
