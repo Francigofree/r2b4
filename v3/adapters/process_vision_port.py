@@ -368,20 +368,21 @@ class ProcessVisionPort:
             self._set_failed("VISION_DETECTION_STATUS_INVALID")
             return
         with self._condition:
+            if self._fatal_error:
+                return
             self._camera_edge = edge
             self._detection = detection
             self._detection_status = status
             self._condition.notify_all()
 
     def _drain_state(self) -> None:
-        newest: object | None = None
         for _ in range(_STATE_QUEUE_CAPACITY):
             try:
-                newest = self._state_queue.get_nowait()
+                message = self._state_queue.get_nowait()
             except queue.Empty:
                 break
-        if newest is not None:
-            self._apply_message(newest)
+            # Failure cannot be coalesced away by a later healthy snapshot.
+            self._apply_message(message)
 
     def _collect_state(self) -> None:
         try:
@@ -407,6 +408,8 @@ class ProcessVisionPort:
         with self._condition:
             edge = self._camera_edge
             error = self._fatal_error or edge.status.last_error
+            if not self._closed and not self._process.is_alive():
+                error = error or "VISION_OWNER_PROCESS_EXITED"
         frame = edge.frame
         return latest_state_snapshot(
             name="vision.camera",
@@ -430,6 +433,8 @@ class ProcessVisionPort:
             detection = self._detection
             status = self._detection_status
             error = self._fatal_error or status.last_error
+            if not self._closed and not self._process.is_alive():
+                error = error or "VISION_OWNER_PROCESS_EXITED"
         return latest_state_snapshot(
             name="vision.person_detection",
             observed_monotonic_ns=observed_monotonic_ns,

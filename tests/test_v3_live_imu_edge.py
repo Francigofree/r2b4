@@ -83,6 +83,8 @@ def test_native_imu_source_closes_one_typed_heading_sample():
             21,
             990,
             (
+                DataField("measurement_stale", False),
+                DataField("measurement_timing_valid", True),
                 DataField("yaw_rad", math.pi / 2.0),
                 DataField("omega_rad_s", -0.2),
                 DataField("confidence", 0.9),
@@ -136,7 +138,7 @@ def test_invalid_imu_timing_is_rejected_by_existing_l2_admission():
 
     assert admitted.accepted == ()
     assert tuple(item.reason for item in admitted.rejected) == (
-        RejectionReason.UNTRUSTED,
+        RejectionReason.TIME_ALIGNMENT_FAILED,
     )
     assert admitted.degraded_sources == ("BNO055_IMU",)
 

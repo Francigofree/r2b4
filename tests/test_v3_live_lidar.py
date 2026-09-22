@@ -113,7 +113,7 @@ def test_native_lidar_source_closes_health_and_pose_from_one_matcher_result():
     )
     health, safety, local, localization, diagnostics, pose = snapshot.samples
     assert health.sequence == safety.sequence == 31
-    assert health.captured_monotonic_ns == safety.captured_monotonic_ns == 960
+    assert health.captured_monotonic_ns == safety.captured_monotonic_ns == 940
     assert localization.sequence == diagnostics.sequence == pose.sequence == 17
     assert localization.captured_monotonic_ns == diagnostics.captured_monotonic_ns == pose.captured_monotonic_ns == 980
     assert {field.key: field.value for field in local.values} == {

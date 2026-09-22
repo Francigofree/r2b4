@@ -353,7 +353,7 @@ class NativeLidarSource:
 
     transport_semantics = TransportSemantics.LATEST_STATE
 
-    __slots__ = ("_backend", "_config", "_local_points_cache_key", "_local_points_cache", "_latest")
+    __slots__ = ("_backend", "_config", "_local_points_cache_key", "_local_points_cache", "_latest", "_error")
 
     def __init__(
         self,
@@ -365,6 +365,7 @@ class NativeLidarSource:
         self._backend = backend
         self._config = config
         self._latest = None
+        self._error = None
         self._local_points_cache_key: tuple[int, int] | None = None
         self._local_points_cache: DeviceSample | None = None
 
@@ -375,7 +376,7 @@ class NativeLidarSource:
             source_sequence=None if scan is None or scan.revision == 0 else scan.revision,
             source_monotonic_ns=None if scan is None else scan.measurement_monotonic_ns,
             stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
-            error="LIDAR_DEVICE_FAILED" if scan is not None and scan.health == "ERROR" else None,
+            error=self._error or ("LIDAR_DEVICE_FAILED" if scan is not None and scan.health == "ERROR" else None),
             stale=scan is not None and scan.stale,
             timing_valid=scan is None or scan.timing_valid,
         )
@@ -387,6 +388,7 @@ class NativeLidarSource:
             source_sequence=None if reading is None or reading.revision == 0 else reading.revision,
             source_monotonic_ns=None if reading is None else reading.captured_monotonic_ns,
             stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
+            error=self._error,
             stale=reading is not None and reading.stale,
             timing_valid=reading is None or reading.timing_valid,
             degraded=reading is not None and (reading.pose is None or reading.confidence < self._config.minimum_confidence),
@@ -399,10 +401,15 @@ class NativeLidarSource:
     def read(self, context: TickContext) -> LiveDeviceSnapshot:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
-        reading = self._backend.read(context)
+        try:
+            reading = self._backend.read(context)
+        except Exception as exc:
+            self._error = f"{type(exc).__name__}:{exc}"[:256]
+            raise
         if not isinstance(reading, LidarHealthReading):
             raise TypeError("lidar backend must return LidarHealthReading")
         self._latest = reading
+        self._error = None
 
         scan = reading.scan
         if scan is None:

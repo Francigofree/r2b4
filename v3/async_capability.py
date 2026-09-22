@@ -64,11 +64,12 @@ class CapabilityCounters:
     restarts: int = 0
     late_rejected: int = 0
     deadline_missed: int = 0
+    completed: int = 0
 
     def __post_init__(self) -> None:
         for value in (
             self.produced, self.accepted, self.superseded, self.stale,
-            self.errors, self.restarts, self.late_rejected, self.deadline_missed,
+            self.errors, self.restarts, self.late_rejected, self.deadline_missed, self.completed,
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError("capability counters must be non-negative integers")

@@ -78,6 +78,7 @@ class NativePersonDetectionSource:
         if not status.running:
             return self._failed(context, "PERSON_DETECTOR_NOT_RUNNING")
         if result is None:
+            self._last_capability = None
             return LiveDeviceSnapshot(
                 context,
                 DeviceHealth(self.device_id, DeviceHealthState.UNKNOWN, "PERSON_DETECTOR_NO_RESULT"),

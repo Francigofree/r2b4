@@ -140,7 +140,7 @@ def test_post_tick_dispatch_submits_pending_request_before_next_input_closure():
     production.close()
 
 
-def test_worker_timeout_is_closed_as_typed_planner_input_after_actual_submit():
+def test_missing_delivery_is_closed_as_transport_failure_after_actual_submit():
     config = control_config()
     backend = DelayedBackend(config.navigation, delay_calls=10_000)
     production = NativeControlComposition(
@@ -159,11 +159,11 @@ def test_worker_timeout_is_closed_as_typed_planner_input_after_actual_submit():
     assert closed.planner_input.error is None
     assert production.run_tick(closed).trace.fault_layer is None
 
-    expired = _retime(values[3], 1_631_000_001)
+    expired = _retime(values[3], 3_331_000_001)
     closed = production.close_inputs(expired)
     assert closed.planner_input is not None
     assert closed.planner_input.request_context is not None
-    assert closed.planner_input.error == "ASYNC_L6_DEADLINE_MISSED"
+    assert closed.planner_input.error == "ASYNC_L6_TRANSPORT_TIMEOUT"
     result = production.run_tick(closed)
     assert result.trace.fault_layer == "L6"
     assert result.final_actuation.left_output == 0

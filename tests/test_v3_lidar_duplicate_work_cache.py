@@ -94,8 +94,8 @@ def test_duplicate_raw_revision_reuses_immutable_point_conversion_but_updates_ag
 
     assert first.scan is not None and second.scan is not None
     assert first.scan.local_points is second.scan.local_points
-    assert first.scan.measurement_age_ns == 20_000_000
-    assert second.scan.measurement_age_ns == 40_000_000
+    assert first.scan.measurement_age_ns == 70_000_000
+    assert second.scan.measurement_age_ns == 90_000_000
 
     port.raw = port._snapshot(32, 1_010_000_000)
     third = backend.read(TickContext(3, 1_030_000_000))
@@ -122,8 +122,8 @@ def test_duplicate_revision_reuses_local_points_device_sample_only():
     assert first_local is second_local
     # Time-dependent evidence is NOT cached/refreshed falsely.
     assert first_health is not second_health
-    assert _field(first_health, "age_ns") == 20_000_000
-    assert _field(second_health, "age_ns") == 40_000_000
+    assert _field(first_health, "age_ns") == 70_000_000
+    assert _field(second_health, "age_ns") == 90_000_000
 
     port.raw = port._snapshot(32, 1_010_000_000)
     third = source.read(TickContext(3, 1_030_000_000))

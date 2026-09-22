@@ -233,6 +233,9 @@ def matcher_process_main(
                     "output_drops": output_drops,
                 },
             )
+            # A real compute/contract failure cannot be overwritten by the next
+            # latest-state result. Physical LiDAR acquisition remains independent.
+            return
 
 
 __all__ = ["matcher_process_main", "put_latest"]

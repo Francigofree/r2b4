@@ -15,6 +15,7 @@ from v3.contracts import (
     DeviceHealthState,
     DeviceSample,
     TickContext,
+    RejectionReason,
 )
 from v3.layers.l2_admission import AdmissionConfig, InputAdmission
 
@@ -107,8 +108,8 @@ def test_invalid_measurement_timing_is_degraded_without_device_failure():
         AcquisitionFrame(batch.context, batch.samples, batch.device_health)
     )
 
-    assert tuple(item.kind for item in admitted.accepted) == ("wheel_velocity",)
-    assert admitted.rejected == ()
+    assert admitted.accepted == ()
+    assert tuple(item.reason for item in admitted.rejected) == (RejectionReason.TIME_ALIGNMENT_FAILED,)
     assert admitted.degraded_sources == ("KIT0085_ENCODER",)
 
 

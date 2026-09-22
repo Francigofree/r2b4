@@ -457,6 +457,7 @@ class NativeLidarPort:
         self._result_drops = 0
         self._matcher_errors = 0
         self._last_matcher_reason = ""
+        self._matcher_error = ""
         self._fatal_error = ""
 
     @property
@@ -585,6 +586,7 @@ class NativeLidarPort:
                 "queue_drops": self._queue_drops,
                 "result_drops": self._result_drops,
                 "matcher_errors": self._matcher_errors,
+                "matcher_error": self._matcher_error,
                 "last_matcher_reason": self._last_matcher_reason,
                 "fatal_error": self._fatal_error,
             }
@@ -616,9 +618,7 @@ class NativeLidarPort:
             return "ERROR"
         if snapshot is None:
             return "STALE"
-        age_ns = self._checked_clock() - int(
-            round(snapshot.raw_scan_timestamp * 1_000_000_000.0)
-        )
+        age_ns = self._checked_clock() - snapshot.measurement_monotonic_ns
         if age_ns < 0 or age_ns > int(self._config.driver.stale_timeout_s * 1e9):
             return "STALE"
         return "OK"
@@ -711,7 +711,7 @@ class NativeLidarPort:
             raise RuntimeError("native LiDAR result queue is unavailable")
         newest: object | None = None
         drained = 0
-        while True:
+        for _ in range(MATCHER_QUEUE_CAPACITY):
             try:
                 value = result_queue.get_nowait()
             except queue.Empty:
@@ -724,19 +724,25 @@ class NativeLidarPort:
             self._accept_matcher_packet(newest)
 
     def _accept_matcher_packet(self, packet: object) -> None:
+        if self._matcher_error:
+            return
         if not isinstance(packet, Mapping):
             self._matcher_errors += 1
             self._last_matcher_reason = "INVALID_RESULT_TYPE"
+            self._matcher_error = self._last_matcher_reason
             return
         kind = packet.get("kind")
         if kind != "result":
             self._matcher_errors += int(kind == "error")
             self._result_drops += int(kind == "drop")
             self._last_matcher_reason = str(packet.get("reason", kind or "UNKNOWN"))
+            if kind != "drop":
+                self._matcher_error = self._last_matcher_reason[:256]
             return
         if packet.get("matcher_contract_id") != MATCHER_CONTRACT_ID:
             self._matcher_errors += 1
             self._last_matcher_reason = "MATCHER_CONTRACT_MISMATCH"
+            self._matcher_error = self._last_matcher_reason
             return
         scan_revision = int(packet.get("scan_revision", 0) or 0)
         captured_ns = int(packet.get("captured_monotonic_ns", 0) or 0)

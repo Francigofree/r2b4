@@ -706,7 +706,7 @@ class ProcessLidarPort:
     def localization_capability_snapshot(self, observed_monotonic_ns: int, *, stale_after_ns: int = 250_000_000):
         result = self._matcher_result
         status = self.get_runtime_status()
-        error = self._fatal_error or None
+        error = self._fatal_error or status.get("matcher_error") or None
         if not self._stopped and not status.get("matcher_process_alive", False):
             error = error or "LIDAR_MATCHER_NOT_RUNNING"
         return latest_state_snapshot(

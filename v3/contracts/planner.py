@@ -77,6 +77,12 @@ class PlannerCompletion:
             raise TypeError("planner completion requires typed identity and timing")
         if (self.result is None) == (self.error is None):
             raise ValueError("planner completion requires one result or error")
+        if self.identity.source_context.monotonic_ns > self.timing.submit_ns:
+            raise ValueError("planner submission cannot precede source context")
+        if self.result is not None and not isinstance(self.result, TrajectoryRolloutResult):
+            raise TypeError("invalid planner completion result")
+        if self.error is not None and (not isinstance(self.error, str) or not self.error or len(self.error) > 256):
+            raise ValueError("planner completion error must be bounded and non-empty")
         if self.result is not None and self.result.source_context != self.identity.source_context:
             raise ValueError("planner completion source context mismatch")
 

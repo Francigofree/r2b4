@@ -93,6 +93,7 @@ class ProcessTrajectoryRolloutBackend:
         "_late_rejected_count", "_error_count", "_last_completed_request_id",
         "_last_completed_source_ns", "_request_sources",
         "_running", "_pending", "_deadline_missed_count", "_last_timing",
+        "_accepted_count",
     )
 
     def __init__(self, config: NavigationConfig, *, worker_cpu=None, strict_affinity=True, ready_timeout_s=5.0):
@@ -120,6 +121,7 @@ class ProcessTrajectoryRolloutBackend:
         self._closed = False
         self._submitted_count = 0
         self._completed_count = 0
+        self._accepted_count = 0
         self._abandoned_count = 0
         self._superseded_count = 0
         self._late_rejected_count = 0
@@ -227,6 +229,7 @@ class ProcessTrajectoryRolloutBackend:
                             message.result,
                         )
                         self._running = None
+                        self._completed_count += 1
                         if message.request_id in self._abandoned:
                             self._abandoned.discard(message.request_id)
                             self._request_sources.pop(message.request_id, None)
@@ -279,6 +282,12 @@ class ProcessTrajectoryRolloutBackend:
             request_id = self._next_id
             self._next_id += 1
             item = _WorkItem(self._generation, request_id, request, time.monotonic_ns())
+            # An unconsumed completion also belongs to the superseded state.
+            for old_id in self._buffer:
+                self._request_sources.pop(old_id, None)
+                self._superseded_count += 1
+                self._late_rejected_count += 1
+            self._buffer.clear()
             if self._running is None:
                 self._dispatch_locked(item)
             else:
@@ -316,7 +325,7 @@ class ProcessTrajectoryRolloutBackend:
                 return None
             self._buffer.pop(request_id)
             self._request_sources.pop(request_id, None)
-            self._completed_count += 1
+            self._accepted_count += 1
             self._last_completed_request_id = request_id
             self._last_completed_source_ns = completion.identity.source_context.monotonic_ns
             self._last_timing = completion.timing
@@ -344,6 +353,9 @@ class ProcessTrajectoryRolloutBackend:
     def note_deadline_missed(self) -> None:
         with self._lock:
             self._deadline_missed_count += 1
+            self._accepted_count -= 1
+            self._last_completed_request_id = None
+            self._last_completed_source_ns = None
 
     @property
     def last_completion_timing(self) -> CompletionTiming | None:
@@ -356,11 +368,15 @@ class ProcessTrajectoryRolloutBackend:
             if not self._closed and not self._process.is_alive():
                 error = error or "ASYNC_L6_WORKER_EXITED"
             pending = self._pending or self._running
+            buffered = next(iter(self._buffer.values()), None)
             if pending_identity is None and pending is not None:
                 pending_identity = WorkerIdentity(self._generation, pending.request_id, pending.request.context)
+            elif pending_identity is None and buffered is not None:
+                pending_identity = buffered.identity
             counters = CapabilityCounters(
                 produced=self._submitted_count,
-                accepted=self._completed_count,
+                accepted=self._accepted_count,
+                completed=self._completed_count,
                 superseded=self._superseded_count,
                 errors=self._error_count,
                 late_rejected=self._late_rejected_count,
@@ -380,7 +396,8 @@ class ProcessTrajectoryRolloutBackend:
             running=running,
             counters=counters,
             stale_after_ns=stale_after_ns,
-            pending_submit_ns=None if pending is None else pending.submit_ns,
+            pending_submit_ns=(pending.submit_ns if pending is not None else
+                               None if buffered is None else buffered.timing.submit_ns),
         )
 
     def close(self) -> None:

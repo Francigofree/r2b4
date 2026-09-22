@@ -259,7 +259,7 @@ def test_async_l6_config_is_explicit_and_defaults_off_for_old_documents():
     assert parsed.async_l6 == enabled
 
 
-def test_previous_plan_staleness_still_fails_closed_before_release_tick():
+def test_previous_plan_staleness_holds_before_release_tick():
     """The P0 fix must not weaken pre-release fail-closed freshness."""
 
     config = NavigationConfig()
@@ -277,8 +277,10 @@ def test_previous_plan_staleness_still_fails_closed_before_release_tick():
 
     # Pending result releases at tick 10. At tick 6 the old plan is already
     # 120 ms old, so continuing to drive on it must still fail closed.
-    with pytest.raises(RuntimeError, match="ASYNC_L6_PLAN_STALE"):
-        _evaluate(navigator, manager, 6)
+    held = _evaluate(navigator, manager, 6)
+    assert held.reason == "PLANNER_STALE_HOLD"
+    assert not held.trajectory_candidates
+    assert held.velocity_target is None
 
     backend.close()
 
@@ -413,7 +415,7 @@ def test_late_async_rollout_keeps_fresh_previous_plan():
     backend.close()
 
 
-def test_async_rollout_fails_when_previous_plan_becomes_stale():
+def test_async_rollout_holds_when_previous_plan_becomes_stale():
     config = NavigationConfig(trajectory_replan_interval_ns=100_000_000)
     navigator = TrajectoryNavigator(
         config,
@@ -429,6 +431,8 @@ def test_async_rollout_fails_when_previous_plan_becomes_stale():
 
     _evaluate_at(navigator, manager, 10, 1_200_000_000)
 
-    with pytest.raises(RuntimeError, match="ASYNC_L6_PLAN_STALE"):
-        _evaluate_at(navigator, manager, 18, 1_360_000_000)
+    held = _evaluate_at(navigator, manager, 18, 1_360_000_000)
+    assert held.reason == "PLANNER_STALE_HOLD"
+    assert not held.trajectory_candidates
+    assert held.velocity_target is None
 

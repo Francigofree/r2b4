@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 from v3.contracts import TickContext
+from v3.async_capability import TransportSemantics
 from v3.runtime_performance import apply_current_affinity
 
 from .counter_encoder import CounterEncoderBackendConfig, NativeCounterEncoderBackend
@@ -100,6 +101,8 @@ def _encoder_process_main(
 class ProcessEncoderBackend:
     """Non-blocking latest-reading proxy for the process-owned encoder."""
 
+    transport_semantics = TransportSemantics.LATEST_STATE
+
     __slots__ = (
         "_closed",
         "_fatal_error",
@@ -183,7 +186,8 @@ class ProcessEncoderBackend:
         if message[0] == "reading" and len(message) == 2:
             reading = message[1]
             if isinstance(reading, EncoderVelocityReading):
-                self._latest = reading
+                if self._latest is None or reading.sequence > self._latest.sequence:
+                    self._latest = reading
             else:
                 self._fatal_error = "ENCODER_READING_INVALID"
         elif message[0] == "error" and len(message) >= 3:

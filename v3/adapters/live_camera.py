@@ -90,6 +90,7 @@ class NativeCameraSource:
         if status.last_error:
             return self._failed(context, "CAMERA_RUNTIME_ERROR")
         if frame is None:
+            self._last_capability = None
             return LiveDeviceSnapshot(
                 context,
                 DeviceHealth(self.device_id, DeviceHealthState.UNKNOWN, "CAMERA_NO_FRAME"),

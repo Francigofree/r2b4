@@ -182,6 +182,7 @@ class NativeLatestLidarBackend:
             and status.get("running") is True
             and type(status.get("matcher_process_alive")) is bool
             and status.get("matcher_process_alive") is True
+            and not status.get("matcher_error")
         )
 
     def _read_raw_snapshot(

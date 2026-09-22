@@ -120,7 +120,7 @@ def test_request_queue_full_is_explicit_and_bounded():
     try:
         backend._request_queue = FullQueue()
         started = time.monotonic()
-        with pytest.raises(RuntimeError, match="ASYNC_L6_REQUEST_QUEUE_FULL"):
+        with pytest.raises(RuntimeError, match="ASYNC_L6_REQUEST_TRANSPORT_FAILED"):
             backend.submit(_request())
         assert time.monotonic() - started < 0.25
     finally:
@@ -148,31 +148,20 @@ def test_worker_exit_becomes_explicit_collector_error():
         backend.close()
 
 
-def test_result_buffer_full_fails_explicitly_instead_of_unbounded_growth():
-    backend = ProcessTrajectoryRolloutBackend(
-        NavigationConfig(),
-        worker_cpu=None,
-        strict_affinity=False,
-    )
+def test_unconsumed_completions_are_superseded_without_result_backlog():
+    backend = ProcessTrajectoryRolloutBackend(NavigationConfig(), worker_cpu=None, strict_affinity=False)
     try:
-        buffered_ids: list[int] = []
-        for tick_id in range(4):
+        ids = []
+        for tick_id in range(8):
             request_id = backend.submit(_request(tick_id))
-            buffered_ids.append(request_id)
-            _wait_until(lambda rid=request_id: _buffer_contains(backend, rid))
-
-        overflow_id = backend.submit(_request(4))
-        _wait_until(
-            lambda: _collector_error(backend) == "ASYNC_L6_RESULT_BUFFER_FULL"
-        )
-
-        # Already completed requested results remain consumable; the overflow is
-        # not silently accepted and future backend use sees the explicit fault.
-        assert backend.take(buffered_ids[0]) is not None
-        with pytest.raises(RuntimeError, match="ASYNC_L6_RESULT_BUFFER_FULL"):
-            backend.take(overflow_id)
-        with pytest.raises(RuntimeError, match="ASYNC_L6_RESULT_BUFFER_FULL"):
-            backend.submit(_request(5))
+            ids.append(request_id)
+            _wait_until(lambda: _buffer_contains(backend, request_id))
+            with backend._lock:
+                assert len(backend._buffer) == 1
+                assert len(backend._request_sources) == 1
+        assert all(backend.take(request_id) is None for request_id in ids[:-1])
+        assert backend.take(ids[-1]) is not None
+        assert backend.capability_snapshot(time.monotonic_ns()).counters.superseded == 7
     finally:
         backend.close()
 
@@ -200,4 +189,71 @@ def test_abandoned_old_request_cannot_leak_into_new_request():
         assert new_result.source_context == new_request.context
         assert backend.take(old_id) is None
     finally:
+        backend.close()
+
+
+def test_running_plus_one_latest_replacement_dispatches_only_a_then_d():
+    from v3.adapters.l6_planner_process import _WorkResult
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+
+    backend = ProcessTrajectoryRolloutBackend(NavigationConfig(), worker_cpu=None, strict_affinity=False)
+    real_queue = backend._request_queue
+
+    class HeldQueue:
+        def __init__(self):
+            self.items = []
+
+        def put_nowait(self, item):
+            self.items.append(item)
+
+    held = HeldQueue()
+    try:
+        backend._request_queue = held
+        a, b, c, d = [backend.submit(_request(tick)) for tick in range(4)]
+        assert len(held.items) == 1
+        assert held.items[0].request_id == a
+        with backend._lock:
+            assert backend._running.request_id == a
+            assert backend._pending.request_id == d
+            assert len(backend._request_sources) == 2
+            assert len(backend._abandoned) == 1
+        # Old generation cannot discharge the current running slot.
+        backend._result_queue.put(_WorkResult(0, a, TrajectoryRolloutComputer(NavigationConfig()).compute(_request(0))))
+        _wait_until(lambda: backend.capability_snapshot(time.monotonic_ns()).counters.late_rejected == 1)
+        with backend._lock:
+            assert backend._running.request_id == a
+        backend._request_queue = real_queue
+        real_queue.put_nowait(held.items[0])
+        _wait_until(lambda: _buffer_contains(backend, d))
+        assert all(backend.take(old_id) is None for old_id in (a, b, c))
+        completion = backend.take_completion(d)
+        assert completion.identity == backend.request_identity(d, _request(3).context)
+        assert completion.result == TrajectoryRolloutComputer(NavigationConfig()).compute(_request(3))
+        timing = completion.timing
+        assert timing.submit_ns <= timing.worker_start_ns <= timing.worker_completed_ns <= timing.collector_received_ns
+        assert backend.capability_snapshot(time.monotonic_ns()).counters.superseded == 3
+        assert backend.capability_snapshot(time.monotonic_ns()).counters.late_rejected == 2
+    finally:
+        backend._request_queue = real_queue
+        backend.close()
+
+
+def test_hung_running_worker_watchdog_survives_replacement_submission():
+    backend = ProcessTrajectoryRolloutBackend(NavigationConfig(), worker_cpu=None, strict_affinity=False)
+    real_queue = backend._request_queue
+
+    class HeldQueue:
+        def put_nowait(self, item):
+            pass
+
+    try:
+        backend._request_queue = HeldQueue()
+        backend.submit(_request(0))
+        started = backend._running.submit_ns
+        backend.submit(_request(1))
+        latest = backend.submit(_request(2))
+        with pytest.raises(RuntimeError, match="ASYNC_L6_TRANSPORT_TIMEOUT"):
+            backend.take_completion(latest, visible_ns=started + 2_000_000_001)
+    finally:
+        backend._request_queue = real_queue
         backend.close()

@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 
 from v3.adapters.bno055_device import NativeBno055Device, NativeBno055DeviceConfig
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.async_capability import TransportSemantics
 
 
 _HISTORY_SIZE = 16
@@ -61,6 +62,8 @@ def _acquire_imu(config, open_bus, lock, sequence, times, values,
 
 class ProcessBno055Device:
     """Sample-port-compatible proxy; no motor or production layer authority."""
+
+    transport_semantics = TransportSemantics.LATEST_STATE
 
     def __init__(self, config: NativeBno055DeviceConfig, *, open_bus: Callable,
                  worker_cpu: int | None = None, strict_affinity: bool = False) -> None:

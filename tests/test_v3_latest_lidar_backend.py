@@ -173,7 +173,7 @@ class Port:
 def _backend(port: Port) -> NativeLatestLidarBackend:
     return NativeLatestLidarBackend(
         port,
-        LatestLidarBackendConfig(maximum_result_age_ns=20_000_000),
+        LatestLidarBackendConfig(maximum_result_age_ns=100_000_000),
     )
 
 
@@ -186,7 +186,7 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
     assert port.status_calls == 1
     assert port.raw_calls == 1
     assert reading.revision == 17
-    assert reading.captured_monotonic_ns == 995_000_000
+    assert reading.captured_monotonic_ns == 930_000_000
     assert reading.measurement_age_ns == 70_000_000
     assert reading.confidence == 0.8
     assert reading.pose is not None
@@ -279,8 +279,8 @@ def test_missing_latest_result_keeps_independent_physical_safety_without_pose():
     )
 
 
-def test_result_age_and_runtime_stale_health_are_degraded():
-    old_port = Port(_result(timestamp=0.970), _status())
+def test_measurement_age_and_runtime_stale_health_are_degraded():
+    old_port = Port(_result(timestamp=0.995, source_raw_scan_timestamp=0.900), _status())
     status_port = Port(_result(), _status(health="STALE"))
 
     old = _backend(old_port).read(TickContext(7, 1_000_000_000))
@@ -290,7 +290,7 @@ def test_result_age_and_runtime_stale_health_are_degraded():
     assert status.timing_valid is True and status.stale is True
 
 
-def test_explicit_same_tick_acquisition_skew_is_bounded_and_clamped():
+def test_recent_completion_does_not_rejuvenate_or_retimestamp_measurement():
     port = Port(
         _result(
             timestamp=1.005,
@@ -309,8 +309,8 @@ def test_explicit_same_tick_acquisition_skew_is_bounded_and_clamped():
     reading = backend.read(TickContext(7, 1_000_000_000))
 
     assert reading.timing_valid is True
-    assert reading.stale is False
-    assert reading.captured_monotonic_ns == 1_000_000_000
+    assert reading.stale is True
+    assert reading.captured_monotonic_ns == 954_000_000
     assert reading.measurement_age_ns == 46_000_000
 
 
@@ -333,7 +333,7 @@ def test_result_beyond_explicit_same_tick_skew_remains_failed():
     assert backend.read(TickContext(7, 1_000_000_000)).timing_valid is False
 
 
-def test_same_tick_async_raw_scan_uses_observation_horizon_and_remains_healthy():
+def test_same_tick_raw_scan_uses_measurement_age_despite_recent_completion():
     port = Port(
         raw=RawSnapshot(
             raw_scan_timestamp=1.011_227_336,
@@ -357,9 +357,9 @@ def test_same_tick_async_raw_scan_uses_observation_horizon_and_remains_healthy()
 
     assert reading.scan is not None
     assert reading.scan.timing_valid is True
-    assert reading.scan.measurement_age_ns == 0
+    assert reading.scan.measurement_age_ns == 38_772_664
     assert reading.scan.captured_monotonic_ns == 1_011_227_336
-    assert physical.health.state is DeviceHealthState.OK
+    assert physical.health.state is DeviceHealthState.DEGRADED
 
 
 def test_raw_scan_beyond_observation_future_skew_remains_failed_closed():
