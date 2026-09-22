@@ -24,7 +24,7 @@ Source-first hibakeresésnél a tényleges viselkedést a source-ból kell megé
 * A production réteghatárok immutable, konkrét Python típusok; `dict[str, Any]` nem réteghatár-contract.
 * Egyetlen szekvenciális TickEngine dolgozik egy már lezárt `TickInputs` snapshotból, rögzített sorrendben, rétegenként legfeljebb egyszer.
 * Egy tickből pontosan egy L12 final döntés és legfeljebb egy normál motor-write születik.
-* Kritikus hiány, hiba vagy bizonytalanság fail-closed STOP/FAULT és fizikailag inaktív motorállapot.
+* Kritikus hiány, hiba vagy bizonytalanság nem eredményezhet pozitív actuationt. Recoverable esetben typed SAFE HOLD/STOP, nem recoverable safety-, contract- vagy recovery-exhaustion esetben FAULT alkalmazható; minden tiltó final döntés fizikailag inaktív motorállapotot eredményez.
 * Azonos lezárt input + konfiguráció + szükséges induló state + kód azonos typed layer-outputot ad.
 * Replay eltérésnél a legelső eltérő tick, réteg és mező megnevezhető.
 * Egy fizikai szenzor több független szemantikai capabilityt szolgáltathat; egy ág hibája nem érvénytelenítheti automatikusan a többit.
@@ -35,10 +35,10 @@ Ezeket a garanciákat adminisztratív egyszerűsítés, diagnosztikai kényelmi 
 
 ## 2. Determinisztikus végrehajtás és passzív observation sík
 
-A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az aszinkron completion **nem közvetlen layer-input**: a runtime/composition root a tick production végrehajtása előtt a pillanatnyilag látható completion eredményt, annak hiányát vagy completion/transport hibáját immutable, typed `TickInputs` részévé zárja. L1–L12 kizárólag ezt a lezárt inputot láthatja; layer nem kérdezheti le közvetlenül a workert, completion queue-t vagy faliórát, és egy completion nem válhat ugyanazon tick közben utólag láthatóvá. Az owning layer a lezárt completiont saját typed contractja és owned state-je szerint elfogadhatja vagy elutasíthatja; worker-hiány, deadline-miss, context-eltérés vagy túl öreg elfogadott terv fail-closed hiba. Stateful replay-slice esetén a checkpointnak a szükséges pending immutable kérést és production state-et kell rögzítenie; a completion adott tickbeli láthatóságát vagy hibáját nem checkpoint-időzítési szabályból kell újraszámítani, hanem a lezárt replay-inputból kell visszaadni.
+A composition root egyetlen `TickEngine`-t futtat. A motor-döntést befolyásoló **authority és owned layer-state** nem költözhet rétegenkénti threadbe/processzbe, és layer-kódban továbbra sincs sleep, falióra, rejtett I/O vagy modulglobális mutable state. Drága, determinisztikus **pure computation** külön worker-processzbe tehető kizárólag a runtime/adapter szélen, composition-root által injektált typed compute-port mögött. A worker csak lezárt immutable snapshotból számolhat; nem birtokolhat command-, mission-, navigation-, lifecycle-, safety-, motor- vagy GPIO-authorityt. Az aszinkron completion **nem közvetlen layer-input**: a runtime/composition root a tick production végrehajtása előtt a pillanatnyilag látható completion eredményt, annak hiányát vagy completion/transport állapotát immutable, typed `TickInputs` részévé zárja. L1–L12 kizárólag ezt a lezárt inputot láthatja; layer nem kérdezheti le közvetlenül a workert, completion queue-t vagy faliórát, és egy completion nem válhat ugyanazon tick közben utólag láthatóvá. Az owning layer a lezárt completiont saját typed contractja és owned state-je szerint elfogadhatja vagy elutasíthatja. Átmeneti `PENDING`/`STALE`/`DEGRADED`/`RESTARTING` vagy capability-specifikus ekvivalens állapot önmagában nem kötelező terminal FAULT: az owning layer fail-closed SAFE HOLD/STOP eredményt adhat és ugyanazt a mission/state identityt megtarthatja, miközben az edge bounded recoveryt végez. Stale, superseded, late vagy régi worker-generationből származó eredmény nem használható pozitív actuationhoz. Lehetetlen/malformed context- vagy contract-invariáns sérülés, nem recoverable safety-critical failure, recovery-exhaustion vagy váratlan upstream exception továbbra is fail-closed FAULT lehet. Stateful replay-slice esetén a checkpointnak a szükséges pending immutable kérést és production state-et kell rögzítenie; a completion adott tickbeli láthatóságát, capability/recovery állapotát vagy hibáját nem checkpoint-időzítési szabályból kell újraszámítani, hanem a lezárt replay-inputból kell visszaadni.
 
 ```text
-async completion / completion error
+async completion / capability state / completion error
               ↓
 runtime input closure
               ↓
@@ -50,11 +50,11 @@ single TickEngine → L1 → … → L12
 Egy normál tick:
 
 1. `TickContext(tick_id, monotonic_ns)` létrejön.
-2. A device-, command- és runtime/adapter completion-input egy immutable typed `TickInputs` snapshotba lezárul.
+2. A device-, command-, engedélyezett delayed-feedback- és runtime/adapter completion-input egy immutable typed `TickInputs` snapshotba lezárul.
 3. L1–L11 legfeljebb egyszer, rögzített sorrendben fut.
-4. Upstream hiba megszakítja a normál láncot; L12 egyszer, explicit fault okkal fut.
+4. Váratlan upstream exception vagy explicit hard-fault megszakítja a normál láncot; L12 egyszer, explicit fault okkal fut. Expected recoverable capability-unavailability nem exceptionnel jelzendő csak azért, hogy FAULT keletkezzen.
 5. L12 dönt és birtokolja az egyetlen normál `MotorWriter` capabilityt.
-6. A completed typed eredmény kifelé megfigyelhető, de nem hat vissza a controlra.
+6. A completed typed eredmény kifelé megfigyelhető. Production controlba csak e contractban explicit engedélyezett, typed, késleltetett feedback térhet vissza egy későbbi tick input-closure pontján; same-tick visszaél tilos.
 
 A döntési idő az injektált monoton idő. Randomizált algoritmus csak replayelhető seedből dolgozhat; reprodukálható döntésnél bounded, determinisztikus work-budget kell.
 
@@ -64,7 +64,7 @@ A live, replay és szimuláció közös végrehajtási határa:
 input source → production V3 → output sink
 ```
 
-Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, motor-, lifecycle- és safety-authority nélkül. Aszinkron driver vagy feldolgozás megengedett, ha eredménye — beleértve a completion elérhetőségét vagy hibáját — a production rétegek futása előtt lezárt, immutable, időbélyegzett typed inputként jelenik meg.
+Az input source lezárt `TickInputs` értéket ad; a sink passzív fogyasztó, motor-, lifecycle- és safety-authority nélkül. Aszinkron driver vagy feldolgozás megengedett, ha eredménye — beleértve a completion elérhetőségét, capability/recovery állapotát vagy hibáját — a production rétegek futása előtt lezárt, immutable, időbélyegzett typed inputként jelenik meg.
 
 A fizikai live runtime-ban a szenzor I/O multi-rate edge ownerben futhat. A control tick L0 `DeviceReader.read()` útja nem végez blokkoló fizikai sensor I/O-t: kizárólag korábban publikált, bounded historyból választ olyan immutable snapshotot, amely a tick `monotonic_ns` idején már látható volt. A safety-kritikus és auxiliary acquisition külön worker lane-ben futhat; auxiliary késés vagy hiba nem blokkolhatja a kritikus acquisition lane-t és önmagában nem adhat egész-robot fault authorityt. A worker lane-ek CPU-affinityja operational runtime policy, nem production authority, és nem sértheti a control CPU izolációját. Replay/szimuláció továbbra is közvetlenül lezárt `RawDeviceBatch`/`TickInputs` értékből dolgozik, worker nélkül.
 
@@ -88,6 +88,23 @@ Kötelező invariánsok:
 
 Observation publication time csak transport/diagnosztikai idő; nem helyettesíti a fizikai measurement időt vagy a domain saját revision/sequence jelentését. Filtered fan-outnál globális publication sequence kihagyása önmagában nem bizonyít loss-t: az evidence-loss authority annak a konkrét consumer-delivery élnek az integrity állapota, amely az adat kézbesítéséért felel.
 
+### 2.2 Recoverable capability-unavailability és recovery
+
+A SAFE HOLD e contractban **nem új numbered layer, nem új `LifecycleState` és nem új L12 `SafetyDecision`**. Azt jelenti, hogy az owning production layer megtartja a releváns mission/state identityt, de pozitív mozgást nem kér, amíg a szükséges capability újra nem válik frisssé és érvényessé. Safety-critical evidence hiányánál L12 ettől függetlenül STOP-ot kényszeríthet ki.
+
+Recovery szabályok:
+
+* expected, átmeneti capability-unavailability (`PENDING`, `STALE`, `DEGRADED`, `RESTARTING` vagy typed ekvivalens) elsődlegesen adat/state, nem exception;
+* stale, late, superseded vagy régi generationből érkező result elutasítható anélkül, hogy önmagában terminal FAULT keletkezne;
+* worker/device supervisor csak technikai lifecycle-t, transportot, generation/request identityt és bounded restartot birtokolhat; mission/navigation/motion/safety authorityt nem;
+* recovery alatt nincs pozitív actuation stale vagy hiányzó evidence alapján;
+* recovery csak friss, újra validált typed evidence után folytathatja ugyanazt a missiont/state-et;
+* recovery attempt/idő budget bounded; exhaustion explicit FAILED/FAULT policyhoz vezet;
+* hard contract/context corruption, motor-writer failure, nem helyreállítható safety-critical failure vagy váratlan layer exception nem maszkolható recoveryként;
+* a recovery döntéshez szükséges capability state, generation/request identity, accepted/rejected completion és recovery-exhaustion állapot replayelhető input/state legyen.
+
+A konkrét retry-szám, timeout, backoff, generation formátum és capability-specifikus readiness/revalidation algoritmus source + config kérdés, amíg a fenti authority- és safety-invariánsok megmaradnak.
+
 ## 3. Egyszerű contractmodell és időszemantika
 
 Minden production réteghatár explicit typed és a fogyasztó számára immutable érték. A jelenlegi Python implementáció használhat frozen/slotted dataclassot; nagy payload esetén read-only vagy egyértelmű ownershipű immutable buffer/view is használható, ha nincs kifelé szivárgó írható shared state. Közös metadata minimum:
@@ -110,14 +127,16 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 
 ## 4. Rétegek és state-ownership
 
+A numbered L0–L12 réteg **authority-, ownership- és typed contract-határ, nem fájl-, osztály-, függvény-, thread-, processz- vagy algoritmusszám**. Egy réteg lehet több belső modulból álló subsystem, és használhat ugyanahhoz a layerhez tartozó pure/helper/domain modulokat. Ezek egymást importálhatják, amennyiben kifelé egyetlen canonical layer contract, egyértelmű state owner és az engedélyezett production adatél marad. Nagy authority-free compute továbbra is a 2. szakasz szerint edge workerbe szervezhető; ettől a layer authority nem költözik ki.
+
 | Réteg | Egyetlen felelősség és owned state | Typed output |
 | --- | --- | --- |
 | L0 Input Snapshot | edge-owner által már megszerzett measurementek determinisztikus tick-zárása, bounded published history és device/stream health | `RawDeviceBatch` |
 | L1 Acquisition | source sample-ek és I/O health zárása | `AcquisitionFrame` |
 | L2 Admission | freshness, sorrend, duplikáció, trust/alignment history | `AdmittedFrame` |
 | L3 State Estimation | pose, twist, covariance | `RobotEstimate` |
-| L4 World Model | rolling lokális világállapot/costmap | `WorldSnapshot` |
-| L5 Command & Mission | command- és mission-lifecycle | `MissionIntent` |
+| L4 World Model | spatial/temporal környezetállapot, lokális operational world/costmap, tracked entity-k és navigationhöz szükséges bounded structural/persistent knowledge; nincs külső I/O- vagy navigation authority | `WorldSnapshot` |
+| L5 Command & Mission | command-validáció, aktív mission identity és mission-lifecycle; szükség esetén korábbi completed tickből closure-on át érkező typed execution feedback fogyasztása | `MissionIntent` |
 | L6 Navigation | navigation plan, progress és szükséges lokális/global navigation state | `NavigationPlan` |
 | L7 Motion Selection | pontosan egy trajectory/cél választása | `MotionObjective` |
 | L8 Motion Realization | guidance → pillanatnyi kinematikai cél | `MotionIntent` |
@@ -125,7 +144,7 @@ A capture edge használhat verziózott külső serializációt, de az nem válik
 | L10 Chassis Control | chassis-kinematika | `WheelVelocitySetpoint` |
 | L11 Actuator Control | wheel-loop, feed-forward, calibration map | `ActuatorRequest` |
 | L12 Safety & Final | safety latch, final döntés, egyetlen normál writer | `FinalActuation` |
-| Composition/runtime root | tick, production lifecycle state, config snapshot és wiring | `TickResult` / completed execution record |
+| Composition/runtime root | tick, production lifecycle state, config snapshot, wiring, input closure és az explicit engedélyezett delayed-feedback zárása | `TickResult` / completed execution record |
 
 Egy réteg nem módosíthat másik réteg state-jét és nem adhat át más komponens által írható shared mutable state-et. Read-only vagy egyértelmű ownershipű bounded buffer/view megengedett. Egy fizikai acquisition több szemantikailag különálló typed eredményt adhat, ha ownershipjük egyértelmű.
 
@@ -152,17 +171,21 @@ L11 -> L12
 L12 -> MotorWriter -> motor-edge/device I/O
 CommandGateway -> L5
 CompositionRoot -> minden layer konstrukciója, production lifecycle-ja és wiringja
+CompletedExecution[tick N] -> runtime input closure -> L5[tick > N]
+    (opcionális typed MissionExecutionFeedback; nincs same-tick L6 -> L5 visszaél)
 ```
+
+Az L5 delayed execution-feedback él kizárólag korábban **completed** production eredményből, a composition/runtime root input-closure pontján át vezethet. L6 vagy bármely downstream layer nem hívhatja vissza közvetlenül L5-öt és nem módosíthatja annak state-jét. A feedback immutable, mission/command identityhoz kötött és replay-input; hiánya nem jogosít fel implicit lifecycle-átmenetre. A konkrét feedback-típus és az, hogy mely mission módok igénylik, canonical source kérdés.
 
 A host/operator nem része a production döntési él-listának. Control irányban kizárólag a canonical command ingressen keresztül kapcsolódhat:
 
 host/operator → canonical command producer/ingress → CommandGateway → L5
 
-A runtime status/observation kifelé olvasható host/operator orchestration számára. Ez használható például readiness-, IDLE- vagy ALLOW-várásra, tesztfázis befejezésének felismerésére és fail-safe megszakításra, de nem vezethető vissza kerülő production adatélként valamely L0–L12 rétegbe.
+A runtime status/observation kifelé olvasható host/operator orchestration számára. Ez használható például readiness-, IDLE- vagy ALLOW-várásra, tesztfázis befejezésének felismerésére és fail-safe megszakításra, de nem vezethető vissza kerülő production adatélként valamely L0–L12 rétegbe. A fent explicit engedélyezett delayed mission feedback nem observation-visszaút, hanem canonical production input-closure él.
 
-Layer implementation nem importálhat másik layer implementationt; wiring csak composition rootban, typed callable/porttal történhet.
+Különböző numbered layer implementationök nem importálhatják egymást; wiring közöttük csak composition rootban, typed callable/porttal történhet. **Azonos numbered layerhez tartozó belső helper/domain/subsystem modulok egymást importálhatják**, ha ezzel nem jön létre második state owner, kerülő authority vagy új cross-layer adatél.
 
-A lista a production döntési élekre vonatkozik. Completed typed értékből vagy meglévő edge-owner immutable snapshotjából kifelé vezető passzív observation/capture él megengedett, ha nem tér vissza a döntési láncba és megfelel a 2.1 szakasznak.
+A lista a production döntési élekre vonatkozik. Completed typed értékből vagy meglévő edge-owner immutable snapshotjából kifelé vezető passzív observation/capture él megengedett, ha nem tér vissza a döntési láncba és megfelel a 2.1 szakasznak. Kivétel kizárólag az e contractban explicit felsorolt typed delayed-feedback él, amely minden esetben egy későbbi `TickInputs` closure része.
 
 ## 6. Final safety és motorírás
 
@@ -170,8 +193,9 @@ L12 a normál motor-write capability egyetlen tulajdonosa. Nincs alternatív poz
 
 Kötelező viselkedés:
 
-* upstream exception, kritikus device failure vagy hiányzó actuator request → fail-closed `FAULT`;
-* ismeretlen/bizonytalan, a mozgáshoz ténylegesen kritikus input → `STOP` vagy indokolt `FAULT`;
+* váratlan upstream exception, hard contract/invariant violation, kritikus device failure vagy hiányzó actuator request → fail-closed `FAULT`;
+* expected recoverable capability-unavailability nem alakítandó exceptionnel terminal FAULT-tá pusztán azért, mert az aktuális tickben nincs használható friss eredmény; az owning layer typed SAFE HOLD/STOP szemantikát használhat a 2.2 szerint;
+* ismeretlen/bizonytalan, a mozgáshoz ténylegesen kritikus safety input → `STOP` vagy indokolt `FAULT`;
 * érvényes safety observation közvetlenül korlátozhat vagy tilthat actuationt;
 * `ALLOW` csak érvényes L11 request + megfelelő lifecycle + szükséges safety feltételek mellett;
 * döntésenként legfeljebb egy atomi writer-hívás;
@@ -247,7 +271,7 @@ A védett V3 production és canonical validációs source csak V3-at, standard l
 
 A host/operator dependency iránya egyirányú: host/operator függhet a canonical command ingress, runtime status/lifecycle edge, capture és Test Hub felületektől, de production layer, TickEngine, composition/runtime root vagy CommandGateway nem függhet vissza launcher- vagy host/operator-implementációtól. Az, hogy egy host/operator modul technikailag a `v3` Python package-ben található, önmagában nem teszi production réteggé.
 
-Layer implementation más layer implementationt nem importál. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
+Különböző numbered layer implementationök nem importálják egymást. Azonos numbered layer belső subsystem/helper/domain moduljai importálhatják egymást, ha a canonical layer boundary, az egyetlen state owner és a cross-layer dependency irány változatlan marad. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
 
 Külső GUI/vizualizáció/agent kliens használhat saját függőségeket a V3 csomagon kívül, de production V3 nem függhet vissza ezektől.
 
@@ -269,9 +293,9 @@ Capture csak indokolt replay/diagnosztikai evidence-et tartson; nincs „mindent
 
 ### 11.2 Canonical replay
 
-Replayhez kell a futtatandó lezárt `TickInputs`, tényleges config és minden olyan determinisztikus state/input, amely nélkül a scope nem reprodukálható. Ebbe explicit beletartozik az adott live tick input-closure pontján láthatóvá tett aszinkron completion eredmény, annak hiánya, valamint completion/transport hibája abban a typed formában, ahogy az a lezárt `TickInputs` részévé vált. A completion **láthatósága és hibaállapota replay-input**.
+Replayhez kell a futtatandó lezárt `TickInputs`, tényleges config és minden olyan determinisztikus state/input, amely nélkül a scope nem reprodukálható. Ebbe explicit beletartozik az adott live tick input-closure pontján láthatóvá tett aszinkron completion eredmény, annak hiánya, capability/recovery állapota, valamint completion/transport hibája abban a typed formában, ahogy az a lezárt `TickInputs` részévé vált. A completion **láthatósága, capability/recovery állapota és hibaállapota replay-input**. Ugyanez igaz az explicit engedélyezett delayed `MissionExecutionFeedback` értékre, ha az adott tickben L5 inputja volt.
 
-A Replayer ugyanazt a canonical production composition/TickEngine utat futtatja offline; saját layer-logika tilos. Replay nem futtathat vagy időzíthet újra aszinkron workert azért, hogy utólag kikövetkeztesse, melyik tickben lett volna látható az eredmény: az adott tick lezárt `TickInputs` értéke authority a completion láthatóságára/hibájára. Az első eltérő tick/réteg/mező közvetlenül megnevezendő.
+A Replayer ugyanazt a canonical production composition/TickEngine utat futtatja offline; saját layer-logika tilos. Replay nem futtathat vagy időzíthet újra aszinkron workert azért, hogy utólag kikövetkeztesse, melyik tickben lett volna látható az eredmény vagy mikor állt volna helyre a worker: az adott tick lezárt `TickInputs` értéke authority a completion láthatóságára, capability/recovery állapotára és hibájára. Az első eltérő tick/réteg/mező közvetlenül megnevezendő.
 
 Production FAIL/FAULT futás is lehet teljes, MATCH replay evidence. Stateful slice csak megfelelő prefixből vagy bounded production-state checkpointból kaphat MATCH-et; checkpoint nem live authority és nem pótol hiányzó tick inputot.
 
@@ -323,6 +347,10 @@ Alapkapuk:
 * determinisztikus replay és első divergence;
 * motor-edge változásnál fizikai STOP/FAULT inaktivitás bizonyítása.
 
+Recoverable capability/recovery változásnál célzottan bizonyítandó: expected transient state nem használ stale/invalid eredményt pozitív actuationhoz; HOLD/STOP alatt a fizikai output inaktív; bounded recovery után csak friss, revalidált evidence enged resume-ot; old/superseded generation completion nem fogadható el; recovery-exhaustion determinisztikus terminal policyhoz vezet; live és replay ugyanazon recovery-state sorozatból azonos layer-outputot ad.
+
+Mission-lifecycle delayed-feedback változásnál bizonyítandó: nincs same-tick downstream→L5 callback vagy közvetlen state-write; a feedback korábbi completed tickből származik, immutable és mission/command identityhoz kötött; a feedback ugyanazon későbbi tick `TickInputs` része live/replay módban; L5 marad a mission lifecycle egyetlen ownere.
+
 Host/operator boundary változásnál célzottan bizonyítandó: minden pozitív motion request és STOP a canonical command ingressen halad; aktív command livenessnek egyetlen logikai ownere van; a host/operator runtime readiness/ALLOW/FAULT truth-ot fogyaszt és nem gyárt második authorityt; command-producer hiba vagy megszakítás fail-safe útra jut; production V3 nem függ vissza az operator implementációtól; capture/Test Hub orchestration nem tér vissza production control inputként.
 
 Szenzor/algoritmus-változás saját közvetlen invariánsait célzottan bizonyítja.
@@ -341,6 +369,6 @@ Ez a dokumentum nem workflow és nem implementációs leltár. Stabil architekt�
 
 **Ezt a dokumentumot módosítani kell**, ha változik: ownership; production control/data edge; motor/safety/lifecycle/command authority; layer felelősségi határ; fail-closed safety invariáns; determinisztikus execution/replay alapfeltétel; production–observation authority-határ; a capture/replay evidence alapvető completeness/MATCH/root-cause szemantikája; vagy V3 dependency boundary.
 
-**Nem kell módosítani csak azért**, mert változik: layeren belüli algoritmus; tuning/threshold/config; queue-kapacitás; capture konténerformátum/topic/chunkolás; azonos szemantikájú encoder-optimalizálás; CLI/GUI/agent brief mező; ideiglenes replay bridge; fájlnév/modulon belüli refaktor; vagy authorityt nem változtató diagnosztikai tool.
+**Nem kell módosítani csak azért**, mert változik: layeren belüli algoritmus; ugyanazon numbered layer belső subsystem/modulstruktúrája; tuning/threshold/config; queue-kapacitás; capture konténerformátum/topic/chunkolás; azonos szemantikájú encoder-optimalizálás; CLI/GUI/agent brief mező; ideiglenes replay bridge; fájlnév/modulon belüli refaktor; vagy authorityt nem változtató diagnosztikai tool.
 
 A pillanatnyi implementáció authorityja a canonical source + aktív config; a konkrét futásé a run-bound evidence. Mindkettőnek e dokumentum architekturális korlátain belül kell maradnia.
