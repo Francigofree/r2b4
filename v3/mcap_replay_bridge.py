@@ -119,7 +119,7 @@ def replay_mcap(
 
     decoded_ticks: list[dict[str, object]] = []
     materialized_bytes = 0
-    for message in reader.iter_messages(
+    for message, payload in reader.iter_json_messages(
         topics=(TICK_TOPIC,),
         start_ns=checkpoint_message.log_time_ns if checkpoint_message else None,
         end_ns=last_target_msg.log_time_ns,
@@ -129,7 +129,6 @@ def replay_mcap(
         materialized_bytes += len(message.data)
         if len(decoded_ticks) >= requested.max_materialized_ticks or materialized_bytes > requested.max_materialized_bytes:
             raise McapReplayBridgeError("replay window exceeds bounded materialization budget; select a shorter checkpoint window")
-        payload = message.json()
         if not isinstance(payload, dict):
             raise McapReplayBridgeError("/r2b4/tick payload must be a JSON object")
         decoded_ticks.append(payload)

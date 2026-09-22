@@ -27,6 +27,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Mapping
 
+from .capture_compaction import compact_checkpoint_row, compact_tick_row
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .capture_encoding import (
     CaptureEncodingError,
@@ -558,6 +559,7 @@ class McapCaptureConsumer:
             referenced = tuple(sorted(_referenced_lidar_revisions(row)))
             if len(referenced) > self._config.max_referenced_revisions_per_tick:
                 raise CaptureEncodingError("tick exceeds referenced LiDAR revision bound")
+            stored_row = compact_tick_row(row)
             tick = EncodedRecord(
                 hub_sequence=item.sequence,
                 published_monotonic_ns=item.published_monotonic_ns,
@@ -565,7 +567,7 @@ class McapCaptureConsumer:
                 mcap_topic=TICK_TOPIC,
                 monotonic_ns=monotonic_ns,
                 sequence=tick_id,
-                payload=_json_bytes(row),
+                payload=_json_bytes(stored_row),
                 tick_id=tick_id,
                 referenced_lidar_revisions=referenced,
             )
@@ -586,7 +588,7 @@ class McapCaptureConsumer:
                         mcap_topic=CHECKPOINT_TOPIC,
                         monotonic_ns=monotonic_ns,
                         sequence=tick_id,
-                        payload=_json_bytes(checkpoint_row),
+                        payload=_json_bytes(compact_checkpoint_row(checkpoint_row)),
                         tick_id=tick_id,
                         is_checkpoint=True,
                     )

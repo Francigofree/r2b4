@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Iterable, Iterator, Mapping, Sequence
 
+from .capture_compaction import expand_checkpoint_row, expand_tick_row
+
 MAGIC = b"\x89MCAP0\r\n"
 
 OP_HEADER = 0x01
@@ -408,7 +410,13 @@ class McapReader:
 
     def iter_json_messages(self, **kwargs: object) -> Iterator[tuple[McapMessage, object]]:
         for message in self.iter_messages(**kwargs):
-            yield message, message.json()
+            payload = message.json()
+            if isinstance(payload, dict):
+                if message.topic == TICK_TOPIC:
+                    payload = expand_tick_row(payload)
+                elif message.topic == CHECKPOINT_TOPIC:
+                    payload = expand_checkpoint_row(payload)
+            yield message, payload
 
     def first_json(self, topic: str) -> tuple[McapMessage, object] | None:
         for message, payload in self.iter_json_messages(topics=(topic,)):
