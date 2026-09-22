@@ -1,91 +1,80 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import sys
+import re
 
-ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('/home/alba/project_r2b4')
+ROOT = Path.cwd()
+if not (ROOT / "v3").exists():
+    ROOT = Path(__file__).resolve().parent
+FILES = Path(__file__).resolve().parent / "files"
 
+def overwrite(rel):
+    src = FILES / rel
+    dst = ROOT / rel
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
-def rewrite(relpath: str, replacements: list[tuple[str, str]]) -> None:
-    path = ROOT / relpath
-    text = path.read_text(encoding='utf-8')
-    for old, new in replacements:
-        text = text.replace(old, new)
-    path.write_text(text, encoding='utf-8')
-    print(f'UPDATED {relpath}')
+def patch(rel, old, new):
+    path = ROOT / rel
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text.replace(old, new), encoding="utf-8")
 
+def regex_patch(rel, pattern, replacement):
+    path = ROOT / rel
+    text = path.read_text(encoding="utf-8")
+    path.write_text(re.sub(pattern, replacement, text, flags=re.S), encoding="utf-8")
 
-rewrite(
-    'v3/composition/native_control.py',
-    [
-        (
-            'from v3.contracts.planner import PlannerInput\n',
-            'from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest\n',
-        ),
-        (
-            '''        self._engine.restore(checkpoint.engine_last_context)\n\n    def close_inputs(self, inputs: TickInputs) -> TickInputs:\n''',
-            '''        self._engine.restore(checkpoint.engine_last_context)\n\n    def _sync_planner_transport(\n        self,\n        request: TrajectoryRolloutRequest | None,\n        started_ns: int,\n    ) -> bool:\n        \"\"\"Synchronize the authority-free worker transport with L6-owned request state.\"\"\"\n        if request == self._transport_request:\n            return False\n        backend = self._rollout_backend\n        if self._transport_id is not None and backend is not None:\n            backend.abandon(self._transport_id)\n        self._transport_request = request\n        self._transport_id = None\n        self._transport_error = None\n        self._transport_started_ns = None\n        if request is None:\n            return False\n        try:\n            if backend is None:\n                raise RuntimeError(\"ASYNC_L6_BACKEND_MISSING\")\n            self._transport_id = backend.submit(request)\n            self._transport_started_ns = started_ns\n        except Exception as exc:\n            self._transport_error = f\"{type(exc).__name__}:{exc}\"[:256]\n        return True\n\n    def dispatch_pending_planner_request(self, monotonic_ns: int) -> bool:\n        \"\"\"Dispatch a request created by the completed tick without exposing a completion.\n\n        L6 remains the sole navigation-state owner. This method only advances the\n        runtime transport edge after L1-L12 has completed; worker output can still\n        become visible only through a later ``close_inputs`` call.\n        \"\"\"\n        if not self._closed_planner_mode:\n            return False\n        if (\n            not isinstance(monotonic_ns, int)\n            or isinstance(monotonic_ns, bool)\n            or monotonic_ns < 0\n        ):\n            raise ValueError(\"planner dispatch monotonic_ns must be non-negative int\")\n        request = self._navigation.pending_rollout_request\n        if request is not None and monotonic_ns < request.context.monotonic_ns:\n            raise ValueError(\"planner dispatch cannot precede request source time\")\n        return self._sync_planner_transport(request, monotonic_ns)\n\n    def close_inputs(self, inputs: TickInputs) -> TickInputs:\n''',
-        ),
-        (
-            '''        event = PlannerInput(inputs.context)\n        request = self._navigation.pending_rollout_request\n        backend = self._rollout_backend\n        if request != self._transport_request:\n            if self._transport_id is not None and backend is not None:\n                backend.abandon(self._transport_id)\n            self._transport_request = request\n            self._transport_id = None\n            self._transport_error = None\n            self._transport_started_ns = None\n            if request is not None:\n                try:\n                    if backend is None:\n                        raise RuntimeError(\"ASYNC_L6_BACKEND_MISSING\")\n                    self._transport_id = backend.submit(request)\n                    # This tick is the first point at which the request actually\n                    # exists outside L6. Do not charge earlier scheduler/closure\n                    # latency against the worker's bounded completion budget.\n                    self._transport_started_ns = inputs.context.monotonic_ns\n                except Exception as exc:\n                    self._transport_error = f\"{type(exc).__name__}:{exc}\"[:256]\n        if request is not None:\n''',
-            '''        event = PlannerInput(inputs.context)\n        request = self._navigation.pending_rollout_request\n        # Live production normally dispatches immediately after the tick that\n        # created this immutable request. Keep this fallback for replay/tests and\n        # any caller that does not own an explicit post-tick runtime edge.\n        self._sync_planner_transport(request, inputs.context.monotonic_ns)\n        backend = self._rollout_backend\n        if request is not None:\n''',
-        ),
-    ],
+overwrite("v3/async_capability.py")
+overwrite("v3/adapters/l6_planner_process.py")
+overwrite("tests/test_v3_async_capability_convergence.py")
+
+patch("v3/layers/l6_navigation.py",
+      "from dataclasses import dataclass, replace\nfrom typing import Protocol\n",
+      "from dataclasses import dataclass, replace\nfrom enum import Enum\nfrom typing import Protocol\n")
+patch("v3/layers/l6_navigation.py",
+      "_FOLLOW_PERSON_RECOVERY_TIMEOUT_NS = 2_000_000_000\n",
+      '_FOLLOW_PERSON_RECOVERY_TIMEOUT_NS = 2_000_000_000\n\n\nclass _RolloutDisposition(str, Enum):\n    NONE = "NONE"\n    ACCEPTED = "ACCEPTED"\n    HOLD = "HOLD"\n')
+patch("v3/layers/l6_navigation.py",
+      "        self._accept_pending_rollout(mission.context)\n        if self._replan_due(\n",
+      '        if (\n            self._accept_pending_rollout(mission.context)\n            is _RolloutDisposition.HOLD\n        ):\n            return self._inactive(\n                mission,\n                NavigationStatus.IDLE,\n                "PLANNER_STALE_HOLD",\n            )\n        if self._replan_due(\n')
+regex_patch("v3/layers/l6_navigation.py",
+            r"    def _accept_closed_rollout\(self, context: TickContext\) -> bool:\n.*?(?=    def _accept_pending_rollout\()",
+            '    def _accept_closed_rollout(\n        self,\n        context: TickContext,\n    ) -> _RolloutDisposition:\n        request = self._pending_rollout_request\n        if request is None:\n            if self._trajectory_candidates:\n                self._require_fresh_cached_plan(context)\n            return _RolloutDisposition.NONE\n\n        event = self._closed_completion\n        if (\n            event is None\n            or event.request_context is None\n            or event.request_context.tick_id < request.context.tick_id\n        ):\n            if self._trajectory_candidates and self._cached_plan_stale(context):\n                return _RolloutDisposition.HOLD\n            return _RolloutDisposition.NONE\n\n        if event.request_context != request.context:\n            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")\n        if event.error is not None:\n            if event.error == "ASYNC_L6_DEADLINE_MISSED":\n                raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")\n            raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{event.error}")\n\n        result = event.result\n        if result is None or result.source_context != request.context:\n            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")\n        if context.monotonic_ns - request.context.monotonic_ns > self._max_plan_age_ns:\n            raise RuntimeError("ASYNC_L6_PLAN_STALE")\n\n        if self._pending_goal_selected_ns is not None:\n            self._goal_selected_ns = self._pending_goal_selected_ns\n        self._store_trajectory_plan(\n            request.context.monotonic_ns,\n            request.context.tick_id,\n            request.goal,\n            result.trajectory_candidates,\n        )\n        self._abandon_pending_rollout()\n        return _RolloutDisposition.ACCEPTED\n\n')
+regex_patch("v3/layers/l6_navigation.py",
+            r"    def _accept_pending_rollout\(self, context: TickContext\) -> bool:\n.*?(?=    def _require_fresh_cached_plan\()",
+            '    def _accept_pending_rollout(\n        self,\n        context: TickContext,\n    ) -> _RolloutDisposition:\n        if self._completion_inputs:\n            return self._accept_closed_rollout(context)\n\n        request_id = self._pending_rollout_id\n        if request_id is None:\n            return _RolloutDisposition.NONE\n        request = self._pending_rollout_request\n        release_tick_id = self._pending_release_tick_id\n        release_not_before_ns = self._pending_release_not_before_ns\n        backend = self._rollout_backend\n        if (\n            request is None\n            or backend is None\n            or (release_tick_id is None) == (release_not_before_ns is None)\n        ):\n            raise RuntimeError("async rollout pending state is incomplete")\n\n        source_context = request.context\n        goal = request.goal\n        if release_not_before_ns is not None:\n            before_handoff = context.monotonic_ns < release_not_before_ns\n        else:\n            assert release_tick_id is not None\n            before_handoff = context.tick_id < release_tick_id\n            if context.tick_id > release_tick_id:\n                raise RuntimeError("ASYNC_L6_RELEASE_TICK_MISSED")\n\n        if before_handoff:\n            if self._trajectory_candidates and self._cached_plan_stale(context):\n                return _RolloutDisposition.HOLD\n            return _RolloutDisposition.NONE\n\n        result = backend.take(request_id)\n        if result is None:\n            if release_not_before_ns is None:\n                raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")\n            if self._trajectory_candidates and self._cached_plan_stale(context):\n                return _RolloutDisposition.HOLD\n            return _RolloutDisposition.NONE\n\n        if result.source_context != source_context:\n            raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")\n        if context.monotonic_ns - result.source_context.monotonic_ns > self._max_plan_age_ns:\n            raise RuntimeError("ASYNC_L6_PLAN_STALE")\n\n        selected_ns = self._pending_goal_selected_ns\n        self._pending_rollout_id = None\n        self._pending_rollout_request = None\n        self._pending_goal_selected_ns = None\n        self._pending_release_tick_id = None\n        self._pending_release_not_before_ns = None\n        if selected_ns is not None:\n            self._goal_selected_ns = selected_ns\n        self._store_trajectory_plan(\n            result.source_context.monotonic_ns,\n            result.source_context.tick_id,\n            goal,\n            result.trajectory_candidates,\n        )\n        return _RolloutDisposition.ACCEPTED\n\n    def _cached_plan_stale(self, context: TickContext) -> bool:\n        return bool(\n            self._trajectory_candidates\n            and self._last_replan_ns is not None\n            and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns\n        )\n\n')
+
+patch("v3/adapters/process_lidar_port.py",
+      "from v3.runtime_performance import",
+      'from v3.async_capability import TransportSemantics, latest_state_snapshot\nfrom v3.runtime_performance import')
+patch("v3/adapters/process_lidar_port.py",
+      'class ProcessLidarPort:\n    """Latest compact-control proxy plus revision-only full-raw capture lane."""\n',
+      'class ProcessLidarPort:\n    """Latest compact-control proxy plus revision-only full-raw capture lane."""\n\n    transport_semantics = TransportSemantics.LATEST_STATE\n')
+patch("v3/adapters/process_lidar_port.py",
+      "    def get_runtime_status(self) -> dict[str, object]:\n        status = dict(self._status)\n",
+      '    def capability_snapshot(\n        self,\n        observed_monotonic_ns: int,\n        *,\n        stale_after_ns: int = 250_000_000,\n    ):\n        raw = self._raw_snapshot\n        status = self.get_runtime_status()\n        source_sequence = None if raw is None else int(raw.raw_scan_id)\n        source_ns = None if raw is None else int(raw.scan_end_monotonic_ns)\n        error = self._fatal_error or (\n            "LIDAR_NOT_RUNNING" if status.get("health") == "ERROR" else None\n        )\n        return latest_state_snapshot(\n            name="lidar.control",\n            observed_monotonic_ns=observed_monotonic_ns,\n            source_sequence=source_sequence,\n            source_monotonic_ns=source_ns,\n            stale_after_ns=stale_after_ns,\n            running=bool(status.get("running", False)),\n            error=error,\n            degraded=status.get("health") == "DEGRADED",\n        )\n\n    def get_runtime_status(self) -> dict[str, object]:\n        status = dict(self._status)\n')
+
+patch("v3/adapters/process_vision_port.py",
+      "from v3.runtime_performance import apply_current_affinity, temporary_current_affinity\n",
+      'from v3.async_capability import TransportSemantics, latest_state_snapshot\nfrom v3.runtime_performance import apply_current_affinity, temporary_current_affinity\n')
+patch("v3/adapters/process_vision_port.py",
+      'class ProcessVisionPort:\n    """Small parent proxy implementing camera, detection and photo request ports."""\n',
+      'class ProcessVisionPort:\n    """Small parent proxy implementing camera, detection and photo request ports."""\n\n    transport_semantics = TransportSemantics.LATEST_STATE\n')
+patch("v3/adapters/process_vision_port.py",
+      "    def get_edge_snapshot(self) -> CameraEdgeSnapshot:\n        with self._condition:\n            return self._camera_edge\n",
+      '    def capability_snapshot(\n        self,\n        observed_monotonic_ns: int,\n        *,\n        stale_after_ns: int = 250_000_000,\n    ):\n        with self._condition:\n            edge = self._camera_edge\n            error = self._fatal_error or edge.status.last_error\n        frame = edge.frame\n        return latest_state_snapshot(\n            name="vision.camera",\n            observed_monotonic_ns=observed_monotonic_ns,\n            source_sequence=None if frame is None else int(frame.sequence),\n            source_monotonic_ns=(\n                None if frame is None else int(frame.measurement_monotonic_ns)\n            ),\n            stale_after_ns=stale_after_ns,\n            running=bool(edge.status.running),\n            error=error or None,\n        )\n\n    def detection_capability_snapshot(\n        self,\n        observed_monotonic_ns: int,\n        *,\n        stale_after_ns: int = 400_000_000,\n    ):\n        with self._condition:\n            detection = self._detection\n            status = self._detection_status\n            error = self._fatal_error or status.last_error\n        return latest_state_snapshot(\n            name="vision.person_detection",\n            observed_monotonic_ns=observed_monotonic_ns,\n            source_sequence=None if detection is None else int(detection.sequence),\n            source_monotonic_ns=(\n                None\n                if detection is None\n                else int(detection.measurement_monotonic_ns)\n            ),\n            stale_after_ns=stale_after_ns,\n            running=bool(status.running),\n            error=error or None,\n        )\n\n    def get_edge_snapshot(self) -> CameraEdgeSnapshot:\n        with self._condition:\n            return self._camera_edge\n')
+
+patch("v3/process_sidecars.py",
+      "from v3.engine import TickResult\n",
+      "from v3.async_capability import TransportSemantics\nfrom v3.engine import TickResult\n")
+patch("v3/process_sidecars.py",
+      'class ProcessMcapCaptureSession:\n    """Production MCAP capture whose expensive work lives outside control process."""\n',
+      'class ProcessMcapCaptureSession:\n    """Production MCAP capture whose expensive work lives outside control process."""\n\n    transport_semantics = TransportSemantics.EVIDENCE_STREAM\n')
+
+contract = ROOT / "ASZINKRON_RUNTIME_CONTRACT_V3.md"
+contract.write_text(
+    contract.read_text(encoding="utf-8")
+    + (FILES / "ASZINKRON_RUNTIME_CONTRACT_APPEND.md").read_text(encoding="utf-8"),
+    encoding="utf-8",
 )
 
-rewrite(
-    'v3/composition/resident_live_control.py',
-    [
-        (
-            '''    def close(self) -> None:\n        self._control.close()\n\n    def _preflight_is_fresh_for(self, context: TickContext) -> bool:\n''',
-            '''    def close(self) -> None:\n        self._control.close()\n\n    def dispatch_pending_planner_request(self, monotonic_ns: int) -> bool:\n        \"\"\"Forward authority-free post-tick planner dispatch to the runtime edge.\"\"\"\n        return self._control.dispatch_pending_planner_request(monotonic_ns)\n\n    def _preflight_is_fresh_for(self, context: TickContext) -> bool:\n''',
-        ),
-    ],
-)
-
-rewrite(
-    'v3/composition/resident_physical_control.py',
-    [
-        (
-            '''    def checkpoint(self) -> NativeControlStateCheckpoint:\n        return self._live_control.checkpoint()\n\n    def set_timing_observer(\n''',
-            '''    def checkpoint(self) -> NativeControlStateCheckpoint:\n        return self._live_control.checkpoint()\n\n    def dispatch_pending_planner_request(self, monotonic_ns: int) -> bool:\n        \"\"\"Dispatch a post-tick L6 request without changing layer authority.\"\"\"\n        return self._live_control.dispatch_pending_planner_request(monotonic_ns)\n\n    def set_timing_observer(\n''',
-        ),
-    ],
-)
-
-rewrite(
-    'v3/runtime_performance.py',
-    [
-        (
-            '''    \"POST_CONTROL\",\n)\n''',
-            '''    \"POST_CONTROL\",\n    \"ASYNC_L6_DISPATCH\",\n)\n''',
-        ),
-    ],
-)
-
-rewrite(
-    'v3_runtime.py',
-    [
-        (
-            '''            control_completed_ns = time.perf_counter_ns()\n            if timing is not None:\n                timing.observe_control(control_completed_ns - control_started_ns)\n            observer_started_ns = control_completed_ns\n            if record_observer is not None:\n''',
-            '''            control_completed_ns = time.perf_counter_ns()\n            if timing is not None:\n                timing.observe_control(control_completed_ns - control_started_ns)\n\n            # L6 may have created a new immutable rollout request during this\n            # completed tick. Dispatch it now, before observation callbacks and\n            # before the scheduler sleep. The worker still has no navigation\n            # authority and its result remains invisible until a later input\n            # closure freezes it into PlannerInput.\n            if (\n                last_result.trace.fault_layer is None\n                and last_result.final_actuation.safety_decision is not SafetyDecision.FAULT\n            ):\n                dispatch_ns = _read_monotonic_ns(monotonic_ns, previous_clock_ns)\n                previous_clock_ns = dispatch_ns\n                dispatch_started_ns = time.perf_counter_ns()\n                dispatched = runtime.dispatch_pending_planner_request(dispatch_ns)\n                dispatch_completed_ns = time.perf_counter_ns()\n                if timing is not None and dispatched:\n                    timing.observe_control_phase(\n                        \"ASYNC_L6_DISPATCH\",\n                        dispatch_completed_ns - dispatch_started_ns,\n                    )\n\n            observer_started_ns = time.perf_counter_ns()\n            if record_observer is not None:\n''',
-        ),
-    ],
-)
-
-rewrite(
-    'tests/test_v3_async_completion_boundary_fix.py',
-    [
-        (
-            '''        self.delay_calls = delay_calls\n        self.calls = 0\n\n    def submit(self, request):\n        self.calls = 0\n        return self.inner.submit(request)\n''',
-            '''        self.delay_calls = delay_calls\n        self.calls = 0\n        self.submit_count = 0\n\n    def submit(self, request):\n        self.calls = 0\n        self.submit_count += 1\n        return self.inner.submit(request)\n''',
-        ),
-        (
-            '''    assert result.final_actuation.safety_decision.value != \"FAULT\"\n    production.close()\n\n\ndef test_worker_timeout_is_closed_as_typed_planner_input_after_actual_submit():\n''',
-            '''    assert result.final_actuation.safety_decision.value != \"FAULT\"\n    production.close()\n\n\ndef test_post_tick_dispatch_submits_pending_request_before_next_input_closure():\n    config = control_config()\n    backend = DelayedBackend(config.navigation, delay_calls=1)\n    production = NativeControlComposition(\n        RecordingMotorSink(),\n        config,\n        trajectory_rollout_backend=backend,\n    )\n    values = _explore_values()\n\n    production.run_tick(production.close_inputs(values[0]))\n    active = production.close_inputs(values[1])\n    result = production.run_tick(active)\n    assert result.trace.fault_layer is None\n    assert backend.submit_count == 0\n\n    source_ns = values[1].context.monotonic_ns\n    assert production.dispatch_pending_planner_request(source_ns + 1_000_000)\n    assert backend.submit_count == 1\n\n    next_tick = _retime(values[2], source_ns + 20_000_000)\n    closed = production.close_inputs(next_tick)\n    assert backend.submit_count == 1\n    assert closed.planner_input is not None\n    assert closed.planner_input.error is None\n    production.close()\n\n\ndef test_worker_timeout_is_closed_as_typed_planner_input_after_actual_submit():\n''',
-        ),
-    ],
-)
-
-print('R2B4 ASYNC L6 DISPATCH P0 UPGRADE APPLIED')
-print('Installer intentionally ran no tests, gates, preflight checks, validation, or rollback.')
-print('Optional manual full test: cd /home/alba/project_r2b4 && python3 -m pytest -q')
+print("R2B4 async capability convergence P0/P1/P2 applied.")

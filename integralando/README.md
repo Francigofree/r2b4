@@ -1,72 +1,34 @@
-# R2B4 async L6 dispatch P0 upgrade — 2026-09-21
+# R2B4 Async Capability Convergence — P0 + P1 + P2
 
-Base inspected: `3154b98a9bb4cc544710150f0f96904d07a3b6a1`.
+Base HEAD: `378d42b98ce5f5d893561f007698eb7d768d9e4a`
 
-## Root cause addressed
+## P0
+- stale cached L6 plan + replacement pending -> `PLANNER_STALE_HOLD`
+- zero-motion hold, fresh completion után resume
+- deadline/worker/context/stale-completed-result továbbra is fail-closed
 
-Two live FULL captures independently reproduced the same failure: tick 149 and the newer tick 558 both ended in L6 fault while the closed `PlannerInput` contained no request/result/error. The newer capture replay is also MATCH. Therefore the cached accepted
-plan expired while its replacement was still pending.
+## P1
+- `v3/async_capability.py`
+- `LATEST_STATE`, `REQUEST_RESULT`, `EVIDENCE_STREAM`
+- LiDAR + vision capability snapshots
+- planner request/result capability evidence
+- capture explicit evidence-stream
+- async contract kiegészítés
 
-Current production creates the immutable L6 rollout request inside tick N, but
-submits it to the process worker only at tick N+1 `close_inputs`. That needlessly
-puts observer/capture/sleep/wakeup delay in front of worker execution.
+## P2
+- `worker_generation + request_id + source_context`
+- late/abandoned result rejection
+- lifecycle state vocabulary
+- supersede/error/late-result counters
+- restart-safe identity foundation
 
-This upgrade adds a post-tick runtime dispatch edge:
+Automatikus restart nincs bekapcsolva; worker-halál továbbra is fail-closed.
 
-```
-L6 creates immutable request in tick N
-        ↓
-L0-L12 completes
-        ↓
-post-tick runtime dispatch (before observers/sleep)
-        ↓
-planner process computes
-        ↓
-result collector
-        ↓
-NEXT input closure freezes result/error into PlannerInput
-        ↓
-L6 may accept/reject it
-```
-
-Layer authority, stale limit, request timeout, L12 safety, motor writer and replay
-semantics are unchanged.
-
-## Files modified
-
-- `v3/composition/native_control.py`
-- `v3/composition/resident_live_control.py`
-- `v3/composition/resident_physical_control.py`
-- `v3/runtime_performance.py`
-- `v3_runtime.py`
-- `tests/test_v3_async_completion_boundary_fix.py`
-
-## Install
+## Installer policy
+Az installer szándékosan nem végez Git/head/dirty-tree ellenőrzést, tesztet,
+gate-et, preflightot, backupot vagy rollbacket. Csak módosít.
 
 ```bash
 cd /home/alba/project_r2b4
-python3 /PATH/TO/r2b4_async_l6_dispatch_p0_upgrade_20260921/installer.py
+python3 /PATH/r2b4_async_capability_convergence_p0_p1_p2_20260921/installer.py
 ```
-
-The installer intentionally performs **no checks, tests, gates, preflight,
-validation, or rollback**. It applies the modifications directly.
-
-Optional manual full test after installation:
-
-```bash
-cd /home/alba/project_r2b4 && python3 -m pytest -q
-```
-
-## What is deliberately NOT changed
-
-- `max_plan_age_ns=350ms`
-- `request_timeout_ns=300ms`
-- L6 navigation ownership
-- completion/input-closure rule
-- planner result visibility rule
-- L12 / safety / motor path
-- CPU affinity layout
-
-The package does not claim that sustained planner latency above the continuity
-budget is solved. The included simulation demonstrates both the fixed delay and
-the remaining performance boundary.
