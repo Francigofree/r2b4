@@ -775,9 +775,27 @@ class NativeControlComposition:
                             # Pure inline/replay ports have no asynchronous worker
                             # clock. They preserve their explicit result visibility.
                             result = backend.take(self._transport_id)
+                        watchdog_started_ns = started_ns
+                        current_transport_start = getattr(
+                            backend, "transport_started_ns", None
+                        )
+                        if callable(current_transport_start):
+                            restarted_ns = current_transport_start(self._transport_id)
+                            if restarted_ns is not None:
+                                watchdog_started_ns = restarted_ns
+                        transport_restarting = False
+                        capability_snapshot = getattr(backend, "capability_snapshot", None)
+                        if callable(capability_snapshot):
+                            snapshot = capability_snapshot(inputs.context.monotonic_ns)
+                            transport_restarting = (
+                                getattr(getattr(snapshot, "state", None), "value", None)
+                                == "RESTARTING"
+                            )
                         if (
                             result is None and self._transport_error is None
-                            and inputs.context.monotonic_ns - started_ns > self._transport_timeout_ns
+                            and not transport_restarting
+                            and inputs.context.monotonic_ns - watchdog_started_ns
+                            > self._transport_timeout_ns
                         ):
                             backend.abandon(self._transport_id)
                             self._transport_error = "ASYNC_L6_TRANSPORT_TIMEOUT"

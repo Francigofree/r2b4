@@ -1,0 +1,873 @@
+"""Explicit finite hardware ownership for V3 measurement and bounded control."""
+
+from __future__ import annotations
+
+from bisect import bisect_left
+import math
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Protocol
+
+from v3.adapters.bno055_device import (
+    Bno055RegisterBus,
+    NativeBno055Device,
+    NativeBno055DeviceConfig,
+)
+from v3.adapters.bno055_imu import Bno055SamplePort
+from v3.adapters.gpio_counter import GpioCounterBackend
+from v3.adapters.gpio_motor import PwmGpioBackend
+from v3.adapters.latest_lidar import LatestMatcherResultPort
+from v3.adapters.native_lidar_port import TimedPoseReference
+from v3.adapters.picamera2_camera import (
+    NativePicamera2Camera,
+    Picamera2Factory,
+    default_picamera2_factory,
+    raspberry_pi_sensor_timestamp_to_monotonic_ns,
+)
+from v3.adapters.litert_person_detector import LiteRtSsdPersonDetector
+from v3.adapters.person_detection import (
+    NativePersonDetector,
+    PersonDetectionPort,
+    UnavailablePersonDetectionPort,
+)
+from v3.adapters.person_photo_evidence import PersonPhotoEvidenceRecorder
+from v3.composition.live_inputs import (
+    LiveInputComposition,
+    LiveInputCompositionConfig,
+)
+from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
+from v3.adapters.process_encoder_backend import ProcessEncoderSource
+from v3.adapters.process_vision_port import ProcessVisionPort, UnavailableVisionPort
+from v3.composition.native_sensor_inputs import (
+    NativeSensorHardwareConfig,
+    NativeSensorInputOwner,
+)
+from v3.contracts import (
+    AcquisitionFrame,
+    DeviceHealthState,
+    AdmittedFrame,
+    LifecycleState,
+    MissionIntent,
+    RobotEstimate,
+    TickContext,
+)
+from v3.engine import TickResult
+from v3.execution import CaptureRecord
+from v3.ports import CommandGateway
+from v3.runtime_performance import (
+    RuntimeAffinityConfig,
+    temporary_current_affinity,
+)
+from v3.device_health_policy import (
+    PRODUCTION_CRITICAL_DEVICE_IDS,
+    critical_devices_ready,
+)
+from v3_bounded_runtime import (
+    BoundedPhysicalRuntimeConfig,
+    RUN_OK,
+    run_owned_bounded_physical_control,
+)
+from v3_runtime import (
+    ResidentPhysicalRuntimeConfig,
+    ResidentRuntimeReport,
+    run_owned_resident_physical_control,
+)
+
+
+PHYSICAL_RUN_APPROVAL = "raised-stand-bounded-v3"
+RESIDENT_PHYSICAL_RUN_APPROVAL = "native-resident-v3"
+POSE_HISTORY_CAPACITY = 64
+
+
+class ImuBusFactory(Protocol):
+    def __call__(self, bus_number: int) -> Bno055RegisterBus: ...
+
+
+class LidarPortFactory(Protocol):
+    def __call__(
+        self,
+        pose_provider: Callable[[int], TimedPoseReference | None],
+    ) -> LatestMatcherResultPort: ...
+
+
+def _positive_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+def _clock_value(
+    monotonic_ns: Callable[[], int],
+    previous_ns: int | None,
+) -> int:
+    value = monotonic_ns()
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError("monotonic_ns must return a non-negative integer")
+    if previous_ns is not None and value < previous_ns:
+        raise RuntimeError("monotonic clock moved backwards")
+    return value
+
+
+def _stop_value(stop_requested: Callable[[], bool]) -> bool:
+    value = stop_requested()
+    if type(value) is not bool:
+        raise TypeError("stop_requested must return bool")
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class FiniteSensorMeasurementConfig:
+    """One zero-output sample schedule and its complete native input config."""
+
+    sensors: NativeSensorHardwareConfig
+    live_inputs: LiveInputCompositionConfig
+    tick_count: int
+    tick_period_ns: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.sensors, NativeSensorHardwareConfig):
+            raise TypeError("sensors must be NativeSensorHardwareConfig")
+        if not isinstance(self.live_inputs, LiveInputCompositionConfig):
+            raise TypeError("live_inputs must be LiveInputCompositionConfig")
+        _positive_int(self.tick_count, "tick_count")
+        period_ns = _positive_int(self.tick_period_ns, "tick_period_ns")
+        if period_ns > self.live_inputs.admission.max_sample_age_ns:
+            raise ValueError("tick_period_ns cannot exceed the admission freshness bound")
+
+    @classmethod
+    def from_runtime(
+        cls,
+        runtime: BoundedPhysicalRuntimeConfig,
+        *,
+        tick_count: int,
+    ) -> FiniteSensorMeasurementConfig:
+        if not isinstance(runtime, BoundedPhysicalRuntimeConfig):
+            raise TypeError("runtime must be BoundedPhysicalRuntimeConfig")
+        if runtime.sensor_inputs is None:
+            raise ValueError("runtime config does not close native sensor inputs")
+        return cls(
+            sensors=runtime.sensor_inputs,
+            live_inputs=LiveInputCompositionConfig(
+                estimation=runtime.composition.live_control.control.estimation,
+            ),
+            tick_count=tick_count,
+            tick_period_ns=runtime.tick_period_ns,
+        )
+
+
+def _layer_output(result: TickResult, layer: str) -> object | None:
+    for record in result.trace.layers:
+        if record.layer == layer:
+            return record.output
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class SensorMeasurementReport:
+    """Immutable results of one finite, zero-output hardware session."""
+
+    ticks: tuple[TickResult, ...]
+    operator_stopped: bool
+
+    def __post_init__(self) -> None:
+        if type(self.operator_stopped) is not bool:
+            raise TypeError("operator_stopped must be bool")
+        if any(not isinstance(item, TickResult) for item in self.ticks):
+            raise TypeError("ticks must contain TickResult values")
+
+    @property
+    def healthy_tick_count(self) -> int:
+        total = 0
+        for result in self.ticks:
+            acquisition = _layer_output(result, "L1")
+            if (
+                isinstance(acquisition, AcquisitionFrame)
+                and acquisition.io_health
+                and critical_devices_ready(
+                    acquisition.io_health,
+                    PRODUCTION_CRITICAL_DEVICE_IDS,
+                )
+            ):
+                total += 1
+        return total
+
+    @property
+    def l3_estimates(self) -> tuple[RobotEstimate, ...]:
+        return tuple(
+            estimate
+            for result in self.ticks
+            if isinstance((estimate := _layer_output(result, "L3")), RobotEstimate)
+        )
+
+    @property
+    def fault_tick_count(self) -> int:
+        return sum(result.trace.fault_layer is not None for result in self.ticks)
+
+    @property
+    def all_commits_zero(self) -> bool:
+        return all(
+            not result.final_actuation.enabled
+            and result.final_actuation.left_output == 0.0
+            and result.final_actuation.right_output == 0.0
+            for result in self.ticks
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NativePoseFeedbackCheckpoint:
+    """Complete bounded hardware-edge pose history for deterministic restore."""
+
+    frame_id: str
+    capacity: int
+    poses: tuple[TimedPoseReference, ...]
+
+
+class NativePoseFeedback:
+    """Own a bounded history of completed L3 poses for scan-time lookup."""
+
+    __slots__ = ("_capacity", "_frame_id", "_lock", "_poses")
+
+    def __init__(
+        self,
+        frame_id: str,
+        capacity: int = POSE_HISTORY_CAPACITY,
+    ) -> None:
+        if not isinstance(frame_id, str) or not frame_id:
+            raise ValueError("frame_id must be non-empty")
+        if (
+            not isinstance(capacity, int)
+            or isinstance(capacity, bool)
+            or capacity < 2
+        ):
+            raise ValueError("capacity must be an integer of at least two")
+        self._frame_id = frame_id
+        self._capacity = capacity
+        self._lock = threading.Lock()
+        self._poses: list[TimedPoseReference] = []
+
+    @property
+    def capacity(self) -> int:
+        return self._capacity
+
+    def __call__(self, monotonic_ns: int) -> TimedPoseReference | None:
+        return self.lookup(monotonic_ns)
+
+    def lookup(self, monotonic_ns: int) -> TimedPoseReference | None:
+        if (
+            not isinstance(monotonic_ns, int)
+            or isinstance(monotonic_ns, bool)
+            or monotonic_ns < 0
+        ):
+            raise ValueError("monotonic_ns must be a non-negative integer")
+        with self._lock:
+            poses = tuple(self._poses)
+        if (
+            not poses
+            or monotonic_ns < poses[0].monotonic_ns
+            or monotonic_ns > poses[-1].monotonic_ns
+        ):
+            return None
+        index = bisect_left(
+            tuple(item.monotonic_ns for item in poses),
+            monotonic_ns,
+        )
+        if index < len(poses) and poses[index].monotonic_ns == monotonic_ns:
+            return poses[index]
+        before = poses[index - 1]
+        after = poses[index]
+        fraction = (monotonic_ns - before.monotonic_ns) / (
+            after.monotonic_ns - before.monotonic_ns
+        )
+        yaw_delta = math.atan2(
+            math.sin(after.yaw_rad - before.yaw_rad),
+            math.cos(after.yaw_rad - before.yaw_rad),
+        )
+        yaw = before.yaw_rad + fraction * yaw_delta
+        return TimedPoseReference(
+            monotonic_ns=monotonic_ns,
+            x_m=before.x_m + fraction * (after.x_m - before.x_m),
+            y_m=before.y_m + fraction * (after.y_m - before.y_m),
+            yaw_rad=math.atan2(math.sin(yaw), math.cos(yaw)),
+        )
+
+    def publish(self, estimate: RobotEstimate) -> None:
+        if not isinstance(estimate, RobotEstimate):
+            raise TypeError("estimate must be RobotEstimate")
+        if estimate.frame_id != self._frame_id:
+            raise ValueError("estimate pose frame does not match matcher feedback frame")
+        pose = TimedPoseReference(
+            estimate.context.monotonic_ns,
+            estimate.x_m,
+            estimate.y_m,
+            estimate.yaw_rad,
+        )
+        with self._lock:
+            if self._poses and pose.monotonic_ns <= self._poses[-1].monotonic_ns:
+                raise ValueError("pose feedback timestamps must increase monotonically")
+            self._poses.append(pose)
+            if len(self._poses) > self._capacity:
+                del self._poses[: len(self._poses) - self._capacity]
+
+    def checkpoint(self) -> NativePoseFeedbackCheckpoint:
+        with self._lock:
+            return NativePoseFeedbackCheckpoint(
+                self._frame_id,
+                self._capacity,
+                tuple(self._poses),
+            )
+
+    def restore(self, checkpoint: NativePoseFeedbackCheckpoint) -> None:
+        if not isinstance(checkpoint, NativePoseFeedbackCheckpoint):
+            raise TypeError("checkpoint must be NativePoseFeedbackCheckpoint")
+        if checkpoint.frame_id != self._frame_id:
+            raise ValueError("pose feedback checkpoint frame does not match owner")
+        if checkpoint.capacity != self._capacity:
+            raise ValueError("pose feedback checkpoint capacity does not match owner")
+        if len(checkpoint.poses) > self._capacity or any(
+            not isinstance(item, TimedPoseReference) for item in checkpoint.poses
+        ):
+            raise ValueError("pose feedback checkpoint contains invalid poses")
+        timestamps = tuple(item.monotonic_ns for item in checkpoint.poses)
+        if any(
+            current <= previous
+            for previous, current in zip(timestamps, timestamps[1:])
+        ):
+            raise ValueError("pose feedback checkpoint timestamps must increase")
+        with self._lock:
+            self._poses = list(checkpoint.poses)
+
+
+class NativeHardwareSensorOwner:
+    """Acquire/release core sensors plus the optional native camera capability."""
+
+    # P0_CONTROL_PROCESS_ISOLATION_20260920: retain port only for tiny pose-ring publication.
+    __slots__ = (
+        "_closed",
+        "_inputs",
+        "_lidar_port",
+        "_person_evidence",
+        "_pose_feedback",
+    )
+
+    def __init__(
+        self,
+        counter_gpio_backend: GpioCounterBackend,
+        open_imu_bus: ImuBusFactory,
+        open_lidar_port: LidarPortFactory,
+        config: NativeSensorHardwareConfig,
+        *,
+        open_camera: Picamera2Factory = default_picamera2_factory,
+        open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
+        affinity_config: RuntimeAffinityConfig | None = None,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        if not isinstance(config, NativeSensorHardwareConfig):
+            raise TypeError("config must be NativeSensorHardwareConfig")
+        if affinity_config is not None and not isinstance(
+            affinity_config, RuntimeAffinityConfig
+        ):
+            raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
+        affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
+        for callback, name in (
+            (open_imu_bus, "open_imu_bus"),
+            (open_lidar_port, "open_lidar_port"),
+            (open_camera, "open_camera"),
+            (monotonic_ns, "monotonic_ns"),
+            (sleep, "sleep"),
+        ):
+            if not callable(callback):
+                raise TypeError(f"{name} must be callable")
+
+        bus: Bno055RegisterBus | None = None
+        imu: Bno055SamplePort | None = None
+        lidar: LatestMatcherResultPort | None = None
+        camera: object | None = None
+        person_detection_port: PersonDetectionPort | None = None
+        person_evidence: PersonPhotoEvidenceRecorder | None = None
+        inputs: NativeSensorInputOwner | None = None
+        encoder_source_override: ProcessEncoderSource | None = None
+        pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
+        try:
+            if open_imu_device is not None:
+                imu = open_imu_device(config.imu_device)
+            else:
+                bus = open_imu_bus(config.imu_device.bus_number)
+                imu = NativeBno055Device(
+                    bus, config.imu_device, monotonic_ns=monotonic_ns, sleep=sleep,
+                )
+                imu.initialize()
+            lidar = open_lidar_port(pose_feedback)
+
+            # CONTROL_PROCESS_STERILE_1: the concrete production lgpio owner,
+            # callbacks and velocity backend live in a separate interpreter.
+            if getattr(counter_gpio_backend, "__name__", "") == "lgpio":
+                encoder_source_override = ProcessEncoderSource(
+                    config.inputs.encoder_counter,
+                    config.inputs.encoder_backend,
+                    config.inputs.encoder_source,
+                    worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+                    strict_affinity=(affinity.strict if affinity.enabled else False),
+                )
+
+            # Camera + detector share one child so frame bytes never cross IPC.
+            if config.camera_device is not None and open_camera is default_picamera2_factory:
+                try:
+                    camera = ProcessVisionPort(
+                        config.camera_device,
+                        config.person_detection_backend,
+                        worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
+                        strict_affinity=(affinity.strict if affinity.enabled else False),
+                    )
+                except Exception as exc:
+                    camera = UnavailableVisionPort(f"{type(exc).__name__}:{exc}")
+                if config.person_detection_backend is not None:
+                    person_detection_port = camera  # type: ignore[assignment]
+
+            if config.camera_device is not None and not isinstance(
+                camera, (ProcessVisionPort, UnavailableVisionPort)
+            ):
+                with temporary_current_affinity(
+                    affinity.vision_cpu if affinity.enabled else None,
+                    role="vision",
+                    strict=affinity.strict,
+                ):
+                    camera = NativePicamera2Camera(
+                        config.camera_device,
+                        picamera_factory=open_camera,
+                        sensor_timestamp_mapper=(
+                            raspberry_pi_sensor_timestamp_to_monotonic_ns
+                        ),
+                        monotonic_ns=monotonic_ns,
+                    )
+                    # Camera/libcamera workers inherit the dedicated vision CPU.
+                    # Camera remains non-critical for motor safety authority.
+                    camera.start()
+
+            if (
+                config.person_detection_backend is not None
+                and person_detection_port is None
+            ):
+                assert config.inputs.person_detection_source is not None
+                if camera is None or not camera.get_runtime_status().running:
+                    camera_error = (
+                        camera.get_runtime_status().last_error
+                        if camera is not None
+                        else "camera capability unavailable"
+                    )
+                    person_detection_port = UnavailablePersonDetectionPort(
+                        f"PERSON_DETECTOR_CAMERA_UNAVAILABLE:{camera_error}"
+                    )
+                else:
+                    detector: NativePersonDetector | None = None
+                    with temporary_current_affinity(
+                        affinity.vision_cpu if affinity.enabled else None,
+                        role="vision",
+                        strict=affinity.strict,
+                    ):
+                        try:
+                            backend = LiteRtSsdPersonDetector(
+                                config.person_detection_backend
+                            )
+                            detector = NativePersonDetector(camera, backend)
+                            if not detector.start():
+                                raise RuntimeError("person detector worker did not start")
+                            person_detection_port = detector
+                        except Exception as exc:
+                            if detector is not None:
+                                try:
+                                    detector.stop()
+                                except Exception:
+                                    pass
+                            # Detector/model/runtime failures are capability-local.
+                            # TELEOP/EXPLORE motor availability is unchanged because
+                            # PERSON_DETECTOR_FRONT is not production-critical.
+                            person_detection_port = UnavailablePersonDetectionPort(
+                                f"{type(exc).__name__}:{exc}"
+                            )
+
+                if config.person_photo_evidence is not None:
+                    person_evidence = PersonPhotoEvidenceRecorder(
+                        camera,
+                        config.person_photo_evidence,
+                        source_device_id=(
+                            config.inputs.person_detection_source.device_id
+                        ),
+                    )
+
+            inputs = NativeSensorInputOwner(
+                counter_gpio_backend,
+                imu,
+                lidar,
+                config.inputs,
+                camera_port=camera,  # type: ignore[arg-type]
+                person_detection_port=person_detection_port,
+                encoder_source=encoder_source_override,
+            )
+        except Exception:
+            if inputs is not None:
+                inputs.close()
+            else:
+                if person_detection_port is not None:
+                    try:
+                        person_detection_port.stop()
+                    except Exception:
+                        pass
+                if camera is not None:
+                    try:
+                        camera.stop()
+                    except Exception:
+                        pass
+                if encoder_source_override is not None:
+                    try:
+                        encoder_source_override.close()
+                    except Exception:
+                        pass
+                if lidar is not None:
+                    try:
+                        lidar.stop()
+                    except Exception:
+                        pass
+                if imu is not None:
+                    try:
+                        imu.close()
+                    except Exception:
+                        pass
+                elif bus is not None:
+                    try:
+                        bus.close()
+                    except Exception:
+                        pass
+            raise
+        assert lidar is not None
+        self._inputs = inputs
+        self._lidar_port = lidar
+        self._pose_feedback = pose_feedback
+        self._person_evidence = person_evidence
+        self._closed = False
+
+    @property
+    def inputs(self) -> NativeSensorInputOwner:
+        return self._inputs
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    @property
+    def pose_feedback(self) -> NativePoseFeedback:
+        return self._pose_feedback
+
+    def publish_tick_result(self, result: TickResult) -> None:
+        if not isinstance(result, TickResult):
+            raise TypeError("result must be TickResult")
+        estimate = _layer_output(result, "L3")
+        if isinstance(estimate, RobotEstimate):
+            self._pose_feedback.publish(estimate)
+            publish_pose_reference = getattr(
+                self._lidar_port,
+                "publish_pose_reference",
+                None,
+            )
+            if callable(publish_pose_reference):
+                publish_pose_reference(
+                    TimedPoseReference(
+                        estimate.context.monotonic_ns,
+                        estimate.x_m,
+                        estimate.y_m,
+                        estimate.yaw_rad,
+                    )
+                )
+        admitted = _layer_output(result, "L2")
+        mission = _layer_output(result, "L5")
+        if (
+            self._person_evidence is not None
+            and isinstance(admitted, AdmittedFrame)
+            and isinstance(mission, MissionIntent)
+        ):
+            self._person_evidence.observe(admitted, mission)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._inputs.close()
+
+
+def run_finite_sensor_measurement(
+    counter_gpio_backend: GpioCounterBackend,
+    open_imu_bus: ImuBusFactory,
+    open_lidar_port: LidarPortFactory,
+    config: FiniteSensorMeasurementConfig,
+    *,
+    stop_requested: Callable[[], bool],
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    sleep: Callable[[float], None] = time.sleep,
+) -> SensorMeasurementReport:
+    """Run L0-L12 in fixed IDLE with a zero-only sink and close all devices."""
+
+    if not isinstance(config, FiniteSensorMeasurementConfig):
+        raise TypeError("config must be FiniteSensorMeasurementConfig")
+    for callback, name in (
+        (open_imu_bus, "open_imu_bus"),
+        (open_lidar_port, "open_lidar_port"),
+        (stop_requested, "stop_requested"),
+        (monotonic_ns, "monotonic_ns"),
+        (sleep, "sleep"),
+    ):
+        if not callable(callback):
+            raise TypeError(f"{name} must be callable")
+    if _stop_value(stop_requested):
+        return SensorMeasurementReport((), True)
+
+    first_deadline_ns = _clock_value(monotonic_ns, None)
+    owner = NativeHardwareSensorOwner(
+        counter_gpio_backend,
+        open_imu_bus,
+        open_lidar_port,
+        config.sensors,
+        monotonic_ns=monotonic_ns,
+        sleep=sleep,
+    )
+    results: list[TickResult] = []
+    operator_stopped = False
+    previous_clock_ns = first_deadline_ns
+    previous_tick_ns: int | None = None
+    next_deadline_ns = first_deadline_ns
+    try:
+        runtime = LiveInputComposition(
+            *owner.inputs.sources,
+            config.live_inputs,
+            auxiliary_sources=owner.inputs.auxiliary_sources,
+        )
+        for tick_id in range(config.tick_count):
+            if tick_id > 0 and _stop_value(stop_requested):
+                operator_stopped = True
+                break
+            now_ns = _clock_value(monotonic_ns, previous_clock_ns)
+            previous_clock_ns = now_ns
+            while now_ns < next_deadline_ns:
+                sleep((next_deadline_ns - now_ns) / 1_000_000_000.0)
+                if _stop_value(stop_requested):
+                    operator_stopped = True
+                    break
+                now_ns = _clock_value(monotonic_ns, previous_clock_ns)
+                previous_clock_ns = now_ns
+            if operator_stopped:
+                break
+            if previous_tick_ns is not None and now_ns <= previous_tick_ns:
+                raise RuntimeError("monotonic clock did not advance between ticks")
+            result = runtime.tick(TickContext(tick_id, now_ns))
+            if (
+                result.final_actuation.enabled
+                or result.final_actuation.left_output != 0.0
+                or result.final_actuation.right_output != 0.0
+            ):
+                raise RuntimeError("sensor measurement produced non-zero actuation")
+            results.append(result)
+            owner.publish_tick_result(result)
+            previous_tick_ns = now_ns
+            next_deadline_ns = max(
+                next_deadline_ns + config.tick_period_ns,
+                now_ns + 1,
+            )
+    finally:
+        owner.close()
+    return SensorMeasurementReport(tuple(results), operator_stopped)
+
+
+def run_native_hardware_bounded_physical_control(
+    counter_gpio_backend: GpioCounterBackend,
+    open_imu_bus: ImuBusFactory,
+    open_lidar_port: LidarPortFactory,
+    motor_gpio_backend: PwmGpioBackend,
+    config: BoundedPhysicalRuntimeConfig,
+    *,
+    approval: str,
+    stop_requested: Callable[[], bool],
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Enter only the existing bounded L12 writer path after explicit approval."""
+
+    if approval != PHYSICAL_RUN_APPROVAL:
+        raise PermissionError("explicit raised-stand bounded V3 approval is required")
+    if not isinstance(config, BoundedPhysicalRuntimeConfig):
+        raise TypeError("config must be BoundedPhysicalRuntimeConfig")
+    if config.sensor_inputs is None:
+        raise ValueError("runtime config does not close native sensor inputs")
+    for callback, name in (
+        (open_imu_bus, "open_imu_bus"),
+        (open_lidar_port, "open_lidar_port"),
+        (stop_requested, "stop_requested"),
+        (monotonic_ns, "monotonic_ns"),
+        (sleep, "sleep"),
+    ):
+        if not callable(callback):
+            raise TypeError(f"{name} must be callable")
+    if _stop_value(stop_requested):
+        return RUN_OK
+
+    owner = NativeHardwareSensorOwner(
+        counter_gpio_backend,
+        open_imu_bus,
+        open_lidar_port,
+        config.sensor_inputs,
+        monotonic_ns=monotonic_ns,
+        sleep=sleep,
+    )
+    try:
+        return run_owned_bounded_physical_control(
+            owner.inputs,
+            motor_gpio_backend,
+            config,
+            stop_requested=stop_requested,
+            monotonic_ns=monotonic_ns,
+            sleep=sleep,
+            tick_observer=owner.publish_tick_result,
+        )
+    finally:
+        owner.close()
+
+
+def run_native_hardware_resident_control(
+    counter_gpio_backend: GpioCounterBackend,
+    open_imu_bus: ImuBusFactory,
+    open_lidar_port: LidarPortFactory,
+    command_gateway: CommandGateway,
+    motor_gpio_backend: PwmGpioBackend,
+    config: ResidentPhysicalRuntimeConfig,
+    *,
+    approval: str,
+    stop_requested: Callable[[], bool],
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
+    sleep: Callable[[float], None] = time.sleep,
+    tick_observer: Callable[[TickResult], None] | None = None,
+    readiness_observer: Callable[[TickResult, bool], None] | None = None,
+    record_observer: Callable[[CaptureRecord], None] | None = None,
+    raw_lidar_observer: Callable[[object | None], None] | None = None,
+    affinity_config: RuntimeAffinityConfig | None = None,
+    enable_multirate_inputs: bool = True,
+    open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
+) -> ResidentRuntimeReport:
+    """Own all hardware for one resident session behind an explicit cutover gate."""
+
+    if approval != RESIDENT_PHYSICAL_RUN_APPROVAL:
+        raise PermissionError("explicit native resident V3 approval is required")
+    if not isinstance(config, ResidentPhysicalRuntimeConfig):
+        raise TypeError("config must be ResidentPhysicalRuntimeConfig")
+    for callback, name in (
+        (open_imu_bus, "open_imu_bus"),
+        (open_lidar_port, "open_lidar_port"),
+        (stop_requested, "stop_requested"),
+        (monotonic_ns, "monotonic_ns"),
+        (sleep, "sleep"),
+    ):
+        if not callable(callback):
+            raise TypeError(f"{name} must be callable")
+    if not callable(getattr(command_gateway, "snapshot", None)):
+        raise TypeError("command_gateway must provide a callable snapshot method")
+    if tick_observer is not None and not callable(tick_observer):
+        raise TypeError("tick_observer must be callable or None")
+    if readiness_observer is not None and not callable(readiness_observer):
+        raise TypeError("readiness_observer must be callable or None")
+    if record_observer is not None and not callable(record_observer):
+        raise TypeError("record_observer must be callable or None")
+    if raw_lidar_observer is not None and not callable(raw_lidar_observer):
+        raise TypeError("raw_lidar_observer must be callable or None")
+    if affinity_config is not None and not isinstance(
+        affinity_config, RuntimeAffinityConfig
+    ):
+        raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
+    if _stop_value(stop_requested):
+        return ResidentRuntimeReport(
+            status=RUN_OK,
+            exit_reason="STOP_REQUESTED_BEFORE_START",
+            tick_count=0,
+            normal_tick_count=0,
+            last_tick_id=None,
+            final_lifecycle=LifecycleState.SHUTDOWN,
+            final_safety_decision=None,
+            final_reason=None,
+            fault_layer=None,
+            operator_stopped=True,
+        )
+
+    affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
+    owner = NativeHardwareSensorOwner(
+        counter_gpio_backend,
+        open_imu_bus,
+        open_lidar_port,
+        config.sensor_inputs,
+        affinity_config=affinity_config,
+        open_imu_device=open_imu_device,
+        monotonic_ns=monotonic_ns,
+        sleep=sleep,
+    )
+    rollout_backend = None
+    async_l6 = config.composition.live_control.control.async_l6
+    try:
+        if async_l6.enabled:
+            rollout_backend = ProcessTrajectoryRolloutBackend(
+                config.composition.live_control.control.navigation,
+                worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
+                strict_affinity=(affinity.strict if affinity.enabled else False),
+            )
+        def observe(result: TickResult) -> None:
+            owner.publish_tick_result(result)
+            if raw_lidar_observer is not None:
+                raw_lidar_observer(owner.inputs.raw_lidar_snapshot())
+            if tick_observer is not None:
+                tick_observer(result)
+
+        return run_owned_resident_physical_control(
+            owner.inputs,
+            command_gateway,
+            motor_gpio_backend,
+            config,
+            stop_requested=stop_requested,
+            monotonic_ns=monotonic_ns,
+            sleep=sleep,
+            tick_observer=observe,
+            readiness_observer=readiness_observer,
+            record_observer=record_observer,
+            timing_enabled=bool(
+                affinity_config is not None and affinity_config.enabled
+            ),
+            trajectory_rollout_backend=rollout_backend,
+            enable_multirate_inputs=enable_multirate_inputs,
+            # Critical encoder/IMU acquisition stays on the dedicated I/O CPU;
+            # camera/person inference is isolated on vision_cpu so it cannot starve it.
+            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+            lidar_input_worker_cpu=(
+                affinity.lidar_cpu if affinity.enabled else None
+            ),
+            input_worker_strict_affinity=(
+                affinity.strict if affinity.enabled else False
+            ),
+        )
+    finally:
+        try:
+            if rollout_backend is not None:
+                rollout_backend.close()
+        finally:
+            owner.close()
+
+
+__all__ = [
+    "FiniteSensorMeasurementConfig",
+    "NativeHardwareSensorOwner",
+    "NativePoseFeedback",
+    "NativePoseFeedbackCheckpoint",
+    "POSE_HISTORY_CAPACITY",
+    "PHYSICAL_RUN_APPROVAL",
+    "RESIDENT_PHYSICAL_RUN_APPROVAL",
+    "ResidentPhysicalRuntimeConfig",
+    "ResidentRuntimeReport",
+    "SensorMeasurementReport",
+    "run_finite_sensor_measurement",
+    "run_native_hardware_bounded_physical_control",
+    "run_native_hardware_resident_control",
+]

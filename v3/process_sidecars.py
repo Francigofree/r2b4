@@ -32,7 +32,8 @@ from v3.resident_status import (
 _SPAWN_METHOD = "spawn"
 _CAPTURE_LOCAL_CAPACITY = 4096
 _CAPTURE_TRANSPORT_MIN_CAPACITY = 512
-_RAW_LIDAR_CAPACITY = 64
+_RAW_LIDAR_CAPACITY = 512
+_RAW_LIDAR_DRAIN_BATCH = 256
 _SIDECAR_READY_TIMEOUT_S = 10.0
 _SIDECAR_FINISH_TIMEOUT_S = 120.0
 
@@ -90,7 +91,7 @@ def _capture_sidecar_main(
         while running:
             # The LiDAR producer sends full scans directly here. The control
             # interpreter never unpickles/rebuilds/re-pickles raw geometry.
-            for _ in range(_RAW_LIDAR_CAPACITY):
+            for _ in range(_RAW_LIDAR_DRAIN_BATCH):
                 try:
                     raw_message = raw_lidar_queue.get_nowait()
                 except queue.Empty:
@@ -374,6 +375,11 @@ class ProcessMcapCaptureSession:
     def raw_lidar_queue(self) -> Any:
         """Spawn-time producer → sidecar evidence lane; never a control input."""
         return self._raw_lidar_queue
+
+    @property
+    def raw_lidar_transport_capacity(self) -> int:
+        """Bounded burst reserve; overflow remains explicit integrity failure."""
+        return _RAW_LIDAR_CAPACITY
 
     @property
     def failed(self) -> bool:

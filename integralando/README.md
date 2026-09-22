@@ -1,104 +1,107 @@
-# R2B4 lossless capture economy refactor
+# R2B4 P0 architecture upgrade — recovery / sterility / evidence
 
-Target repository: `Francigofree/r2b4`
-Target source HEAD: `bc188d1895d334dd9d10bd5b57fb8798522494bc`
+Source basis: `Francigofree/r2b4` main @ `b896ad2878bc3d6dcd181187f0a4adf2f072cf62` (2026-09-22).
 
-## Source-first conclusion
+This package implements the source-first revised P0.1 / P0.2 / P0.3 scope. It never starts robot movement or a resident runtime.
 
-The live capture `v3_20260922_222500_14887_capture.mcap` proves that the previous
-capture isolation upgrade is operational:
+## P0.1 — bounded L6 worker recovery
 
-- evidence integrity: PASS
-- replay: MATCH
-- ingress drops: 0
-- RELIABLE capture subscription: accepted == consumed == 709
-- core capacity evictions: 0
-- raw LiDAR evidence complete: true
-- raw LiDAR missing revisions: 0
+Adds `RecoveringTrajectoryRolloutBackend` in front of the existing process-isolated L6 rollout backend.
 
-The run itself ended in a production L3 fault associated with stale LiDAR/heading
-evidence. That is not a capture transport failure.
+Properties:
 
-## Measured MCAP size profile
+- explicit `RESTARTING` capability state;
+- generation increments on a genuine worker-recovery episode;
+- old-generation completions cannot be accepted;
+- one latest pending logical request is retained while recovery is running;
+- bounded retry policy (`3` attempts, short exponential backoff by default);
+- recovery exhaustion becomes explicit `FAILED` / `ASYNC_L6_RECOVERY_EXHAUSTED`;
+- no mission, navigation, safety, GPIO or motor authority moves into the supervisor;
+- `NativeControlComposition` uses the restarted generation's transport-start timestamp for the transport watchdog and suppresses watchdog expiry only while the edge is explicitly `RESTARTING`.
 
-Authority file size: 54,581,115 bytes.
+The original `ProcessTrajectoryRolloutBackend` remains available for direct edge/unit tests. Production hardware composition switches to the recovering wrapper.
 
-Message payload:
-- /r2b4/tick: 50,061,206 bytes (376 messages)
-- /r2b4/checkpoint: 3,453,651 bytes (9 messages)
-- /r2b4/raw_lidar: 1,016,100 bytes (96 messages)
-- /r2b4/runtime: 12,847 bytes
-- /r2b4/event: 2,575 bytes
+## P0.2 — control-path sterility hardening
 
-The raw LiDAR lane is therefore not the main storage problem. Tick JSON is.
+The fresh runtime evidence does **not** support removing canonical replay checkpoints as a P0 fix: the latest measured checkpoint p99 is ~4.9 ms, while L4 p99 is ~16.9 ms. Removing checkpoint construction would risk short-window replay determinism without addressing the dominant control-phase cost.
 
-Measured redundant representation inside ticks:
-- verbose DataField wrappers are repeated thousands of times;
-- L6 trajectory candidates are sometimes byte-for-byte identical to
-  TickInputs.planner_input.result.trajectory_candidates;
-- L7 selected trajectory is an exact member of the same L6 candidate list;
-- L5/L6/L7/L8 constraints repeat exactly;
-- layer TickContext values repeat the already stored TickInputs.context.
+This package therefore keeps canonical checkpoints and removes a real remaining downstream side effect from the completed-tick observer: person-photo evidence is now handed to a bounded passive worker. Wall-clock filename creation and camera JPEG requests no longer execute in the synchronous hardware tick observer.
 
-## Refactor
+The existing process capture/status isolation is preserved.
 
-The upgrade adds `v3/capture_compaction.py`.
+## P0.3 — reliable evidence transport hardening
 
-On disk only:
-- `DataField` becomes a compact reserved form;
-- exact intra-tick duplicates become explicit references.
+The latest authority capture already has integrity PASS and replay MATCH, so the architecture is retained and hardened rather than replaced.
 
-At `McapReader.iter_json_messages()`:
-- compact rows are expanded back to the canonical legacy JSON shape.
+Changes:
 
-Therefore Test Hub, replay and analysis code continue to receive the same expanded
-data model. Old uncompressed MCAP files remain readable.
+- raw-LiDAR process transport burst reserve: `64 -> 512` messages;
+- sidecar raw-priority drain batch: `256` messages;
+- raw evidence producer stays non-blocking (`put_nowait`); capture overload can never backpressure the LiDAR/control owner;
+- overflow remains explicit through the existing supersede/integrity accounting;
+- transport capacity is exposed for acceptance evidence;
+- new P0 regression tests are added to the canonical async acceptance tool.
 
-Raw LiDAR content is not reduced. Checkpoint state is not semantically pruned.
-No L0-L12 control data is discarded.
-
-The replay bridge is changed to consume the reader's expanded JSON path instead
-of directly decoding compact tick bytes.
-
-## Measured projected saving on the supplied MCAP
-
-Exact round-trip was verified for all:
-- 376 tick rows
-- 9 checkpoint rows
-
-Projected message payload:
-- before: 54,546,379 bytes
-- after:  43,706,396 bytes
-- saving: 10,839,983 bytes (~19.9%)
-
-This is lossless representation compaction, not evidence deletion.
+`max_raw_lidar_scans` in the triggered on-disk capture ring is intentionally unchanged: transport burst reserve and retained capture-window size are different concerns.
 
 ## Apply
 
 ```bash
-unzip r2b4_capture_economy_refactor_20260922.zip
-cd r2b4_capture_economy_refactor_20260922
+unzip r2b4_p0_arch_upgrade_20260922.zip
+cd r2b4_p0_arch_upgrade_20260922
 python3 apply_upgrade.py /home/alba/project_r2b4
 ```
 
-The installer requires the target HEAD by default. For an intentionally newer
-working tree, use `--allow-source-drift` only after reviewing the source anchors.
+The installer checks the source HEAD by default. If the working tree intentionally moved beyond the recorded source basis, review the exact source changes first and then use:
+
+```bash
+python3 apply_upgrade.py /home/alba/project_r2b4 --allow-source-drift
+```
+
+Even with `--allow-source-drift`, every exact patch anchor must still match; the installer will not guess through source drift.
+
+A rollback copy of every overwritten file is created under:
+
+```text
+runtime/upgrade_backups/r2b4_p0_arch_upgrade_20260922_<timestamp>/
+```
 
 ## Validate
 
+Targeted no-hardware regressions:
+
 ```bash
 cd /home/alba/project_r2b4
-
 python3 -m pytest -q \
-  tests/test_v3_capture_compaction.py \
-  tests/test_v3_mcap_e2e.py \
-  tests/test_v3_capture_refactor_p0.py \
-  tests/test_v3_capture_async_isolation.py
-
-python3 tools/r2b4_capture_size_audit.py \
-  runtime/captures/<capture>.mcap
+  tests/test_v3_async_recovery_p0.py \
+  tests/test_v3_async_person_photo_evidence.py \
+  tests/test_v3_capture_reliable_transport_p0.py
 ```
 
-Then run the full pytest suite.
+Canonical async offline gate:
 
-The package never starts robot movement.
+```bash
+python3 tools/v3_p0_async_acceptance.py \
+  --project-root /home/alba/project_r2b4 offline
+```
+
+Then full regression:
+
+```bash
+python3 -m pytest -q
+```
+
+For live acceptance without a motion command, use the repository's existing P0 async acceptance live gate only when the robot is in the usual safe test setup:
+
+```bash
+python3 tools/v3_p0_async_acceptance.py \
+  --project-root /home/alba/project_r2b4 live
+```
+
+## Deliberately not included
+
+- No L1-L12 layer is moved into its own process.
+- No generic event bus or scheduler is introduced.
+- No capture evidence is silently dropped to improve timing.
+- No replay checkpoint semantics are weakened.
+- No L4 revision-driven optimization is included here; current source/evidence indicates that is the next separate performance architecture task.

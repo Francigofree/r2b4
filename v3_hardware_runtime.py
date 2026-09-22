@@ -33,11 +33,12 @@ from v3.adapters.person_detection import (
     UnavailablePersonDetectionPort,
 )
 from v3.adapters.person_photo_evidence import PersonPhotoEvidenceRecorder
+from v3.adapters.async_person_photo_evidence import AsyncPersonPhotoEvidenceRecorder
 from v3.composition.live_inputs import (
     LiveInputComposition,
     LiveInputCompositionConfig,
 )
-from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
+from v3.adapters.recovering_l6_planner import RecoveringTrajectoryRolloutBackend
 from v3.adapters.process_encoder_backend import ProcessEncoderSource
 from v3.adapters.process_vision_port import ProcessVisionPort, UnavailableVisionPort
 from v3.composition.native_sensor_inputs import (
@@ -386,7 +387,7 @@ class NativeHardwareSensorOwner:
         lidar: LatestMatcherResultPort | None = None
         camera: object | None = None
         person_detection_port: PersonDetectionPort | None = None
-        person_evidence: PersonPhotoEvidenceRecorder | None = None
+        person_evidence: AsyncPersonPhotoEvidenceRecorder | None = None
         inputs: NativeSensorInputOwner | None = None
         encoder_source_override: ProcessEncoderSource | None = None
         pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
@@ -489,12 +490,14 @@ class NativeHardwareSensorOwner:
                             )
 
                 if config.person_photo_evidence is not None:
-                    person_evidence = PersonPhotoEvidenceRecorder(
-                        camera,
-                        config.person_photo_evidence,
-                        source_device_id=(
-                            config.inputs.person_detection_source.device_id
-                        ),
+                    person_evidence = AsyncPersonPhotoEvidenceRecorder(
+                        PersonPhotoEvidenceRecorder(
+                            camera,
+                            config.person_photo_evidence,
+                            source_device_id=(
+                                config.inputs.person_detection_source.device_id
+                            ),
+                        )
                     )
 
             inputs = NativeSensorInputOwner(
@@ -507,6 +510,8 @@ class NativeHardwareSensorOwner:
                 encoder_source=encoder_source_override,
             )
         except Exception:
+            if person_evidence is not None:
+                person_evidence.close()
             if inputs is not None:
                 inputs.close()
             else:
@@ -593,6 +598,8 @@ class NativeHardwareSensorOwner:
         if self._closed:
             return
         self._closed = True
+        if self._person_evidence is not None:
+            self._person_evidence.close()
         self._inputs.close()
 
 
@@ -810,7 +817,7 @@ def run_native_hardware_resident_control(
     async_l6 = config.composition.live_control.control.async_l6
     try:
         if async_l6.enabled:
-            rollout_backend = ProcessTrajectoryRolloutBackend(
+            rollout_backend = RecoveringTrajectoryRolloutBackend(
                 config.composition.live_control.control.navigation,
                 worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
                 strict_affinity=(affinity.strict if affinity.enabled else False),
