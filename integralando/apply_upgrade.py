@@ -91,12 +91,31 @@ def main() -> int:
         "            tick = EncodedRecord(\n"
     )
     capture = replace_once(capture, old, new, "mcap_capture stored row")
+
+    # IMPORTANT: target the TICK block specifically.
+    # The generic line "payload=_json_bytes(row)" also exists in the raw LiDAR
+    # block and must remain unchanged.
+    old = (
+        "                mcap_topic=TICK_TOPIC,\n"
+        "                monotonic_ns=monotonic_ns,\n"
+        "                sequence=tick_id,\n"
+        "                payload=_json_bytes(row),\n"
+        "                tick_id=tick_id,\n"
+    )
+    new = (
+        "                mcap_topic=TICK_TOPIC,\n"
+        "                monotonic_ns=monotonic_ns,\n"
+        "                sequence=tick_id,\n"
+        "                payload=_json_bytes(stored_row),\n"
+        "                tick_id=tick_id,\n"
+    )
     capture = replace_once(
         capture,
-        "                payload=_json_bytes(row),\n",
-        "                payload=_json_bytes(stored_row),\n",
+        old,
+        new,
         "mcap_capture tick payload",
     )
+
     capture = replace_once(
         capture,
         "                        payload=_json_bytes(checkpoint_row),\n",
