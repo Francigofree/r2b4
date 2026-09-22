@@ -376,10 +376,18 @@ class WheelActuatorController:
             return ActuatorRequest(wheels.context, 0.0, 0.0)
 
         feedback = self._last_feedback
+        if feedback is not None and any(
+            item.source_device_id == feedback.source_device_id
+            and item.reason is RejectionReason.STALE
+            for item in frame.rejected
+        ):
+            return self._stale_hold(wheels.context)
         if feedback is None:
             raise ValueError("L11 requires exactly one admitted wheel_velocity observation")
         age_ns = wheels.context.monotonic_ns - feedback.captured_monotonic_ns
-        if not 0 <= age_ns <= self._config.max_feedback_age_ns:
+        if age_ns > self._config.max_feedback_age_ns:
+            return self._stale_hold(wheels.context)
+        if age_ns < 0:
             raise ValueError("L11 wheel feedback is stale or from the future")
         if not fresh:
             if feedback.source_device_id in frame.degraded_sources or any(
@@ -424,6 +432,8 @@ class WheelActuatorController:
             self._transient_stale_ticks += 1
             self._left_pi.reset()
             self._right_pi.reset()
+            if any(field.key == "measurement_stale" and field.value is True for field in feedback.values):
+                return ActuatorRequest(wheels.context, 0.0, 0.0)
             # Preserve the last fully closed-loop context.  Recovery therefore
             # re-anchors PI time through the existing tick-gap rule instead of
             # integrating the whole uncertainty interval.  The current targets
@@ -516,6 +526,16 @@ class WheelActuatorController:
         return float(
             context.monotonic_ns - previous.monotonic_ns
         ) / 1_000_000_000.0
+
+    def _stale_hold(self, context: TickContext) -> ActuatorRequest:
+        self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
+            "feedback", self._feedback_uncertain_since_ns, context.monotonic_ns,
+        )
+        self._transient_stale_ticks += 1
+        self._left_pi.reset()
+        self._right_pi.reset()
+        self._last_context = None
+        return ActuatorRequest(context, 0.0, 0.0)
 
     @staticmethod
     def _counter_diagnostics_are_clean(values: Mapping[str, object]) -> bool:

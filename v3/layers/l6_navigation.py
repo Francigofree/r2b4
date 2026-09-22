@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Protocol
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult
+from v3.contracts.async_runtime import source_is_stale
 
 from v3.contracts import (
     CommandMode,
@@ -320,12 +321,16 @@ class AsyncL6PlannerConfig:
     release_tick_gap: int = 5
     max_plan_age_ns: int = 350_000_000
     release_delay_ns: int | None = None
+    # Missing delivery is a separate hard failure, not a computation deadline.
+    transport_timeout_ns: int = 2_000_000_000
 
     def __post_init__(self) -> None:
         if type(self.completion_inputs) is not bool:
             raise TypeError("completion_inputs must be bool")
         if type(self.request_timeout_ns) is not int or self.request_timeout_ns <= 0:
             raise ValueError("request_timeout_ns must be positive integer")
+        if type(self.transport_timeout_ns) is not int or self.transport_timeout_ns <= self.request_timeout_ns:
+            raise ValueError("transport_timeout_ns must exceed request_timeout_ns")
         if type(self.enabled) is not bool:
             raise TypeError("enabled must be bool")
         for value, name in (
@@ -683,15 +688,7 @@ class TrajectoryNavigator:
                 NavigationStatus.INVALIDATED,
                 "LOCAL_COSTMAP_STALE",
             )
-        if (
-            self._accept_pending_rollout(mission.context)
-            is _RolloutDisposition.HOLD
-        ):
-            return self._inactive(
-                mission,
-                NavigationStatus.IDLE,
-                "PLANNER_STALE_HOLD",
-            )
+        disposition = self._accept_pending_rollout(mission.context)
         if self._replan_due(
             mission.context.monotonic_ns,
             mission.context.tick_id,
@@ -711,6 +708,8 @@ class TrajectoryNavigator:
                 mission.constraints.max_v_mps,
                 mission.constraints.max_omega_rad_s,
             )
+        if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
+            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD")
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
@@ -1096,15 +1095,7 @@ class TrajectoryNavigator:
             ),
         )
 
-        if (
-            self._accept_pending_rollout(mission.context)
-            is _RolloutDisposition.HOLD
-        ):
-            return self._inactive(
-                mission,
-                NavigationStatus.IDLE,
-                "PLANNER_STALE_HOLD",
-            )
+        disposition = self._accept_pending_rollout(mission.context)
         if self._replan_due(
             mission.context.monotonic_ns,
             mission.context.tick_id,
@@ -1126,6 +1117,8 @@ class TrajectoryNavigator:
                 mission.constraints.max_omega_rad_s,
             )
 
+        if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
+            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD")
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
@@ -1170,7 +1163,7 @@ class TrajectoryNavigator:
             self._reset()
             self._mission_id = mission.mission_id
 
-        self._accept_pending_rollout(mission.context)
+        disposition = self._accept_pending_rollout(mission.context)
         self._mark_coverage(estimate.x_m, estimate.y_m, mission.context.tick_id)
         goal = self._local_goal
         if self._replan_due(
@@ -1200,6 +1193,8 @@ class TrajectoryNavigator:
                 scene=scene,
                 goal_selected_ns=goal_selected_ns,
             )
+        if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
+            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD")
         goal = self._local_goal
         candidates = self._trajectory_candidates
         if goal is None or not candidates:
@@ -1238,7 +1233,13 @@ class TrajectoryNavigator:
 
     def _replan_due(self, monotonic_ns: int, tick_id: int) -> bool:
         if self._pending_rollout_id is not None:
-            return False
+            pending = self._pending_rollout_request
+            if not self._completion_inputs or pending is None or not source_is_stale(
+                monotonic_ns, pending.context.monotonic_ns, self._max_plan_age_ns
+            ):
+                return False
+            self._abandon_pending_rollout()
+            return True
         previous_ns = self._last_replan_ns
         previous_tick_id = self._last_replan_tick_id
         if (
@@ -1345,9 +1346,7 @@ class TrajectoryNavigator:
     ) -> _RolloutDisposition:
         request = self._pending_rollout_request
         if request is None:
-            if self._trajectory_candidates:
-                self._require_fresh_cached_plan(context)
-            return _RolloutDisposition.NONE
+            return _RolloutDisposition.HOLD if self._cached_plan_stale(context) else _RolloutDisposition.NONE
 
         event = self._closed_completion
         if (
@@ -1363,14 +1362,16 @@ class TrajectoryNavigator:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
         if event.error is not None:
             if event.error == "ASYNC_L6_DEADLINE_MISSED":
-                raise RuntimeError("ASYNC_L6_DEADLINE_MISSED")
+                self._clear_trajectory_plan()
+                return _RolloutDisposition.HOLD
             raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{event.error}")
 
         result = event.result
         if result is None or result.source_context != request.context:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
-        if context.monotonic_ns - request.context.monotonic_ns > self._max_plan_age_ns:
-            raise RuntimeError("ASYNC_L6_PLAN_STALE")
+        if source_is_stale(context.monotonic_ns, request.context.monotonic_ns, self._max_plan_age_ns):
+            self._clear_trajectory_plan()
+            return _RolloutDisposition.HOLD
 
         if self._pending_goal_selected_ns is not None:
             self._goal_selected_ns = self._pending_goal_selected_ns
@@ -1429,8 +1430,9 @@ class TrajectoryNavigator:
 
         if result.source_context != source_context:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
-        if context.monotonic_ns - result.source_context.monotonic_ns > self._max_plan_age_ns:
-            raise RuntimeError("ASYNC_L6_PLAN_STALE")
+        if source_is_stale(context.monotonic_ns, result.source_context.monotonic_ns, self._max_plan_age_ns):
+            self._clear_trajectory_plan()
+            return _RolloutDisposition.HOLD
 
         selected_ns = self._pending_goal_selected_ns
         self._pending_rollout_id = None
@@ -1452,15 +1454,8 @@ class TrajectoryNavigator:
         return bool(
             self._trajectory_candidates
             and self._last_replan_ns is not None
-            and context.monotonic_ns - self._last_replan_ns > self._max_plan_age_ns
+            and source_is_stale(context.monotonic_ns, self._last_replan_ns, self._max_plan_age_ns)
         )
-
-    def _require_fresh_cached_plan(self, context: TickContext) -> None:
-        last_replan_ns = self._last_replan_ns
-        if last_replan_ns is None or not self._trajectory_candidates:
-            raise RuntimeError("async rollout has no authoritative cached plan")
-        if context.monotonic_ns - last_replan_ns > self._max_plan_age_ns:
-            raise RuntimeError("ASYNC_L6_PLAN_STALE")
 
     def _abandon_pending_rollout(self) -> None:
         request_id = self._pending_rollout_id

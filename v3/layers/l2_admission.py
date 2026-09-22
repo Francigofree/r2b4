@@ -91,7 +91,9 @@ class InputAdmission:
             if not measurement_timing_valid or measurement_stale:
                 degraded.add(sample.device_id)
 
-            if age_ns > self._config.max_sample_age_ns:
+            if not measurement_timing_valid:
+                reason = RejectionReason.TIME_ALIGNMENT_FAILED
+            elif measurement_stale or age_ns > self._config.max_sample_age_ns:
                 reason = RejectionReason.STALE
             elif previous_sequence is not None and sample.sequence == previous_sequence:
                 reason = RejectionReason.DUPLICATE
@@ -102,8 +104,6 @@ class InputAdmission:
                 > frame.context.monotonic_ns + self._config.max_future_skew_ns
             ):
                 reason = RejectionReason.TIME_ALIGNMENT_FAILED
-            elif age_ns > self._config.max_sample_age_ns:
-                reason = RejectionReason.STALE
             elif health_by_device.get(sample.device_id) in {
                 None,
                 DeviceHealthState.FAILED,

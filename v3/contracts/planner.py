@@ -5,6 +5,7 @@ import math
 from dataclasses import dataclass
 from .base import TickContext
 from .messages import RobotEstimate, WorldSnapshot, Waypoint, TrajectoryEvaluation
+from .async_runtime import CompletionTiming, WorkerIdentity
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,24 @@ class TrajectoryRolloutResult:
             )
         ):
             raise ValueError("trajectory_candidates must be a non-empty tuple")
+
+
+@dataclass(frozen=True, slots=True)
+class PlannerCompletion:
+    """Authority-free transport envelope; closure freezes its result or error."""
+
+    identity: WorkerIdentity
+    timing: CompletionTiming
+    result: TrajectoryRolloutResult | None
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.identity, WorkerIdentity) or not isinstance(self.timing, CompletionTiming):
+            raise TypeError("planner completion requires typed identity and timing")
+        if (self.result is None) == (self.error is None):
+            raise ValueError("planner completion requires one result or error")
+        if self.result is not None and self.result.source_context != self.identity.source_context:
+            raise ValueError("planner completion source context mismatch")
 
 
 @dataclass(frozen=True, slots=True)

@@ -32,6 +32,7 @@ from v3.adapters.litert_person_detector import LiteRtPersonDetectorConfig
 from v3.adapters.person_detection import PersonDetectionPort
 from v3.adapters.person_photo_evidence import PersonPhotoEvidenceConfig
 from v3.adapters.picamera2_camera import Picamera2CameraConfig
+from v3.async_capability import CapabilitySnapshot, SensorIntegritySnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +298,19 @@ class NativeSensorInputOwner:
         if not callable(getter):
             getter = getattr(self._lidar_port, "get_raw_scan_snapshot", None)
         return getter() if callable(getter) else None
+
+    def capability_snapshots(self, observed_monotonic_ns: int) -> tuple[CapabilitySnapshot, ...]:
+        """Passive scalar view of the last acquired values; no device I/O."""
+        if self._closed:
+            return ()
+        return tuple(source.capability_snapshot(observed_monotonic_ns)
+                     for source in self.sources + self.auxiliary_sources) + (
+            self._lidar_source.localization_capability_snapshot(observed_monotonic_ns),
+        )
+
+    def sensor_integrity_snapshots(self) -> tuple[SensorIntegritySnapshot, ...]:
+        return tuple(snapshot for source in (self._encoder_source, self._imu_source)
+                     if (snapshot := source.integrity_snapshot()) is not None)
 
     def close(self) -> None:
         """Release every transferred source capability exactly once."""

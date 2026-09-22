@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from v3.async_capability import CapabilitySnapshot, CapabilityState, TransportSemantics, latest_state_snapshot
 
 from v3.adapters.live_inputs import LiveDeviceSnapshot
 from v3.adapters.person_detection import PersonDetectionPort, PersonDetectionSnapshot
@@ -35,7 +36,9 @@ class NativePersonDetectionConfig:
 class NativePersonDetectionSource:
     """Expose detector health plus bounded person boxes as one L0 observation."""
 
-    __slots__ = ("_config", "_port")
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    __slots__ = ("_config", "_port", "_last_capability")
 
     def __init__(self, port: PersonDetectionPort, config: NativePersonDetectionConfig) -> None:
         if not callable(getattr(port, "get_detection_snapshot", None)):
@@ -46,6 +49,17 @@ class NativePersonDetectionSource:
             raise TypeError("config must be NativePersonDetectionConfig")
         self._port = port
         self._config = config
+        self._last_capability = None
+
+    def capability_snapshot(self, observed_monotonic_ns: int) -> CapabilitySnapshot:
+        previous = self._last_capability
+        return latest_state_snapshot(
+            name="vision.person_detection", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if previous is None else previous.source_sequence,
+            source_monotonic_ns=None if previous is None else previous.source_monotonic_ns,
+            stale_after_ns=self._config.maximum_result_age_ns, running=True,
+            error=None if previous is None else previous.error,
+        )
 
     @property
     def device_id(self) -> str:
@@ -61,7 +75,7 @@ class NativePersonDetectionSource:
             return self._failed(context, "PERSON_DETECTOR_PORT_ERROR")
         if status.last_error:
             return self._failed(context, "PERSON_DETECTOR_RUNTIME_ERROR")
-        if not status.running and result is None:
+        if not status.running:
             return self._failed(context, "PERSON_DETECTOR_NOT_RUNNING")
         if result is None:
             return LiveDeviceSnapshot(
@@ -74,7 +88,13 @@ class NativePersonDetectionSource:
             return self._failed(context, "PERSON_DETECTOR_TIME_INVALID")
 
         age_ns = context.monotonic_ns - result.measurement_monotonic_ns
-        stale = age_ns > self._config.maximum_result_age_ns
+        self._last_capability = latest_state_snapshot(
+            name="vision.person_detection", observed_monotonic_ns=context.monotonic_ns,
+            source_sequence=result.sequence,
+            source_monotonic_ns=result.measurement_monotonic_ns,
+            stale_after_ns=self._config.maximum_result_age_ns, running=True,
+        )
+        stale = self._last_capability.state is CapabilityState.STALE
         state = DeviceHealthState.DEGRADED if stale else DeviceHealthState.OK
         reason = "PERSON_DETECTOR_RESULT_STALE" if stale else None
         detections = result.detections[: self._config.maximum_detections]
@@ -131,6 +151,11 @@ class NativePersonDetectionSource:
         )
 
     def _failed(self, context: TickContext, reason: str) -> LiveDeviceSnapshot:
+        self._last_capability = latest_state_snapshot(
+            name="vision.person_detection", observed_monotonic_ns=context.monotonic_ns,
+            source_sequence=None, source_monotonic_ns=None,
+            stale_after_ns=self._config.maximum_result_age_ns, running=False, error=reason,
+        )
         return LiveDeviceSnapshot(
             context,
             DeviceHealth(self.device_id, DeviceHealthState.FAILED, reason),

@@ -247,7 +247,7 @@ class NativeLatestLidarBackend:
             or measurement_ns != midpoint_ns
         ):
             raise ValueError("raw scan timing contract is invalid")
-        measurement_age_ns = context.monotonic_ns - captured_ns
+        measurement_age_ns = context.monotonic_ns - measurement_ns
         observed_ns_value = getattr(snapshot, "observed_monotonic_ns", None)
         observed_ns = (
             context.monotonic_ns
@@ -437,7 +437,7 @@ class NativeLatestLidarBackend:
             timing_valid
             and (
                 status.get("health") != "OK"
-                or result_age_ns > self._config.maximum_result_age_ns
+                or measurement_age_ns > self._config.maximum_result_age_ns
             )
         )
         pose = LidarPoseReading(
@@ -531,7 +531,7 @@ class NativeLatestLidarBackend:
         )
         return LidarHealthReading(
             revision=revision,
-            captured_monotonic_ns=min(captured_ns, context.monotonic_ns),
+            captured_monotonic_ns=measurement_ns,
             measurement_age_ns=max(0, measurement_age_ns),
             confidence=confidence,
             stale=stale,

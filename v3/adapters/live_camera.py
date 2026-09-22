@@ -9,6 +9,7 @@ camera is a non-critical capability in the current production safety policy.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from v3.async_capability import CapabilitySnapshot, CapabilityState, TransportSemantics, latest_state_snapshot
 from v3.adapters.live_inputs import LiveDeviceSnapshot
 from v3.adapters.picamera2_camera import CameraEdgeSnapshot, CameraFramePort
 from v3.contracts import (
@@ -39,7 +40,9 @@ class NativeCameraConfig:
 class NativeCameraSource:
     """Close camera health/metadata into one bounded non-critical L0 source."""
 
-    __slots__ = ("_config", "_port")
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    __slots__ = ("_config", "_port", "_last_capability")
 
     def __init__(self, port: CameraFramePort, config: NativeCameraConfig) -> None:
         if not callable(getattr(port, "get_edge_snapshot", None)):
@@ -48,6 +51,17 @@ class NativeCameraSource:
             raise TypeError("config must be NativeCameraConfig")
         self._port = port
         self._config = config
+        self._last_capability = None
+
+    def capability_snapshot(self, observed_monotonic_ns: int) -> CapabilitySnapshot:
+        previous = self._last_capability
+        return latest_state_snapshot(
+            name="vision.camera", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if previous is None else previous.source_sequence,
+            source_monotonic_ns=None if previous is None else previous.source_monotonic_ns,
+            stale_after_ns=self._config.maximum_frame_age_ns, running=True,
+            error=None if previous is None else previous.error,
+        )
 
     @property
     def device_id(self) -> str:
@@ -86,7 +100,13 @@ class NativeCameraSource:
             return self._failed(context, "CAMERA_TIME_INVALID")
 
         age_ns = context.monotonic_ns - frame.measurement_monotonic_ns
-        stale = age_ns > self._config.maximum_frame_age_ns
+        self._last_capability = latest_state_snapshot(
+            name="vision.camera", observed_monotonic_ns=context.monotonic_ns,
+            source_sequence=frame.sequence,
+            source_monotonic_ns=frame.measurement_monotonic_ns,
+            stale_after_ns=self._config.maximum_frame_age_ns, running=True,
+        )
+        stale = self._last_capability.state is CapabilityState.STALE
         state = DeviceHealthState.DEGRADED if stale else DeviceHealthState.OK
         reason = "CAMERA_FRAME_STALE" if stale else None
         sample = DeviceSample(
@@ -120,6 +140,11 @@ class NativeCameraSource:
         )
 
     def _failed(self, context: TickContext, reason: str) -> LiveDeviceSnapshot:
+        self._last_capability = latest_state_snapshot(
+            name="vision.camera", observed_monotonic_ns=context.monotonic_ns,
+            source_sequence=None, source_monotonic_ns=None,
+            stale_after_ns=self._config.maximum_frame_age_ns, running=False, error=reason,
+        )
         return LiveDeviceSnapshot(
             context,
             DeviceHealth(self.device_id, DeviceHealthState.FAILED, reason),

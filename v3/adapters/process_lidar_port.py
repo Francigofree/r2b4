@@ -687,7 +687,7 @@ class ProcessLidarPort:
         raw = self._raw_snapshot
         status = self.get_runtime_status()
         source_sequence = None if raw is None else int(raw.raw_scan_id)
-        source_ns = None if raw is None else int(raw.scan_end_monotonic_ns)
+        source_ns = None if raw is None else int(raw.measurement_monotonic_ns)
         error = self._fatal_error or (
             "LIDAR_NOT_RUNNING" if status.get("health") == "ERROR" else None
         )
@@ -700,6 +700,21 @@ class ProcessLidarPort:
             running=bool(status.get("running", False)),
             error=error,
             degraded=status.get("health") == "DEGRADED",
+            stale=raw is not None and raw.health == "STALE",
+        )
+
+    def localization_capability_snapshot(self, observed_monotonic_ns: int, *, stale_after_ns: int = 250_000_000):
+        result = self._matcher_result
+        status = self.get_runtime_status()
+        error = self._fatal_error or None
+        if not self._stopped and not status.get("matcher_process_alive", False):
+            error = error or "LIDAR_MATCHER_NOT_RUNNING"
+        return latest_state_snapshot(
+            name="lidar.localization", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if result is None else result.matcher_result_id,
+            source_monotonic_ns=None if result is None else result.measurement_monotonic_ns,
+            stale_after_ns=stale_after_ns, running=not self._stopped, error=error,
+            degraded=status.get("health") not in ("OK", "STALE"),
         )
 
     def get_runtime_status(self) -> dict[str, object]:

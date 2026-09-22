@@ -5,14 +5,17 @@ from __future__ import annotations
 import multiprocessing as mp
 import queue
 import threading
+import time
 from dataclasses import dataclass
 
 from v3.async_capability import (
     CapabilityCounters,
+    CompletionTiming,
     TransportSemantics,
     WorkerIdentity,
     request_result_snapshot,
 )
+from v3.contracts.planner import PlannerCompletion
 from v3.layers.l6_navigation import (
     NavigationConfig,
     TrajectoryRolloutComputer,
@@ -30,6 +33,7 @@ class _WorkItem:
     generation: int
     request_id: int
     request: TrajectoryRolloutRequest
+    submit_ns: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +42,8 @@ class _WorkResult:
     request_id: int
     result: TrajectoryRolloutResult | None
     error: str | None = None
+    worker_start_ns: int = 0
+    worker_completed_ns: int = 0
 
 
 def _worker_main(generation, config, request_queue, result_queue, worker_cpu, strict_affinity):
@@ -58,12 +64,15 @@ def _worker_main(generation, config, request_queue, result_queue, worker_cpu, st
                 continue
             if item.generation != generation:
                 continue
+            started_ns = time.monotonic_ns()
             try:
                 result = computer.compute(item.request)
             except BaseException as exc:
-                result_queue.put(_WorkResult(generation, item.request_id, None, f"{type(exc).__name__}:{exc}"))
+                completed_ns = time.monotonic_ns()
+                result_queue.put(_WorkResult(generation, item.request_id, None, f"{type(exc).__name__}:{exc}"[:256], started_ns, completed_ns))
             else:
-                result_queue.put(_WorkResult(generation, item.request_id, result, None))
+                completed_ns = time.monotonic_ns()
+                result_queue.put(_WorkResult(generation, item.request_id, result, None, started_ns, completed_ns))
     except BaseException as exc:
         try:
             result_queue.put(("startup_error", f"{type(exc).__name__}:{exc}"))
@@ -83,6 +92,7 @@ class ProcessTrajectoryRolloutBackend:
         "_completed_count", "_abandoned_count", "_superseded_count",
         "_late_rejected_count", "_error_count", "_last_completed_request_id",
         "_last_completed_source_ns", "_request_sources",
+        "_running", "_pending", "_deadline_missed_count", "_last_timing",
     )
 
     def __init__(self, config: NavigationConfig, *, worker_cpu=None, strict_affinity=True, ready_timeout_s=5.0):
@@ -116,6 +126,10 @@ class ProcessTrajectoryRolloutBackend:
         self._error_count = 0
         self._last_completed_request_id = None
         self._last_completed_source_ns = None
+        self._running = None
+        self._pending = None
+        self._deadline_missed_count = 0
+        self._last_timing = None
 
         self._process.start()
         try:
@@ -188,24 +202,45 @@ class ProcessTrajectoryRolloutBackend:
                     return
 
                 if isinstance(message, _WorkResult):
+                    received_ns = time.monotonic_ns()
                     with self._lock:
                         if message.generation != self._generation:
                             self._late_rejected_count += 1
                             continue
+                        running = self._running
+                        if running is None or message.request_id != running.request_id:
+                            self._late_rejected_count += 1
+                            continue
+                        # Even a superseded worker failure is a real failure.
+                        if message.error is not None or message.result is None:
+                            self._collector_error = f"ASYNC_L6_WORKER_FAILED:{message.error}"[:256]
+                            self._error_count += 1
+                            return
+                        if message.result.source_context != running.request.context:
+                            self._collector_error = "ASYNC_L6_SOURCE_CONTEXT_MISMATCH"
+                            self._error_count += 1
+                            return
+                        completion = PlannerCompletion(
+                            WorkerIdentity(message.generation, message.request_id, running.request.context),
+                            CompletionTiming(running.submit_ns, message.worker_start_ns,
+                                             message.worker_completed_ns, received_ns),
+                            message.result,
+                        )
+                        self._running = None
                         if message.request_id in self._abandoned:
                             self._abandoned.discard(message.request_id)
                             self._request_sources.pop(message.request_id, None)
                             self._late_rejected_count += 1
-                            continue
-                        if message.request_id in self._buffer:
-                            self._collector_error = self._collector_error or f"ASYNC_L6_DUPLICATE_RESULT:{message.request_id}"
+                        elif len(self._buffer) >= _RESULT_BUFFER_CAPACITY:
+                            self._collector_error = "ASYNC_L6_RESULT_BUFFER_FULL"
                             self._error_count += 1
                             return
-                        if len(self._buffer) >= _RESULT_BUFFER_CAPACITY:
-                            self._collector_error = self._collector_error or "ASYNC_L6_RESULT_BUFFER_FULL"
-                            self._error_count += 1
-                            return
-                        self._buffer[message.request_id] = message
+                        else:
+                            self._buffer[message.request_id] = completion
+                        pending = self._pending
+                        self._pending = None
+                        if pending is not None:
+                            self._dispatch_locked(pending)
                     continue
 
                 if isinstance(message, tuple) and message and message[0] in {"startup_error", "worker_error"}:
@@ -219,74 +254,117 @@ class ProcessTrajectoryRolloutBackend:
         finally:
             self._collector_ready.set()
 
+    def _dispatch_locked(self, item: _WorkItem) -> None:
+        # Only one request is ever handed to the process. Replacements stay in
+        # the parent slot until that request completes, so no obsolete IPC FIFO
+        # can accumulate behind a busy worker.
+        try:
+            self._request_queue.put_nowait(item)
+        except (queue.Full, OSError, ValueError) as exc:
+            self._collector_error = f"ASYNC_L6_REQUEST_TRANSPORT_FAILED:{type(exc).__name__}"
+            self._error_count += 1
+            raise RuntimeError(self._collector_error) from exc
+        self._running = item
+
     def submit(self, request: TrajectoryRolloutRequest) -> int:
         if not isinstance(request, TrajectoryRolloutRequest):
             raise TypeError("request must be TrajectoryRolloutRequest")
         with self._lock:
             if self._closed:
                 raise RuntimeError("trajectory rollout backend is closed")
-            collector_error = self._collector_error
-        if collector_error is not None:
-            raise RuntimeError(collector_error)
-        request_id = self._next_id
-        self._next_id += 1
-        try:
-            self._request_queue.put_nowait(_WorkItem(self._generation, request_id, request))
-        except queue.Full as exc:
-            raise RuntimeError("ASYNC_L6_REQUEST_QUEUE_FULL") from exc
-        with self._lock:
+            if self._collector_error is not None:
+                raise RuntimeError(self._collector_error)
+            if not self._process.is_alive():
+                raise RuntimeError("ASYNC_L6_WORKER_EXITED")
+            request_id = self._next_id
+            self._next_id += 1
+            item = _WorkItem(self._generation, request_id, request, time.monotonic_ns())
+            if self._running is None:
+                self._dispatch_locked(item)
+            else:
+                running_id = self._running.request_id
+                if running_id not in self._abandoned:
+                    self._abandoned.add(running_id)
+                    self._superseded_count += 1
+                if self._pending is not None:
+                    self._request_sources.pop(self._pending.request_id, None)
+                    self._superseded_count += 1
+                self._pending = item
             self._submitted_count += 1
             self._request_sources[request_id] = request.context
         return request_id
 
-    def take(self, request_id: int):
+    def take_completion(self, request_id: int, *, visible_ns: int | None = None, transport_timeout_ns: int = 2_000_000_000):
         with self._lock:
             if self._closed:
                 raise RuntimeError("trajectory rollout backend is closed")
-            message = self._buffer.pop(request_id, None)
-            collector_error = self._collector_error
-            source_context = self._request_sources.get(request_id)
-        if message is not None:
-            with self._lock:
-                self._request_sources.pop(request_id, None)
-                self._completed_count += 1
-                self._last_completed_request_id = request_id
-                if source_context is not None:
-                    self._last_completed_source_ns = source_context.monotonic_ns
-            if message.error is not None or message.result is None:
-                with self._lock:
+            if self._collector_error is not None:
+                raise RuntimeError(self._collector_error)
+            if not self._process.is_alive():
+                raise RuntimeError("ASYNC_L6_WORKER_EXITED")
+            completion = self._buffer.get(request_id)
+            if completion is None:
+                # Superseding requests must not reset a hung worker's watchdog.
+                running = self._running
+                if (visible_ns is not None and running is not None
+                        and visible_ns - running.submit_ns > transport_timeout_ns):
+                    self._collector_error = "ASYNC_L6_TRANSPORT_TIMEOUT"
                     self._error_count += 1
-                raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{message.error}")
-            return message.result
-        if collector_error is not None:
-            raise RuntimeError(collector_error)
-        return None
+                    raise RuntimeError(self._collector_error)
+                return None
+            if visible_ns is not None and completion.timing.collector_received_ns > visible_ns:
+                return None
+            self._buffer.pop(request_id)
+            self._request_sources.pop(request_id, None)
+            self._completed_count += 1
+            self._last_completed_request_id = request_id
+            self._last_completed_source_ns = completion.identity.source_context.monotonic_ns
+            self._last_timing = completion.timing
+            return completion
+
+    def take(self, request_id: int):
+        completion = self.take_completion(request_id)
+        return None if completion is None else completion.result
 
     def abandon(self, request_id: int) -> None:
         with self._lock:
             if self._closed:
                 return
-            buffered = self._buffer.pop(request_id, None)
+            self._buffer.pop(request_id, None)
             self._request_sources.pop(request_id, None)
             self._abandoned_count += 1
-            if buffered is None:
-                self._abandoned.add(request_id)
-            else:
-                self._abandoned.discard(request_id)
+            if self._pending is not None and self._pending.request_id == request_id:
+                self._pending = None
+                self._superseded_count += 1
+            if self._running is not None and self._running.request_id == request_id:
+                if request_id not in self._abandoned:
+                    self._abandoned.add(request_id)
+                    self._superseded_count += 1
 
-    def note_superseded(self) -> None:
+    def note_deadline_missed(self) -> None:
         with self._lock:
-            self._superseded_count += 1
+            self._deadline_missed_count += 1
 
-    def capability_snapshot(self, observed_monotonic_ns: int, *, pending_identity=None):
+    @property
+    def last_completion_timing(self) -> CompletionTiming | None:
+        with self._lock:
+            return self._last_timing
+
+    def capability_snapshot(self, observed_monotonic_ns: int, *, pending_identity=None, stale_after_ns=350_000_000):
         with self._lock:
             error = self._collector_error
+            if not self._closed and not self._process.is_alive():
+                error = error or "ASYNC_L6_WORKER_EXITED"
+            pending = self._pending or self._running
+            if pending_identity is None and pending is not None:
+                pending_identity = WorkerIdentity(self._generation, pending.request_id, pending.request.context)
             counters = CapabilityCounters(
                 produced=self._submitted_count,
                 accepted=self._completed_count,
                 superseded=self._superseded_count,
                 errors=self._error_count,
                 late_rejected=self._late_rejected_count,
+                deadline_missed=self._deadline_missed_count,
             )
             last_id = self._last_completed_request_id
             last_source = self._last_completed_source_ns
@@ -301,6 +379,8 @@ class ProcessTrajectoryRolloutBackend:
             error=error,
             running=running,
             counters=counters,
+            stale_after_ns=stale_after_ns,
+            pending_submit_ns=None if pending is None else pending.submit_ns,
         )
 
     def close(self) -> None:
@@ -336,6 +416,7 @@ class ProcessTrajectoryRolloutBackend:
                 self._buffer.clear()
                 self._abandoned.clear()
                 self._request_sources.clear()
+                self._running = self._pending = None
 
 
 __all__ = ["ProcessTrajectoryRolloutBackend"]

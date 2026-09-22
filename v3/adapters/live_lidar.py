@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from typing import Protocol
 
+from v3.async_capability import TransportSemantics, latest_state_snapshot
+
 from v3.contracts import (
     DataField,
     DeviceHealth,
@@ -349,7 +351,9 @@ class LidarHealthBackend(Protocol):
 class NativeLidarSource:
     """Split one acquired scan into independent native V3 capabilities."""
 
-    __slots__ = ("_backend", "_config", "_local_points_cache_key", "_local_points_cache")
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    __slots__ = ("_backend", "_config", "_local_points_cache_key", "_local_points_cache", "_latest")
 
     def __init__(
         self,
@@ -360,8 +364,33 @@ class NativeLidarSource:
             raise TypeError("config must be NativeLidarConfig")
         self._backend = backend
         self._config = config
+        self._latest = None
         self._local_points_cache_key: tuple[int, int] | None = None
         self._local_points_cache: DeviceSample | None = None
+
+    def capability_snapshot(self, observed_monotonic_ns: int):
+        scan = None if self._latest is None else self._latest.scan
+        return latest_state_snapshot(
+            name="lidar.control", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if scan is None or scan.revision == 0 else scan.revision,
+            source_monotonic_ns=None if scan is None else scan.measurement_monotonic_ns,
+            stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
+            error="LIDAR_DEVICE_FAILED" if scan is not None and scan.health == "ERROR" else None,
+            stale=scan is not None and scan.stale,
+            timing_valid=scan is None or scan.timing_valid,
+        )
+
+    def localization_capability_snapshot(self, observed_monotonic_ns: int):
+        reading = self._latest
+        return latest_state_snapshot(
+            name="lidar.localization", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if reading is None or reading.revision == 0 else reading.revision,
+            source_monotonic_ns=None if reading is None else reading.captured_monotonic_ns,
+            stale_after_ns=self._config.maximum_measurement_age_ns, running=True,
+            stale=reading is not None and reading.stale,
+            timing_valid=reading is None or reading.timing_valid,
+            degraded=reading is not None and (reading.pose is None or reading.confidence < self._config.minimum_confidence),
+        )
 
     @property
     def device_id(self) -> str:
@@ -373,12 +402,13 @@ class NativeLidarSource:
         reading = self._backend.read(context)
         if not isinstance(reading, LidarHealthReading):
             raise TypeError("lidar backend must return LidarHealthReading")
+        self._latest = reading
 
         scan = reading.scan
         if scan is None:
             raise ValueError("native lidar reading must include a physical scan")
         physical_revision = scan.revision
-        physical_captured_ns = scan.captured_monotonic_ns
+        physical_captured_ns = scan.measurement_monotonic_ns
         physical_age_ns = scan.measurement_age_ns
         physical_stale = scan.stale
         physical_timing_valid = scan.timing_valid
@@ -423,13 +453,13 @@ class NativeLidarSource:
             ),
         )
         samples = [health_sample]
-        if scan.revision > 0:
+        if scan.revision > 0 and health.state is DeviceHealthState.OK:
             samples.append(
                 DeviceSample(
                     device_id=self.device_id,
                     kind="lidar_safety_clearance",
                     sequence=scan.revision,
-                    captured_monotonic_ns=scan.captured_monotonic_ns,
+                    captured_monotonic_ns=scan.measurement_monotonic_ns,
                     values=(
                         DataField("age_ns", scan.measurement_age_ns),
                         DataField("front_clearance_m", scan.front_clearance_m),
@@ -487,7 +517,7 @@ class NativeLidarSource:
                     device_id=self.device_id,
                     kind="lidar_local_points",
                     sequence=scan.revision,
-                    captured_monotonic_ns=scan.captured_monotonic_ns,
+                    captured_monotonic_ns=scan.measurement_monotonic_ns,
                     values=tuple(local_values),
                 )
                 self._local_points_cache_key = cache_key

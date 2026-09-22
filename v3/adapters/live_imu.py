@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from typing import Protocol
 
+from v3.async_capability import SensorIntegritySnapshot, TransportSemantics, latest_state_snapshot
+
 from v3.contracts import (
     DataField,
     DeviceHealth,
@@ -131,13 +133,49 @@ class ImuHeadingBackend(Protocol):
 class NativeImuSource:
     """Convert one injected fused IMU reading into one native device snapshot."""
 
-    __slots__ = ("_backend", "_config")
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    __slots__ = ("_backend", "_config", "_latest", "_error", "_read_errors")
 
     def __init__(self, backend: ImuHeadingBackend, config: NativeImuConfig) -> None:
         if not isinstance(config, NativeImuConfig):
             raise TypeError("config must be NativeImuConfig")
         self._backend = backend
         self._config = config
+        self._latest = None
+        self._error = None
+        self._read_errors = 0
+
+    def capability_snapshot(self, observed_monotonic_ns: int, *, stale_after_ns: int = 250_000_000):
+        reading = self._latest
+        rate_only = self._config.allow_rate_only
+        return latest_state_snapshot(
+            name="imu.heading_rate", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if reading is None else reading.sequence,
+            source_monotonic_ns=None if reading is None else reading.captured_monotonic_ns,
+            stale_after_ns=stale_after_ns, running=True, error=self._error,
+            stale=False if reading is None else reading.stale,
+            timing_valid=True if reading is None else reading.timing_valid,
+            degraded=reading is not None and (
+                (reading.resolved_omega_confidence if rate_only else reading.confidence) < self._config.minimum_confidence
+                or (reading.resolved_omega_calibration if rate_only else reading.calibration) < self._config.minimum_calibration
+            ),
+        )
+
+    def integrity_snapshot(self) -> SensorIntegritySnapshot | None:
+        reading = self._latest
+        if reading is None:
+            return None
+        rate_only = self._config.allow_rate_only
+        return SensorIntegritySnapshot(
+            source_sequence=reading.sequence,
+            source_monotonic_ns=reading.captured_monotonic_ns,
+            timing_valid=reading.timing_valid,
+            measurement_valid=reading.timing_valid and not reading.stale
+                and (reading.resolved_omega_confidence if rate_only else reading.confidence) >= self._config.minimum_confidence
+                and (reading.resolved_omega_calibration if rate_only else reading.calibration) >= self._config.minimum_calibration,
+            read_errors=self._read_errors,
+        )
 
     @property
     def device_id(self) -> str:
@@ -146,9 +184,16 @@ class NativeImuSource:
     def read(self, context: TickContext) -> LiveDeviceSnapshot:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
-        reading = self._backend.read(context)
+        try:
+            reading = self._backend.read(context)
+        except Exception as exc:
+            self._read_errors += 1
+            self._error = f"{type(exc).__name__}:{exc}"[:256]
+            raise
         if not isinstance(reading, ImuHeadingReading):
             raise TypeError("IMU backend must return ImuHeadingReading")
+        self._latest = reading
+        self._error = None
 
         if not reading.timing_valid:
             health = DeviceHealth(
@@ -209,6 +254,8 @@ class NativeImuSource:
             sequence=reading.sequence,
             captured_monotonic_ns=reading.captured_monotonic_ns,
             values=(
+                DataField("measurement_stale", reading.stale),
+                DataField("measurement_timing_valid", reading.timing_valid),
                 DataField("yaw_rad", reading.yaw_rad),
                 DataField("omega_rad_s", reading.omega_rad_s),
                 DataField("confidence", reading.confidence),

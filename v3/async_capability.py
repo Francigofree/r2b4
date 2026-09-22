@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from v3.contracts import TickContext
+from v3.contracts.async_runtime import CompletionTiming, WorkerIdentity, source_is_stale
 
 
 class TransportSemantics(str, Enum):
@@ -29,6 +29,32 @@ class CapabilityState(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
+class SensorIntegritySnapshot:
+    """Passive raw integrity, separate from age and semantic measurement validity.
+
+    Counters are source lifetime totals, never a freshness or safety authority.
+    Capability-specific detail (e.g. left/right encoder deltas) stays at its edge.
+    """
+
+    source_sequence: int
+    source_monotonic_ns: int
+    timing_valid: bool
+    measurement_valid: bool
+    read_errors: int = 0
+    invalid_alerts: int = 0
+    quadrature_rejections: int = 0
+    measurement_rejection: str | None = None
+
+    def __post_init__(self) -> None:
+        for value in (self.source_sequence, self.source_monotonic_ns,
+                      self.read_errors, self.invalid_alerts, self.quadrature_rejections):
+            if type(value) is not int or value < 0:
+                raise ValueError("integrity counters/times must be non-negative integers")
+        if type(self.timing_valid) is not bool or type(self.measurement_valid) is not bool:
+            raise TypeError("integrity validity must be bool")
+
+
+@dataclass(frozen=True, slots=True)
 class CapabilityCounters:
     produced: int = 0
     accepted: int = 0
@@ -37,29 +63,15 @@ class CapabilityCounters:
     errors: int = 0
     restarts: int = 0
     late_rejected: int = 0
+    deadline_missed: int = 0
 
     def __post_init__(self) -> None:
         for value in (
             self.produced, self.accepted, self.superseded, self.stale,
-            self.errors, self.restarts, self.late_rejected,
+            self.errors, self.restarts, self.late_rejected, self.deadline_missed,
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError("capability counters must be non-negative integers")
-
-
-@dataclass(frozen=True, slots=True)
-class WorkerIdentity:
-    generation: int
-    request_id: int
-    source_context: TickContext
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.generation, int) or isinstance(self.generation, bool) or self.generation <= 0:
-            raise ValueError("generation must be a positive integer")
-        if not isinstance(self.request_id, int) or isinstance(self.request_id, bool) or self.request_id <= 0:
-            raise ValueError("request_id must be a positive integer")
-        if not isinstance(self.source_context, TickContext):
-            raise TypeError("source_context must be TickContext")
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +87,12 @@ class CapabilitySnapshot:
     request_id: int | None = None
     error: str | None = None
     counters: CapabilityCounters = CapabilityCounters()
+
+    @property
+    def age_ns(self) -> int | None:
+        if self.source_monotonic_ns is None:
+            return None
+        return max(0, self.observed_monotonic_ns - self.source_monotonic_ns)
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -108,10 +126,14 @@ def latest_state_snapshot(
     running: bool,
     error: str | None = None,
     degraded: bool = False,
+    stale: bool = False,
+    timing_valid: bool = True,
     counters: CapabilityCounters = CapabilityCounters(),
 ) -> CapabilitySnapshot:
     if not isinstance(stale_after_ns, int) or isinstance(stale_after_ns, bool) or stale_after_ns <= 0:
         raise ValueError("stale_after_ns must be positive")
+    if not timing_valid or (source_monotonic_ns is not None and source_monotonic_ns > observed_monotonic_ns):
+        error = error or "SOURCE_TIME_INVALID"
     if error:
         state = CapabilityState.FAILED
     elif not running:
@@ -119,8 +141,7 @@ def latest_state_snapshot(
     elif source_sequence is None or source_monotonic_ns is None:
         state = CapabilityState.NO_DATA
     else:
-        age = max(0, observed_monotonic_ns - source_monotonic_ns)
-        if age > stale_after_ns:
+        if stale or source_is_stale(observed_monotonic_ns, source_monotonic_ns, stale_after_ns):
             state = CapabilityState.STALE
         elif degraded:
             state = CapabilityState.DEGRADED
@@ -149,6 +170,8 @@ def request_result_snapshot(
     error: str | None,
     running: bool,
     counters: CapabilityCounters,
+    stale_after_ns: int = 350_000_000,
+    pending_submit_ns: int | None = None,
 ) -> CapabilitySnapshot:
     if error:
         state = CapabilityState.FAILED
@@ -156,6 +179,10 @@ def request_result_snapshot(
         state = CapabilityState.STOPPED
     elif pending_identity is not None:
         state = CapabilityState.PENDING
+    elif last_completed_source_ns is not None and source_is_stale(
+        observed_monotonic_ns, last_completed_source_ns, stale_after_ns
+    ):
+        state = CapabilityState.STALE
     elif last_completed_request_id is not None:
         state = CapabilityState.FRESH
     else:
@@ -166,7 +193,9 @@ def request_result_snapshot(
     if pending_identity is not None:
         request_id = pending_identity.request_id
         source_ns = pending_identity.source_context.monotonic_ns
-        pending_age = max(0, observed_monotonic_ns - source_ns)
+        pending_age = max(0, observed_monotonic_ns - (
+            source_ns if pending_submit_ns is None else pending_submit_ns
+        ))
     return CapabilitySnapshot(
         name=name,
         semantics=TransportSemantics.REQUEST_RESULT,
@@ -185,8 +214,11 @@ __all__ = [
     "CapabilityCounters",
     "CapabilitySnapshot",
     "CapabilityState",
+    "CompletionTiming",
     "TransportSemantics",
+    "SensorIntegritySnapshot",
     "WorkerIdentity",
     "latest_state_snapshot",
     "request_result_snapshot",
+    "source_is_stale",
 ]

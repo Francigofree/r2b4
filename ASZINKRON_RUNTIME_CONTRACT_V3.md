@@ -187,6 +187,15 @@ is fail-closed.
 
 ### Worker identity és restart
 
+A számítási deadline authorityja a worker tényleges completion ideje az
+aktuális request submit idejéhez mérve. A worker start/completion, collector
+receipt és closure visibility külön időpont; az utóbbi kettő nem írhatja át a
+határidőre elkészült eredményt timeouttá. A frissesség mindig az eredeti
+source/measurement időből számítandó, nem a completion vagy receipt idejéből.
+A hiányzó delivery külön bounded transport-watchdoghoz tartozik: a számítási
+deadline túllépése recoverable HOLD/replacement lehet, a tényleges transport-
+vagy workerhiba fail-closed. Supersede nem nullázhatja a futó worker watchdogját.
+
 Request/result worker logikai azonossága:
 `worker_generation + request_id + source_context`.
 
@@ -198,6 +207,14 @@ fogadható el. Worker restart nem írhatja át a source identityt.
 Állapotjellegű compute esetén a bounded célminta:
 `1 running + legfeljebb 1 latest pending replacement`.
 Végtelen queue és sorban kiszámolt elavult state nem megengedett.
+
+Friss előző eredmény pending replacement alatt használható. Stale előző
+eredménnyel kizárólag zero-motion HOLD/STOP megengedett; a mission identity
+megőrizhető, a friss replacement elfogadása után resume következhet. Ez azonos
+jelentésű EXPLORE, FOLLOW és NAVIGATE módban. A raw szenzorintegritás (például
+quadrature rejection vagy bus error), a timing validity, a frissesség és a
+szemantikai mérés elfogadása külön tény; egy integrity counter nem önálló
+measurement- vagy safety-authority.
 
 ### Lightweight production evidence
 

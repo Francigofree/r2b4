@@ -189,6 +189,7 @@ def v3_navigation_config_from_mapping(
         enabled=async_enabled,
         completion_inputs=async_mapping.get("completion_inputs", False),
         request_timeout_ns=_positive_int(async_mapping.get("request_timeout_ns", 300_000_000), "async_l6.request_timeout_ns"),
+        transport_timeout_ns=_positive_int(async_mapping.get("transport_timeout_ns", 2_000_000_000), "async_l6.transport_timeout_ns"),
         release_tick_gap=_positive_int(
             async_mapping.get("release_tick_gap", 5),
             "v3_navigation.async_l6.release_tick_gap",
@@ -539,6 +540,7 @@ class NativeControlComposition:
         "_transport_error",
         "_transport_started_ns",
         "_transport_timeout_ns",
+        "_request_timeout_ns",
         "_world_model",
     )
 
@@ -602,7 +604,8 @@ class NativeControlComposition:
         self._transport_id = None
         self._transport_error = None
         self._transport_started_ns = None
-        self._transport_timeout_ns = config.async_l6.request_timeout_ns
+        self._transport_timeout_ns = config.async_l6.transport_timeout_ns
+        self._request_timeout_ns = config.async_l6.request_timeout_ns
         self._rollout_backend = backend
         self._motion_realization = motion_realization
         self._operational_constraints = operational_constraints
@@ -638,6 +641,11 @@ class NativeControlComposition:
         """Forward passive layer timing to the deterministic engine."""
 
         self._engine.set_timing_observer(observer)
+
+    def planner_capability_snapshot(self, observed_monotonic_ns: int):
+        """Passive transport evidence; never participates in input closure."""
+        getter = getattr(self._rollout_backend, "capability_snapshot", None)
+        return getter(observed_monotonic_ns) if callable(getter) else None
 
     def checkpoint(self) -> NativeControlStateCheckpoint:
         context = self._engine.checkpoint()
@@ -723,10 +731,10 @@ class NativeControlComposition:
     def close_inputs(self, inputs: TickInputs) -> TickInputs:
         """Close async planner completion before L1 without borrowing pre-submit time.
 
-        The transport deadline starts only after the request has actually been
-        submitted to the worker. Completion visibility, transport failure and
-        deadline expiry are all frozen into ``PlannerInput`` so canonical replay
-        never re-evaluates worker scheduling.
+        Worker completion time decides the computation deadline. Collector and
+        closure times decide visibility only. A separate transport watchdog
+        fails closed on missing delivery. Replay consumes the frozen result/error
+        and never re-evaluates worker scheduling.
         """
         if not self._closed_planner_mode or inputs.planner_input is not None:
             return inputs
@@ -743,14 +751,36 @@ class NativeControlComposition:
                 started_ns = self._transport_started_ns
                 if started_ns is None:
                     self._transport_error = "ASYNC_L6_TRANSPORT_STATE_INVALID"
-                elif inputs.context.monotonic_ns - started_ns > self._transport_timeout_ns:
-                    if self._transport_id is not None and backend is not None:
-                        backend.abandon(self._transport_id)
-                    self._transport_id = None
-                    self._transport_error = "ASYNC_L6_DEADLINE_MISSED"
                 else:
                     try:
-                        result = backend.take(self._transport_id)
+                        take_completion = getattr(backend, "take_completion", None)
+                        if callable(take_completion):
+                            completion = take_completion(
+                                self._transport_id,
+                                visible_ns=inputs.context.monotonic_ns,
+                                transport_timeout_ns=self._transport_timeout_ns,
+                            )
+                            if completion is not None:
+                                identity = backend.request_identity(self._transport_id, request.context)
+                                if completion.identity != identity:
+                                    raise RuntimeError("ASYNC_L6_COMPLETION_IDENTITY_MISMATCH")
+                                if completion.error is not None:
+                                    raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{completion.error}")
+                                if completion.timing.deadline_missed(self._request_timeout_ns):
+                                    self._transport_error = "ASYNC_L6_DEADLINE_MISSED"
+                                    backend.note_deadline_missed()
+                                else:
+                                    result = completion.result
+                        else:
+                            # Pure inline/replay ports have no asynchronous worker
+                            # clock. They preserve their explicit result visibility.
+                            result = backend.take(self._transport_id)
+                        if (
+                            result is None and self._transport_error is None
+                            and inputs.context.monotonic_ns - started_ns > self._transport_timeout_ns
+                        ):
+                            backend.abandon(self._transport_id)
+                            self._transport_error = "ASYNC_L6_TRANSPORT_TIMEOUT"
                     except Exception as exc:
                         self._transport_error = f"{type(exc).__name__}:{exc}"[:256]
             if result is not None or self._transport_error is not None:
