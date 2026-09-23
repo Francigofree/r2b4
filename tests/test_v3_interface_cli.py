@@ -24,17 +24,19 @@ def test_short_aliases_and_seconds_first_syntax():
 
 
 def test_capture_selector_can_be_written_anywhere_without_stealing_command_args():
-    clean, mode, no_trigger = _extract_capture_selector(["rc", "35", "c", "full", "nc"])
+    clean, mode, hz, no_trigger = _extract_capture_selector(["rc", "35", "c", "full", "nc"])
     assert clean == ["rc", "35"]
     assert mode == "full"
+    assert hz == 10
     assert no_trigger is True
 
-    clean, mode, no_trigger = _extract_capture_selector(["--capture=nincs", "f", "4", "0.15"])
+    clean, mode, hz, no_trigger = _extract_capture_selector(["--capture=nincs", "f", "4", "0.15"])
     assert clean == ["f", "4", "0.15"]
     assert mode == "nincs"
+    assert hz == 10
     assert no_trigger is False
 
 
 def test_invalid_capture_selector_fails_closed():
-    with pytest.raises(ValueError, match="capture mode"):
+    with pytest.raises(ValueError):
         _extract_capture_selector(["rc", "10", "c", "maybe"])

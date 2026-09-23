@@ -1,214 +1,257 @@
 #!/usr/bin/env python3
-"""Apply the R2B4 Test Hub high-level evidence upgrade.
+"""Apply the 2026-09-23 R2B4 launcher convergence upgrade.
 
-Run from the repository root:
-    python3 integralando/apply_upgrade.py
-
-The script backs up every replaced/modified file under runtime/upgrade_backups.
-It does not touch runtime/control/capture production code.
+The upgrade intentionally changes only host/operator interface files and tests.
+It does not touch runtime captures, logs, configs, control layers, motor/GPIO code,
+or the resident runtime-session implementation.
 """
 
 from __future__ import annotations
 
-import shutil
-import time
+import argparse
+import datetime as dt
 from pathlib import Path
+import shutil
+import stat
+import tempfile
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-PAYLOAD = SCRIPT_DIR / "payload"
-ROOT = Path.cwd().resolve()
-BACKUP = ROOT / "runtime" / "upgrade_backups" / f"testhub_level100_{time.strftime('%Y%m%d_%H%M%S')}"
+PACKAGE_ROOT = Path(__file__).resolve().parent
+PAYLOAD = PACKAGE_ROOT / "payload"
 
 
-def require_repo() -> None:
-    required = (ROOT / "v3", ROOT / "tests", ROOT / "conf")
-    if not all(path.exists() for path in required):
-        raise RuntimeError("Run this script from the r2b4 repository root")
+class UpgradeError(RuntimeError):
+    pass
 
 
-def backup(path: Path) -> None:
-    if not path.exists():
-        return
-    relative = path.relative_to(ROOT)
-    target = BACKUP / relative
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(path, target)
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Apply R2B4 launcher convergence upgrade")
+    p.add_argument(
+        "root",
+        nargs="?",
+        default="/home/alba/project_r2b4",
+        help="R2B4 repo root (default: /home/alba/project_r2b4)",
+    )
+    return p
 
 
-def install_payload(relative: str) -> None:
+def validate_root(root: Path) -> None:
+    required = [
+        root / "r",
+        root / "v3" / "interface_cli.py",
+        root / "v3" / "operator_controller.py",
+        root / "v3" / "pytest_profiles.py",
+        root / "README.md",
+        root / "pytest.ini",
+    ]
+    missing = [str(path) for path in required if not path.exists()]
+    if missing:
+        raise UpgradeError("not an R2B4 repo or required files missing: " + ", ".join(missing))
+
+
+def backup_paths(root: Path, paths: list[Path]) -> Path:
+    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup = Path(tempfile.mkdtemp(prefix=f"r2b4_launcher_upgrade_backup_{stamp}_"))
+    for path in paths:
+        if not path.exists():
+            continue
+        relative = path.relative_to(root)
+        target = backup / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_dir():
+            shutil.copytree(path, target)
+        else:
+            shutil.copy2(path, target)
+    return backup
+
+
+def write_payload(root: Path, relative: str, *, executable: bool = False) -> None:
     source = PAYLOAD / relative
-    target = ROOT / relative
+    destination = root / relative
     if not source.is_file():
-        raise RuntimeError(f"missing payload file: {source}")
-    backup(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
+        raise UpgradeError(f"payload missing: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.launcher-upgrade.tmp")
+    shutil.copy2(source, temporary)
+    if executable:
+        mode = temporary.stat().st_mode
+        temporary.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    temporary.replace(destination)
 
 
-def replace_once(relative: str, old: str, new: str) -> bool:
-    path = ROOT / relative
-    text = path.read_text(encoding="utf-8")
+def replace_once(text: str, old: str, new: str, *, label: str) -> str:
     if new in text:
-        return False
-    if old not in text:
-        raise RuntimeError(f"{relative}: patch anchor not found")
-    backup(path)
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
-    return True
-
-
-def replace_all_exact(relative: str, old: str, new: str, expected_min: int = 1) -> int:
-    path = ROOT / relative
-    text = path.read_text(encoding="utf-8")
-    if old not in text:
-        if new in text:
-            return 0
-        raise RuntimeError(f"{relative}: patch anchor not found: {old!r}")
+        return text
     count = text.count(old)
-    if count < expected_min:
-        raise RuntimeError(f"{relative}: expected at least {expected_min} anchors, found {count}")
-    backup(path)
-    path.write_text(text.replace(old, new), encoding="utf-8")
-    return count
+    if count != 1:
+        raise UpgradeError(f"{label}: expected exactly one patch anchor, found {count}")
+    return text.replace(old, new, 1)
+
+
+def transform_interface_cli(text: str) -> str:
+
+    import_anchor = "from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent\n"
+    import_new = import_anchor + "from v3.pytest_profiles import pytest_profile_names\n"
+    text = replace_once(text, import_anchor, import_new, label="interface_cli pytest profile import")
+
+    parser_anchor = '    testhub.add_argument("--no-sweep", action="store_true")\n'
+    parser_new = parser_anchor + (
+        '    testhub.add_argument(\n'
+        '        "--pytest", "--pytest-scope", dest="pytest_scope",\n'
+        '        choices=("off", *pytest_profile_names()), default="off",\n'
+        '        help="run one shared pytest profile inside Test Hub",\n'
+        '    )\n'
+    )
+    text = replace_once(text, parser_anchor, parser_new, label="interface_cli Test Hub pytest argument")
+
+    signature_anchor = "    replay: str,\n    no_sweep: bool,\n) -> object:\n"
+    signature_new = "    replay: str,\n    no_sweep: bool,\n    pytest_scope: str,\n) -> object:\n"
+    text = replace_once(text, signature_anchor, signature_new, label="interface_cli Test Hub helper signature")
+
+    execute_anchor = "                replay=replay,\n                no_sweep=no_sweep,\n            ))\n"
+    execute_new = "                replay=replay,\n                no_sweep=no_sweep,\n                pytest_scope=pytest_scope,\n            ))\n"
+    text = replace_once(text, execute_anchor, execute_new, label="interface_cli Test Hub execute parameters")
+
+    call_anchor = "                    replay=args.replay,\n                    no_sweep=args.no_sweep,\n                )\n"
+    call_new = "                    replay=args.replay,\n                    no_sweep=args.no_sweep,\n                    pytest_scope=args.pytest_scope,\n                )\n"
+    text = replace_once(text, call_anchor, call_new, label="interface_cli Test Hub call")
+
+    return text
+
+
+def transform_interface_test(text: str) -> str:
+    old = '    clean, mode, no_trigger = _extract_capture_selector(["rc", "35", "c", "full", "nc"])\n'
+    new = '    clean, mode, hz, no_trigger = _extract_capture_selector(["rc", "35", "c", "full", "nc"])\n'
+    if old in text:
+        text = text.replace(old, new, 1)
+        text = text.replace('    assert mode == "full"\n    assert no_trigger is True\n', '    assert mode == "full"\n    assert hz == 10\n    assert no_trigger is True\n', 1)
+
+    old = '    clean, mode, no_trigger = _extract_capture_selector(["--capture=nincs", "f", "4", "0.15"])\n'
+    new = '    clean, mode, hz, no_trigger = _extract_capture_selector(["--capture=nincs", "f", "4", "0.15"])\n'
+    if old in text:
+        text = text.replace(old, new, 1)
+        text = text.replace('    assert mode == "nincs"\n    assert no_trigger is False\n', '    assert mode == "nincs"\n    assert hz == 10\n    assert no_trigger is False\n', 1)
+
+    text = text.replace('with pytest.raises(ValueError, match="capture mode"):', 'with pytest.raises(ValueError):')
+    return text
+
+
+def transform_readme(text: str) -> str:
+    start = text.find("## Használat\n")
+    end = text.find("Közvetlen production entrypoint:", start)
+    if start < 0 or end < 0:
+        raise UpgradeError("README: launcher section anchors not found")
+
+    section = '''## Használat
+
+Az egyetlen ajánlott ember/agent belépő a gyökér `r` launcher. A `r` nem robotikai
+authority: a robotparancsokat változtatás nélkül a `v3.interface_cli` felé delegálja,
+a host/developer segédek pedig külön launcher-infrastruktúrában maradnak.
+
+```bash
+./r help
+./r commands
+./r commands --json
+
+./r s
+./r d
+./r rc 30
+./r fp 20
+./r f 10 0.15
+./r x
+./r sd
+```
+
+A timed mozgásparancsok a szükséges runtime-ot automatikusan elindítják, majd STOP,
+runtime shutdown és Test Hub finalizálás következik. `0` másodperc folyamatos módot
+jelent, ilyenkor a runtime futva marad explicit STOP/shutdown kérésig.
+
+Capture mintavétel alapértelmezése 10 Hz. Választható: `c 50`, `c 10`, `c 5`,
+`c 1`; a capture mód továbbra is `c alap`, `c full` vagy `c nincs`. Példák:
+
+```bash
+./r rc 30 c 10
+./r rc 30 c 50
+./r fp 20 c nincs
+./r cap status
+```
+
+Test Hub és közös pytest-profilok:
+
+```bash
+./r th
+./r th run
+./r th run --pytest control
+./r test
+./r test async
+./r test --list
+```
+
+A pytest-profilok egyetlen forrása a `v3/pytest_profiles.py`; a launcher és a Test Hub
+ezt a közös listát használja. Nyers pytest továbbra is elérhető: `./r pytest ...`.
+
+Fejlesztő/host segédek például: `r git`, `r gitre`, `r tools`, `r tool NAME`,
+`r cpu`, `r cpu2`, `r disc`, `r mem`, `r temp`, `r ps`, `r net`, `r usb`, `r i2c`,
+`r host`, `r version`. A teljes aktuális felület agent-barát JSON formában:
+`r commands --json`; az élő RobotInterface capability-k: `r caps`.
+
+A régi gyökér `r2b4` launcher megszűnt. A belső `v3.operator_cli` modul megmarad,
+mert a resident runtime-session technikai child-process entrypointja használja; ez
+nem második felhasználói launcher.
+
+'''
+    return text[:start] + section + text[end:]
 
 
 def main() -> int:
-    require_repo()
+    args = parser().parse_args()
+    root = Path(args.root).expanduser().resolve()
+    validate_root(root)
 
-    # New derived-only analyzers and focused regression tests.
-    install_payload("v3/test_hub_task_evidence.py")
-    install_payload("v3/test_hub_motion_tuning.py")
-    install_payload("tests/test_v3_test_hub_task_evidence.py")
-
-    replace_once(
-        "v3/test_hub_next.py",
-        "from .test_hub_behavior import build_behavior_evidence\n",
-        "from .test_hub_behavior import build_behavior_evidence\n"
-        "from .test_hub_task_evidence import build_task_evidence\n"
-        "from .test_hub_motion_tuning import build_motion_tuning_evidence\n",
-    )
-    replace_once("v3/test_hub_next.py", "DEFAULT_HZ = 5\n", "DEFAULT_HZ = 10\n")
-
-    anchor = (
-        "    behavior_episode_path = destination / \"behavior_episodes.ndjson\"\n"
-        "    behavior_episode_source = behavior_episode_path if behavior_episode_path.is_file() else None\n\n"
-        "    motion_quality_path = destination / \"motion_quality.json\"\n"
-    )
-    replacement = (
-        "    behavior_episode_path = destination / \"behavior_episodes.ndjson\"\n"
-        "    behavior_episode_source = behavior_episode_path if behavior_episode_path.is_file() else None\n\n"
-        "    # Level-100 task evidence and movement-tuning evidence are derived-only.\n"
-        "    # They never change the canonical Test Hub status/diagnosis/replay result.\n"
-        "    try:\n"
-        "        task_evidence = build_task_evidence(\n"
-        "            reader, destination, behavior_episodes_path=behavior_episode_source\n"
-        "        )\n"
-        "    except (OSError, TypeError, ValueError, RuntimeError) as exc:\n"
-        "        task_evidence = {\n"
-        "            \"schema\": \"R2B4_TEST_HUB_TASK_EVIDENCE_V1\",\n"
-        "            \"policy\": \"DESCRIPTIVE_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT\",\n"
-        "            \"availability\": \"ERROR\",\n"
-        "            \"error\": str(exc),\n"
-        "        }\n"
-        "        _write_json(destination / \"task_evidence_summary.json\", task_evidence)\n\n"
-        "    try:\n"
-        "        motion_tuning = build_motion_tuning_evidence(\n"
-        "            reader, destination, behavior_episodes_path=behavior_episode_source\n"
-        "        )\n"
-        "    except (OSError, TypeError, ValueError, RuntimeError) as exc:\n"
-        "        motion_tuning = {\n"
-        "            \"schema\": \"R2B4_TEST_HUB_MOTION_TUNING_V1\",\n"
-        "            \"policy\": \"DESCRIPTIVE_TUNING_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT\",\n"
-        "            \"availability\": \"ERROR\",\n"
-        "            \"error\": str(exc),\n"
-        "        }\n"
-        "        _write_json(destination / \"motion_tuning_summary.json\", motion_tuning)\n"
-        "        (destination / \"motion_tuning_segments.ndjson\").write_text(\"\", encoding=\"utf-8\")\n\n"
-        "    motion_quality_path = destination / \"motion_quality.json\"\n"
-    )
-    replace_once("v3/test_hub_next.py", anchor, replacement)
-
-    replace_once(
-        "v3/test_hub_next.py",
-        "        \"behavior\": behavior,\n        \"replay_status\": replay_status,\n",
-        "        \"behavior\": behavior,\n"
-        "        \"task_evidence\": task_evidence,\n"
-        "        \"motion_tuning\": motion_tuning,\n"
-        "        \"replay_status\": replay_status,\n",
+    tracked = [
+        root / "r",
+        root / "r2b4",
+        root / "v3" / "interface_cli.py",
+        root / "v3" / "launcher_cli.py",
+        root / "v3" / "host_cli.py",
+        root / "tests" / "test_v3_launcher_cli.py",
+        root / "tests" / "test_v3_interface_cli.py",
+        root / "README.md",
+    ]
+    # Compute every source patch before writing anything, so an unexpected
+    # source shape cannot leave a half-applied upgrade.
+    interface_path = root / "v3" / "interface_cli.py"
+    readme_path = root / "README.md"
+    interface_text = transform_interface_cli(interface_path.read_text(encoding="utf-8"))
+    readme_text = transform_readme(readme_path.read_text(encoding="utf-8"))
+    interface_test_path = root / "tests" / "test_v3_interface_cli.py"
+    interface_test_text = (
+        transform_interface_test(interface_test_path.read_text(encoding="utf-8"))
+        if interface_test_path.is_file() else None
     )
 
-    replace_once(
-        "v3/test_hub_next.py",
-        "        \"localization_quality_status\": localization_quality.get(\"status\"),\n"
-        "        \"note\": \"One .evidence directory is the portable agent package; MCAP remains local authority.\",\n",
-        "        \"localization_quality_status\": localization_quality.get(\"status\"),\n"
-        "        \"task_evidence_episode_count\": task_evidence.get(\"episode_count\"),\n"
-        "        \"motion_tuning_segment_count\": motion_tuning.get(\"segment_count\"),\n"
-        "        \"note\": \"One .evidence directory is the portable agent package; MCAP remains local authority.\",\n",
-    )
+    backup = backup_paths(root, tracked)
 
-    # Agent-facing view defaults now match the default 10 Hz capture. This only
-    # changes presentation density; the analysis profile still comes from MCAP metadata.
-    replace_once("v3/test_hub_views.py", "    hz: int = 5,\n", "    hz: int = 10,\n")
-    replace_all_exact("v3/adapters/testhub.py", 'params.pop("hz", 5)', 'params.pop("hz", 10)', expected_min=2)
+    write_payload(root, "r", executable=True)
+    write_payload(root, "v3/launcher_cli.py")
+    write_payload(root, "v3/host_cli.py")
+    write_payload(root, "tests/test_v3_launcher_cli.py")
+    interface_path.write_text(interface_text, encoding="utf-8")
+    readme_path.write_text(readme_text, encoding="utf-8")
+    if interface_test_text is not None:
+        interface_test_path.write_text(interface_test_text, encoding="utf-8")
 
-    # Surface the new evidence references through the RobotInterface adapter.
-    replace_all_exact(
-        "v3/adapters/testhub.py",
-        '                "behavior_status": agent.get("behavior_status") if agent else None,\n',
-        '                "behavior_status": agent.get("behavior_status") if agent else None,\n'
-        '                "task_evidence": agent.get("task_evidence") if agent else None,\n'
-        '                "motion_tuning": agent.get("motion_tuning") if agent else None,\n',
-        expected_min=1,
-    )
-    replace_once(
-        "v3/adapters/testhub.py",
-        '            "behavior_status": agent.get("behavior_status"),\n        }\n\n    def _selected_capture',
-        '            "behavior_status": agent.get("behavior_status"),\n'
-        '            "task_evidence": agent.get("task_evidence"),\n'
-        '            "motion_tuning": agent.get("motion_tuning"),\n'
-        '        }\n\n    def _selected_capture',
-    )
+    legacy = root / "r2b4"
+    if legacy.exists() or legacy.is_symlink():
+        legacy.unlink()
 
-    # Minimal documentation update; no architecture authority docs are changed.
-    readme = ROOT / "README.md"
-    if readme.is_file():
-        text = readme.read_text(encoding="utf-8")
-        changed = False
-        if "és 5 Hz-es áttekintést" in text:
-            text = text.replace("és 5 Hz-es áttekintést", "és 10 Hz-es áttekintést", 1)
-            changed = True
-        marker = (
-            "A számlálók rögzített mintákat számolnak, nem teljes control\n"
-            "tick-számot vagy időarányt; a köztes, nem rögzített állapotok nem rekonstruálhatók.\n"
-        )
-        addition = marker + (
-            "\nA magasabb szintű, döntésmentes evidence réteg `task_evidence_summary.json`,\n"
-            "`task_evidence_episodes.ndjson` és `task_evidence_timeline.ndjson` fájlokban\n"
-            "méri az EXPLORE/FOLLOW_PERSON/NAVIGATE feladatspecifikus capture-tényeket.\n"
-            "A `motion_tuning_summary.json` és `motion_tuning_segments.ndjson` cross-layer\n"
-            "mozgás-, kerék-, actuator- és planner-metrikákat ad hangoláshoz. Ezek nem\n"
-            "adnak GOOD/BAD minősítést, root cause diagnózist vagy javítási javaslatot.\n"
-        )
-        if marker in text and "task_evidence_summary.json" not in text:
-            text = text.replace(marker, addition, 1)
-            changed = True
-        if changed:
-            backup(readme)
-            readme.write_text(text, encoding="utf-8")
-
-    print("R2B4 Test Hub high-level evidence upgrade applied.")
-    print(f"Backup: {BACKUP}")
-    print("New artifacts on new/rebuilt captures:")
-    print("  task_evidence_summary.json")
-    print("  task_evidence_episodes.ndjson")
-    print("  task_evidence_timeline.ndjson")
-    print("  motion_tuning_summary.json")
-    print("  motion_tuning_segments.ndjson")
-    print("Suggested validation:")
-    print("  python3 -m pytest -q tests/test_v3_test_hub_task_evidence.py")
-    print("  python3 -m pytest -q -m testhub")
+    print("R2B4 launcher upgrade applied.")
+    print(f"root:   {root}")
+    print(f"backup: {backup}")
+    print("changed: r, v3/launcher_cli.py, v3/host_cli.py, v3/interface_cli.py, README.md, launcher tests")
+    print("removed: r2b4 (legacy user launcher)")
+    print("unchanged: v3/operator_cli.py internal runtime-session entrypoint")
+    print("validate: ./r commands && ./r test gate")
     return 0
 
 

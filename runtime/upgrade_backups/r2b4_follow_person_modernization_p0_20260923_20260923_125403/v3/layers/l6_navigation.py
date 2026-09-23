@@ -35,22 +35,13 @@ _POINT_CLEARANCE_EPSILON_M = 1e-9
 _LOCAL_ESCAPE_TRIGGER_CLEARANCE_M = 0.12
 _LOCAL_ESCAPE_REVERSE_MAX_V_MPS = 0.12
 _MOTION_EPSILON = 1e-9
+_FOLLOW_PERSON_RECOVERY_TIMEOUT_NS = 2_000_000_000
 
 
 class _RolloutDisposition(str, Enum):
     NONE = "NONE"
     ACCEPTED = "ACCEPTED"
     HOLD = "HOLD"
-
-
-class _FollowPersonState(str, Enum):
-    """L6-owned target lifecycle; no new numbered architectural layer."""
-
-    ACQUIRE = "ACQUIRE"
-    FOLLOW = "FOLLOW"
-    OCCLUDED_HOLD = "OCCLUDED_HOLD"
-    SEARCH = "SEARCH"
-    LOST = "LOST"
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,11 +84,6 @@ class NavigationConfig:
     follow_person_distance_deadband_m: float = 0.15
     follow_person_min_safe_distance_m: float = 0.75
     follow_person_lost_hold_ns: int = 400_000_000
-    # Recovery is bounded, rotation-only and deterministic. The first search
-    # step looks at the last known heading before sweeping either side.
-    follow_person_search_timeout_ns: int = 2_000_000_000
-    follow_person_search_sweep_rad: float = 0.45
-    follow_person_search_step_ns: int = 400_000_000
     follow_person_pivot_enter_rad: float = 0.55
     follow_person_hold_release_margin_m: float = 0.05
     follow_person_slowdown_distance_m: float = 0.18
@@ -276,20 +262,6 @@ class NavigationConfig:
             or self.follow_person_lost_hold_ns <= 0
         ):
             raise ValueError("follow_person_lost_hold_ns must be a positive integer")
-        for name in (
-            "follow_person_search_timeout_ns",
-            "follow_person_search_step_ns",
-        ):
-            value = getattr(self, name)
-            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-                raise ValueError(f"{name} must be a positive integer")
-        if (
-            not isinstance(self.follow_person_search_sweep_rad, (int, float))
-            or isinstance(self.follow_person_search_sweep_rad, bool)
-            or not math.isfinite(self.follow_person_search_sweep_rad)
-            or not 0.0 < self.follow_person_search_sweep_rad < math.pi
-        ):
-            raise ValueError("follow_person_search_sweep_rad must be in (0, pi)")
         if (
             not isinstance(self.follow_person_pivot_enter_rad, (int, float))
             or isinstance(self.follow_person_pivot_enter_rad, bool)
@@ -347,7 +319,6 @@ class NavigationStateCheckpoint:
     follow_person_pivoting: bool = False
     follow_person_holding: bool = False
     follow_person_last_heading_rad: float | None = None
-    follow_person_state: str = _FollowPersonState.ACQUIRE.value
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -473,7 +444,6 @@ class TrajectoryNavigator:
         "_follow_person_holding",
         "_follow_person_lost_since_ns",
         "_follow_person_pivoting",
-        "_follow_person_state",
         "_follow_person_track_id",
         "_follow_person_last_heading_rad",
         "_coverage",
@@ -566,7 +536,6 @@ class TrajectoryNavigator:
         self._follow_person_pivoting = False
         self._follow_person_holding = False
         self._follow_person_last_heading_rad: float | None = None
-        self._follow_person_state = _FollowPersonState.ACQUIRE
 
     def checkpoint(self) -> NavigationStateCheckpoint:
         return NavigationStateCheckpoint(
@@ -596,7 +565,6 @@ class TrajectoryNavigator:
             self._follow_person_pivoting,
             self._follow_person_holding,
             self._follow_person_last_heading_rad,
-            self._follow_person_state.value,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -623,7 +591,6 @@ class TrajectoryNavigator:
         self._follow_person_pivoting = checkpoint.follow_person_pivoting
         self._follow_person_holding = checkpoint.follow_person_holding
         self._follow_person_last_heading_rad = checkpoint.follow_person_last_heading_rad
-        self._follow_person_state = _FollowPersonState(checkpoint.follow_person_state)
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
         pending = checkpoint.pending_rollout_request
@@ -835,7 +802,6 @@ class TrajectoryNavigator:
         self._follow_person_pivoting = False
         self._follow_person_holding = False
         self._follow_person_last_heading_rad = None
-        self._follow_person_state = _FollowPersonState.ACQUIRE
 
     def _face_person_plan(
         self,
@@ -938,7 +904,6 @@ class TrajectoryNavigator:
         # may not silently replace the locked target. A new command is re-acquire.
         if self._follow_person_track_id is None:
             if not eligible:
-                self._follow_person_state = _FollowPersonState.ACQUIRE
                 self._clear_trajectory_plan()
                 return self._inactive(
                     mission,
@@ -957,7 +922,6 @@ class TrajectoryNavigator:
             self._follow_person_lost_since_ns = None
             self._follow_person_pivoting = False
             self._follow_person_holding = False
-            self._follow_person_state = _FollowPersonState.FOLLOW
             self._clear_trajectory_plan()
         else:
             selected = next(
@@ -974,7 +938,6 @@ class TrajectoryNavigator:
                     self._clear_trajectory_plan()
                 lost_ns = mission.context.monotonic_ns - self._follow_person_lost_since_ns
                 if lost_ns <= self._config.follow_person_lost_hold_ns:
-                    self._follow_person_state = _FollowPersonState.OCCLUDED_HOLD
                     return NavigationPlan(
                         context=mission.context,
                         mission_id=mission.mission_id,
@@ -985,40 +948,30 @@ class TrajectoryNavigator:
                         progress=0.0,
                         status=NavigationStatus.ACTIVE,
                     )
-
-                search_elapsed_ns = lost_ns - self._config.follow_person_lost_hold_ns
                 if (
                     self._follow_person_last_heading_rad is not None
-                    and search_elapsed_ns <= self._config.follow_person_search_timeout_ns
+                    and lost_ns
+                    <= self._config.follow_person_lost_hold_ns
+                    + _FOLLOW_PERSON_RECOVERY_TIMEOUT_NS
                 ):
-                    # Keep the locked UID and search only by rotation. The target
-                    # heading sequence is deterministic and bounded around the
-                    # last observation; translation remains forbidden.
-                    self._follow_person_state = _FollowPersonState.SEARCH
-                    search_step = (
-                        search_elapsed_ns // self._config.follow_person_search_step_ns
-                    )
-                    if search_step == 0:
-                        search_offset_rad = 0.0
-                    elif search_step % 2:
-                        search_offset_rad = self._config.follow_person_search_sweep_rad
-                    else:
-                        search_offset_rad = -self._config.follow_person_search_sweep_rad
-                    search_yaw = _wrapped_angle(
-                        self._follow_person_last_heading_rad + search_offset_rad
-                    )
+                    # Keep the locked identity. Recovery is rotation-only until
+                    # that exact track returns; no blind translation is allowed.
                     return NavigationPlan(
                         context=mission.context,
                         mission_id=mission.mission_id,
-                        route=(Waypoint(estimate.x_m, estimate.y_m, search_yaw),),
+                        route=(
+                            Waypoint(
+                                estimate.x_m,
+                                estimate.y_m,
+                                self._follow_person_last_heading_rad,
+                            ),
+                        ),
                         velocity_target=None,
                         constraints=mission.constraints,
                         corridor_radius_m=0.0,
                         progress=0.0,
                         status=NavigationStatus.ACTIVE,
                     )
-
-                self._follow_person_state = _FollowPersonState.LOST
                 return self._inactive(
                     mission,
                     NavigationStatus.INVALIDATED,
@@ -1027,7 +980,6 @@ class TrajectoryNavigator:
 
         assert selected is not None
         self._follow_person_lost_since_ns = None
-        self._follow_person_state = _FollowPersonState.FOLLOW
 
         dx = selected.x_m - estimate.x_m
         dy = selected.y_m - estimate.y_m

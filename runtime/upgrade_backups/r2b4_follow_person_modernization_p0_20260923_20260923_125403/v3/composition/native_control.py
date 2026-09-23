@@ -314,18 +314,6 @@ def v3_navigation_config_from_mapping(
             follow_person.get("lost_hold_ns", 400_000_000),
             "v3_navigation.follow_person.lost_hold_ns",
         ),
-        follow_person_search_timeout_ns=_positive_int(
-            follow_person.get("search_timeout_ns", 2_000_000_000),
-            "v3_navigation.follow_person.search_timeout_ns",
-        ),
-        follow_person_search_sweep_rad=_positive_float(
-            follow_person.get("search_sweep_rad", 0.45),
-            "v3_navigation.follow_person.search_sweep_rad",
-        ),
-        follow_person_search_step_ns=_positive_int(
-            follow_person.get("search_step_ns", 400_000_000),
-            "v3_navigation.follow_person.search_step_ns",
-        ),
         follow_person_pivot_enter_rad=_positive_float(
             follow_person.get("pivot_enter_rad", 0.55),
             "v3_navigation.follow_person.pivot_enter_rad",

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent
+from v3.pytest_profiles import pytest_profile_names
 from v3.robot_interface import RobotInterface, RobotInterfaceError
 
 
@@ -208,6 +209,11 @@ def _parser() -> argparse.ArgumentParser:
     testhub.add_argument("--replay", choices=("off", "incident", "full"), default="incident")
     testhub.add_argument("--hz", type=int, choices=(1, 5, 10), default=5)
     testhub.add_argument("--no-sweep", action="store_true")
+    testhub.add_argument(
+        "--pytest", "--pytest-scope", dest="pytest_scope",
+        choices=("off", *pytest_profile_names()), default="off",
+        help="run one shared pytest profile inside Test Hub",
+    )
 
     camera = sub.add_parser("camera", aliases=["cam"], help="exclusive camera diagnostics")
     camera.add_argument("operation", choices=("photo", "video"))
@@ -490,6 +496,7 @@ def _run_testhub_with_progress(
     hz: int,
     replay: str,
     no_sweep: bool,
+    pytest_scope: str,
 ) -> object:
     result: list[object] = []
     error: list[BaseException] = []
@@ -502,6 +509,7 @@ def _run_testhub_with_progress(
                 hz=hz,
                 replay=replay,
                 no_sweep=no_sweep,
+                pytest_scope=pytest_scope,
             ))
         except BaseException as exc:
             error.append(exc)
@@ -600,6 +608,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     hz=args.hz,
                     replay=args.replay,
                     no_sweep=args.no_sweep,
+                    pytest_scope=args.pytest_scope,
                 )
             else:
                 output = interface.execute("testhub.batch", hz=args.hz, replay=args.replay)

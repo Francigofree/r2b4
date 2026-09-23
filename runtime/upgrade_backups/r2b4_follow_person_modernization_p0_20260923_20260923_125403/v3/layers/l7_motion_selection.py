@@ -40,10 +40,6 @@ class MotionSelectionStateCheckpoint:
 
     last_mission_id: str | None = None
     last_candidate_id: str | None = None
-    # Candidate IDs are planner-grid identities, not physical motion identity.
-    # Persist the selected command-space point so continuity survives replans.
-    last_v_mps: float | None = None
-    last_omega_rad_s: float | None = None
 
     def __post_init__(self) -> None:
         values = (self.last_mission_id, self.last_candidate_id)
@@ -57,18 +53,6 @@ class MotionSelectionStateCheckpoint:
         ):
             if value is not None and (not isinstance(value, str) or not value.strip()):
                 raise ValueError(f"{name} must be a non-empty string or None")
-        if (self.last_v_mps is None) != (self.last_omega_rad_s is None):
-            raise ValueError("last_v_mps and last_omega_rad_s must both be set or both be None")
-        for value, name in (
-            (self.last_v_mps, "last_v_mps"),
-            (self.last_omega_rad_s, "last_omega_rad_s"),
-        ):
-            if value is not None and (
-                isinstance(value, bool)
-                or not isinstance(value, (int, float))
-                or not math.isfinite(value)
-            ):
-                raise ValueError(f"{name} must be finite or None")
 
 
 class MotionSelector:
@@ -105,39 +89,25 @@ class MotionSelector:
 
             best = _canonical_best(viable)
             selected = best
+            held = False
+            previous = self._previous_candidate(plan, viable)
             band = float(self._config.continuity_score_band)
-            state = self._state
 
             if (
                 band > 0.0
-                and state.last_mission_id == plan.mission_id
-                and state.last_v_mps is not None
-                and state.last_omega_rad_s is not None
+                and previous is not None
+                and previous.candidate_id != best.candidate_id
+                and previous.total_score + _SCORE_EPSILON
+                >= best.total_score - band
             ):
-                near_best = tuple(
-                    candidate
-                    for candidate in viable
-                    if candidate.total_score + _SCORE_EPSILON
-                    >= best.total_score - band
-                )
-                selected = min(
-                    near_best,
-                    key=lambda candidate: _command_continuity_key(state, candidate),
-                )
+                selected = previous
+                held = True
 
-            previous_id = state.last_candidate_id if state.last_mission_id == plan.mission_id else None
             self._state = MotionSelectionStateCheckpoint(
                 plan.mission_id,
                 selected.candidate_id,
-                selected.v_mps,
-                selected.omega_rad_s,
             )
-            if selected.candidate_id == best.candidate_id:
-                prefix = "BEST_TRAJECTORY"
-            elif selected.candidate_id == previous_id:
-                prefix = "CONTINUITY_HOLD"
-            else:
-                prefix = "CONTINUITY_NEAREST"
+            prefix = "CONTINUITY_HOLD" if held else "BEST_TRAJECTORY"
             return _trajectory_objective(
                 plan,
                 selected,
@@ -169,31 +139,6 @@ class MotionSelector:
 
     def _reset(self) -> None:
         self._state = MotionSelectionStateCheckpoint()
-
-
-def _command_continuity_key(
-    state: MotionSelectionStateCheckpoint,
-    candidate: TrajectoryEvaluation,
-) -> tuple[int, float, float, float, str]:
-    """Prefer physical continuity only inside the already-approved score band."""
-
-    assert state.last_v_mps is not None
-    assert state.last_omega_rad_s is not None
-    previous_omega = state.last_omega_rad_s
-    candidate_omega = candidate.omega_rad_s
-    # A meaningful steering sign reversal is the strongest chatter signal.
-    reversal = int(
-        previous_omega * candidate_omega < 0.0
-        and abs(previous_omega) >= 0.05
-        and abs(candidate_omega) >= 0.05
-    )
-    return (
-        reversal,
-        abs(candidate_omega - previous_omega),
-        abs(candidate.v_mps - state.last_v_mps),
-        -candidate.total_score,
-        candidate.candidate_id,
-    )
 
 
 def select_motion(plan: NavigationPlan) -> MotionObjective:

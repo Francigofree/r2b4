@@ -25,25 +25,10 @@ class TemporalTrackState:
 @dataclass(frozen=True, slots=True)
 class TemporalTrackCheckpoint:
     states: tuple[TemporalTrackState, ...]
-    # Monotonic allocator state is replay authority: a person UID must never be
-    # recycled after expiry/clear inside one runtime lineage.
-    next_person_track_sequence: int = 1
-
-    def __post_init__(self) -> None:
-        value = self.next_person_track_sequence
-        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise ValueError("next_person_track_sequence must be a positive integer")
 
 
 class TemporalTrackStore:
-    __slots__ = (
-        "_alpha",
-        "_beta",
-        "_prediction_max_age_ns",
-        "_max_speed_mps",
-        "_next_person_track_sequence",
-        "_states",
-    )
+    __slots__ = ("_alpha", "_beta", "_prediction_max_age_ns", "_max_speed_mps", "_states")
 
     def __init__(
         self,
@@ -61,7 +46,6 @@ class TemporalTrackStore:
         self._beta = beta
         self._prediction_max_age_ns = prediction_max_age_ns
         self._max_speed_mps = max_speed_mps
-        self._next_person_track_sequence = 1
         self._states: dict[str, TemporalTrackState] = {}
 
     def clear(self) -> bool:
@@ -77,7 +61,6 @@ class TemporalTrackStore:
         state = TemporalTrackState(track, captured_ns, updates)
         changed = state != previous
         self._states[track.track_id] = state
-        self._observe_person_track_id(track.track_id)
         return changed
 
     def associate_people(
@@ -208,36 +191,24 @@ class TemporalTrackStore:
         return tuple(result)
 
     def checkpoint(self) -> TemporalTrackCheckpoint:
-        return TemporalTrackCheckpoint(
-            tuple(self._states[key] for key in sorted(self._states)),
-            self._next_person_track_sequence,
-        )
+        return TemporalTrackCheckpoint(tuple(self._states[key] for key in sorted(self._states)))
 
     def restore(self, checkpoint: TemporalTrackCheckpoint) -> None:
         if not isinstance(checkpoint, TemporalTrackCheckpoint):
             raise TypeError("checkpoint must be TemporalTrackCheckpoint")
         self._states = {state.track.track_id: state for state in checkpoint.states}
-        self._next_person_track_sequence = checkpoint.next_person_track_sequence
-        # Accept older/externally-built checkpoints defensively: the allocator
-        # must always advance beyond every numeric person UID already present.
-        for track_id in self._states:
-            self._observe_person_track_id(track_id)
-
-    def _observe_person_track_id(self, track_id: str) -> None:
-        if not track_id.startswith("person-"):
-            return
-        suffix = track_id[len("person-") :]
-        if suffix.isdigit():
-            self._next_person_track_sequence = max(
-                self._next_person_track_sequence,
-                int(suffix) + 1,
-            )
 
     def _allocate_person_track_id(self) -> str:
-        candidate = self._next_person_track_sequence
-        while f"person-{candidate}" in self._states:
+        used: set[int] = set()
+        for track_id in self._states:
+            if not track_id.startswith("person-"):
+                continue
+            suffix = track_id[len("person-") :]
+            if suffix.isdigit():
+                used.add(int(suffix))
+        candidate = 1
+        while candidate in used:
             candidate += 1
-        self._next_person_track_sequence = candidate + 1
         return f"person-{candidate}"
 
 

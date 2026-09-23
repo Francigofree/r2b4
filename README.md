@@ -24,43 +24,60 @@ Aktív konfigurációk:
 
 ## Használat
 
-Ajánlott belépő a gyökérben lévő launcher:
+Az egyetlen ajánlott ember/agent belépő a gyökér `r` launcher. A `r` nem robotikai
+authority: a robotparancsokat változtatás nélkül a `v3.interface_cli` felé delegálja,
+a host/developer segédek pedig külön launcher-infrastruktúrában maradnak.
 
 ```bash
-./r2b4 start
-./r2b4 status
-./r2b4 diag
+./r help
+./r commands
+./r commands --json
 
-./r2b4 capture start
-./r2b4 capture status
-./r2b4 capture stop
-
-./r2b4 forward 0.15
-./r2b4 backward 0.15
-./r2b4 wheels 0.10 0.20
-./r2b4 teleop 0.15 -0.20
-./r2b4 roomcruise
-./r2b4 proba c full
-
-./r2b4 stop
-./r2b4 shutdown
+./r s
+./r d
+./r rc 30
+./r fp 20
+./r f 10 0.15
+./r x
+./r sd
 ```
 
-A launcher a szükséges runtime-ot automatikusan elindítja. A capture-választó
-`c alap` (alapértelmezett, 8+2 másodperces triggered capture), `c full`
-(folyamatos felvétel) vagy `c nincs` (capture kikapcsolva); `--capture MODE`
-alakban is megadható. A régi `runtime start/status/diag`, `forward start`,
-`mozog start` és `roomcruise start` parancsok továbbra is működnek.
-A `--no-trigger` és régi `nocapture` csak a launcher által kért ALAP
-mozgás-trigger élesítését hagyja ki; a runtime fail-evidence szabályai ettől
-nem változnak.
+A timed mozgásparancsok a szükséges runtime-ot automatikusan elindítják, majd STOP,
+runtime shutdown és Test Hub finalizálás következik. `0` másodperc folyamatos módot
+jelent, ilyenkor a runtime futva marad explicit STOP/shutdown kérésig.
 
-A shell launcher a `v3.operator_cli` adaptert indítja. Az orchestration
-Pythonból a `v3.operator_controller.OperatorController` API-n érhető el,
-opcionális `OperatorEvent` callbackkel. A mozgásparancsokat és a heartbeatet
-továbbra is a canonical `v3.control_cli` kezeli; a robot readiness- és
-safety-döntéseit a V3 runtime hozza. A `proba` tíz rögzített TELEOP fázist futtat,
-öt másodperces szünetekkel; a fordulás végét a runtime yaw-telemetriája jelzi.
+Capture mintavétel alapértelmezése 10 Hz. Választható: `c 50`, `c 10`, `c 5`,
+`c 1`; a capture mód továbbra is `c alap`, `c full` vagy `c nincs`. Példák:
+
+```bash
+./r rc 30 c 10
+./r rc 30 c 50
+./r fp 20 c nincs
+./r cap status
+```
+
+Test Hub és közös pytest-profilok:
+
+```bash
+./r th
+./r th run
+./r th run --pytest control
+./r test
+./r test async
+./r test --list
+```
+
+A pytest-profilok egyetlen forrása a `v3/pytest_profiles.py`; a launcher és a Test Hub
+ezt a közös listát használja. Nyers pytest továbbra is elérhető: `./r pytest ...`.
+
+Fejlesztő/host segédek például: `r git`, `r gitre`, `r tools`, `r tool NAME`,
+`r cpu`, `r cpu2`, `r disc`, `r mem`, `r temp`, `r ps`, `r net`, `r usb`, `r i2c`,
+`r host`, `r version`. A teljes aktuális felület agent-barát JSON formában:
+`r commands --json`; az élő RobotInterface capability-k: `r caps`.
+
+A régi gyökér `r2b4` launcher megszűnt. A belső `v3.operator_cli` modul megmarad,
+mert a resident runtime-session technikai child-process entrypointja használja; ez
+nem második felhasználói launcher.
 
 Közvetlen production entrypoint:
 
