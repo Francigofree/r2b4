@@ -1,0 +1,201 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_131848_5357_capture.mcap",
+    "capture_name": "v3_20260923_131848_5357_capture.mcap",
+    "capture_sha256": "ea81d28575b14d08372eab4d1f8da5be8970b19ef49c5aa1c06a708d1ad0e488",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 10,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 102,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 100,
+      "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
+    }
+  },
+  "default_view_hz": 10,
+  "diagnosis_status": "WARNING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "ADMISSION",
+      "count": 63,
+      "first_tick": 2649,
+      "last_tick": 3128,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 253764586,
+              "reason": "STALE",
+              "source_device_id": "PERSON_DETECTOR_FRONT",
+              "source_sequence": 549
+            }
+          ]
+        },
+        "id": "l2-reject-2649",
+        "layer": "L2",
+        "monotonic_ns": 1123515501586,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "WARNING",
+        "tick_id": 2649
+      },
+      "severity": "WARNING"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "ADMISSION",
+      "count": 63,
+      "first_tick": 2649,
+      "group_index": 1,
+      "last_tick": 3128,
+      "path": "01_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 3,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "motion_tuning": {
+    "capture_tick_sample_hz": 10,
+    "policy": "DESCRIPTIVE_TUNING_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_MOTION_TUNING_V1",
+    "segment_count": 1,
+    "segments": "motion_tuning_segments.ndjson",
+    "signal_sample_counts": {
+      "actuator_output": 100,
+      "allowed_motion": 100,
+      "body_state": 100,
+      "planner_candidates": 75,
+      "requested_motion": 100,
+      "wheel_feedback": 100,
+      "wheel_target": 100
+    },
+    "summary": "motion_tuning_summary.json"
+  },
+  "overview": "overview_10hz.ndjson",
+  "phases": [
+    {
+      "end_s": 7.397441273,
+      "end_tick": 3010,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 75,
+      "start_s": 0.0,
+      "start_tick": 2649,
+      "stop_ticks": 0,
+      "tick_count": 75
+    },
+    {
+      "end_s": 9.896331923,
+      "end_tick": 3128,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 7.497903106,
+      "start_tick": 3012,
+      "stop_ticks": 25,
+      "tick_count": 25
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 5,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 51550,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "NOT_APPLICABLE",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "NOT_APPLICABLE",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "WARNING",
+  "suppressed_agent_noise": [],
+  "task_evidence": {
+    "episode_count": 1,
+    "episodes": "task_evidence_episodes.ndjson",
+    "mode_counts": {
+      "EXPLORE": 1
+    },
+    "policy": "DESCRIPTIVE_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_TASK_EVIDENCE_V1",
+    "summary": "task_evidence_summary.json",
+    "supported_mode_extractors": [
+      "NAVIGATE",
+      "EXPLORE",
+      "FOLLOW_PERSON"
+    ],
+    "timeline": "task_evidence_timeline.ndjson"
+  },
+  "timeline": "timeline.ndjson"
+}
