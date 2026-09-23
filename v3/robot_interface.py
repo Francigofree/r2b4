@@ -12,11 +12,12 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
+from v3.action_catalog import ACTION_CATALOG_SCHEMA, action_catalog_jsonable
 from v3.interface_adapters import build_adapters
 from v3.operator_controller import OperatorController, OperatorEvent
 
 
-ROBOT_INTERFACE_SCHEMA = "R2B4_ROBOT_INTERFACE_V1"
+ROBOT_INTERFACE_SCHEMA = "R2B4_ROBOT_INTERFACE_V2"
 
 
 class RobotInterfaceError(RuntimeError):
@@ -39,8 +40,9 @@ class InterfaceAdapter(Protocol):
 class RobotInterface:
     """One public facade for external R2B4 clients.
 
-    Capability data is generated from the live adapters on every request.  No
-    capability registry file or duplicated robot state is maintained here.
+    Live capability state is generated from adapters on every request. Static
+    canonical v3.command action contracts come from v3.action_catalog; no duplicated
+    live robot state is maintained here.
     """
 
     def __init__(
@@ -82,6 +84,8 @@ class RobotInterface:
                 items[name] = item
         return {
             "schema": ROBOT_INTERFACE_SCHEMA,
+            "action_catalog_schema": ACTION_CATALOG_SCHEMA,
+            "action_catalog": action_catalog_jsonable(),
             "capabilities": dict(sorted(items.items())),
         }
 

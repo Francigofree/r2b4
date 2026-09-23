@@ -85,5 +85,5 @@ def test_fault_and_non_allowlisted_action_fail_closed():
     assert faulty.calls == []
 
     unknown = executor.execute_proposal({"name": "v3.command.forward", "parameters": {}})
-    assert unknown.status == "REJECTED:ACTION_NOT_ALLOWLISTED"
+    assert unknown.status == "REJECTED:ACTION_NOT_ADVERTISED"
     assert faulty.calls == []

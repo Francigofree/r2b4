@@ -4,18 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from v3.action_catalog import ACTION_CATALOG, ActionDescriptor
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
 
 class V3ControlInterfaceAdapter:
     name = "v3_control"
-    capability_names = frozenset({
-        "v3.status", "v3.pose", "v3.safety", "v3.health",
-        "v3.command.stop", "v3.command.forward", "v3.command.backward",
-        "v3.command.teleop", "v3.command.wheels", "v3.command.explore",
-        "v3.command.face_person", "v3.command.follow_person",
-    })
+    capability_names = frozenset({"v3.status", "v3.pose", "v3.safety", "v3.health"}) | frozenset(ACTION_CATALOG)
 
     def __init__(self, controller: OperatorController) -> None:
         self.controller = controller
@@ -33,54 +29,41 @@ class V3ControlInterfaceAdapter:
             "RUNTIME_RUNNING_NOT_READY" if runtime_running else "RUNTIME_WILL_AUTO_START"
         )
         read_ready = isinstance(runtime_status, Mapping)
-        return {
+        result: dict[str, dict[str, object]] = {
             "v3.status": {
-                "kind": "read",
-                "supported": True,
-                "available": read_ready,
-                "ready": read_ready,
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
                 "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
             },
             "v3.pose": {
-                "kind": "read",
-                "supported": True,
-                "available": read_ready,
-                "ready": read_ready,
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
                 "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
             },
             "v3.safety": {
-                "kind": "read",
-                "supported": True,
-                "available": read_ready,
-                "ready": read_ready,
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
                 "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
             },
             "v3.health": {
-                "kind": "read",
-                "supported": True,
-                "available": read_ready,
-                "ready": read_ready,
+                "kind": "read", "supported": True, "available": read_ready, "ready": read_ready,
                 "reason": None if read_ready else "NO_LIVE_RUNTIME_STATUS",
             },
-            "v3.command.stop": self._action(True, runtime_running, "STOP_IS_SAFE_NOOP_WHEN_IDLE"),
-            "v3.command.forward": self._action(True, True, current),
-            "v3.command.backward": self._action(True, True, current),
-            "v3.command.teleop": self._action(True, True, current),
-            "v3.command.wheels": self._action(True, True, current),
-            "v3.command.explore": self._action(True, True, current),
-            "v3.command.face_person": self._action(True, True, current),
-            "v3.command.follow_person": self._action(True, True, current),
         }
+        for name, descriptor in ACTION_CATALOG.items():
+            ready = runtime_running if name == "v3.command.stop" else True
+            reason = "STOP_IS_SAFE_NOOP_WHEN_IDLE" if name == "v3.command.stop" else current
+            result[name] = self._action(descriptor, True, ready, reason)
+        return result
 
     @staticmethod
-    def _action(available: bool, ready: bool, reason: str | None) -> dict[str, object]:
-        return {
+    def _action(descriptor: ActionDescriptor, available: bool, ready: bool, reason: str | None) -> dict[str, object]:
+        result = descriptor.to_jsonable()
+        result.update({
             "kind": "action",
             "supported": True,
             "available": available,
             "ready": ready,
             "reason": reason,
-        }
+        })
+        return result
 
     def read(self, resource: str) -> object:
         status = self.controller.live_runtime_status()

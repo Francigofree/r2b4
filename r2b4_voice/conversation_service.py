@@ -231,7 +231,13 @@ class ConversationService:
                 )
             else:
                 messages = self._prompt.build_messages(turn, context, history)
-            decision = self._llm.complete(messages)
+            complete_with_actions = getattr(self._llm, "complete_with_actions", None)
+            if callable(complete_with_actions):
+                decision = complete_with_actions(messages, context.available_actions)
+            else:
+                # Compatibility for simple/fake LLM ports; production providers
+                # use the dynamic catalog-aware method above.
+                decision = self._llm.complete(messages)
 
             action_status = "NONE"
             if decision.robot_action is not None:

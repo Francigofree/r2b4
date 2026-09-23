@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
 
 from .conversation_contracts import LLMDecision
-from .llm_decision import DECISION_SCHEMA, DecisionParseError, parse_llm_decision
+from .llm_decision import DECISION_SCHEMA, DecisionParseError, build_decision_schema, parse_llm_decision
 
 
 class LLMRequestError(RuntimeError):
@@ -58,6 +58,21 @@ class GroqStructuredChatClient:
         return self._config.model
 
     def complete(self, messages: Sequence[Mapping[str, str]]) -> LLMDecision:
+        return self._complete(messages, action_catalog=None)
+
+    def complete_with_actions(
+        self,
+        messages: Sequence[Mapping[str, str]],
+        action_catalog: Sequence[Mapping[str, object]],
+    ) -> LLMDecision:
+        return self._complete(messages, action_catalog=action_catalog)
+
+    def _complete(
+        self,
+        messages: Sequence[Mapping[str, str]],
+        *,
+        action_catalog: Sequence[Mapping[str, object]] | None,
+    ) -> LLMDecision:
         if not messages:
             raise ValueError("messages must not be empty")
         body = json.dumps(
@@ -69,7 +84,7 @@ class GroqStructuredChatClient:
                     "json_schema": {
                         "name": "r2b4_llm_decision",
                         "strict": True,
-                        "schema": DECISION_SCHEMA,
+                        "schema": build_decision_schema(action_catalog) if action_catalog is not None else DECISION_SCHEMA,
                     },
                 },
             },
@@ -110,7 +125,7 @@ class GroqStructuredChatClient:
         except (UnicodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise LLMRequestError("Groq LLM returned an invalid structured response") from exc
         try:
-            return parse_llm_decision(decision_raw, model=self._config.model)
+            return parse_llm_decision(decision_raw, model=self._config.model, action_catalog=action_catalog)
         except DecisionParseError as exc:
             raise LLMRequestError(str(exc)) from exc
 
