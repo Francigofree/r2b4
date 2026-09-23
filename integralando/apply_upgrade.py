@@ -14,7 +14,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-UPGRADE_ID = "r2b4_follow_person_p0_v2_1_20260923"
+UPGRADE_ID = "r2b4_follow_person_p0_v2_2_20260923"
 BASE_HEAD = "f55f459b2b3e420ce992d96355329a33c5a6e566"
 MARKER = "R2B4_FOLLOW_PERSON_P0_V2_20260923"
 
@@ -80,16 +80,27 @@ def class_method_names(tree: ast.Module, cls_name: str) -> set[str]:
 
 
 def replace_top_level_class(text: str, class_name: str, replacement: str, rel: str) -> str:
+    """Replace one top-level class including every decorator attached to it."""
     tree = parse_python(text, rel)
     matches = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == class_name]
     if len(matches) != 1:
         raise UpgradeError(f"{rel}: class {class_name} not uniquely found")
     node = matches[0]
     lines = text.splitlines(keepends=True)
-    start = node.lineno - 1
+
+    # ast.ClassDef.lineno points at the ``class`` statement, not at decorators.
+    # Replacing from node.lineno would leave the old @dataclass decorator in
+    # place and then add the replacement's decorator again. Frozen dataclasses
+    # fail at import time on the second decoration (__setattr__ collision).
+    first_lineno = min(
+        [node.lineno, *(decorator.lineno for decorator in node.decorator_list)]
+    )
+    start = first_lineno - 1
     end = node.end_lineno
     replacement = replacement.rstrip() + "\n\n"
-    return "".join(lines[:start]) + replacement + "".join(lines[end:])
+    result = "".join(lines[:start]) + replacement + "".join(lines[end:])
+    parse_python(result, rel)
+    return result
 
 
 def _top_level_function(text: str, function_name: str, rel: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
@@ -1052,6 +1063,58 @@ def test_testhub_reads_navigation_from_resolved_runtime():
 '''
 
 
+def _decorator_call_name(node: ast.expr) -> str | None:
+    target = node.func if isinstance(node, ast.Call) else node
+    if isinstance(target, ast.Name):
+        return target.id
+    if isinstance(target, ast.Attribute):
+        return target.attr
+    return None
+
+
+def validate_generated_patch_semantics(patched: dict[str, str]) -> None:
+    """Catch generation mistakes that syntax-only validation cannot see."""
+    rel = "v3/layers/l4_temporal_tracking.py"
+    tree = parse_python(patched[rel], rel)
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and node.name == "TemporalTrackCheckpoint"
+    ]
+    if len(matches) != 1:
+        raise UpgradeError(
+            f"{rel}: generated TemporalTrackCheckpoint is not unique"
+        )
+    dataclass_count = sum(
+        1
+        for decorator in matches[0].decorator_list
+        if _decorator_call_name(decorator) == "dataclass"
+    )
+    if dataclass_count != 1:
+        raise UpgradeError(
+            f"{rel}: generated TemporalTrackCheckpoint must have exactly one "
+            f"@dataclass decorator, found {dataclass_count}"
+        )
+
+    rel = "v3/test_hub_task_evidence.py"
+    tree = parse_python(patched[rel], rel)
+    names = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    for name in (
+        "_follow_person_evidence",
+        "_follow_person_direct_evidence",
+        "_captured_follow_evidence",
+    ):
+        if names.count(name) != 1:
+            raise UpgradeError(
+                f"{rel}: generated function {name} must be unique"
+            )
+
+
 def build_patches(root: Path) -> dict[str, str]:
     src = {rel: read_text(root, rel) for rel in EXPECTED_GIT_BLOB_SHA1}
     patched = {
@@ -1069,6 +1132,7 @@ def build_patches(root: Path) -> dict[str, str]:
             parse_python(content, rel)
         elif rel.endswith(".json"):
             json.loads(content)
+    validate_generated_patch_semantics(patched)
     return patched
 
 
