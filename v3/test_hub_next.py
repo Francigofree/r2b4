@@ -27,6 +27,7 @@ from .test_hub_localization_quality import (
     write_localization_quality,
 )
 from .test_hub_behavior import build_behavior_evidence
+from .hri_evidence import build_hri_evidence
 from .test_hub_task_evidence import build_task_evidence
 from .test_hub_motion_tuning import build_motion_tuning_evidence
 from .test_hub_profiles import BEHAVIORAL
@@ -48,6 +49,8 @@ from .test_hub_portable import (
 
 DEFAULT_CAPTURE_DIR = Path("runtime/captures")
 DEFAULT_HZ = 10
+
+# R2B4_HRI_P0_V1
 
 
 def latest_capture(capture_dir: Path = DEFAULT_CAPTURE_DIR) -> Path:
@@ -127,6 +130,10 @@ def run_default(
 
     reader = McapReader(capture)
     behavior = build_behavior_evidence(reader, destination, triage=triage)
+    hri = build_hri_evidence(
+        reader, destination,
+        behavior_timeline_path=destination / "behavior_timeline.ndjson",
+    )
     capture_sha256 = reader.sha256()
 
     view_path = destination / f"overview_{hz}hz.ndjson"
@@ -293,6 +300,8 @@ def run_default(
         "evidence_status": base.get("evidence_status"),
         "behavior_status": base.get("behavior_status"),
         "behavior": behavior,
+        "hri": hri,
+        "hri_timeline": "hri_timeline.ndjson",
         "task_evidence": task_evidence,
         "motion_tuning": motion_tuning,
         "replay_status": replay_status,
@@ -376,6 +385,8 @@ def run_default(
         "localization_quality_status": localization_quality.get("status"),
         "task_evidence_episode_count": task_evidence.get("episode_count"),
         "motion_tuning_segment_count": motion_tuning.get("segment_count"),
+        "hri_event_count": hri.get("event_count"),
+        "hri_correlated_event_count": hri.get("correlated_event_count"),
         "note": "One .evidence directory is the portable agent package; MCAP remains local authority.",
     }
 

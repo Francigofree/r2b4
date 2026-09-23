@@ -30,6 +30,7 @@ from typing import Mapping
 from .capture_compaction import compact_checkpoint_row, compact_tick_row
 from .capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
+from .hri_evidence import HRI_EVENT_TOPIC
 from .capture_encoding import (
     CaptureEncodingError,
     encode_capture_record,
@@ -57,6 +58,8 @@ RAW_LIDAR_TOPIC = "/r2b4/raw_lidar"
 CHECKPOINT_TOPIC = "/r2b4/checkpoint"
 EVENT_TOPIC = "/r2b4/event"
 RUNTIME_TOPIC = "/r2b4/runtime"
+
+# R2B4_HRI_P0_V1
 
 TERMINAL_STATUSES = frozenset(("PASS", "FAIL", "FAULT"))
 
@@ -504,7 +507,10 @@ class McapCaptureConsumer:
                     self._trim_untriggered_ring(self._last_seen_ns)
             else:
                 upper = self._trigger_ns + self._config.post_event_ns
-                if record.monotonic_ns <= upper:
+                if record.source_topic == HRI_EVENT_TOPIC or record.monotonic_ns <= upper:
+                    # HRI rows are imported by the passive sidecar at finalize. Their
+                    # original monotonic time remains inside the payload; allow the
+                    # late evidence message itself to be appended after post-window.
                     self._write_encoded_record(record)
                 if record.mcap_topic == TICK_TOPIC and record.monotonic_ns >= upper:
                     self._post_window_complete = True

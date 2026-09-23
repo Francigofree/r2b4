@@ -1,0 +1,37 @@
+{
+  "active_duration_s": 38.380006299,
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "correlation": {
+    "mission": "mission_id",
+    "navigation": "NavigationPlan.mission_id",
+    "primary": "command_id"
+  },
+  "episode_count": 3,
+  "episodes_with_incidents": 2,
+  "finding_counts": {},
+  "modes": {
+    "EXPLORE": 3
+  },
+  "safety": {
+    "ALLOW": 386,
+    "FAULT": 1,
+    "STOP": 0
+  },
+  "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+  "total_constrained_zero_ticks": 0,
+  "total_requested_motion_ticks": 375,
+  "unique_command_count": 1,
+  "unique_mission_count": 1
+}

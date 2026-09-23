@@ -19,6 +19,7 @@ from v3.engine import TickResult
 from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
 from v3.capture_ipc import CaptureCoreExpander
+from v3.hri_evidence import HRI_EVENT_TOPIC, load_hri_events_for_capture
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
@@ -36,6 +37,8 @@ _RAW_LIDAR_CAPACITY = 512
 _RAW_LIDAR_DRAIN_BATCH = 256
 _SIDECAR_READY_TIMEOUT_S = 10.0
 _SIDECAR_FINISH_TIMEOUT_S = 120.0
+
+# R2B4_HRI_P0_V1
 
 
 def _capture_sidecar_main(
@@ -69,7 +72,7 @@ def _capture_sidecar_main(
             required=True,
             topics=(
                 "v3.capture_record", "v3.raw_lidar",
-                "v3.raw_lidar_transport", "v3.capture_transport",
+                "v3.raw_lidar_transport", "v3.capture_transport", HRI_EVENT_TOPIC,
             ),
         )
         consumer = McapCaptureConsumer(
@@ -81,6 +84,7 @@ def _capture_sidecar_main(
             config=config,
         )
         consumer.start()
+        capture_started_ns = time.monotonic_ns()
         expander = CaptureCoreExpander()
         ready_event.set()
 
@@ -148,6 +152,10 @@ def _capture_sidecar_main(
                         {"event_type": "capture_core_transport_loss", "drop_count": finish_request[3]},
                         topic="v3.capture_transport",
                     )
+                for hri_event in load_hri_events_for_capture(
+                    Path(project_root), capture_started_ns, time.monotonic_ns()
+                ):
+                    hub.publish(hri_event, topic=HRI_EVENT_TOPIC)
                 hub.close()
                 result = consumer.finish(finish_request[0], terminal=finish_request[1])
                 evidence: dict[str, object] | None = None

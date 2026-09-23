@@ -1,0 +1,32 @@
+R2B4 HRI P0 UPGRADE PACKAGE VALIDATION
+Date: 2026-09-23
+Base source commit: 04b5cb704b1f532028c49058f4fc416a1c5deb9d
+
+Offline package validation performed in this ChatGPT environment:
+
+PASS  Python py_compile: installer, restore tool, payload modules, payload tests
+PASS  Payload SHA-256 integrity table matches package bytes
+PASS  HRI evidence isolated pytest: 3/3
+      - bounded journal/capture window
+      - MCAP-event -> behavior correlation
+      - read-only live behavior observer + bounded feedback
+PASS  Voice action receipt isolated execution test
+      - command_id preserved
+      - mission-{command_id} correlation identity produced
+PASS  Installer source-drift failure test
+      - exit failure
+      - zero repository writes
+      - zero backup side effects before valid staging
+PASS  Installer post-write regression failure test
+      - automatic full rollback
+      - original files byte-identical after rollback
+      - newly added files removed
+      - persistent backup retained
+
+Not executable in this environment:
+- Raspberry Pi hardware/microphone/motor live validation
+- the repository's complete pytest suite against the actual RPi working tree
+
+The installer therefore runs targeted repository pytest on the RPi by default and
+rolls back automatically if those tests fail. README_HU.md contains the live
+hardware validation sequence.

@@ -8,9 +8,9 @@ Data path:
 
 The service is host-side orchestration only.  It never writes motor/GPIO state; optional
 LLM proposals can execute only through the fresh-state canonical RobotInterface gate.  One process owns the microphone
-for wake and conversation; microphone frames are deliberately not consumed while
-THINKING/SPEAKING and the capture tail is discarded before returning to LISTENING
-so Alba does not transcribe its own voice.
+for wake and conversation. Normal dialogue remains half-duplex; during
+THINKING/SPEAKING only a separate exact-STOP interrupt lane may read the same
+bounded microphone frame port. The acoustic tail is discarded before normal listening.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import argparse
 import fcntl
 import json
 import os
+import queue
 import signal
 import stat
 import sys
@@ -31,6 +32,7 @@ from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
 from v3.adapters.microphone import MicrophoneHealth, MicrophoneState, NativeUsbMicrophone
+from v3.hri_evidence import HriBehaviorObserver, HriEventJournal
 
 from .action_executor import VoiceActionExecutor
 from .conversation_interface import VoiceInterfaceBundle, build_voice_interface
@@ -42,6 +44,8 @@ from .safety_intents import is_stop_intent
 from .speaker import ReadyWaveSpeaker
 from .voice_output import PcmWavePlayer
 from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActivityConfig
+
+# R2B4_HRI_P0_V1
 
 
 class VoiceServiceState(str, Enum):
@@ -161,6 +165,7 @@ class VoiceConversationService:
         action_executor: VoiceActionExecutor | None = None,
         config: VoiceServiceConfig = VoiceServiceConfig(),
         activity_config: WakeVoiceActivityConfig = WakeVoiceActivityConfig(),
+        hri_journal: HriEventJournal | None = None,
         status_file: Path | str | None = None,
         stop_event: threading.Event | None = None,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
@@ -198,6 +203,20 @@ class VoiceConversationService:
         self._action_executor = action_executor
         self._config = config
         self._builder = EnergyUtteranceBuilder(activity_config)
+        self._activity_config = activity_config
+        self._hri_journal = hri_journal
+        self._behavior_feedback_queue = queue.Queue(maxsize=4)
+        self._behavior_observer = HriBehaviorObserver(
+            conversation_interface, hri_journal, feedback_sink=self._queue_behavior_feedback,
+        )
+        self._interaction_counter = 0
+        self._interrupt_enabled = threading.Event()
+        self._stop_interrupt_latched = threading.Event()
+        self._interrupt_thread = threading.Thread(
+            target=self._interrupt_stop_loop,
+            name="r2b4-voice-stop-interrupt",
+            daemon=True,
+        )
         self._matcher = WakePhraseMatcher(config.keyword)
         self._status_file = Path(status_file) if status_file is not None else None
         self._stop_event = stop_event or threading.Event()
@@ -215,8 +234,12 @@ class VoiceConversationService:
 
     def run_forever(self) -> int:
         self._publish_status()
+        if not self._interrupt_thread.is_alive():
+            self._interrupt_thread.start()
         try:
             while not self._stop_event.is_set():
+                if self._deliver_behavior_feedback():
+                    continue
                 if not self._ensure_microphone():
                     continue
                 if self._robot_running():
@@ -229,6 +252,11 @@ class VoiceConversationService:
             self._set_state(VoiceServiceState.FAILED)
             return 1
         finally:
+            self._interrupt_enabled.clear()
+            self._behavior_observer.close()
+            self._stop_event.set()
+            if self._interrupt_thread.is_alive():
+                self._interrupt_thread.join(timeout=1.0)
             try:
                 self._microphone.stop()
             except Exception:
@@ -309,19 +337,19 @@ class VoiceConversationService:
         self._last_error = None
         self._publish_status()
         print(f"voice: user={self._last_transcript!r}", flush=True)
+        interaction_id = self._next_interaction_id()
+        self._stop_interrupt_latched.clear()
+        self._hri_event(
+            "STT_RESULT", interaction_id=interaction_id, text=self._last_transcript,
+            phase=self._state.value,
+        )
 
-        # P0.1: deterministic STOP bypasses the network/LLM completely.
+        # Deterministic STOP bypasses the LLM/action-proposal path after STT.
         # It still enters only through the canonical RobotInterface command path.
         if is_stop_intent(self._last_transcript):
-            try:
-                self._conversation_interface.execute("v3.command.stop")
-                self._last_action_status = "EXECUTED:VOICE_STOP_FAST_PATH"
-                print("voice: STOP fast-path executed via RobotInterface", flush=True)
-                self._last_error = None
-            except Exception as exc:
-                self._last_action_status = "STOP_FAILED"
-                self._last_error = f"voice STOP {type(exc).__name__}: {exc}"
-                print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
+            self._execute_voice_stop(
+                interaction_id=interaction_id, source="FAST_PATH", transcript=self._last_transcript
+            )
             self._settle_and_discard()
             return
 
@@ -334,10 +362,18 @@ class VoiceConversationService:
             )
             if not isinstance(accepted, Mapping) or not isinstance(accepted.get("turn_id"), str):
                 raise RuntimeError("conversation.submit_text did not return a turn_id")
-            result = self._conversation.wait_for_turn(
-                accepted["turn_id"],
-                timeout_s=self._config.llm_timeout_s,
+            turn_id = accepted["turn_id"]
+            self._hri_event(
+                "TURN_ACCEPTED", interaction_id=interaction_id, turn_id=turn_id,
+                text=self._last_transcript, phase=self._state.value,
             )
+            self._interrupt_enabled.set()
+            try:
+                result = self._conversation.wait_for_turn(
+                    turn_id, timeout_s=self._config.llm_timeout_s,
+                )
+            finally:
+                self._interrupt_enabled.clear()
             if result is None:
                 raise TimeoutError("conversation turn timed out")
         except Exception as exc:
@@ -347,7 +383,20 @@ class VoiceConversationService:
             return
 
         self._last_action_status = str(result.get("action_status")) if result.get("action_status") is not None else None
+        defer_action_feedback = False
         proposed = result.get("proposed_action")
+        if proposed is not None:
+            self._hri_event(
+                "INTENT_PROPOSED", interaction_id=interaction_id, turn_id=turn_id,
+                proposal=proposed, phase=self._state.value,
+            )
+            if self._stop_interrupt_latched.is_set():
+                self._last_action_status = "REJECTED:INTERRUPTED_BY_STOP"
+                self._hri_event(
+                    "ACTION_REJECTED", interaction_id=interaction_id, turn_id=turn_id,
+                    action_status=self._last_action_status, reason="INTERRUPTED_BY_STOP",
+                )
+                proposed = None
         if proposed is not None:
             mode = self._action_executor.mode.upper() if self._action_executor is not None else "PROPOSAL_ONLY"
             print(
@@ -358,14 +407,35 @@ class VoiceConversationService:
                 try:
                     execution = self._action_executor.execute_proposal(proposed)
                     self._last_action_status = execution.status
+                    self._hri_event(
+                        "ACTION_EXECUTED" if execution.executed else "ACTION_REJECTED",
+                        interaction_id=interaction_id, turn_id=turn_id,
+                        action_name=execution.action_name, action_status=execution.status,
+                        command_id=execution.command_id, mission_id=execution.mission_id,
+                    )
+                    if (
+                        execution.executed and execution.action_name != "v3.command.stop"
+                        and execution.command_id and execution.mission_id
+                    ):
+                        defer_action_feedback = True
+                        self._behavior_observer.observe(
+                            interaction_id=interaction_id, turn_id=turn_id,
+                            session_id=self._conversation.session_id,
+                            action_name=execution.action_name, command_id=execution.command_id,
+                            mission_id=execution.mission_id,
+                        )
                     print(
-                        f"voice: action={execution.action_name} status={execution.status}",
+                        f"voice: action={execution.action_name} status={execution.status} command_id={execution.command_id} mission_id={execution.mission_id}",
                         flush=True,
                     )
                 except Exception as exc:
                     # Fail closed: executor failure never falls back to a direct action path.
                     self._last_action_status = "REJECTED:EXECUTOR_ERROR"
                     self._last_error = f"voice action {type(exc).__name__}: {exc}"
+                    self._hri_event(
+                        "ACTION_REJECTED", interaction_id=interaction_id, turn_id=turn_id,
+                        action_status=self._last_action_status, reason=self._last_error,
+                    )
                     print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
 
         error = result.get("error")
@@ -375,7 +445,12 @@ class VoiceConversationService:
             self._settle_and_discard()
             return
 
-        spoken = result.get("spoken_text")
+        if self._stop_interrupt_latched.is_set():
+            spoken = "Megálltam."
+        elif defer_action_feedback:
+            spoken = "Rendben."
+        else:
+            spoken = result.get("spoken_text")
         if not isinstance(spoken, str) or not spoken.strip():
             self._last_spoken_text = None
             self._last_error = None
@@ -383,7 +458,12 @@ class VoiceConversationService:
             return
 
         self._last_spoken_text = spoken.strip()
+        self._hri_event(
+            "HRI_RESPONSE", interaction_id=interaction_id, turn_id=turn_id,
+            text=self._last_spoken_text, action_status=self._last_action_status,
+        )
         self._set_state(VoiceServiceState.SPEAKING)
+        self._interrupt_enabled.set()
         try:
             speech = self._tts.synthesize(self._last_spoken_text)
             backend = self._playback.play(speech)
@@ -396,9 +476,177 @@ class VoiceConversationService:
             self._last_error = f"speech {type(exc).__name__}: {exc}"
             print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
         finally:
-            # Half-duplex P0: everything captured during THINKING/SPEAKING plus
+            self._interrupt_enabled.clear()
+            # Half-duplex remains the normal dialogue path; the separate exact STOP
+            # lane is the only microphone consumer allowed during THINKING/SPEAKING.
             # the configured acoustic tail is discarded before we listen again.
             self._settle_and_discard()
+
+
+    def _queue_behavior_feedback(self, text: str, fields: Mapping[str, object]) -> None:
+        item = (str(text), dict(fields))
+        try:
+            self._behavior_feedback_queue.put_nowait(item)
+        except queue.Full:
+            try:
+                self._behavior_feedback_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._behavior_feedback_queue.put_nowait(item)
+            except queue.Full:
+                pass
+
+    def _deliver_behavior_feedback(self) -> bool:
+        try:
+            text, fields = self._behavior_feedback_queue.get_nowait()
+        except queue.Empty:
+            return False
+        self._last_spoken_text = text
+        self._hri_event("BEHAVIOR_FEEDBACK_SPEAKING", text=text, **fields)
+        self._set_state(VoiceServiceState.SPEAKING)
+        self._interrupt_enabled.set()
+        try:
+            speech = self._tts.synthesize(text)
+            backend = self._playback.play(speech)
+            print(f"voice: behavior_feedback={text!r}; player={backend}", flush=True)
+            self._last_error = None
+        except Exception as exc:
+            self._last_error = f"behavior feedback {type(exc).__name__}: {exc}"
+            self._hri_event("BEHAVIOR_FEEDBACK_FAILED", text=text, reason=self._last_error, **fields)
+            print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
+        finally:
+            self._interrupt_enabled.clear()
+            self._settle_and_discard()
+        return True
+
+    def _next_interaction_id(self) -> str:
+        self._interaction_counter += 1
+        return f"voice-{os.getpid()}-{self._monotonic_ns()}-{self._interaction_counter}"
+
+    def _hri_event(self, event_type: str, **fields: object) -> None:
+        if self._hri_journal is None:
+            return
+        try:
+            self._hri_journal.append(
+                event_type,
+                session_id=self._conversation.session_id,
+                **fields,
+            )
+        except Exception:
+            # HRI evidence is passive; it must never perturb dialogue or control.
+            return
+
+    def _execute_voice_stop(
+        self, *, interaction_id: str, source: str, transcript: str | None = None
+    ) -> bool:
+        if source == "INTERRUPT":
+            self._stop_interrupt_latched.set()
+        self._hri_event(
+            "STOP_REQUESTED",
+            interaction_id=interaction_id,
+            source=source,
+            transcript=transcript,
+            phase=self._state.value,
+        )
+        try:
+            self._conversation_interface.execute("v3.command.stop")
+            status = (
+                "EXECUTED:VOICE_STOP_INTERRUPT"
+                if source == "INTERRUPT"
+                else "EXECUTED:VOICE_STOP_FAST_PATH"
+            )
+            self._last_action_status = status
+            self._last_error = None
+            self._hri_event(
+                "INTERRUPT_STOP_EXECUTED" if source == "INTERRUPT" else "STOP_EXECUTED",
+                interaction_id=interaction_id,
+                source=source,
+                action_name="v3.command.stop",
+                action_status=status,
+                phase=self._state.value,
+            )
+            print(f"voice: STOP {source.lower()} executed via RobotInterface", flush=True)
+            return True
+        except Exception as exc:
+            self._last_action_status = "STOP_FAILED"
+            self._last_error = f"voice STOP {type(exc).__name__}: {exc}"
+            self._hri_event(
+                "INTERRUPT_STOP_FAILED" if source == "INTERRUPT" else "STOP_FAILED",
+                interaction_id=interaction_id,
+                source=source,
+                action_name="v3.command.stop",
+                action_status=self._last_action_status,
+                reason=self._last_error,
+                phase=self._state.value,
+            )
+            print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
+            return False
+
+    def _handle_interrupt_transcript(self, transcript: str, *, phase: str) -> bool:
+        normalized = transcript.strip()
+        if not normalized or not is_stop_intent(normalized):
+            return False
+        interaction_id = self._next_interaction_id()
+        self._hri_event(
+            "INTERRUPT_STOP_DETECTED",
+            interaction_id=interaction_id,
+            transcript=normalized,
+            phase=phase,
+        )
+        return self._execute_voice_stop(
+            interaction_id=interaction_id,
+            source="INTERRUPT",
+            transcript=normalized,
+        )
+
+    def _interrupt_stop_loop(self) -> None:
+        builder = EnergyUtteranceBuilder(self._activity_config)
+        sequence = 0
+        lane_active = False
+        while not self._stop_event.is_set():
+            if not self._interrupt_enabled.is_set():
+                lane_active = False
+                self._stop_event.wait(0.05)
+                continue
+            health = self._microphone.health()
+            if health.state is not MicrophoneState.CAPTURING:
+                self._stop_event.wait(0.05)
+                continue
+            if not lane_active:
+                sequence = health.sequence
+                builder.reset(reset_sequence=True)
+                lane_active = True
+                # Let transient THINKING/SPEAKING phases collapse without touching
+                # the audio ring; real speech remains buffered behind this cursor.
+                if self._stop_event.wait(0.02):
+                    continue
+                if not self._interrupt_enabled.is_set():
+                    continue
+            frame = self._microphone.port.read_after(sequence, timeout_s=0.10)
+            if frame is None:
+                continue
+            sequence = frame.sequence
+            try:
+                utterance = builder.feed(frame)
+            except Exception:
+                builder.reset(reset_sequence=True)
+                sequence = self._microphone.health().sequence
+                continue
+            if utterance is None:
+                continue
+            try:
+                transcript = self._transcriber.transcribe(utterance).strip()
+            except Exception as exc:
+                self._hri_event(
+                    "INTERRUPT_STT_ERROR",
+                    phase=self._state.value,
+                    reason=f"{type(exc).__name__}: {exc}",
+                )
+                continue
+            if self._handle_interrupt_transcript(transcript, phase=self._state.value):
+                builder.reset(reset_sequence=True)
+                sequence = self._microphone.health().sequence
 
     def _read_utterance(self):
         frame = self._microphone.port.read_after(
@@ -701,6 +949,7 @@ def main(argv: list[str] | None = None) -> int:
             bundle.conversation,
             tts,
             PcmWavePlayer(),
+            hri_journal=HriEventJournal((runtime / "hri_events.ndjson").resolve()),
             action_executor=VoiceActionExecutor(
                 bundle.interface,
                 mode=action_mode,
