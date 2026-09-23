@@ -76,6 +76,7 @@ class FollowPersonEvidence:
     search_timeout_ns: int
     search_sweep_rad: float
     search_yaw_tolerance_rad: float
+    search_budget_ns: int | None = None
 
 
 
@@ -133,6 +134,9 @@ class NavigationConfig:
     follow_person_heading_min_factor: float = 0.75
     # None preserves the acquisition threshold for configs without retention tuning.
     follow_person_retention_min_confidence: float | None = None
+    # Search allows ideal travel time plus search_timeout_ns settling/stall slack,
+    # under this hard cap even for very small operator angular-speed limits.
+    follow_person_search_max_duration_ns: int = 10_000_000_000
 
     def __post_init__(self) -> None:
         for name in (
@@ -307,10 +311,13 @@ class NavigationConfig:
         for name in (
             "follow_person_search_timeout_ns",
             "follow_person_search_step_ns",
+            "follow_person_search_max_duration_ns",
         ):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if self.follow_person_search_max_duration_ns < self.follow_person_search_timeout_ns:
+            raise ValueError("follow_person_search_max_duration_ns must cover search timeout")
         if (
             not isinstance(self.follow_person_search_sweep_rad, (int, float))
             or isinstance(self.follow_person_search_sweep_rad, bool)
@@ -385,6 +392,7 @@ class NavigationStateCheckpoint:
     follow_person_state: str = _FollowPersonState.ACQUIRE.value
     follow_person_search_phase: int | None = None
     follow_person_search_target_yaw_rad: float | None = None
+    follow_person_search_budget_ns: int | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -513,6 +521,7 @@ class TrajectoryNavigator:
         "_follow_person_state",
         "_follow_person_search_phase",
         "_follow_person_search_target_yaw_rad",
+        "_follow_person_search_budget_ns",
         "_follow_person_evidence",
         "_follow_person_track_id",
         "_follow_person_last_heading_rad",
@@ -609,6 +618,7 @@ class TrajectoryNavigator:
         self._follow_person_state = _FollowPersonState.ACQUIRE
         self._follow_person_search_phase: int | None = None
         self._follow_person_search_target_yaw_rad: float | None = None
+        self._follow_person_search_budget_ns: int | None = None
         self._follow_person_evidence: FollowPersonEvidence | None = None
 
     def checkpoint(self) -> NavigationStateCheckpoint:
@@ -642,6 +652,7 @@ class TrajectoryNavigator:
             self._follow_person_state.value,
             self._follow_person_search_phase,
             self._follow_person_search_target_yaw_rad,
+            self._follow_person_search_budget_ns,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -671,6 +682,7 @@ class TrajectoryNavigator:
         self._follow_person_state = _FollowPersonState(checkpoint.follow_person_state)
         self._follow_person_search_phase = checkpoint.follow_person_search_phase
         self._follow_person_search_target_yaw_rad = checkpoint.follow_person_search_target_yaw_rad
+        self._follow_person_search_budget_ns = checkpoint.follow_person_search_budget_ns
         self._follow_person_evidence = None
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
@@ -887,6 +899,7 @@ class TrajectoryNavigator:
         self._follow_person_state = _FollowPersonState.ACQUIRE
         self._follow_person_search_phase = None
         self._follow_person_search_target_yaw_rad = None
+        self._follow_person_search_budget_ns = None
         self._follow_person_evidence = None
 
     def _face_person_plan(
@@ -1029,6 +1042,7 @@ class TrajectoryNavigator:
             search_timeout_ns=self._config.follow_person_search_timeout_ns,
             search_sweep_rad=self._config.follow_person_search_sweep_rad,
             search_yaw_tolerance_rad=self._config.follow_person_search_yaw_tolerance_rad,
+            search_budget_ns=self._follow_person_search_budget_ns,
         )
 
     def _follow_person_plan_impl(
@@ -1096,6 +1110,9 @@ class TrajectoryNavigator:
                     self._follow_person_lost_since_ns = mission.context.monotonic_ns
                     self._follow_person_search_phase = None
                     self._follow_person_search_target_yaw_rad = None
+                    self._follow_person_search_budget_ns = self._follow_search_budget(
+                        mission, estimate,
+                    )
                     self._clear_trajectory_plan()
                 lost_ns = mission.context.monotonic_ns - self._follow_person_lost_since_ns
                 if lost_ns <= self._config.follow_person_lost_hold_ns:
@@ -1114,7 +1131,12 @@ class TrajectoryNavigator:
                 search_elapsed_ns = lost_ns - self._config.follow_person_lost_hold_ns
                 if (
                     self._follow_person_last_heading_rad is not None
-                    and search_elapsed_ns <= self._config.follow_person_search_timeout_ns
+                    and self._follow_person_state is not _FollowPersonState.LOST
+                    and search_elapsed_ns <= (
+                        self._follow_person_search_budget_ns
+                        if self._follow_person_search_budget_ns is not None
+                        else self._config.follow_person_search_timeout_ns
+                    )
                 ):
                     # Stable target yaw until the physical yaw reaches it. Overall
                     # search timeout remains the bounded failure exit.
@@ -1136,6 +1158,12 @@ class TrajectoryNavigator:
                         and abs(_wrapped_angle(search_yaw - estimate.yaw_rad))
                         <= self._config.follow_person_search_yaw_tolerance_rad
                     ):
+                        if self._follow_person_search_phase == 2:
+                            self._follow_person_state = _FollowPersonState.LOST
+                            self._follow_person_search_target_yaw_rad = None
+                            return self._inactive(
+                                mission, NavigationStatus.INVALIDATED, "PERSON_TARGET_LOST",
+                            )
                         next_phase = self._follow_person_search_phase + 1
                         search_offset_rad = (
                             self._config.follow_person_search_sweep_rad
@@ -1170,6 +1198,7 @@ class TrajectoryNavigator:
         self._follow_person_lost_since_ns = None
         self._follow_person_search_phase = None
         self._follow_person_search_target_yaw_rad = None
+        self._follow_person_search_budget_ns = None
         self._follow_person_state = _FollowPersonState.FOLLOW
 
         dx = selected.x_m - estimate.x_m
@@ -1355,6 +1384,23 @@ class TrajectoryNavigator:
             local_goal=local_goal,
             trajectory_candidates=candidates,
         )
+
+    def _follow_search_budget(
+        self, mission: MissionIntent, estimate: RobotEstimate,
+    ) -> int:
+        heading = self._follow_person_last_heading_rad
+        if heading is None:
+            return self._config.follow_person_search_timeout_ns
+        # CENTER -> +SWEEP -> -SWEEP. Use wrapped angular distances, including
+        # sweeps larger than pi/2, and the actual command's angular-speed cap.
+        sweep = self._config.follow_person_search_sweep_rad
+        travel_rad = (
+            abs(_wrapped_angle(heading - estimate.yaw_rad))
+            + sweep + abs(_wrapped_angle(2 * sweep))
+        )
+        cap = self._config.follow_person_search_max_duration_ns
+        travel_s = min(cap / 1e9, travel_rad / mission.constraints.max_omega_rad_s)
+        return min(cap, math.ceil(travel_s * 1e9) + self._config.follow_person_search_timeout_ns)
 
     def _exploration_plan(
         self,

@@ -314,7 +314,8 @@ def test_follow_person_locks_target_and_never_silently_switches():
 
     c5 = TickContext(
         14,
-        c3.monotonic_ns + config.follow_person_lost_hold_ns + 3_000_000_000,
+        c3.monotonic_ns + config.follow_person_lost_hold_ns
+        + config.follow_person_search_max_duration_ns + 1,
     )
     expired = navigator.evaluate(
         _mission(c5, command_id=command_id),

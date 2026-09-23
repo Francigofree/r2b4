@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from v3.contracts import AdmittedFrame, DataField, Observation, RobotEstimate, TickContext
@@ -108,6 +110,24 @@ def _frame(
             )
         )
     return AdmittedFrame(context, tuple(observations), ())
+
+
+def test_person_image_identity_uses_measurement_time_camera_orientation():
+    model = ShadowWorldModel()
+    first = TickContext(0, 1_000_000_000)
+    model(_frame(first, sequence=0, lidar_points=((2.0, 0.0, 10),)),
+          _estimate(first, yaw_rad=0.20))
+    current = TickContext(1, 1_100_000_000)
+    model(_frame(current, sequence=1, lidar_points=None,
+                 person_boxes=((0.9, 0.4, 0.6),), person_captured_ns=first.monotonic_ns),
+          _estimate(current, yaw_rad=0.40))
+    state = model.checkpoint().tracks.states[0]
+    assert state.captured_ns == first.monotonic_ns
+    assert state.image_region is not None
+    assert state.image_region.bearing_rad == pytest.approx(0.20)
+    assert state.image_region.ymin == 0.1
+    assert state.image_region.ymax == 0.9
+    assert state.track.x_m == pytest.approx(2 * math.cos(0.20))
 
 
 def test_temporal_l4_projects_delayed_lidar_with_measurement_time_pose():

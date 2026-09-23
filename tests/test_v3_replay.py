@@ -85,6 +85,75 @@ def test_native_capture_inspect_replay_and_result_verification(tmp_path):
     assert verify_replay_result(result_path)["status"] == "PASS"
 
 
+def test_follow_identity_and_speed_bounded_search_replay_from_checkpoint(tmp_path):
+    from dataclasses import replace
+
+    from v3.capture import CaptureSink
+    from v3.capture_encoding import encode_value
+    from v3.composition.native_control import NativeControlComposition
+    from v3.contracts import (
+        CommandMode, CommandRequest, DataField, DeviceHealth, DeviceHealthState,
+        DeviceSample, LifecycleState,
+    )
+    from v3.execution import ExecutionRecord
+    from v3_validation_helpers import RecordingMotorSink, control_config, tick_inputs
+
+    config = control_config()
+    production = NativeControlComposition(RecordingMotorSink(), config)
+    capture = CaptureSink("follow-search", configuration={"resolved_control": config})
+    sliced = CaptureSink("follow-search-slice", configuration={"resolved_control": config})
+    checkpoint = None
+    states = {}
+    for base in tick_inputs(390):
+        c = base.context
+        local = DeviceSample("RPLIDAR_C1", "lidar_local_points", c.tick_id, c.monotonic_ns, (
+            DataField("frame_id", "ROBOT_BASE"), DataField("point_count", 1),
+            DataField("point_000_x_m", 2.0), DataField("point_000_y_m", 0.0),
+            DataField("point_000_quality", 10),
+        ))
+        samples = base.raw_devices.samples + (local,)
+        if c.tick_id <= 2:
+            samples += (DeviceSample("PERSON_DETECTOR_FRONT", "person_detection",
+                c.tick_id, c.monotonic_ns, (
+                    DataField("age_ns", 0), DataField("measurement_timing_valid", True),
+                    DataField("measurement_stale", False), DataField("person_detected", True),
+                    DataField("primary_confidence", 0.9), DataField("primary_xmin", 0.4),
+                    DataField("primary_xmax", 0.6), DataField("primary_ymin", 0.1),
+                    DataField("primary_ymax", 0.9),
+                )),)
+        command = CommandRequest(c, "follow-search", CommandMode.FOLLOW_PERSON, (
+            DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.30),
+        ), c.tick_id)
+        inputs = production.close_inputs(replace(base, command=command,
+            lifecycle=LifecycleState.ACTIVE, raw_devices=replace(base.raw_devices, samples=samples,
+                device_health=base.raw_devices.device_health + (
+                    DeviceHealth("PERSON_DETECTOR_FRONT", DeviceHealthState.OK),
+                ))))
+        result = production.run_tick(inputs)
+        assert result.trace.fault_layer is None
+        record = ExecutionRecord(inputs, result, production.tick_evidence)
+        capture.write(record)
+        if c.tick_id == 60:
+            checkpoint = encode_value(production.checkpoint())
+            assert checkpoint["navigation"]["follow_person_search_budget_ns"] == pytest.approx(
+                6_500_000_000, rel=0, abs=1,
+            )
+            assert checkpoint["world_model"]["tracks"]["dormant_states"][0]["image_region"]
+        elif c.tick_id > 60:
+            sliced.write(record)
+        follow = next(e for e in production.tick_evidence if type(e).__name__ == "FollowPersonEvidence")
+        states[c.tick_id] = follow.state
+    assert states[200] == "SEARCH"  # The former two-second cutoff is too short.
+    assert states[389] == "LOST"    # A stalled robot still terminates recovery.
+    full_path = capture.finalize("PASS", tmp_path / "follow.json")
+    slice_path = sliced.finalize("PASS", tmp_path / "follow-slice.json",
+                                initial_state_checkpoint=checkpoint)
+    for path in (full_path, slice_path):
+        replay = replay_capture(path, project_root=PROJECT_ROOT)
+        assert replay["status"] == "MATCH", replay.get("first_divergence")
+        assert replay["determinism"]["repeated_trace_match"] is True
+
+
 def test_replay_rejects_non_native_capture_schema(tmp_path):
     path = tmp_path / "unsupported.json"
     path.write_text(json.dumps({"schema": "OBSOLETE_CAPTURE"}), encoding="utf-8")

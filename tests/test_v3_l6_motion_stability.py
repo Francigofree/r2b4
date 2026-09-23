@@ -88,7 +88,9 @@ def test_retention_does_not_bypass_loss_or_switch_identity(tracks):
     nav = TrajectoryNavigator(config)
     c0 = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(c0), _estimate(c0), _world(c0, _person('person-1', 2.0, 0.0)))
-    for tick, time_ns in [(1, 1_020_000_000), (2, 4_000_000_000)]:
+    deadline = (1_020_000_000 + config.follow_person_lost_hold_ns
+                + config.follow_person_search_max_duration_ns + 1)
+    for tick, time_ns in [(1, 1_020_000_000), (2, deadline)]:
         context = TickContext(tick, time_ns)
         plan = nav.evaluate(_mission(context), _estimate(context), _world(context, *tracks))
         assert not plan.trajectory_candidates

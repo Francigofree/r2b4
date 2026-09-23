@@ -40,6 +40,7 @@ from v3.layers.l4_temporal_occupancy import (
     TemporalOccupancyGrid,
 )
 from v3.layers.l4_temporal_tracking import (
+    PersonImageRegion,
     PersonMeasurement,
     TemporalTrackCheckpoint,
     TemporalTrackStore,
@@ -285,6 +286,8 @@ class _PersonImageDetection:
     confidence: float
     xmin: float
     xmax: float
+    ymin: float | None = None
+    ymax: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,6 +295,7 @@ class _PersonSpatialMeasurement:
     confidence: float
     x_m: float
     y_m: float
+    image_region: PersonImageRegion | None = None
 
 
 class ShadowWorldModel:
@@ -814,7 +818,8 @@ class ShadowWorldModel:
         if not spatial:
             return False
         return self._track_store.associate_people(
-            tuple(PersonMeasurement(item.confidence, item.x_m, item.y_m) for item in spatial),
+            tuple(PersonMeasurement(item.confidence, item.x_m, item.y_m, item.image_region)
+                  for item in spatial),
             captured_ns=observation.captured_monotonic_ns,
             radius_m=self._config.person_track_radius_m,
             max_association_distance_m=self._config.person_track_max_association_distance_m,
@@ -832,7 +837,8 @@ class ShadowWorldModel:
             xmax = _unit_number(values, "primary_xmax")
             if xmax <= xmin:
                 raise ValueError("person detection bounding box must have positive width")
-            return (_PersonImageDetection(confidence, xmin, xmax),)
+            ymin, ymax = self._person_vertical_extent(values, "primary")
+            return (_PersonImageDetection(confidence, xmin, xmax, ymin, ymax),)
         count = _integer(values, "emitted_person_count")
         detections: list[_PersonImageDetection] = []
         for index in range(count):
@@ -842,8 +848,22 @@ class ShadowWorldModel:
             xmax = _unit_number(values, f"{prefix}_xmax")
             if xmax <= xmin:
                 raise ValueError("person detection bounding box must have positive width")
-            detections.append(_PersonImageDetection(confidence, xmin, xmax))
+            ymin, ymax = self._person_vertical_extent(values, prefix)
+            detections.append(_PersonImageDetection(confidence, xmin, xmax, ymin, ymax))
         return tuple(detections)
+
+    @staticmethod
+    def _person_vertical_extent(
+        values: dict[str, object], prefix: str,
+    ) -> tuple[float | None, float | None]:
+        # Older observations only carried horizontal bounds.
+        if f"{prefix}_ymin" not in values and f"{prefix}_ymax" not in values:
+            return None, None
+        ymin = _unit_number(values, f"{prefix}_ymin")
+        ymax = _unit_number(values, f"{prefix}_ymax")
+        if ymax <= ymin:
+            raise ValueError("person detection bounding box must have positive height")
+        return ymin, ymax
 
     def _localize_people(
         self,
@@ -897,7 +917,15 @@ class ShadowWorldModel:
                 used_points.add(point[0])
             world_x = sum(point[1] for point in cluster) / len(cluster)
             world_y = sum(point[2] for point in cluster) / len(cluster)
-            result.append(_PersonSpatialMeasurement(detection.confidence, world_x, world_y))
+            region = None
+            if detection.ymin is not None and detection.ymax is not None:
+                region = PersonImageRegion(
+                    _wrapped_angle(detection_pose.yaw_rad + (left + right) / 2),
+                    abs(left - right), detection.ymin, detection.ymax,
+                )
+            result.append(_PersonSpatialMeasurement(
+                detection.confidence, world_x, world_y, region,
+            ))
         return tuple(result)
 
     def _pixel_bearing(self, normalized_x: float) -> float:

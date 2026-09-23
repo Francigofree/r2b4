@@ -10,10 +10,34 @@ from v3.contracts import ObstacleTrack
 
 
 @dataclass(frozen=True, slots=True)
+class PersonImageRegion:
+    """Measurement-time image extent; horizontal angles are in the map frame."""
+
+    bearing_rad: float
+    width_rad: float
+    ymin: float
+    ymax: float
+
+    def overlap(self, other: PersonImageRegion) -> float:
+        delta = math.atan2(
+            math.sin(other.bearing_rad - self.bearing_rad),
+            math.cos(other.bearing_rad - self.bearing_rad),
+        )
+        width = max(0.0, min(self.width_rad / 2, delta + other.width_rad / 2)
+                    - max(-self.width_rad / 2, delta - other.width_rad / 2))
+        height = max(0.0, min(self.ymax, other.ymax) - max(self.ymin, other.ymin))
+        intersection = width * height
+        union = (self.width_rad * (self.ymax - self.ymin)
+                 + other.width_rad * (other.ymax - other.ymin) - intersection)
+        return intersection / union if union > 0.0 else 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class PersonMeasurement:
     confidence: float
     x_m: float
     y_m: float
+    image_region: PersonImageRegion | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +45,7 @@ class TemporalTrackState:
     track: ObstacleTrack
     captured_ns: int
     updates: int
+    image_region: PersonImageRegion | None = None
 
 
 
@@ -149,12 +174,14 @@ class TemporalTrackStore:
                     vy_mps=0.0,
                     confidence=measurement.confidence,
                 )
-                self._states[track_id] = TemporalTrackState(track, captured_ns, 1)
+                self._states[track_id] = TemporalTrackState(
+                    track, captured_ns, 1, measurement.image_region
+                )
                 used_track_ids.add(track_id)
                 changed = True
                 continue
 
-            _, track_id, state = best
+            _, _, track_id, state = best
             used_track_ids.add(track_id)
             if reactivated:
                 self._dormant_states.pop(track_id, None)
@@ -171,8 +198,8 @@ class TemporalTrackStore:
         measurement: PersonMeasurement,
         captured_ns: int,
         max_association_distance_m: float,
-    ) -> tuple[float, str, TemporalTrackState] | None:
-        best: tuple[float, str, TemporalTrackState] | None = None
+    ) -> tuple[float, float, str, TemporalTrackState] | None:
+        best: tuple[float, float, str, TemporalTrackState] | None = None
         for track_id in sorted(pool):
             if track_id in used_track_ids:
                 continue
@@ -191,8 +218,14 @@ class TemporalTrackStore:
             ) / dt_s
             if distance_m > max_association_distance_m or raw_speed_mps > self._max_speed_mps:
                 continue
-            candidate = (distance_m, track_id, state)
-            if best is None or candidate[:2] < best[:2]:
+            # A nearby LiDAR return can move between a person's legs/background.
+            # Retain the visual identity when both observations carry its extent;
+            # image overlap never bypasses the spatial/speed admission above.
+            overlap = 0.0
+            if state.image_region is not None and measurement.image_region is not None:
+                overlap = state.image_region.overlap(measurement.image_region)
+            candidate = (-overlap, distance_m, track_id, state)
+            if best is None or candidate[:3] < best[:3]:
                 best = candidate
         return best
 
@@ -241,6 +274,7 @@ class TemporalTrackStore:
             ),
             captured_ns,
             state.updates + 1,
+            measurement.image_region,
         )
 
     def expire(self, now_ns: int, *, person_max_age_ns: int, other_max_age_ns: int) -> bool:
@@ -321,6 +355,7 @@ class TemporalTrackStore:
 
 
 __all__ = [
+    "PersonImageRegion",
     "PersonMeasurement",
     "TemporalTrackCheckpoint",
     "TemporalTrackState",

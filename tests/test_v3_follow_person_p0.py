@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -110,9 +111,16 @@ def test_p0_config_preserves_follow_person_safety_invariants():
         )
     )
     assert config.follow_person_hold_release_margin_m > 0.0
+    assert config.follow_person_search_max_duration_ns == 10_000_000_000
     assert config.follow_person_slowdown_distance_m > 0.0
     assert config.follow_person_minimum_follow_speed_mps > 0.0
     assert 0.0 < config.follow_person_heading_min_factor <= 1.0
+
+
+@pytest.mark.parametrize("cap", [0, True, 1.5, 1_000_000_000])
+def test_search_hard_cap_must_be_integer_and_cover_timeout(cap):
+    with pytest.raises(ValueError, match="follow_person_search_max_duration_ns"):
+        replace(_config(), follow_person_search_max_duration_ns=cap)
 
 
 def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
@@ -149,7 +157,7 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
         4,
         c2.monotonic_ns
         + _config().follow_person_lost_hold_ns
-        + 3_000_000_000,
+        + _config().follow_person_search_max_duration_ns + 1,
     )
     expired = nav.evaluate(
         _mission(c4),
@@ -158,6 +166,62 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
     )
     assert expired.status is NavigationStatus.INVALIDATED
     assert expired.reason == "PERSON_TARGET_LOST"
+
+
+@pytest.mark.parametrize("omega", [0.3, 1.2, 1e-300])
+def test_search_budget_covers_sweep_at_command_speed_but_is_bounded(omega):
+    config = _config()
+    nav = TrajectoryNavigator(config)
+    first = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
+    lost = TickContext(1, 1_020_000_000)
+    mission = _mission(lost)
+    mission = replace(mission, constraints=replace(mission.constraints, max_omega_rad_s=omega))
+    nav.evaluate(mission, _estimate(lost), _world(lost))
+    budget = nav.checkpoint().follow_person_search_budget_ns
+    expected = min(config.follow_person_search_max_duration_ns,
+                   math.ceil(min(10.0, 1.35 / omega) * 1e9)
+                   + config.follow_person_search_timeout_ns)
+    assert budget == expected
+    assert nav.follow_person_evidence.search_budget_ns == budget
+    deadline = lost.monotonic_ns + config.follow_person_lost_hold_ns + budget
+    late = TickContext(2, deadline + 1)
+    plan = nav.evaluate(replace(mission, context=late), _estimate(late), _world(late))
+    assert plan.reason == "PERSON_TARGET_LOST"
+    assert not plan.route and plan.velocity_target is None
+
+
+def test_search_completes_both_sides_after_old_timeout_and_does_not_restart():
+    config = _config()
+    nav = TrajectoryNavigator(config)
+    first = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
+    lost = TickContext(1, 1_020_000_000)
+    nav.evaluate(_mission(lost), _estimate(lost), _world(lost))
+    start = lost.monotonic_ns + config.follow_person_lost_hold_ns + 1
+    for tick, offset, yaw, phase in (
+        (2, 0, 0.0, 0),
+        (3, 20_000_000, 0.0, 1),
+        (4, 1_800_000_000, 0.45, 2),
+        (5, 3_000_000_000, 0.10, 2),
+    ):
+        c = TickContext(tick, start + offset)
+        plan = nav.evaluate(_mission(c), _estimate(c, yaw), _world(c))
+        assert plan.status is NavigationStatus.ACTIVE
+        assert nav.follow_person_evidence.search_phase == phase
+    restored = TrajectoryNavigator(config)
+    restored.restore(nav.checkpoint())
+    for tick, offset in ((6, 5_200_000_000), (7, 5_220_000_000)):
+        c = TickContext(tick, start + offset)
+        for navigator in (nav, restored):
+            plan = navigator.evaluate(_mission(c), _estimate(c, -0.45), _world(c))
+            assert plan.reason == "PERSON_TARGET_LOST"
+            assert not plan.route
+        assert nav.checkpoint() == restored.checkpoint()
+    c = TickContext(8, start + 5_240_000_000)
+    nav.evaluate(_mission(c), _estimate(c), _world(c, _person("person-a", 2, 0)))
+    assert nav.follow_person_evidence.state == "FOLLOW"
+    assert nav.checkpoint().follow_person_search_budget_ns is None
 
 
 def test_p0_same_locked_target_can_return_without_identity_switch():
