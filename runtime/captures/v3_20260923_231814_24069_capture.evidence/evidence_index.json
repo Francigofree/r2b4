@@ -1,0 +1,69 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "2b74f4597107ebfdd6fa33b1b12caf0d544c9212b9d034d62d1b58cb9e3fbbca",
+      "size_bytes": 9037
+    },
+    "diagnosis.json": {
+      "sha256": "620cd58705d1cf0625338d28b48ba51743326894b1fd03b09790cb2d3e94974c",
+      "size_bytes": 10391
+    },
+    "gui_manifest.json": {
+      "sha256": "917a496b8e53c7a84c0f70f7aeb78abe576029117558cbabf9fea1a3104fb6e3",
+      "size_bytes": 14212
+    },
+    "inspect.json": {
+      "sha256": "ab2b56a048f6f7bde0b26b3896d6317256c7da4350ab13bcfb01aa58f0ee8a4c",
+      "size_bytes": 11969
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "37735738d7032b975e2100798d967a56b80959f75805caec4ab7e978ddd45b35",
+      "size_bytes": 22189
+    },
+    "timeline.ndjson": {
+      "sha256": "0de26ce229e5a1bf5f7bb32faad3bea344558a987f8070975e8aece969ef923b",
+      "size_bytes": 191762
+    },
+    "triage.json": {
+      "sha256": "b6e89f77b25d6e5b0c218ee73827d9d7ad6968903e69594b0e308f817b7ddc07",
+      "size_bytes": 14528
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_231814_24069_capture.mcap",
+    "sha256": "71ad5116eddccf3b405f548d63176ee52e7094af794107573880dc8ffec862fc"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "created_at_utc": "2026-09-23T21:18:31Z",
+  "diagnosis_status": "FINDING",
+  "evidence_sha256": "3be7217f1084e8041aaf694b3f03289039d68c907ca522b20add3b4b8397c7bf",
+  "evidence_status": "PASS",
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "covariance-growth-405"
+    ],
+    "kind": "LOCALIZATION",
+    "layer": "L3",
+    "reason": "COVARIANCE_GROWTH",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 405
+  },
+  "run_id": "v3_20260923_231814_24069_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}
