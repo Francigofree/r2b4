@@ -1,0 +1,305 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_132806_7777_capture.mcap",
+    "capture_name": "v3_20260923_132806_7777_capture.mcap",
+    "capture_sha256": "9697f70cd395e1c3ee35dcc3d88905bc1bfb16ec35d3d46ae23b0e1842a65091",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 34,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 352,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 350,
+      "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
+    }
+  },
+  "default_view_hz": 10,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 1700,
+      "last_tick": 1700,
+      "layer": "L3",
+      "reason": "COVARIANCE_GROWTH",
+      "representative": {
+        "category": "LOCALIZATION",
+        "evidence": {
+          "first_trace": 0.0461,
+          "growth_ratio": 4.275571568052716,
+          "last_trace": 0.19710384928723024,
+          "max_trace": 0.27099655265737554,
+          "sample_count": 350
+        },
+        "id": "covariance-growth-1700",
+        "layer": "L3",
+        "monotonic_ns": 1661903797085,
+        "reason": "COVARIANCE_GROWTH",
+        "severity": "MEDIUM",
+        "tick_id": 1700
+      },
+      "severity": "MEDIUM"
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 8,
+      "first_tick": 0,
+      "last_tick": 35,
+      "layer": "L1",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "representative": {
+        "category": "DEVICE_HEALTH",
+        "evidence": {
+          "devices": [
+            {
+              "device_id": "RPLIDAR_C1",
+              "reason": "LIDAR_STALE",
+              "state": "DEGRADED"
+            },
+            {
+              "device_id": "CAMERA_FRONT",
+              "reason": "CAMERA_NO_FRAME",
+              "state": "UNKNOWN"
+            },
+            {
+              "device_id": "PERSON_DETECTOR_FRONT",
+              "reason": "PERSON_DETECTOR_NO_RESULT",
+              "state": "UNKNOWN"
+            }
+          ]
+        },
+        "id": "device-0",
+        "layer": "L1",
+        "monotonic_ns": 1627019736801,
+        "reason": "DEVICE_HEALTH_NON_OK",
+        "severity": "WARNING",
+        "tick_id": 0
+      },
+      "severity": "WARNING"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 81,
+      "first_tick": 55,
+      "last_tick": 1661,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 305465349,
+              "reason": "STALE",
+              "source_device_id": "RPLIDAR_C1",
+              "source_sequence": 3
+            }
+          ]
+        },
+        "id": "l2-reject-55",
+        "layer": "L2",
+        "monotonic_ns": 1628137121950,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "WARNING",
+        "tick_id": 55
+      },
+      "severity": "WARNING"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 1700,
+      "group_index": 1,
+      "last_tick": 1700,
+      "path": "01_COVARIANCE_GROWTH.ndjson",
+      "reason": "COVARIANCE_GROWTH",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "count": 8,
+      "first_tick": 0,
+      "group_index": 2,
+      "last_tick": 35,
+      "path": "02_DEVICE_HEALTH_NON_OK.ndjson",
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 81,
+      "first_tick": 55,
+      "group_index": 3,
+      "last_tick": 1661,
+      "path": "03_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 5,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "motion_tuning": {
+    "capture_tick_sample_hz": 10,
+    "policy": "DESCRIPTIVE_TUNING_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_MOTION_TUNING_V1",
+    "segment_count": 1,
+    "segments": "motion_tuning_segments.ndjson",
+    "signal_sample_counts": {
+      "actuator_output": 350,
+      "allowed_motion": 350,
+      "body_state": 350,
+      "planner_candidates": 297,
+      "requested_motion": 350,
+      "wheel_feedback": 350,
+      "wheel_target": 350
+    },
+    "summary": "motion_tuning_summary.json"
+  },
+  "overview": "overview_10hz.ndjson",
+  "phases": [
+    {
+      "end_s": 1.50043596,
+      "end_tick": 74,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 0,
+      "stop_ticks": 16,
+      "tick_count": 16
+    },
+    {
+      "end_s": 31.317358207,
+      "end_tick": 1523,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 297,
+      "start_s": 1.618031192,
+      "start_tick": 80,
+      "stop_ticks": 0,
+      "tick_count": 298
+    },
+    {
+      "end_s": 34.884060284,
+      "end_tick": 1700,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 31.417469056,
+      "start_tick": 1528,
+      "stop_ticks": 36,
+      "tick_count": 36
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 1,
+      "status": "FINDING",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_COVARIANCE_GROWTH.ndjson",
+      "raw_scan_count": 6,
+      "reason": "COVARIANCE_GROWTH",
+      "size_bytes": 68234,
+      "truncated": false
+    },
+    {
+      "group_index": 3,
+      "path": "03_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 10,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 75541,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "NOT_APPLICABLE",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "NOT_APPLICABLE",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "task_evidence": {
+    "episode_count": 1,
+    "episodes": "task_evidence_episodes.ndjson",
+    "mode_counts": {
+      "EXPLORE": 1
+    },
+    "policy": "DESCRIPTIVE_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_TASK_EVIDENCE_V1",
+    "summary": "task_evidence_summary.json",
+    "supported_mode_extractors": [
+      "NAVIGATE",
+      "EXPLORE",
+      "FOLLOW_PERSON"
+    ],
+    "timeline": "task_evidence_timeline.ndjson"
+  },
+  "timeline": "timeline.ndjson"
+}
