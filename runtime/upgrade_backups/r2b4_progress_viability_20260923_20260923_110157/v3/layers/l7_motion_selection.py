@@ -190,24 +190,11 @@ def select_stop(plan: NavigationPlan) -> MotionObjective:
 def _viable_trajectories(
     plan: NavigationPlan,
 ) -> tuple[TrajectoryEvaluation, ...]:
-    collision_free = tuple(
+    return tuple(
         candidate
         for candidate in plan.trajectory_candidates
         if not candidate.collision
     )
-    if not collision_free:
-        return ()
-
-    # Escape is L6's explicit recovery family: by definition it is used when
-    # local-goal progress is not currently achievable, so it is ranked by the
-    # existing escape score instead of normal progress viability.
-    if all(candidate.candidate_id.startswith("escape-") for candidate in collision_free):
-        return collision_free
-
-    # L6 owns navigation viability; L7 only chooses one objective among viable
-    # normal trajectories. This prevents smooth/novel stationary local optima
-    # from beating a trajectory that can actually improve the navigation state.
-    return tuple(candidate for candidate in collision_free if candidate.progress_viable)
 
 
 def _canonical_best(
@@ -219,7 +206,6 @@ def _canonical_best(
         viable,
         key=lambda candidate: (
             -candidate.total_score,
-            -candidate.progress_potential_score,
             -candidate.min_clearance_m,
             -candidate.progress_score,
             -candidate.novelty_score,

@@ -71,9 +71,6 @@ class NavigationConfig:
     clearance_weight: float = 0.25
     smoothness_weight: float = 0.15
     novelty_weight: float = 0.22
-    # Minimum predicted normalized improvement required for a normal trajectory.
-    # Progress may be translational or angular alignment toward the local goal.
-    progress_viability_floor: float = 0.02
     face_person_min_confidence: float = 0.60
     face_person_align_tolerance_rad: float = 0.10
     face_person_release_tolerance_rad: float = 0.16
@@ -165,13 +162,6 @@ class NavigationConfig:
             raise ValueError("trajectory score weights must be finite and non-negative")
         if sum(weights) <= 0.0:
             raise ValueError("at least one trajectory score weight must be positive")
-        if (
-            not isinstance(self.progress_viability_floor, (int, float))
-            or isinstance(self.progress_viability_floor, bool)
-            or not math.isfinite(self.progress_viability_floor)
-            or not 0.0 <= self.progress_viability_floor <= 1.0
-        ):
-            raise ValueError("progress_viability_floor must be finite and in [0, 1]")
         if (
             not isinstance(self.face_person_min_confidence, (int, float))
             or isinstance(self.face_person_min_confidence, bool)
@@ -1595,11 +1585,8 @@ class TrajectoryNavigator:
                         start_clearance_m,
                     )
                 )
-        # Normal navigation is useful only if at least one collision-free
-        # candidate can improve distance or heading toward the local goal. Keep the
-        # full 54-candidate family for diagnostics/L7 ranking once that invariant holds.
         if any(
-            not candidate.collision and candidate.progress_viable
+            not candidate.collision and candidate.v_mps > _MOTION_EPSILON
             for candidate in evaluations
         ):
             return tuple(evaluations)
@@ -1708,12 +1695,6 @@ class TrajectoryNavigator:
         progress = _clamp_signed(
             (start_distance - final_distance) / max(start_distance, 1e-9)
         )
-        progress_potential = _trajectory_progress_potential(
-            estimate, goal, x_m, y_m, yaw_rad, progress
-        )
-        progress_viable = (
-            progress_potential + 1e-12 >= self._config.progress_viability_floor
-        )
         linear_change = abs(v_mps - estimate.v_mps) / max(max_v_mps, 1e-9)
         angular_change = abs(omega_rad_s - estimate.omega_rad_s) / max(
             max_omega_rad_s,
@@ -1751,8 +1732,6 @@ class TrajectoryNavigator:
             collision=collision,
             min_clearance_m=bounded_clearance,
             progress_score=progress,
-            progress_potential_score=progress_potential,
-            progress_viable=progress_viable,
             smoothness_score=smoothness,
             novelty_score=novelty,
             total_score=total_score,
@@ -1840,7 +1819,7 @@ class TrajectoryRolloutComputer:
                     )
                 )
         if not any(
-            not candidate.collision and candidate.progress_viable
+            not candidate.collision and candidate.v_mps > _MOTION_EPSILON
             for candidate in evaluations
         ):
             evaluations = []
@@ -1957,12 +1936,6 @@ class TrajectoryRolloutComputer:
         progress = _clamp_signed(
             (start_distance - final_distance) / max(start_distance, 1e-9)
         )
-        progress_potential = _trajectory_progress_potential(
-            estimate, goal, x_m, y_m, yaw_rad, progress
-        )
-        progress_viable = (
-            progress_potential + 1e-12 >= config.progress_viability_floor
-        )
         linear_change = abs(v_mps - estimate.v_mps) / max(max_v_mps, 1e-9)
         angular_change = abs(omega_rad_s - estimate.omega_rad_s) / max(
             max_omega_rad_s,
@@ -2000,60 +1973,10 @@ class TrajectoryRolloutComputer:
             collision=collision,
             min_clearance_m=bounded_clearance,
             progress_score=progress,
-            progress_potential_score=progress_potential,
-            progress_viable=progress_viable,
             smoothness_score=smoothness,
             novelty_score=novelty,
             total_score=total_score,
         )
-
-
-def _goal_heading_error(
-    x_m: float,
-    y_m: float,
-    yaw_rad: float,
-    goal: Waypoint,
-) -> float:
-    """Absolute heading error toward the local goal from one predicted pose."""
-
-    dx_m = goal.x_m - x_m
-    dy_m = goal.y_m - y_m
-    if math.hypot(dx_m, dy_m) <= 1e-9:
-        return 0.0
-    return abs(_wrapped_angle(math.atan2(dy_m, dx_m) - yaw_rad))
-
-
-def _trajectory_progress_potential(
-    estimate: RobotEstimate,
-    goal: Waypoint,
-    final_x_m: float,
-    final_y_m: float,
-    final_yaw_rad: float,
-    distance_progress_score: float,
-) -> float:
-    """Predict generic local progress without conflating it with quality score.
-
-    A trajectory is useful when it either gets closer to the local goal or turns
-    the robot meaningfully toward it. This admits productive in-place pivots while
-    rejecting stationary/nonproductive local optima.
-    """
-
-    start_heading_error = _goal_heading_error(
-        estimate.x_m,
-        estimate.y_m,
-        estimate.yaw_rad,
-        goal,
-    )
-    final_heading_error = _goal_heading_error(
-        final_x_m,
-        final_y_m,
-        final_yaw_rad,
-        goal,
-    )
-    heading_progress = _clamp_signed(
-        (start_heading_error - final_heading_error) / math.pi
-    )
-    return max(distance_progress_score, heading_progress)
 
 
 def _as_escape_candidate(

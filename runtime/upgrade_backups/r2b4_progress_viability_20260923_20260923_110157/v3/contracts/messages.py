@@ -453,10 +453,6 @@ class TrajectoryEvaluation:
     smoothness_score: float
     novelty_score: float
     total_score: float
-    # L6 navigation viability is orthogonal to weighted quality. Defaults keep
-    # older captures/manual constructors replay-compatible.
-    progress_potential_score: float = 0.0
-    progress_viable: bool = True
 
     def __post_init__(self) -> None:
         require_token(self.candidate_id, "TrajectoryEvaluation.candidate_id")
@@ -465,7 +461,6 @@ class TrajectoryEvaluation:
             "omega_rad_s",
             "min_clearance_m",
             "progress_score",
-            "progress_potential_score",
             "smoothness_score",
             "novelty_score",
             "total_score",
@@ -496,12 +491,6 @@ class TrajectoryEvaluation:
             )
         if not -1.0 <= self.progress_score <= 1.0:
             raise ContractValidationError("progress_score must be in [-1, 1]")
-        if not -1.0 <= self.progress_potential_score <= 1.0:
-            raise ContractValidationError(
-                "progress_potential_score must be in [-1, 1]"
-            )
-        if type(self.progress_viable) is not bool:
-            raise ContractValidationError("progress_viable must be bool")
         for name in ("smoothness_score", "novelty_score"):
             if not 0.0 <= getattr(self, name) <= 1.0:
                 raise ContractValidationError(f"{name} must be in [0, 1]")

@@ -409,10 +409,6 @@ def v3_navigation_config_from_mapping(
             rollout.get("novelty_weight"),
             "v3_navigation.trajectory_rollout.novelty_weight",
         ),
-        progress_viability_floor=_finite_float(
-            rollout.get("progress_viability_floor", 0.02),
-            "v3_navigation.trajectory_rollout.progress_viability_floor",
-        ),
     )
     return V3NavigationConfig(
         local_perception_min_range_m=local_min_range_m,

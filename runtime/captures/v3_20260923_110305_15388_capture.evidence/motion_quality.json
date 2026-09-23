@@ -1,0 +1,126 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "findings": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.025390625,
+        "mission_id": "mission-operator-roomcruise-1790154185002451138-15388",
+        "monotonic_ns": 7943671400965,
+        "observed_span_s": 5.000335899,
+        "tick_id": 1897
+      },
+      "id": "behavior-navigation_progress_stagnation-1897",
+      "layer": "L6",
+      "monotonic_ns": 7943671400965,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "HIGH",
+      "tick_id": 1897
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": -0.060232339999999995,
+          "v_mps": 0.0
+        },
+        "requested": {
+          "omega_rad_s": -0.1883605049782332,
+          "v_mps": 0.0
+        },
+        "safety_decision": "STOP"
+      },
+      "id": "motion-blocked-l12-1999",
+      "layer": "L12",
+      "monotonic_ns": 7945775178510,
+      "reason": "LIDAR_CLEARANCE_LOW",
+      "severity": "HIGH",
+      "tick_id": 1999
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": -0.1891067934889148,
+          "v_mps": 0.0
+        },
+        "requested": {
+          "omega_rad_s": -0.1891067934889148,
+          "v_mps": 0.0
+        },
+        "safety_decision": "STOP"
+      },
+      "id": "motion-blocked-l12-2004",
+      "layer": "L12",
+      "monotonic_ns": 7945874140862,
+      "reason": "LIDAR_CLEARANCE_LOW",
+      "severity": "HIGH",
+      "tick_id": 2004
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": -0.1889855481347632,
+          "v_mps": 0.0
+        },
+        "requested": {
+          "omega_rad_s": -0.1889855481347632,
+          "v_mps": 0.0
+        },
+        "safety_decision": "STOP"
+      },
+      "id": "motion-blocked-l12-2019",
+      "layer": "L12",
+      "monotonic_ns": 7946173658119,
+      "reason": "LIDAR_CLEARANCE_LOW",
+      "severity": "HIGH",
+      "tick_id": 2019
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": -0.18897999883808442,
+          "v_mps": 0.0
+        },
+        "requested": {
+          "omega_rad_s": -0.18897999883808442,
+          "v_mps": 0.0
+        },
+        "safety_decision": "STOP"
+      },
+      "id": "motion-blocked-l12-2024",
+      "layer": "L12",
+      "monotonic_ns": 7946271070407,
+      "reason": "LIDAR_CLEARANCE_LOW",
+      "severity": "HIGH",
+      "tick_id": 2024
+    }
+  ],
+  "metrics": {
+    "behavior_status": "FAULT",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 0.14426662662487783,
+    "requested_motion_tick_count": 21
+  },
+  "sample_count": 85,
+  "schema": "R2B4_TEST_HUB_SAMPLED_MOTION_V1",
+  "status": "FINDING",
+  "trends": {
+    "blocked_sample_count": 5,
+    "longest_observed_blocked_span_s": 0.197439906
+  }
+}
