@@ -13,7 +13,7 @@ from v3.layers.l3_state_estimation import ShadowStateEstimator, StateEstimatorCo
 from v3.layers.l4_world_model import ShadowWorldModel, WorldModelConfig
 from v3.layers.l5_command_mission import MissionConfig, MissionManager
 from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
-from v3.layers.l7_motion_selection import select_motion
+from v3.layers.l7_motion_selection import MotionSelector
 from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
 from v3.layers.l9_operational_constraints import (
     OperationalConstraintLayer,
@@ -180,6 +180,7 @@ class FullFakeComposition:
         world_model = ShadowWorldModel(config.world_model)
         mission = MissionManager(config.mission)
         navigation = TrajectoryNavigator(config.navigation)
+        selection = MotionSelector()
         realization = MotionRealizer(config.motion_realization)
         constraints = OperationalConstraintLayer(config.operational_constraints)
         chassis = DifferentialDriveKinematics(config.chassis_control)
@@ -197,7 +198,7 @@ class FullFakeComposition:
                 world_model=boundary("L4", world_model),
                 command_mission=boundary("L5", mission.evaluate),
                 navigation=boundary("L6", navigation.evaluate),
-                motion_selection=boundary("L7", select_motion),
+                motion_selection=boundary("L7", selection.evaluate),
                 motion_realization=boundary("L8", realization.evaluate),
                 constraints=boundary("L9", constraints.evaluate),
                 chassis_control=boundary("L10", chassis),

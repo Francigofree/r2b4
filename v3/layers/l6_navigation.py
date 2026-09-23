@@ -15,11 +15,13 @@ from v3.contracts import (
     CommandMode,
     MissionIntent,
     MissionLifecycle,
+    MotionValidity,
     NavigationPlan,
     NavigationStatus,
     RobotEstimate,
     RollingLocalCostmap,
     TickContext,
+    TrackEstimateStatus,
     TrajectoryEvaluation,
     TrajectoryPose,
     Waypoint,
@@ -77,6 +79,8 @@ class FollowPersonEvidence:
     search_sweep_rad: float
     search_yaw_tolerance_rad: float
     search_budget_ns: int | None = None
+    target_estimate_status: str | None = None
+    target_measurement_age_ms: float | None = None
 
 
 
@@ -723,6 +727,48 @@ class TrajectoryNavigator:
         world: WorldSnapshot,
         planner_input: PlannerInput | None = None,
     ) -> NavigationPlan:
+        plan = self._evaluate(mission, estimate, world, planner_input)
+        if plan.status is NavigationStatus.ACTIVE:
+            return replace(plan, motion_validity=self._guidance_validity(
+                mission, world, trajectory=bool(plan.trajectory_candidates),
+            ))
+        return plan
+
+    def _guidance_validity(
+        self, mission: MissionIntent, world: WorldSnapshot, *, trajectory: bool = False,
+    ) -> MotionValidity:
+        # Cached guidance keeps its computation time. L7 alone retains the
+        # selected objective; a pending request cannot refresh that objective.
+        source = mission.context
+        if trajectory:
+            assert self._last_replan_ns is not None and self._last_replan_tick_id is not None
+            source = TickContext(self._last_replan_tick_id, self._last_replan_ns)
+        until_ns = source.monotonic_ns + self._max_plan_age_ns
+        if trajectory:
+            until_ns = min(until_ns, source.monotonic_ns + min(
+                candidate.horizon_ns for candidate in self._trajectory_candidates
+            ))
+        scope = mission.mode.value
+        target_uid = (self._follow_person_track_id if mission.mode is CommandMode.FOLLOW_PERSON
+                      else self._face_person_track_id if mission.mode is CommandMode.FACE_PERSON
+                      else None)
+        if target_uid is not None:
+            scope += ":" + target_uid
+            track = next((item for item in world.obstacle_tracks if item.track_id == target_uid), None)
+            # SEARCH has its own current guidance. FOLLOW prediction must not
+            # renew the underlying person's measurement lifetime.
+            if track is not None and track.usable_at(mission.context.monotonic_ns):
+                if track.prediction_valid_until_ns is not None:
+                    until_ns = min(until_ns, track.prediction_valid_until_ns)
+        return MotionValidity(source, until_ns, world.frame_id, scope)
+
+    def _evaluate(
+        self,
+        mission: MissionIntent,
+        estimate: RobotEstimate,
+        world: WorldSnapshot,
+        planner_input: PlannerInput | None = None,
+    ) -> NavigationPlan:
         if planner_input is not None and planner_input.context != mission.context:
             raise ValueError("planner input context mismatch")
         self._closed_completion = planner_input
@@ -833,7 +879,10 @@ class TrajectoryNavigator:
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
             if self._completion_inputs and self._pending_rollout_request is not None:
-                return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
+                return self._inactive(
+                    mission, NavigationStatus.PENDING, "PLANNER_PENDING",
+                    motion_validity=self._guidance_validity(mission, world),
+                )
             raise RuntimeError("trajectory plan cache is empty after replanning")
         return NavigationPlan(
             context=mission.context,
@@ -853,6 +902,8 @@ class TrajectoryNavigator:
         mission: MissionIntent,
         status: NavigationStatus,
         reason: str | None,
+        *,
+        motion_validity: MotionValidity | None = None,
     ) -> NavigationPlan:
         if status is NavigationStatus.INVALIDATED and reason is None:
             reason = "MISSION_INVALID"
@@ -866,6 +917,7 @@ class TrajectoryNavigator:
             progress=0.0,
             status=status,
             reason=reason,
+            motion_validity=motion_validity,
         )
 
     @staticmethod
@@ -922,6 +974,7 @@ class TrajectoryNavigator:
             for track in world.obstacle_tracks
             if track.track_id.startswith("person-")
             and track.confidence >= self._config.face_person_min_confidence
+            and track.usable_at(mission.context.monotonic_ns)
         )
         selected = next(
             (
@@ -1030,7 +1083,7 @@ class TrajectoryNavigator:
         return FollowPersonEvidence(
             state=self._follow_person_state.value,
             locked_target_uid=locked_uid,
-            target_visible=selected is not None,
+            target_visible=selected is not None and selected.estimate_status is TrackEstimateStatus.OBSERVED,
             target_confidence=target_confidence,
             target_distance_m=target_distance_m,
             target_bearing_rad=target_bearing_rad,
@@ -1051,6 +1104,11 @@ class TrajectoryNavigator:
                 mission.constraints.yaw_tolerance_rad,
             ),
             search_budget_ns=self._follow_person_search_budget_ns,
+            target_estimate_status=None if selected is None else selected.estimate_status.value,
+            target_measurement_age_ms=(
+                None if selected is None or selected.measurement_monotonic_ns is None
+                else (mission.context.monotonic_ns - selected.measurement_monotonic_ns) / 1e6
+            ),
         )
 
     def _follow_person_plan_impl(
@@ -1070,6 +1128,7 @@ class TrajectoryNavigator:
             track
             for track in world.obstacle_tracks
             if track.track_id.startswith("person-")
+            and track.usable_at(mission.context.monotonic_ns)
             and track.confidence >= (
                 retention_confidence
                 if track.track_id == self._follow_person_track_id
@@ -1125,16 +1184,7 @@ class TrajectoryNavigator:
                 lost_ns = mission.context.monotonic_ns - self._follow_person_lost_since_ns
                 if lost_ns <= self._config.follow_person_lost_hold_ns:
                     self._follow_person_state = _FollowPersonState.OCCLUDED_HOLD
-                    return NavigationPlan(
-                        context=mission.context,
-                        mission_id=mission.mission_id,
-                        route=(Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad),),
-                        velocity_target=None,
-                        constraints=mission.constraints,
-                        corridor_radius_m=0.0,
-                        progress=0.0,
-                        status=NavigationStatus.ACTIVE,
-                    )
+                    return self._inactive(mission, NavigationStatus.IDLE, "PERSON_OCCLUDED_HOLD")
 
                 search_elapsed_ns = lost_ns - self._config.follow_person_lost_hold_ns
                 if (
@@ -1269,16 +1319,7 @@ class TrajectoryNavigator:
 
         if self._follow_person_holding:
             self._clear_trajectory_plan()
-            return NavigationPlan(
-                context=mission.context,
-                mission_id=mission.mission_id,
-                route=(Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad),),
-                velocity_target=None,
-                constraints=mission.constraints,
-                corridor_radius_m=0.0,
-                progress=0.0,
-                status=NavigationStatus.ACTIVE,
-            )
+            return self._inactive(mission, NavigationStatus.IDLE, "PERSON_DISTANCE_HOLD")
 
         costmap = world.local_costmap
         if costmap is None:
@@ -1371,7 +1412,11 @@ class TrajectoryNavigator:
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
             if self._completion_inputs and self._pending_rollout_request is not None:
-                return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
+                return self._inactive(
+                    replace(mission, constraints=replace(mission.constraints, max_v_mps=follow_max_v_mps)),
+                    NavigationStatus.PENDING, "PLANNER_PENDING",
+                    motion_validity=self._guidance_validity(mission, world),
+                )
             raise RuntimeError("follow-person trajectory cache is empty after replanning")
         # FOLLOW already chose translation over the explicit PIVOT behavior.
         # Keep L7's choice within that intent when a safe, productive forward
@@ -1480,7 +1525,10 @@ class TrajectoryNavigator:
         candidates = self._trajectory_candidates
         if goal is None or not candidates:
             if self._completion_inputs and self._pending_rollout_request is not None:
-                return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
+                return self._inactive(
+                    mission, NavigationStatus.PENDING, "PLANNER_PENDING",
+                    motion_validity=self._guidance_validity(mission, world),
+                )
             raise RuntimeError("trajectory plan cache is empty after replanning")
         return NavigationPlan(
             context=mission.context,

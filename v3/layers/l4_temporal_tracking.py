@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from v3.contracts import ObstacleTrack
+from v3.contracts import ObstacleTrack, TrackEstimateStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +46,7 @@ class TemporalTrackState:
     captured_ns: int
     updates: int
     image_region: PersonImageRegion | None = None
+    observed_monotonic_ns: int | None = None
 
 
 
@@ -117,14 +118,16 @@ class TemporalTrackStore:
         # The monotonic person allocator intentionally survives clear().
         return changed
 
-    def upsert_external(self, track: ObstacleTrack, captured_ns: int) -> bool:
+    def upsert_external(
+        self, track: ObstacleTrack, captured_ns: int, *, observed_ns: int | None = None,
+    ) -> bool:
         previous = self._states.get(track.track_id)
         if previous is None:
             previous = self._dormant_states.get(track.track_id)
         if previous is not None and captured_ns < previous.captured_ns:
             raise ValueError("L4 obstacle track time must not move backwards")
         updates = 1 if previous is None else previous.updates + 1
-        state = TemporalTrackState(track, captured_ns, updates)
+        state = TemporalTrackState(track, captured_ns, updates, observed_monotonic_ns=observed_ns)
         changed = state != previous or track.track_id in self._dormant_states
         self._dormant_states.pop(track.track_id, None)
         self._states[track.track_id] = state
@@ -138,6 +141,7 @@ class TemporalTrackStore:
         captured_ns: int,
         radius_m: float,
         max_association_distance_m: float,
+        observed_ns: int | None = None,
     ) -> bool:
         active = {
             track_id: state
@@ -175,7 +179,7 @@ class TemporalTrackStore:
                     confidence=measurement.confidence,
                 )
                 self._states[track_id] = TemporalTrackState(
-                    track, captured_ns, 1, measurement.image_region
+                    track, captured_ns, 1, measurement.image_region, observed_ns
                 )
                 used_track_ids.add(track_id)
                 changed = True
@@ -186,7 +190,8 @@ class TemporalTrackStore:
             if reactivated:
                 self._dormant_states.pop(track_id, None)
             self._states[track_id] = self._updated_person_state(
-                track_id, state, measurement, captured_ns, radius_m, reactivated=reactivated
+                track_id, state, measurement, captured_ns, radius_m,
+                reactivated=reactivated, observed_ns=observed_ns,
             )
             changed = True
         return changed
@@ -238,6 +243,7 @@ class TemporalTrackStore:
         radius_m: float,
         *,
         reactivated: bool,
+        observed_ns: int | None = None,
     ) -> TemporalTrackState:
         previous = state.track
         dt_s = (captured_ns - state.captured_ns) / 1e9
@@ -275,6 +281,7 @@ class TemporalTrackStore:
             captured_ns,
             state.updates + 1,
             measurement.image_region,
+            observed_ns,
         )
 
     def expire(self, now_ns: int, *, person_max_age_ns: int, other_max_age_ns: int) -> bool:
@@ -316,6 +323,16 @@ class TemporalTrackStore:
                     vx_mps=track.vx_mps,
                     vy_mps=track.vy_mps,
                     confidence=track.confidence,
+                    estimate_status=(
+                        TrackEstimateStatus.DEGRADED
+                        if age_ns > self._prediction_max_age_ns
+                        else TrackEstimateStatus.OBSERVED
+                        if now_ns == (state.observed_monotonic_ns
+                                      if state.observed_monotonic_ns is not None else state.captured_ns)
+                        else TrackEstimateStatus.PREDICTED
+                    ),
+                    measurement_monotonic_ns=state.captured_ns,
+                    prediction_valid_until_ns=state.captured_ns + self._prediction_max_age_ns,
                 )
             )
         return tuple(result)

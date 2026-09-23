@@ -193,7 +193,7 @@ def test_mission_change_cannot_reuse_old_candidate_identity():
     assert objective.selection_reason == "BEST_TRAJECTORY:best"
 
 
-def test_nontrajectory_branch_resets_continuity_state():
+def test_nontrajectory_branch_retains_objective_without_old_candidate_bias():
     selector = MotionSelector()
     _prime_previous(selector)
 
@@ -206,7 +206,8 @@ def test_nontrajectory_branch_resets_continuity_state():
     )
     route_objective = selector.evaluate(route_plan)
     assert route_objective.kind is MotionObjectiveKind.TRACK_PLAN
-    assert selector.checkpoint() == MotionSelectionStateCheckpoint()
+    assert selector.checkpoint().last_valid_objective == route_objective
+    assert selector.checkpoint().last_candidate_id is None
 
     objective = selector.evaluate(
         _plan(

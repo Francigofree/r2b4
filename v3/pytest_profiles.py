@@ -86,6 +86,8 @@ _PROFILES: tuple[PytestProfile, ...] = (
         "Mission/planner/motion/safety/motor tests for the canonical control chain.",
         (
             "tests/test_v3_l5_l9_*.py",
+            "tests/test_v3_follow_person*.py",
+            "tests/test_v3_face_person.py",
             "tests/test_v3_l6_*.py",
             "tests/test_v3_l7_*.py",
             "tests/test_v3_l8_*.py",

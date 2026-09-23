@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from v3.contracts import (
     MotionObjective,
@@ -44,13 +44,16 @@ class MotionSelectionStateCheckpoint:
     # Persist the selected command-space point so continuity survives replans.
     last_v_mps: float | None = None
     last_omega_rad_s: float | None = None
+    last_valid_objective: MotionObjective | None = None
 
     def __post_init__(self) -> None:
-        values = (self.last_mission_id, self.last_candidate_id)
-        if (values[0] is None) != (values[1] is None):
-            raise ValueError(
-                "last_mission_id and last_candidate_id must both be set or both be None"
-            )
+        if self.last_candidate_id is not None and self.last_mission_id is None:
+            raise ValueError("candidate identity requires mission identity")
+        if self.last_valid_objective is not None:
+            if not isinstance(self.last_valid_objective, MotionObjective):
+                raise TypeError("last_valid_objective must be MotionObjective")
+            if self.last_mission_id is None or self.last_valid_objective.kind is MotionObjectiveKind.STOP:
+                raise ValueError("retained objective requires mission identity and active motion")
         for value, name in (
             (self.last_mission_id, "last_mission_id"),
             (self.last_candidate_id, "last_candidate_id"),
@@ -72,7 +75,7 @@ class MotionSelectionStateCheckpoint:
 
 
 class MotionSelector:
-    """Choose one L7 objective while suppressing insignificant trajectory chatter."""
+    """Own one temporally valid objective across guidance kinds and replans."""
 
     __slots__ = ("_config", "_state")
 
@@ -96,6 +99,74 @@ class MotionSelector:
     def evaluate(self, plan: NavigationPlan) -> MotionObjective:
         if not isinstance(plan, NavigationPlan):
             raise TypeError("plan must be NavigationPlan")
+
+        previous = self._state.last_valid_objective
+        validity = plan.motion_validity
+        if validity is not None and not validity.usable_at(plan.context):
+            self._reset()
+            return _stop_objective(plan, "OBJECTIVE_EXPIRED")
+        if previous is not None and (
+            self._state.last_mission_id != plan.mission_id
+            or plan.context.tick_id != previous.context.tick_id + 1
+            or plan.context.monotonic_ns <= previous.context.monotonic_ns
+            or (previous.validity is not None and (
+                not previous.validity.usable_at(plan.context)
+                or validity is None
+                or previous.validity.frame_id != validity.frame_id
+                or previous.validity.scope != validity.scope
+            ))
+        ):
+            self._reset()
+            previous = None
+
+        if plan.status is NavigationStatus.PENDING:
+            # Pending is permission to retain a still-valid objective, never
+            # new evidence and never permission to revive an expired one.
+            if previous is None or previous.validity is None:
+                self._reset()
+                return _stop_objective(plan, "PLANNER_PENDING_NO_VALID_OBJECTIVE")
+            assert validity is not None
+            objective = replace(
+                previous, context=plan.context, expiry_tick=plan.context.tick_id + 1,
+                selection_reason="PLANNER_PENDING_CONTINUITY",
+                validity=replace(previous.validity, valid_until_ns=min(
+                    previous.validity.valid_until_ns, validity.valid_until_ns,
+                )),
+                constraints=replace(plan.constraints,
+                    max_v_mps=min(previous.constraints.max_v_mps, plan.constraints.max_v_mps),
+                    max_omega_rad_s=min(previous.constraints.max_omega_rad_s, plan.constraints.max_omega_rad_s)),
+            )
+        else:
+            objective = self._select(plan)
+
+        if objective.kind is MotionObjectiveKind.STOP:
+            self._reset()
+        else:
+            transition_allowed = previous is not None and previous.validity is not None
+            if previous is not None and previous.trajectory is not None:
+                # A newly rejected command cannot survive as a braking origin.
+                # Candidate grid IDs may change on replan: compare the physical
+                # command as well as the planner identity.
+                old = previous.trajectory
+                if any(
+                    (candidate.candidate_id == old.candidate_id
+                     or (candidate.v_mps == old.v_mps and candidate.omega_rad_s == old.omega_rad_s))
+                    and (candidate.collision or not candidate.progress_viable)
+                    for candidate in plan.trajectory_candidates
+                ):
+                    transition_allowed = False
+            objective = replace(objective, transition_allowed=transition_allowed)
+            command = objective.trajectory or objective.velocity_target
+            self._state = MotionSelectionStateCheckpoint(
+                last_mission_id=plan.mission_id,
+                last_candidate_id=None if objective.trajectory is None else objective.trajectory.candidate_id,
+                last_v_mps=None if command is None else command.v_mps,
+                last_omega_rad_s=None if command is None else command.omega_rad_s,
+                last_valid_objective=objective,
+            )
+        return objective
+
+    def _select(self, plan: NavigationPlan) -> MotionObjective:
 
         if plan.status is NavigationStatus.ACTIVE and plan.trajectory_candidates:
             viable = _viable_trajectories(plan)
@@ -126,12 +197,6 @@ class MotionSelector:
                 )
 
             previous_id = state.last_candidate_id if state.last_mission_id == plan.mission_id else None
-            self._state = MotionSelectionStateCheckpoint(
-                plan.mission_id,
-                selected.candidate_id,
-                selected.v_mps,
-                selected.omega_rad_s,
-            )
             if selected.candidate_id == best.candidate_id:
                 prefix = "BEST_TRAJECTORY"
             elif selected.candidate_id == previous_id:
@@ -144,28 +209,7 @@ class MotionSelector:
                 f"{prefix}:{selected.candidate_id}",
             )
 
-        self._reset()
         return select_motion(plan)
-
-    def _previous_candidate(
-        self,
-        plan: NavigationPlan,
-        viable: tuple[TrajectoryEvaluation, ...],
-    ) -> TrajectoryEvaluation | None:
-        state = self._state
-        if (
-            state.last_mission_id != plan.mission_id
-            or state.last_candidate_id is None
-        ):
-            return None
-        return next(
-            (
-                candidate
-                for candidate in viable
-                if candidate.candidate_id == state.last_candidate_id
-            ),
-            None,
-        )
 
     def _reset(self) -> None:
         self._state = MotionSelectionStateCheckpoint()
@@ -199,6 +243,8 @@ def _command_continuity_key(
 def select_motion(plan: NavigationPlan) -> MotionObjective:
     """Stateless canonical single-plan selector retained for focused unit slices."""
 
+    if plan.motion_validity is not None and not plan.motion_validity.usable_at(plan.context):
+        return _stop_objective(plan, "OBJECTIVE_EXPIRED")
     if plan.status is NavigationStatus.ACTIVE and plan.trajectory_candidates:
         viable = _viable_trajectories(plan)
         if not viable:
@@ -220,6 +266,7 @@ def select_motion(plan: NavigationPlan) -> MotionObjective:
             target_waypoint=plan.route[-1],
             velocity_target=None,
             constraints=plan.constraints,
+            validity=plan.motion_validity,
         )
     if plan.status is NavigationStatus.ACTIVE and plan.velocity_target is not None:
         return MotionObjective(
@@ -232,6 +279,7 @@ def select_motion(plan: NavigationPlan) -> MotionObjective:
             target_waypoint=None,
             velocity_target=plan.velocity_target,
             constraints=plan.constraints,
+            validity=plan.motion_validity,
         )
     return _stop_objective(plan, plan.reason or plan.status.value)
 
@@ -299,6 +347,7 @@ def _trajectory_objective(
         velocity_target=None,
         constraints=plan.constraints,
         trajectory=selected,
+        validity=plan.motion_validity,
     )
 
 

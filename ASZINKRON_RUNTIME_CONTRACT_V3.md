@@ -208,7 +208,7 @@ fogadható el. Worker restart nem írhatja át a source identityt.
 `1 running + legfeljebb 1 latest pending replacement`.
 Végtelen queue és sorban kiszámolt elavult state nem megengedett.
 
-Friss előző eredmény pending replacement alatt használható. Stale előző
+Friss előző eredmény pending replacement alatt használható. A kiválasztott motion objective időbeli ownershipje L7-é: a typed pending nem törli az érvényes objective-et, de nem újítja meg annak source-időhöz kötött lejáratát. L6 továbbra is a guidance és a planner-completion elfogadásának ownere. Stale előző
 eredménnyel kizárólag zero-motion HOLD/STOP megengedett; a mission identity
 megőrizhető, a friss replacement elfogadása után resume következhet. Ez azonos
 jelentésű EXPLORE, FOLLOW és NAVIGATE módban. A raw szenzorintegritás (például

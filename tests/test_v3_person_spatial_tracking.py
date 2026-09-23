@@ -214,3 +214,31 @@ def test_l4_person_tracking_checkpoint_restore_is_deterministic():
     restored.restore(checkpoint)
     actual = restored(frame, _estimate(second_context))
     assert actual == expected
+
+
+def test_live_world_path_preserves_measurement_through_empty_detection_and_dropout():
+    from dataclasses import replace
+    from v3.contracts import TrackEstimateStatus
+
+    model = ShadowWorldModel()
+    context = TickContext(0, 1_000_000_000)
+    frame = _frame(context, sequence=1, lidar_points=((2.0, 0.0, 10),),
+                   person_boxes=((0.9, 0.43, 0.57),))
+    observed = model(frame, _estimate(context)).obstacle_tracks[0]
+    assert observed.estimate_status is TrackEstimateStatus.OBSERVED
+    for tick, age in ((1, 100_000_000), (2, 200_000_000), (3, 350_000_001)):
+        context = TickContext(tick, 1_000_000_000 + age)
+        frame = _frame(context, sequence=tick + 1, lidar_points=((2.0, 0.0, 10),), person_boxes=())
+        if tick == 2:
+            frame = replace(frame, accepted=tuple(item for item in frame.accepted if item.kind != "person_detection"))
+        track = model(frame, _estimate(context)).obstacle_tracks[0]
+        assert track.track_id == observed.track_id
+        assert track.measurement_monotonic_ns == observed.measurement_monotonic_ns
+        assert track.prediction_valid_until_ns == observed.prediction_valid_until_ns
+        assert track.estimate_status is (TrackEstimateStatus.DEGRADED if tick == 3 else TrackEstimateStatus.PREDICTED)
+    restored = ShadowWorldModel()
+    restored.restore(model.checkpoint())
+    context = TickContext(4, 1_400_000_000)
+    frame = _frame(context, sequence=5, lidar_points=((2.0, 0.0, 10),), person_boxes=((0.9, 0.43, 0.57),))
+    assert model(frame, _estimate(context)) == restored(frame, _estimate(context))
+    assert model.checkpoint() == restored.checkpoint()

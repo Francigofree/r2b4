@@ -21,7 +21,7 @@ class GeminiRequestError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class GeminiChatConfig:
     endpoint: str = "https://generativelanguage.googleapis.com/v1beta/interactions"
-    model: str = "gemini-3.8-flash"
+    model: str = "gemini-3.5-flash-lite"
     timeout_s: float = 20.0
     thinking_level: str = "low"
 
@@ -52,7 +52,7 @@ class GeminiStructuredChatClient:
         key = api_key if api_key is not None else os.environ.get("GEMINI_API_KEY")
         if not isinstance(key, str) or not key.strip():
             raise GeminiRequestError("GEMINI_API_KEY is not configured")
-        cfg = config or GeminiChatConfig(model=os.environ.get("R2B4_LLM_MODEL", "gemini-3.8-flash"))
+        cfg = config or GeminiChatConfig(model=os.environ.get("R2B4_LLM_MODEL", "gemini-3.5-flash-lite"))
         if not callable(urlopen):
             raise TypeError("urlopen must be callable")
         self._api_key = key.strip()

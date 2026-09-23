@@ -138,7 +138,7 @@ A numbered L0–L12 réteg **authority-, ownership- és typed contract-határ, n
 | L4 World Model | spatial/temporal környezetállapot, lokális operational world/costmap, tracked entity-k és navigationhöz szükséges bounded structural/persistent knowledge; nincs külső I/O- vagy navigation authority | `WorldSnapshot` |
 | L5 Command & Mission | command-validáció, aktív mission identity és mission-lifecycle; szükség esetén korábbi completed tickből closure-on át érkező typed execution feedback fogyasztása | `MissionIntent` |
 | L6 Navigation | navigation plan, progress és szükséges lokális/global navigation state | `NavigationPlan` |
-| L7 Motion Selection | pontosan egy trajectory/cél választása | `MotionObjective` |
+| L7 Motion Selection | pontosan egy érvényes objective és annak időbeli motion-authority ownershipje | `MotionObjective` |
 | L8 Motion Realization | guidance → pillanatnyi kinematikai cél | `MotionIntent` |
 | L9 Operational Constraints | motion/platform/gyorsulás/lokalizáció korlátozás | `ConstrainedMotion` |
 | L10 Chassis Control | chassis-kinematika | `WheelVelocitySetpoint` |
@@ -212,6 +212,8 @@ Live multi-rate acquisitionnél a source `TickContext` az acquisition saját mon
 
 A multi-rate út event-szemantikájú: ugyanazon `(device_id, kind, sequence)` ismételt snapshotja ugyanaz a measurement, ezért L2 `DUPLICATE` és nem alkalmazható újra csak azért, hogy kitöltse a control tick frekvenciáját. A natív L3 EKF bootstrapkor egy friss `wheel_velocity` + `ekf_heading` párból indul; bootstrap után control tickenként forrásonként `0..1` friss admitted measurement érkezhet. L3 minden érvényes control tickben predikál, de encoder-, IMU- és LiDAR measurement correctiont kizárólag friss admitted observationre végez. Egyetlen tickben hiányzó új measurement önmagában nem exception/fault; a tartós hiány, stale állapot és fizikai device health továbbra is L1/L2/L12 freshness/safety contract szerint fail-closed kezelendő.
 
+L4 a track observationt és a track estimate-et külön kezeli: az utolsó fizikai measurement ideje, a bounded prediction lejárata és az observed/predicted/degraded minőség a typed track része. Új observation nélküli tick nem új measurement és önmagában nem target-LOST. Érvényes predikciót L6 felhasználhat; lejárt/degraded becslés megőrizhet identityt és indokolhat HOLD/SEARCH állapotot, de nem adhat követési motion-authorityt. A target behavior (acquire/follow/hold/search/lost) L6 owned state, nem az observation-elérhetőség másolata.
+
 ### 7.1 Encoder
 
 A fizikai count/delta és közvetlen elmozdulás RAW measurement; control-output vagy velocity filter nem írhatja át. Velocity estimation lehet stateful/időablakos, de bounded és determinisztikus. Pulse-window, debounce, CPR és tuning source/config, nem architektúra.
@@ -245,7 +247,9 @@ L7–L12 stabil by default; csak konkrét funkció vagy igazolt source/replay/li
 
 Host/UI convenience adapter elfogadhat emberbarát primitive-et vagy bal/jobb keréksebesség-célt, ha azt még a CommandGateway előtt általános kinematikai commanddá alakítja. Ez nem L10 ownership: külső komponens nem injektálhat közvetlen `WheelVelocitySetpoint`, `ActuatorRequest`, PWM vagy más downstream control értéket. A tényleges chassis-, actuator- és safety-realizáció továbbra is kizárólag a canonical L9→L10→L11→L12 úton történik.
 
-L6 birtokolja a navigation planninget és progress state-et, és egy érvényes `NavigationPlan` értéket állít elő. A terv konkrét reprezentációja és planner algoritmusa layeren belüli implementációs döntés. L7 a tervből pontosan egy `MotionObjective` értéket választ, L8 pedig azt pillanatnyi kinematikai céllá realizálja. Második motion-selection vagy safety authority tilos.
+L6 birtokolja a navigation planninget és progress state-et, és egy érvényes `NavigationPlan` értéket állít elő. A terv konkrét reprezentációja és planner algoritmusa layeren belüli implementációs döntés. L7 a tervből pontosan egy `MotionObjective` értéket választ, és birtokolja az utolsó még érvényes objective időbeli folytonosságát. L6 a guidance eredetét, frame/scope-ját és monoton lejáratát adja át; az async planner-pending nem önálló motion-visszavonás. Azonos mission/frame/scope mellett L7 a még érvényes korábbi objective-et megtarthatja, de sem a pending, sem az új tick-context nem hosszabbíthatja meg az eredeti élettartamot. Lejárat, explicit invalidálás, STOP, mission/frame/scope-váltás vagy megszakadt control-folytonosság után korábbi objective nem éleszthető vissza. Ez minden guidance-reprezentációra vonatkozik, nem behavior-specifikus cache.
+
+L7 csak folytonos, azonos mission/frame/scope és még érvényes előző objective mellett engedélyez normál átmenetet; a friss tervben explicit elutasított korábbi trajectory sem maradhat átmeneti motion-alap. L8 az objective-et pillanatnyi kinematikai céllá realizálja és a monoton érvényességet is ellenőrzi. A normál objective-váltás, nulla célra lassítás és irányváltás folytonosságát L9 meglévő sebesség/gyorsulás-korlátja biztosítja, a guidance fajtájától függetlenül. Az aktuális cél pillanatnyi nagyságát meghaladó vagy még az előző irányban fékező L9 kimenet csak az előző folytonos tick engedélyezett sebességéhez kötött typed transition-originnel megengedett: annak nagyságát nem növelheti, és az aktuális cél felé kell haladnia. Origin nélkül a pillanatnyi non-amplification szabály marad érvényben. Explicit HOLD/STOP, érvényességvesztés és safety-tiltás nem simítható át pozitív motionné; a szigorodó motion-envelope azonnal érvényes. Második motion-selection vagy safety authority tilos.
 
 ## 9. Konfiguráció, command, host/operator és külső I/O
 

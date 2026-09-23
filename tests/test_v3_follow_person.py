@@ -195,7 +195,8 @@ def test_follow_person_holds_inside_standoff_band_and_never_reverses():
 
     plan = navigator.evaluate(_mission(context), estimate, world)
 
-    assert plan.status is NavigationStatus.ACTIVE
+    assert plan.status is NavigationStatus.IDLE
+    assert plan.reason == "PERSON_DISTANCE_HOLD"
     motion = MotionRealizer().evaluate(select_motion(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
     assert motion.requested_omega_rad_s == 0.0
@@ -289,7 +290,8 @@ def test_follow_person_locks_target_and_never_silently_switches():
         _estimate(c3),
         lost_world,
     )
-    assert hold.status is NavigationStatus.ACTIVE
+    assert hold.status is NavigationStatus.IDLE
+    assert hold.reason == "PERSON_OCCLUDED_HOLD"
     assert hold_motion.requested_v_mps == 0.0
     assert hold_motion.requested_omega_rad_s == 0.0
 

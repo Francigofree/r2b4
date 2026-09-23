@@ -137,8 +137,9 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
         _estimate(c2),
         _world(c2, _person("person-b", 1.5, 0.0, 0.99)),
     )
-    assert hold.status is NavigationStatus.ACTIVE
-    assert len(hold.route) == 1
+    assert hold.status is NavigationStatus.IDLE
+    assert hold.reason == "PERSON_OCCLUDED_HOLD"
+    assert hold.route == ()
 
     c3 = TickContext(
         3,
@@ -318,7 +319,7 @@ def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_motion():
         _estimate(c1),
         _world(c1, _person("person-a", inside_hold, 0.0)),
     )
-    assert len(hold.route) == 1
+    assert hold.reason == "PERSON_DISTANCE_HOLD"
 
     c2 = TickContext(41, 5_020_000_000)
     still_hold = nav.evaluate(
@@ -326,7 +327,7 @@ def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_motion():
         _estimate(c2),
         _world(c2, _person("person-a", inside_hysteresis, 0.0)),
     )
-    assert len(still_hold.route) == 1
+    assert still_hold.reason == "PERSON_DISTANCE_HOLD"
 
     c3 = TickContext(42, 5_040_000_000)
     resumed = nav.evaluate(

@@ -79,6 +79,7 @@ class LifecycleState(str, Enum):
 class NavigationStatus(str, Enum):
     IDLE = "IDLE"
     ACTIVE = "ACTIVE"
+    PENDING = "PENDING"
     COMPLETE = "COMPLETE"
     NO_PATH = "NO_PATH"
     INVALIDATED = "INVALIDATED"
@@ -236,6 +237,12 @@ class RobotEstimate:
             raise ContractValidationError("RobotEstimate covariance diagonal cannot be negative")
 
 
+class TrackEstimateStatus(str, Enum):
+    OBSERVED = "OBSERVED"
+    PREDICTED = "PREDICTED"
+    DEGRADED = "DEGRADED"
+
+
 @dataclass(frozen=True, slots=True)
 class ObstacleTrack:
     track_id: str
@@ -245,6 +252,9 @@ class ObstacleTrack:
     vx_mps: float
     vy_mps: float
     confidence: float
+    estimate_status: TrackEstimateStatus = TrackEstimateStatus.OBSERVED
+    measurement_monotonic_ns: int | None = None
+    prediction_valid_until_ns: int | None = None
 
     def __post_init__(self) -> None:
         require_token(self.track_id, "ObstacleTrack.track_id")
@@ -253,6 +263,23 @@ class ObstacleTrack:
         if self.radius_m < 0.0:
             raise ContractValidationError("ObstacleTrack.radius_m cannot be negative")
         require_unit_interval(self.confidence, "ObstacleTrack.confidence")
+        if not isinstance(self.estimate_status, TrackEstimateStatus):
+            raise ContractValidationError("ObstacleTrack estimate_status must be typed")
+        if (self.measurement_monotonic_ns is None) != (self.prediction_valid_until_ns is None):
+            raise ContractValidationError("track measurement time and validity must be paired")
+        if self.measurement_monotonic_ns is not None:
+            require_nonnegative(self.measurement_monotonic_ns, "track measurement time")
+            require_nonnegative(self.prediction_valid_until_ns, "track prediction expiry")
+            if self.prediction_valid_until_ns < self.measurement_monotonic_ns:
+                raise ContractValidationError("track prediction expires before measurement")
+        elif self.estimate_status is not TrackEstimateStatus.OBSERVED:
+            raise ContractValidationError("predicted/degraded track requires measurement time")
+
+    def usable_at(self, monotonic_ns: int) -> bool:
+        return self.estimate_status is not TrackEstimateStatus.DEGRADED and (
+            self.measurement_monotonic_ns is None
+            or self.measurement_monotonic_ns <= monotonic_ns <= self.prediction_valid_until_ns
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,6 +536,29 @@ class TrajectoryEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class MotionValidity:
+    """Guidance lineage and inclusive monotonic expiry; recontexting cannot renew it."""
+
+    source_context: TickContext
+    valid_until_ns: int
+    frame_id: str
+    scope: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_context, TickContext):
+            raise ContractValidationError("MotionValidity requires source context")
+        require_nonnegative(self.valid_until_ns, "MotionValidity.valid_until_ns")
+        require_token(self.frame_id, "MotionValidity.frame_id")
+        require_token(self.scope, "MotionValidity.scope")
+        if self.valid_until_ns < self.source_context.monotonic_ns:
+            raise ContractValidationError("motion validity expires before source")
+
+    def usable_at(self, context: TickContext) -> bool:
+        return (self.source_context.tick_id <= context.tick_id
+                and self.source_context.monotonic_ns <= context.monotonic_ns <= self.valid_until_ns)
+
+
+@dataclass(frozen=True, slots=True)
 class NavigationPlan:
     context: TickContext
     mission_id: str
@@ -521,9 +571,14 @@ class NavigationPlan:
     reason: str | None = None
     local_goal: Waypoint | None = None
     trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
+    motion_validity: MotionValidity | None = None
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "NavigationPlan.mission_id")
+        if self.motion_validity is not None and not isinstance(self.motion_validity, MotionValidity):
+            raise ContractValidationError("NavigationPlan.motion_validity must be typed")
+        if self.status is NavigationStatus.PENDING and self.motion_validity is None:
+            raise ContractValidationError("pending plan requires current motion validity")
         require_finite(self.corridor_radius_m, "NavigationPlan.corridor_radius_m")
         if self.corridor_radius_m < 0.0:
             raise ContractValidationError("NavigationPlan corridor radius cannot be negative")
@@ -569,14 +624,22 @@ class MotionObjective:
     velocity_target: VelocityTarget | None
     constraints: MissionConstraints
     trajectory: TrajectoryEvaluation | None = None
+    validity: MotionValidity | None = None
+    transition_allowed: bool = False
 
     def __post_init__(self) -> None:
         require_token(self.selected_source, "MotionObjective.selected_source")
+        if type(self.transition_allowed) is not bool:
+            raise ContractValidationError("objective transition_allowed must be bool")
+        if self.validity is not None and not isinstance(self.validity, MotionValidity):
+            raise ContractValidationError("MotionObjective.validity must be typed")
         if not isinstance(self.priority, int) or isinstance(self.priority, bool):
             raise ContractValidationError("MotionObjective.priority must be an integer")
         require_nonnegative(self.expiry_tick, "MotionObjective.expiry_tick")
         require_token(self.selection_reason, "MotionObjective.selection_reason")
         if self.kind is MotionObjectiveKind.STOP:
+            if self.transition_allowed:
+                raise ContractValidationError("STOP objective cannot authorize a transition")
             if (
                 self.target_waypoint is not None
                 or self.velocity_target is not None
@@ -619,12 +682,17 @@ class MotionIntent:
     horizon_ns: int
     constraints: MissionConstraints
     stop_reason: str | None = None
+    transition_allowed: bool = False
 
     def __post_init__(self) -> None:
         require_finite(self.requested_v_mps, "MotionIntent.requested_v_mps")
         require_finite(self.requested_omega_rad_s, "MotionIntent.requested_omega_rad_s")
         require_nonnegative(self.horizon_ns, "MotionIntent.horizon_ns")
         _require_optional_token(self.stop_reason, "MotionIntent.stop_reason")
+        if type(self.transition_allowed) is not bool:
+            raise ContractValidationError("motion transition_allowed must be bool")
+        if self.stop_reason is not None and self.transition_allowed:
+            raise ContractValidationError("stopped motion cannot authorize a transition")
         if self.stop_reason is not None and (
             self.requested_v_mps != 0.0 or self.requested_omega_rad_s != 0.0
         ):
@@ -639,6 +707,8 @@ class ConstrainedMotion:
     allowed_v_mps: float
     allowed_omega_rad_s: float
     active_constraints: tuple[ConstraintCode, ...]
+    previous_velocity: VelocityTarget | None = None
+    previous_context: TickContext | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -650,10 +720,29 @@ class ConstrainedMotion:
             require_finite(getattr(self, name), f"ConstrainedMotion.{name}")
         if len(set(self.active_constraints)) != len(self.active_constraints):
             raise ContractValidationError("active_constraints must be unique")
-        for requested, allowed, name in (
-            (self.requested_v_mps, self.allowed_v_mps, "linear"),
-            (self.requested_omega_rad_s, self.allowed_omega_rad_s, "angular"),
+        if (self.previous_velocity is None) != (self.previous_context is None):
+            raise ContractValidationError("transition requires previous velocity and context")
+        if self.previous_context is not None:
+            if not isinstance(self.previous_velocity, VelocityTarget) or not isinstance(self.previous_context, TickContext):
+                raise ContractValidationError("transition origin must be typed")
+            if (self.previous_context.tick_id + 1 != self.context.tick_id
+                    or self.previous_context.monotonic_ns >= self.context.monotonic_ns
+                    or ConstraintCode.ACCELERATION_LIMIT not in self.active_constraints):
+                raise ContractValidationError("transition requires consecutive acceleration-limited motion")
+        for requested, allowed, name, previous in (
+            (self.requested_v_mps, self.allowed_v_mps, "linear",
+             None if self.previous_velocity is None else self.previous_velocity.v_mps),
+            (self.requested_omega_rad_s, self.allowed_omega_rad_s, "angular",
+             None if self.previous_velocity is None else self.previous_velocity.omega_rad_s),
         ):
+            # A bounded transition can still be braking the previous command.
+            # It must retain its sign, never amplify it, and move toward the
+            # current target. Without this explicit origin the instantaneous
+            # non-amplification contract below remains unchanged.
+            if (previous is not None and previous * allowed > 0.0
+                    and abs(allowed) <= abs(previous)
+                    and abs(allowed - requested) < abs(previous - requested)):
+                continue
             if requested == 0.0 and allowed != 0.0:
                 raise ContractValidationError(f"{name} constraint cannot create motion")
             if requested != 0.0 and (
@@ -728,6 +817,8 @@ __all__ = [
     "MotionIntent",
     "MotionObjective",
     "MotionObjectiveKind",
+    "MotionValidity",
+    "TrackEstimateStatus",
     "NavigationPlan",
     "NavigationStatus",
     "Observation",

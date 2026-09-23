@@ -11,6 +11,7 @@ from v3.contracts import (
     MotionIntent,
     RobotEstimate,
     TickContext,
+    VelocityTarget,
 )
 
 
@@ -119,26 +120,35 @@ class OperationalConstraintLayer:
             allowed_v_mps,
             previous_v,
             self._config.max_acceleration_mps2 * dt_s,
+            transition_allowed=motion.transition_allowed,
         )
         limited_omega = _rate_limited(
             allowed_omega_rad_s,
             previous_omega,
             self._config.max_angular_acceleration_rad_s2 * dt_s,
+            transition_allowed=motion.transition_allowed,
         )
         if limited_v != allowed_v_mps or limited_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.ACCELERATION_LIMIT)
-        allowed_v_mps = limited_v
-        allowed_omega_rad_s = limited_omega
+        # A newly tightened authority envelope wins over temporal continuity.
+        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, self._config.max_v_mps))
+        allowed_omega_rad_s = _clamp(limited_omega, min(
+            motion.constraints.max_omega_rad_s, self._config.max_omega_rad_s,
+        ))
 
-        self._remember(motion.context, allowed_v_mps, allowed_omega_rad_s)
-        return ConstrainedMotion(
+        transition = motion.transition_allowed and ConstraintCode.ACCELERATION_LIMIT in codes and dt_s > 0.0
+        result = ConstrainedMotion(
             context=motion.context,
             requested_v_mps=motion.requested_v_mps,
             requested_omega_rad_s=motion.requested_omega_rad_s,
             allowed_v_mps=allowed_v_mps,
             allowed_omega_rad_s=allowed_omega_rad_s,
             active_constraints=tuple(dict.fromkeys(codes)),
+            previous_velocity=VelocityTarget(previous_v, previous_omega) if transition else None,
+            previous_context=self._last_context if transition else None,
         )
+        self._remember(motion.context, allowed_v_mps, allowed_omega_rad_s)
+        return result
 
     def _previous_motion(self, estimate: RobotEstimate) -> tuple[float, float, float]:
         previous = self._last_context
@@ -197,10 +207,15 @@ def _clamp(value: float, limit: float) -> float:
     return min(limit, max(-limit, value))
 
 
-def _rate_limited(target: float, previous: float, max_delta: float) -> float:
-    if target == 0.0 or max_delta <= 0.0:
+def _rate_limited(
+    target: float, previous: float, max_delta: float, *, transition_allowed: bool,
+) -> float:
+    if max_delta <= 0.0:
         return 0.0
     candidate = min(previous + max_delta, max(previous - max_delta, target))
+    if transition_allowed:
+        return candidate
+    # No retained L7 authority: only the current target can authorize motion.
     if candidate * target <= 0.0:
         return 0.0
     return math.copysign(min(abs(candidate), abs(target)), target)

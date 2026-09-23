@@ -1,8 +1,9 @@
 # R2B4_FOLLOW_PERSON_P0_V2_20260923
 """L4 deterministic temporal realtime world model.
 
-TEMPORAL-2.1 keeps the public V3 L4 boundary unchanged while hardening
-structural local memory with dynamic masking and measurement-time quality.
+Tracks expose measurement lineage and bounded prediction quality separately
+from navigation behavior. Structural memory uses dynamic masking and
+measurement-time quality.
 Fresh measurement-time-aligned LiDAR evidence always outranks remembered
 geometry; no navigation, persistence or I/O authority is added to L4.
 """
@@ -450,6 +451,7 @@ class ShadowWorldModel:
                     confidence=_number(values, "confidence"),
                 ),
                 observation.captured_monotonic_ns,
+                observed_ns=frame.context.monotonic_ns,
             ) or changed_tracks
 
         costmap_changed = self._update_local_scan(frame, estimate)
@@ -823,6 +825,7 @@ class ShadowWorldModel:
             captured_ns=observation.captured_monotonic_ns,
             radius_m=self._config.person_track_radius_m,
             max_association_distance_m=self._config.person_track_max_association_distance_m,
+            observed_ns=estimate.context.monotonic_ns,
         )
 
     def _person_image_detections(self, observation: Observation) -> tuple[_PersonImageDetection, ...]:

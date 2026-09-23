@@ -97,6 +97,11 @@ class MotionRealizer:
             return self._stopped(objective, "WORLD_STALE")
         if objective.expiry_tick < objective.context.tick_id:
             return self._stopped(objective, "OBJECTIVE_EXPIRED")
+        if objective.validity is not None:
+            if not objective.validity.usable_at(objective.context):
+                return self._stopped(objective, "OBJECTIVE_EXPIRED")
+            if objective.validity.frame_id != world.frame_id:
+                return self._stopped(objective, "FRAME_MISMATCH")
         if objective.kind is MotionObjectiveKind.STOP:
             return self._stopped(objective, objective.selection_reason)
 
@@ -133,7 +138,7 @@ class MotionRealizer:
             distance_m = math.hypot(dx, dy)
             if distance_m <= objective.constraints.goal_tolerance_m:
                 if target.yaw_rad is None:
-                    return self._stopped(objective, "GOAL_REACHED")
+                    return self._arrived(objective)
                 desired_heading = target.yaw_rad
                 requested_v_mps = 0.0
             else:
@@ -147,7 +152,7 @@ class MotionRealizer:
                 distance_m <= objective.constraints.goal_tolerance_m
                 and abs(heading_error) <= objective.constraints.yaw_tolerance_rad
             ):
-                return self._stopped(objective, "GOAL_REACHED")
+                return self._arrived(objective)
             requested_omega_rad_s = _clamp(
                 self._config.heading_gain * heading_error,
                 self._config.max_requested_omega_rad_s,
@@ -163,6 +168,7 @@ class MotionRealizer:
             requested_omega_rad_s=requested_omega_rad_s,
             horizon_ns=self._config.horizon_ns,
             constraints=objective.constraints,
+            transition_allowed=objective.transition_allowed,
         )
 
     def _velocity_reference(self, target: VelocityTarget, estimate: RobotEstimate) -> Waypoint:
@@ -239,6 +245,14 @@ class MotionRealizer:
             constraints=objective.constraints,
             stop_reason=reason,
         )
+
+    def _arrived(self, objective: MotionObjective) -> MotionIntent:
+        # Reaching an active guidance point is an ordinary zero target. L9 owns
+        # bounded deceleration across every objective kind; revocation is STOP.
+        self._state = MotionRealizationStateCheckpoint()
+        return MotionIntent(objective.context, 0.0, 0.0,
+                            self._config.horizon_ns, objective.constraints,
+                            transition_allowed=objective.transition_allowed)
 
 
 def realize_stop(

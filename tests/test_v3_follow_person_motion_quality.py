@@ -214,7 +214,7 @@ def test_hold_hysteresis_prevents_chatter_and_restarts_translation():
         _estimate(c1),
         _world(c1, _person(inside_hold)),
     )
-    assert len(hold.route) == 1
+    assert hold.reason == "PERSON_DISTANCE_HOLD"
 
     c2 = TickContext(2, 1_020_000_000)
     still_hold = nav.evaluate(
@@ -222,7 +222,7 @@ def test_hold_hysteresis_prevents_chatter_and_restarts_translation():
         _estimate(c2),
         _world(c2, _person(inside_hysteresis)),
     )
-    assert len(still_hold.route) == 1
+    assert still_hold.reason == "PERSON_DISTANCE_HOLD"
 
     c3 = TickContext(3, 1_040_000_000)
     resumed = nav.evaluate(

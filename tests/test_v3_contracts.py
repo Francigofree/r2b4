@@ -302,3 +302,41 @@ def test_final_actuation_is_fail_closed():
             safety_decision=SafetyDecision.STOP,
             latch_state="STOPPED",
         )
+
+
+def test_motion_validity_and_track_prediction_require_explicit_valid_lineage():
+    from v3.contracts import MotionValidity, TrackEstimateStatus
+
+    context = TickContext(1, 100)
+    validity = MotionValidity(context, 200, "map", "FOLLOW_PERSON:person-1")
+    assert validity.usable_at(TickContext(2, 200))
+    assert not validity.usable_at(TickContext(2, 201))
+    assert not validity.usable_at(TickContext(0, 150))
+    with pytest.raises(ContractValidationError):
+        MotionValidity(context, 99, "map", "follow")
+    with pytest.raises(ContractValidationError):
+        ObstacleTrack("person-1", 0, 0, 0.3, 0, 0, 0.9,
+                      estimate_status=TrackEstimateStatus.PREDICTED)
+    with pytest.raises(ContractValidationError):
+        ObstacleTrack("person-1", 0, 0, 0.3, 0, 0, 0.9,
+                      measurement_monotonic_ns=100, prediction_valid_until_ns=99)
+
+
+@pytest.mark.parametrize("allowed,previous", [(0.5, 0.4), (-0.1, 0.4), (0.4, 0.4)])
+def test_transition_origin_cannot_create_amplify_or_move_away_from_zero(allowed, previous):
+    with pytest.raises(ContractValidationError):
+        ConstrainedMotion(TickContext(2, 200), 0, 0, 0, allowed,
+                          (ConstraintCode.ACCELERATION_LIMIT,),
+                          VelocityTarget(0, previous), TickContext(1, 100))
+
+
+def test_deceleration_requires_explicit_consecutive_transition_origin():
+    current = TickContext(2, 200)
+    with pytest.raises(ContractValidationError):
+        ConstrainedMotion(current, 0, 0, 0, 0.3, (ConstraintCode.ACCELERATION_LIMIT,))
+    with pytest.raises(ContractValidationError):
+        ConstrainedMotion(current, 0, 0, 0, 0.3, (ConstraintCode.ACCELERATION_LIMIT,),
+                          VelocityTarget(0, 0.4), TickContext(0, 100))
+    valid = ConstrainedMotion(current, 0, 0, 0, 0.3, (ConstraintCode.ACCELERATION_LIMIT,),
+                              VelocityTarget(0, 0.4), TickContext(1, 100))
+    assert valid.allowed_omega_rad_s == 0.3
