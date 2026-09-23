@@ -1296,10 +1296,8 @@ class TrajectoryNavigator:
                 "LOCAL_COSTMAP_STALE",
             )
 
-        # FOLLOW motion shaping keeps HOLD, distance approach and heading response
-        # independent. HOLD is the only behavior-level zero-motion state here.
-        # The minimum speed is a rollout-envelope floor, not a forced command:
-        # rollout still contains v=0 and downstream L7-L12 remain authoritative.
+        # Arrival and HOLD share a boundary. The heading envelope's speed floor
+        # must not override distance braking, which tends continuously to zero.
         max_follow_v_mps = mission.constraints.max_v_mps
         minimum_follow_v_mps = min(
             self._config.follow_person_minimum_follow_speed_mps,
@@ -1314,13 +1312,7 @@ class TrajectoryNavigator:
                 / self._config.follow_person_slowdown_distance_m,
             ),
         )
-        distance_cap_mps = min(
-            max_follow_v_mps,
-            max(
-                minimum_follow_v_mps,
-                max_follow_v_mps * distance_ratio,
-            ),
-        )
+        distance_cap_mps = max_follow_v_mps * distance_ratio
 
         if absolute_error <= self._config.follow_person_align_tolerance_rad:
             heading_factor = 1.0
@@ -1347,11 +1339,8 @@ class TrajectoryNavigator:
 
         heading_cap_mps = max_follow_v_mps * heading_factor
         follow_max_v_mps = min(
-            max_follow_v_mps,
-            max(
-                minimum_follow_v_mps,
-                min(distance_cap_mps, heading_cap_mps),
-            ),
+            distance_cap_mps,
+            max(minimum_follow_v_mps, heading_cap_mps),
         )
 
         disposition = self._accept_pending_rollout(mission.context)
@@ -1360,7 +1349,7 @@ class TrajectoryNavigator:
             mission.context.tick_id,
         ):
             travel_m = min(
-                distance_m - self._config.follow_person_stand_off_m,
+                distance_m - hold_enter_m,
                 self._config.local_goal_distance_m,
             )
             local_goal = Waypoint(
@@ -1384,12 +1373,28 @@ class TrajectoryNavigator:
             if self._completion_inputs and self._pending_rollout_request is not None:
                 return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_PENDING")
             raise RuntimeError("follow-person trajectory cache is empty after replanning")
+        # FOLLOW already chose translation over the explicit PIVOT behavior.
+        # Keep L7's choice within that intent when a safe, productive forward
+        # path exists. Preserve recovery/pivot options when none exists.
+        if any(
+            candidate.v_mps > _MOTION_EPSILON
+            and candidate.progress_score > 0.0
+            and candidate.progress_viable
+            and not candidate.collision
+            for candidate in candidates
+        ):
+            candidates = tuple(
+                candidate for candidate in candidates
+                if abs(candidate.v_mps) > _MOTION_EPSILON
+            )
         return NavigationPlan(
             context=mission.context,
             mission_id=mission.mission_id,
             route=(),
             velocity_target=None,
-            constraints=mission.constraints,
+            # Reapply the current arrival envelope even while a fresh cached
+            # trajectory or async completion still carries an older speed.
+            constraints=replace(mission.constraints, max_v_mps=follow_max_v_mps),
             corridor_radius_m=mission.constraints.corridor_radius_m,
             progress=0.0,
             status=NavigationStatus.ACTIVE,

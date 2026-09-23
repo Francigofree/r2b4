@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,73 @@ from v3.layers.l5_command_mission import MissionManager
 from v3.layers.l6_navigation import TrajectoryNavigator
 from v3.layers.l7_motion_selection import select_motion
 from v3.layers.l8_motion_realization import MotionRealizer
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+@pytest.mark.parametrize("closed", [False, True])
+def test_follow_does_not_choose_a_pivot_when_safe_translation_is_available(side, closed):
+    from v3.contracts.planner import PlannerInput
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+
+    config = _config()
+    nav = TrajectoryNavigator(config, completion_inputs=closed)
+    c = TickContext(0, 1_000_000_000)
+    estimate = replace(_estimate(c), omega_rad_s=side * 0.15)
+    world = _world(c, _person(1.613, side * 0.276))
+    plan = nav.evaluate(_mission(c, "follow-continuity"), estimate, world)
+    if closed:
+        request = nav.pending_rollout_request
+        result = TrajectoryRolloutComputer(config).compute(request)
+        next_c = TickContext(1, 1_020_000_000)
+        plan = nav.evaluate(_mission(next_c, "follow-continuity"),
+                            replace(estimate, context=next_c), replace(world, context=next_c),
+                            PlannerInput(next_c, c, result))
+    selected = select_motion(plan).trajectory
+    assert selected is not None and not selected.collision and selected.progress_viable
+    assert selected.v_mps > 0.0
+    assert selected.omega_rad_s * side > 0.0
+    # Keep the complete worker result in owned state for checkpoint/replay.
+    assert len(nav.checkpoint().trajectory_candidates) == 54
+
+
+def test_approach_speed_tapers_to_hold_boundary_even_with_a_cached_plan():
+    config = _config()
+    nav = TrajectoryNavigator(config)
+    boundary = config.follow_person_stand_off_m + config.follow_person_distance_deadband_m
+    caps = []
+    for tick, remaining in enumerate((0.20, 0.10, 0.04, 0.005, 0.001)):
+        c = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
+        mission = _mission(c, "follow-arrival")
+        plan = nav.evaluate(mission, _estimate(c), _world(c, _person(boundary + remaining)))
+        assert plan.trajectory_candidates
+        expected = 0.15 * min(1.0, remaining / config.follow_person_slowdown_distance_m)
+        assert plan.constraints.max_v_mps == pytest.approx(expected)
+        assert mission.constraints.max_v_mps == 0.15
+        caps.append(plan.constraints.max_v_mps)
+        if tick == 0:
+            cached = nav.checkpoint().trajectory_candidates
+        else:
+            assert nav.checkpoint().trajectory_candidates == cached
+    assert all(a > b > 0.0 for a, b in zip(caps, caps[1:]))
+    assert caps[-1] < 0.001
+    c = TickContext(5, 1_100_000_000)
+    world = _world(c, _person(boundary))
+    plan = nav.evaluate(_mission(c, "follow-arrival"), _estimate(c), world)
+    intent = MotionRealizer().evaluate(select_motion(plan), _estimate(c), world)
+    assert intent.requested_v_mps == intent.requested_omega_rad_s == 0.0
+
+
+def test_near_hold_planning_uses_the_same_arrival_boundary_as_the_speed_envelope():
+    config = _config()
+    c = TickContext(0, 1_000_000_000)
+    boundary = config.follow_person_stand_off_m + config.follow_person_distance_deadband_m
+    remaining = 0.005
+    plan = TrajectoryNavigator(config).evaluate(_mission(c, "follow-near"), _estimate(c),
+                                               _world(c, _person(boundary + remaining)))
+    assert plan.local_goal.x_m == pytest.approx(remaining)
+    selected = select_motion(plan).trajectory
+    assert selected is not None and selected.progress_viable
+    assert 0.0 < selected.v_mps < 0.01
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
