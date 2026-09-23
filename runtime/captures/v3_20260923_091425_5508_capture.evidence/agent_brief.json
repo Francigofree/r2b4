@@ -1,0 +1,233 @@
+{
+  "behavior_status": "NOMINAL",
+  "budget": {
+    "actual_bytes": 4203,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "FAULT",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_091425_5508_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_091425_5508_capture.evidence/interesting_slice.ndjson",
+    "rows": 2,
+    "size_bytes": 12481,
+    "tick_range": [
+      1,
+      11
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 6.008069777467533,
+      "last_trace": 0.10244362728867047,
+      "max_trace": 0.27697201674125327,
+      "sample_count": 28
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 0.2277872107982256,
+      "requested_motion_tick_count": 12
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 13,
+      "FAULT": 1,
+      "STOP": 15,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 10,
+      "l2_actionable_rejection_count": 7,
+      "l2_duplicate_count": 76,
+      "l2_rejection_count": 83,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 76,
+        "STALE": 7
+      }
+    },
+    "ticks": {
+      "count": 29,
+      "first_monotonic_ns": 1385207562059,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 1387972151458,
+      "last_tick_id": 137
+    },
+    "timing": {
+      "max_ms": 117.342565,
+      "p50_ms": 99.994161,
+      "p95_ms": 106.869492,
+      "p99_ms": 117.342565,
+      "sample_count": 28
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 3:16 --layers L2,L3,L5,L6,L8,L9,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 6:6 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": null
+  },
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "tick-gap-0-6"
+    ],
+    "kind": "TICK_SEQUENCE",
+    "layer": "Capture",
+    "reason": "TICK_SEQUENCE_GAP",
+    "tick_id": 6
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 6,
+        "previous_tick_id": 0
+      },
+      "id": "tick-gap-0-6",
+      "layer": "Capture",
+      "monotonic_ns": 1385324904624,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 6
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 10,
+        "previous_tick_id": 6
+      },
+      "id": "tick-gap-6-10",
+      "layer": "Capture",
+      "monotonic_ns": 1385424915749,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 10
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 15,
+        "previous_tick_id": 10
+      },
+      "id": "tick-gap-10-15",
+      "layer": "Capture",
+      "monotonic_ns": 1385524909910,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 15
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 20,
+        "previous_tick_id": 15
+      },
+      "id": "tick-gap-15-20",
+      "layer": "Capture",
+      "monotonic_ns": 1385624896682,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 20
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 25,
+        "previous_tick_id": 20
+      },
+      "id": "tick-gap-20-25",
+      "layer": "Capture",
+      "monotonic_ns": 1385724896510,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 25
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 30,
+        "previous_tick_id": 25
+      },
+      "id": "tick-gap-25-30",
+      "layer": "Capture",
+      "monotonic_ns": 1385824897486,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 30
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 35,
+        "previous_tick_id": 30
+      },
+      "id": "tick-gap-30-35",
+      "layer": "Capture",
+      "monotonic_ns": 1385924942147,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 35
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 40,
+        "previous_tick_id": 35
+      },
+      "id": "tick-gap-35-40",
+      "layer": "Capture",
+      "monotonic_ns": 1386024930142,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 40
+    }
+  ]
+}

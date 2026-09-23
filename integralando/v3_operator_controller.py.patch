@@ -1,8 +1,0 @@
---- a/v3/operator_controller.py
-+++ b/v3/operator_controller.py
-@@
--        if not self._wait_fresh_ready(pid, baseline, timeout=8.0):
-+        if not self._wait_fresh_ready(pid, baseline, timeout=20.0):
-             diag = self.diagnostics()
-             try:
-                 self.runtime_stop()
