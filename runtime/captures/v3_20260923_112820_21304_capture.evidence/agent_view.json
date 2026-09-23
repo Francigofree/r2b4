@@ -1,0 +1,212 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_112820_21304_capture.mcap",
+    "capture_name": "v3_20260923_112820_21304_capture.mcap",
+    "capture_sha256": "12ad29a385a9153e1d1c5afeaca78f27168bc0be80aaf16bd8595edb45658885",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 10,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 102,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 100,
+      "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "NAVIGATION",
+      "count": 1,
+      "first_tick": 2921,
+      "last_tick": 2921,
+      "layer": "L6",
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "representative": {
+        "category": "NAVIGATION",
+        "evidence": {
+          "last_progress": 0.001953125,
+          "mission_id": "mission-operator-roomcruise-1790155700802116966-21304",
+          "monotonic_ns": 9480072803029,
+          "observed_span_s": 5.099958256,
+          "tick_id": 2921
+        },
+        "id": "behavior-navigation_progress_stagnation-2921",
+        "layer": "L6",
+        "monotonic_ns": 9480072803029,
+        "reason": "NAVIGATION_PROGRESS_STAGNATION",
+        "severity": "HIGH",
+        "tick_id": 2921
+      },
+      "severity": "HIGH"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 21,
+      "first_tick": 2666,
+      "last_tick": 3055,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 264180773,
+              "reason": "STALE",
+              "source_device_id": "PERSON_DETECTOR_FRONT",
+              "source_sequence": 556
+            }
+          ]
+        },
+        "id": "l2-reject-2666",
+        "layer": "L2",
+        "monotonic_ns": 9474972844773,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "WARNING",
+        "tick_id": 2666
+      },
+      "severity": "WARNING"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "NAVIGATION",
+      "count": 1,
+      "first_tick": 2921,
+      "group_index": 1,
+      "last_tick": 2921,
+      "path": "01_NAVIGATION_PROGRESS_STAGNATION.ndjson",
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "rows": 5,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 21,
+      "first_tick": 2666,
+      "group_index": 2,
+      "last_tick": 3055,
+      "path": "02_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 3,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 7.601332834,
+      "end_tick": 3046,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 2666,
+      "stop_ticks": 0,
+      "tick_count": 77
+    },
+    {
+      "end_s": 9.90031437,
+      "end_tick": 3160,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 7.699996204,
+      "start_tick": 3050,
+      "stop_ticks": 23,
+      "tick_count": 23
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 1,
+      "status": "FINDING",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_NAVIGATION_PROGRESS_STAGNATION.ndjson",
+      "raw_scan_count": 7,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "size_bytes": 78228,
+      "truncated": false
+    },
+    {
+      "group_index": 2,
+      "path": "02_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 4,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 45072,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "NOT_APPLICABLE",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "NOT_APPLICABLE",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}

@@ -85,7 +85,7 @@ class MotionSelector:
             viable = _viable_trajectories(plan)
             if not viable:
                 self._reset()
-                return _stop_objective(plan, "NO_COLLISION_FREE_TRAJECTORY")
+                return _stop_objective(plan, _unavailable_trajectory_reason(plan))
 
             best = _canonical_best(viable)
             selected = best
@@ -147,7 +147,7 @@ def select_motion(plan: NavigationPlan) -> MotionObjective:
     if plan.status is NavigationStatus.ACTIVE and plan.trajectory_candidates:
         viable = _viable_trajectories(plan)
         if not viable:
-            return _stop_objective(plan, "NO_COLLISION_FREE_TRAJECTORY")
+            return _stop_objective(plan, _unavailable_trajectory_reason(plan))
         selected = _canonical_best(viable)
         return _trajectory_objective(
             plan,
@@ -198,16 +198,15 @@ def _viable_trajectories(
     if not collision_free:
         return ()
 
-    # Escape is L6's explicit recovery family: by definition it is used when
-    # local-goal progress is not currently achievable, so it is ranked by the
-    # existing escape score instead of normal progress viability.
-    if all(candidate.candidate_id.startswith("escape-") for candidate in collision_free):
-        return collision_free
-
-    # L6 owns navigation viability; L7 only chooses one objective among viable
-    # normal trajectories. This prevents smooth/novel stationary local optima
-    # from beating a trajectory that can actually improve the navigation state.
+    # L6 owns viability, including clearance progress for recovery trajectories.
+    # Candidate names never bypass that typed decision or continuity filtering.
     return tuple(candidate for candidate in collision_free if candidate.progress_viable)
+
+
+def _unavailable_trajectory_reason(plan: NavigationPlan) -> str:
+    if any(not candidate.collision for candidate in plan.trajectory_candidates):
+        return "NO_PROGRESS_VIABLE_TRAJECTORY"
+    return "NO_COLLISION_FREE_TRAJECTORY"
 
 
 def _canonical_best(

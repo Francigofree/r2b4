@@ -89,6 +89,8 @@ class NavigationConfig:
     follow_person_slowdown_distance_m: float = 0.18
     follow_person_minimum_follow_speed_mps: float = 0.10
     follow_person_heading_min_factor: float = 0.75
+    # None preserves the acquisition threshold for configs without retention tuning.
+    follow_person_retention_min_confidence: float | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -186,6 +188,14 @@ class NavigationConfig:
             or not 0.0 <= self.follow_person_min_confidence <= 1.0
         ):
             raise ValueError("follow_person_min_confidence must be in [0, 1]")
+        retention = self.follow_person_retention_min_confidence
+        if retention is not None and (
+            isinstance(retention, bool)
+            or not isinstance(retention, (int, float))
+            or not math.isfinite(retention)
+            or not 0.0 < retention <= self.follow_person_min_confidence
+        ):
+            raise ValueError("follow_person_retention_min_confidence must be in (0, acquisition confidence]")
         for name in (
             "face_person_align_tolerance_rad",
             "face_person_release_tolerance_rad",
@@ -876,11 +886,18 @@ class TrajectoryNavigator:
             self._reset()
             self._mission_id = mission.mission_id
 
+        retention_confidence = self._config.follow_person_retention_min_confidence
+        if retention_confidence is None:
+            retention_confidence = self._config.follow_person_min_confidence
         eligible = tuple(
             track
             for track in world.obstacle_tracks
             if track.track_id.startswith("person-")
-            and track.confidence >= self._config.follow_person_min_confidence
+            and track.confidence >= (
+                retention_confidence
+                if track.track_id == self._follow_person_track_id
+                else self._config.follow_person_min_confidence
+            )
         )
 
         # Acquire exactly once per FOLLOW_PERSON mission. Another visible person
@@ -1615,6 +1632,14 @@ class TrajectoryNavigator:
                 / (self._config.rollout_linear_samples - 1)
             )
             for angular_index in range(self._config.rollout_angular_samples):
+                # Reverse recovery is straight at every angular index. Reuse its
+                # immutable geometry while preserving the bounded family and IDs.
+                if linear_index > 0 and angular_index > 0:
+                    evaluations.append(replace(
+                        evaluations[-1],
+                        candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
+                    ))
+                    continue
                 angular_ratio = (
                     2.0 * angular_index
                     / (self._config.rollout_angular_samples - 1)
@@ -1643,7 +1668,10 @@ class TrajectoryNavigator:
                         candidate,
                         linear_index,
                         angular_index,
-                        reverse_limit_mps,
+                        start_clearance_m,
+                        world,
+                        self._config,
+                        scene,
                     )
                 )
         return tuple(evaluations)
@@ -1737,7 +1765,7 @@ class TrajectoryNavigator:
         )
         clearance_score = bounded_clearance / self._config.clearance_score_cap_m
         total_score = (
-            self._config.progress_weight * progress
+            self._config.progress_weight * progress_potential
             + self._config.clearance_weight * clearance_score
             + self._config.smoothness_weight * smoothness
             + self._config.novelty_weight * novelty
@@ -1857,6 +1885,12 @@ class TrajectoryRolloutComputer:
                     / (config.rollout_linear_samples - 1)
                 )
                 for angular_index in range(config.rollout_angular_samples):
+                    if linear_index > 0 and angular_index > 0:
+                        evaluations.append(replace(
+                            evaluations[-1],
+                            candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
+                        ))
+                        continue
                     angular_ratio = (
                         2.0 * angular_index
                         / (config.rollout_angular_samples - 1)
@@ -1886,7 +1920,10 @@ class TrajectoryRolloutComputer:
                             candidate,
                             linear_index,
                             angular_index,
-                            reverse_limit_mps,
+                            start_clearance_m,
+                            world,
+                            config,
+                            scene,
                         )
                     )
         return TrajectoryRolloutResult(request.context, tuple(evaluations))
@@ -1986,7 +2023,7 @@ class TrajectoryRolloutComputer:
         )
         clearance_score = bounded_clearance / config.clearance_score_cap_m
         total_score = (
-            config.progress_weight * progress
+            config.progress_weight * progress_potential
             + config.clearance_weight * clearance_score
             + config.smoothness_weight * smoothness
             + config.novelty_weight * novelty
@@ -2060,37 +2097,46 @@ def _as_escape_candidate(
     candidate: TrajectoryEvaluation,
     linear_index: int,
     angular_index: int,
-    reverse_limit_mps: float,
+    start_clearance_m: float,
+    world: WorldSnapshot,
+    config: NavigationConfig,
+    scene: _LocalPlanningScene,
 ) -> TrajectoryEvaluation:
-    """Re-score a bounded candidate for clearance recovery, not goal progress."""
+    """Make recovery viability and quality depend on predicted clearance gain.
+
+    Minimum path clearance includes the starting footprint, so it cannot express
+    improvement. Keep it for collision safety and score the final clearance gain
+    separately. A pivot earns no unconditional bonus for remaining in place.
+    """
 
     moving = (
         abs(candidate.v_mps) > _MOTION_EPSILON
         or abs(candidate.omega_rad_s) > _MOTION_EPSILON
     )
-    pivot = (
-        abs(candidate.v_mps) <= _MOTION_EPSILON
-        and abs(candidate.omega_rad_s) > _MOTION_EPSILON
+    end = candidate.samples[-1]
+    final_clearance_m = _footprint_clearance(
+        end.x_m, end.y_m, end.yaw_rad, world, config, scene,
     )
-    motion_bonus = 0.25 if pivot else (0.08 if moving else -1.0)
-    reverse_penalty = (
-        0.10
-        * abs(candidate.v_mps)
-        / max(reverse_limit_mps, _MOTION_EPSILON)
-        if candidate.v_mps < -_MOTION_EPSILON
-        else 0.0
+    clearance_progress = _clamp_signed(
+        (final_clearance_m - start_clearance_m) / config.clearance_score_cap_m
+    )
+    viable = (
+        moving
+        and clearance_progress > _MOTION_EPSILON
+        and clearance_progress + 1e-12 >= config.progress_viability_floor
     )
     escape_score = (
-        candidate.min_clearance_m
-        + 0.20 * candidate.novelty_score
-        + 0.10 * candidate.smoothness_score
-        + motion_bonus
-        - reverse_penalty
+        config.progress_weight * clearance_progress
+        + config.clearance_weight * candidate.min_clearance_m / config.clearance_score_cap_m
+        + config.smoothness_weight * candidate.smoothness_score
+        + config.novelty_weight * candidate.novelty_score
     )
     return replace(
         candidate,
         candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
         total_score=escape_score,
+        progress_potential_score=clearance_progress,
+        progress_viable=viable,
     )
 
 

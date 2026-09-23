@@ -293,6 +293,7 @@ def v3_navigation_config_from_mapping(
             follow_person.get("align_tolerance_rad", 0.22),
             "v3_navigation.follow_person.align_tolerance_rad",
         ),
+        follow_person_retention_min_confidence=follow_person.get("retention_minimum_confidence"),
         follow_person_release_tolerance_rad=_positive_float(
             follow_person.get("release_tolerance_rad", 0.30),
             "v3_navigation.follow_person.release_tolerance_rad",
