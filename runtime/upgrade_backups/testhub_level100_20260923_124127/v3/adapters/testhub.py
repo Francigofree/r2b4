@@ -166,8 +166,6 @@ class TestHubInterfaceAdapter:
             "replay_status": agent.get("replay_status"),
             "replay_sweep_status": agent.get("replay_sweep_status"),
             "behavior_status": agent.get("behavior_status"),
-            "task_evidence": agent.get("task_evidence"),
-            "motion_tuning": agent.get("motion_tuning"),
         }
 
     def _selected_capture(self) -> Path:

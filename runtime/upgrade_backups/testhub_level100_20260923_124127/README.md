@@ -121,7 +121,7 @@ telepíteni.
 
 Az alapértelmezett belépő az integrált Test Hub Next. Paraméter nélkül a
 legújabb `runtime/captures/*.mcap` fájlt elemzi, a capture profiljának megfelelően,
-és 10 Hz-es áttekintést, valamint `agent_view.json` összefoglalót készít:
+és 5 Hz-es áttekintést, valamint `agent_view.json` összefoglalót készít:
 
 ```bash
 python3 -m v3.test_hub
@@ -175,13 +175,6 @@ GUI manifest és áttekintő nézet részei. A `behavior_summary.json`,
 `behavior_episodes.ndjson` és `behavior_timeline.ndjson` tartalmazza a mission- és
 command-kapcsolatokat. A számlálók rögzített mintákat számolnak, nem teljes control
 tick-számot vagy időarányt; a köztes, nem rögzített állapotok nem rekonstruálhatók.
-
-A magasabb szintű, döntésmentes evidence réteg `task_evidence_summary.json`,
-`task_evidence_episodes.ndjson` és `task_evidence_timeline.ndjson` fájlokban
-méri az EXPLORE/FOLLOW_PERSON/NAVIGATE feladatspecifikus capture-tényeket.
-A `motion_tuning_summary.json` és `motion_tuning_segments.ndjson` cross-layer
-mozgás-, kerék-, actuator- és planner-metrikákat ad hangoláshoz. Ezek nem
-adnak GOOD/BAD minősítést, root cause diagnózist vagy javítási javaslatot.
 
 Olcsó integritási összefoglaló:
 

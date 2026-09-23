@@ -374,8 +374,6 @@ def run_default(
         "pytest_status": pytest_payload.get("status") if pytest_payload else "OFF",
         "motion_quality_status": motion_quality.get("status"),
         "localization_quality_status": localization_quality.get("status"),
-        "task_evidence_episode_count": task_evidence.get("episode_count"),
-        "motion_tuning_segment_count": motion_tuning.get("segment_count"),
         "note": "One .evidence directory is the portable agent package; MCAP remains local authority.",
     }
 

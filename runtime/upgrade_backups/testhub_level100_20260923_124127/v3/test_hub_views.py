@@ -317,7 +317,7 @@ def _suppress_agent_noise(incidents: Sequence[Mapping[str, object]], rows: Seque
 def build_run_view(
     capture_path: str | Path,
     *,
-    hz: int = 10,
+    hz: int = 5,
     output_path: str | Path | None = None,
     triage: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
