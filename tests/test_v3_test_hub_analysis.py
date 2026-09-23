@@ -19,6 +19,9 @@ from v3.test_hub_views import (
 
 
 class _Reader:
+    def latest_metadata(self, name):
+        return None
+
     def __init__(self, ticks):
         self._ticks = ticks
 

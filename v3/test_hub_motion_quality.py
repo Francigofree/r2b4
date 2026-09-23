@@ -653,7 +653,13 @@ def _load_source(path: Path) -> Mapping[str, object] | None:
         return None
     if path.suffix.lower() == ".mcap" and path.is_file():
         from .mcap_reader import McapReader
-        summary, _segments = analyze_motion_quality_ticks(_read_ticks(McapReader(path)))
+        from .test_hub_profiles import capture_analysis_profile
+        reader = McapReader(path)
+        if not capture_analysis_profile(reader)["exact_replay_applicable"]:
+            from .test_hub_analysis import analyze_capture
+            from .test_hub_sampled import sampled_quality
+            return sampled_quality(analyze_capture(reader), "motion")[0]
+        summary, _segments = analyze_motion_quality_ticks(_read_ticks(reader))
         return summary
     return None
 
@@ -667,6 +673,9 @@ def compare_motion_quality_sources(before: str | Path, after: str | Path) -> dic
     b = _load_source(Path(before)); a = _load_source(Path(after))
     if b is None or a is None:
         return {"status": "UNAVAILABLE", "reason": "motion_quality.json missing and input is not an MCAP"}
+    if b.get("analysis_profile") or a.get("analysis_profile"):
+        from .test_hub_sampled import compare_sampled_quality
+        return compare_sampled_quality(b, a)
     bt = _map(_map(b.get("tracking")).get("allowed_to_actual_linear"))
     at = _map(_map(a.get("tracking")).get("allowed_to_actual_linear"))
     ba = _map(_map(b.get("tracking")).get("allowed_to_actual_angular"))

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 from .mcap_reader import EVENT_TOPIC, McapReader, TICK_TOPIC
+from .test_hub_profiles import BEHAVIORAL, capture_analysis_profile
 
 LAYER_ORDER = tuple(f"L{i}" for i in range(1, 13))
 LAYER_RANK = {layer: index for index, layer in enumerate(LAYER_ORDER, 1)}
@@ -84,6 +85,15 @@ def analyze_capture(
 ) -> dict[str, object]:
     """One streaming pass over tick payloads plus cheap MCAP metadata inspection."""
 
+    profile = capture_analysis_profile(reader)
+    behavioral = profile["name"] == BEHAVIORAL
+    append_incident = _append_incident
+    trends = None
+    if behavioral:
+        from .test_hub_sampled import BehavioralTrends, append_sampled_incident
+        append_incident = append_sampled_incident
+        trends = BehavioralTrends(int(profile["tick_sample_hz"]))
+
     final_event = _final_event(reader)
     integrity = final_event.get("integrity") if isinstance(final_event, Mapping) else None
     incidents: list[Incident] = []
@@ -94,7 +104,7 @@ def analyze_capture(
             if isinstance(reasons, Sequence)
             else "CAPTURE_INCOMPLETE"
         )
-        _append_incident(
+        append_incident(
             incidents,
             Incident(
                 "capture-integrity",
@@ -151,8 +161,10 @@ def analyze_capture(
 
             if previous_ns is not None and monotonic_ns > previous_ns:
                 tick_deltas.append(monotonic_ns - previous_ns)
-            if previous_tick_id is not None and tick_id != previous_tick_id + 1:
-                _append_incident(
+            if previous_tick_id is not None and (
+                tick_id <= previous_tick_id if behavioral else tick_id != previous_tick_id + 1
+            ):
+                append_incident(
                     incidents,
                     Incident(
                         f"tick-gap-{previous_tick_id}-{tick_id}",
@@ -171,6 +183,10 @@ def analyze_capture(
                 )
             previous_ns = monotonic_ns
             previous_tick_id = tick_id
+
+            if trends is not None:
+                for incident in trends.observe(payload, row):
+                    append_incident(incidents, incident, max_incidents)
 
             decision = str(row.get("safety_decision") or "UNKNOWN")
             if decision not in safety_counts:
@@ -205,7 +221,7 @@ def analyze_capture(
             non_ok = row.get("device_non_ok")
             if isinstance(non_ok, list) and non_ok:
                 device_non_ok_count += len(non_ok)
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"device-{tick_id}",
@@ -245,7 +261,7 @@ def analyze_capture(
                         else "MEDIUM"
                     )
                     reason_text = "OBSERVATION_REJECTED:" + ",".join(ordered_reasons)
-                    _append_incident(
+                    append_incident(
                         incidents,
                         Incident(
                             f"l2-reject-{tick_id}",
@@ -263,7 +279,7 @@ def analyze_capture(
             record_type = row.get("record_type")
             fault_layer = row.get("fault_layer")
             if record_type == "edge_fault_tick":
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"edge-fault-{tick_id}",
@@ -278,7 +294,7 @@ def analyze_capture(
                     max_incidents,
                 )
             elif isinstance(fault_layer, str) and fault_layer:
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"fault-layer-{tick_id}",
@@ -294,7 +310,7 @@ def analyze_capture(
                 )
 
             if decision == "FAULT":
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"safety-fault-{tick_id}",
@@ -313,7 +329,7 @@ def analyze_capture(
             # ALLOW. That is still a real motion block and must be diagnosed.
             if requested_motion and constrained_zero:
                 reason = _constraint_reason(row.get("l9_constraints"))
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"motion-blocked-l9-{tick_id}",
@@ -333,7 +349,7 @@ def analyze_capture(
                     max_incidents,
                 )
             elif decision == "STOP" and requested_motion:
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"motion-blocked-l12-{tick_id}",
@@ -367,11 +383,13 @@ def analyze_capture(
             timeline_handle.close()
 
     timing = _timing_metrics(tick_deltas)
+    if behavioral:
+        timing["scope"] = "CAPTURE_SAMPLE_INTERVALS_ONLY"
     if tick_deltas and timing.get("p50_ms"):
         median_ns = statistics.median(tick_deltas)
         for index, delta in enumerate(tick_deltas):
             if delta > max(100_000_000, 3.0 * median_ns):
-                _append_incident(
+                append_incident(
                     incidents,
                     Incident(
                         f"timing-gap-{index}",
@@ -380,7 +398,7 @@ def analyze_capture(
                         None,
                         None,
                         "Runtime",
-                        "TICK_INTERVAL_OUTLIER",
+                        "CAPTURE_SAMPLE_INTERVAL_OUTLIER" if behavioral else "TICK_INTERVAL_OUTLIER",
                         {
                             "delta_ms": delta / 1_000_000.0,
                             "median_ms": median_ns / 1_000_000.0,
@@ -391,12 +409,21 @@ def analyze_capture(
                 break
 
     covariance = _covariance_metrics(covariance_trace_values)
+    if behavioral:
+        first_trace = covariance.get("first_trace")
+        last_trace = covariance.get("last_trace")
+        covariance["growth_ratio"] = (
+            last_trace / first_trace
+            if first_trace is not None and first_trace > 1e-12 and last_trace is not None
+            else None
+        )
     if (
         covariance.get("growth_ratio") is not None
         and float(covariance["growth_ratio"]) >= 4.0
+        and (not behavioral or covariance_trace_values[-1][1] - covariance_trace_values[0][1] >= 5_000_000_000)
     ):
         tick_id, ns, _value = max(covariance_trace_values, key=lambda item: item[2])
-        _append_incident(
+        append_incident(
             incidents,
             Incident(
                 f"covariance-growth-{tick_id}",
@@ -411,9 +438,9 @@ def analyze_capture(
             max_incidents,
         )
 
-    stagnation = _progress_stagnation(progress_series, active_motion_rows)
-    if stagnation is not None:
-        _append_incident(
+    stagnation = trends.stagnation if trends is not None else _progress_stagnation(progress_series, active_motion_rows)
+    if stagnation is not None and not behavioral:
+        append_incident(
             incidents,
             Incident(
                 "navigation-stagnation",
@@ -429,11 +456,16 @@ def analyze_capture(
         )
 
     incidents.sort(key=_incident_sort_key)
-    root = _root_cause_candidate(incidents)
-    behavior_status = _behavior_status(active_motion_rows, constrained_zero_rows)
+    root = _root_cause_candidate([item for item in incidents if item.severity != "WARNING"])
+    if behavioral:
+        root["scope"] = "CAPTURED_SAMPLES_ONLY"
+    behavior_status = _behavior_status(active_motion_rows, trends.blocked_samples if trends is not None else constrained_zero_rows)
+    if behavioral and (safety_counts["FAULT"] or trends.unsafe_output_samples or trends.lifecycle_counts["FAULT"]):
+        behavior_status = "FAULT"
 
     return {
         "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+        **({"analysis_profile": profile, "behavioral_trends": trends.summary()} if trends is not None else {}),
         "capture": {
             "capture_id": (
                 final_event.get("capture_id")
@@ -480,7 +512,8 @@ def analyze_capture(
         "localization": covariance,
         "navigation": {"stagnation": stagnation},
         "incident_count": len(incidents),
-        "actionable_incident_count": len(incidents),
+        "actionable_incident_count": sum(item.severity != "WARNING" for item in incidents),
+        **({"warning_count": sum(item.severity == "WARNING" for item in incidents)} if behavioral else {}),
         "incidents": [item.as_dict() for item in incidents],
         "root_cause_candidate": root,
     }

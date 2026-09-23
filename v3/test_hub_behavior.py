@@ -572,6 +572,7 @@ def build_behavior_evidence(
 
     summary = {
         "schema": BEHAVIOR_SCHEMA,
+        **({"analysis_profile": triage["analysis_profile"]} if triage and "analysis_profile" in triage else {}),
         "episode_count": len(episodes),
         "active_duration_s": sum(episode.duration_s for episode in episodes),
         "modes": dict(sorted(modes.items())),

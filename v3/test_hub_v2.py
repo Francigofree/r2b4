@@ -27,6 +27,7 @@ from .mcap_reader import (
 )
 from .mcap_replay_bridge import McapReplayBridgeError, ReplayWindow, replay_mcap
 from .test_hub_analysis import LAYER_ORDER, analyze_capture
+from .test_hub_profiles import BEHAVIORAL, capture_analysis_profile
 
 TEST_HUB_SCHEMA = "R2B4_TEST_HUB_V2"
 AGENT_BRIEF_SCHEMA = "R2B4_AGENT_BRIEF_V2"
@@ -109,6 +110,7 @@ def inspect_mcap(
             for channel in reader.channels.values()
         },
         "capture_metadata": capture_meta,
+        "analysis_profile": capture_analysis_profile(reader),
         "final_metadata": final_meta,
         "runtime": {
             "capture_id": runtime_payload.get("capture_id"),
@@ -150,7 +152,8 @@ def diagnose_run(
     if mode not in {"off", "incident", "full"}:
         raise ValueError("replay_mode must be off, incident or full")
 
-    if mode != "off":
+    replay_applicable = inspect["analysis_profile"]["exact_replay_applicable"]
+    if mode != "off" and replay_applicable:
         try:
             if replay_window is None:
                 replay_window = (
@@ -184,8 +187,9 @@ def diagnose_run(
         triage,
         replay,
         replay_error,
-        replay_requested=mode != "off",
+        replay_requested=mode != "off" and replay_applicable,
     )
+    diagnosis["replay_mode_requested"] = mode
     diagnosis_path = _write_json(
         diagnosis, destination / "diagnosis.json"
     )
@@ -250,6 +254,7 @@ def diagnose_run(
     return {
         "schema": TEST_HUB_SCHEMA,
         "status": diagnosis["status"],
+        "analysis_profile": diagnosis.get("analysis_profile"),
         "diagnosis_status": diagnosis.get("diagnosis_status"),
         "evidence_status": diagnosis.get("evidence_status"),
         "behavior_status": diagnosis.get("behavior_status"),
@@ -280,7 +285,8 @@ def build_agent_brief_only(
     replay_result = None
     replay_error = None
 
-    if replay:
+    replay_applicable = inspect["analysis_profile"]["exact_replay_applicable"]
+    if replay and replay_applicable:
         try:
             replay_result = replay_mcap(
                 capture_path,
@@ -301,7 +307,7 @@ def build_agent_brief_only(
         triage,
         replay_result,
         replay_error,
-        replay_requested=replay,
+        replay_requested=replay and replay_applicable,
     )
     return _build_agent_brief(
         capture_path,
@@ -606,6 +612,8 @@ def _build_diagnosis(
 ) -> dict[str, object]:
     """Build diagnosis without conflating evidence validity with behaviour."""
 
+    profile = inspect.get("analysis_profile") or triage.get("analysis_profile")
+    behavioral = isinstance(profile, Mapping) and profile.get("name") == BEHAVIORAL
     root = (
         dict(triage.get("root_cause_candidate") or {})
         if isinstance(triage.get("root_cause_candidate"), Mapping)
@@ -717,11 +725,14 @@ def _build_diagnosis(
         diagnosis_status = "FAIL"
     elif actionable:
         diagnosis_status = "FINDING"
+    elif behavioral and triage.get("warning_count", 0):
+        diagnosis_status = "WARNING"
     else:
         diagnosis_status = "PASS"
 
     return {
         "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+        **({"analysis_profile": profile} if profile is not None else {}),
         # Deliberately no longer an unqualified infrastructure-only PASS.
         "status": diagnosis_status,
         "diagnosis_status": diagnosis_status,
@@ -734,7 +745,8 @@ def _build_diagnosis(
         ),
         "capture_integrity": integrity,
         "structure_valid": structure_ok,
-        "replay_status": replay_status,
+        "replay_status": "NOT_APPLICABLE" if behavioral and not replay_requested else replay_status,
+        **({"replay_skip_reason": "SAMPLED_TICK_STREAM", "warning_count": triage.get("warning_count", 0)} if behavioral else {}),
         "replay_error": replay_error,
         "replay_requested": replay_requested,
         "root_cause": root,
@@ -749,6 +761,7 @@ def _build_diagnosis(
             "sensors": triage.get("sensors"),
             "localization": triage.get("localization"),
             "navigation": triage.get("navigation"),
+            **({"behavioral_trends": triage.get("behavioral_trends")} if behavioral else {}),
         },
         "incident_count": triage.get("incident_count"),
     }
@@ -782,6 +795,7 @@ def _has_actionable_finding(
     if _triage_behavior_status(triage) in {
         "BLOCKED",
         "DEGRADED",
+        "FAULT",
     }:
         return True
 
@@ -795,6 +809,8 @@ def _has_actionable_finding(
             "CRITICAL",
             "HIGH",
         }:
+            return True
+        if triage.get("analysis_profile") and str(item.get("severity")) == "MEDIUM":
             return True
     return False
 
@@ -908,6 +924,7 @@ def _build_agent_brief(
     brief: dict[str, object] = {
         "schema": AGENT_BRIEF_SCHEMA,
         "status": diagnosis.get("status"),
+        "analysis_profile": diagnosis.get("analysis_profile"),
         "diagnosis_status": diagnosis.get(
             "diagnosis_status"
         ),
@@ -958,6 +975,7 @@ def _build_agent_brief(
             "status_semantics": (
                 "PASS=no actionable finding; "
                 "FINDING=evidence valid but behaviour/problem found; "
+                "WARNING=sampled low-level observation only; "
                 "FAIL=evidence/replay gate failed"
             ),
             "mcap_is_authority": True,
@@ -977,6 +995,7 @@ def _build_gui_manifest(
     return {
         "schema": GUI_MANIFEST_SCHEMA,
         "status": diagnosis.get("status"),
+        "analysis_profile": diagnosis.get("analysis_profile"),
         "diagnosis_status": diagnosis.get(
             "diagnosis_status"
         ),
@@ -1010,7 +1029,7 @@ def _build_gui_manifest(
             "timeline_ndjson": timeline_path.name,
             "interesting_slice_ndjson": slice_path.name,
             "diagnosis_json": "diagnosis.json",
-            "replay_json": "replay_result.json",
+            "replay_json": "replay_result.json" if diagnosis.get("replay_status") != "NOT_APPLICABLE" else None,
         },
     }
 
@@ -1035,6 +1054,7 @@ def _build_evidence_index(
             "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
         ),
         "status": diagnosis.get("status"),
+        "analysis_profile": diagnosis.get("analysis_profile"),
         "diagnosis_status": diagnosis.get(
             "diagnosis_status"
         ),

@@ -1,0 +1,233 @@
+{
+  "behavior_status": "NOMINAL",
+  "budget": {
+    "actual_bytes": 4343,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_093142_7705_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_093142_7705_capture.evidence/interesting_slice.ndjson",
+    "rows": 3,
+    "size_bytes": 109122,
+    "tick_range": [
+      1670,
+      1680
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.06077264294736247,
+      "growth_ratio": 3.7282309665288498,
+      "last_trace": 0.060824997757073104,
+      "max_trace": 0.21655467899004946,
+      "sample_count": 102
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 0.10245632225028682,
+      "requested_motion_tick_count": 13
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 80,
+      "FAULT": 0,
+      "STOP": 22,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 0,
+      "l2_actionable_rejection_count": 10,
+      "l2_duplicate_count": 355,
+      "l2_rejection_count": 365,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 355,
+        "STALE": 10
+      }
+    },
+    "ticks": {
+      "count": 102,
+      "first_monotonic_ns": 2456521625106,
+      "first_tick_id": 1670,
+      "last_monotonic_ns": 2466621266868,
+      "last_tick_id": 2172
+    },
+    "timing": {
+      "max_ms": 120.009684,
+      "p50_ms": 100.001533,
+      "p95_ms": 102.861199,
+      "p99_ms": 118.345395,
+      "sample_count": 101
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 1672:1685 --layers L2,L3,L5,L6,L8,L9,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 1675:1675 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": null
+  },
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "tick-gap-1670-1675"
+    ],
+    "kind": "TICK_SEQUENCE",
+    "layer": "Capture",
+    "reason": "TICK_SEQUENCE_GAP",
+    "tick_id": 1675
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1675,
+        "previous_tick_id": 1670
+      },
+      "id": "tick-gap-1670-1675",
+      "layer": "Capture",
+      "monotonic_ns": 2456621286435,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1675
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1680,
+        "previous_tick_id": 1675
+      },
+      "id": "tick-gap-1675-1680",
+      "layer": "Capture",
+      "monotonic_ns": 2456721223785,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1680
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1685,
+        "previous_tick_id": 1680
+      },
+      "id": "tick-gap-1680-1685",
+      "layer": "Capture",
+      "monotonic_ns": 2456821372266,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1685
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1690,
+        "previous_tick_id": 1685
+      },
+      "id": "tick-gap-1685-1690",
+      "layer": "Capture",
+      "monotonic_ns": 2456921246504,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1690
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1695,
+        "previous_tick_id": 1690
+      },
+      "id": "tick-gap-1690-1695",
+      "layer": "Capture",
+      "monotonic_ns": 2457021265225,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1695
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1700,
+        "previous_tick_id": 1695
+      },
+      "id": "tick-gap-1695-1700",
+      "layer": "Capture",
+      "monotonic_ns": 2457121339890,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1700
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1705,
+        "previous_tick_id": 1700
+      },
+      "id": "tick-gap-1700-1705",
+      "layer": "Capture",
+      "monotonic_ns": 2457221262555,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1705
+    },
+    {
+      "category": "TICK_SEQUENCE",
+      "evidence": {
+        "current_tick_id": 1710,
+        "previous_tick_id": 1705
+      },
+      "id": "tick-gap-1705-1710",
+      "layer": "Capture",
+      "monotonic_ns": 2457321256294,
+      "reason": "TICK_SEQUENCE_GAP",
+      "severity": "CRITICAL",
+      "tick_id": 1710
+    }
+  ]
+}

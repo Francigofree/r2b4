@@ -27,6 +27,8 @@ from .test_hub_localization_quality import (
     write_localization_quality,
 )
 from .test_hub_behavior import build_behavior_evidence
+from .test_hub_profiles import BEHAVIORAL
+from .test_hub_sampled import sampled_quality
 from .test_hub_v2 import diagnose_run
 from .test_hub_views import SUPPORTED_HZ, build_run_view, compare_views
 from .mcap_reader import McapReader
@@ -118,6 +120,8 @@ def run_default(
     triage = _load_json(destination / "triage.json")
     if triage is None:
         triage = analyze_capture(McapReader(capture))
+    profile = base.get("analysis_profile")
+    behavioral = isinstance(profile, Mapping) and profile.get("name") == BEHAVIORAL
 
     reader = McapReader(capture)
     behavior = build_behavior_evidence(reader, destination, triage=triage)
@@ -152,7 +156,15 @@ def run_default(
     performance_path = _write_json(destination / "runtime_performance.json", performance)
 
     sweep: Mapping[str, object] | None = None
-    if replay_sweep_enabled and replay_mode != "off":
+    if behavioral:
+        sweep = {
+            "status": "NOT_APPLICABLE",
+            "reason": "SAMPLED_TICK_STREAM",
+            "analysis_profile": profile,
+            "windows": [],
+        }
+        _write_json(destination / "replay_sweep.json", sweep)
+    elif replay_sweep_enabled and replay_mode != "off":
         final_event = inspect_payload.get("final_event")
         structure = inspect_payload.get("structure")
         integrity_verified = bool(
@@ -200,12 +212,15 @@ def run_default(
     motion_quality_path = destination / "motion_quality.json"
     motion_segments_path = destination / "motion_quality_segments.ndjson"
     try:
-        motion_quality = write_motion_quality(
-            reader,
-            motion_quality_path,
-            motion_segments_path,
-            behavior_episodes_path=behavior_episode_source,
-        )
+        if behavioral:
+            motion_quality = _write_sampled_quality(triage, "motion", motion_quality_path, motion_segments_path)
+        else:
+            motion_quality = write_motion_quality(
+                reader,
+                motion_quality_path,
+                motion_segments_path,
+                behavior_episodes_path=behavior_episode_source,
+            )
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         motion_quality = {
             "schema": "R2B4_TEST_HUB_MOTION_QUALITY_V1",
@@ -219,12 +234,15 @@ def run_default(
     localization_quality_path = destination / "localization_quality.json"
     localization_events_path = destination / "localization_events.ndjson"
     try:
-        localization_quality = write_localization_quality(
-            reader,
-            localization_quality_path,
-            localization_events_path,
-            behavior_episodes_path=behavior_episode_source,
-        )
+        if behavioral:
+            localization_quality = _write_sampled_quality(triage, "localization", localization_quality_path, localization_events_path)
+        else:
+            localization_quality = write_localization_quality(
+                reader,
+                localization_quality_path,
+                localization_events_path,
+                behavior_episodes_path=behavior_episode_source,
+            )
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
         localization_quality = {
             "schema": "R2B4_TEST_HUB_LOCALIZATION_QUALITY_V1",
@@ -238,6 +256,7 @@ def run_default(
     agent_view_path = destination / "agent_view.json"
     agent_view = {
         "schema": "R2B4_TEST_HUB_AGENT_V1",
+        "analysis_profile": profile,
         "status": overall_status,
         "diagnosis_status": base.get("diagnosis_status"),
         "evidence_status": base.get("evidence_status"),
@@ -305,6 +324,7 @@ def run_default(
 
     return {
         "status": overall_status,
+        "analysis_profile": profile,
         "evidence_status": base.get("evidence_status"),
         "behavior_status": base.get("behavior_status"),
         "replay_status": replay_status,
@@ -322,6 +342,17 @@ def run_default(
         "localization_quality_status": localization_quality.get("status"),
         "note": "One .evidence directory is the portable agent package; MCAP remains local authority.",
     }
+
+
+def _write_sampled_quality(
+    triage: Mapping[str, object], kind: str, summary_path: Path, details_path: Path,
+) -> dict[str, object]:
+    summary, findings = sampled_quality(triage, kind)
+    _write_json(summary_path, summary)
+    with details_path.open("x", encoding="utf-8") as handle:
+        for finding in findings:
+            handle.write(json.dumps(finding, ensure_ascii=False, allow_nan=False) + "\n")
+    return summary
 
 
 def run_pending(
@@ -435,9 +466,9 @@ def _parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="convert/analyze one finished MCAP")
     run.add_argument("capture", nargs="?", help="default: newest runtime/captures/*.mcap")
-    run.add_argument("--hz", type=int, choices=SUPPORTED_HZ, default=DEFAULT_HZ)
+    run.add_argument("--hz", type=int, choices=SUPPORTED_HZ, default=DEFAULT_HZ, help="overview bins only; analysis profile comes from MCAP tick_sample_hz")
     run.add_argument("--output-dir")
-    run.add_argument("--replay", choices=("off", "incident", "full"), default="incident")
+    run.add_argument("--replay", choices=("off", "incident", "full"), default="incident", help="50 Hz replay scope; sampled captures report NOT_APPLICABLE")
     run.add_argument("--no-sweep", action="store_true", help="skip full-run bounded replay sweep")
     run.add_argument("--sweep-window-ticks", type=int, default=DEFAULT_REPLAY_WINDOW_TICKS)
     run.add_argument("--pytest", choices=("off", *pytest_profile_names()), default="off")

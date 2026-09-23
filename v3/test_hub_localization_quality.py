@@ -618,7 +618,12 @@ def _load_source(path: Path) -> Mapping[str, object] | None:
         return None
     if path.suffix.lower() == ".mcap" and path.is_file():
         from .mcap_reader import McapReader
+        from .test_hub_profiles import capture_analysis_profile
         reader = McapReader(path)
+        if not capture_analysis_profile(reader)["exact_replay_applicable"]:
+            from .test_hub_analysis import analyze_capture
+            from .test_hub_sampled import sampled_quality
+            return sampled_quality(analyze_capture(reader), "localization")[0]
         summary, _events = analyze_localization_quality_ticks(_read_ticks(reader), runtime_configuration=_runtime_configuration(reader))
         return summary
     return None
@@ -633,6 +638,9 @@ def compare_localization_quality_sources(before: str | Path, after: str | Path) 
     b = _load_source(Path(before)); a = _load_source(Path(after))
     if b is None or a is None:
         return {"status": "UNAVAILABLE", "reason": "localization_quality.json missing and input is not an MCAP"}
+    if b.get("analysis_profile") or a.get("analysis_profile"):
+        from .test_hub_sampled import compare_sampled_quality
+        return compare_sampled_quality(b, a)
     bc = _map(b.get("cross_sensor")); ac = _map(a.get("cross_sensor"))
     bei = _map(bc.get("encoder_minus_imu_omega_rad_s")); aei = _map(ac.get("encoder_minus_imu_omega_rad_s"))
     bl = _map(b.get("lidar_matcher")); al = _map(a.get("lidar_matcher"))

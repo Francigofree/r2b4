@@ -24,6 +24,7 @@ from .mcap_reader import (
     McapReader,
 )
 from .test_hub_analysis import _summarize_tick
+from .test_hub_profiles import capture_analysis_profile
 
 VIEW_SCHEMA = "R2B4_AGENT_RUN_VIEW_V1"
 COMPARE_SCHEMA = "R2B4_AGENT_RUN_COMPARE_V1"
@@ -324,6 +325,7 @@ def build_run_view(
     if hz not in SUPPORTED_HZ:
         raise ValueError(f"hz must be one of {SUPPORTED_HZ}")
     reader = McapReader(capture_path)
+    profile = capture_analysis_profile(reader)
     rows: list[dict[str, object]] = []
     for message, payload in reader.iter_json_messages(topics=(TICK_TOPIC,)):
         if isinstance(payload, Mapping):
@@ -383,12 +385,17 @@ def build_run_view(
 
     result = {
         "schema": VIEW_SCHEMA,
+        "analysis_profile": profile,
         "authority": {
             "mcap_path": str(Path(capture_path).resolve()),
             "derived_only": True,
             "sampling_hz": hz,
             "event_preservation": True,
-            "exact_evidence_policy": "Use MCAP/query/replay for proof; this view is navigation and compression only.",
+            "exact_evidence_policy": (
+                "Use MCAP/query/replay for proof; this view is navigation and compression only."
+                if profile["exact_replay_applicable"] else
+                "Captured samples only; intervening transitions and exact replay are unavailable."
+            ),
         },
         "ticks": {
             "count": len(rows),
