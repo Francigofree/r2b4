@@ -14,8 +14,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-UPGRADE_ID = "r2b4_follow_person_p0_v2_20260923"
-BASE_HEAD = "04b5cb704b1f532028c49058f4fc416a1c5deb9d"
+UPGRADE_ID = "r2b4_follow_person_p0_v2_1_20260923"
+BASE_HEAD = "f55f459b2b3e420ce992d96355329a33c5a6e566"
 MARKER = "R2B4_FOLLOW_PERSON_P0_V2_20260923"
 
 EXPECTED_GIT_BLOB_SHA1 = {
@@ -90,6 +90,50 @@ def replace_top_level_class(text: str, class_name: str, replacement: str, rel: s
     end = node.end_lineno
     replacement = replacement.rstrip() + "\n\n"
     return "".join(lines[:start]) + replacement + "".join(lines[end:])
+
+
+def _top_level_function(text: str, function_name: str, rel: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    tree = parse_python(text, rel)
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == function_name
+    ]
+    if len(matches) != 1:
+        raise UpgradeError(f"{rel}: function {function_name} not uniquely found")
+    return matches[0]
+
+
+def insert_before_top_level_function(
+    text: str, function_name: str, block: str, rel: str
+) -> str:
+    node = _top_level_function(text, function_name, rel)
+    lines = text.splitlines(keepends=True)
+    start = node.lineno - 1
+    block = block.rstrip() + "\n\n"
+    return "".join(lines[:start]) + block + "".join(lines[start:])
+
+
+def insert_function_body_prefix(
+    text: str, function_name: str, prefix: str, rel: str
+) -> str:
+    node = _top_level_function(text, function_name, rel)
+    if not node.body:
+        raise UpgradeError(f"{rel}: function {function_name} has no body")
+    first = node.body[0]
+    # Preserve a function docstring if one is added later.
+    if (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Constant)
+        and isinstance(first.value.value, str)
+    ):
+        insert_at = first.end_lineno
+    else:
+        insert_at = first.lineno - 1
+    lines = text.splitlines(keepends=True)
+    prefix = prefix.rstrip() + "\n"
+    return "".join(lines[:insert_at]) + prefix + "".join(lines[insert_at:])
 
 
 def semantic_preflight(root: Path) -> dict[str, str]:
@@ -837,12 +881,25 @@ def patch_test_hub(text: str) -> str:
         }, "CAPTURE_RUNTIME.resolved_runtime.composition.live_control.control"
     return {}, "UNAVAILABLE"
 '''
+    rel = "v3/test_hub_task_evidence.py"
     text = replace_once(text, old_nav, new_nav, "Test Hub resolved runtime config")
-    marker = "\ndef _follow_person_evidence(\n"
-    if text.count(marker) != 1:
-        raise UpgradeError("Test Hub follow evidence function anchor not unique")
-    text = text.replace(marker, "\n\n" + DIRECT_FOLLOW_HELPERS.strip() + "\n\n\ndef _follow_person_evidence(\n", 1)
-    text = replace_once(text, '    config = _map(navigation_config.get("follow_person"))\n', '    if any(_captured_follow_evidence(tick) for tick in ticks):\n        return _follow_person_direct_evidence(episode, ticks, navigation_config)\n\n    config = _map(navigation_config.get("follow_person"))\n', "Test Hub direct follow evidence")
+    # Patch the intended function structurally before helper insertion. This avoids
+    # the old installer bug where DIRECT_FOLLOW_HELPERS introduced a second copy
+    # of the generic `config = ...follow_person...` line and made the later anchor
+    # ambiguous.
+    text = insert_function_body_prefix(
+        text,
+        "_follow_person_evidence",
+        '    if any(_captured_follow_evidence(tick) for tick in ticks):\n'
+        '        return _follow_person_direct_evidence(episode, ticks, navigation_config)\n\n',
+        rel,
+    )
+    text = insert_before_top_level_function(
+        text,
+        "_follow_person_evidence",
+        DIRECT_FOLLOW_HELPERS,
+        rel,
+    )
     return f"# {MARKER}\n" + text
 
 
