@@ -1,8 +1,8 @@
 """Pure host-side wake-word building blocks.
 
-No V3 production layer imports live here.  Raw native microphone frames are
+No V3 production layer imports live here. Raw native microphone frames are
 consumed as immutable edge values; the result is a bounded utterance that can be
-sent to an external speech recognizer.  Wake recognition never creates robot
+sent to an external speech recognizer. Wake recognition never creates robot
 actuation authority.
 """
 
@@ -37,22 +37,44 @@ def _positive_float(value: object, name: str) -> float:
 
 @dataclass(frozen=True, slots=True)
 class WakeVoiceActivityConfig:
-    """Bounded energy gate used only to decide what short audio reaches STT."""
+    """Bounded energy gate used only to decide what short audio reaches STT.
 
-    minimum_rms: float = 450.0
+    The defaults are tuned for the measured R2B4 2026-09-23 acoustic profile:
+    runtime-off noise RMS ~=102 and runtime-on noise RMS ~=336. The previous
+    production policy (minimum 450, noise x3) could raise the live threshold to
+    about 1000 RMS, which risks clipping quiet Hungarian command syllables.
+
+    The new policy remains adaptive but is deliberately bounded:
+      * absolute floor kept above the measured runtime noise (336 RMS);
+      * gentler noise multiplier;
+      * hard maximum adaptive threshold.
+
+    This is an utterance boundary detector, not a safety layer and not a noise
+    suppressor.
+    """
+
+    minimum_rms: float = 400.0
     noise_floor_initial_rms: float = 120.0
-    noise_multiplier: float = 3.0
-    noise_ema_alpha: float = 0.03
+    noise_multiplier: float = 1.6
+    maximum_threshold_rms: float = 700.0
+    noise_ema_alpha: float = 0.02
     start_frames: int = 2
     end_silence_frames: int = 18
-    pre_roll_frames: int = 8
+    pre_roll_frames: int = 10
     max_utterance_frames: int = 250
     minimum_voiced_frames: int = 4
 
     def __post_init__(self) -> None:
-        _positive_float(self.minimum_rms, "minimum_rms")
+        minimum = _positive_float(self.minimum_rms, "minimum_rms")
         _positive_float(self.noise_floor_initial_rms, "noise_floor_initial_rms")
         _positive_float(self.noise_multiplier, "noise_multiplier")
+        maximum = _positive_float(
+            self.maximum_threshold_rms, "maximum_threshold_rms"
+        )
+        if maximum < minimum:
+            raise ValueError(
+                "maximum_threshold_rms must be >= minimum_rms"
+            )
         alpha = _positive_float(self.noise_ema_alpha, "noise_ema_alpha")
         if alpha > 1.0:
             raise ValueError("noise_ema_alpha must be <= 1")
@@ -85,7 +107,10 @@ class WakeUtterance:
         _positive_int(self.last_sequence, "last_sequence")
         if self.last_sequence < self.first_sequence:
             raise ValueError("last_sequence must not precede first_sequence")
-        if self.started_monotonic_ns < 0 or self.ended_monotonic_ns < self.started_monotonic_ns:
+        if (
+            self.started_monotonic_ns < 0
+            or self.ended_monotonic_ns < self.started_monotonic_ns
+        ):
             raise ValueError("utterance monotonic times are invalid")
         _positive_int(self.sample_rate_hz, "sample_rate_hz")
         _positive_int(self.sample_count, "sample_count")
@@ -115,11 +140,16 @@ class EnergyUtteranceBuilder:
         "_voiced_frames",
     )
 
-    def __init__(self, config: WakeVoiceActivityConfig = WakeVoiceActivityConfig()) -> None:
+    def __init__(
+        self,
+        config: WakeVoiceActivityConfig = WakeVoiceActivityConfig(),
+    ) -> None:
         if not isinstance(config, WakeVoiceActivityConfig):
             raise TypeError("config must be WakeVoiceActivityConfig")
         self._config = config
-        self._pre_roll: deque[AudioFrame] = deque(maxlen=config.pre_roll_frames)
+        self._pre_roll: deque[AudioFrame] = deque(
+            maxlen=config.pre_roll_frames
+        )
         self._candidate: list[AudioFrame] = []
         self._frames: list[AudioFrame] = []
         self._active = False
@@ -136,6 +166,17 @@ class EnergyUtteranceBuilder:
     @property
     def noise_floor_rms(self) -> float:
         return self._noise_floor
+
+    @property
+    def current_threshold_rms(self) -> float:
+        """Current bounded voiced/unvoiced threshold for diagnostics."""
+        return min(
+            self._config.maximum_threshold_rms,
+            max(
+                self._config.minimum_rms,
+                self._noise_floor * self._config.noise_multiplier,
+            ),
+        )
 
     def reset(self, *, reset_sequence: bool = False) -> None:
         self._pre_roll.clear()
@@ -157,10 +198,7 @@ class EnergyUtteranceBuilder:
         self._last_sequence = frame.sequence
 
         rms = self._rms_s16le(frame.pcm)
-        threshold = max(
-            self._config.minimum_rms,
-            self._noise_floor * self._config.noise_multiplier,
-        )
+        threshold = self.current_threshold_rms
         voiced = rms >= threshold
 
         if not self._active:
@@ -176,7 +214,9 @@ class EnergyUtteranceBuilder:
 
             self._candidate.clear()
             alpha = self._config.noise_ema_alpha
-            self._noise_floor = (1.0 - alpha) * self._noise_floor + alpha * rms
+            self._noise_floor = (
+                (1.0 - alpha) * self._noise_floor + alpha * rms
+            )
             self._pre_roll.append(frame)
             return None
 
@@ -212,7 +252,9 @@ class EnergyUtteranceBuilder:
         return WakeUtterance(
             first_sequence=first.sequence,
             last_sequence=last.sequence,
-            started_monotonic_ns=max(0, first.read_monotonic_ns - first.duration_ns),
+            started_monotonic_ns=max(
+                0, first.read_monotonic_ns - first.duration_ns
+            ),
             ended_monotonic_ns=last.read_monotonic_ns,
             sample_rate_hz=first.sample_rate_hz,
             sample_count=samples,
@@ -224,9 +266,13 @@ class EnergyUtteranceBuilder:
         if not isinstance(frame, AudioFrame):
             raise TypeError("frame must be AudioFrame")
         if frame.channels != 1 or frame.sample_format != "S16_LE":
-            raise ValueError("wake edge requires native mono S16_LE audio")
+            raise ValueError(
+                "wake edge requires native mono S16_LE audio"
+            )
         if len(frame.pcm) != frame.sample_count * 2:
-            raise ValueError("audio frame payload size does not match S16_LE sample count")
+            raise ValueError(
+                "audio frame payload size does not match S16_LE sample count"
+            )
 
     @staticmethod
     def _rms_s16le(payload: bytes) -> float:
@@ -235,7 +281,11 @@ class EnergyUtteranceBuilder:
         total = 0
         count = len(payload) // 2
         for index in range(0, len(payload), 2):
-            sample = int.from_bytes(payload[index : index + 2], "little", signed=True)
+            sample = int.from_bytes(
+                payload[index : index + 2],
+                "little",
+                signed=True,
+            )
             total += sample * sample
         return math.sqrt(total / max(1, count))
 
@@ -249,7 +299,9 @@ class WakePhraseMatcher:
         normalized = self._normalize(keyword)
         tokens = self._tokens(normalized)
         if len(tokens) != 1:
-            raise ValueError("wake keyword must normalize to exactly one token")
+            raise ValueError(
+                "wake keyword must normalize to exactly one token"
+            )
         self._keyword = tokens[0]
 
     @property
@@ -259,12 +311,19 @@ class WakePhraseMatcher:
     def matches(self, transcript: str) -> bool:
         if not isinstance(transcript, str):
             raise TypeError("transcript must be str")
-        return self._keyword in self._tokens(self._normalize(transcript))
+        return self._keyword in self._tokens(
+            self._normalize(transcript)
+        )
 
     @staticmethod
     def _normalize(value: str) -> str:
-        decomposed = unicodedata.normalize("NFKD", value.casefold())
-        return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+        decomposed = unicodedata.normalize(
+            "NFKD", value.casefold()
+        )
+        return "".join(
+            ch for ch in decomposed
+            if not unicodedata.combining(ch)
+        )
 
     @staticmethod
     def _tokens(value: str) -> tuple[str, ...]:
