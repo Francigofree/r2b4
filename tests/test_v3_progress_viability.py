@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from v3.contracts import (
     MissionConstraints,
+    MotionObjectiveKind,
     NavigationPlan,
     NavigationStatus,
     RobotEstimate,
@@ -128,7 +129,7 @@ def test_progress_viable_candidate_beats_higher_scoring_stationary_candidate():
     assert objective.trajectory.candidate_id == "moving"
 
 
-def test_escape_family_remains_selectable_when_goal_progress_is_not_available():
+def test_candidate_name_never_bypasses_typed_progress_viability():
     pivot = _candidate(
         "escape-00-08", v_mps=0.0, omega_rad_s=0.60,
         total_score=0.80, potential=0.0, viable=False,
@@ -138,8 +139,9 @@ def test_escape_family_remains_selectable_when_goal_progress_is_not_available():
         total_score=0.40, potential=-0.10, viable=False,
     )
     objective = select_motion(_plan((pivot, reverse)))
-    assert objective.trajectory is not None
-    assert objective.trajectory.candidate_id == "escape-00-08"
+    assert objective.kind is MotionObjectiveKind.STOP
+    assert objective.trajectory is None
+    assert objective.selection_reason == "NO_PROGRESS_VIABLE_TRAJECTORY"
 
 
 def test_straight_goal_keeps_54_candidates_but_stationary_is_not_viable():

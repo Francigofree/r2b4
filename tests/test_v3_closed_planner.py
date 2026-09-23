@@ -67,31 +67,56 @@ def explore_inputs(count=20):
             (DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.3)) if active else (),
             context.tick_id,
         )
-        local = DeviceSample("RPLIDAR_C1", "lidar_local_points", context.tick_id,
-                             context.monotonic_ns, (DataField("frame_id", "ROBOT_BASE"), DataField("point_count", 0)))
-        yield replace(item, command=command, raw_devices=replace(
-            item.raw_devices, samples=item.raw_devices.samples + (local,),
-        ))
+        local = DeviceSample(
+            "RPLIDAR_C1",
+            "lidar_local_points",
+            context.tick_id,
+            context.monotonic_ns,
+            (DataField("frame_id", "ROBOT_BASE"), DataField("point_count", 0)),
+        )
+        yield replace(
+            item,
+            command=command,
+            raw_devices=replace(
+                item.raw_devices,
+                samples=item.raw_devices.samples + (local,),
+            ),
+        )
 
 
 @pytest.mark.parametrize("scenario", ["late", "missing", "failed"])
 def test_closed_worker_availability_matches_mcap_replay_and_test_hub(tmp_path, scenario):
     config = control_config()
-    backend = DelayedBackend(config.navigation, delay=100 if scenario == "missing" else 3,
-                             fail=scenario == "failed")
+    backend = DelayedBackend(
+        config.navigation,
+        delay=100 if scenario == "missing" else 3,
+        fail=scenario == "failed",
+    )
     writer = RecordingMotorSink()
-    production = NativeControlComposition(writer, config, trajectory_rollout_backend=backend)
+    production = NativeControlComposition(
+        writer,
+        config,
+        trajectory_rollout_backend=backend,
+    )
     hub = ObservationHub()
     subscription = hub.subscribe_reliable("capture", capacity=100, required=True)
-    capture = McapCaptureConsumer("planner", tmp_path / "planner.mcap", subscription=subscription,
-                                 configuration={"resolved_control": config},
-                                 config=McapCaptureConfig(mode="append_only"))
+    capture = McapCaptureConsumer(
+        "planner",
+        tmp_path / "planner.mcap",
+        subscription=subscription,
+        configuration={"resolved_control": config},
+        config=McapCaptureConfig(mode="append_only"),
+    )
     outputs = []
     for raw in explore_inputs():
         inputs = production.close_inputs(raw)
         result = production.run_tick(inputs)
         outputs.append(result)
-        checkpoint = production.checkpoint() if inputs.context.tick_id == 3 and result.trace.fault_layer is None else None
+        checkpoint = (
+            production.checkpoint()
+            if inputs.context.tick_id == 3 and result.trace.fault_layer is None
+            else None
+        )
         hub.publish(
             raw_lidar_snapshot(
                 inputs.context.tick_id + 1,
@@ -99,7 +124,10 @@ def test_closed_worker_availability_matches_mcap_replay_and_test_hub(tmp_path, s
             ),
             topic="v3.raw_lidar",
         )
-        hub.publish(ExecutionRecord(inputs, result, production.tick_evidence, checkpoint), topic="v3.capture_record")
+        hub.publish(
+            ExecutionRecord(inputs, result, production.tick_evidence, checkpoint),
+            topic="v3.capture_record",
+        )
         if result.final_actuation.safety_decision is SafetyDecision.FAULT:
             break
     hub.close()
@@ -111,14 +139,31 @@ def test_closed_worker_availability_matches_mcap_replay_and_test_hub(tmp_path, s
     if scenario == "late":
         assert any(output.final_actuation.left_output != 0 for output in outputs[5:])
         assert all(output.trace.fault_layer is None for output in outputs)
-        selected = replay_capture(artifact.path, selection=ReplaySelection(start_tick_id=4, end_tick_id=10))
+        selected = replay_capture(
+            artifact.path,
+            selection=ReplaySelection(start_tick_id=4, end_tick_id=10),
+        )
         assert selected["status"] == "MATCH"
+    elif scenario == "missing":
+        # Missing/late async completion is now an explicit HOLD, not a layer
+        # exception. L6 keeps the mission fail-closed at zero while the worker
+        # result is unavailable.
+        assert all(output.trace.fault_layer is None for output in outputs)
+        assert all(
+            output.final_actuation.left_output == 0.0
+            and output.final_actuation.right_output == 0.0
+            for output in outputs
+        )
     else:
         assert outputs[-1].trace.fault_layer == "L6"
         assert outputs[-1].final_actuation.left_output == outputs[-1].final_actuation.right_output == 0
     replay = replay_capture(artifact.path)
     assert replay["status"] == "MATCH"
-    evidence = diagnose_run(artifact.path, tmp_path / "evidence", replay_mode="full")
+    evidence = diagnose_run(
+        artifact.path,
+        tmp_path / "evidence",
+        replay_mode="full",
+    )
     assert evidence["replay_status"] == "MATCH"
     assert len(writer.commands) == len(outputs)
 
@@ -135,9 +180,19 @@ def test_replay_checks_the_pure_kernel_instead_of_trusting_recorded_candidates()
     assert event.result is not None
     candidate = event.result.trajectory_candidates[0]
     corrupted = replace(candidate, novelty_score=candidate.novelty_score + 0.1)
-    changed = replace(inputs, planner_input=replace(event, result=replace(
-        event.result, trajectory_candidates=(corrupted, *event.result.trajectory_candidates[1:]),
-    )))
+    changed = replace(
+        inputs,
+        planner_input=replace(
+            event,
+            result=replace(
+                event.result,
+                trajectory_candidates=(
+                    corrupted,
+                    *event.result.trajectory_candidates[1:],
+                ),
+            ),
+        ),
+    )
     with pytest.raises(ValueError, match="PLANNER_PURE_RESULT_MISMATCH"):
         production.verify_planner_input(changed)
 
@@ -150,7 +205,16 @@ def test_stop_discards_a_completion_without_starting_another_mission():
         production.run_tick(production.close_inputs(item))
     item = production.close_inputs(values[2])
     assert item.planner_input.result is not None
-    stopped = replace(item, command=CommandRequest(item.context, "stop", CommandMode.STOP, (), item.context.tick_id))
+    stopped = replace(
+        item,
+        command=CommandRequest(
+            item.context,
+            "stop",
+            CommandMode.STOP,
+            (),
+            item.context.tick_id,
+        ),
+    )
     result = production.run_tick(stopped)
     assert result.trace.fault_layer is None
     assert result.final_actuation.left_output == result.final_actuation.right_output == 0

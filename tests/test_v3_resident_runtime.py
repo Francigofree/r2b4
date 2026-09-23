@@ -171,7 +171,10 @@ class FailingWriter:
 
 
 class StepClock:
-    def __init__(self, start=1_000_000_000, step=100_000_000):
+    # The resident runtime can take several monotonic snapshots inside one
+    # 50 Hz tick (scheduler, async-L6 dispatch, capture timing). Advancing
+    # fake time by 100 ms per *read* manufactured stale preflight windows.
+    def __init__(self, start=1_000_000_000, step=20_000_000):
         self.value = start
         self.step = step
 

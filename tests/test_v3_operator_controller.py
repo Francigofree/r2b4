@@ -189,7 +189,11 @@ def test_motion_start_cleans_up_heartbeat_on_failed_or_interrupted_allow(tmp_pat
     monkeypatch.setattr(c, "ensure_runtime", lambda mode: 42)
     monkeypatch.setattr(c, "stop", lambda **kwargs: calls.append(("stop", kwargs)))
     monkeypatch.setattr(c, "current_capture_mode", lambda: "nincs")
-    monkeypatch.setattr(c, "_spawn_control_process", lambda command: calls.append(("spawn", command)) or 43)
+    monkeypatch.setattr(
+        c,
+        "_spawn_control_process",
+        lambda command, **_kwargs: calls.append(("spawn", command)) or 43,
+    )
 
     def fail(*args):
         raise failure

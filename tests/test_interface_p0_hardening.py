@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -7,7 +8,7 @@ import threading
 import time
 from pathlib import Path
 
-from v3 import control_cli
+from v3 import control_cli, host_cli
 from v3.adapters.v3_control import V3ControlInterfaceAdapter
 from v3.operator_controller import OperatorController
 
@@ -16,7 +17,8 @@ def _controller(tmp_path: Path) -> OperatorController:
     (tmp_path / "runtime" / "captures").mkdir(parents=True)
     (tmp_path / "conf").mkdir()
     (tmp_path / "conf" / "fizika.json").write_text(
-        json.dumps({"nyomtav_szelesseg_m": 0.3557}), encoding="utf-8"
+        json.dumps({"nyomtav_szelesseg_m": 0.3557}),
+        encoding="utf-8",
     )
     return OperatorController(tmp_path)
 
@@ -34,9 +36,12 @@ def test_active_owner_death_publishes_stop_before_new_heartbeat(monkeypatch, cap
     monkeypatch.setattr(control_cli, "_pid_alive", lambda _pid: False)
     publishes = []
     assert control_cli._run_active(
-        client, lambda command_id: publishes.append(command_id) or 1,
-        command_id="timed-owner", ttl_ns=200_000_000,
-        heartbeat_ns=100_000_000, owner_pid=424242,
+        client,
+        lambda command_id: publishes.append(command_id) or 1,
+        command_id="timed-owner",
+        ttl_ns=200_000_000,
+        heartbeat_ns=100_000_000,
+        owner_pid=424242,
     ) == 0
     assert publishes == []
     assert client.stopped[0][1] == 200_000_000
@@ -46,13 +51,16 @@ def test_active_owner_death_publishes_stop_before_new_heartbeat(monkeypatch, cap
 def test_active_watchdog_publishes_stop(capsys):
     class Clock:
         now = 0
+
         def monotonic_ns(self):
             return self.now
+
         def sleep(self, seconds):
             self.now += round(seconds * 1e9)
 
     class Client:
         stopped = False
+
         def publish_stop(self, _command_id, *, ttl_ns):
             assert ttl_ns == 200_000_000
             self.stopped = True
@@ -62,10 +70,14 @@ def test_active_watchdog_publishes_stop(capsys):
     client = Client()
     publishes = []
     assert control_cli._run_active(
-        client, lambda command_id: publishes.append(command_id) or len(publishes),
-        command_id="timed-watchdog", ttl_ns=200_000_000,
-        heartbeat_ns=100_000_000, max_runtime_s=0.05,
-        sleep=clock.sleep, monotonic_ns=clock.monotonic_ns,
+        client,
+        lambda command_id: publishes.append(command_id) or len(publishes),
+        command_id="timed-watchdog",
+        ttl_ns=200_000_000,
+        heartbeat_ns=100_000_000,
+        max_runtime_s=0.05,
+        sleep=clock.sleep,
+        monotonic_ns=clock.monotonic_ns,
     ) == 0
     assert len(publishes) == 1
     assert client.stopped
@@ -75,10 +87,20 @@ def test_active_watchdog_publishes_stop(capsys):
 def test_live_runtime_status_rejects_stale_file(tmp_path, monkeypatch):
     c = _controller(tmp_path)
     monkeypatch.setattr(c, "_runtime_pid", lambda: 42)
-    monkeypatch.setattr(c, "_read_status_optional", lambda: {"state": "RUNNING", "monotonic_ns": 1_000_000_000})
-    monkeypatch.setattr("v3.operator_controller.time.monotonic_ns", lambda: 2_000_000_000)
+    monkeypatch.setattr(
+        c,
+        "_read_status_optional",
+        lambda: {"state": "RUNNING", "monotonic_ns": 1_000_000_000},
+    )
+    monkeypatch.setattr(
+        "v3.operator_controller.time.monotonic_ns",
+        lambda: 2_000_000_000,
+    )
     assert c.live_runtime_status() is None
-    monkeypatch.setattr("v3.operator_controller.time.monotonic_ns", lambda: 1_100_000_000)
+    monkeypatch.setattr(
+        "v3.operator_controller.time.monotonic_ns",
+        lambda: 1_100_000_000,
+    )
     assert c.live_runtime_status()["state"] == "RUNNING"
 
 
@@ -86,6 +108,7 @@ def test_v3_capabilities_do_not_publish_stale_status_as_live():
     class Controller:
         def status(self):
             return {"runtime_running": True, "status": {"state": "RUNNING"}}
+
         def live_runtime_status(self):
             return None
 
@@ -97,17 +120,38 @@ def test_v3_capabilities_do_not_publish_stale_status_as_live():
 
 def test_spawn_injects_owner_and_watchdog_before_subcommand(tmp_path, monkeypatch):
     from v3 import operator_controller as module
+
     c = _controller(tmp_path)
     calls = []
 
     class Process:
         pid = 123
 
-    monkeypatch.setattr(module.subprocess, "Popen", lambda command, **kwargs: calls.append((command, kwargs)) or Process())
-    command = [c.python, "-m", "v3.control_cli", "explore", "--command-id", "x"]
-    assert c._spawn_control_process(command, session_owner_pid=77, session_watchdog_s=35.0) == 123
+    monkeypatch.setattr(
+        module.subprocess,
+        "Popen",
+        lambda command, **kwargs: calls.append((command, kwargs)) or Process(),
+    )
+    command = [
+        c.python,
+        "-m",
+        "v3.control_cli",
+        "explore",
+        "--command-id",
+        "x",
+    ]
+    assert c._spawn_control_process(
+        command,
+        session_owner_pid=77,
+        session_watchdog_s=35.0,
+    ) == 123
     launched = calls[0][0]
-    assert launched[3:7] == ["--owner-pid", "77", "--max-runtime-s", "35.0"]
+    assert launched[3:7] == [
+        "--owner-pid",
+        "77",
+        "--max-runtime-s",
+        "35.0",
+    ]
     assert launched[7] == "explore"
 
 
@@ -131,7 +175,9 @@ def test_operator_transition_reentrant_and_serialized(tmp_path):
             assert not finished.is_set()
     thread.join(1.0)
     assert finished.is_set()
-    assert (tmp_path / "runtime" / ".r2b4_operator.lock").stat().st_mode & 0o777 == 0o600
+    assert (
+        tmp_path / "runtime" / ".r2b4_operator.lock"
+    ).stat().st_mode & 0o777 == 0o600
 
 
 def test_launcher_unknown_word_cannot_be_shadowed_by_repo_tool(tmp_path):
@@ -139,22 +185,65 @@ def test_launcher_unknown_word_cannot_be_shadowed_by_repo_tool(tmp_path):
     fake_root = tmp_path / "fake_repo"
     (fake_root / "tools").mkdir(parents=True)
     (fake_root / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
-    (fake_root / "tools" / "ghost.py").write_text('print("SHADOW_TOOL_RAN")\n', encoding="utf-8")
+    (fake_root / "tools" / "ghost.py").write_text(
+        'print("SHADOW_TOOL_RAN")\n',
+        encoding="utf-8",
+    )
     env = os.environ.copy()
     env["R2B4_ROOT"] = str(fake_root)
     env["PYTHONPATH"] = str(repo) + os.pathsep + env.get("PYTHONPATH", "")
     result = subprocess.run(
-        ["bash", str(repo / "r"), "ghost"], cwd=repo, env=env,
-        text=True, capture_output=True, check=False,
+        ["bash", str(repo / "r"), "ghost"],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
     )
     assert result.returncode != 0
     assert "SHADOW_TOOL_RAN" not in result.stdout
 
 
-def test_launcher_marks_physical_tools_as_exclusive():
-    launcher = (Path(__file__).resolve().parents[1] / "r").read_text(encoding="utf-8")
-    assert "hardware_guard" in launcher
-    assert "v3_sensor_measurement" in launcher
+def test_launcher_routes_physical_tools_through_exclusive_hardware_guard(
+    tmp_path,
+    monkeypatch,
+):
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "v3_sensor_measurement.py").write_text(
+        "raise SystemExit(0)\n",
+        encoding="utf-8",
+    )
+    events = []
+
+    @contextlib.contextmanager
+    def fake_hardware_guard(root):
+        assert root == tmp_path
+        events.append("guard-enter")
+        try:
+            yield
+        finally:
+            events.append("guard-exit")
+
+    def fake_run(command, *, root):
+        events.append(("run", Path(command[1]).stem, root))
+        return 0
+
+    monkeypatch.setattr(host_cli, "hardware_guard", fake_hardware_guard)
+    monkeypatch.setattr(host_cli, "_run", fake_run)
+
+    assert "v3_sensor_measurement" in host_cli.HARDWARE_TOOLS
+    assert host_cli.run_tool(tmp_path, ["v3_sensor_measurement"]) == 0
+    assert events == [
+        "guard-enter",
+        ("run", "v3_sensor_measurement", tmp_path),
+        "guard-exit",
+    ]
+
+    launcher = (Path(__file__).resolve().parents[1] / "r").read_text(
+        encoding="utf-8"
+    )
+    assert "exec python3 -m v3.launcher_cli" in launcher
     assert "Direct convenience path for repo tools" not in launcher
 
 

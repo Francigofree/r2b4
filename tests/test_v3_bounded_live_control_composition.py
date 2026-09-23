@@ -243,7 +243,7 @@ def test_missing_or_stale_direct_preflight_faults_before_any_active_command(
     assert result.final_actuation.right_output == 0.0
 
 
-def test_degraded_idle_tick_does_not_qualify_as_preflight():
+def test_degraded_critical_idle_input_fails_closed_and_never_qualifies_as_preflight():
     writer = RecordingMotorWriter()
     encoder = EncoderBackend(stale_tick=0)
     composition, _, _, _ = _composition(writer, encoder=encoder)
@@ -251,7 +251,7 @@ def test_degraded_idle_tick_does_not_qualify_as_preflight():
     idle = composition.tick(_context(0))
     active = composition.tick(_context(1))
 
-    assert idle.final_actuation.safety_decision is SafetyDecision.STOP
+    assert idle.final_actuation.safety_decision is SafetyDecision.FAULT
     assert not composition.preflight_complete
     assert active.final_actuation.safety_decision is SafetyDecision.FAULT
     assert composition.lifecycle is LifecycleState.FAULT
@@ -274,25 +274,26 @@ def test_source_failure_closes_one_fault_commit_and_latches_session():
     assert [item.tick_id for item in lidar.calls] == [0]
 
 
-def test_active_sensor_degradation_faults_and_cannot_resume_source_polling():
+def test_active_transient_encoder_stale_holds_zero_then_resumes_without_session_fault():
     writer = RecordingMotorWriter()
     encoder = EncoderBackend(stale_tick=2)
     composition, encoder, imu, lidar = _composition(writer, encoder=encoder)
     composition.tick(_context(0))
     composition.tick(_context(1))
 
-    degraded = composition.tick(_context(2))
-    faulted = composition.tick(_context(3))
+    stale = composition.tick(_context(2))
+    recovered = composition.tick(_context(3))
 
-    assert degraded.final_actuation.safety_decision is SafetyDecision.FAULT
-    assert degraded.final_actuation.reason == "L11_ERROR"
-    assert degraded.final_actuation.left_output == 0.0
-    assert degraded.final_actuation.right_output == 0.0
-    assert faulted.final_actuation.safety_decision is SafetyDecision.FAULT
-    assert composition.lifecycle is LifecycleState.FAULT
-    assert [item.tick_id for item in encoder.calls] == [0, 1, 2]
-    assert [item.tick_id for item in imu.calls] == [0, 1, 2]
-    assert [item.tick_id for item in lidar.calls] == [0, 1, 2]
+    assert stale.trace.fault_layer is None
+    assert stale.final_actuation.safety_decision is SafetyDecision.ALLOW
+    assert stale.final_actuation.left_output == 0.0
+    assert stale.final_actuation.right_output == 0.0
+    assert recovered.trace.fault_layer is None
+    assert recovered.final_actuation.safety_decision is SafetyDecision.ALLOW
+    assert composition.lifecycle is LifecycleState.ACTIVE
+    assert [item.tick_id for item in encoder.calls] == [0, 1, 2, 3]
+    assert [item.tick_id for item in imu.calls] == [0, 1, 2, 3]
+    assert [item.tick_id for item in lidar.calls] == [0, 1, 2, 3]
     assert tuple(item.context.tick_id for item in writer.commands) == (0, 1, 2, 3)
 
 

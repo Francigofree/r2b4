@@ -82,8 +82,9 @@ def test_tick_engine_keeps_bounded_exception_type_and_message_as_evidence():
     assert item["message"] == "diagnostic-l11-failure"
 
 
-def test_native_control_tick_evidence_includes_layer_fault_evidence():
+def test_native_control_tick_evidence_includes_ekf_fault_and_follow_evidence():
     composition = object.__new__(NativeControlComposition)
     composition._estimator = SimpleNamespace(last_update_evidence=("ekf",))
     composition._engine = SimpleNamespace(fault_evidence=("fault",))
-    assert composition.tick_evidence == ("ekf", "fault")
+    composition._navigation = SimpleNamespace(follow_person_evidence="follow")
+    assert composition.tick_evidence == ("ekf", "fault", "follow")

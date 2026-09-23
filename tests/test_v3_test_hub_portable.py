@@ -37,7 +37,7 @@ def test_portable_bundle_contains_remote_analysis_evidence(tmp_path):
     expected = {
         "agent_view.json",
         "portable_manifest.json",
-        "overview_5hz.ndjson",
+        "overview_10hz.ndjson",
         "timeline.ndjson",
         "lidar_summary.ndjson",
         "runtime_performance.json",
@@ -67,7 +67,7 @@ def test_portable_bundle_contains_remote_analysis_evidence(tmp_path):
     agent = json.loads((destination / "agent_view.json").read_text(encoding="utf-8"))
     assert agent["authority"]["portable_remote_analysis"] is True
     assert agent["remote_analysis_policy"]["normal_analysis_requires_mcap"] is False
-    assert agent["overview"] == "overview_5hz.ndjson"
+    assert agent["overview"] == "overview_10hz.ndjson"
 
     manifest = json.loads((destination / "portable_manifest.json").read_text(encoding="utf-8"))
     assert manifest["replay_sweep_status"] == "MATCH"

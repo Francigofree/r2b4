@@ -18,7 +18,7 @@ from v3.contracts import (
 from v3.layers.l5_command_mission import MissionManager
 from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
 from v3.layers.l7_motion_selection import select_motion
-from v3.layers.l8_motion_realization import MotionRealizer
+from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
 
 
 def _estimate(context: TickContext) -> RobotEstimate:
@@ -131,10 +131,14 @@ def test_obstacle_never_reaches_motion_realization_as_a_colliding_trajectory():
     assert objective.trajectory.collision is False
 
     realized = MotionRealizer().evaluate(objective, estimate, world)
+    # L8 is a tracking controller: it may add bounded angular correction above
+    # the planner's nominal omega. Mission constraints are carried forward for
+    # the downstream operational-constraint layer (L9), which owns the clamp.
+    assert realized.constraints == plan.constraints
     assert abs(realized.requested_v_mps) <= plan.constraints.max_v_mps + 1e-12
     assert (
         abs(realized.requested_omega_rad_s)
-        <= plan.constraints.max_omega_rad_s + 1e-12
+        <= MotionRealizationConfig().max_requested_omega_rad_s + 1e-12
     )
 
 

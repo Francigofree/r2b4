@@ -104,7 +104,9 @@ def test_recovery_exhaustion_is_explicit_failed_state():
         backend.close()
 
 
-def test_native_control_watchdog_uses_current_generation_transport_start():
+def test_native_control_watchdog_tracks_current_generation_transport_start():
+    """Keep the architectural guard without pinning Python formatting/layout."""
     source = Path(native_control.__file__).read_text(encoding="utf-8")
-    assert 'getattr(backend, "transport_started_ns", None)' in source
+    assert "transport_started_ns" in source
+    assert "current_transport_start" in source
     assert "watchdog_started_ns" in source

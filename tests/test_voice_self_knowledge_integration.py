@@ -4,6 +4,7 @@ from r2b4_voice.conversation_contracts import LLMDecision, RobotContextSnapshot
 from r2b4_voice.conversation_journal import ConversationJournal
 from r2b4_voice.conversation_service import ConversationService
 from r2b4_voice.prompting import PromptAssembler
+from r2b4_voice.robot_context import ROBOT_CONTEXT_SCHEMA
 
 
 class FakeLLM:
@@ -20,7 +21,7 @@ class FakeLLM:
 class FakeContext:
     def build(self):
         return RobotContextSnapshot(
-            schema="R2B4_ROBOT_CONTEXT_V3",
+            schema=ROBOT_CONTEXT_SCHEMA,
             runtime={"state": "STOPPED", "fault_layer": None},
             pose=None,
             safety=None,

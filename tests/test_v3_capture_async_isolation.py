@@ -4,6 +4,7 @@ import ast
 import inspect
 import pickle
 import queue
+import textwrap
 from pathlib import Path
 
 import v3.process_sidecars as sidecars
@@ -24,7 +25,8 @@ FORBIDDEN_CONTROL_CAPTURE_CALLS = {
 
 
 def _call_names(source: str) -> set[str]:
-    tree = ast.parse(source)
+    # inspect.getsource(method) returns class-indented source. Dedent before AST.
+    tree = ast.parse(textwrap.dedent(source))
     names: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):

@@ -180,7 +180,11 @@ def test_sparse_raw_lidar_loss_below_five_percent_is_tolerated(tmp_path):
         capacity=256,
         missing_raw_revisions={20, 80},
     )
-    assert result.complete and result.status == 'PASS'
+    # Sparse loss may be within the configured loss-rate tolerance, but
+    # raw evidence is no longer complete. The capture therefore cannot be
+    # promoted to PASS; the tolerance is diagnostic severity, not evidence
+    # completeness authority.
+    assert not result.complete and result.status == 'FAIL'
     assert sub.snapshot().lost_count == 0
     final = McapReader(result.path).last_json(EVENT_TOPIC)[1]
     integrity = final['integrity']
@@ -191,6 +195,7 @@ def test_sparse_raw_lidar_loss_below_five_percent_is_tolerated(tmp_path):
     assert integrity['raw_lidar_max_consecutive_missing'] == 1
     assert integrity['raw_lidar_loss_within_tolerance'] is True
     assert integrity['integrity_warnings'] == ['RAW_LIDAR_SPARSE_LOSS_TOLERATED']
+    assert 'RAW_LIDAR_EVIDENCE_INCOMPLETE' in integrity['integrity_reasons']
     assert 'RAW_LIDAR_REVISION_GAP' not in integrity['integrity_reasons']
     assert 'REFERENCED_RAW_LIDAR_MISSING' not in integrity['integrity_reasons']
 
@@ -202,12 +207,14 @@ def test_exactly_five_percent_sparse_raw_lidar_loss_is_tolerated(tmp_path):
         capacity=256,
         missing_raw_revisions={10, 30, 50, 70, 90},
     )
-    assert result.complete and result.status == 'PASS'
+    assert not result.complete and result.status == 'FAIL'
     integrity = McapReader(result.path).last_json(EVENT_TOPIC)[1]['integrity']
     assert integrity['raw_lidar_missing_count'] == 5
     assert integrity['raw_lidar_loss_fraction'] == pytest.approx(0.05)
     assert integrity['raw_lidar_max_consecutive_missing'] == 1
     assert integrity['raw_lidar_loss_within_tolerance'] is True
+    assert integrity['integrity_warnings'] == ['RAW_LIDAR_SPARSE_LOSS_TOLERATED']
+    assert 'RAW_LIDAR_EVIDENCE_INCOMPLETE' in integrity['integrity_reasons']
 
 
 def test_raw_lidar_loss_above_five_percent_remains_integrity_failure(tmp_path):
