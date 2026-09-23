@@ -1,6 +1,7 @@
 """Motion regressions motivated by the September 23 sampled live runs."""
 
 from dataclasses import replace
+import math
 
 import pytest
 
@@ -34,6 +35,37 @@ def test_productive_heading_alignment_is_rewarded_in_the_ranking():
     fast = by_id['trajectory-00-08']
     assert fast.progress_potential_score > slow.progress_potential_score > 0.0
     assert fast.total_score > slow.total_score
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+@pytest.mark.parametrize("distance", [0.3, 0.6, 2.0])
+def test_goal_alignment_overcomes_wrong_way_smoothness_and_continuity(side, distance):
+    from test_v3_progress_viability import _plan
+    from v3.layers.l7_motion_selection import MotionSelectionStateCheckpoint
+
+    config = _production_navigation()
+    context = TickContext(0, 1_000_000_000)
+    bearing = side * 0.507
+    goal = Waypoint(distance * math.cos(bearing), distance * math.sin(bearing))
+    # Live failure: positive distance progress masks increasing heading error.
+    # Exercise both mirror images and goal ranges with wrong-way initial motion.
+    estimate = replace(_estimate(context), v_mps=0.10, omega_rad_s=-side * 0.08)
+    request = TrajectoryRolloutRequest(context, estimate, _world(context), goal, 0.12, 0.30, ())
+    candidates = TrajectoryRolloutComputer(config).compute(request).trajectory_candidates
+    nav = TrajectoryNavigator(config)
+    assert candidates == nav._trajectory_rollout(
+        estimate, request.world, nav._build_planning_scene(request.world), goal, 0.12, 0.30,
+    )
+    plan = _plan(candidates)
+    selector = MotionSelector()
+    selector.restore(MotionSelectionStateCheckpoint(plan.mission_id, "previous", 0.12, -side * 0.075))
+    chosen = selector.evaluate(plan).trajectory
+    assert chosen is not None and chosen.progress_viable and not chosen.collision
+    assert chosen.omega_rad_s * side > 0.0
+    end = chosen.samples[-1]
+    final_error = abs(math.remainder(math.atan2(goal.y_m - end.y_m, goal.x_m - end.x_m) - end.yaw_rad, 2 * math.pi))
+    assert final_error < abs(bearing)
+    assert math.hypot(goal.x_m - end.x_m, goal.y_m - end.y_m) < distance
 
 
 def test_clearance_recovery_prefers_retreat_over_unproductive_pivot():
@@ -79,6 +111,31 @@ def test_locked_person_survives_confidence_dip_but_is_not_acquired_at_low_confid
         assert plan.status.value == 'ACTIVE'
         assert plan.trajectory_candidates
         assert nav.checkpoint().follow_person_lost_since_ns is None
+
+
+@pytest.mark.parametrize("mode", ["NAVIGATE", "EXPLORE"])
+def test_transient_world_staleness_preserves_navigation_progress_and_coverage(mode):
+    from v3.contracts import CommandMode
+
+    config = _production_navigation()
+    nav = TrajectoryNavigator(config)
+    for tick in (0, 1):
+        c = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
+        mission = replace(_mission(c), mode=CommandMode(mode),
+                          target_pose=Waypoint(2.0, 0.0) if mode == "NAVIGATE" else None)
+        nav.evaluate(mission, replace(_estimate(c), x_m=tick * 0.3), _world(c))
+    before = nav.checkpoint()
+    assert before.progress > 0.0 if mode == "NAVIGATE" else before.coverage
+    c = TickContext(2, 1_040_000_000)
+    plan = nav.evaluate(replace(mission, context=c), _estimate(c),
+                        replace(_world(c), freshness_ns=config.max_world_freshness_ns + 1))
+    assert plan.reason == "WORLD_STALE"
+    after = nav.checkpoint()
+    assert after.mission_id == before.mission_id
+    assert after.initial_distance_m == before.initial_distance_m
+    assert after.progress == before.progress
+    assert after.coverage == before.coverage
+    assert not after.trajectory_candidates
 
 
 @pytest.mark.parametrize('tracks', [(), (_person('person-2', 2.0, 0.0),),

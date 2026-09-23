@@ -483,12 +483,12 @@ def _follow_person_direct_evidence(
         uid = evidence.get("locked_target_uid") if isinstance(evidence.get("locked_target_uid"), str) else None
         if previous_uid is not None and uid is not None and uid != previous_uid:
             switches += 1
-        if uid is not None:
-            previous_uid = uid
-        is_visible = evidence.get("target_visible") is True
+            # A new identity has no visibility history yet.
+            previous_visible = None
+        is_visible = uid is not None and evidence.get("target_visible") is True
         if is_visible:
             visible += 1
-            if previous_visible is False:
+            if previous_visible is False and uid == previous_uid:
                 reacquisitions += 1
                 events.append(_event("FOLLOW_TARGET_REACQUIRED_OBSERVED", episode=episode, tick=tick, extra={"track_id": uid}))
         else:
@@ -496,9 +496,12 @@ def _follow_person_direct_evidence(
                 missing += 1
             if previous_visible is True:
                 losses += 1
-                events.append(_event("FOLLOW_TARGET_LOST_OBSERVED", episode=episode, tick=tick, extra={"track_id": uid}))
+                events.append(_event("FOLLOW_TARGET_LOST_OBSERVED", episode=episode, tick=tick, extra={"track_id": previous_uid}))
+        # ACQUIRE/null-lock rows end visibility too; otherwise each such row
+        # repeats the last visible -> missing transition.
+        previous_visible = is_visible
         if uid is not None:
-            previous_visible = is_visible
+            previous_uid = uid
         missing_age_ms = _num(evidence.get("target_missing_age_ms"))
         if missing_age_ms is not None:
             longest_missing_s = max(longest_missing_s, missing_age_ms / 1000.0)

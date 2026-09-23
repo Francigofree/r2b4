@@ -1,0 +1,69 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "27ce711080143fc58abb21800b3dafd4731a8db3da9f50b42c05d37d50bfe8fc",
+      "size_bytes": 8486
+    },
+    "diagnosis.json": {
+      "sha256": "882b157722be1710e1c37553b57122e00824556a039d296c32300058c9458081",
+      "size_bytes": 44481
+    },
+    "gui_manifest.json": {
+      "sha256": "8304f87ff346c67579cb98b02ea7e50e7386f0c2b4f9f7434e49511b17f6c518",
+      "size_bytes": 98399
+    },
+    "inspect.json": {
+      "sha256": "6a60c4c6891f03fc553e778eea6474d980a1233df1fc625f693f5517757e3a90",
+      "size_bytes": 50305
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "62740912ace47b02a4ea0c9b8e4aebe265292855cb9932decbf2f24277727c5e",
+      "size_bytes": 23760
+    },
+    "timeline.ndjson": {
+      "sha256": "263d3957342d5ebd875edc1d329c3e9874fcb4d16c643856adaaebd18159e8c2",
+      "size_bytes": 1594942
+    },
+    "triage.json": {
+      "sha256": "53433ed076701bd82fe5f4fb6e7896109facbeca59a13826d56656e4a0907615",
+      "size_bytes": 98818
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_165008_33177_capture.mcap",
+    "sha256": "927416dbbde9beba9456dccdddeff80d7c7e3ec2c20ce7bafe8995bc9eb1f43e"
+  },
+  "behavior_status": "DEGRADED",
+  "created_at_utc": "2026-09-23T14:51:27Z",
+  "diagnosis_status": "FINDING",
+  "evidence_sha256": "c3a11de67895f4c687d03785ef36089ac1d5713957815d2c0298317b745b0377",
+  "evidence_status": "PASS",
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "motion-blocked-l9-1163"
+    ],
+    "kind": "MOTION_BLOCKED",
+    "layer": "L9",
+    "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 1163
+  },
+  "run_id": "v3_20260923_165008_33177_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}

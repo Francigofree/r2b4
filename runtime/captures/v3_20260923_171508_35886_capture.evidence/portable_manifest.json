@@ -1,0 +1,184 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "c7b578c61bf76aa86aab5df7ab006dfb55ab5050a0fd8c1c39987d72a5bad212",
+      "size_bytes": 10945
+    },
+    "agent_view.json": {
+      "sha256": "52f19eb696cbdd7256d3953992ae1a5838e3570d5ac08fc665aa26f290ade21a",
+      "size_bytes": 14814
+    },
+    "behavior_episodes.ndjson": {
+      "sha256": "6eee4b50b8f7dd99187add4671b7d83409c45ea792f5bda280f15fc41c9b2610",
+      "size_bytes": 7181
+    },
+    "behavior_summary.json": {
+      "sha256": "91cb380e8851e44a1dbf038c811db44f482f45d3f888becafecfcb1b3ac9a8db",
+      "size_bytes": 1103
+    },
+    "behavior_timeline.ndjson": {
+      "sha256": "87643a7f4d60e18e67ecb491d7e934f3e92aea23f1b237d3d19ee9fe433278cd",
+      "size_bytes": 33096
+    },
+    "diagnosis.json": {
+      "sha256": "b61b0cf09c7c588cf1d3f74af526dfd477a7bfc30565a6fd15a61944316b89a1",
+      "size_bytes": 43480
+    },
+    "evidence_index.json": {
+      "sha256": "d73b8c4f58dbfe5fdcb0076624707b8bf23242c83ac34e632dd9244bc1276137",
+      "size_bytes": 2442
+    },
+    "gui_manifest.json": {
+      "sha256": "70f7d36b69b194fdb19d43849fc4af6e3b8f2355cfcad3e1f79593c3a0f6caf9",
+      "size_bytes": 99647
+    },
+    "hri_summary.json": {
+      "sha256": "752ebc8774b44229e4aee63b6689ff1b69f391e4bf47043ee401ba8c08754a27",
+      "size_bytes": 382
+    },
+    "hri_timeline.ndjson": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    "incident_slices/01_L11_ERROR.ndjson": {
+      "sha256": "8fe10b2e1844f7ddb540a24e7f73cf8d782d9f60c8e3a98137668601000d1d14",
+      "size_bytes": 16974
+    },
+    "incident_slices/02_NAVIGATION_UNAVAILABLE.ndjson": {
+      "sha256": "214d7a70bc80467e0a1bc30a40af02aa8a93a9abfcdb726fd2a8a0f5a7243264",
+      "size_bytes": 40565
+    },
+    "incident_slices/03_MOTION_REQUEST_CONSTRAINED_TO_ZERO.ndjson": {
+      "sha256": "8ffca5137eae174b4eabacbc579d0b5cccca74ed29c985ed5b6a0fc0d8b6c5a9",
+      "size_bytes": 27393
+    },
+    "incident_slices/04_NAVIGATION_PROGRESS_STAGNATION.ndjson": {
+      "sha256": "39afb3cf47be38543a72d22cb20b0eaa6fcb67c4176ba1964e05dfa710be6504",
+      "size_bytes": 43391
+    },
+    "incident_slices/05_COVARIANCE_GROWTH.ndjson": {
+      "sha256": "2e190cc8f2f2c27d0d223e4dd72aa876b74657d6bb20e3bfcd61413be50a80e3",
+      "size_bytes": 29508
+    },
+    "incident_slices/06_DEVICE_HEALTH_NON_OK.ndjson": {
+      "sha256": "13c36b222a873cdb79afa302241cba9ab39432786067c4d00a365531c7a12894",
+      "size_bytes": 7948
+    },
+    "inspect.json": {
+      "sha256": "ea06cac3efb1f8bbae5ea2bf3308fe7a6ca873929e0f8877681aa9c9b8746cb5",
+      "size_bytes": 48678
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "b411251556683c6dbb6488a215f13969099c018eada46335c5ce90faaf3d32fe",
+      "size_bytes": 21648
+    },
+    "lidar_summary.ndjson": {
+      "sha256": "be30d022c71470a73c437fbcc40cb0794a0368ceb88e86601b8d0154eeae557b",
+      "size_bytes": 2353843
+    },
+    "localization_events.ndjson": {
+      "sha256": "83db0be0aa8c63fd28bf4c6f600f4e26e1da44cc117d6b0a3fea5617f1bdc5f5",
+      "size_bytes": 338
+    },
+    "localization_quality.json": {
+      "sha256": "71830ceb44b37425fbc2adf449888f6cf0d45cdc17d629a908e024120d7b9e47",
+      "size_bytes": 1369
+    },
+    "motion_quality.json": {
+      "sha256": "df7c9505fb9744cfc30c0d4ef27fdee85c1a8f2f412f8e86e8cb5e50da94482d",
+      "size_bytes": 47982
+    },
+    "motion_quality_segments.ndjson": {
+      "sha256": "6e2aea6355169d998c5c5a2554378d21d8cc5844375b5e51db46d5e2aed52768",
+      "size_bytes": 36876
+    },
+    "motion_tuning_segments.ndjson": {
+      "sha256": "c9c2e48517671dd851c2d65550bec65c8e2da891e0152093c9abf82e6cee68d4",
+      "size_bytes": 42252
+    },
+    "motion_tuning_summary.json": {
+      "sha256": "a4f278f259d0671ff8c78745cc05b6129f51823bce1431e16b5799496420a4a3",
+      "size_bytes": 17777
+    },
+    "overview_10hz.ndjson": {
+      "sha256": "5cfa333a212c42148267edae5a90135bffb0f7651d2b1bea196fffedfc4e4de2",
+      "size_bytes": 1295219
+    },
+    "raw_lidar_incidents/01_L11_ERROR.ndjson": {
+      "sha256": "255d19c1ca2d957e91a8f2d336910d219ebe8a4bf9d25a710d73bfac372b914b",
+      "size_bytes": 84330
+    },
+    "raw_lidar_incidents/02_NAVIGATION_UNAVAILABLE.ndjson": {
+      "sha256": "9cec125f95b7fe0961faad96c57fad260144c4b5cec49953abae443fe49e639e",
+      "size_bytes": 76065
+    },
+    "raw_lidar_incidents/03_MOTION_REQUEST_CONSTRAINED_TO_ZERO.ndjson": {
+      "sha256": "063c1b78a0322f68d858d22929ec72c16c72a7ca50936d7d5887fcbb4baa7ca0",
+      "size_bytes": 73259
+    },
+    "raw_lidar_incidents/04_NAVIGATION_PROGRESS_STAGNATION.ndjson": {
+      "sha256": "e4627b1171c0dda9ecb9b07fd74209b726892fc89837da7d4388cf9aeb9c0b41",
+      "size_bytes": 73355
+    },
+    "raw_lidar_incidents/05_COVARIANCE_GROWTH.ndjson": {
+      "sha256": "a79d8d2f63dcf953857ebe24cdc93a7e52269045a747a7fb20b70dd9f850e587",
+      "size_bytes": 84338
+    },
+    "replay_sweep.json": {
+      "sha256": "3c4bcb53584ad47dd84f6008516c647b1485213c54c10c963a1e96b0a6bef866",
+      "size_bytes": 659
+    },
+    "runtime_performance.json": {
+      "sha256": "7c29fde92b59a3951f233a7eb43d5a54b0548718909da6c0c9bc5a3a1b25d275",
+      "size_bytes": 1503
+    },
+    "task_evidence_episodes.ndjson": {
+      "sha256": "12cf642c0c660b382241481cce7b2f0b6e700572a08961c5eb035bb5d211375b",
+      "size_bytes": 10973
+    },
+    "task_evidence_summary.json": {
+      "sha256": "80f403b2e7ef2272d394cb82d2d83b81c06a7e2c52bebe4fdfda3fb83b2e519d",
+      "size_bytes": 1177
+    },
+    "task_evidence_timeline.ndjson": {
+      "sha256": "602ccae1cae9f0ad1585fb1ed8021b5100f0ab6a7d5f9cd38d1991d99eca73e0",
+      "size_bytes": 7292
+    },
+    "timeline.ndjson": {
+      "sha256": "d1b607678a5401e53545cd99c311b9b9736425d45989a7fbb0ca0b17860e9c21",
+      "size_bytes": 1582594
+    },
+    "triage.json": {
+      "sha256": "dd0fa0f01974673d6cfa46e07c670112c7e127667f5527730a16a86f0463a4ff",
+      "size_bytes": 100488
+    }
+  },
+  "capture": {
+    "local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_171508_35886_capture.mcap",
+    "mcap_remains_authority": true,
+    "mcap_required_for_normal_remote_analysis": false,
+    "name": "v3_20260923_171508_35886_capture.mcap",
+    "sha256": "b1a20d4120d3ed257ac2f286381eaf5058827140c39f2dbb9f903363d0ad4feb"
+  },
+  "limitations": [
+    "Full raw LiDAR point arrays are exported only around representative incidents.",
+    "Exact evidence outside exported incident slices remains available from the local MCAP.",
+    "Per-core scheduler telemetry is not invented when the capture did not record it."
+  ],
+  "pytest_status": "OFF",
+  "replay_sweep_status": "NOT_APPLICABLE",
+  "schema": "R2B4_TEST_HUB_PORTABLE_V1"
+}

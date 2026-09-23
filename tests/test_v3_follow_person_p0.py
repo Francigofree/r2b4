@@ -372,3 +372,136 @@ def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
     assert after.follow_person_pivoting == checkpoint.follow_person_pivoting
     assert after.follow_person_holding == checkpoint.follow_person_holding
     assert after.follow_person_last_heading_rad == checkpoint.follow_person_last_heading_rad
+
+
+def test_world_stale_stops_motion_but_retains_lock_for_low_confidence_recovery():
+    from v3.layers.l7_motion_selection import select_motion
+    from v3.layers.l8_motion_realization import MotionRealizer
+
+    config = _config()
+    nav = TrajectoryNavigator(config)
+    first = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
+    stale = TickContext(1, 1_020_000_000)
+    world = replace(_world(stale), freshness_ns=config.max_world_freshness_ns + 1)
+    plan = nav.evaluate(_mission(stale), _estimate(stale), world)
+    assert plan.reason == "WORLD_STALE"
+    assert not plan.route and not plan.trajectory_candidates and plan.velocity_target is None
+    intent = MotionRealizer().evaluate(select_motion(plan), _estimate(stale), world)
+    assert intent.requested_v_mps == intent.requested_omega_rad_s == 0.0
+    checkpoint = nav.checkpoint()
+    assert checkpoint.follow_person_track_id == "person-a"
+    assert not checkpoint.trajectory_candidates
+    restored = TrajectoryNavigator(config)
+    restored.restore(checkpoint)
+    fresh = TickContext(2, 1_040_000_000)
+    world = _world(fresh, _person("person-a", 2, 0, 0.48), _person("person-b", 1.5, 0, 0.99))
+    for navigator in (nav, restored):
+        plan = navigator.evaluate(_mission(fresh), _estimate(fresh), world)
+        assert plan.status is NavigationStatus.ACTIVE
+        assert plan.trajectory_candidates
+        assert navigator.follow_person_evidence.locked_target_uid == "person-a"
+    assert nav.checkpoint() == restored.checkpoint()
+
+
+@pytest.mark.parametrize("reset", ["new_command", "stop"])
+def test_stale_world_does_not_keep_lock_across_mission_reset(reset):
+    from v3.contracts import MissionLifecycle
+
+    nav = TrajectoryNavigator(_config())
+    first = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
+    stale = TickContext(1, 1_020_000_000)
+    mission = _mission(stale, "new-command" if reset == "new_command" else "follow-p0")
+    if reset == "stop":
+        mission = replace(mission, lifecycle=MissionLifecycle.CANCELLED)
+    nav.evaluate(mission, _estimate(stale), replace(_world(stale), freshness_ns=999_000_000))
+    assert nav.checkpoint().follow_person_track_id is None
+    fresh = TickContext(2, 1_040_000_000)
+    nav.evaluate(_mission(fresh, "new-command"), _estimate(fresh),
+                 _world(fresh, _person("person-a", 2, 0, 0.48), _person("person-b", 2, 0)))
+    assert nav.follow_person_evidence.locked_target_uid == "person-b"
+
+
+def test_stale_world_discards_closed_rollout_and_requires_a_fresh_request():
+    from v3.contracts.planner import PlannerInput
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+
+    config = _config()
+    nav = TrajectoryNavigator(config, completion_inputs=True)
+    c0 = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(c0), _estimate(c0), _world(c0, _person("person-a", 2, 0)), PlannerInput(c0))
+    old_request = nav.pending_rollout_request
+    assert old_request is not None
+    old_result = TrajectoryRolloutComputer(config).compute(old_request)
+    c1 = TickContext(1, 1_020_000_000)
+    stale = replace(_world(c1), freshness_ns=config.max_world_freshness_ns + 1)
+    plan = nav.evaluate(_mission(c1), _estimate(c1), stale, PlannerInput(c1, c0, old_result))
+    assert plan.reason == "WORLD_STALE" and not plan.trajectory_candidates
+    assert nav.pending_rollout_request is None
+    checkpoint = nav.checkpoint()
+    restored = TrajectoryNavigator(config, completion_inputs=True)
+    restored.restore(checkpoint)
+    for navigator in (nav, restored):
+        for tick in (2, 3):
+            c = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
+            plan = navigator.evaluate(_mission(c), _estimate(c),
+                _world(c, _person("person-a", 2, 0, 0.48)), PlannerInput(c, c0, old_result))
+            assert plan.reason == "PLANNER_PENDING" and not plan.trajectory_candidates
+            assert navigator.pending_rollout_request.context.tick_id == 2
+        request = navigator.pending_rollout_request
+        result = TrajectoryRolloutComputer(config).compute(request)
+        c4 = TickContext(4, 1_080_000_000)
+        plan = navigator.evaluate(_mission(c4), _estimate(c4),
+            _world(c4, _person("person-a", 2, 0, 0.48)), PlannerInput(c4, request.context, result))
+        assert plan.status is NavigationStatus.ACTIVE and plan.trajectory_candidates
+        assert navigator.follow_person_evidence.locked_target_uid == "person-a"
+    assert nav.checkpoint() == restored.checkpoint()
+
+
+def test_stale_world_does_not_restart_search_or_extend_its_deadline():
+    config = _config()
+    nav = TrajectoryNavigator(config)
+    c0 = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(c0), _estimate(c0), _world(c0, _person("person-a", 2, 0)))
+    c1 = TickContext(1, 1_020_000_000)
+    nav.evaluate(_mission(c1), _estimate(c1), _world(c1))
+    c2 = TickContext(2, c1.monotonic_ns + config.follow_person_lost_hold_ns + 1)
+    nav.evaluate(_mission(c2), _estimate(c2), _world(c2))
+    before = nav.checkpoint()
+    c3 = TickContext(3, c2.monotonic_ns + 20_000_000)
+    nav.evaluate(_mission(c3), _estimate(c3), replace(_world(c3), freshness_ns=999_000_000))
+    after = nav.checkpoint()
+    assert after.follow_person_search_phase == before.follow_person_search_phase
+    assert after.follow_person_lost_since_ns == before.follow_person_lost_since_ns
+    assert after.follow_person_search_budget_ns == before.follow_person_search_budget_ns
+    c4 = TickContext(4, c1.monotonic_ns + config.follow_person_lost_hold_ns + before.follow_person_search_budget_ns + 1)
+    plan = nav.evaluate(_mission(c4), _estimate(c4), _world(c4))
+    assert plan.reason == "PERSON_TARGET_LOST"
+    assert nav.follow_person_evidence.locked_target_uid == "person-a"
+
+
+@pytest.mark.parametrize("mission_tolerance", [0.10, 0.04])
+def test_search_and_realization_share_completion_tolerance(mission_tolerance):
+    from v3.layers.l7_motion_selection import select_motion
+    from v3.layers.l8_motion_realization import MotionRealizer
+
+    config = _config()
+    nav = TrajectoryNavigator(config)
+    first = TickContext(0, 1_000_000_000)
+    nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
+    lost = TickContext(1, 1_020_000_000)
+    nav.evaluate(_mission(lost), _estimate(lost), _world(lost))
+    effective = min(config.follow_person_search_yaw_tolerance_rad, mission_tolerance)
+    start = lost.monotonic_ns + config.follow_person_lost_hold_ns + 1
+    for tick, yaw in ((2, 0.09), (3, effective + 0.01), (4, effective - 0.01)):
+        c = TickContext(tick, start + (tick - 2) * 20_000_000)
+        mission = _mission(c)
+        mission = replace(mission, constraints=replace(mission.constraints, yaw_tolerance_rad=mission_tolerance))
+        plan = nav.evaluate(mission, _estimate(c, yaw), _world(c))
+        assert mission.constraints.yaw_tolerance_rad == mission_tolerance
+        assert plan.constraints.yaw_tolerance_rad == effective
+        assert nav.follow_person_evidence.search_yaw_tolerance_rad == effective
+        assert nav.follow_person_evidence.search_phase == (1 if tick == 4 else 0)
+        intent = MotionRealizer().evaluate(select_motion(plan), _estimate(c, yaw), _world(c))
+        assert abs(intent.requested_omega_rad_s) > 0.0

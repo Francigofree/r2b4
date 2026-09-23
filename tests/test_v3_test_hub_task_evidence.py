@@ -204,6 +204,34 @@ def test_follow_person_reconstructs_observed_lock_loss_and_reacquire_from_captur
     }
 
 
+@pytest.mark.parametrize("return_uid, reacquisitions, switches", [("person-a", 2, 0), ("person-b", 1, 1)])
+def test_captured_follow_visibility_transitions_do_not_repeat_during_acquire(
+    tmp_path, return_uid, reacquisitions, switches,
+):
+    observations = ((None, False), ("person-a", True), ("person-a", False),
+                    ("person-a", True), (None, False), (None, False),
+                    (None, False), (return_uid, True), (return_uid, True))
+    ticks = []
+    for tick_id, (uid, visible) in enumerate(observations):
+        tick = _tick(tick_id, mode="FOLLOW_PERSON")
+        tick["tick_evidence"] = [{"__type__": "FollowPersonEvidence",
+                                 "locked_target_uid": uid, "target_visible": visible,
+                                 "state": "ACQUIRE" if uid is None else "FOLLOW"}]
+        ticks.append(tick)
+    episode_path = _episodes(tmp_path / "episodes.ndjson", "FOLLOW_PERSON", 0, len(ticks) - 1)
+    result = build_task_evidence(FakeReader(ticks), tmp_path, behavior_episodes_path=episode_path)
+    metrics = _lines(tmp_path / result["episodes"])[0]["mode_metrics"]
+    assert metrics["visibility"]["observed_loss_count"] == 2
+    assert metrics["visibility"]["observed_reacquisition_count"] == reacquisitions
+    assert metrics["visibility"]["visible_sample_count"] == 4
+    assert metrics["visibility"]["missing_sample_count"] == 1
+    assert metrics["target_identity"]["observed_target_switch_count"] == switches
+    loss_events = [event for event in _lines(tmp_path / result["timeline"])
+                   if event["event_type"] == "FOLLOW_TARGET_LOST_OBSERVED"]
+    assert len(loss_events) == 2
+    assert all(event["track_id"] == "person-a" for event in loss_events)
+
+
 def test_navigate_exports_goal_errors_and_complete_observation_not_success_verdict(tmp_path):
     ticks = [
         _tick(0, mode="NAVIGATE", x=0.0, target_pose=(1.0, 0.0, 0.0)),

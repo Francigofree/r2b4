@@ -154,6 +154,84 @@ def test_follow_identity_and_speed_bounded_search_replay_from_checkpoint(tmp_pat
         assert replay["determinism"]["repeated_trace_match"] is True
 
 
+def test_follow_world_stale_hold_and_recovery_replay_from_checkpoint(tmp_path):
+    from dataclasses import replace
+
+    from v3.capture import CaptureSink
+    from v3.capture_encoding import encode_value
+    from v3.composition.native_control import NativeControlComposition
+    from v3.contracts import (
+        CommandMode, CommandRequest, DataField, DeviceHealth, DeviceHealthState,
+        DeviceSample, LifecycleState,
+    )
+    from v3.execution import ExecutionRecord
+    from v3_validation_helpers import RecordingMotorSink, control_config, tick_inputs
+
+    config = control_config()
+    production = NativeControlComposition(RecordingMotorSink(), config)
+    capture = CaptureSink("follow-stale", configuration={"resolved_control": config})
+    sliced = CaptureSink("follow-stale-slice", configuration={"resolved_control": config})
+    checkpoint = None
+    locked_uid = None
+    stale_ticks = []
+    resumed_ticks = []
+    for base in tick_inputs(30):
+        c = base.context
+        local = DeviceSample("RPLIDAR_C1", "lidar_local_points", c.tick_id, c.monotonic_ns, (
+            DataField("frame_id", "ROBOT_BASE"), DataField("point_count", 1),
+            DataField("point_000_x_m", 2.0), DataField("point_000_y_m", 0.0),
+            DataField("point_000_quality", 10),
+        ))
+        person = DeviceSample("PERSON_DETECTOR_FRONT", "person_detection", c.tick_id, c.monotonic_ns, (
+            DataField("age_ns", 0), DataField("measurement_timing_valid", True),
+            DataField("measurement_stale", False), DataField("person_detected", True),
+            DataField("primary_confidence", 0.9 if c.tick_id < 3 else 0.48),
+            DataField("primary_xmin", 0.4), DataField("primary_xmax", 0.6),
+            DataField("primary_ymin", 0.1), DataField("primary_ymax", 0.9),
+        ))
+        # Auxiliary detections keep arriving while the world freshness input
+        # pauses. Other safety inputs remain independently closed per tick.
+        samples = tuple(s for s in base.raw_devices.samples
+                        if not (3 <= c.tick_id <= 18 and s.kind == "lidar_health")) + (local, person)
+        command = CommandRequest(c, "follow-stale", CommandMode.FOLLOW_PERSON, (
+            DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.30),
+        ), c.tick_id)
+        inputs = production.close_inputs(replace(base, command=command,
+            lifecycle=LifecycleState.ACTIVE, raw_devices=replace(base.raw_devices, samples=samples,
+                device_health=base.raw_devices.device_health + (
+                    DeviceHealth("PERSON_DETECTOR_FRONT", DeviceHealthState.OK),
+                ))))
+        result = production.run_tick(inputs)
+        assert result.trace.fault_layer is None
+        layers = {row.layer: row.output for row in result.trace.layers}
+        record = ExecutionRecord(inputs, result, production.tick_evidence)
+        capture.write(record)
+        nav = production.checkpoint().navigation
+        if locked_uid is None:
+            locked_uid = nav.follow_person_track_id
+        assert locked_uid is not None and nav.follow_person_track_id == locked_uid
+        if layers["L6"].reason == "WORLD_STALE":
+            stale_ticks.append(c.tick_id)
+            assert layers["L8"].requested_v_mps == 0.0
+            assert layers["L8"].requested_omega_rad_s == 0.0
+            assert result.final_actuation.left_output == result.final_actuation.right_output == 0.0
+            assert not nav.trajectory_candidates and nav.pending_rollout_request is None
+        if c.tick_id > 18 and nav.trajectory_candidates:
+            resumed_ticks.append(c.tick_id)
+        if c.tick_id == 16:
+            checkpoint = encode_value(production.checkpoint())
+        elif c.tick_id > 16:
+            sliced.write(record)
+    assert stale_ticks == [15, 16, 17, 18]
+    assert resumed_ticks
+    paths = (capture.finalize("PASS", tmp_path / "follow-stale.json"),
+             sliced.finalize("PASS", tmp_path / "follow-stale-slice.json", initial_state_checkpoint=checkpoint))
+    for path in paths:
+        replay = replay_capture(path, project_root=PROJECT_ROOT)
+        assert replay["status"] == "MATCH", replay.get("first_divergence")
+        assert replay["determinism"]["repeated_trace_match"] is True
+
+
 def test_replay_rejects_non_native_capture_schema(tmp_path):
     path = tmp_path / "unsupported.json"
     path.write_text(json.dumps({"schema": "OBSOLETE_CAPTURE"}), encoding="utf-8")
@@ -193,11 +271,9 @@ def test_general_replay_matches_generic_explore_trajectory_through_l4_l8(tmp_pat
     assert active["L8"]["requested_v_mps"] == pytest.approx(
         active["L7"]["trajectory"]["v_mps"]
     )
-    assert (
-        active["L8"]["requested_omega_rad_s"]
-        < active["L7"]["trajectory"]["omega_rad_s"]
-        < 0.0
-    )
+    # An aligned, collision-free goal no longer rewards arbitrary turning.
+    assert active["L6"]["local_goal"]["y_m"] == 0.0
+    assert active["L8"]["requested_omega_rad_s"] == active["L7"]["trajectory"]["omega_rad_s"] == 0.0
     assert {
         tick["expected"]["layers"]["L5"]["mission_id"]
         for tick in active_ticks

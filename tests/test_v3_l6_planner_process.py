@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 import time
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from v3.contracts import (
 )
 from v3.layers.l6_navigation import (
     NavigationConfig,
+    TrajectoryRolloutComputer,
     TrajectoryRolloutRequest,
 )
 
@@ -118,11 +120,12 @@ def test_process_backend_roundtrip_is_collected_before_control_thread_take():
     try:
         assert collector is not None
         assert collector.is_alive()
-        request = _request()
+        request = replace(_request(), goal=Waypoint(0.6, -0.3), max_omega_rad_s=0.30)
         request_id = backend.submit(request)
         result = _wait_for_result(backend, request_id)
         assert result.source_context == request.context
         assert result.trajectory_candidates
+        assert result == TrajectoryRolloutComputer(NavigationConfig()).compute(request)
     finally:
         backend.close()
     assert collector is not None

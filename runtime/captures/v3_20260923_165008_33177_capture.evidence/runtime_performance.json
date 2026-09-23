@@ -1,0 +1,43 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "note": "Capture-derived evidence only. Slow-tick correlation is descriptive association, not a causal layer-cost claim.",
+  "parent_process": {
+    "cpu_core_equivalent": 0.2362535639416444,
+    "elapsed_ns": 72748674675,
+    "max_rss_bytes": 74268672,
+    "process_cpu_ns": 17187133664,
+    "write_duration_ns": 987513133
+  },
+  "per_core_available": false,
+  "runtime_tick": {
+    "average_hz": 10.015056617110321,
+    "average_period_ms": 99.84966018979266,
+    "completion_latency_max_ns": 143576052,
+    "completion_latency_sum_ns": 13419078282,
+    "period_count": 627,
+    "period_max_ns": 182936682,
+    "period_sum_ns": 62605736939,
+    "tick_count": 628
+  },
+  "schema": "R2B4_TEST_HUB_PORTABLE_V1",
+  "scope": "RECORDED_RUNTIME_AGGREGATES_ONLY",
+  "slow_tick_correlation": {
+    "claim_policy": {
+      "root_cause_inferred": false
+    },
+    "reason": "SAMPLED_TICK_STREAM",
+    "status": "NOT_APPLICABLE"
+  }
+}

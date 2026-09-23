@@ -741,7 +741,12 @@ class TrajectoryNavigator:
             self._reset()
             return self._inactive(mission, NavigationStatus.INVALIDATED, "FRAME_MISMATCH")
         if world.freshness_ns > self._config.max_world_freshness_ns:
-            self._reset()
+            # Transient input invalidity revokes motion, not mission identity.
+            # Never reuse a cached/pending rollout after the stale interval.
+            if self._mission_id != mission.mission_id:
+                self._reset()
+            else:
+                self._clear_trajectory_plan()
             return self._inactive(mission, NavigationStatus.INVALIDATED, "WORLD_STALE")
 
         if mission.mode is CommandMode.TELEOP:
@@ -1041,7 +1046,10 @@ class TrajectoryNavigator:
             lost_hold_ns=self._config.follow_person_lost_hold_ns,
             search_timeout_ns=self._config.follow_person_search_timeout_ns,
             search_sweep_rad=self._config.follow_person_search_sweep_rad,
-            search_yaw_tolerance_rad=self._config.follow_person_search_yaw_tolerance_rad,
+            search_yaw_tolerance_rad=min(
+                self._config.follow_person_search_yaw_tolerance_rad,
+                mission.constraints.yaw_tolerance_rad,
+            ),
             search_budget_ns=self._follow_person_search_budget_ns,
         )
 
@@ -1153,10 +1161,14 @@ class TrajectoryNavigator:
                         )
                     assert self._follow_person_search_target_yaw_rad is not None
                     search_yaw = self._follow_person_search_target_yaw_rad
+                    search_tolerance = min(
+                        self._config.follow_person_search_yaw_tolerance_rad,
+                        mission.constraints.yaw_tolerance_rad,
+                    )
                     if (
                         not entered_search
                         and abs(_wrapped_angle(search_yaw - estimate.yaw_rad))
-                        <= self._config.follow_person_search_yaw_tolerance_rad
+                        <= search_tolerance
                     ):
                         if self._follow_person_search_phase == 2:
                             self._follow_person_state = _FollowPersonState.LOST
@@ -1180,7 +1192,7 @@ class TrajectoryNavigator:
                         mission_id=mission.mission_id,
                         route=(Waypoint(estimate.x_m, estimate.y_m, search_yaw),),
                         velocity_target=None,
-                        constraints=mission.constraints,
+                        constraints=replace(mission.constraints, yaw_tolerance_rad=search_tolerance),
                         corridor_radius_m=0.0,
                         progress=0.0,
                         status=NavigationStatus.ACTIVE,
@@ -1974,7 +1986,8 @@ class TrajectoryNavigator:
             (start_distance - final_distance) / max(start_distance, 1e-9)
         )
         progress_potential = _trajectory_progress_potential(
-            estimate, goal, x_m, y_m, yaw_rad, progress
+            estimate, goal, x_m, y_m, yaw_rad, progress,
+            max_omega_rad_s * self._config.rollout_horizon_ns / 1e9,
         )
         progress_viable = (
             progress_potential + 1e-12 >= self._config.progress_viability_floor
@@ -2232,7 +2245,8 @@ class TrajectoryRolloutComputer:
             (start_distance - final_distance) / max(start_distance, 1e-9)
         )
         progress_potential = _trajectory_progress_potential(
-            estimate, goal, x_m, y_m, yaw_rad, progress
+            estimate, goal, x_m, y_m, yaw_rad, progress,
+            max_omega_rad_s * config.rollout_horizon_ns / 1e9,
         )
         progress_viable = (
             progress_potential + 1e-12 >= config.progress_viability_floor
@@ -2304,12 +2318,15 @@ def _trajectory_progress_potential(
     final_y_m: float,
     final_yaw_rad: float,
     distance_progress_score: float,
+    angular_travel_rad: float,
 ) -> float:
-    """Predict generic local progress without conflating it with quality score.
+    """Combine signed distance and heading improvement toward the local goal.
 
-    A trajectory is useful when it either gets closer to the local goal or turns
-    the robot meaningfully toward it. This admits productive in-place pivots while
-    rejecting stationary/nonproductive local optima.
+    Normalize heading by the initial error or one horizon's angular travel,
+    whichever is larger. This keeps small errors bounded without diluting a
+    speed-limited turn by a full half-circle. Heading deterioration must offset
+    distance gain; taking their maximum would reward driving past the target.
+    Straight progress and productive in-place pivots remain admissible.
     """
 
     start_heading_error = _goal_heading_error(
@@ -2325,9 +2342,10 @@ def _trajectory_progress_potential(
         goal,
     )
     heading_progress = _clamp_signed(
-        (start_heading_error - final_heading_error) / math.pi
+        (start_heading_error - final_heading_error)
+        / max(start_heading_error, angular_travel_rad, 1e-9)
     )
-    return max(distance_progress_score, heading_progress)
+    return _clamp_signed(distance_progress_score + heading_progress)
 
 
 def _as_escape_candidate(

@@ -1,0 +1,30 @@
+{
+  "artifacts": {
+    "episodes": "task_evidence_episodes.ndjson",
+    "timeline": "task_evidence_timeline.ndjson"
+  },
+  "capture_tick_sample_hz": 10,
+  "capture_time_navigation_config_source": "CAPTURE_RUNTIME.resolved_runtime.composition.live_control.control",
+  "episode_count": 3,
+  "evidence_scope": "CAPTURED_SAMPLES_ONLY",
+  "extractor_counts": {
+    "FOLLOW_PERSON": 3
+  },
+  "future_mode_policy": "UNRECOGNIZED_MODES_KEEP_GENERIC_EVIDENCE_UNTIL_A_MODE_EXTRACTOR_EXISTS",
+  "limitations": [
+    "Metrics describe recorded samples only; missing intervals are not reconstructed.",
+    "Mode evidence is intentionally non-diagnostic and carries no automatic task-success or quality verdict.",
+    "FOLLOW_PERSON target identity is inferred only from captured L4 tracks plus capture-time selection thresholds.",
+    "EXPLORE revisit metrics are sampled-pose metrics, not a reconstruction of every 50 Hz coverage update."
+  ],
+  "mode_counts": {
+    "FOLLOW_PERSON": 3
+  },
+  "policy": "DESCRIPTIVE_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+  "schema": "R2B4_TEST_HUB_TASK_EVIDENCE_V1",
+  "supported_mode_extractors": [
+    "NAVIGATE",
+    "EXPLORE",
+    "FOLLOW_PERSON"
+  ]
+}
