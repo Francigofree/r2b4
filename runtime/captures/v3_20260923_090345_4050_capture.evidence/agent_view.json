@@ -1,0 +1,240 @@
+{
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_090345_4050_capture.mcap",
+    "capture_name": "v3_20260923_090345_4050_capture.mcap",
+    "capture_sha256": "ec224dfdfd7d5ccda57abccf18dd2927e73e8575283769eb9de2e6f365a10e19",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 10,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 2,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 102,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 100,
+      "usage": "FULL_RATE_ANALYSIS"
+    }
+  },
+  "default_view_hz": 5,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incident_groups": [
+    {
+      "category": "TICK_SEQUENCE",
+      "count": 99,
+      "first_tick": 1144,
+      "last_tick": 1627,
+      "layer": "Capture",
+      "reason": "TICK_SEQUENCE_GAP",
+      "representative": {
+        "category": "TICK_SEQUENCE",
+        "evidence": {
+          "current_tick_id": 1144,
+          "previous_tick_id": 1139
+        },
+        "id": "tick-gap-1139-1144",
+        "layer": "Capture",
+        "monotonic_ns": 769496393390,
+        "reason": "TICK_SEQUENCE_GAP",
+        "severity": "CRITICAL",
+        "tick_id": 1144
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "category": "ADMISSION",
+      "count": 27,
+      "first_tick": 1139,
+      "last_tick": 1532,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 275221882,
+              "reason": "STALE",
+              "source_device_id": "PERSON_DETECTOR_FRONT",
+              "source_sequence": 242
+            }
+          ]
+        },
+        "id": "l2-reject-1139",
+        "layer": "L2",
+        "monotonic_ns": 769395539882,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "MEDIUM",
+        "tick_id": 1139
+      },
+      "severity": "MEDIUM"
+    },
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 1541,
+      "last_tick": 1541,
+      "layer": "L3",
+      "reason": "COVARIANCE_GROWTH",
+      "representative": {
+        "category": "LOCALIZATION",
+        "evidence": {
+          "first_trace": 0.08140025081215704,
+          "growth_ratio": 4.404541362447108,
+          "last_trace": 0.07422489658349632,
+          "max_trace": 0.3081713149483844,
+          "sample_count": 100
+        },
+        "id": "covariance-growth-1541",
+        "layer": "L3",
+        "monotonic_ns": 777578254780,
+        "reason": "COVARIANCE_GROWTH",
+        "severity": "MEDIUM",
+        "tick_id": 1541
+      },
+      "severity": "MEDIUM"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "TICK_SEQUENCE",
+      "count": 99,
+      "first_tick": 1144,
+      "group_index": 1,
+      "last_tick": 1627,
+      "path": "01_TICK_SEQUENCE_GAP.ndjson",
+      "reason": "TICK_SEQUENCE_GAP",
+      "rows": 4,
+      "truncated": false
+    },
+    {
+      "category": "ADMISSION",
+      "count": 27,
+      "first_tick": 1139,
+      "group_index": 2,
+      "last_tick": 1532,
+      "path": "02_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 3,
+      "truncated": false
+    },
+    {
+      "category": "LOCALIZATION",
+      "count": 1,
+      "first_tick": 1541,
+      "group_index": 3,
+      "last_tick": 1541,
+      "path": "03_COVARIANCE_GROWTH.ndjson",
+      "reason": "COVARIANCE_GROWTH",
+      "rows": 4,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "overview": "overview_5hz.ndjson",
+  "phases": [
+    {
+      "end_s": 7.700043485,
+      "end_tick": 1518,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "EXPLORE",
+      "motion_requested_ticks": 78,
+      "start_s": 0.0,
+      "start_tick": 1139,
+      "stop_ticks": 0,
+      "tick_count": 78
+    },
+    {
+      "end_s": 9.900069044,
+      "end_tick": 1627,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 7.800034266,
+      "start_tick": 1523,
+      "stop_ticks": 22,
+      "tick_count": 22
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 1,
+      "status": "WARN",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_TICK_SEQUENCE_GAP.ndjson",
+      "raw_scan_count": 5,
+      "reason": "TICK_SEQUENCE_GAP",
+      "size_bytes": 53318,
+      "truncated": false
+    },
+    {
+      "group_index": 2,
+      "path": "02_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 4,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 42645,
+      "truncated": false
+    },
+    {
+      "group_index": 3,
+      "path": "03_COVARIANCE_GROWTH.ndjson",
+      "raw_scan_count": 6,
+      "reason": "COVARIANCE_GROWTH",
+      "size_bytes": 64204,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": null,
+  "replay_sweep": null,
+  "replay_sweep_status": "OFF",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "timeline": "timeline.ndjson"
+}
