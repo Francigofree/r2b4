@@ -505,7 +505,6 @@ def run_owned_resident_physical_control(
     tick_observer: Callable[[TickResult], None] | None = None,
     readiness_observer: Callable[[TickResult, bool], None] | None = None,
     record_observer: Callable[[CaptureRecord], None] | None = None,
-    record_observer_hz: int = CONTROL_CAPTURE_HZ,
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
     enable_multirate_inputs: bool = True,

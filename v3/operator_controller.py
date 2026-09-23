@@ -257,7 +257,7 @@ class OperatorController:
             tail = "\n".join(self._tail(runtime_log, 30))
             raise OperatorError(f"runtime failed to start{': ' + tail if tail else ''}")
 
-        if not self._wait_fresh_ready(pid, baseline, timeout=8.0):
+        if not self._wait_fresh_ready(pid, baseline, timeout=20.0):
             diag = self.diagnostics()
             try:
                 self.runtime_stop()
