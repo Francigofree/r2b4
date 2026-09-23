@@ -1,0 +1,322 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "NOMINAL",
+  "budget": {
+    "actual_bytes": 6847,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_163208_31685_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; WARNING=sampled low-level observation only; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L4",
+      "L5",
+      "L6",
+      "L7",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260923_163208_31685_capture.evidence/interesting_slice.ndjson",
+    "rows": 3,
+    "size_bytes": 30169,
+    "tick_range": [
+      325,
+      335
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "behavioral_trends": {
+      "commands": {
+        "observed_change_count": 36,
+        "observed_unique_count": 36
+      },
+      "domain_sample_counts": {
+        "command": 627,
+        "mission": 627,
+        "navigation": 627,
+        "pose": 627,
+        "safety": 627
+      },
+      "localization": {
+        "sample_count": 627
+      },
+      "maximum_contiguous_sample_gap_s": 0.3,
+      "missing_domains": [],
+      "missions": {
+        "lifecycle_sample_counts": {
+          "ACTIVE": 588,
+          "CANCELLED": 2,
+          "IDLE": 37
+        },
+        "observed_lifecycle_change_count": 6,
+        "observed_unique_count": 36
+      },
+      "motion": {
+        "blocked_sample_count": 0,
+        "longest_observed_blocked_span_s": 0.0
+      },
+      "navigation": {
+        "stagnation": {
+          "last_progress": 0.0,
+          "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+          "monotonic_ns": 12710306064395,
+          "observed_span_s": 5.000022846,
+          "tick_id": 2051
+        },
+        "status_sample_counts": {
+          "ACTIVE": 394,
+          "IDLE": 54,
+          "INVALIDATED": 179
+        }
+      },
+      "safety": {
+        "unsafe_output_sample_count": 0
+      },
+      "trend_window_s": 5.0
+    },
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 5.3340472980823295,
+      "last_trace": 0.2458995804415954,
+      "max_trace": 0.421259860743733,
+      "sample_count": 627
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 2.158309539893159,
+      "requested_motion_tick_count": 246
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "monotonic_ns": 12710306064395,
+        "observed_span_s": 5.000022846,
+        "tick_id": 2051
+      }
+    },
+    "safety": {
+      "ALLOW": 587,
+      "FAULT": 0,
+      "STOP": 40,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 10,
+      "l2_actionable_rejection_count": 102,
+      "l2_duplicate_count": 1614,
+      "l2_rejection_count": 1716,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1614,
+        "STALE": 102
+      }
+    },
+    "ticks": {
+      "count": 627,
+      "first_monotonic_ns": 12668888449639,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 12731496645928,
+      "last_tick_id": 3110
+    },
+    "timing": {
+      "max_ms": 150.388762,
+      "p50_ms": 100.005225,
+      "p95_ms": 116.59204,
+      "p99_ms": 118.161529,
+      "sample_count": 626,
+      "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 327:340 --layers L4,L5,L6,L7,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 330:330 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "NOT_APPLICABLE"
+  },
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "behavior-navigation_progress_stagnation-330"
+    ],
+    "kind": "NAVIGATION",
+    "layer": "L6",
+    "reason": "NAVIGATION_PROGRESS_STAGNATION",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 330
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l5_command_mission.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l6_navigation.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l7_motion_selection.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "monotonic_ns": 12675606037028,
+        "observed_span_s": 5.096728959,
+        "tick_id": 330
+      },
+      "id": "behavior-navigation_progress_stagnation-330",
+      "layer": "L6",
+      "monotonic_ns": 12675606037028,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "HIGH",
+      "tick_id": 330
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "monotonic_ns": 12687506081389,
+        "observed_span_s": 5.099982992,
+        "tick_id": 916
+      },
+      "id": "behavior-navigation_progress_stagnation-916",
+      "layer": "L6",
+      "monotonic_ns": 12687506081389,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "HIGH",
+      "tick_id": 916
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1384",
+      "layer": "L6",
+      "monotonic_ns": 12696906365781,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1384
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1737",
+      "layer": "L6",
+      "monotonic_ns": 12704009654707,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1737
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1742",
+      "layer": "L6",
+      "monotonic_ns": 12704112805505,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1742
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1747",
+      "layer": "L6",
+      "monotonic_ns": 12704210243271,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1747
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1752",
+      "layer": "L6",
+      "monotonic_ns": 12704306068027,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1752
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790173928366538486-31685",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1757",
+      "layer": "L6",
+      "monotonic_ns": 12704408820823,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1757
+    }
+  ]
+}
