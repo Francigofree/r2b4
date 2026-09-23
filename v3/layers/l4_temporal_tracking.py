@@ -1,3 +1,4 @@
+# R2B4_FOLLOW_PERSON_P0_V2_20260923
 """Bounded deterministic temporal object tracking for L4."""
 
 from __future__ import annotations
@@ -22,27 +23,38 @@ class TemporalTrackState:
     updates: int
 
 
+
 @dataclass(frozen=True, slots=True)
 class TemporalTrackCheckpoint:
     states: tuple[TemporalTrackState, ...]
-    # Monotonic allocator state is replay authority: a person UID must never be
-    # recycled after expiry/clear inside one runtime lineage.
     next_person_track_sequence: int = 1
+    # Dormant identities are replay authority but are never public obstacle tracks.
+    dormant_states: tuple[TemporalTrackState, ...] = ()
 
     def __post_init__(self) -> None:
         value = self.next_person_track_sequence
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ValueError("next_person_track_sequence must be a positive integer")
+        active = {state.track.track_id for state in self.states}
+        dormant = {state.track.track_id for state in self.dormant_states}
+        if active & dormant:
+            raise ValueError("active and dormant track identities must be disjoint")
+
+
 
 
 class TemporalTrackStore:
+    """Bounded active tracking plus non-published short-lived person identity memory."""
+
     __slots__ = (
         "_alpha",
         "_beta",
         "_prediction_max_age_ns",
         "_max_speed_mps",
+        "_person_reacquire_max_age_ns",
         "_next_person_track_sequence",
         "_states",
+        "_dormant_states",
     )
 
     def __init__(
@@ -52,30 +64,44 @@ class TemporalTrackStore:
         beta: float,
         prediction_max_age_ns: int,
         max_speed_mps: float,
+        person_reacquire_max_age_ns: int = 2_500_000_000,
     ) -> None:
         if not 0.0 < alpha <= 1.0 or not 0.0 < beta <= 1.0:
             raise ValueError("track alpha/beta must be in (0, 1]")
         if prediction_max_age_ns < 0 or max_speed_mps <= 0.0:
             raise ValueError("invalid track prediction bounds")
+        if (
+            not isinstance(person_reacquire_max_age_ns, int)
+            or isinstance(person_reacquire_max_age_ns, bool)
+            or person_reacquire_max_age_ns <= 0
+        ):
+            raise ValueError("person_reacquire_max_age_ns must be positive integer")
         self._alpha = alpha
         self._beta = beta
         self._prediction_max_age_ns = prediction_max_age_ns
         self._max_speed_mps = max_speed_mps
+        self._person_reacquire_max_age_ns = person_reacquire_max_age_ns
         self._next_person_track_sequence = 1
         self._states: dict[str, TemporalTrackState] = {}
+        self._dormant_states: dict[str, TemporalTrackState] = {}
 
     def clear(self) -> bool:
-        changed = bool(self._states)
+        changed = bool(self._states or self._dormant_states)
         self._states.clear()
+        self._dormant_states.clear()
+        # The monotonic person allocator intentionally survives clear().
         return changed
 
     def upsert_external(self, track: ObstacleTrack, captured_ns: int) -> bool:
         previous = self._states.get(track.track_id)
+        if previous is None:
+            previous = self._dormant_states.get(track.track_id)
         if previous is not None and captured_ns < previous.captured_ns:
             raise ValueError("L4 obstacle track time must not move backwards")
         updates = 1 if previous is None else previous.updates + 1
         state = TemporalTrackState(track, captured_ns, updates)
-        changed = state != previous
+        changed = state != previous or track.track_id in self._dormant_states
+        self._dormant_states.pop(track.track_id, None)
         self._states[track.track_id] = state
         self._observe_person_track_id(track.track_id)
         return changed
@@ -88,39 +114,29 @@ class TemporalTrackStore:
         radius_m: float,
         max_association_distance_m: float,
     ) -> bool:
-        available = {
+        active = {
             track_id: state
             for track_id, state in self._states.items()
             if track_id.startswith("person-")
         }
+        dormant = {
+            track_id: state
+            for track_id, state in self._dormant_states.items()
+            if track_id.startswith("person-")
+            and 0 < captured_ns - state.captured_ns <= self._person_reacquire_max_age_ns
+        }
         used_track_ids: set[str] = set()
         changed = False
         for measurement in measurements:
-            best: tuple[float, str, TemporalTrackState] | None = None
-            for track_id in sorted(available):
-                if track_id in used_track_ids:
-                    continue
-                state = available[track_id]
-                dt_ns = captured_ns - state.captured_ns
-                if dt_ns <= 0:
-                    continue
-                dt_s = dt_ns / 1e9
-                previous = state.track
-                predicted_x = previous.x_m + previous.vx_mps * dt_s
-                predicted_y = previous.y_m + previous.vy_mps * dt_s
-                distance_m = math.hypot(
-                    measurement.x_m - predicted_x,
-                    measurement.y_m - predicted_y,
+            best = self._best_person_match(
+                active, used_track_ids, measurement, captured_ns, max_association_distance_m
+            )
+            reactivated = False
+            if best is None:
+                best = self._best_person_match(
+                    dormant, used_track_ids, measurement, captured_ns, max_association_distance_m
                 )
-                raw_speed_mps = math.hypot(
-                    measurement.x_m - previous.x_m,
-                    measurement.y_m - previous.y_m,
-                ) / dt_s
-                if distance_m > max_association_distance_m or raw_speed_mps > self._max_speed_mps:
-                    continue
-                candidate = (distance_m, track_id, state)
-                if best is None or candidate[:2] < best[:2]:
-                    best = candidate
+                reactivated = best is not None
 
             if best is None:
                 track_id = self._allocate_person_track_id()
@@ -134,35 +150,87 @@ class TemporalTrackStore:
                     confidence=measurement.confidence,
                 )
                 self._states[track_id] = TemporalTrackState(track, captured_ns, 1)
+                used_track_ids.add(track_id)
                 changed = True
                 continue
 
             _, track_id, state = best
             used_track_ids.add(track_id)
+            if reactivated:
+                self._dormant_states.pop(track_id, None)
+            self._states[track_id] = self._updated_person_state(
+                track_id, state, measurement, captured_ns, radius_m, reactivated=reactivated
+            )
+            changed = True
+        return changed
+
+    def _best_person_match(
+        self,
+        pool: dict[str, TemporalTrackState],
+        used_track_ids: set[str],
+        measurement: PersonMeasurement,
+        captured_ns: int,
+        max_association_distance_m: float,
+    ) -> tuple[float, str, TemporalTrackState] | None:
+        best: tuple[float, str, TemporalTrackState] | None = None
+        for track_id in sorted(pool):
+            if track_id in used_track_ids:
+                continue
+            state = pool[track_id]
+            dt_ns = captured_ns - state.captured_ns
+            if dt_ns <= 0:
+                continue
+            dt_s = dt_ns / 1e9
             previous = state.track
-            dt_s = (captured_ns - state.captured_ns) / 1e9
-            if state.updates == 1:
-                # Preserve the established V3 behaviour on the first velocity
-                # estimate; filtering begins once a real motion history exists.
-                x_m = measurement.x_m
-                y_m = measurement.y_m
-                vx_mps = (measurement.x_m - previous.x_m) / dt_s
-                vy_mps = (measurement.y_m - previous.y_m) / dt_s
-            else:
-                predicted_x = previous.x_m + previous.vx_mps * dt_s
-                predicted_y = previous.y_m + previous.vy_mps * dt_s
-                residual_x = measurement.x_m - predicted_x
-                residual_y = measurement.y_m - predicted_y
-                x_m = predicted_x + self._alpha * residual_x
-                y_m = predicted_y + self._alpha * residual_y
-                vx_mps = previous.vx_mps + self._beta * residual_x / dt_s
-                vy_mps = previous.vy_mps + self._beta * residual_y / dt_s
-                speed = math.hypot(vx_mps, vy_mps)
-                if speed > self._max_speed_mps:
-                    scale = self._max_speed_mps / speed
-                    vx_mps *= scale
-                    vy_mps *= scale
-            track = ObstacleTrack(
+            projected_s = min(dt_ns, self._prediction_max_age_ns) / 1e9
+            predicted_x = previous.x_m + previous.vx_mps * projected_s
+            predicted_y = previous.y_m + previous.vy_mps * projected_s
+            distance_m = math.hypot(measurement.x_m - predicted_x, measurement.y_m - predicted_y)
+            raw_speed_mps = math.hypot(
+                measurement.x_m - previous.x_m, measurement.y_m - previous.y_m
+            ) / dt_s
+            if distance_m > max_association_distance_m or raw_speed_mps > self._max_speed_mps:
+                continue
+            candidate = (distance_m, track_id, state)
+            if best is None or candidate[:2] < best[:2]:
+                best = candidate
+        return best
+
+    def _updated_person_state(
+        self,
+        track_id: str,
+        state: TemporalTrackState,
+        measurement: PersonMeasurement,
+        captured_ns: int,
+        radius_m: float,
+        *,
+        reactivated: bool,
+    ) -> TemporalTrackState:
+        previous = state.track
+        dt_s = (captured_ns - state.captured_ns) / 1e9
+        if reactivated or state.updates == 1:
+            # Reactivate exactly at the fresh measurement; stale velocity is not
+            # extrapolated blindly through an occlusion.
+            x_m = measurement.x_m
+            y_m = measurement.y_m
+            vx_mps = (measurement.x_m - previous.x_m) / dt_s
+            vy_mps = (measurement.y_m - previous.y_m) / dt_s
+        else:
+            predicted_x = previous.x_m + previous.vx_mps * dt_s
+            predicted_y = previous.y_m + previous.vy_mps * dt_s
+            residual_x = measurement.x_m - predicted_x
+            residual_y = measurement.y_m - predicted_y
+            x_m = predicted_x + self._alpha * residual_x
+            y_m = predicted_y + self._alpha * residual_y
+            vx_mps = previous.vx_mps + self._beta * residual_x / dt_s
+            vy_mps = previous.vy_mps + self._beta * residual_y / dt_s
+        speed = math.hypot(vx_mps, vy_mps)
+        if speed > self._max_speed_mps:
+            scale = self._max_speed_mps / speed
+            vx_mps *= scale
+            vy_mps *= scale
+        return TemporalTrackState(
+            ObstacleTrack(
                 track_id=track_id,
                 x_m=x_m,
                 y_m=y_m,
@@ -170,21 +238,32 @@ class TemporalTrackStore:
                 vx_mps=vx_mps,
                 vy_mps=vy_mps,
                 confidence=measurement.confidence,
-            )
-            self._states[track_id] = TemporalTrackState(track, captured_ns, state.updates + 1)
-            changed = True
-        return changed
+            ),
+            captured_ns,
+            state.updates + 1,
+        )
 
     def expire(self, now_ns: int, *, person_max_age_ns: int, other_max_age_ns: int) -> bool:
-        expired = tuple(
+        expired_active = tuple(
             track_id
             for track_id, state in self._states.items()
             if now_ns - state.captured_ns
             > (person_max_age_ns if track_id.startswith("person-") else other_max_age_ns)
         )
-        for track_id in expired:
-            del self._states[track_id]
-        return bool(expired)
+        for track_id in expired_active:
+            state = self._states.pop(track_id)
+            if track_id.startswith("person-"):
+                self._dormant_states[track_id] = state
+
+        expired_dormant = tuple(
+            track_id
+            for track_id, state in self._dormant_states.items()
+            if now_ns - state.captured_ns > self._person_reacquire_max_age_ns
+        )
+        for track_id in expired_dormant:
+            del self._dormant_states[track_id]
+        # Only active-set changes affect the public world snapshot/map revision.
+        return bool(expired_active)
 
     def projected_tracks(self, now_ns: int) -> tuple[ObstacleTrack, ...]:
         result: list[ObstacleTrack] = []
@@ -211,16 +290,18 @@ class TemporalTrackStore:
         return TemporalTrackCheckpoint(
             tuple(self._states[key] for key in sorted(self._states)),
             self._next_person_track_sequence,
+            tuple(self._dormant_states[key] for key in sorted(self._dormant_states)),
         )
 
     def restore(self, checkpoint: TemporalTrackCheckpoint) -> None:
         if not isinstance(checkpoint, TemporalTrackCheckpoint):
             raise TypeError("checkpoint must be TemporalTrackCheckpoint")
         self._states = {state.track.track_id: state for state in checkpoint.states}
+        self._dormant_states = {state.track.track_id: state for state in checkpoint.dormant_states}
+        if self._states.keys() & self._dormant_states.keys():
+            raise ValueError("active and dormant track identities must be disjoint")
         self._next_person_track_sequence = checkpoint.next_person_track_sequence
-        # Accept older/externally-built checkpoints defensively: the allocator
-        # must always advance beyond every numeric person UID already present.
-        for track_id in self._states:
+        for track_id in (*self._states, *self._dormant_states):
             self._observe_person_track_id(track_id)
 
     def _observe_person_track_id(self, track_id: str) -> None:
@@ -228,17 +309,15 @@ class TemporalTrackStore:
             return
         suffix = track_id[len("person-") :]
         if suffix.isdigit():
-            self._next_person_track_sequence = max(
-                self._next_person_track_sequence,
-                int(suffix) + 1,
-            )
+            self._next_person_track_sequence = max(self._next_person_track_sequence, int(suffix) + 1)
 
     def _allocate_person_track_id(self) -> str:
         candidate = self._next_person_track_sequence
-        while f"person-{candidate}" in self._states:
+        while f"person-{candidate}" in self._states or f"person-{candidate}" in self._dormant_states:
             candidate += 1
         self._next_person_track_sequence = candidate + 1
         return f"person-{candidate}"
+
 
 
 __all__ = [

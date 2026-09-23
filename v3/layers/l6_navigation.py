@@ -1,3 +1,4 @@
+# R2B4_FOLLOW_PERSON_P0_V2_20260923
 """L6 generic deterministic local navigation and progress ownership."""
 
 from __future__ import annotations
@@ -52,6 +53,31 @@ class _FollowPersonState(str, Enum):
     SEARCH = "SEARCH"
     LOST = "LOST"
 
+@dataclass(frozen=True, slots=True)
+class FollowPersonEvidence:
+    """Passive L6 follow state for capture/Test Hub; never feeds control."""
+
+    state: str
+    locked_target_uid: str | None
+    target_visible: bool
+    target_confidence: float | None
+    target_distance_m: float | None
+    target_bearing_rad: float | None
+    target_missing_age_ms: float | None
+    person_candidate_count: int
+    search_phase: int | None
+    search_target_yaw_rad: float | None
+    acquisition_min_confidence: float
+    retention_min_confidence: float
+    stand_off_m: float
+    distance_deadband_m: float
+    min_safe_distance_m: float
+    lost_hold_ns: int
+    search_timeout_ns: int
+    search_sweep_rad: float
+    search_yaw_tolerance_rad: float
+
+
 
 @dataclass(frozen=True, slots=True)
 class NavigationConfig:
@@ -97,7 +123,9 @@ class NavigationConfig:
     # step looks at the last known heading before sweeping either side.
     follow_person_search_timeout_ns: int = 2_000_000_000
     follow_person_search_sweep_rad: float = 0.45
+    # Compatibility field only; search advancement is now yaw-completion-driven.
     follow_person_search_step_ns: int = 400_000_000
+    follow_person_search_yaw_tolerance_rad: float = 0.08
     follow_person_pivot_enter_rad: float = 0.55
     follow_person_hold_release_margin_m: float = 0.05
     follow_person_slowdown_distance_m: float = 0.18
@@ -291,6 +319,13 @@ class NavigationConfig:
         ):
             raise ValueError("follow_person_search_sweep_rad must be in (0, pi)")
         if (
+            not isinstance(self.follow_person_search_yaw_tolerance_rad, (int, float))
+            or isinstance(self.follow_person_search_yaw_tolerance_rad, bool)
+            or not math.isfinite(self.follow_person_search_yaw_tolerance_rad)
+            or not 0.0 < self.follow_person_search_yaw_tolerance_rad < math.pi
+        ):
+            raise ValueError("follow_person_search_yaw_tolerance_rad must be in (0, pi)")
+        if (
             not isinstance(self.follow_person_pivot_enter_rad, (int, float))
             or isinstance(self.follow_person_pivot_enter_rad, bool)
             or not math.isfinite(self.follow_person_pivot_enter_rad)
@@ -348,6 +383,8 @@ class NavigationStateCheckpoint:
     follow_person_holding: bool = False
     follow_person_last_heading_rad: float | None = None
     follow_person_state: str = _FollowPersonState.ACQUIRE.value
+    follow_person_search_phase: int | None = None
+    follow_person_search_target_yaw_rad: float | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -474,6 +511,9 @@ class TrajectoryNavigator:
         "_follow_person_lost_since_ns",
         "_follow_person_pivoting",
         "_follow_person_state",
+        "_follow_person_search_phase",
+        "_follow_person_search_target_yaw_rad",
+        "_follow_person_evidence",
         "_follow_person_track_id",
         "_follow_person_last_heading_rad",
         "_coverage",
@@ -567,6 +607,9 @@ class TrajectoryNavigator:
         self._follow_person_holding = False
         self._follow_person_last_heading_rad: float | None = None
         self._follow_person_state = _FollowPersonState.ACQUIRE
+        self._follow_person_search_phase: int | None = None
+        self._follow_person_search_target_yaw_rad: float | None = None
+        self._follow_person_evidence: FollowPersonEvidence | None = None
 
     def checkpoint(self) -> NavigationStateCheckpoint:
         return NavigationStateCheckpoint(
@@ -597,6 +640,8 @@ class TrajectoryNavigator:
             self._follow_person_holding,
             self._follow_person_last_heading_rad,
             self._follow_person_state.value,
+            self._follow_person_search_phase,
+            self._follow_person_search_target_yaw_rad,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -624,6 +669,9 @@ class TrajectoryNavigator:
         self._follow_person_holding = checkpoint.follow_person_holding
         self._follow_person_last_heading_rad = checkpoint.follow_person_last_heading_rad
         self._follow_person_state = _FollowPersonState(checkpoint.follow_person_state)
+        self._follow_person_search_phase = checkpoint.follow_person_search_phase
+        self._follow_person_search_target_yaw_rad = checkpoint.follow_person_search_target_yaw_rad
+        self._follow_person_evidence = None
         # Derived acceleration state is deliberately not part of replay authority.
         self._static_planning_index = None
         pending = checkpoint.pending_rollout_request
@@ -666,6 +714,7 @@ class TrajectoryNavigator:
         if planner_input is not None and planner_input.context != mission.context:
             raise ValueError("planner input context mismatch")
         self._closed_completion = planner_input
+        self._follow_person_evidence = None
         if mission.context != estimate.context or mission.context != world.context:
             return self._inactive(mission, NavigationStatus.INVALIDATED, "CONTEXT_MISMATCH")
         if mission.lifecycle is not MissionLifecycle.ACTIVE:
@@ -836,6 +885,9 @@ class TrajectoryNavigator:
         self._follow_person_holding = False
         self._follow_person_last_heading_rad = None
         self._follow_person_state = _FollowPersonState.ACQUIRE
+        self._follow_person_search_phase = None
+        self._follow_person_search_target_yaw_rad = None
+        self._follow_person_evidence = None
 
     def _face_person_plan(
         self,
@@ -910,7 +962,76 @@ class TrajectoryNavigator:
             status=NavigationStatus.ACTIVE,
         )
 
+
+    @property
+    def follow_person_evidence(self) -> FollowPersonEvidence | None:
+        """Return passive evidence produced by the latest FOLLOW_PERSON tick."""
+        return self._follow_person_evidence
+
     def _follow_person_plan(
+        self,
+        mission: MissionIntent,
+        estimate: RobotEstimate,
+        world: WorldSnapshot,
+    ) -> NavigationPlan:
+        plan = self._follow_person_plan_impl(mission, estimate, world)
+        self._follow_person_evidence = self._build_follow_person_evidence(mission, estimate, world)
+        return plan
+
+    def _build_follow_person_evidence(
+        self,
+        mission: MissionIntent,
+        estimate: RobotEstimate,
+        world: WorldSnapshot,
+    ) -> FollowPersonEvidence:
+        locked_uid = self._follow_person_track_id
+        retention = self._config.follow_person_retention_min_confidence
+        if retention is None:
+            retention = self._config.follow_person_min_confidence
+        selected = next(
+            (
+                track
+                for track in world.obstacle_tracks
+                if locked_uid is not None
+                and track.track_id == locked_uid
+                and track.confidence >= retention
+            ),
+            None,
+        )
+        target_distance_m = target_bearing_rad = target_confidence = None
+        if selected is not None:
+            dx = selected.x_m - estimate.x_m
+            dy = selected.y_m - estimate.y_m
+            target_distance_m = math.hypot(dx, dy)
+            desired_yaw = estimate.yaw_rad if target_distance_m <= 1e-9 else math.atan2(dy, dx)
+            target_bearing_rad = _wrapped_angle(desired_yaw - estimate.yaw_rad)
+            target_confidence = selected.confidence
+        missing_age_ms = None
+        if self._follow_person_lost_since_ns is not None:
+            missing_age_ms = max(0.0, (mission.context.monotonic_ns - self._follow_person_lost_since_ns) / 1e6)
+        return FollowPersonEvidence(
+            state=self._follow_person_state.value,
+            locked_target_uid=locked_uid,
+            target_visible=selected is not None,
+            target_confidence=target_confidence,
+            target_distance_m=target_distance_m,
+            target_bearing_rad=target_bearing_rad,
+            target_missing_age_ms=missing_age_ms,
+            person_candidate_count=sum(1 for track in world.obstacle_tracks if track.track_id.startswith("person-")),
+            search_phase=self._follow_person_search_phase if self._follow_person_state is _FollowPersonState.SEARCH else None,
+            search_target_yaw_rad=self._follow_person_search_target_yaw_rad if self._follow_person_state is _FollowPersonState.SEARCH else None,
+            acquisition_min_confidence=self._config.follow_person_min_confidence,
+            retention_min_confidence=retention,
+            stand_off_m=self._config.follow_person_stand_off_m,
+            distance_deadband_m=self._config.follow_person_distance_deadband_m,
+            min_safe_distance_m=self._config.follow_person_min_safe_distance_m,
+            lost_hold_ns=self._config.follow_person_lost_hold_ns,
+            search_timeout_ns=self._config.follow_person_search_timeout_ns,
+            search_sweep_rad=self._config.follow_person_search_sweep_rad,
+            search_yaw_tolerance_rad=self._config.follow_person_search_yaw_tolerance_rad,
+        )
+
+    def _follow_person_plan_impl(
         self,
         mission: MissionIntent,
         estimate: RobotEstimate,
@@ -955,6 +1076,8 @@ class TrajectoryNavigator:
             )
             self._follow_person_track_id = selected.track_id
             self._follow_person_lost_since_ns = None
+            self._follow_person_search_phase = None
+            self._follow_person_search_target_yaw_rad = None
             self._follow_person_pivoting = False
             self._follow_person_holding = False
             self._follow_person_state = _FollowPersonState.FOLLOW
@@ -971,6 +1094,8 @@ class TrajectoryNavigator:
             if selected is None:
                 if self._follow_person_lost_since_ns is None:
                     self._follow_person_lost_since_ns = mission.context.monotonic_ns
+                    self._follow_person_search_phase = None
+                    self._follow_person_search_target_yaw_rad = None
                     self._clear_trajectory_plan()
                 lost_ns = mission.context.monotonic_ns - self._follow_person_lost_since_ns
                 if lost_ns <= self._config.follow_person_lost_hold_ns:
@@ -991,22 +1116,37 @@ class TrajectoryNavigator:
                     self._follow_person_last_heading_rad is not None
                     and search_elapsed_ns <= self._config.follow_person_search_timeout_ns
                 ):
-                    # Keep the locked UID and search only by rotation. The target
-                    # heading sequence is deterministic and bounded around the
-                    # last observation; translation remains forbidden.
+                    # Stable target yaw until the physical yaw reaches it. Overall
+                    # search timeout remains the bounded failure exit.
                     self._follow_person_state = _FollowPersonState.SEARCH
-                    search_step = (
-                        search_elapsed_ns // self._config.follow_person_search_step_ns
-                    )
-                    if search_step == 0:
-                        search_offset_rad = 0.0
-                    elif search_step % 2:
-                        search_offset_rad = self._config.follow_person_search_sweep_rad
-                    else:
-                        search_offset_rad = -self._config.follow_person_search_sweep_rad
-                    search_yaw = _wrapped_angle(
-                        self._follow_person_last_heading_rad + search_offset_rad
-                    )
+                    entered_search = self._follow_person_search_phase is None
+                    if entered_search:
+                        # Preserve the established recovery contract: the first
+                        # SEARCH output is the last observed target heading.
+                        # Advancement is evaluated only on a later tick, so a
+                        # robot already aligned with center cannot skip CENTER.
+                        self._follow_person_search_phase = 0
+                        self._follow_person_search_target_yaw_rad = (
+                            self._follow_person_last_heading_rad
+                        )
+                    assert self._follow_person_search_target_yaw_rad is not None
+                    search_yaw = self._follow_person_search_target_yaw_rad
+                    if (
+                        not entered_search
+                        and abs(_wrapped_angle(search_yaw - estimate.yaw_rad))
+                        <= self._config.follow_person_search_yaw_tolerance_rad
+                    ):
+                        next_phase = self._follow_person_search_phase + 1
+                        search_offset_rad = (
+                            self._config.follow_person_search_sweep_rad
+                            if next_phase % 2
+                            else -self._config.follow_person_search_sweep_rad
+                        )
+                        self._follow_person_search_phase = next_phase
+                        search_yaw = _wrapped_angle(
+                            self._follow_person_last_heading_rad + search_offset_rad
+                        )
+                        self._follow_person_search_target_yaw_rad = search_yaw
                     return NavigationPlan(
                         context=mission.context,
                         mission_id=mission.mission_id,
@@ -1019,6 +1159,7 @@ class TrajectoryNavigator:
                     )
 
                 self._follow_person_state = _FollowPersonState.LOST
+                self._follow_person_search_target_yaw_rad = None
                 return self._inactive(
                     mission,
                     NavigationStatus.INVALIDATED,
@@ -1027,6 +1168,8 @@ class TrajectoryNavigator:
 
         assert selected is not None
         self._follow_person_lost_since_ns = None
+        self._follow_person_search_phase = None
+        self._follow_person_search_target_yaw_rad = None
         self._follow_person_state = _FollowPersonState.FOLLOW
 
         dx = selected.x_m - estimate.x_m

@@ -1,3 +1,4 @@
+# R2B4_FOLLOW_PERSON_P0_V2_20260923
 """L4 deterministic temporal realtime world model.
 
 TEMPORAL-2.1 keeps the public V3 L4 boundary unchanged while hardening
@@ -104,6 +105,7 @@ class WorldModelConfig:
     person_track_max_speed_mps: float = 6.0
     person_track_radius_m: float = 0.30
     person_track_max_age_ns: int = 500_000_000
+    person_track_reacquire_max_age_ns: int = 2_500_000_000
 
     # TEMPORAL-1 private implementation bounds. No public contract changes.
     pose_history_max_age_ns: int = 2_000_000_000
@@ -146,6 +148,7 @@ class WorldModelConfig:
             "local_costmap_max_cell_age_ns",
             "person_lidar_max_skew_ns",
             "person_track_max_age_ns",
+            "person_track_reacquire_max_age_ns",
             "pose_history_max_age_ns",
             "scan_history_max_age_ns",
             "structural_max_age_ns",
@@ -153,6 +156,8 @@ class WorldModelConfig:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if self.person_track_reacquire_max_age_ns <= self.person_track_max_age_ns:
+            raise ValueError("person_track_reacquire_max_age_ns must exceed active track max age")
         for name in ("pose_lookup_max_skew_ns", "person_track_prediction_max_age_ns", "structural_confirm_min_span_ns"):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
@@ -357,6 +362,7 @@ class ShadowWorldModel:
             beta=config.person_track_beta,
             prediction_max_age_ns=config.person_track_prediction_max_age_ns,
             max_speed_mps=config.person_track_max_speed_mps,
+            person_reacquire_max_age_ns=config.person_track_reacquire_max_age_ns,
         )
 
     def checkpoint(self) -> WorldModelStateCheckpoint:

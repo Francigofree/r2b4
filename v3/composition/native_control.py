@@ -1,3 +1,4 @@
+# R2B4_FOLLOW_PERSON_P0_V2_20260923
 """Closed-input native V3 L1-L12 control composition."""
 
 from __future__ import annotations
@@ -271,6 +272,10 @@ def v3_navigation_config_from_mapping(
             person_tracking.get("track_max_age_ns", 500_000_000),
             "v3_navigation.person_tracking.track_max_age_ns",
         ),
+        person_track_reacquire_max_age_ns=_positive_int(
+            person_tracking.get("reacquire_max_age_ns", 2_500_000_000),
+            "v3_navigation.person_tracking.reacquire_max_age_ns",
+        ),
     )
     navigation = NavigationConfig(
         face_person_min_confidence=_finite_float(
@@ -325,6 +330,10 @@ def v3_navigation_config_from_mapping(
         follow_person_search_step_ns=_positive_int(
             follow_person.get("search_step_ns", 400_000_000),
             "v3_navigation.follow_person.search_step_ns",
+        ),
+        follow_person_search_yaw_tolerance_rad=_positive_float(
+            follow_person.get("search_yaw_tolerance_rad", 0.08),
+            "v3_navigation.follow_person.search_yaw_tolerance_rad",
         ),
         follow_person_pivot_enter_rad=_positive_float(
             follow_person.get("pivot_enter_rad", 0.55),
@@ -650,7 +659,9 @@ class NativeControlComposition:
     def tick_evidence(self) -> tuple[object, ...]:
         """Expose bounded EKF facts plus any caught L1-L11 exception detail."""
 
-        return self._estimator.last_update_evidence + self._engine.fault_evidence
+        follow = self._navigation.follow_person_evidence
+        follow_evidence = () if follow is None else (follow,)
+        return self._estimator.last_update_evidence + self._engine.fault_evidence + follow_evidence
 
     def set_timing_observer(
         self, observer: Callable[[str, int], None] | None

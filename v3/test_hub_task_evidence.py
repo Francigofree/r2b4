@@ -1,3 +1,4 @@
+# R2B4_FOLLOW_PERSON_P0_V2_20260923
 """Mode-aware, non-diagnostic task evidence for finished R2B4 MCAP captures.
 
 This module raises Test Hub analysis above generic BehaviorEpisode without
@@ -130,6 +131,42 @@ def _navigation_configuration(reader: object) -> tuple[Mapping[str, object], str
     nav = _map(configuration.get("v3_navigation"))
     if nav:
         return nav, "CAPTURE_RUNTIME.v3_navigation"
+
+    # Production already captures the exact resolved runtime dataclasses.
+    runtime = _map(configuration.get("resolved_runtime"))
+    composition = _map(runtime.get("composition"))
+    live_control = _map(composition.get("live_control"))
+    control = _map(live_control.get("control"))
+    navigation = _map(control.get("navigation"))
+    world = _map(control.get("world_model"))
+    if navigation:
+        return {
+            "follow_person": {
+                "minimum_confidence": navigation.get("follow_person_min_confidence"),
+                "retention_minimum_confidence": navigation.get("follow_person_retention_min_confidence"),
+                "align_tolerance_rad": navigation.get("follow_person_align_tolerance_rad"),
+                "release_tolerance_rad": navigation.get("follow_person_release_tolerance_rad"),
+                "stand_off_m": navigation.get("follow_person_stand_off_m"),
+                "distance_deadband_m": navigation.get("follow_person_distance_deadband_m"),
+                "min_safe_distance_m": navigation.get("follow_person_min_safe_distance_m"),
+                "lost_hold_ns": navigation.get("follow_person_lost_hold_ns"),
+                "search_timeout_ns": navigation.get("follow_person_search_timeout_ns"),
+                "search_sweep_rad": navigation.get("follow_person_search_sweep_rad"),
+                "search_step_ns": navigation.get("follow_person_search_step_ns"),
+                "search_yaw_tolerance_rad": navigation.get("follow_person_search_yaw_tolerance_rad"),
+            },
+            "person_tracking": {
+                "track_max_age_ns": world.get("person_track_max_age_ns"),
+                "reacquire_max_age_ns": world.get("person_track_reacquire_max_age_ns"),
+                "max_association_distance_m": world.get("person_track_max_association_distance_m"),
+                "max_speed_mps": world.get("person_track_max_speed_mps"),
+            },
+            "exploration": {
+                "coverage_cell_size_m": navigation.get("coverage_cell_size_m"),
+                "coverage_max_cells": navigation.get("coverage_max_cells"),
+                "local_goal_max_age_ns": navigation.get("local_goal_max_age_ns"),
+            },
+        }, "CAPTURE_RUNTIME.resolved_runtime.composition.live_control.control"
     return {}, "UNAVAILABLE"
 
 
@@ -396,11 +433,138 @@ def _track_distance(track: Mapping[str, object], pose: tuple[float, float, float
     return _distance((x, y), (pose[0], pose[1]))
 
 
+
+def _captured_follow_evidence(tick: Mapping[str, object]) -> Mapping[str, object]:
+    for item in _seq(tick.get("tick_evidence")):
+        row = _map(item)
+        if row.get("__type__") == "FollowPersonEvidence":
+            return row
+    return {}
+
+
+def _follow_person_direct_evidence(
+    episode: Mapping[str, object],
+    ticks: Sequence[Mapping[str, object]],
+    navigation_config: Mapping[str, object],
+) -> tuple[dict[str, object], list[dict[str, object]], list[str]]:
+    config = _map(navigation_config.get("follow_person"))
+    rows = [(tick, evidence) for tick in ticks if (evidence := _captured_follow_evidence(tick))]
+    state_counts: Counter[str] = Counter()
+    search_phase_counts: Counter[str] = Counter()
+    person_candidate_counts: list[float] = []
+    distances: list[float] = []
+    stand_off_errors: list[float] = []
+    bearings: list[float] = []
+    safe_margins: list[float] = []
+    search_yaws: list[float] = []
+    visible = missing = losses = reacquisitions = switches = 0
+    longest_missing_s = 0.0
+    previous_visible: bool | None = None
+    previous_uid: str | None = None
+    events: list[dict[str, object]] = []
+
+    first = rows[0][1] if rows else {}
+    acquire_conf = _num(first.get("acquisition_min_confidence")) or _num(config.get("minimum_confidence"))
+    retain_conf = _num(first.get("retention_min_confidence")) or _num(config.get("retention_minimum_confidence"))
+    stand_off = _num(first.get("stand_off_m")) or _num(config.get("stand_off_m"))
+    deadband = _num(first.get("distance_deadband_m"))
+    if deadband is None:
+        deadband = _num(config.get("distance_deadband_m"))
+    min_safe = _num(first.get("min_safe_distance_m")) or _num(config.get("min_safe_distance_m"))
+
+    for tick, evidence in rows:
+        state_counts[str(evidence.get("state") or "UNKNOWN")] += 1
+        phase = evidence.get("search_phase")
+        if phase is not None:
+            search_phase_counts[str(phase)] += 1
+        count = _integer(evidence.get("person_candidate_count"))
+        if count is not None:
+            person_candidate_counts.append(float(count))
+        uid = evidence.get("locked_target_uid") if isinstance(evidence.get("locked_target_uid"), str) else None
+        if previous_uid is not None and uid is not None and uid != previous_uid:
+            switches += 1
+        if uid is not None:
+            previous_uid = uid
+        is_visible = evidence.get("target_visible") is True
+        if is_visible:
+            visible += 1
+            if previous_visible is False:
+                reacquisitions += 1
+                events.append(_event("FOLLOW_TARGET_REACQUIRED_OBSERVED", episode=episode, tick=tick, extra={"track_id": uid}))
+        else:
+            if uid is not None:
+                missing += 1
+            if previous_visible is True:
+                losses += 1
+                events.append(_event("FOLLOW_TARGET_LOST_OBSERVED", episode=episode, tick=tick, extra={"track_id": uid}))
+        if uid is not None:
+            previous_visible = is_visible
+        missing_age_ms = _num(evidence.get("target_missing_age_ms"))
+        if missing_age_ms is not None:
+            longest_missing_s = max(longest_missing_s, missing_age_ms / 1000.0)
+        distance = _num(evidence.get("target_distance_m"))
+        if distance is not None:
+            distances.append(distance)
+            if stand_off is not None:
+                stand_off_errors.append(distance - stand_off)
+            if min_safe is not None:
+                safe_margins.append(distance - min_safe)
+        bearing = _num(evidence.get("target_bearing_rad"))
+        if bearing is not None:
+            bearings.append(bearing)
+        search_yaw = _num(evidence.get("search_target_yaw_rad"))
+        if search_yaw is not None:
+            search_yaws.append(search_yaw)
+
+    observed = visible + missing
+    within_deadband = (
+        sum(1 for error in stand_off_errors if deadband is not None and abs(error) <= deadband) / len(stand_off_errors)
+        if stand_off_errors and deadband is not None else None
+    )
+    locked_ids = [str(e.get("locked_target_uid")) for _t, e in rows if isinstance(e.get("locked_target_uid"), str)]
+    return {
+        "target_identity": {
+            "inference_source": "CAPTURED_L6_FOLLOW_PERSON_EVIDENCE",
+            "locked_track_id": locked_ids[-1] if locked_ids else None,
+            "observed_target_switch_count": switches,
+        },
+        "capture_time_follow_config": {
+            "acquisition_min_confidence": acquire_conf,
+            "retention_min_confidence": retain_conf,
+            "stand_off_m": stand_off,
+            "distance_deadband_m": deadband,
+            "min_safe_distance_m": min_safe,
+            "lost_hold_ns": _integer(first.get("lost_hold_ns")),
+            "search_timeout_ns": _integer(first.get("search_timeout_ns")),
+            "search_sweep_rad": _num(first.get("search_sweep_rad")),
+            "search_yaw_tolerance_rad": _num(first.get("search_yaw_tolerance_rad")),
+        },
+        "supervisor_state_sample_counts": dict(sorted(state_counts.items())),
+        "search_phase_sample_counts": dict(sorted(search_phase_counts.items())),
+        "visibility": {
+            "visible_sample_count": visible,
+            "missing_sample_count": missing,
+            "visible_sample_fraction": visible / observed if observed else None,
+            "observed_loss_count": losses,
+            "observed_reacquisition_count": reacquisitions,
+            "longest_observed_missing_span_s": longest_missing_s,
+        },
+        "person_candidate_count": _stats(person_candidate_counts),
+        "target_distance_m": _stats(distances),
+        "stand_off_error_m": _error_stats(stand_off_errors),
+        "within_stand_off_deadband_sample_fraction": within_deadband,
+        "minimum_safe_distance_margin_m": _stats(safe_margins),
+        "target_heading_error_rad": _error_stats(bearings),
+        "search_target_yaw_rad": _stats(search_yaws),
+    }, events, []
+
 def _follow_person_evidence(
     episode: Mapping[str, object],
     ticks: Sequence[Mapping[str, object]],
     navigation_config: Mapping[str, object],
 ) -> tuple[dict[str, object], list[dict[str, object]], list[str]]:
+    if any(_captured_follow_evidence(tick) for tick in ticks):
+        return _follow_person_direct_evidence(episode, ticks, navigation_config)
     config = _map(navigation_config.get("follow_person"))
     acquire_conf = _num(config.get("minimum_confidence"))
     retain_conf = _num(config.get("retention_minimum_confidence"))
