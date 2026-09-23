@@ -320,6 +320,7 @@ def run_default(
         capture_sha256=capture_sha256,
         replay_sweep_payload=sweep,
         pytest_payload=pytest_payload,
+        analysis_profile=profile,
     )
 
     return {

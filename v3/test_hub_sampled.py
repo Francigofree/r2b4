@@ -47,6 +47,7 @@ class BehavioralTrends:
         self.blocked_samples = 0
         self.unsafe_output_samples = 0
         self.localization_samples = 0
+        self.coverage: Counter[str] = Counter()
 
     def observe(self, tick: Mapping[str, object], row: dict[str, object]) -> list[Incident]:
         tick_id, ns = int(row["tick_id"]), int(row["monotonic_ns"])
@@ -55,6 +56,12 @@ class BehavioralTrends:
         command = _mapping(_mapping(tick.get("inputs")).get("command"))
         command_id, mission_id = command.get("command_id"), l5.get("mission_id")
         lifecycle, mode, navigation = l5.get("lifecycle"), l5.get("mode"), row.get("navigation_status")
+        for domain, present in (
+            ("command", bool(command)), ("mission", bool(l5)),
+            ("navigation", bool(l6)), ("pose", bool(row.get("pose"))),
+            ("safety", row.get("safety_decision") in {"ALLOW", "STOP", "FAULT"}),
+        ):
+            self.coverage[domain] += int(present)
         identity = (mission_id, command_id, mode, lifecycle)
         gap = self.previous_ns is not None and not 0 < ns - self.previous_ns <= self.max_gap_ns
         if gap or identity != self.previous_identity:
@@ -145,6 +152,8 @@ class BehavioralTrends:
             "localization": {"sample_count": self.localization_samples},
             "trend_window_s": TREND_WINDOW_NS / 1e9,
             "maximum_contiguous_sample_gap_s": self.max_gap_ns / 1e9,
+            "domain_sample_counts": dict(self.coverage),
+            "missing_domains": [domain for domain, count in self.coverage.items() if count == 0],
         }
 
 

@@ -404,7 +404,12 @@ def build_run_view(
             "duration_s": (int(rows[-1]["monotonic_ns"]) - first_ns) / 1e9,
         },
         "data_coverage": {
-            topic: {"captured": count, "usage": _topic_usage(topic)}
+            topic: {
+                "captured": count,
+                "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
+                if topic == TICK_TOPIC and not profile["exact_replay_applicable"]
+                else _topic_usage(topic),
+            }
             for topic, count in sorted(topic_counts.items())
         },
         "lidar_summary": {
@@ -497,6 +502,8 @@ def compare_views(before: Mapping[str, object], after: Mapping[str, object]) -> 
             delta[f"safety_{decision.lower()}"] = b - a
     return {
         "schema": COMPARE_SCHEMA,
+        "before_profile": before.get("analysis_profile"),
+        "after_profile": after.get("analysis_profile"),
         "verdict_policy": "No automatic pass/fail; objective deltas only.",
         "before": left,
         "after": right,

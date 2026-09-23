@@ -1,6 +1,7 @@
 """Sampling-aware behavior scope, warning policy and real MCAP routing."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -84,6 +85,14 @@ def test_low_level_errors_are_warnings_and_not_root_cause_or_failure():
     assert result["replay_status"] == "NOT_APPLICABLE"
 
 
+def test_sample_interval_outlier_is_only_a_warning():
+    triage = analyze_capture(SampledReader([behavior_tick(i) for i in (0, 5, 10, 60)]))
+    timing = [row for row in triage["incidents"] if row["category"] == "TIMING"]
+    assert timing[0]["severity"] == "WARNING"
+    assert timing[0]["reason"] == "CAPTURE_SAMPLE_INTERVAL_OUTLIER"
+    assert diagnosis(triage)["status"] == "WARNING"
+
+
 @pytest.mark.parametrize("decision", ["STOP", "FAULT"])
 def test_safety_outcomes_remain_actionable_despite_low_level_warning_budget(decision):
     ticks = [behavior_tick(i * 5) for i in range(4)]
@@ -161,17 +170,19 @@ def test_real_sampled_mcap_routes_all_artifacts_without_replay(tmp_path, monkeyp
     monkeypatch.setattr("v3.test_hub_next.replay_sweep", no_replay)
     monkeypatch.setattr("v3.test_hub_next.write_motion_quality", no_replay)
     monkeypatch.setattr("v3.test_hub_next.write_localization_quality", no_replay)
+    monkeypatch.setattr("v3.test_hub_portable.slow_tick_correlation_from_inspect", no_replay)
     result = run_default(captured.path, output_dir=tmp_path / "evidence", hz=10, replay_mode="full")
     assert result["status"] == "PASS"
     assert result["replay_status"] == result["replay_sweep_status"] == "NOT_APPLICABLE"
     assert result["analysis_profile"]["tick_sample_hz"] == hz
-    for name in ("inspect", "diagnosis", "agent_brief", "gui_manifest", "evidence_index", "agent_view", "triage", "behavior_summary", "motion_quality", "localization_quality"):
+    for name in ("inspect", "diagnosis", "agent_brief", "gui_manifest", "evidence_index", "agent_view", "triage", "behavior_summary", "motion_quality", "localization_quality", "portable_manifest", "runtime_performance"):
         artifact = json.loads((tmp_path / "evidence" / f"{name}.json").read_text())
         assert artifact["analysis_profile"]["name"] == BEHAVIORAL
     assert not (tmp_path / "evidence" / "replay_result.json").exists()
     assert verify_evidence(tmp_path / "evidence" / "evidence_index.json")["status"] == "PASS"
-    brief = build_agent_brief_only(captured.path)
+    brief = build_agent_brief_only(captured.path, max_bytes=4096)
     assert brief["replay"]["status"] == "NOT_APPLICABLE"
+    assert brief["analysis_profile"]["name"] == BEHAVIORAL
 
 
 def test_sampled_required_loss_remains_evidence_failure(tmp_path):
@@ -185,11 +196,17 @@ def test_sampled_required_loss_remains_evidence_failure(tmp_path):
 
 
 def test_sampled_cli_and_compare_use_metadata_not_view_hz(tmp_path, capsys):
+    from v3.adapters.testhub import TestHubInterfaceAdapter
+
     captured = sampled_capture(tmp_path, 1)
-    assert main(["run", str(captured.path), "--output-dir", str(tmp_path / "cli"), "--hz", "10"]) == 0
+    destination = captured.path.with_suffix(".evidence")
+    assert main(["run", str(captured.path), "--output-dir", str(destination), "--hz", "10"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["analysis_profile"]["tick_sample_hz"] == 1
-    assert main(["compare", str(captured.path), str(tmp_path / "cli")]) == 0
+    adapter = TestHubInterfaceAdapter(SimpleNamespace(current_capture_path=lambda: captured.path), tmp_path)
+    assert adapter.status()["analysis_profile"]["name"] == BEHAVIORAL
+    assert adapter.execute("testhub.run")["analysis_profile"]["name"] == BEHAVIORAL
+    assert main(["compare", str(captured.path), str(destination)]) == 0
     comparison = json.loads(capsys.readouterr().out)
     assert comparison["motion_quality"]["before_profile"]["name"] == BEHAVIORAL
     assert comparison["localization_quality"]["after_profile"]["name"] == BEHAVIORAL

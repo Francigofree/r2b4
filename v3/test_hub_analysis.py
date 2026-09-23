@@ -422,7 +422,10 @@ def analyze_capture(
         and float(covariance["growth_ratio"]) >= 4.0
         and (not behavioral or covariance_trace_values[-1][1] - covariance_trace_values[0][1] >= 5_000_000_000)
     ):
-        tick_id, ns, _value = max(covariance_trace_values, key=lambda item: item[2])
+        tick_id, ns, _value = (
+            covariance_trace_values[-1] if behavioral
+            else max(covariance_trace_values, key=lambda item: item[2])
+        )
         append_incident(
             incidents,
             Incident(

@@ -558,6 +558,8 @@ def replay_sweep(
 
 
 def runtime_performance_summary(inspect_payload: Mapping[str, object]) -> dict[str, object]:
+    profile = _mapping(inspect_payload.get("analysis_profile"))
+    sampled = profile.get("exact_replay_applicable") is False
     final = _mapping(inspect_payload.get("final_event"))
     metrics = _mapping(final.get("metrics"))
     timing = _mapping(metrics.get("runtime_tick_timing"))
@@ -588,7 +590,11 @@ def runtime_performance_summary(inspect_payload: Mapping[str, object]) -> dict[s
             "average_hz": average_hz,
         },
         "per_core_available": False,
-        "slow_tick_correlation": slow_tick_correlation_from_inspect(inspect_payload),
+        "slow_tick_correlation": (
+            {"status": "NOT_APPLICABLE", "reason": "SAMPLED_TICK_STREAM", "claim_policy": {"root_cause_inferred": False}}
+            if sampled else slow_tick_correlation_from_inspect(inspect_payload)
+        ),
+        **({"analysis_profile": profile, "scope": "RECORDED_RUNTIME_AGGREGATES_ONLY"} if sampled else {}),
         "note": "Capture-derived evidence only. Slow-tick correlation is descriptive association, not a causal layer-cost claim.",
     }
 
@@ -651,6 +657,7 @@ def write_portable_manifest(
     capture_sha256: str,
     replay_sweep_payload: Mapping[str, object] | None,
     pytest_payload: Mapping[str, object] | None,
+    analysis_profile: Mapping[str, object] | None = None,
 ) -> Path:
     root = Path(destination)
     artifacts: dict[str, dict[str, object]] = {}
@@ -665,6 +672,7 @@ def write_portable_manifest(
         }
     payload = {
         "schema": PORTABLE_SCHEMA,
+        "analysis_profile": analysis_profile,
         "capture": {
             "name": Path(capture_path).name,
             "sha256": capture_sha256,

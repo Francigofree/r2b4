@@ -1344,6 +1344,8 @@ def _fit_json_budget(
     if size() > max_bytes:
         result = {
             "schema": AGENT_BRIEF_SCHEMA,
+            "analysis_profile": payload.get("analysis_profile"),
+            "replay": {"status": result.get("replay", {}).get("status")},
             "status": payload.get("status"),
             "diagnosis_status": payload.get(
                 "diagnosis_status"

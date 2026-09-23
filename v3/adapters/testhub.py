@@ -106,6 +106,7 @@ class TestHubInterfaceAdapter:
                 "capture": str(capture),
                 "evidence": str(evidence),
                 "status": agent.get("status") if agent else None,
+                "analysis_profile": agent.get("analysis_profile") if agent else None,
                 "replay_status": agent.get("replay_status") if agent else None,
                 "replay_sweep_status": agent.get("replay_sweep_status") if agent else None,
                 "behavior_status": agent.get("behavior_status") if agent else None,
@@ -154,6 +155,7 @@ class TestHubInterfaceAdapter:
         agent = self._load_mapping(agent_path) or {}
         return {
             "status": agent.get("status") or "PASS",
+            "analysis_profile": agent.get("analysis_profile"),
             "state": "ALREADY_FINISHED",
             "capture": str(capture),
             "output_dir": str(evidence),

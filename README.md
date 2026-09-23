@@ -120,7 +120,7 @@ telepíteni.
 ## Test Hub
 
 Az alapértelmezett belépő az integrált Test Hub Next. Paraméter nélkül a
-legújabb `runtime/captures/*.mcap` fájlt elemzi, incident replayt futtat,
+legújabb `runtime/captures/*.mcap` fájlt elemzi, a capture profiljának megfelelően,
 és 5 Hz-es áttekintést, valamint `agent_view.json` összefoglalót készít:
 
 ```bash
@@ -131,14 +131,50 @@ python3 -m v3.test_hub compare before.mcap after.mcap
 ```
 
 A `v3.test_hub_next` közvetlenül is használható. Az alapértelmezett cél
-`<capture>.mcap.evidence_next/`; meglévő adatot nem ír felül, ismételt futáshoz
-új `--output-dir` szükséges. Az 1/5/10 Hz-es nézet megőrzi a rövid
+`<capture>.evidence/`; meglévő adatot nem ír felül, ismételt futáshoz
+új `--output-dir` szükséges. Az 1/5/10 Hz-es nézet megőrzi a capture-ben rögzített
 állapotváltásokat is. A compare különbségeket mutat, automatikus verdict nélkül.
 A nézetek származtatott adatok; az MCAP és a canonical replay marad az authority.
 
-A V2 háttérmodulok szükséges függőségek. A launcher (`./r2b4`) változatlanul
-a korábbi V2 evidence-útvonalat használja. A régi `validate`, `replay`,
+A V2 háttérmodulok szükséges függőségek. A runtime utófeldolgozása és az operator
+ugyanezt az automatikus profilválasztást használja. A régi `validate`, `replay`,
 `inspect`, `verify-result`, `verify-evidence` kompatibilitási parancsok is megmaradnak.
+
+### Capture-alapú feldolgozási profilok
+
+A profilválasztás forrása az MCAP `r2b4.capture.tick_sample_hz` metaadata.
+A `--hz` csak az áttekintő nézet sűrűségét állítja; nem módosítja az elemzési profilt.
+
+| Capture | Profil | Vizsgálatok |
+|---|---|---|
+| 50 Hz | `FORENSIC_LOW_LEVEL` | Változatlan tick-/layer-vizsgálatok, timing, raw szenzorok, canonical replay és sweep |
+| ≤10 Hz (jelenleg 1/5/10 Hz) | `BEHAVIORAL_HIGH_LEVEL` | Mission/command életciklus és azonosítók, navigáció, mozgásblokkolás, pose/covariance trend, safety-kimenetel |
+
+Régi, frekvencia-metaadat nélküli MCAP a korábbi 50 Hz-es utat kapja. Hibás vagy
+nem támogatott frekvencia explicit hiba; a rendszer nem találgat a tick-távolságból.
+
+A behavioral profil a meglévő capture-beolvasást és mission-epizódokat használja.
+A szándékos tick-kihagyás nem adatvesztés. A navigációs stagnálás legalább 5 másodperc
+megfigyelt, változatlan progress után jelez, egy aktív autonóm missionon belül.
+Mission-/command-váltás vagy három mintaperiódusnál nagyobb rés új ablakot kezd;
+TELEOP-ra nincs progress-stagnálási szabály. A covariance-jelzés legalább 5 másodperc
+alatti, első és utolsó minta közötti négyszeres növekedést vizsgál.
+
+Az alacsony szintű device-, admission-, layer-fault- és timing-észrevétel legfeljebb
+`WARNING`, és nem válik bizonyított root cause-zá. A megfigyelt mission/safety FAULT,
+mozgásblokkolás vagy navigációs probléma `FINDING` marad. A sérült, hiányos vagy
+nem finalizált capture evidence-hiba (`FAIL`), ezt a ritkább mintavétel nem menti fel.
+
+A behavioral profilban a replay és sweep `NOT_APPLICABLE`, a `--replay` értékétől
+függetlenül. Ez nem `MATCH`, és nem teljesít exact-replay követelményt. Ehhez 50 Hz-es
+capture szükséges. A mozgás- és lokalizációs quality fájlok mintavételezett trendeket
+tartalmaznak; jerk-, control-jitter- és raw-szenzor folytonossági verdictet nem adnak.
+
+A választott profil és korlátai az `agent_view.json`, `diagnosis.json`, agent brief,
+GUI manifest és áttekintő nézet részei. A `behavior_summary.json`,
+`behavior_episodes.ndjson` és `behavior_timeline.ndjson` tartalmazza a mission- és
+command-kapcsolatokat. A számlálók rögzített mintákat számolnak, nem teljes control
+tick-számot vagy időarányt; a köztes, nem rögzített állapotok nem rekonstruálhatók.
 
 Olcsó integritási összefoglaló:
 
