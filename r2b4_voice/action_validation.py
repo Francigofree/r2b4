@@ -11,6 +11,9 @@ from v3.action_catalog import action_descriptor
 from .conversation_contracts import RobotAction, RobotContextSnapshot
 
 
+PROPOSAL_ACCEPTED = "PROPOSAL_ACCEPTED"
+
+
 @dataclass(frozen=True, slots=True)
 class ActionValidation:
     accepted: bool
@@ -50,7 +53,7 @@ class RobotActionValidator:
                 return ActionValidation(False, f"PARAMETER_OUT_OF_RANGE:{name}")
             if spec.maximum is not None and value > spec.maximum:
                 return ActionValidation(False, f"PARAMETER_OUT_OF_RANGE:{name}")
-        return ActionValidation(True, "SHADOW_ACCEPTED")
+        return ActionValidation(True, PROPOSAL_ACCEPTED)
 
     @staticmethod
     def _find_capability(name: str, context: RobotContextSnapshot) -> Mapping[str, object] | None:
@@ -60,4 +63,4 @@ class RobotActionValidator:
         return None
 
 
-__all__ = ["ActionValidation", "RobotActionValidator"]
+__all__ = ["PROPOSAL_ACCEPTED", "ActionValidation", "RobotActionValidator"]

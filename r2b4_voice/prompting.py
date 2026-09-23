@@ -9,7 +9,7 @@ from pathlib import Path
 from .conversation_contracts import ConversationMemoryTurn, RobotContextSnapshot, UserTextTurn
 
 
-PROMPT_VERSION = "R2B4_VOICE_LLM_SYSTEM_V4"
+PROMPT_VERSION = "R2B4_VOICE_LLM_SYSTEM_V5"
 
 
 class PromptAssembler:

@@ -47,6 +47,17 @@ from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActiv
 
 # R2B4_HRI_P0_V1
 
+DEFAULT_ACTION_MODE = "execute"
+
+
+def _action_receipt_text(*, status: str, executed: bool, action_name: str | None) -> str:
+    """Return speech derived only from the fresh executor receipt, never from LLM claims."""
+    if executed:
+        return "Megálltam." if action_name == "v3.command.stop" else "Rendben."
+    if status == "SHADOW_ACCEPTED":
+        return "Értettem, de a végrehajtás teszt módban van."
+    return "A parancsot most nem tudom végrehajtani."
+
 
 class VoiceServiceState(str, Enum):
     STARTING = "STARTING"
@@ -383,7 +394,7 @@ class VoiceConversationService:
             return
 
         self._last_action_status = str(result.get("action_status")) if result.get("action_status") is not None else None
-        defer_action_feedback = False
+        action_spoken: str | None = None
         proposed = result.get("proposed_action")
         if proposed is not None:
             self._hri_event(
@@ -407,6 +418,11 @@ class VoiceConversationService:
                 try:
                     execution = self._action_executor.execute_proposal(proposed)
                     self._last_action_status = execution.status
+                    action_spoken = _action_receipt_text(
+                        status=execution.status,
+                        executed=execution.executed,
+                        action_name=execution.action_name,
+                    )
                     self._hri_event(
                         "ACTION_EXECUTED" if execution.executed else "ACTION_REJECTED",
                         interaction_id=interaction_id, turn_id=turn_id,
@@ -417,7 +433,6 @@ class VoiceConversationService:
                         execution.executed and execution.action_name != "v3.command.stop"
                         and execution.command_id and execution.mission_id
                     ):
-                        defer_action_feedback = True
                         self._behavior_observer.observe(
                             interaction_id=interaction_id, turn_id=turn_id,
                             session_id=self._conversation.session_id,
@@ -431,6 +446,9 @@ class VoiceConversationService:
                 except Exception as exc:
                     # Fail closed: executor failure never falls back to a direct action path.
                     self._last_action_status = "REJECTED:EXECUTOR_ERROR"
+                    action_spoken = _action_receipt_text(
+                        status=self._last_action_status, executed=False, action_name=None
+                    )
                     self._last_error = f"voice action {type(exc).__name__}: {exc}"
                     self._hri_event(
                         "ACTION_REJECTED", interaction_id=interaction_id, turn_id=turn_id,
@@ -447,8 +465,8 @@ class VoiceConversationService:
 
         if self._stop_interrupt_latched.is_set():
             spoken = "Megálltam."
-        elif defer_action_feedback:
-            spoken = "Rendben."
+        elif action_spoken is not None:
+            spoken = action_spoken
         else:
             spoken = result.get("spoken_text")
         if not isinstance(spoken, str) or not spoken.strip():
@@ -823,8 +841,8 @@ def _diagnostic_check(root: Path) -> int:
         "tts_model": tts_model,
         "tts_voice": tts_voice,
         "tts_api_key": "PASS" if gemini_key else "FAIL",
-        "action_mode": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or "shadow").lower(),
-        "motor_action_execution": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or "shadow").lower() == "execute",
+        "action_mode": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).lower(),
+        "motor_action_execution": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).lower() == "execute",
         "half_duplex_self_hearing_guard": True,
     }
     try:
@@ -887,7 +905,7 @@ def main(argv: list[str] | None = None) -> int:
         groq_key = _setting(project_env, "GROQ_API_KEY")
         gemini_key = _setting(project_env, "GEMINI_API_KEY")
         provider, model, llm_key = _resolved_llm(project_env)
-        action_mode = (args.action_mode or _setting(project_env, "R2B4_VOICE_ACTION_MODE") or "shadow").strip().lower()
+        action_mode = (args.action_mode or _setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).strip().lower()
         if action_mode not in {"shadow", "execute"}:
             raise RuntimeError("R2B4_VOICE_ACTION_MODE must be shadow or execute")
         watchdog_raw = args.action_watchdog_s if args.action_watchdog_s is not None else (_setting(project_env, "R2B4_VOICE_ACTION_WATCHDOG_S") or "30")
