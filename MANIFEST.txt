@@ -1,0 +1,20 @@
+R2B4 Test Hub High-Level Evidence Upgrade
+Baseline: e237f9c43835de5a63388cbdc6937a863a3b4a09
+
+Adds:
+  v3/test_hub_task_evidence.py
+  v3/test_hub_motion_tuning.py
+  tests/test_v3_test_hub_task_evidence.py
+
+Patches:
+  v3/test_hub_next.py
+  v3/test_hub_views.py
+  v3/adapters/testhub.py
+  README.md (documentation only)
+
+Does not patch:
+  capture encoding
+  runtime scheduling/processes
+  L1-L12 production layers
+  motor/safety authority
+  hardware drivers
