@@ -27,6 +27,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
+from v3.action_catalog import (
+    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
+    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
+)
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.control_cli import RESIDENT_PROCESS_STATUS_SCHEMA, _read_status
 from v3.mcap_reader import McapReadError, McapReader
@@ -534,8 +538,8 @@ class OperatorController:
     def followperson(
         self,
         *,
-        max_v_mps: float = 0.15,
-        max_omega_rad_s: float = 0.30,
+        max_v_mps: float = FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
+        max_omega_rad_s: float = FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ,

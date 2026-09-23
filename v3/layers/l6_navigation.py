@@ -1319,7 +1319,21 @@ class TrajectoryNavigator:
 
         if self._follow_person_holding:
             self._clear_trajectory_plan()
-            return self._inactive(mission, NavigationStatus.IDLE, "PERSON_DISTANCE_HOLD")
+            # Stand-off arrival is ordinary zero guidance, not authority
+            # revocation. Keep it ACTIVE so L7 retains temporal ownership and
+            # L8/L9 can perform bounded deceleration/restart. Too-close,
+            # missing-target and safety paths remain fail-closed.
+            return NavigationPlan(
+                context=mission.context,
+                mission_id=mission.mission_id,
+                route=(Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad),),
+                velocity_target=None,
+                constraints=mission.constraints,
+                corridor_radius_m=0.0,
+                progress=0.0,
+                status=NavigationStatus.ACTIVE,
+                reason="PERSON_DISTANCE_HOLD",
+            )
 
         costmap = world.local_costmap
         if costmap is None:

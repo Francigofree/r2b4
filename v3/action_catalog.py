@@ -16,6 +16,12 @@ from typing import Mapping
 ACTION_CATALOG_SCHEMA = "R2B4_ACTION_CATALOG_V1"
 ACTION_DESCRIPTOR_SCHEMA = "R2B4_ACTION_DESCRIPTOR_V1"
 
+# Canonical default FOLLOW envelope. All operator/agent ingress surfaces import
+# these values so a stale UI/adapter default cannot silently reintroduce a
+# lower nominal speed. Dynamic safety/geometry layers may still tighten it.
+FOLLOW_PERSON_DEFAULT_MAX_V_MPS = 0.25
+FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S = 0.30
+
 
 @dataclass(frozen=True, slots=True)
 class ActionParameterDescriptor:
@@ -167,8 +173,8 @@ _DESCRIPTORS = (
         "v3.command.follow_person",
         "Follow the currently tracked person using the canonical navigation stack.",
         (
-            _p("max_v_mps", "Maximum following linear speed.", minimum=0.01, maximum=0.50, default=0.15),
-            _p("max_omega_rad_s", "Maximum following angular speed.", minimum=0.01, maximum=1.20, default=0.30),
+            _p("max_v_mps", "Maximum following linear speed.", minimum=0.01, maximum=0.50, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS),
+            _p("max_omega_rad_s", "Maximum following angular speed.", minimum=0.01, maximum=1.20, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S),
         ),
         voice_exposed=True,
         session_watchdog=True,
@@ -203,6 +209,8 @@ __all__ = [
     "ACTION_CATALOG",
     "ACTION_CATALOG_SCHEMA",
     "ACTION_DESCRIPTOR_SCHEMA",
+    "FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S",
+    "FOLLOW_PERSON_DEFAULT_MAX_V_MPS",
     "ActionDescriptor",
     "ActionParameterDescriptor",
     "action_catalog_jsonable",

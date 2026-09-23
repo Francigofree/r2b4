@@ -13,6 +13,10 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
+from v3.action_catalog import (
+    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
+    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
+)
 from v3.adapters.resident_command import (
     ResidentCommandClient,
     ResidentCommandMailboxConfig,
@@ -230,8 +234,8 @@ def _parser() -> argparse.ArgumentParser:
         help="heartbeat FOLLOW_PERSON: safely follow the selected person",
     )
     followperson.add_argument("--command-id")
-    followperson.add_argument("--max-v-mps", type=float, default=0.15)
-    followperson.add_argument("--max-omega-rad-s", type=float, default=0.30)
+    followperson.add_argument("--max-v-mps", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
+    followperson.add_argument("--max-omega-rad-s", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S)
     return parser
 
 

@@ -1,0 +1,43 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "findings": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790197280267708471-19118",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-741",
+      "layer": "L6",
+      "monotonic_ns": 6768618745259,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 741
+    }
+  ],
+  "metrics": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 1.6767028312585988,
+    "requested_motion_tick_count": 110
+  },
+  "sample_count": 177,
+  "schema": "R2B4_TEST_HUB_SAMPLED_MOTION_V1",
+  "status": "FINDING",
+  "trends": {
+    "blocked_sample_count": 0,
+    "longest_observed_blocked_span_s": 0.0
+  }
+}

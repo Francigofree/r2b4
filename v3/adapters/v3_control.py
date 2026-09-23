@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from v3.action_catalog import ACTION_CATALOG, ActionDescriptor
+from v3.action_catalog import (
+    ACTION_CATALOG,
+    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
+    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
+    ActionDescriptor,
+)
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
@@ -138,8 +143,10 @@ class V3ControlInterfaceAdapter:
                 max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
             )
         if action == "v3.command.follow_person":
-            max_v = params.pop("max_v_mps", 0.15)
-            max_omega = params.pop("max_omega_rad_s", 0.30)
+            max_v = params.pop("max_v_mps", FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
+            max_omega = params.pop(
+                "max_omega_rad_s", FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S
+            )
             self._reject_unknown(params, set())
             return self.controller.followperson(
                 max_v_mps=max_v, max_omega_rad_s=max_omega,

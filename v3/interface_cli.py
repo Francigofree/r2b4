@@ -17,6 +17,10 @@ import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from v3.action_catalog import (
+    FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
+    FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
+)
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent
 from v3.pytest_profiles import pytest_profile_names
@@ -200,8 +204,8 @@ def _parser() -> argparse.ArgumentParser:
 
     follow = sub.add_parser("followperson", aliases=["fp"], help="follow person: [SECONDS]")
     follow.add_argument("seconds", type=float, nargs="?", default=0.0)
-    follow.add_argument("--max-v", type=float, default=0.15)
-    follow.add_argument("--max-omega", type=float, default=0.30)
+    follow.add_argument("--max-v", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
+    follow.add_argument("--max-omega", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S)
 
     testhub = sub.add_parser("testhub", aliases=["th"], help="Test Hub status/run/batch")
     testhub.add_argument("operation", nargs="?", choices=("status", "run", "batch"), default="status")
