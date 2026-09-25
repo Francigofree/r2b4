@@ -1,0 +1,3323 @@
+{
+  "actionable_incident_count": 0,
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "NOMINAL",
+  "behavioral_trends": {
+    "commands": {
+      "observed_change_count": 553,
+      "observed_unique_count": 554
+    },
+    "domain_sample_counts": {
+      "command": 628,
+      "mission": 628,
+      "navigation": 628,
+      "pose": 628,
+      "safety": 628
+    },
+    "localization": {
+      "sample_count": 628
+    },
+    "maximum_contiguous_sample_gap_s": 0.3,
+    "missing_domains": [],
+    "missions": {
+      "lifecycle_sample_counts": {
+        "ACTIVE": 62,
+        "CANCELLED": 4,
+        "IDLE": 562
+      },
+      "observed_lifecycle_change_count": 12,
+      "observed_unique_count": 554
+    },
+    "motion": {
+      "blocked_sample_count": 0,
+      "longest_observed_blocked_span_s": 0.0
+    },
+    "navigation": {
+      "stagnation": null,
+      "status_sample_counts": {
+        "ACTIVE": 62,
+        "IDLE": 566
+      }
+    },
+    "safety": {
+      "unsafe_output_sample_count": 0
+    },
+    "trend_window_s": 5.0
+  },
+  "capture": {
+    "capture_id": "v3_20260925_234702_20449_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 0,
+          "before": 6
+        },
+        {
+          "after": 6,
+          "before": 11
+        },
+        {
+          "after": 11,
+          "before": 16
+        },
+        {
+          "after": 16,
+          "before": 21
+        },
+        {
+          "after": 21,
+          "before": 26
+        },
+        {
+          "after": 26,
+          "before": 31
+        },
+        {
+          "after": 31,
+          "before": 36
+        },
+        {
+          "after": 36,
+          "before": 41
+        },
+        {
+          "after": 41,
+          "before": 46
+        },
+        {
+          "after": 46,
+          "before": 51
+        },
+        {
+          "after": 51,
+          "before": 55
+        },
+        {
+          "after": 55,
+          "before": 61
+        },
+        {
+          "after": 61,
+          "before": 66
+        },
+        {
+          "after": 66,
+          "before": 71
+        },
+        {
+          "after": 71,
+          "before": 76
+        },
+        {
+          "after": 76,
+          "before": 81
+        },
+        {
+          "after": 81,
+          "before": 86
+        },
+        {
+          "after": 86,
+          "before": 91
+        },
+        {
+          "after": 91,
+          "before": 96
+        },
+        {
+          "after": 96,
+          "before": 101
+        },
+        {
+          "after": 101,
+          "before": 106
+        },
+        {
+          "after": 106,
+          "before": 111
+        },
+        {
+          "after": 111,
+          "before": 116
+        },
+        {
+          "after": 116,
+          "before": 120
+        },
+        {
+          "after": 120,
+          "before": 126
+        },
+        {
+          "after": 126,
+          "before": 131
+        },
+        {
+          "after": 131,
+          "before": 135
+        },
+        {
+          "after": 135,
+          "before": 140
+        },
+        {
+          "after": 140,
+          "before": 146
+        },
+        {
+          "after": 146,
+          "before": 151
+        },
+        {
+          "after": 151,
+          "before": 156
+        },
+        {
+          "after": 156,
+          "before": 161
+        },
+        {
+          "after": 161,
+          "before": 166
+        },
+        {
+          "after": 166,
+          "before": 171
+        },
+        {
+          "after": 171,
+          "before": 176
+        },
+        {
+          "after": 176,
+          "before": 181
+        },
+        {
+          "after": 181,
+          "before": 185
+        },
+        {
+          "after": 185,
+          "before": 191
+        },
+        {
+          "after": 191,
+          "before": 196
+        },
+        {
+          "after": 196,
+          "before": 200
+        },
+        {
+          "after": 200,
+          "before": 206
+        },
+        {
+          "after": 206,
+          "before": 211
+        },
+        {
+          "after": 211,
+          "before": 215
+        },
+        {
+          "after": 215,
+          "before": 221
+        },
+        {
+          "after": 221,
+          "before": 226
+        },
+        {
+          "after": 226,
+          "before": 230
+        },
+        {
+          "after": 230,
+          "before": 235
+        },
+        {
+          "after": 235,
+          "before": 241
+        },
+        {
+          "after": 241,
+          "before": 246
+        },
+        {
+          "after": 246,
+          "before": 251
+        },
+        {
+          "after": 251,
+          "before": 256
+        },
+        {
+          "after": 256,
+          "before": 261
+        },
+        {
+          "after": 261,
+          "before": 266
+        },
+        {
+          "after": 266,
+          "before": 271
+        },
+        {
+          "after": 271,
+          "before": 276
+        },
+        {
+          "after": 276,
+          "before": 281
+        },
+        {
+          "after": 281,
+          "before": 286
+        },
+        {
+          "after": 286,
+          "before": 291
+        },
+        {
+          "after": 291,
+          "before": 295
+        },
+        {
+          "after": 295,
+          "before": 301
+        },
+        {
+          "after": 301,
+          "before": 306
+        },
+        {
+          "after": 306,
+          "before": 311
+        },
+        {
+          "after": 311,
+          "before": 316
+        },
+        {
+          "after": 316,
+          "before": 321
+        },
+        {
+          "after": 321,
+          "before": 325
+        },
+        {
+          "after": 325,
+          "before": 331
+        },
+        {
+          "after": 331,
+          "before": 336
+        },
+        {
+          "after": 336,
+          "before": 340
+        },
+        {
+          "after": 340,
+          "before": 346
+        },
+        {
+          "after": 346,
+          "before": 351
+        },
+        {
+          "after": 351,
+          "before": 356
+        },
+        {
+          "after": 356,
+          "before": 361
+        },
+        {
+          "after": 361,
+          "before": 366
+        },
+        {
+          "after": 366,
+          "before": 370
+        },
+        {
+          "after": 370,
+          "before": 376
+        },
+        {
+          "after": 376,
+          "before": 381
+        },
+        {
+          "after": 381,
+          "before": 386
+        },
+        {
+          "after": 386,
+          "before": 391
+        },
+        {
+          "after": 391,
+          "before": 395
+        },
+        {
+          "after": 395,
+          "before": 401
+        },
+        {
+          "after": 401,
+          "before": 406
+        },
+        {
+          "after": 406,
+          "before": 411
+        },
+        {
+          "after": 411,
+          "before": 416
+        },
+        {
+          "after": 416,
+          "before": 421
+        },
+        {
+          "after": 421,
+          "before": 426
+        },
+        {
+          "after": 426,
+          "before": 430
+        },
+        {
+          "after": 430,
+          "before": 436
+        },
+        {
+          "after": 436,
+          "before": 440
+        },
+        {
+          "after": 440,
+          "before": 446
+        },
+        {
+          "after": 446,
+          "before": 451
+        },
+        {
+          "after": 451,
+          "before": 456
+        },
+        {
+          "after": 456,
+          "before": 460
+        },
+        {
+          "after": 460,
+          "before": 465
+        },
+        {
+          "after": 465,
+          "before": 471
+        },
+        {
+          "after": 471,
+          "before": 476
+        },
+        {
+          "after": 476,
+          "before": 481
+        },
+        {
+          "after": 481,
+          "before": 486
+        },
+        {
+          "after": 486,
+          "before": 490
+        },
+        {
+          "after": 490,
+          "before": 496
+        },
+        {
+          "after": 496,
+          "before": 501
+        },
+        {
+          "after": 501,
+          "before": 506
+        },
+        {
+          "after": 506,
+          "before": 511
+        },
+        {
+          "after": 511,
+          "before": 516
+        },
+        {
+          "after": 516,
+          "before": 521
+        },
+        {
+          "after": 521,
+          "before": 525
+        },
+        {
+          "after": 525,
+          "before": 530
+        },
+        {
+          "after": 530,
+          "before": 536
+        },
+        {
+          "after": 536,
+          "before": 541
+        },
+        {
+          "after": 541,
+          "before": 546
+        },
+        {
+          "after": 546,
+          "before": 551
+        },
+        {
+          "after": 551,
+          "before": 556
+        },
+        {
+          "after": 556,
+          "before": 561
+        },
+        {
+          "after": 561,
+          "before": 565
+        },
+        {
+          "after": 565,
+          "before": 570
+        },
+        {
+          "after": 570,
+          "before": 576
+        },
+        {
+          "after": 576,
+          "before": 581
+        },
+        {
+          "after": 581,
+          "before": 585
+        },
+        {
+          "after": 585,
+          "before": 590
+        },
+        {
+          "after": 590,
+          "before": 596
+        },
+        {
+          "after": 596,
+          "before": 601
+        },
+        {
+          "after": 601,
+          "before": 606
+        },
+        {
+          "after": 606,
+          "before": 611
+        },
+        {
+          "after": 611,
+          "before": 616
+        },
+        {
+          "after": 616,
+          "before": 621
+        },
+        {
+          "after": 621,
+          "before": 626
+        },
+        {
+          "after": 626,
+          "before": 630
+        },
+        {
+          "after": 630,
+          "before": 635
+        },
+        {
+          "after": 635,
+          "before": 641
+        },
+        {
+          "after": 641,
+          "before": 646
+        },
+        {
+          "after": 646,
+          "before": 651
+        },
+        {
+          "after": 651,
+          "before": 656
+        },
+        {
+          "after": 656,
+          "before": 661
+        },
+        {
+          "after": 661,
+          "before": 666
+        },
+        {
+          "after": 666,
+          "before": 671
+        },
+        {
+          "after": 671,
+          "before": 676
+        },
+        {
+          "after": 676,
+          "before": 680
+        },
+        {
+          "after": 680,
+          "before": 686
+        },
+        {
+          "after": 686,
+          "before": 691
+        },
+        {
+          "after": 691,
+          "before": 696
+        },
+        {
+          "after": 696,
+          "before": 701
+        },
+        {
+          "after": 701,
+          "before": 706
+        },
+        {
+          "after": 706,
+          "before": 711
+        },
+        {
+          "after": 711,
+          "before": 716
+        },
+        {
+          "after": 716,
+          "before": 721
+        },
+        {
+          "after": 721,
+          "before": 726
+        },
+        {
+          "after": 726,
+          "before": 731
+        },
+        {
+          "after": 731,
+          "before": 736
+        },
+        {
+          "after": 736,
+          "before": 741
+        },
+        {
+          "after": 741,
+          "before": 746
+        },
+        {
+          "after": 746,
+          "before": 751
+        },
+        {
+          "after": 751,
+          "before": 756
+        },
+        {
+          "after": 756,
+          "before": 760
+        },
+        {
+          "after": 760,
+          "before": 766
+        },
+        {
+          "after": 766,
+          "before": 771
+        },
+        {
+          "after": 771,
+          "before": 775
+        },
+        {
+          "after": 775,
+          "before": 780
+        },
+        {
+          "after": 780,
+          "before": 786
+        },
+        {
+          "after": 786,
+          "before": 791
+        },
+        {
+          "after": 791,
+          "before": 796
+        },
+        {
+          "after": 796,
+          "before": 800
+        },
+        {
+          "after": 800,
+          "before": 806
+        },
+        {
+          "after": 806,
+          "before": 811
+        },
+        {
+          "after": 811,
+          "before": 816
+        },
+        {
+          "after": 816,
+          "before": 821
+        },
+        {
+          "after": 821,
+          "before": 826
+        },
+        {
+          "after": 826,
+          "before": 830
+        },
+        {
+          "after": 830,
+          "before": 836
+        },
+        {
+          "after": 836,
+          "before": 841
+        },
+        {
+          "after": 841,
+          "before": 845
+        },
+        {
+          "after": 845,
+          "before": 851
+        },
+        {
+          "after": 851,
+          "before": 856
+        },
+        {
+          "after": 856,
+          "before": 861
+        },
+        {
+          "after": 861,
+          "before": 866
+        },
+        {
+          "after": 866,
+          "before": 870
+        },
+        {
+          "after": 870,
+          "before": 876
+        },
+        {
+          "after": 876,
+          "before": 881
+        },
+        {
+          "after": 881,
+          "before": 886
+        },
+        {
+          "after": 886,
+          "before": 891
+        },
+        {
+          "after": 891,
+          "before": 896
+        },
+        {
+          "after": 896,
+          "before": 901
+        },
+        {
+          "after": 901,
+          "before": 906
+        },
+        {
+          "after": 906,
+          "before": 911
+        },
+        {
+          "after": 911,
+          "before": 916
+        },
+        {
+          "after": 916,
+          "before": 921
+        },
+        {
+          "after": 921,
+          "before": 926
+        },
+        {
+          "after": 926,
+          "before": 931
+        },
+        {
+          "after": 931,
+          "before": 936
+        },
+        {
+          "after": 936,
+          "before": 941
+        },
+        {
+          "after": 941,
+          "before": 946
+        },
+        {
+          "after": 946,
+          "before": 951
+        },
+        {
+          "after": 951,
+          "before": 956
+        },
+        {
+          "after": 956,
+          "before": 961
+        },
+        {
+          "after": 961,
+          "before": 965
+        },
+        {
+          "after": 965,
+          "before": 971
+        },
+        {
+          "after": 971,
+          "before": 976
+        },
+        {
+          "after": 976,
+          "before": 981
+        },
+        {
+          "after": 981,
+          "before": 986
+        },
+        {
+          "after": 986,
+          "before": 991
+        },
+        {
+          "after": 991,
+          "before": 996
+        },
+        {
+          "after": 996,
+          "before": 1000
+        },
+        {
+          "after": 1000,
+          "before": 1006
+        },
+        {
+          "after": 1006,
+          "before": 1011
+        },
+        {
+          "after": 1011,
+          "before": 1016
+        },
+        {
+          "after": 1016,
+          "before": 1020
+        },
+        {
+          "after": 1020,
+          "before": 1025
+        },
+        {
+          "after": 1025,
+          "before": 1031
+        },
+        {
+          "after": 1031,
+          "before": 1036
+        },
+        {
+          "after": 1036,
+          "before": 1041
+        },
+        {
+          "after": 1041,
+          "before": 1046
+        },
+        {
+          "after": 1046,
+          "before": 1051
+        },
+        {
+          "after": 1051,
+          "before": 1056
+        },
+        {
+          "after": 1056,
+          "before": 1061
+        },
+        {
+          "after": 1061,
+          "before": 1066
+        },
+        {
+          "after": 1066,
+          "before": 1071
+        },
+        {
+          "after": 1071,
+          "before": 1076
+        },
+        {
+          "after": 1076,
+          "before": 1081
+        },
+        {
+          "after": 1081,
+          "before": 1086
+        },
+        {
+          "after": 1086,
+          "before": 1091
+        },
+        {
+          "after": 1091,
+          "before": 1095
+        },
+        {
+          "after": 1095,
+          "before": 1101
+        },
+        {
+          "after": 1101,
+          "before": 1104
+        },
+        {
+          "after": 1104,
+          "before": 1109
+        },
+        {
+          "after": 1109,
+          "before": 1115
+        },
+        {
+          "after": 1115,
+          "before": 1120
+        },
+        {
+          "after": 1120,
+          "before": 1125
+        },
+        {
+          "after": 1125,
+          "before": 1130
+        },
+        {
+          "after": 1130,
+          "before": 1135
+        },
+        {
+          "after": 1135,
+          "before": 1140
+        },
+        {
+          "after": 1140,
+          "before": 1145
+        },
+        {
+          "after": 1145,
+          "before": 1150
+        },
+        {
+          "after": 1150,
+          "before": 1155
+        },
+        {
+          "after": 1155,
+          "before": 1160
+        },
+        {
+          "after": 1160,
+          "before": 1165
+        },
+        {
+          "after": 1165,
+          "before": 1170
+        },
+        {
+          "after": 1170,
+          "before": 1175
+        },
+        {
+          "after": 1175,
+          "before": 1180
+        },
+        {
+          "after": 1180,
+          "before": 1185
+        },
+        {
+          "after": 1185,
+          "before": 1190
+        },
+        {
+          "after": 1190,
+          "before": 1195
+        },
+        {
+          "after": 1195,
+          "before": 1199
+        },
+        {
+          "after": 1199,
+          "before": 1205
+        },
+        {
+          "after": 1205,
+          "before": 1208
+        },
+        {
+          "after": 1208,
+          "before": 1214
+        },
+        {
+          "after": 1214,
+          "before": 1219
+        },
+        {
+          "after": 1219,
+          "before": 1224
+        },
+        {
+          "after": 1224,
+          "before": 1229
+        },
+        {
+          "after": 1229,
+          "before": 1234
+        },
+        {
+          "after": 1234,
+          "before": 1239
+        },
+        {
+          "after": 1239,
+          "before": 1243
+        },
+        {
+          "after": 1243,
+          "before": 1249
+        },
+        {
+          "after": 1249,
+          "before": 1254
+        },
+        {
+          "after": 1254,
+          "before": 1259
+        },
+        {
+          "after": 1259,
+          "before": 1264
+        },
+        {
+          "after": 1264,
+          "before": 1269
+        },
+        {
+          "after": 1269,
+          "before": 1274
+        },
+        {
+          "after": 1274,
+          "before": 1279
+        },
+        {
+          "after": 1279,
+          "before": 1284
+        },
+        {
+          "after": 1284,
+          "before": 1288
+        },
+        {
+          "after": 1288,
+          "before": 1294
+        },
+        {
+          "after": 1294,
+          "before": 1299
+        },
+        {
+          "after": 1299,
+          "before": 1304
+        },
+        {
+          "after": 1304,
+          "before": 1308
+        },
+        {
+          "after": 1308,
+          "before": 1313
+        },
+        {
+          "after": 1313,
+          "before": 1317
+        },
+        {
+          "after": 1317,
+          "before": 1323
+        },
+        {
+          "after": 1323,
+          "before": 1328
+        },
+        {
+          "after": 1328,
+          "before": 1333
+        },
+        {
+          "after": 1333,
+          "before": 1338
+        },
+        {
+          "after": 1338,
+          "before": 1343
+        },
+        {
+          "after": 1343,
+          "before": 1348
+        },
+        {
+          "after": 1348,
+          "before": 1353
+        },
+        {
+          "after": 1353,
+          "before": 1358
+        },
+        {
+          "after": 1358,
+          "before": 1363
+        },
+        {
+          "after": 1363,
+          "before": 1368
+        },
+        {
+          "after": 1368,
+          "before": 1373
+        },
+        {
+          "after": 1373,
+          "before": 1378
+        },
+        {
+          "after": 1378,
+          "before": 1383
+        },
+        {
+          "after": 1383,
+          "before": 1388
+        },
+        {
+          "after": 1388,
+          "before": 1393
+        },
+        {
+          "after": 1393,
+          "before": 1398
+        },
+        {
+          "after": 1398,
+          "before": 1403
+        },
+        {
+          "after": 1403,
+          "before": 1408
+        },
+        {
+          "after": 1408,
+          "before": 1413
+        },
+        {
+          "after": 1413,
+          "before": 1418
+        },
+        {
+          "after": 1418,
+          "before": 1423
+        },
+        {
+          "after": 1423,
+          "before": 1428
+        },
+        {
+          "after": 1428,
+          "before": 1433
+        },
+        {
+          "after": 1433,
+          "before": 1438
+        },
+        {
+          "after": 1438,
+          "before": 1443
+        },
+        {
+          "after": 1443,
+          "before": 1448
+        },
+        {
+          "after": 1448,
+          "before": 1453
+        },
+        {
+          "after": 1453,
+          "before": 1458
+        },
+        {
+          "after": 1458,
+          "before": 1463
+        },
+        {
+          "after": 1463,
+          "before": 1468
+        },
+        {
+          "after": 1468,
+          "before": 1473
+        },
+        {
+          "after": 1473,
+          "before": 1478
+        },
+        {
+          "after": 1478,
+          "before": 1483
+        },
+        {
+          "after": 1483,
+          "before": 1488
+        },
+        {
+          "after": 1488,
+          "before": 1493
+        },
+        {
+          "after": 1493,
+          "before": 1498
+        },
+        {
+          "after": 1498,
+          "before": 1503
+        },
+        {
+          "after": 1503,
+          "before": 1508
+        },
+        {
+          "after": 1508,
+          "before": 1513
+        },
+        {
+          "after": 1513,
+          "before": 1518
+        },
+        {
+          "after": 1518,
+          "before": 1523
+        },
+        {
+          "after": 1523,
+          "before": 1528
+        },
+        {
+          "after": 1528,
+          "before": 1533
+        },
+        {
+          "after": 1533,
+          "before": 1538
+        },
+        {
+          "after": 1538,
+          "before": 1543
+        },
+        {
+          "after": 1543,
+          "before": 1548
+        },
+        {
+          "after": 1548,
+          "before": 1553
+        },
+        {
+          "after": 1553,
+          "before": 1558
+        },
+        {
+          "after": 1558,
+          "before": 1563
+        },
+        {
+          "after": 1563,
+          "before": 1568
+        },
+        {
+          "after": 1568,
+          "before": 1573
+        },
+        {
+          "after": 1573,
+          "before": 1578
+        },
+        {
+          "after": 1578,
+          "before": 1583
+        },
+        {
+          "after": 1583,
+          "before": 1588
+        },
+        {
+          "after": 1588,
+          "before": 1593
+        },
+        {
+          "after": 1593,
+          "before": 1598
+        },
+        {
+          "after": 1598,
+          "before": 1603
+        },
+        {
+          "after": 1603,
+          "before": 1608
+        },
+        {
+          "after": 1608,
+          "before": 1613
+        },
+        {
+          "after": 1613,
+          "before": 1618
+        },
+        {
+          "after": 1618,
+          "before": 1623
+        },
+        {
+          "after": 1623,
+          "before": 1628
+        },
+        {
+          "after": 1628,
+          "before": 1633
+        },
+        {
+          "after": 1633,
+          "before": 1638
+        },
+        {
+          "after": 1638,
+          "before": 1643
+        },
+        {
+          "after": 1643,
+          "before": 1648
+        },
+        {
+          "after": 1648,
+          "before": 1653
+        },
+        {
+          "after": 1653,
+          "before": 1658
+        },
+        {
+          "after": 1658,
+          "before": 1663
+        },
+        {
+          "after": 1663,
+          "before": 1668
+        },
+        {
+          "after": 1668,
+          "before": 1673
+        },
+        {
+          "after": 1673,
+          "before": 1678
+        },
+        {
+          "after": 1678,
+          "before": 1683
+        },
+        {
+          "after": 1683,
+          "before": 1688
+        },
+        {
+          "after": 1688,
+          "before": 1693
+        },
+        {
+          "after": 1693,
+          "before": 1698
+        },
+        {
+          "after": 1698,
+          "before": 1703
+        },
+        {
+          "after": 1703,
+          "before": 1708
+        },
+        {
+          "after": 1708,
+          "before": 1713
+        },
+        {
+          "after": 1713,
+          "before": 1718
+        },
+        {
+          "after": 1718,
+          "before": 1723
+        },
+        {
+          "after": 1723,
+          "before": 1728
+        },
+        {
+          "after": 1728,
+          "before": 1733
+        },
+        {
+          "after": 1733,
+          "before": 1738
+        },
+        {
+          "after": 1738,
+          "before": 1743
+        },
+        {
+          "after": 1743,
+          "before": 1748
+        },
+        {
+          "after": 1748,
+          "before": 1753
+        },
+        {
+          "after": 1753,
+          "before": 1758
+        },
+        {
+          "after": 1758,
+          "before": 1763
+        },
+        {
+          "after": 1763,
+          "before": 1766
+        },
+        {
+          "after": 1766,
+          "before": 1771
+        },
+        {
+          "after": 1771,
+          "before": 1776
+        },
+        {
+          "after": 1776,
+          "before": 1780
+        },
+        {
+          "after": 1780,
+          "before": 1786
+        },
+        {
+          "after": 1786,
+          "before": 1791
+        },
+        {
+          "after": 1791,
+          "before": 1796
+        },
+        {
+          "after": 1796,
+          "before": 1801
+        },
+        {
+          "after": 1801,
+          "before": 1806
+        },
+        {
+          "after": 1806,
+          "before": 1811
+        },
+        {
+          "after": 1811,
+          "before": 1816
+        },
+        {
+          "after": 1816,
+          "before": 1821
+        },
+        {
+          "after": 1821,
+          "before": 1826
+        },
+        {
+          "after": 1826,
+          "before": 1831
+        },
+        {
+          "after": 1831,
+          "before": 1836
+        },
+        {
+          "after": 1836,
+          "before": 1841
+        },
+        {
+          "after": 1841,
+          "before": 1846
+        },
+        {
+          "after": 1846,
+          "before": 1851
+        },
+        {
+          "after": 1851,
+          "before": 1856
+        },
+        {
+          "after": 1856,
+          "before": 1861
+        },
+        {
+          "after": 1861,
+          "before": 1866
+        },
+        {
+          "after": 1866,
+          "before": 1871
+        },
+        {
+          "after": 1871,
+          "before": 1876
+        },
+        {
+          "after": 1876,
+          "before": 1881
+        },
+        {
+          "after": 1881,
+          "before": 1886
+        },
+        {
+          "after": 1886,
+          "before": 1891
+        },
+        {
+          "after": 1891,
+          "before": 1896
+        },
+        {
+          "after": 1896,
+          "before": 1901
+        },
+        {
+          "after": 1901,
+          "before": 1906
+        },
+        {
+          "after": 1906,
+          "before": 1911
+        },
+        {
+          "after": 1911,
+          "before": 1916
+        },
+        {
+          "after": 1916,
+          "before": 1921
+        },
+        {
+          "after": 1921,
+          "before": 1926
+        },
+        {
+          "after": 1926,
+          "before": 1931
+        },
+        {
+          "after": 1931,
+          "before": 1936
+        },
+        {
+          "after": 1936,
+          "before": 1941
+        },
+        {
+          "after": 1941,
+          "before": 1946
+        },
+        {
+          "after": 1946,
+          "before": 1951
+        },
+        {
+          "after": 1951,
+          "before": 1956
+        },
+        {
+          "after": 1956,
+          "before": 1961
+        },
+        {
+          "after": 1961,
+          "before": 1966
+        },
+        {
+          "after": 1966,
+          "before": 1971
+        },
+        {
+          "after": 1971,
+          "before": 1976
+        },
+        {
+          "after": 1976,
+          "before": 1981
+        },
+        {
+          "after": 1981,
+          "before": 1986
+        },
+        {
+          "after": 1986,
+          "before": 1991
+        },
+        {
+          "after": 1991,
+          "before": 1996
+        },
+        {
+          "after": 1996,
+          "before": 2001
+        },
+        {
+          "after": 2001,
+          "before": 2006
+        },
+        {
+          "after": 2006,
+          "before": 2011
+        },
+        {
+          "after": 2011,
+          "before": 2016
+        },
+        {
+          "after": 2016,
+          "before": 2021
+        },
+        {
+          "after": 2021,
+          "before": 2026
+        },
+        {
+          "after": 2026,
+          "before": 2031
+        },
+        {
+          "after": 2031,
+          "before": 2036
+        },
+        {
+          "after": 2036,
+          "before": 2041
+        },
+        {
+          "after": 2041,
+          "before": 2046
+        },
+        {
+          "after": 2046,
+          "before": 2051
+        },
+        {
+          "after": 2051,
+          "before": 2056
+        },
+        {
+          "after": 2056,
+          "before": 2061
+        },
+        {
+          "after": 2061,
+          "before": 2066
+        },
+        {
+          "after": 2066,
+          "before": 2071
+        },
+        {
+          "after": 2071,
+          "before": 2076
+        },
+        {
+          "after": 2076,
+          "before": 2080
+        },
+        {
+          "after": 2080,
+          "before": 2085
+        },
+        {
+          "after": 2085,
+          "before": 2090
+        },
+        {
+          "after": 2090,
+          "before": 2095
+        },
+        {
+          "after": 2095,
+          "before": 2100
+        },
+        {
+          "after": 2100,
+          "before": 2105
+        },
+        {
+          "after": 2105,
+          "before": 2110
+        },
+        {
+          "after": 2110,
+          "before": 2115
+        },
+        {
+          "after": 2115,
+          "before": 2120
+        },
+        {
+          "after": 2120,
+          "before": 2125
+        },
+        {
+          "after": 2125,
+          "before": 2130
+        },
+        {
+          "after": 2130,
+          "before": 2135
+        },
+        {
+          "after": 2135,
+          "before": 2140
+        },
+        {
+          "after": 2140,
+          "before": 2145
+        },
+        {
+          "after": 2145,
+          "before": 2150
+        },
+        {
+          "after": 2150,
+          "before": 2155
+        },
+        {
+          "after": 2155,
+          "before": 2160
+        },
+        {
+          "after": 2160,
+          "before": 2165
+        },
+        {
+          "after": 2165,
+          "before": 2170
+        },
+        {
+          "after": 2170,
+          "before": 2175
+        },
+        {
+          "after": 2175,
+          "before": 2180
+        },
+        {
+          "after": 2180,
+          "before": 2185
+        },
+        {
+          "after": 2185,
+          "before": 2190
+        },
+        {
+          "after": 2190,
+          "before": 2195
+        },
+        {
+          "after": 2195,
+          "before": 2200
+        },
+        {
+          "after": 2200,
+          "before": 2205
+        },
+        {
+          "after": 2205,
+          "before": 2210
+        },
+        {
+          "after": 2210,
+          "before": 2215
+        },
+        {
+          "after": 2215,
+          "before": 2220
+        },
+        {
+          "after": 2220,
+          "before": 2225
+        },
+        {
+          "after": 2225,
+          "before": 2230
+        },
+        {
+          "after": 2230,
+          "before": 2235
+        },
+        {
+          "after": 2235,
+          "before": 2240
+        },
+        {
+          "after": 2240,
+          "before": 2245
+        },
+        {
+          "after": 2245,
+          "before": 2250
+        },
+        {
+          "after": 2250,
+          "before": 2255
+        },
+        {
+          "after": 2255,
+          "before": 2260
+        },
+        {
+          "after": 2260,
+          "before": 2265
+        },
+        {
+          "after": 2265,
+          "before": 2270
+        },
+        {
+          "after": 2270,
+          "before": 2275
+        },
+        {
+          "after": 2275,
+          "before": 2280
+        },
+        {
+          "after": 2280,
+          "before": 2285
+        },
+        {
+          "after": 2285,
+          "before": 2290
+        },
+        {
+          "after": 2290,
+          "before": 2295
+        },
+        {
+          "after": 2295,
+          "before": 2300
+        },
+        {
+          "after": 2300,
+          "before": 2305
+        },
+        {
+          "after": 2305,
+          "before": 2310
+        },
+        {
+          "after": 2310,
+          "before": 2315
+        },
+        {
+          "after": 2315,
+          "before": 2320
+        },
+        {
+          "after": 2320,
+          "before": 2325
+        },
+        {
+          "after": 2325,
+          "before": 2330
+        },
+        {
+          "after": 2330,
+          "before": 2335
+        },
+        {
+          "after": 2335,
+          "before": 2340
+        },
+        {
+          "after": 2340,
+          "before": 2345
+        },
+        {
+          "after": 2345,
+          "before": 2350
+        },
+        {
+          "after": 2350,
+          "before": 2355
+        },
+        {
+          "after": 2355,
+          "before": 2360
+        },
+        {
+          "after": 2360,
+          "before": 2365
+        },
+        {
+          "after": 2365,
+          "before": 2370
+        },
+        {
+          "after": 2370,
+          "before": 2375
+        },
+        {
+          "after": 2375,
+          "before": 2380
+        },
+        {
+          "after": 2380,
+          "before": 2385
+        },
+        {
+          "after": 2385,
+          "before": 2390
+        },
+        {
+          "after": 2390,
+          "before": 2395
+        },
+        {
+          "after": 2395,
+          "before": 2400
+        },
+        {
+          "after": 2400,
+          "before": 2405
+        },
+        {
+          "after": 2405,
+          "before": 2410
+        },
+        {
+          "after": 2410,
+          "before": 2415
+        },
+        {
+          "after": 2415,
+          "before": 2420
+        },
+        {
+          "after": 2420,
+          "before": 2425
+        },
+        {
+          "after": 2425,
+          "before": 2430
+        },
+        {
+          "after": 2430,
+          "before": 2435
+        },
+        {
+          "after": 2435,
+          "before": 2440
+        },
+        {
+          "after": 2440,
+          "before": 2445
+        },
+        {
+          "after": 2445,
+          "before": 2450
+        },
+        {
+          "after": 2450,
+          "before": 2455
+        },
+        {
+          "after": 2455,
+          "before": 2460
+        },
+        {
+          "after": 2460,
+          "before": 2465
+        },
+        {
+          "after": 2465,
+          "before": 2470
+        },
+        {
+          "after": 2470,
+          "before": 2475
+        },
+        {
+          "after": 2475,
+          "before": 2480
+        },
+        {
+          "after": 2480,
+          "before": 2485
+        },
+        {
+          "after": 2485,
+          "before": 2490
+        },
+        {
+          "after": 2490,
+          "before": 2495
+        },
+        {
+          "after": 2495,
+          "before": 2500
+        },
+        {
+          "after": 2500,
+          "before": 2505
+        },
+        {
+          "after": 2505,
+          "before": 2510
+        },
+        {
+          "after": 2510,
+          "before": 2515
+        },
+        {
+          "after": 2515,
+          "before": 2520
+        },
+        {
+          "after": 2520,
+          "before": 2525
+        },
+        {
+          "after": 2525,
+          "before": 2530
+        },
+        {
+          "after": 2530,
+          "before": 2535
+        },
+        {
+          "after": 2535,
+          "before": 2539
+        },
+        {
+          "after": 2539,
+          "before": 2545
+        },
+        {
+          "after": 2545,
+          "before": 2550
+        },
+        {
+          "after": 2550,
+          "before": 2555
+        },
+        {
+          "after": 2555,
+          "before": 2560
+        },
+        {
+          "after": 2560,
+          "before": 2565
+        },
+        {
+          "after": 2565,
+          "before": 2570
+        },
+        {
+          "after": 2570,
+          "before": 2575
+        },
+        {
+          "after": 2575,
+          "before": 2580
+        },
+        {
+          "after": 2580,
+          "before": 2585
+        },
+        {
+          "after": 2585,
+          "before": 2590
+        },
+        {
+          "after": 2590,
+          "before": 2595
+        },
+        {
+          "after": 2595,
+          "before": 2600
+        },
+        {
+          "after": 2600,
+          "before": 2605
+        },
+        {
+          "after": 2605,
+          "before": 2610
+        },
+        {
+          "after": 2610,
+          "before": 2615
+        },
+        {
+          "after": 2615,
+          "before": 2620
+        },
+        {
+          "after": 2620,
+          "before": 2625
+        },
+        {
+          "after": 2625,
+          "before": 2630
+        },
+        {
+          "after": 2630,
+          "before": 2635
+        },
+        {
+          "after": 2635,
+          "before": 2640
+        },
+        {
+          "after": 2640,
+          "before": 2645
+        },
+        {
+          "after": 2645,
+          "before": 2650
+        },
+        {
+          "after": 2650,
+          "before": 2655
+        },
+        {
+          "after": 2655,
+          "before": 2660
+        },
+        {
+          "after": 2660,
+          "before": 2665
+        },
+        {
+          "after": 2665,
+          "before": 2670
+        },
+        {
+          "after": 2670,
+          "before": 2675
+        },
+        {
+          "after": 2675,
+          "before": 2680
+        },
+        {
+          "after": 2680,
+          "before": 2685
+        },
+        {
+          "after": 2685,
+          "before": 2690
+        },
+        {
+          "after": 2690,
+          "before": 2695
+        },
+        {
+          "after": 2695,
+          "before": 2700
+        },
+        {
+          "after": 2700,
+          "before": 2705
+        },
+        {
+          "after": 2705,
+          "before": 2710
+        },
+        {
+          "after": 2710,
+          "before": 2715
+        },
+        {
+          "after": 2715,
+          "before": 2720
+        },
+        {
+          "after": 2720,
+          "before": 2725
+        },
+        {
+          "after": 2725,
+          "before": 2730
+        },
+        {
+          "after": 2730,
+          "before": 2735
+        },
+        {
+          "after": 2735,
+          "before": 2740
+        },
+        {
+          "after": 2740,
+          "before": 2745
+        },
+        {
+          "after": 2745,
+          "before": 2750
+        },
+        {
+          "after": 2750,
+          "before": 2755
+        },
+        {
+          "after": 2755,
+          "before": 2760
+        },
+        {
+          "after": 2760,
+          "before": 2765
+        },
+        {
+          "after": 2765,
+          "before": 2770
+        },
+        {
+          "after": 2770,
+          "before": 2775
+        },
+        {
+          "after": 2775,
+          "before": 2778
+        },
+        {
+          "after": 2778,
+          "before": 2782
+        },
+        {
+          "after": 2782,
+          "before": 2785
+        },
+        {
+          "after": 2785,
+          "before": 2790
+        },
+        {
+          "after": 2790,
+          "before": 2796
+        },
+        {
+          "after": 2796,
+          "before": 2801
+        },
+        {
+          "after": 2801,
+          "before": 2806
+        },
+        {
+          "after": 2806,
+          "before": 2811
+        },
+        {
+          "after": 2811,
+          "before": 2816
+        },
+        {
+          "after": 2816,
+          "before": 2820
+        },
+        {
+          "after": 2820,
+          "before": 2826
+        },
+        {
+          "after": 2826,
+          "before": 2831
+        },
+        {
+          "after": 2831,
+          "before": 2836
+        },
+        {
+          "after": 2836,
+          "before": 2841
+        },
+        {
+          "after": 2841,
+          "before": 2846
+        },
+        {
+          "after": 2846,
+          "before": 2851
+        },
+        {
+          "after": 2851,
+          "before": 2856
+        },
+        {
+          "after": 2856,
+          "before": 2861
+        },
+        {
+          "after": 2861,
+          "before": 2866
+        },
+        {
+          "after": 2866,
+          "before": 2871
+        },
+        {
+          "after": 2871,
+          "before": 2876
+        },
+        {
+          "after": 2876,
+          "before": 2881
+        },
+        {
+          "after": 2881,
+          "before": 2886
+        },
+        {
+          "after": 2886,
+          "before": 2891
+        },
+        {
+          "after": 2891,
+          "before": 2896
+        },
+        {
+          "after": 2896,
+          "before": 2901
+        },
+        {
+          "after": 2901,
+          "before": 2906
+        },
+        {
+          "after": 2906,
+          "before": 2911
+        },
+        {
+          "after": 2911,
+          "before": 2916
+        },
+        {
+          "after": 2916,
+          "before": 2921
+        },
+        {
+          "after": 2921,
+          "before": 2926
+        },
+        {
+          "after": 2926,
+          "before": 2931
+        },
+        {
+          "after": 2931,
+          "before": 2936
+        },
+        {
+          "after": 2936,
+          "before": 2941
+        },
+        {
+          "after": 2941,
+          "before": 2946
+        },
+        {
+          "after": 2946,
+          "before": 2951
+        },
+        {
+          "after": 2951,
+          "before": 2956
+        },
+        {
+          "after": 2956,
+          "before": 2961
+        },
+        {
+          "after": 2961,
+          "before": 2966
+        },
+        {
+          "after": 2966,
+          "before": 2971
+        },
+        {
+          "after": 2971,
+          "before": 2976
+        },
+        {
+          "after": 2976,
+          "before": 2981
+        },
+        {
+          "after": 2981,
+          "before": 2986
+        },
+        {
+          "after": 2986,
+          "before": 2991
+        },
+        {
+          "after": 2991,
+          "before": 2996
+        },
+        {
+          "after": 2996,
+          "before": 3000
+        },
+        {
+          "after": 3000,
+          "before": 3006
+        },
+        {
+          "after": 3006,
+          "before": 3011
+        },
+        {
+          "after": 3011,
+          "before": 3016
+        },
+        {
+          "after": 3016,
+          "before": 3021
+        },
+        {
+          "after": 3021,
+          "before": 3026
+        },
+        {
+          "after": 3026,
+          "before": 3031
+        },
+        {
+          "after": 3031,
+          "before": 3036
+        },
+        {
+          "after": 3036,
+          "before": 3041
+        },
+        {
+          "after": 3041,
+          "before": 3046
+        },
+        {
+          "after": 3046,
+          "before": 3051
+        },
+        {
+          "after": 3051,
+          "before": 3056
+        },
+        {
+          "after": 3056,
+          "before": 3061
+        },
+        {
+          "after": 3061,
+          "before": 3066
+        },
+        {
+          "after": 3066,
+          "before": 3071
+        },
+        {
+          "after": 3071,
+          "before": 3076
+        },
+        {
+          "after": 3076,
+          "before": 3081
+        },
+        {
+          "after": 3081,
+          "before": 3086
+        },
+        {
+          "after": 3086,
+          "before": 3091
+        },
+        {
+          "after": 3091,
+          "before": 3096
+        },
+        {
+          "after": 3096,
+          "before": 3101
+        },
+        {
+          "after": 3101,
+          "before": 3106
+        },
+        {
+          "after": 3106,
+          "before": 3111
+        },
+        {
+          "after": 3111,
+          "before": 3116
+        },
+        {
+          "after": 3116,
+          "before": 3121
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "a87825e1c97a7808b4199007c5947d3774ce899662eabe87d9e2278384c1fd35",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 1316,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 1316,
+        "first_lost_sequence": null,
+        "high_water_mark": 54,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 1316,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": true,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 633,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": true,
+      "raw_transport_produced_count": 633,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 10
+    },
+    "status": "PASS",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "incident_count": 33,
+  "incidents": [
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 17752867560078,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 17752985168048,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-11",
+      "layer": "L1",
+      "monotonic_ns": 17753085118027,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 11
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 17753185114394,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-21",
+      "layer": "L1",
+      "monotonic_ns": 17753285108892,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 21
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-26",
+      "layer": "L1",
+      "monotonic_ns": 17753385111704,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 26
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-31",
+      "layer": "L1",
+      "monotonic_ns": 17753485109127,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 31
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 293634175,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 3
+          }
+        ]
+      },
+      "id": "l2-reject-51",
+      "layer": "L2",
+      "monotonic_ns": 17753885126765,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 51
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 272849742,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 22
+          }
+        ]
+      },
+      "id": "l2-reject-140",
+      "layer": "L2",
+      "monotonic_ns": 17755669011382,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 140
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 287340885,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 23
+          }
+        ]
+      },
+      "id": "l2-reject-146",
+      "layer": "L2",
+      "monotonic_ns": 17755785129327,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 146
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 297040081,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 33
+          }
+        ]
+      },
+      "id": "l2-reject-196",
+      "layer": "L2",
+      "monotonic_ns": 17756785151359,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 196
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 280842188,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 34
+          }
+        ]
+      },
+      "id": "l2-reject-200",
+      "layer": "L2",
+      "monotonic_ns": 17756868138923,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 200
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 295859873,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 69
+          }
+        ]
+      },
+      "id": "l2-reject-376",
+      "layer": "L2",
+      "monotonic_ns": 17760385137670,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 376
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 285921242,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 100
+          }
+        ]
+      },
+      "id": "l2-reject-530",
+      "layer": "L2",
+      "monotonic_ns": 17763469033129,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 530
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 284180706,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 111
+          }
+        ]
+      },
+      "id": "l2-reject-585",
+      "layer": "L2",
+      "monotonic_ns": 17764567996347,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 585
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 285546547,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 112
+          }
+        ]
+      },
+      "id": "l2-reject-590",
+      "layer": "L2",
+      "monotonic_ns": 17764669928652,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 590
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 309160069,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 147
+          }
+        ]
+      },
+      "id": "l2-reject-766",
+      "layer": "L2",
+      "monotonic_ns": 17768186649870,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 766
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 308400778,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 148
+          }
+        ]
+      },
+      "id": "l2-reject-771",
+      "layer": "L2",
+      "monotonic_ns": 17768285284640,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 771
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 304044193,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 158
+          }
+        ]
+      },
+      "id": "l2-reject-821",
+      "layer": "L2",
+      "monotonic_ns": 17769285097165,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 821
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 311587386,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 169
+          }
+        ]
+      },
+      "id": "l2-reject-876",
+      "layer": "L2",
+      "monotonic_ns": 17770388117964,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 876
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 313602462,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 196
+          }
+        ]
+      },
+      "id": "l2-reject-1011",
+      "layer": "L2",
+      "monotonic_ns": 17773088218017,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1011
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 311345674,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 208
+          }
+        ]
+      },
+      "id": "l2-reject-1071",
+      "layer": "L2",
+      "monotonic_ns": 17774288546826,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1071
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 312274447,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 219
+          }
+        ]
+      },
+      "id": "l2-reject-1125",
+      "layer": "L2",
+      "monotonic_ns": 17775385407379,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1125
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 318201430,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 235
+          }
+        ]
+      },
+      "id": "l2-reject-1205",
+      "layer": "L2",
+      "monotonic_ns": 17776989464745,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1205
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 316273551,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 247
+          }
+        ]
+      },
+      "id": "l2-reject-1264",
+      "layer": "L2",
+      "monotonic_ns": 17778186323375,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1264
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 318404190,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 259
+          }
+        ]
+      },
+      "id": "l2-reject-1323",
+      "layer": "L2",
+      "monotonic_ns": 17779385961353,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1323
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 318641221,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 302
+          }
+        ]
+      },
+      "id": "l2-reject-1538",
+      "layer": "L2",
+      "monotonic_ns": 17783685122301,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1538
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 330711699,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 405
+          }
+        ]
+      },
+      "id": "l2-reject-2051",
+      "layer": "L2",
+      "monotonic_ns": 17793986010247,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 2051
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 330651625,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 437
+          }
+        ]
+      },
+      "id": "l2-reject-2210",
+      "layer": "L2",
+      "monotonic_ns": 17797185171458,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 2210
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 320187412,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 553
+          }
+        ]
+      },
+      "id": "l2-reject-2785",
+      "layer": "L2",
+      "monotonic_ns": 17808768143468,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 2785
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 319484686,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 554
+          }
+        ]
+      },
+      "id": "l2-reject-2790",
+      "layer": "L2",
+      "monotonic_ns": 17808868162138,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 2790
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 436501697,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 554
+          }
+        ]
+      },
+      "id": "l2-reject-2796",
+      "layer": "L2",
+      "monotonic_ns": 17808985179149,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 2796
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 345029386,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 609
+          }
+        ]
+      },
+      "id": "l2-reject-3081",
+      "layer": "L2",
+      "monotonic_ns": 17814685242343,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 3081
+    }
+  ],
+  "localization": {
+    "first_trace": 0.0461,
+    "growth_ratio": 3.866871496556267,
+    "last_trace": 0.1782627759912439,
+    "max_trace": 0.2847799907350527,
+    "sample_count": 628
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 1.129150674082339,
+    "requested_motion_tick_count": 62
+  },
+  "navigation": {
+    "stagnation": null
+  },
+  "root_cause_candidate": {
+    "confidence": "NOT_PROVEN",
+    "evidence_ids": [],
+    "kind": null,
+    "layer": null,
+    "reason": "NO_NON_NOMINAL_EVIDENCE_FOUND",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": null
+  },
+  "safety": {
+    "ALLOW": 62,
+    "FAULT": 0,
+    "STOP": 566,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 10,
+    "l2_actionable_rejection_count": 26,
+    "l2_duplicate_count": 2019,
+    "l2_rejection_count": 2045,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 2019,
+      "STALE": 26
+    }
+  },
+  "ticks": {
+    "count": 628,
+    "first_monotonic_ns": 17752867560078,
+    "first_tick_id": 0,
+    "last_monotonic_ns": 17815489656373,
+    "last_tick_id": 3122
+  },
+  "timing": {
+    "max_ms": 121.101676,
+    "p50_ms": 99.999796,
+    "p95_ms": 116.227705,
+    "p99_ms": 117.754066,
+    "sample_count": 627,
+    "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+  },
+  "warning_count": 33
+}
