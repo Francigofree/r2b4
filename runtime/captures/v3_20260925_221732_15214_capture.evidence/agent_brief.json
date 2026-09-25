@@ -14,14 +14,14 @@
   },
   "behavior_status": "NO_MOTION_REQUEST",
   "budget": {
-    "actual_bytes": 6288,
+    "actual_bytes": 6311,
     "max_bytes": 49152,
     "truncated": false
   },
   "capture": {
     "capture_status": "PASS",
     "integrity_complete": true,
-    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260925_221443_14452_capture.mcap"
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260925_221732_15214_capture.mcap"
   },
   "contract": {
     "agent_output_is_derived": true,
@@ -38,12 +38,12 @@
       "L4",
       "L12"
     ],
-    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260925_221443_14452_capture.evidence/interesting_slice.ndjson",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260925_221732_15214_capture.evidence/interesting_slice.ndjson",
     "rows": 2,
-    "size_bytes": 23056,
+    "size_bytes": 24015,
     "tick_range": [
-      756,
-      766
+      696,
+      706
     ],
     "truncated": false
   },
@@ -51,27 +51,27 @@
   "metrics": {
     "behavioral_trends": {
       "commands": {
-        "observed_change_count": 152,
-        "observed_unique_count": 153
+        "observed_change_count": 140,
+        "observed_unique_count": 141
       },
       "domain_sample_counts": {
-        "command": 154,
-        "mission": 154,
-        "navigation": 154,
-        "pose": 154,
-        "safety": 154
+        "command": 142,
+        "mission": 142,
+        "navigation": 142,
+        "pose": 142,
+        "safety": 142
       },
       "localization": {
-        "sample_count": 154
+        "sample_count": 142
       },
       "maximum_contiguous_sample_gap_s": 0.3,
       "missing_domains": [],
       "missions": {
         "lifecycle_sample_counts": {
-          "IDLE": 154
+          "IDLE": 142
         },
         "observed_lifecycle_change_count": 0,
-        "observed_unique_count": 153
+        "observed_unique_count": 141
       },
       "motion": {
         "blocked_sample_count": 0,
@@ -80,7 +80,7 @@
       "navigation": {
         "stagnation": null,
         "status_sample_counts": {
-          "IDLE": 154
+          "IDLE": 142
         }
       },
       "safety": {
@@ -90,15 +90,15 @@
     },
     "localization": {
       "first_trace": 0.0461,
-      "growth_ratio": 4.381653843493298,
-      "last_trace": 0.20199424218504106,
-      "max_trace": 0.2213371252544531,
-      "sample_count": 154
+      "growth_ratio": 4.676158201506333,
+      "last_trace": 0.215570893089442,
+      "max_trace": 0.215570893089442,
+      "sample_count": 142
     },
     "motion": {
       "behavior_status": "NO_MOTION_REQUEST",
       "constrained_to_zero_tick_count": 0,
-      "estimated_path_length_m": 0.02101028216489292,
+      "estimated_path_length_m": 0.021625895480832758,
       "requested_motion_tick_count": 0
     },
     "navigation": {
@@ -107,38 +107,38 @@
     "safety": {
       "ALLOW": 0,
       "FAULT": 0,
-      "STOP": 154,
+      "STOP": 142,
       "UNKNOWN": 0
     },
     "sensors": {
-      "device_non_ok_count": 10,
-      "l2_actionable_rejection_count": 6,
-      "l2_duplicate_count": 462,
-      "l2_rejection_count": 468,
+      "device_non_ok_count": 9,
+      "l2_actionable_rejection_count": 8,
+      "l2_duplicate_count": 417,
+      "l2_rejection_count": 425,
       "l2_rejection_reasons": {
-        "DUPLICATE": 462,
-        "STALE": 6
+        "DUPLICATE": 417,
+        "STALE": 8
       }
     },
     "ticks": {
-      "count": 154,
-      "first_monotonic_ns": 12214533001004,
+      "count": 142,
+      "first_monotonic_ns": 12382938117964,
       "first_tick_id": 0,
-      "last_monotonic_ns": 12229755254372,
-      "last_tick_id": 761
+      "last_monotonic_ns": 12396967521671,
+      "last_tick_id": 701
     },
     "timing": {
-      "max_ms": 119.064477,
-      "p50_ms": 99.996674,
-      "p95_ms": 116.860741,
-      "p99_ms": 117.805396,
-      "sample_count": 153,
+      "max_ms": 120.946666,
+      "p50_ms": 100.002613,
+      "p95_ms": 117.179021,
+      "p99_ms": 117.708933,
+      "sample_count": 141,
       "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
     }
   },
   "next_queries": [
-    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 758:771 --layers L1,L2,L3,L4,L12",
-    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 761:761 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 698:711 --layers L1,L2,L3,L4,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 701:701 --include-inputs --full",
     "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
   ],
   "replay": {
@@ -149,13 +149,13 @@
   "root_cause": {
     "confidence": "INDICATED",
     "evidence_ids": [
-      "covariance-growth-761"
+      "covariance-growth-701"
     ],
     "kind": "LOCALIZATION",
     "layer": "L3",
     "reason": "COVARIANCE_GROWTH",
     "scope": "CAPTURED_SAMPLES_ONLY",
-    "tick_id": 761
+    "tick_id": 701
   },
   "schema": "R2B4_AGENT_BRIEF_V2",
   "source_files": [
@@ -196,17 +196,17 @@
       "category": "LOCALIZATION",
       "evidence": {
         "first_trace": 0.0461,
-        "growth_ratio": 4.381653843493298,
-        "last_trace": 0.20199424218504106,
-        "max_trace": 0.2213371252544531,
-        "sample_count": 154
+        "growth_ratio": 4.676158201506333,
+        "last_trace": 0.215570893089442,
+        "max_trace": 0.215570893089442,
+        "sample_count": 142
       },
-      "id": "covariance-growth-761",
+      "id": "covariance-growth-701",
       "layer": "L3",
-      "monotonic_ns": 12229755254372,
+      "monotonic_ns": 12396967521671,
       "reason": "COVARIANCE_GROWTH",
       "severity": "MEDIUM",
-      "tick_id": 761
+      "tick_id": 701
     },
     {
       "category": "DEVICE_HEALTH",
@@ -231,7 +231,7 @@
       },
       "id": "device-0",
       "layer": "L1",
-      "monotonic_ns": 12214533001004,
+      "monotonic_ns": 12382938117964,
       "reason": "DEVICE_HEALTH_NON_OK",
       "severity": "WARNING",
       "tick_id": 0
@@ -254,7 +254,7 @@
       },
       "id": "device-6",
       "layer": "L1",
-      "monotonic_ns": 12214650580250,
+      "monotonic_ns": 12383055716670,
       "reason": "DEVICE_HEALTH_NON_OK",
       "severity": "WARNING",
       "tick_id": 6
@@ -272,7 +272,7 @@
       },
       "id": "device-11",
       "layer": "L1",
-      "monotonic_ns": 12214750577480,
+      "monotonic_ns": 12383155697687,
       "reason": "DEVICE_HEALTH_NON_OK",
       "severity": "WARNING",
       "tick_id": 11
@@ -290,7 +290,7 @@
       },
       "id": "device-16",
       "layer": "L1",
-      "monotonic_ns": 12214850565691,
+      "monotonic_ns": 12383255704149,
       "reason": "DEVICE_HEALTH_NON_OK",
       "severity": "WARNING",
       "tick_id": 16
@@ -308,7 +308,7 @@
       },
       "id": "device-21",
       "layer": "L1",
-      "monotonic_ns": 12214950582051,
+      "monotonic_ns": 12383355691184,
       "reason": "DEVICE_HEALTH_NON_OK",
       "severity": "WARNING",
       "tick_id": 21
@@ -326,28 +326,29 @@
       },
       "id": "device-26",
       "layer": "L1",
-      "monotonic_ns": 12215050627596,
+      "monotonic_ns": 12383455699276,
       "reason": "DEVICE_HEALTH_NON_OK",
       "severity": "WARNING",
       "tick_id": 26
     },
     {
-      "category": "DEVICE_HEALTH",
+      "category": "ADMISSION",
       "evidence": {
-        "devices": [
+        "rejected": [
           {
-            "device_id": "RPLIDAR_C1",
-            "reason": "LIDAR_STALE",
-            "state": "DEGRADED"
+            "age_ns": 318133809,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 14
           }
         ]
       },
-      "id": "device-31",
-      "layer": "L1",
-      "monotonic_ns": 12215150569233,
-      "reason": "DEVICE_HEALTH_NON_OK",
+      "id": "l2-reject-91",
+      "layer": "L2",
+      "monotonic_ns": 12384756192263,
+      "reason": "OBSERVATION_REJECTED:STALE",
       "severity": "WARNING",
-      "tick_id": 31
+      "tick_id": 91
     }
   ]
 }

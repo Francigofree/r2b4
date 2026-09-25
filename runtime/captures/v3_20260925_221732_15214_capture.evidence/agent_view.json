@@ -13,9 +13,9 @@
     "tick_sample_hz": 10
   },
   "authority": {
-    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260925_221443_14452_capture.mcap",
-    "capture_name": "v3_20260925_221443_14452_capture.mcap",
-    "capture_sha256": "b67c0539c7ed5c2e9518b2cf5b34c4df425e1d9d66c29bd448c145e98fd71b61",
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260925_221732_15214_capture.mcap",
+    "capture_name": "v3_20260925_221732_15214_capture.mcap",
+    "capture_sha256": "ff0861fbfea1c980d64a69aa388c95c067180b2d400646cf77692fbb17bc541b",
     "mcap_remains_authority": true,
     "portable_remote_analysis": true
   },
@@ -33,7 +33,7 @@
   "behavior_status": "NO_MOTION_REQUEST",
   "data_coverage": {
     "/r2b4/checkpoint": {
-      "captured": 15,
+      "captured": 14,
       "usage": "REPLAY"
     },
     "/r2b4/event": {
@@ -41,7 +41,7 @@
       "usage": "FULL_EVENT_PRESERVATION"
     },
     "/r2b4/raw_lidar": {
-      "captured": 157,
+      "captured": 145,
       "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
     },
     "/r2b4/runtime": {
@@ -49,7 +49,7 @@
       "usage": "CONFIGURATION"
     },
     "/r2b4/tick": {
-      "captured": 154,
+      "captured": 142,
       "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
     }
   },
@@ -76,33 +76,33 @@
     {
       "category": "LOCALIZATION",
       "count": 1,
-      "first_tick": 761,
-      "last_tick": 761,
+      "first_tick": 701,
+      "last_tick": 701,
       "layer": "L3",
       "reason": "COVARIANCE_GROWTH",
       "representative": {
         "category": "LOCALIZATION",
         "evidence": {
           "first_trace": 0.0461,
-          "growth_ratio": 4.381653843493298,
-          "last_trace": 0.20199424218504106,
-          "max_trace": 0.2213371252544531,
-          "sample_count": 154
+          "growth_ratio": 4.676158201506333,
+          "last_trace": 0.215570893089442,
+          "max_trace": 0.215570893089442,
+          "sample_count": 142
         },
-        "id": "covariance-growth-761",
+        "id": "covariance-growth-701",
         "layer": "L3",
-        "monotonic_ns": 12229755254372,
+        "monotonic_ns": 12396967521671,
         "reason": "COVARIANCE_GROWTH",
         "severity": "MEDIUM",
-        "tick_id": 761
+        "tick_id": 701
       },
       "severity": "MEDIUM"
     },
     {
       "category": "DEVICE_HEALTH",
-      "count": 7,
+      "count": 6,
       "first_tick": 0,
-      "last_tick": 31,
+      "last_tick": 26,
       "layer": "L1",
       "reason": "DEVICE_HEALTH_NON_OK",
       "representative": {
@@ -128,7 +128,7 @@
         },
         "id": "device-0",
         "layer": "L1",
-        "monotonic_ns": 12214533001004,
+        "monotonic_ns": 12382938117964,
         "reason": "DEVICE_HEALTH_NON_OK",
         "severity": "WARNING",
         "tick_id": 0
@@ -137,9 +137,9 @@
     },
     {
       "category": "ADMISSION",
-      "count": 6,
-      "first_tick": 51,
-      "last_tick": 715,
+      "count": 8,
+      "first_tick": 91,
+      "last_tick": 689,
       "layer": "L2",
       "reason": "OBSERVATION_REJECTED:STALE",
       "representative": {
@@ -147,19 +147,19 @@
         "evidence": {
           "rejected": [
             {
-              "age_ns": 299042202,
+              "age_ns": 318133809,
               "reason": "STALE",
               "source_device_id": "RPLIDAR_C1",
-              "source_sequence": 3
+              "source_sequence": 14
             }
           ]
         },
-        "id": "l2-reject-51",
+        "id": "l2-reject-91",
         "layer": "L2",
-        "monotonic_ns": 12215552730277,
+        "monotonic_ns": 12384756192263,
         "reason": "OBSERVATION_REJECTED:STALE",
         "severity": "WARNING",
-        "tick_id": 51
+        "tick_id": 91
       },
       "severity": "WARNING"
     }
@@ -168,9 +168,9 @@
     {
       "category": "LOCALIZATION",
       "count": 1,
-      "first_tick": 761,
+      "first_tick": 701,
       "group_index": 1,
-      "last_tick": 761,
+      "last_tick": 701,
       "path": "01_COVARIANCE_GROWTH.ndjson",
       "reason": "COVARIANCE_GROWTH",
       "rows": 3,
@@ -178,10 +178,10 @@
     },
     {
       "category": "DEVICE_HEALTH",
-      "count": 7,
+      "count": 6,
       "first_tick": 0,
       "group_index": 2,
-      "last_tick": 31,
+      "last_tick": 26,
       "path": "02_DEVICE_HEALTH_NON_OK.ndjson",
       "reason": "DEVICE_HEALTH_NON_OK",
       "rows": 2,
@@ -189,10 +189,10 @@
     },
     {
       "category": "ADMISSION",
-      "count": 6,
-      "first_tick": 51,
+      "count": 8,
+      "first_tick": 91,
       "group_index": 3,
-      "last_tick": 715,
+      "last_tick": 689,
       "path": "03_OBSERVATION_REJECTED_STALE.ndjson",
       "reason": "OBSERVATION_REJECTED:STALE",
       "rows": 5,
@@ -207,29 +207,29 @@
     "segment_count": 0,
     "segments": "motion_tuning_segments.ndjson",
     "signal_sample_counts": {
-      "actuator_output": 154,
-      "allowed_motion": 154,
-      "body_state": 154,
+      "actuator_output": 142,
+      "allowed_motion": 142,
+      "body_state": 142,
       "planner_candidates": 0,
-      "requested_motion": 154,
-      "wheel_feedback": 154,
-      "wheel_target": 154
+      "requested_motion": 142,
+      "wheel_feedback": 142,
+      "wheel_target": 142
     },
     "summary": "motion_tuning_summary.json"
   },
   "overview": "overview_10hz.ndjson",
   "phases": [
     {
-      "end_s": 15.222253368,
-      "end_tick": 761,
+      "end_s": 14.029403707,
+      "end_tick": 701,
       "fault_ticks": 0,
       "lifecycle": "IDLE",
       "mode": "STOP",
       "motion_requested_ticks": 0,
       "start_s": 0.0,
       "start_tick": 0,
-      "stop_ticks": 154,
-      "tick_count": 154
+      "stop_ticks": 142,
+      "tick_count": 142
     }
   ],
   "pytest_result": null,
@@ -253,15 +253,15 @@
       "path": "01_COVARIANCE_GROWTH.ndjson",
       "raw_scan_count": 6,
       "reason": "COVARIANCE_GROWTH",
-      "size_bytes": 65774,
+      "size_bytes": 66157,
       "truncated": false
     },
     {
       "group_index": 3,
       "path": "03_OBSERVATION_REJECTED_STALE.ndjson",
-      "raw_scan_count": 9,
+      "raw_scan_count": 8,
       "reason": "OBSERVATION_REJECTED:STALE",
-      "size_bytes": 69156,
+      "size_bytes": 87195,
       "truncated": false
     }
   ],
