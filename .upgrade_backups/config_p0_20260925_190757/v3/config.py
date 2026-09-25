@@ -222,8 +222,8 @@ class ConfigResolver:
         edge_names = {f.name for f in fields(RuntimeEdgeConfig)}
         _keys(runtime, edge_names | {"tick_period_ns", "max_preflight_age_ns", "required_lidar_preflight_revisions"}, "runtime")
         edges = _typed(RuntimeEdgeConfig, {k: runtime[k] for k in edge_names}, "runtime")
-        _keys(c["sensor_policy"], {f.name for f in fields(NativeSensorPolicyConfig)} - calibration_names, "sensor_policy")
-        policy = _typed(NativeSensorPolicyConfig, {**c["sensor_policy"], **{k:p[k] for k in calibration_names}}, "sensor_policy")
+        _keys(c["sensor_policy"], {f.name for f in fields(NativeSensorPolicyConfig)} - calibration_names - {"camera_maximum_frame_age_ns"}, "sensor_policy")
+        policy = _typed(NativeSensorPolicyConfig, {**c["sensor_policy"], **{k:p[k] for k in calibration_names}, "camera_maximum_frame_age_ns":250_000_000}, "sensor_policy")
         local = _keys(c["local_perception"], {"min_range_m", "max_range_m", "max_points"}, "local_perception")
         layers = dict(c["layers"])
         for section, derived_names in {
@@ -249,11 +249,6 @@ class ConfigResolver:
             speed_map=WheelSpeedMap.from_mapping(speed_map),
             chassis_control=ChassisControlConfig(_typed(float,p["nyomtav_szelesseg_m"],"track_width_m")),
             critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS)
-        if (
-            resolved_control.motion_selection.reversal_min_omega_rad_s
-            > resolved_control.operational_constraints.max_omega_rad_s
-        ):
-            raise ValueError("motion-selection reversal threshold exceeds operational omega limit")
         navigation = V3NavigationConfig(_typed(float,local["min_range_m"],"local.min_range_m"),
             _typed(float,local["max_range_m"],"local.max_range_m"),_typed(int,local["max_points"],"local.max_points"),
             resolved_control.world_model, resolved_control.navigation, resolved_control.async_l6)

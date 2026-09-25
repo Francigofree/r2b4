@@ -22,7 +22,6 @@ class MotionSelectionConfig:
     """Deterministic temporal-continuity policy for L7 trajectory selection."""
 
     continuity_score_band: float
-    reversal_min_omega_rad_s: float
 
     def __post_init__(self) -> None:
         value = self.continuity_score_band
@@ -33,14 +32,6 @@ class MotionSelectionConfig:
             or not 0.0 <= value <= 1.0
         ):
             raise ValueError("continuity_score_band must be finite and in [0, 1]")
-        reversal = self.reversal_min_omega_rad_s
-        if (
-            isinstance(reversal, bool)
-            or not isinstance(reversal, (int, float))
-            or not math.isfinite(reversal)
-            or reversal < 0.0
-        ):
-            raise ValueError("reversal_min_omega_rad_s must be finite and non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,11 +193,7 @@ class MotionSelector:
                 )
                 selected = min(
                     near_best,
-                    key=lambda candidate: _command_continuity_key(
-                        state,
-                        candidate,
-                        self._config.reversal_min_omega_rad_s,
-                    ),
+                    key=lambda candidate: _command_continuity_key(state, candidate),
                 )
 
             previous_id = state.last_candidate_id if state.last_mission_id == plan.mission_id else None
@@ -231,7 +218,6 @@ class MotionSelector:
 def _command_continuity_key(
     state: MotionSelectionStateCheckpoint,
     candidate: TrajectoryEvaluation,
-    reversal_min_omega_rad_s: float,
 ) -> tuple[int, float, float, float, str]:
     """Prefer physical continuity only inside the already-approved score band."""
 
@@ -242,8 +228,8 @@ def _command_continuity_key(
     # A meaningful steering sign reversal is the strongest chatter signal.
     reversal = int(
         previous_omega * candidate_omega < 0.0
-        and abs(previous_omega) >= reversal_min_omega_rad_s
-        and abs(candidate_omega) >= reversal_min_omega_rad_s
+        and abs(previous_omega) >= 0.05
+        and abs(candidate_omega) >= 0.05
     )
     return (
         reversal,

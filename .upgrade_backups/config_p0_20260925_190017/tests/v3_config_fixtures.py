@@ -63,6 +63,7 @@ def bounded_fixture(hardware_path, physics_path, speed_map_path, command_profile
     c=json.loads(Path(control_path).read_text())
     if sensor_policy is not None:
         values=asdict(sensor_policy)
+        values.pop('camera_maximum_frame_age_ns')
         for key in ('imu_heading_clockwise_positive','imu_yaw_rate_axis','imu_yaw_rate_clockwise_positive','imu_yaw_offset_rad'):p[key]=values.pop(key)
         c['sensor_policy']=values
         c['lidar_runtime']['matcher_max_result_age_s']=values['lidar_maximum_result_age_ns']/1e9

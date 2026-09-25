@@ -16,12 +16,15 @@ import smbus2
 
 from v3.adapters.native_lidar_port import (
     NativeLidarPort,
-    NativeLidarPortConfig,
+    load_native_lidar_port_config,
     open_native_lidar_port,
 )
 from v3.adapters.bounded_command import BoundedTeleopProfile
-from v3.config import ConfigResolver, ResolvedRobotConfig
 from v3.contracts import AcquisitionFrame, AdmittedFrame, RobotEstimate
+from v3_bounded_config import (
+    NativeSensorPolicyConfig,
+    load_bounded_physical_runtime_config,
+)
 from v3_hardware_runtime import (
     FiniteSensorMeasurementConfig,
     SensorMeasurementReport,
@@ -42,6 +45,31 @@ class _SignalStop:
     def __call__(self) -> bool:
         return self.requested
 
+
+def native_sensor_policy() -> NativeSensorPolicyConfig:
+    """Return the explicit first-hardware validation policy."""
+
+    return NativeSensorPolicyConfig(
+        encoder_maximum_sample_interval_ns=100_000_000,
+        encoder_maximum_abs_velocity_mps=1.5,
+        encoder_minimum_trust=0.5,
+        imu_maximum_sample_age_ns=100_000_000,
+        imu_heading_clockwise_positive=True,
+        imu_yaw_rate_axis=2,
+        imu_yaw_rate_clockwise_positive=False,
+        imu_yaw_offset_rad=0.0,
+        imu_minimum_confidence=0.5,
+        imu_minimum_calibration=2,
+        imu_allow_rate_only=True,
+        lidar_maximum_result_age_ns=250_000_000,
+        lidar_maximum_future_skew_ns=10_000_000,
+        lidar_pose_r_scale=1.0,
+        lidar_minimum_confidence=0.2,
+        lidar_maximum_measurement_age_ns=250_000_000,
+        encoder_minimum_estimation_pulses=4,
+        encoder_minimum_estimation_window_ns=40_000_000,
+        encoder_maximum_estimation_window_ns=160_000_000,
+    )
 
 
 def _layer(result, layer: str):
@@ -154,10 +182,12 @@ def summarize_report(report: SensorMeasurementReport) -> dict[str, object]:
     }
 
 
-def _open_lidar_port(
-    config: NativeLidarPortConfig,
-    pose_provider,
-) -> NativeLidarPort:
+def _open_lidar_port(danger_zone_m: float, pose_provider) -> NativeLidarPort:
+    config = load_native_lidar_port_config(
+        PROJECT_ROOT / "conf" / "hardver.json",
+        PROJECT_ROOT / "conf" / "vezerles.json",
+        danger_zone_m=danger_zone_m,
+    )
     return open_native_lidar_port(config, pose_provider, serial.Serial)
 
 
@@ -204,11 +234,11 @@ def _lidar_diagnostics(service: NativeLidarPort | None) -> dict[str, object] | N
     }
 
 
-def _measurement_config(
-    resolved: ResolvedRobotConfig,
-    tick_count: int,
-) -> FiniteSensorMeasurementConfig:
-    runtime = resolved.bounded(
+def _measurement_config(tick_count: int) -> FiniteSensorMeasurementConfig:
+    runtime = load_bounded_physical_runtime_config(
+        PROJECT_ROOT / "conf" / "hardver.json",
+        PROJECT_ROOT / "conf" / "fizika.json",
+        PROJECT_ROOT / "conf" / "speed_map.json",
         BoundedTeleopProfile(
             command_id="v3-sensor-measurement-zero-only",
             start_tick_id=2,
@@ -217,7 +247,8 @@ def _measurement_config(
             omega_rad_s=0.0,
             max_v_mps=0.01,
             max_omega_rad_s=0.01,
-        )
+        ),
+        sensor_policy=native_sensor_policy(),
     )
     return FiniteSensorMeasurementConfig.from_runtime(runtime, tick_count=tick_count)
 
@@ -239,18 +270,17 @@ def main(argv: list[str] | None = None) -> int:
         for signum in (signal.SIGINT, signal.SIGTERM)
     }
     lidar_service: NativeLidarPort | None = None
-    resolved: ResolvedRobotConfig | None = None
 
     def open_lidar(pose_provider) -> NativeLidarPort:
         nonlocal lidar_service
-        if resolved is None:
-            raise RuntimeError("resolved robot config is unavailable")
-        lidar_service = _open_lidar_port(resolved.lidar, pose_provider)
+        lidar_service = _open_lidar_port(
+            config.sensors.lidar_danger_zone_m,
+            pose_provider,
+        )
         return lidar_service
 
     try:
-        resolved = ConfigResolver.for_project(PROJECT_ROOT).resolve()
-        config = _measurement_config(resolved, args.ticks)
+        config = _measurement_config(args.ticks)
         report = run_finite_sensor_measurement(
             lgpio,
             smbus2.SMBus,
@@ -259,7 +289,6 @@ def main(argv: list[str] | None = None) -> int:
             stop_requested=stop,
         )
         summary = summarize_report(report)
-        summary["config_snapshot_id"] = resolved.snapshot_id
         summary["lidar_diagnostics"] = _lidar_diagnostics(lidar_service)
     except Exception as exc:
         summary = {

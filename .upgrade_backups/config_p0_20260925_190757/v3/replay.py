@@ -749,31 +749,6 @@ def _production_entry(tick: Mapping[str, object]) -> _ReplayEntry:
     )
 
 
-def _migrate_legacy_resolved_config_snapshot(value: object) -> object:
-    """Migrate historical immutable config only for replay decoding.
-
-    0.05 rad/s is the historical L7 behavior before this field became explicit.
-    Modern production startup must provide it in vezerles.json; this function is
-    not a live configuration authority.
-    """
-    if isinstance(value, Mapping):
-        migrated = {
-            str(key): _migrate_legacy_resolved_config_snapshot(item)
-            for key, item in value.items()
-        }
-        if (
-            migrated.get("__type__") == "MotionSelectionConfig"
-            and "reversal_min_omega_rad_s" not in migrated
-        ):
-            migrated["reversal_min_omega_rad_s"] = 0.05
-        return migrated
-    if isinstance(value, list):
-        return [_migrate_legacy_resolved_config_snapshot(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_migrate_legacy_resolved_config_snapshot(item) for item in value)
-    return value
-
-
 def _production_control_config(
     payload: Mapping[str, object],
     inputs: Sequence[TickInputs],
@@ -791,23 +766,9 @@ def _production_control_config(
     from v3.config import ResolvedRobotConfig, ConfigResolver
     robot_value = _find_unique_typed_value(configuration, ResolvedRobotConfig.__name__)
     if robot_value is not None:
-        # Verify the exact captured snapshot before any schema-only migration.
-        encoded_snapshot_id = hashlib.sha256(
-            json.dumps(
-                robot_value,
-                sort_keys=True,
-                separators=(",", ":"),
-                allow_nan=False,
-            ).encode()
-        ).hexdigest()
-        if configuration.get("snapshot_id") != encoded_snapshot_id:
+        robot = _decode_production_value(robot_value, ResolvedRobotConfig, "capture.configuration.resolved_robot")
+        if configuration.get("snapshot_id") != robot.snapshot_id:
             raise V3ReplayError("resolved config snapshot hash mismatch")
-        decode_value = _migrate_legacy_resolved_config_snapshot(robot_value)
-        robot = _decode_production_value(
-            decode_value,
-            ResolvedRobotConfig,
-            "capture.configuration.resolved_robot",
-        )
         return robot.runtime.composition.live_control.control, "RESOLVED_ROBOT_SNAPSHOT"
     encoded = _find_unique_typed_value(
         configuration,
