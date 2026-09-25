@@ -1,11 +1,13 @@
-"""Gemini Robotics ER 2 Preview client using the GA Interactions API."""
+"""Gemini Robotics ER 2 Preview client using the Interactions API."""
 from __future__ import annotations
 
 import base64
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from .config import Er2Config, api_key_from_env
+from .evidence import Er2Evidence
 from .tool_bridge import Er2RobotTools
 
 
@@ -20,6 +22,26 @@ class Er2PreviewResult:
     tool_rounds: int
 
 
+def _interaction_steps(interaction: object) -> tuple[object, ...]:
+    """Support the current SDK ``steps`` field and the older ``outputs`` alias."""
+    for name in ("steps", "outputs"):
+        value = getattr(interaction, name, None)
+        if value is not None:
+            try:
+                return tuple(value or ())
+            except TypeError:
+                continue
+    return ()
+
+
+def _function_call_arguments(call: object) -> Mapping[str, object] | None:
+    for name in ("arguments", "args"):
+        value = getattr(call, name, None)
+        if isinstance(value, Mapping):
+            return value
+    return None
+
+
 class Er2PreviewClient:
     def __init__(
         self,
@@ -27,8 +49,10 @@ class Er2PreviewClient:
         *,
         api_key: str | None = None,
         client: object | None = None,
+        evidence: Er2Evidence | None = None,
     ) -> None:
         self.config = config or Er2Config.from_env()
+        self.evidence = evidence
         if client is None:
             try:
                 from google import genai
@@ -36,6 +60,10 @@ class Er2PreviewClient:
                 raise Er2PreviewError("google-genai is not installed") from exc
             client = genai.Client(api_key=api_key or api_key_from_env())
         self.client = client
+
+    def _emit(self, event_type: str, **fields: object) -> None:
+        if self.evidence is not None:
+            self.evidence.emit(event_type, provider="gemini", endpoint="preview", **fields)
 
     def run(
         self,
@@ -63,61 +91,127 @@ class Er2PreviewClient:
                 }
             )
         inputs.append({"type": "text", "text": prompt.strip()})
+        tool_declarations = tools.interaction_tools() if tools is not None else None
+        generation_config = {"thinking_level": "high"}
         kwargs: dict[str, object] = {
             "model": self.config.preview_model,
             "input": inputs,
-            "generation_config": {"thinking_level": "high"},
+            "generation_config": generation_config,
         }
-        if tools is not None:
-            kwargs["tools"] = tools.interaction_tools()
-        interaction = self.client.interactions.create(**kwargs)  # type: ignore[attr-defined]
-        rounds = 0
+        if tool_declarations is not None:
+            kwargs["tools"] = tool_declarations
 
-        while tools is not None:
-            calls = [out for out in tuple(getattr(interaction, "outputs", ()) or ()) if getattr(out, "type", None) == "function_call"]
-            if not calls:
-                break
-            if rounds >= max_tool_rounds:
-                raise Er2PreviewError("ER2 Preview exceeded bounded tool-call rounds")
-            function_results: list[dict[str, object]] = []
-            for call in calls:
-                name = getattr(call, "name", None)
-                arguments = getattr(call, "arguments", {}) or {}
-                call_id = getattr(call, "id", None)
-                if not isinstance(name, str) or not isinstance(arguments, Mapping) or not isinstance(call_id, str):
-                    raise Er2PreviewError("ER2 returned malformed function call")
-                try:
-                    result = tools.execute(name, arguments)
-                except Exception as exc:
-                    result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
-                function_results.append(
-                    {
-                        "type": "function_result",
-                        "name": name,
-                        "call_id": call_id,
-                        "result": result,
-                    }
-                )
-            rounds += 1
-            interaction = self.client.interactions.create(  # type: ignore[attr-defined]
-                model=self.config.preview_model,
-                previous_interaction_id=getattr(interaction, "id", None),
-                input=function_results,
-            )
-
-        text = getattr(interaction, "output_text", None)
-        if not isinstance(text, str):
-            text_parts = [
-                getattr(out, "text", "")
-                for out in tuple(getattr(interaction, "outputs", ()) or ())
-                if isinstance(getattr(out, "text", None), str)
-            ]
-            text = "".join(text_parts)
-        return Er2PreviewResult(
-            interaction_id=getattr(interaction, "id", None),
-            text=text,
-            tool_rounds=rounds,
+        self._emit(
+            "ER2_PREVIEW_START",
+            model=self.config.preview_model,
+            prompt_chars=len(prompt.strip()),
+            image_present=image_bytes is not None,
+            tools_enabled=tools is not None,
         )
+        try:
+            interaction = self.client.interactions.create(**kwargs)  # type: ignore[attr-defined]
+            rounds = 0
+
+            while tools is not None:
+                calls = [
+                    step
+                    for step in _interaction_steps(interaction)
+                    if getattr(step, "type", None) == "function_call"
+                ]
+                if not calls:
+                    break
+                if rounds >= max_tool_rounds:
+                    raise Er2PreviewError("ER2 Preview exceeded bounded tool-call rounds")
+                previous_id = getattr(interaction, "id", None)
+                if not isinstance(previous_id, str) or not previous_id:
+                    raise Er2PreviewError("ER2 Preview tool call is missing interaction id")
+
+                function_results: list[dict[str, object]] = []
+                physical_drive_executed = False
+                for call in calls:
+                    name = getattr(call, "name", None)
+                    arguments = _function_call_arguments(call)
+                    call_id = getattr(call, "id", None)
+                    if not isinstance(name, str) or arguments is None or not isinstance(call_id, str) or not call_id:
+                        raise Er2PreviewError("ER2 returned malformed function call")
+                    if name == "robot_drive" and physical_drive_executed:
+                        # Never execute two physical segments selected from the same
+                        # model turn. The model must observe the first blocking tool
+                        # result and choose the next segment in a fresh interaction.
+                        result = {
+                            "status": "ERROR",
+                            "error": "ONE_ROBOT_DRIVE_PER_TOOL_ROUND: wait for the prior segment result, then request the next segment in a new tool round",
+                        }
+                    else:
+                        try:
+                            result = tools.execute(name, arguments)
+                            if name == "robot_drive":
+                                physical_drive_executed = True
+                        except Exception as exc:
+                            result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
+                    # Interactions API function results are content blocks. Keep the
+                    # robot result JSON-encoded inside a text block, matching the
+                    # provider contract and avoiding SDK-specific object coercion.
+                    function_results.append(
+                        {
+                            "type": "function_result",
+                            "name": name,
+                            "call_id": call_id,
+                            "result": [
+                                {
+                                    "type": "text",
+                                    "text": json.dumps(
+                                        result,
+                                        ensure_ascii=False,
+                                        separators=(",", ":"),
+                                        default=str,
+                                    ),
+                                }
+                            ],
+                        }
+                    )
+                rounds += 1
+                # tools and generation_config are interaction-scoped in the
+                # Interactions API, so they must be re-specified on every turn.
+                interaction = self.client.interactions.create(  # type: ignore[attr-defined]
+                    model=self.config.preview_model,
+                    previous_interaction_id=previous_id,
+                    input=function_results,
+                    tools=tool_declarations,
+                    generation_config=generation_config,
+                )
+
+            text = getattr(interaction, "output_text", None)
+            if not isinstance(text, str):
+                text_parts = [
+                    getattr(step, "text", "")
+                    for step in _interaction_steps(interaction)
+                    if isinstance(getattr(step, "text", None), str)
+                ]
+                text = "".join(text_parts)
+            result = Er2PreviewResult(
+                interaction_id=getattr(interaction, "id", None),
+                text=text,
+                tool_rounds=rounds,
+            )
+            self._emit(
+                "ER2_PREVIEW_COMPLETE",
+                model=self.config.preview_model,
+                interaction_id=result.interaction_id,
+                tool_rounds=result.tool_rounds,
+                output_chars=len(result.text),
+            )
+            return result
+        except Exception as exc:
+            self._emit(
+                "ER2_PREVIEW_ERROR",
+                model=self.config.preview_model,
+                error_type=type(exc).__name__,
+                error=str(exc)[:300],
+            )
+            if isinstance(exc, Er2PreviewError):
+                raise
+            raise Er2PreviewError(f"ER2 Preview request failed: {type(exc).__name__}: {exc}") from exc
 
 
 __all__ = ["Er2PreviewClient", "Er2PreviewError", "Er2PreviewResult"]

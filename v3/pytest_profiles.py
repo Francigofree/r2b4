@@ -144,6 +144,7 @@ _PROFILES: tuple[PytestProfile, ...] = (
         "providers",
         "External AI/provider adapter tests, kept separate from robot-core gates.",
         (
+            "tests/feature/test_er2_*.py",
             "tests/test_r2b4_gemini_*.py",
             "tests/test_r2b4_groq_*.py",
             "tests/test_r2b4_llm_provider.py",

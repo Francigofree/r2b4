@@ -10,12 +10,12 @@ import math
 import os
 import time
 from collections.abc import Mapping
-from typing import Any
 
 from v3.external_gateway import ExternalRequest, ExternalRobotGateway, GatewayPolicy
 from v3.robot_interface import RobotInterface
 
 from .config import Er2Config
+from .evidence import Er2Evidence
 
 
 def _jsonable(value: object) -> object:
@@ -34,6 +34,25 @@ class Er2ToolError(RuntimeError):
     pass
 
 
+def _tool_result_metadata(result: Mapping[str, object]) -> dict[str, object]:
+    out: dict[str, object] = {"status": result.get("status")}
+    payload = result.get("result")
+    if isinstance(payload, Mapping):
+        for key in ("command_id", "mission_id", "action"):
+            value = payload.get(key)
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                out[key] = value
+    command = result.get("command")
+    if isinstance(command, Mapping):
+        command_payload = command.get("result")
+        if isinstance(command_payload, Mapping):
+            for key in ("command_id", "mission_id", "action"):
+                value = command_payload.get(key)
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    out[f"command_{key}"] = value
+    return out
+
+
 class Er2RobotTools:
     """Small, fail-closed ER2 tool surface with real execution only."""
 
@@ -42,6 +61,7 @@ class Er2RobotTools:
         gateway: ExternalRobotGateway,
         config: Er2Config | None = None,
         *,
+        evidence: Er2Evidence | None = None,
         sleep=time.sleep,
         monotonic=time.monotonic,
     ) -> None:
@@ -51,6 +71,7 @@ class Er2RobotTools:
             raise ValueError("ER2 requires a gateway with real execution enabled")
         self.gateway = gateway
         self.config = config or Er2Config.from_env()
+        self.evidence = evidence
         self._sleep = sleep
         self._monotonic = monotonic
         self._seq = 0
@@ -62,6 +83,7 @@ class Er2RobotTools:
         config: Er2Config | None = None,
         *,
         session_owner_pid: int | None = None,
+        evidence: Er2Evidence | None = None,
     ) -> "Er2RobotTools":
         cfg = config or Er2Config.from_env()
         owner = os.getpid() if session_owner_pid is None else session_owner_pid
@@ -73,7 +95,11 @@ class Er2RobotTools:
                 session_watchdog_s=cfg.session_watchdog_s,
             ),
         )
-        return cls(gateway, cfg)
+        return cls(gateway, cfg, evidence=evidence)
+
+    def _emit(self, event_type: str, **fields: object) -> None:
+        if self.evidence is not None:
+            self.evidence.emit(event_type, **fields)
 
     def _request_id(self, label: str) -> str:
         self._seq += 1
@@ -174,28 +200,41 @@ class Er2RobotTools:
 
     def execute(self, name: str, arguments: Mapping[str, object] | None = None) -> dict[str, object]:
         args = dict(arguments or {})
-        if name == "robot_status":
-            if args:
-                raise Er2ToolError("robot_status takes no arguments")
-            return self.robot_status()
-        if name == "robot_stop":
-            if args:
-                raise Er2ToolError("robot_stop takes no arguments")
-            return self.robot_stop()
-        if name == "robot_drive":
-            allowed = {"v_mps", "omega_rad_s", "duration_s"}
-            unknown = sorted(set(args) - allowed)
-            missing = sorted(allowed - set(args))
-            if unknown:
-                raise Er2ToolError("unknown robot_drive arguments: " + ", ".join(unknown))
-            if missing:
-                raise Er2ToolError("missing robot_drive arguments: " + ", ".join(missing))
-            return self.robot_drive(
-                v_mps=args["v_mps"],  # type: ignore[arg-type]
-                omega_rad_s=args["omega_rad_s"],  # type: ignore[arg-type]
-                duration_s=args["duration_s"],  # type: ignore[arg-type]
+        self._emit("ER2_TOOL_CALL", tool_name=name, arguments=_jsonable(args))
+        try:
+            if name == "robot_status":
+                if args:
+                    raise Er2ToolError("robot_status takes no arguments")
+                result = self.robot_status()
+            elif name == "robot_stop":
+                if args:
+                    raise Er2ToolError("robot_stop takes no arguments")
+                result = self.robot_stop()
+            elif name == "robot_drive":
+                allowed = {"v_mps", "omega_rad_s", "duration_s"}
+                unknown = sorted(set(args) - allowed)
+                missing = sorted(allowed - set(args))
+                if unknown:
+                    raise Er2ToolError("unknown robot_drive arguments: " + ", ".join(unknown))
+                if missing:
+                    raise Er2ToolError("missing robot_drive arguments: " + ", ".join(missing))
+                result = self.robot_drive(
+                    v_mps=args["v_mps"],  # type: ignore[arg-type]
+                    omega_rad_s=args["omega_rad_s"],  # type: ignore[arg-type]
+                    duration_s=args["duration_s"],  # type: ignore[arg-type]
+                )
+            else:
+                raise Er2ToolError(f"unknown ER2 tool: {name}")
+        except Exception as exc:
+            self._emit(
+                "ER2_TOOL_ERROR",
+                tool_name=name,
+                error_type=type(exc).__name__,
+                error=str(exc)[:300],
             )
-        raise Er2ToolError(f"unknown ER2 tool: {name}")
+            raise
+        self._emit("ER2_TOOL_RESULT", tool_name=name, **_tool_result_metadata(result))
+        return result
 
     def interaction_tools(self) -> list[dict[str, object]]:
         return [
@@ -214,7 +253,7 @@ class Er2RobotTools:
             {
                 "type": "function",
                 "name": "robot_drive",
-                "description": "Drive R2B4 for one short bounded differential-drive segment. The call blocks until the segment ends and always issues STOP before returning.",
+                "description": "Drive R2B4 for one short bounded differential-drive segment. The call blocks until the segment ends and always issues STOP before returning. For longer travel, use multiple short segments and inspect fresh status between segments.",
                 "parameters": {
                     "type": "object",
                     "properties": {
