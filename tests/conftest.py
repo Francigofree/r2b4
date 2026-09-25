@@ -1,26 +1,28 @@
-"""Shared R2B4 pytest collection metadata.
-
-The physical test-file layout intentionally remains flat during the Test Hub
-migration.  Domain markers are derived from the same profile registry that the
-Test Hub uses, so selection semantics have one source of truth.
-"""
-
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-
 import pytest
 
-from v3.pytest_profiles import markers_for_test_path
+TESTS = Path(__file__).resolve().parent
+ROOT = TESTS.parent
+for path in (ROOT, TESTS, TESTS / "core", TESTS / "feature", TESTS / "deep"):
+    s = str(path)
+    if s not in sys.path:
+        sys.path.insert(0, s)
+
+HARD_CAP = 150
 
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    root = Path(str(config.rootpath)).resolve()
+def pytest_collection_modifyitems(session, config, items):
+    # The hard cap applies to the complete curated tree. Focused selections are naturally smaller.
+    roots = {"core", "feature", "deep"}
+    seen = set()
     for item in items:
-        path = Path(str(item.path)).resolve()
-        try:
-            relative = path.relative_to(root).as_posix()
-        except ValueError:
-            continue
-        for marker_name in markers_for_test_path(relative):
-            item.add_marker(getattr(pytest.mark, marker_name))
+        p = Path(str(item.fspath))
+        seen |= roots.intersection(p.parts)
+    if seen == roots and len(items) > HARD_CAP:
+        raise pytest.UsageError(
+            f"R2B4 pytest budget exceeded: {len(items)} items > {HARD_CAP}. "
+            "Merge or remove an existing test before adding more."
+        )

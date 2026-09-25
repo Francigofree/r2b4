@@ -1,48 +1,37 @@
-R2B4 pytest refactor V5 - staging/project-root fix - 2026-09-25
-================================================================
+R2B4 PYTEST REFAKTOR V6 - FALSE ROLLBACK FIX
+============================================
 
-A HIBA OKA
-----------
-A V4 a kivalasztott teszteket tests/core, tests/feature, tests/deep ala teszi.
-Tobb regi teszt azonban a sajat fajlhelyebol szamolja a repo gyokeret ezzel a
-mintaval:
+A valodi V5 install log szerint a kuralt suite sikeresen telepult:
+- staging 83/83 PASS
+- ./r test 25/25 PASS
+- ./r test full 83/83 PASS
 
-    Path(__file__).resolve().parents[1]
+A rollback oka a V4 sajat utovalidatora volt. Az AST-ban 70 darab test_* Python
+fuggvenyt szamolt, mikozben pytest parametrizacioval 83 tesztesetet collectalt.
+Ezert a jo 83-as suite-ot tevesen 70-esnek minositette.
 
-Ez flat tests/test_x.py helyzetben a repo gyokere volt. Nested
- tests/core/test_x.py esetben mar a tests/ konyvtar. Ezert a stagingben a
-production configot tevesen itt kereste:
-
-    /tmp/.../tests/conf/hardver.json
-
-nem pedig a kanonikus repo conf/ alatt.
-
-A config refaktor/upgrade ezt felszinre hozta, mert az uj ConfigResolver a
-kanonikus 4 production dokumentumot olvassa, de a konkret hiba nem a JSON
-config tartalma: a pytest staging rossz project rootot adott.
-
-V5 JAVITAS
-----------
-- ellenorzi a kanonikus conf/{hardver,fizika,speed_map,vezerles}.json fajlokat;
-- ideiglenesen normalizalja a legacy __file__-alapu repo-root kifejezeseket;
-- staging alatt R2B4_ROOT=/home/alba/project_r2b4 autoritast ad;
-- install utan R2B4_ROOT NELKUL ujra lefuttatja a teljes kuralt suite-ot;
-- --check utan byte-pontosan visszaallitja az eredeti tesztfajlokat;
-- install hiba eseten teljes tests/ rollback;
-- production configot es production robot-control source-ot nem modosit.
+V6 javitas:
+- V4 AST TOTAL also limitet csak ideiglenes masolatban kikapcsolja;
+- a 80..140 hard budgetet pytest --collect-only item-szammal ellenorzi;
+- CORE >=20, FEATURE >=40, <=20 fajl hard guard marad;
+- DEEP 20..40 soft target marad;
+- teljes pytest, ./r test es ./r test full kotelezo PASS;
+- install elott sajat rollback snapshot keszul;
+- a sikertelen V5 utan esetleg megmaradt r / v3/test_runner.py allapotot a legfrissebb V2 backupbol helyreallitja, ha ott elerheto.
 
 HASZNALAT
 ---------
-A mar meglevo installer_v4.py maradjon az integralando konyvtarban.
+A mar kicsomagolt installer_v4.py es installer_v5.py maradjon az integralando
+konyvtarban.
 
   cd /home/alba/project_r2b4/integralando
-  python3 installer_v5.py --check
+  python3 r2b4_pytest_refactor_v6_20260925/installer_v6.py --check
 
-Ha V5 CHECK PASS:
+Ha V6 CHECK PASS:
 
-  python3 installer_v5.py
+  python3 r2b4_pytest_refactor_v6_20260925/installer_v6.py
 
-Utana:
+Majd:
 
   cd /home/alba/project_r2b4
   ./r test

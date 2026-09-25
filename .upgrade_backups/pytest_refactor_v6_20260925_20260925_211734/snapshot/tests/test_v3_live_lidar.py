@@ -1,0 +1,248 @@
+import dataclasses
+from dataclasses import FrozenInstanceError
+
+import pytest
+
+import v3.adapters.live_lidar as live_lidar_module
+from v3.adapters.live_lidar import (
+    LidarHealthReading,
+    LidarMatcherDiagnostics,
+    LidarPointReading,
+    LidarPoseReading,
+    LidarScanReading,
+    NativeLidarConfig,
+    NativeLidarSource,
+)
+from v3.contracts import DeviceHealthState, TickContext
+
+
+class _Backend:
+    def __init__(self, result: object) -> None:
+        self.result = result
+        self.calls: list[TickContext] = []
+
+    def read(self, context: TickContext):
+        self.calls.append(context)
+        return self.result
+
+
+def _reading(*, confidence: float = 0.9, stale: bool = False):
+    return LidarHealthReading(
+        revision=17,
+        captured_monotonic_ns=980,
+        measurement_age_ns=20,
+        confidence=confidence,
+        stale=stale,
+        timing_valid=True,
+        pose=LidarPoseReading(0.25, -0.10, 0.20, r_scale=0.8),
+        diagnostics=LidarMatcherDiagnostics(
+            candidate_id=17,
+            source_raw_scan_id=31,
+            source_raw_scan_timestamp_ns=960,
+            scan_start_monotonic_ns=920,
+            scan_end_monotonic_ns=960,
+            measurement_monotonic_ns=940,
+            pose_reference_monotonic_ns=940,
+            scan_pose_alignment_delta_ns=0,
+            tracking_ready=True,
+            matcher_timed_out=False,
+            matcher_degenerate=False,
+            matcher_runtime_ms=28.5,
+            matcher_queue_delay_ms=1.25,
+            matcher_input_age_ns=60,
+            matcher_confidence=0.85,
+            inlier_ratio=0.75,
+            robust_rmse_m=0.012,
+            sector_coverage=0.5,
+            observability_score=0.8,
+            ambiguity_margin=0.9,
+            scan_to_map_seed=(0.20, -0.05, 0.10),
+        ),
+        scan=LidarScanReading(
+            revision=31,
+            captured_monotonic_ns=960,
+            scan_start_monotonic_ns=920,
+            scan_end_monotonic_ns=960,
+            measurement_monotonic_ns=940,
+            measurement_age_ns=40,
+            health="OK",
+            stale=False,
+            timing_valid=True,
+            point_count=80,
+            front_clearance_m=1.2,
+            rear_clearance_m=1.1,
+            left_clearance_m=0.9,
+            right_clearance_m=1.0,
+            front_observation_count=20,
+            rear_observation_count=20,
+            left_observation_count=20,
+            right_observation_count=20,
+            local_points=(
+                LidarPointReading(0.0, 1.0, 15),
+                LidarPointReading(90.0, 0.5, 10),
+            ),
+        ),
+    )
+
+
+def _config() -> NativeLidarConfig:
+    return NativeLidarConfig(
+        "LIDAR_LOCALIZATION",
+        minimum_confidence=0.3,
+        maximum_measurement_age_ns=250_000_000,
+    )
+
+
+def test_native_lidar_source_closes_health_and_pose_from_one_matcher_result():
+    context = TickContext(7, 1_000)
+    backend = _Backend(_reading())
+    source = NativeLidarSource(backend, _config())
+
+    snapshot = source.read(context)
+
+    assert backend.calls == [context]
+    assert snapshot.context == context
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert tuple(sample.kind for sample in snapshot.samples) == (
+        "lidar_health",
+            "lidar_safety_clearance",
+            "lidar_local_points",
+            "lidar_localization_health",
+        "lidar_matcher_diagnostics",
+        "lidar_pose",
+    )
+    health, safety, local, localization, diagnostics, pose = snapshot.samples
+    assert health.sequence == safety.sequence == 31
+    assert health.captured_monotonic_ns == safety.captured_monotonic_ns == 940
+    assert localization.sequence == diagnostics.sequence == pose.sequence == 17
+    assert localization.captured_monotonic_ns == diagnostics.captured_monotonic_ns == pose.captured_monotonic_ns == 980
+    assert {field.key: field.value for field in local.values} == {
+        "frame_id": "ROBOT_BASE",
+        "point_count": 2,
+        "point_000_x_m": 1.0,
+        "point_000_y_m": 0.0,
+        "point_000_quality": 15,
+        "point_001_x_m": pytest.approx(0.0, abs=1e-12),
+        "point_001_y_m": -0.5,
+        "point_001_quality": 10,
+    }
+    assert {field.key: field.value for field in diagnostics.values} == {
+        "candidate_id": 17,
+        "source_raw_scan_id": 31,
+        "source_raw_scan_timestamp_ns": 960,
+        "source_scan_revision": 31,
+        "scan_start_monotonic_ns": 920,
+        "scan_end_monotonic_ns": 960,
+        "measurement_monotonic_ns": 940,
+        "pose_reference_monotonic_ns": 940,
+        "scan_pose_alignment_delta_ns": 0,
+        "matcher_reason": "",
+        "tracking_ready": True,
+        "matcher_timed_out": False,
+        "matcher_degenerate": False,
+        "degeneracy_reasons": "",
+        "matcher_runtime_ms": 28.5,
+        "matcher_queue_delay_ms": 1.25,
+        "matcher_input_age_ns": 60,
+        "matcher_confidence": 0.85,
+        "inlier_ratio": 0.75,
+        "robust_rmse_m": 0.012,
+        "sector_coverage": 0.5,
+        "observability_score": 0.8,
+        "ambiguity_margin": 0.9,
+        "seed_pose_x_m": 0.20,
+        "seed_pose_y_m": -0.05,
+        "seed_pose_yaw_rad": 0.10,
+    }
+    assert {field.key: field.value for field in pose.values} == {
+        "frame_id": "R2B4_BOOT_ROBOT_MAP",
+        "x_m": 0.25,
+        "y_m": -0.10,
+        "yaw_rad": 0.20,
+        "confidence": 0.9,
+        "r_scale": 0.8,
+    }
+
+
+@pytest.mark.parametrize("reading", (_reading(confidence=0.2), _reading(stale=True)))
+def test_localization_quality_does_not_change_physical_health(reading):
+    snapshot = NativeLidarSource(_Backend(reading), _config()).read(
+        TickContext(7, 1_000)
+    )
+
+    assert snapshot.health.state is DeviceHealthState.OK
+    assert tuple(sample.kind for sample in snapshot.samples) == (
+        "lidar_health",
+            "lidar_safety_clearance",
+            "lidar_local_points",
+            "lidar_localization_health",
+        "lidar_matcher_diagnostics",
+    )
+
+
+def test_physical_scan_staleness_degrades_device_but_keeps_localization_separate():
+    stale_scan = LidarScanReading(
+        revision=31,
+        captured_monotonic_ns=960,
+        scan_start_monotonic_ns=920,
+        scan_end_monotonic_ns=960,
+        measurement_monotonic_ns=940,
+        measurement_age_ns=40,
+        health="STALE",
+        stale=True,
+        timing_valid=True,
+        point_count=80,
+        front_clearance_m=1.2,
+        rear_clearance_m=1.1,
+        left_clearance_m=0.9,
+        right_clearance_m=1.0,
+        front_observation_count=20,
+        rear_observation_count=20,
+        left_observation_count=20,
+        right_observation_count=20,
+    )
+    snapshot = NativeLidarSource(
+        _Backend(dataclasses.replace(_reading(), scan=stale_scan)),
+        _config(),
+    ).read(TickContext(7, 1_000))
+
+    assert snapshot.health.state is DeviceHealthState.DEGRADED
+    assert snapshot.health.reason == "LIDAR_STALE"
+
+
+def test_native_lidar_pose_contract_is_immutable_and_fail_closed():
+    pose = LidarPoseReading(0.0, 0.0, 0.0)
+    with pytest.raises(FrozenInstanceError):
+        pose.x_m = 1.0
+    with pytest.raises(ValueError, match="r_scale"):
+        LidarPoseReading(0.0, 0.0, 0.0, r_scale=0.0)
+    with pytest.raises(ValueError, match="pose_frame_id"):
+        NativeLidarConfig("LIDAR", 0.3, 100, pose_frame_id="")
+
+
+def test_local_point_bound_preserves_nearest_angular_surface_and_density():
+    config = dataclasses.replace(
+        _config(),
+        local_perception_max_range_m=10.0,
+        local_perception_max_points=4,
+    )
+    points = (
+        LidarPointReading(1.0, 4.0, 5),
+        LidarPointReading(2.0, 1.0, 10),
+        LidarPointReading(91.0, 3.0, 5),
+        LidarPointReading(92.0, 0.7, 10),
+        LidarPointReading(181.0, 2.0, 5),
+        LidarPointReading(182.0, 0.8, 10),
+        LidarPointReading(271.0, 2.5, 5),
+        LidarPointReading(272.0, 0.9, 10),
+    )
+
+    selected = live_lidar_module._bounded_local_points(points, config)
+    reversed_selected = live_lidar_module._bounded_local_points(
+        tuple(reversed(points)),
+        config,
+    )
+
+    assert len(selected) == 4
+    assert selected == reversed_selected
+    assert tuple(point.angle_deg for point in selected) == (2.0, 92.0, 182.0, 272.0)

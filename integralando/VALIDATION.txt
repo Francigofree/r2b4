@@ -1,19 +1,22 @@
-R2B4 pytest refactor V5 validation - 2026-09-25
+V6 diagnosis based on real R2B4 install output supplied by user:
+- V2 staged suite: core=25 feature=55 deep=3 total=83 files=16
+- staged execution: 83 passed
+- ./r test: 25 passed
+- ./r test full: 83 passed
+- V4 then reported: total outside hard budget: 70 not in 80..140
 
-Observed real R2B4 V4 dry-run evidence:
-- selected suite: CORE 25 / FEATURE 55 / DEEP 3 = 83, 16 files
-- staged execution: 11 failures, 72 passes
-- every shown failure resolves config under /tmp/.../tests/conf instead of repo conf
-- failure is before config-content validation: FileNotFoundError/expected regular file
+Inference proven by numbers:
+- V4's post-check used static Python test-function count.
+- pytest collection expands parametrized functions to test items.
+- 70 function definitions -> 83 pytest items in this suite.
+- Therefore rollback was a validator bug, not a test-suite failure.
 
-Root cause:
-Moving tests from tests/test_*.py to tests/core|feature|deep/test_*.py invalidates legacy
-Path(__file__).resolve().parents[1] (and equivalent parent.parent) repo-root calculations.
+V6 acceptance uses pytest-collected item counts and independently reruns the suite and launcher commands.
 
-Mechanical validation:
-- synthetic nested 83-test staging suite: 83/83 PASS
-- --check restores original root-coupled test source
-- install: 83/83 staging PASS
-- post-install full suite with R2B4_ROOT deliberately unset: 83/83 PASS
-- forced V4 install failure: V5 restored the full original tests tree
-- production config/source not modified by V5
+Mechanical validation performed:
+- synthetic 70 Python test definitions -> 83 pytest items (25 core / 55 feature / 3 deep): V6 INSTALL PASS
+- full curated pytest: 83/83 PASS
+- ./r test: 25/25 PASS
+- ./r test full: 83/83 PASS
+- synthetic invalid 61-item suite: rejected
+- rollback restored tests/, r, and v3/test_runner.py byte-for-byte

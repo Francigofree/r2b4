@@ -1,9 +1,10 @@
 {
-  "upgrade_id": "pytest_refactor_v5_20260925",
-  "scope": "pytest staging/project-root correction",
-  "production_changes": false,
-  "config_changes": false,
-  "cause": "legacy flat-test __file__ project-root calculation became one level wrong after curation into tests/core|feature|deep",
-  "staging_authority": "R2B4_ROOT",
-  "post_install_validation": "full curated pytest with R2B4_ROOT unset"
+  "upgrade_id": "pytest_refactor_v6_20260925",
+  "root_cause": "V4 counted AST test function definitions (70) instead of pytest collected test items (83)",
+  "authoritative_budget_measure": "pytest --collect-only item count",
+  "hard_budget": {"core_min": 20, "feature_min": 40, "total_min": 80, "total_max": 140, "test_files_max": 20},
+  "deep_target": "20..40 soft",
+  "partial_state_repair": ["r", "v3/test_runner.py from latest V2 backup when available"],
+  "production_config_changes": false,
+  "robot_control_changes": false
 }
