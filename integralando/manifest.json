@@ -1,0 +1,36 @@
+{
+  "adds": [
+    "tests/core",
+    "tests/feature",
+    "tests/deep",
+    "tests/rig.py",
+    "tests/suite_manifest.json",
+    "v3/test_runner.py",
+    "docs/PYTEST_POLICY.md"
+  ],
+  "commands": [
+    "./r test",
+    "./r test follow",
+    "./r test full"
+  ],
+  "notes": [
+    "v3/pytest_profiles.py retained because current source uses it as shared Test Hub/CLI profile registry",
+    "v3_unit_config and reflection fixtures still removed"
+  ],
+  "production_control_changes": 0,
+  "removes": [
+    "pytest_profiles.py (only after non-test reference preflight)",
+    "v3_unit_config.json",
+    "tests/v3_config_fixtures.py"
+  ],
+  "target": {
+    "core": "20-30",
+    "deep": "20-40",
+    "feature": "40-70",
+    "hard_cap": 150,
+    "test_files_max": 20,
+    "total": "80-140"
+  },
+  "type": "test_infrastructure_refactor",
+  "upgrade_id": "pytest_refactor_v2_20260925"
+}

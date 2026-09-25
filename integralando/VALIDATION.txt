@@ -1,0 +1,16 @@
+R2B4 pytest refactor V2 validation - 2026-09-25
+
+Validated mechanically on a synthetic current-shape repo with production/CLI imports of v3.pytest_profiles:
+- before: 128 collected
+- retained shared v3/pytest_profiles.py registry and all importing modules
+- staged: CORE 30 / FEATURE 63 / DEEP 35 = 128
+- staged pytest: 128 passed
+- committed install: PASS
+- ./r test: 30 passed
+- ./r test full: 128 passed
+- v3/pytest_profiles.py still exists after install
+
+V2 correction:
+- v3/pytest_profiles.py is NOT deleted. Current source uses it from Test Hub/host/interface/launcher modules.
+- v3_unit_config.json and tests/v3_config_fixtures.py remain removal targets.
+- No production control algorithm is changed by this upgrade.
