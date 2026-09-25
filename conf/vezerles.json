@@ -367,7 +367,9 @@
     "a_debounce_micros": 150,
     "direction_guard_micros": 50,
     "direction_change_confirm_edges": 3,
-    "direction_change_confirm_window_micros": 250000
+    "direction_change_confirm_window_micros": 250000,
+    "edge_history_capacity": 512,
+    "diagnostic_event_capacity": 2048
   },
   "imu": {
     "operation_mode": "NDOF",
@@ -444,6 +446,15 @@
       "collector_poll_s": 0.05,
       "stop_enqueue_timeout_s": 0.2,
       "stop_timeout_s": 1.0
+    },
+    "command_ingress": {
+      "maximum_ttl_ns": 250000000,
+      "maximum_future_skew_ns": 5000000,
+      "maximum_linear_speed_mps": 0.5,
+      "maximum_angular_speed_rad_s": 1.2,
+      "maximum_file_bytes": 4096,
+      "reader_poll_s": 0.005,
+      "reader_stop_timeout_s": 1.0
     }
   }
 }

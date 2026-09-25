@@ -314,8 +314,11 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
 
     def __init__(self, config: ResidentCommandMailboxConfig, *,
                  monotonic_ns: Callable[[], int] = time.monotonic_ns,
-                 worker_cpu: int | None = None, strict_affinity: bool = False) -> None:
+                 worker_cpu: int | None = None, strict_affinity: bool = False,
+                 reader_poll_s: float, reader_stop_timeout_s: float) -> None:
         super().__init__(config, monotonic_ns=monotonic_ns)
+        self._reader_poll_s = reader_poll_s
+        self._reader_stop_timeout_s = reader_stop_timeout_s
         self._worker_cpu = worker_cpu
         self._strict_affinity = strict_affinity
         self._mailbox: bytes | None = None
@@ -338,7 +341,7 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
         try:
             while not self._stop_reader.is_set():
                 self._mailbox = super()._read_trusted_bytes()
-                self._stop_reader.wait(0.005)
+                self._stop_reader.wait(self._reader_poll_s)
         except Exception as exc:
             self._read_error = exc
 
@@ -352,7 +355,7 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
     def close(self) -> None:
         self._stop_reader.set()
         if self._reader is not None:
-            self._reader.join(timeout=1.0)
+            self._reader.join(timeout=self._reader_stop_timeout_s)
             if self._reader.is_alive():
                 raise RuntimeError("command mailbox reader did not stop")
 

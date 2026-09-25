@@ -1,3 +1,4 @@
+from v3_config_fixtures import bounded_fixture
 from dataclasses import replace
 from pathlib import Path
 
@@ -29,7 +30,6 @@ from v3.engine import TickExecutionError
 from v3.execution import EdgeFaultRecord, ExecutionRecord, WriterFailureRecord
 from v3_bounded_config import (
     NativeSensorPolicyConfig,
-    load_bounded_physical_runtime_config,
 )
 from v3_bounded_runtime import RUN_FAULT, RUN_OK
 from v3_runtime import ResidentPhysicalRuntimeConfig, run_resident_physical_control
@@ -252,7 +252,7 @@ def _policy():
 
 
 def _runtime_config(*, required_lidar_preflight_revisions=1):
-    bounded = load_bounded_physical_runtime_config(
+    bounded = bounded_fixture(
         PROJECT_ROOT / "conf" / "hardver.json",
         PROJECT_ROOT / "conf" / "fizika.json",
         PROJECT_ROOT / "conf" / "speed_map.json",

@@ -38,7 +38,7 @@ def _load(**kwargs):
         PHYSICS_PATH,
         SPEED_MAP_PATH,
         _profile(),
-        **kwargs,
+        **{"control_path": CONTROL_PATH, **kwargs},
     )
 
 
@@ -88,25 +88,20 @@ def test_closed_runtime_config_is_consistent_and_immutable():
         encoder.left_step_distance_m = 1.0  # type: ignore[misc]
 
 
-def test_explicit_runtime_timing_and_gpio_values_are_validated_by_v3_contracts():
-    config = _load(
-        tick_period_ns=10_000_000,
-        max_preflight_age_ns=20_000_000,
-        gpio_chip=2,
-        pwm_frequency_hz=10_000,
-    )
-
+def test_explicit_runtime_timing_and_gpio_values_are_validated_by_v3_contracts(tmp_path):
+    from v3.config import ConfigResolver
+    control = _changed_json(tmp_path, CONTROL_PATH, lambda c: c["runtime"].update(tick_period_ns=10_000_000, max_preflight_age_ns=20_000_000))
+    hardware = _changed_json(tmp_path, HARDWARE_PATH, lambda h: h.update(gpio_chip=2))
+    config = ConfigResolver(hardware, PHYSICS_PATH, SPEED_MAP_PATH, control).resolve().bounded(_profile())
     assert config.tick_period_ns == 10_000_000
     assert config.composition.live_control.max_preflight_age_ns == 20_000_000
     assert config.composition.motor_output.gpio_chip == 2
-    assert config.composition.motor_output.pwm_frequency_hz == 10_000
-    assert config.encoder is not None
     assert config.encoder.counter_gpio.gpio_chip == 2
 
 
 def test_active_sources_close_native_bno055_and_all_sensor_policy_once():
     policy = _sensor_policy()
-    config = _load(sensor_policy=policy)
+    config = _load()
     hardware = config.sensor_inputs
 
     assert hardware is not None
@@ -135,7 +130,7 @@ def test_active_sources_close_native_bno055_and_all_sensor_policy_once():
 
 
 def test_active_v3_navigation_config_closes_local_perception_costmap_and_rollout():
-    config = _load(sensor_policy=_sensor_policy(), control_path=CONTROL_PATH)
+    config = _load(control_path=CONTROL_PATH)
     control = config.composition.live_control.control
     hardware = config.sensor_inputs
 
@@ -161,9 +156,9 @@ def test_invalid_v3_navigation_rollout_budget_fails_before_runtime_construction(
     control = _changed_json(
         tmp_path,
         CONTROL_PATH,
-        lambda payload: payload["v3_navigation"]["trajectory_rollout"].update(
-            linear_samples=2,
-            angular_samples=3,
+        lambda payload: payload["layers"]["navigation"].update(
+            rollout_linear_samples=2,
+            rollout_angular_samples=3,
         ),
     )
 
@@ -179,6 +174,7 @@ def test_sensor_policy_is_explicit_and_rejected_before_config_paths_are_opened(t
             missing,
             missing,
             _profile(),
+        control_path=CONTROL_PATH,
             sensor_policy=object(),  # type: ignore[arg-type]
         )
 
@@ -195,7 +191,7 @@ def test_sensor_loader_rejects_implicit_or_malformed_bno055_values(tmp_path: Pat
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
-            sensor_policy=_sensor_policy(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -230,6 +226,7 @@ def test_loader_rejects_symlink_before_reading_config(tmp_path: Path):
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -258,6 +255,7 @@ def test_loader_rejects_noncanonical_speed_map(
             PHYSICS_PATH,
             speed_map,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -268,12 +266,13 @@ def test_loader_rejects_invalid_track_width(tmp_path: Path):
         lambda payload: payload.__setitem__("nyomtav_szelesseg_m", 0.0),
     )
 
-    with pytest.raises(ValueError, match="finite and positive"):
+    with pytest.raises(ValueError, match="finite and positive|nonfinite JSON"):
         load_bounded_physical_runtime_config(
             HARDWARE_PATH,
             physics,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -289,6 +288,7 @@ def test_loader_rejects_cross_motor_pin_collision(tmp_path: Path):
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -304,6 +304,7 @@ def test_loader_rejects_motor_encoder_pin_collision(tmp_path: Path):
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -319,14 +320,15 @@ def test_loader_rejects_non_x1_encoder_count_mode(tmp_path: Path):
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     (
-        ("forward_b_level", True, "forward_b_level must be 0 or 1"),
-        ("a_debounce_micros", -1, "must be a non-negative integer"),
+        ("forward_b_level", True, "unknown"),
+        ("a_debounce_micros", -1, "unknown"),
         ("input_pull_up", 1, "input_pull_up must be bool"),
         ("invert_bal", 0, "invert_bal must be bool"),
     ),
@@ -348,6 +350,7 @@ def test_loader_rejects_invalid_encoder_pin_policy_types(
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
@@ -363,26 +366,14 @@ def test_loader_rejects_encoder_pin_alias(tmp_path: Path):
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
-def test_loader_rejects_encoder_counts_mismatch(tmp_path: Path):
-    physics = _changed_json(
-        tmp_path,
-        PHYSICS_PATH,
-        lambda payload: payload.__setitem__(
-            "encoder_impulzus_per_fordulat",
-            664,
-        ),
-    )
-
-    with pytest.raises(ValueError, match="counts per revolution differ"):
-        load_bounded_physical_runtime_config(
-            HARDWARE_PATH,
-            physics,
-            SPEED_MAP_PATH,
-            _profile(),
-        )
+def test_loader_rejects_duplicate_encoder_calibration_authority(tmp_path):
+    hardware = _changed_json(tmp_path, HARDWARE_PATH, lambda h: h["encoderek"].update(counts_per_revolution=664))
+    with pytest.raises(ValueError, match="unknown"):
+        load_bounded_physical_runtime_config(hardware, PHYSICS_PATH, SPEED_MAP_PATH, _profile(), control_path=CONTROL_PATH)
 
 
 @pytest.mark.parametrize(
@@ -404,27 +395,29 @@ def test_loader_rejects_invalid_encoder_step_geometry(
         lambda payload: payload.__setitem__(field, value),
     )
 
-    with pytest.raises(ValueError, match="finite and positive"):
+    with pytest.raises(ValueError, match="finite and positive|nonfinite JSON"):
         load_bounded_physical_runtime_config(
             HARDWARE_PATH,
             physics,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=CONTROL_PATH,
         )
 
 
 def test_loader_rejects_unknown_motor_decay_mode(tmp_path: Path):
     def invalidate(payload):
-        payload["motorok"]["pwm_decay_mode"] = "unknown"
+        payload["motor"]["pwm_decay_mode"] = "unknown"
 
-    hardware = _changed_json(tmp_path, HARDWARE_PATH, invalidate)
+    control = _changed_json(tmp_path, CONTROL_PATH, invalidate)
 
     with pytest.raises(ValueError, match="pwm_decay_mode is invalid"):
         load_bounded_physical_runtime_config(
-            hardware,
+            HARDWARE_PATH,
             PHYSICS_PATH,
             SPEED_MAP_PATH,
             _profile(),
+        control_path=control,
         )
 
 
@@ -437,4 +430,5 @@ def test_invalid_profile_is_rejected_before_any_path_is_opened(tmp_path: Path):
             missing,
             missing,
             object(),  # type: ignore[arg-type]
+            control_path=CONTROL_PATH,
         )

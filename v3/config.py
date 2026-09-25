@@ -24,14 +24,14 @@ from v3.capture_encoding import encode_value
 from v3.composition.native_control import NativeControlCompositionConfig, V3NavigationConfig
 from v3.composition.resident_live_control import ResidentLiveControlConfig
 from v3.composition.resident_physical_control import ResidentPhysicalControlConfig
-from v3.config_types import EncoderProcessConfig, ImuProcessConfig, LidarProcessConfig, PlannerProcessConfig
+from v3.config_types import CommandIngressPolicy, EncoderProcessConfig, ImuProcessConfig, LidarProcessConfig, PlannerProcessConfig
 from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
 from v3.lidar_config import LidarMatcherConfig
 from v3.runtime_performance import RuntimeAffinityConfig
-from v3_bounded_config import NativeSensorPolicyConfig, POSE_FRAME_ID, _encoder_runtime_config, _motor_channel, _sensor_hardware_config
-from v3_runtime import ResidentPhysicalRuntimeConfig
+from v3.config_hardware import NativeSensorPolicyConfig, POSE_FRAME_ID, _encoder_runtime_config, _motor_channel, _sensor_hardware_config
+from v3.composition.runtime_config import ResidentPhysicalRuntimeConfig
 
 
 def _keys(value: object, expected: set[str], path: str) -> dict:
@@ -108,6 +108,7 @@ def _read(path: Path) -> dict:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeEdgeConfig:
+    command_ingress: CommandIngressPolicy
     multirate: MultiRateInputConfig
     planner_recovery: PlannerRecoveryPolicy
     encoder_process: EncoderProcessConfig
@@ -129,6 +130,31 @@ class ResolvedRobotConfig:
     affinity: RuntimeAffinityConfig
     edges: RuntimeEdgeConfig
 
+    def __post_init__(self) -> None:
+        control = self.runtime.composition.live_control.control
+        sensors = self.runtime.sensor_inputs
+        if control.lidar_safety is None or control.critical_device_ids != PRODUCTION_CRITICAL_DEVICE_IDS:
+            raise ValueError("resolved production config requires canonical safety inputs")
+        if control.world_model.local_costmap_max_points_per_scan != sensors.inputs.lidar_source.local_perception_max_points:
+            raise ValueError("world-model and LiDAR point budget mismatch")
+        if control.lidar_safety.minimum_clearance_m != sensors.lidar_danger_zone_m or self.lidar.danger_zone_m != sensors.lidar_danger_zone_m:
+            raise ValueError("LiDAR safety clearance mismatch")
+        if control.lidar_safety.maximum_sample_age_ns != sensors.inputs.lidar_source.maximum_measurement_age_ns:
+            raise ValueError("LiDAR safety/source freshness mismatch")
+        if self.lidar.maximum_result_age_ns != sensors.inputs.lidar_backend.maximum_result_age_ns:
+            raise ValueError("LiDAR matcher/source freshness mismatch")
+        if control.estimation.frame_id != sensors.inputs.lidar_source.pose_frame_id:
+            raise ValueError("localization frame mismatch")
+        if (math.hypot(control.navigation.footprint_length_m, control.navigation.footprint_width_m) / 2
+                + control.navigation.footprint_safety_margin_m >= control.world_model.local_costmap_radius_m):
+            raise ValueError("robot footprint does not fit inside the local costmap")
+        if self.edges.encoder_process.sample_period_ns > sensors.inputs.encoder_backend.maximum_sample_interval_ns:
+            raise ValueError("encoder process period exceeds sample interval")
+        if self.edges.imu_process.sample_period_ns > sensors.inputs.imu_backend.maximum_sample_age_ns:
+            raise ValueError("IMU process period exceeds freshness")
+        if self.edges.multirate.max_snapshot_age_ns > control.admission.max_sample_age_ns:
+            raise ValueError("multirate snapshot freshness exceeds admission limit")
+
     @property
     def navigation(self) -> V3NavigationConfig:
         control = self.runtime.composition.live_control.control
@@ -148,7 +174,7 @@ class ResolvedRobotConfig:
     def bounded(self, command_profile):
         from v3.composition.bounded_live_control import BoundedLiveControlConfig
         from v3.composition.bounded_physical_control import BoundedPhysicalControlConfig
-        from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, NativeEncoderRuntimeConfig
+        from v3.composition.runtime_config import BoundedPhysicalRuntimeConfig, NativeEncoderRuntimeConfig
         live = self.runtime.composition.live_control
         sensors = self.runtime.sensor_inputs
         backend = sensors.inputs.encoder_backend
@@ -196,9 +222,21 @@ class ConfigResolver:
         edge_names = {f.name for f in fields(RuntimeEdgeConfig)}
         _keys(runtime, edge_names | {"tick_period_ns", "max_preflight_age_ns", "required_lidar_preflight_revisions"}, "runtime")
         edges = _typed(RuntimeEdgeConfig, {k: runtime[k] for k in edge_names}, "runtime")
+        _keys(c["sensor_policy"], {f.name for f in fields(NativeSensorPolicyConfig)} - calibration_names - {"camera_maximum_frame_age_ns"}, "sensor_policy")
         policy = _typed(NativeSensorPolicyConfig, {**c["sensor_policy"], **{k:p[k] for k in calibration_names}, "camera_maximum_frame_age_ns":250_000_000}, "sensor_policy")
         local = _keys(c["local_perception"], {"min_range_m", "max_range_m", "max_points"}, "local_perception")
         layers = dict(c["layers"])
+        for section, derived_names in {
+            "estimation": {"frame_id", "track_width_m"},
+            "navigation": {"footprint_length_m", "footprint_width_m"},
+            "world_model": {"local_costmap_max_points_per_scan"},
+            "lidar_safety": {"device_id", "maximum_sample_age_ns"},
+        }.items():
+            layer_type = get_type_hints(NativeControlCompositionConfig)[section]
+            if get_origin(layer_type) in (Union, types.UnionType):
+                layer_type = next(t for t in get_args(layer_type) if is_dataclass(t))
+            _keys(layers[section], {f.name for f in fields(layer_type)} - derived_names, f"layers.{section}")
+
         layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID}
         layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"]}
         layers["world_model"] = {**layers["world_model"], "local_costmap_max_points_per_scan":local["max_points"]}
@@ -215,7 +253,7 @@ class ConfigResolver:
             _typed(float,local["max_range_m"],"local.max_range_m"),_typed(int,local["max_points"],"local.max_points"),
             resolved_control.world_model, resolved_control.navigation, resolved_control.async_l6)
         motor = _keys(c["motor"], {"pwm_frequency_hz", "pwm_decay_mode"}, "motor")
-        _keys(c["encoder"], {"a_debounce_micros", "direction_guard_micros", "direction_change_confirm_edges", "direction_change_confirm_window_micros"}, "encoder")
+        _keys(c["encoder"], {"a_debounce_micros", "direction_guard_micros", "direction_change_confirm_edges", "direction_change_confirm_window_micros", "edge_history_capacity", "diagnostic_event_capacity"}, "encoder")
         _keys(c["imu"], {"operation_mode", "startup_timeout_ns", "startup_poll_interval_ns"}, "imu")
         encoder = _encoder_runtime_config(h, p, gpio_chip=h["gpio_chip"], policy=c["encoder"])
         motor_output = GpioMotorFrameSinkConfig(_motor_channel(h["motorok"],"bal_oldal",motor["pwm_decay_mode"]),
@@ -224,6 +262,7 @@ class ConfigResolver:
             raise ValueError("motor and encoder GPIO pins must be unique")
         sensors = _sensor_hardware_config(h, encoder, policy, navigation, p, c["imu"], resolved_control.lidar_safety.minimum_clearance_m)
         pose = _typed(LidarMatcherConfig,c["lidar_pose"],"lidar_pose")
+        _keys(c["lidar_driver"], {f.name for f in fields(RplidarC1Config)} - {"port", "baudrate", "minimum_distance_m", "maximum_distance_m"}, "lidar_driver")
         driver = _typed(RplidarC1Config, {**c["lidar_driver"], **h["lidar"], "minimum_distance_m":pose.min_valid_distance_m, "maximum_distance_m":pose.max_valid_distance_m}, "lidar_driver")
         lr = _keys(c["lidar_runtime"], {"matcher_process_start_method", "matcher_process_ready_timeout_s", "matcher_stop_timeout_s", "latest_scan_queue_size", "latest_result_queue_size", "matcher_max_input_age_s", "matcher_max_result_age_s", "driver_poll_hz"}, "lidar_runtime")
         hz = _typed(float,lr["driver_poll_hz"],"lidar_runtime.driver_poll_hz")

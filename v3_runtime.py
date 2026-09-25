@@ -39,58 +39,7 @@ from v3.runtime_performance import (
 from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, RUN_FAULT, RUN_OK
 
 
-@dataclass(frozen=True, slots=True)
-class ResidentPhysicalRuntimeConfig:
-    """Immutable resident composition, schedule and concrete sensor closure."""
-
-    composition: ResidentPhysicalControlConfig
-    sensor_inputs: NativeSensorHardwareConfig
-    tick_period_ns: int = 20_000_000
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.composition, ResidentPhysicalControlConfig):
-            raise TypeError("composition must be ResidentPhysicalControlConfig")
-        if not isinstance(self.sensor_inputs, NativeSensorHardwareConfig):
-            raise TypeError("sensor_inputs must be NativeSensorHardwareConfig")
-        if (
-            not isinstance(self.tick_period_ns, int)
-            or isinstance(self.tick_period_ns, bool)
-            or self.tick_period_ns <= 0
-        ):
-            raise ValueError("tick_period_ns must be a positive integer")
-        if self.tick_period_ns > self.composition.live_control.max_preflight_age_ns:
-            raise ValueError(
-                "tick_period_ns cannot exceed the preflight freshness bound"
-            )
-
-    @classmethod
-    def from_bounded(
-        cls,
-        runtime: BoundedPhysicalRuntimeConfig,
-        *,
-        required_lidar_preflight_revisions: int = 3,
-    ) -> ResidentPhysicalRuntimeConfig:
-        """Reuse the canonical hardware/control config without its test profile."""
-
-        if not isinstance(runtime, BoundedPhysicalRuntimeConfig):
-            raise TypeError("runtime must be BoundedPhysicalRuntimeConfig")
-        if runtime.sensor_inputs is None:
-            raise ValueError("bounded runtime does not close native sensor inputs")
-        bounded_live = runtime.composition.live_control
-        return cls(
-            composition=ResidentPhysicalControlConfig(
-                live_control=ResidentLiveControlConfig(
-                    control=bounded_live.control,
-                    max_preflight_age_ns=bounded_live.max_preflight_age_ns,
-                    required_lidar_preflight_revisions=(
-                        required_lidar_preflight_revisions
-                    ),
-                ),
-                motor_output=runtime.composition.motor_output,
-            ),
-            sensor_inputs=runtime.sensor_inputs,
-            tick_period_ns=runtime.tick_period_ns,
-        )
+from v3.composition.runtime_config import ResidentPhysicalRuntimeConfig
 
 
 @dataclass(frozen=True, slots=True)

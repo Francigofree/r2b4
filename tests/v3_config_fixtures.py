@@ -52,3 +52,24 @@ def configured(cls, *args, **kwargs):
         if changes: values["async_config"]=replace(policy,**changes)
     values.update(kwargs)
     return cls(*args,**values)
+
+
+def bounded_fixture(hardware_path, physics_path, speed_map_path, command_profile, *, control_path=None, sensor_policy=None, **overrides):
+    """Close explicit modified documents for isolated hardware/runtime unit tests."""
+    from v3.config import ConfigResolver
+    from dataclasses import asdict
+    h,p,s=[json.loads(Path(path).read_text()) for path in (hardware_path,physics_path,speed_map_path)]
+    control_path=control_path or Path(__file__).resolve().parents[1]/'conf/vezerles.json'
+    c=json.loads(Path(control_path).read_text())
+    if sensor_policy is not None:
+        values=asdict(sensor_policy)
+        values.pop('camera_maximum_frame_age_ns')
+        for key in ('imu_heading_clockwise_positive','imu_yaw_rate_axis','imu_yaw_rate_clockwise_positive','imu_yaw_offset_rad'):p[key]=values.pop(key)
+        c['sensor_policy']=values
+        c['lidar_runtime']['matcher_max_result_age_s']=values['lidar_maximum_result_age_ns']/1e9
+    for key,value in overrides.items():
+        if key in ('tick_period_ns','max_preflight_age_ns'):c['runtime'][key]=value
+        elif key=='gpio_chip':h[key]=value
+        elif key=='pwm_frequency_hz':c['motor'][key]=value
+        else:raise TypeError(key)
+    return ConfigResolver.from_documents(h,p,s,c).bounded(command_profile)

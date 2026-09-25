@@ -1,3 +1,4 @@
+from v3_config_fixtures import bounded_fixture
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -289,7 +290,7 @@ def _policy():
 def _runtime_config():
     from v3_test_fixtures import without_optional_perception
 
-    runtime = load_bounded_physical_runtime_config(
+    runtime = bounded_fixture(
         PROJECT_ROOT / "conf" / "hardver.json",
         PROJECT_ROOT / "conf" / "fizika.json",
         PROJECT_ROOT / "conf" / "speed_map.json",

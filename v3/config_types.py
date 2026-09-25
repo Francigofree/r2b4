@@ -61,3 +61,16 @@ class PlannerProcessConfig:
         _positive_fields(self)
 
 
+
+@dataclass(frozen=True, slots=True)
+class CommandIngressPolicy:
+    maximum_ttl_ns: int
+    maximum_future_skew_ns: int
+    maximum_linear_speed_mps: float
+    maximum_angular_speed_rad_s: float
+    maximum_file_bytes: int
+    reader_poll_s: float
+    reader_stop_timeout_s: float
+
+    def __post_init__(self) -> None:
+        _positive_fields(self)
