@@ -200,7 +200,7 @@ class ProcessEncoderBackend:
             self._fatal_error = "ENCODER_TRANSPORT_INVALID"
 
     def _drain(self) -> None:
-        for _ in range(process_config.queue_capacity):
+        for _ in range(self._process_config.queue_capacity):
             try:
                 message = self._queue.get_nowait()
             except queue.Empty:
