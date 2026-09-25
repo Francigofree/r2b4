@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
+
+# Executed as ``python tools/validate_er2_p0.py`` by the installer.  In that
+# mode Python puts ``tools/`` rather than the repository root on sys.path.
+# Bootstrap the R2B4 root explicitly so root-level packages such as r2b4_er2
+# and v3 are importable independent of the caller's shell environment.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_PROJECT_ROOT_STR = str(_PROJECT_ROOT)
+if _PROJECT_ROOT_STR not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT_STR)
 
 from r2b4_er2.config import PREVIEW_MODEL, STREAMING_MODEL, Er2Config
 from r2b4_er2.media import VisionMediaClient

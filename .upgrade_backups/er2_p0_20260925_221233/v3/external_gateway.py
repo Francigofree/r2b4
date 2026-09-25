@@ -13,14 +13,23 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Protocol
 
-from v3.action_catalog import action_descriptor
-
 
 EXTERNAL_GATEWAY_SCHEMA = "R2B4_EXTERNAL_GATEWAY_V1"
 _MAX_REQUEST_ID_CHARS = 128
 _MAX_NAME_CHARS = 160
 _MAX_PARAMETER_COUNT = 32
 
+_SESSION_OWNED_ACTIONS = frozenset(
+    {
+        "v3.command.forward",
+        "v3.command.backward",
+        "v3.command.teleop",
+        "v3.command.wheels",
+        "v3.command.explore",
+        "v3.command.face_person",
+        "v3.command.follow_person",
+    }
+)
 _RESERVED_SESSION_PARAMETERS = frozenset(
     {"session_owner_pid", "session_watchdog_s"}
 )
@@ -201,10 +210,7 @@ class ExternalRobotGateway:
                     "REJECTED",
                     error="gateway owns session parameters: " + ", ".join(reserved),
                 )
-            # R2B4_ER2_P0_20260925: session semantics come from the canonical
-            # action catalog, not from a second gateway-maintained action list.
-            descriptor = action_descriptor(parsed.name)
-            if descriptor is not None and descriptor.session_watchdog:
+            if parsed.name in _SESSION_OWNED_ACTIONS:
                 parameters["session_owner_pid"] = self._policy.session_owner_pid
                 parameters["session_watchdog_s"] = self._policy.session_watchdog_s
             result = self._interface.execute(parsed.name, **parameters)

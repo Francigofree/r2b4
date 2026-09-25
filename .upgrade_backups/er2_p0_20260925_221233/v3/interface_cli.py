@@ -329,51 +329,29 @@ def _run_timed_motion(
     command = _canonical(args.command)
     seconds = _validate_seconds(args.seconds)
     action, parameters = _motion_request(args)
-
-    # R2B4_ER2_P0_20260925: a short CLI motion owns its motion producer, not an
-    # already-running resident runtime. Reuse the resident capture contract too,
-    # so a client command can never restart another client's runtime just to
-    # change capture mode/rate.
-    before_raw = interface.read("operator.status")
-    before = before_raw if isinstance(before_raw, Mapping) else {}
-    runtime_preexisting = before.get("runtime_running") is True
-    effective_mode = capture_mode
-    effective_hz = capture_hz
-    if runtime_preexisting:
-        resident_mode = before.get("capture_mode")
-        resident_hz = before.get("capture_hz")
-        if isinstance(resident_mode, str):
-            effective_mode = resident_mode
-        if isinstance(resident_hz, int) and not isinstance(resident_hz, bool):
-            effective_hz = resident_hz
-        if effective_mode != capture_mode or effective_hz != capture_hz:
-            print(
-                f"runtime already active: inherit capture {effective_mode} @ {effective_hz} Hz "
-                f"(requested {capture_mode} @ {capture_hz} Hz)",
-                flush=True,
-            )
-
     parameters.update({
         "capture": not no_trigger,
-        "capture_mode": effective_mode,
-        "capture_hz": effective_hz,
+        "capture_mode": capture_mode,
+        "capture_hz": capture_hz,
     })
     if seconds > 0.0:
+        # Timed sessions are owned by this interface process. The detached
+        # heartbeat producer cannot outlive a killed/hung launcher.
         parameters["session_owner_pid"] = os.getpid()
         parameters["session_watchdog_s"] = seconds + 5.0
 
     print(
         f"R2B4: {command} | {'continuous' if seconds == 0 else f'{seconds:g} s'}"
-        f" | capture {effective_mode} @ {effective_hz} Hz"
+        f" | capture {capture_mode} @ {capture_hz} Hz"
     )
     try:
         handle = interface.execute(action, **parameters)
     except BaseException:
-        # If this CLI created a resident runtime during setup, clean up only that
-        # owned runtime. A pre-existing runtime belongs to the wider robot session.
-        if seconds > 0 and not runtime_preexisting:
+        # Motion setup can start the runtime before rejecting the command.  The
+        # short launcher owns timed-session cleanup, so do not leave it behind.
+        if seconds > 0:
             try:
-                _shutdown_with_testhub_progress(interface, capture_mode=effective_mode)
+                _shutdown_with_testhub_progress(interface, capture_mode=capture_mode)
             except Exception:
                 pass
         raise
@@ -399,16 +377,10 @@ def _run_timed_motion(
         interrupted = True
         print("\nCtrl+C -> STOP", file=sys.stderr, flush=True)
     finally:
-        interface.stop()
-
-    if runtime_preexisting:
-        final: Mapping[str, object] = {
-            "state": "RUNTIME_REUSED",
-            "runtime_kept_running": True,
-        }
-        print("runtime kept running (pre-existing resident session)")
-    else:
-        final = _shutdown_with_testhub_progress(interface, capture_mode=effective_mode)
+        try:
+            interface.stop()
+        finally:
+            final = _shutdown_with_testhub_progress(interface, capture_mode=capture_mode)
 
     return {
         "status": "INTERRUPTED" if interrupted else "FINISHED",
@@ -416,6 +388,7 @@ def _run_timed_motion(
         "seconds": seconds,
         "testhub": final,
     }
+
 
 def _shutdown_with_testhub_progress(
     interface: RobotInterface,

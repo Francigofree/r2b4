@@ -18,7 +18,6 @@ from v3.async_capability import TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
 from .litert_person_detector import LiteRtPersonDetectorConfig, LiteRtSsdPersonDetector
-from .vision_media_socket import VisionMediaServer
 from .person_detection import (
     NativePersonDetector,
     PersonDetectionRuntimeStatus,
@@ -153,7 +152,6 @@ def _vision_process_main(
 ) -> None:
     camera: NativePicamera2Camera | None = None
     detector: NativePersonDetector | None = None
-    media_server: VisionMediaServer | None = None
     try:
         if worker_cpu is not None:
             apply_current_affinity(worker_cpu, role="vision-owner-process", strict=strict_affinity)
@@ -165,10 +163,6 @@ def _vision_process_main(
         )
         if not camera.start():
             raise RuntimeError("camera worker did not start")
-        # R2B4_ER2_P0_20260925: large JPEG bytes leave directly from the
-        # vision owner process. They never re-enter the 50 Hz control interpreter.
-        media_server = VisionMediaServer(camera)
-        media_server.start()
         if detector_config is not None:
             backend = LiteRtSsdPersonDetector(detector_config)
             detector = NativePersonDetector(camera, backend)
@@ -224,11 +218,6 @@ def _vision_process_main(
         _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
         ready_event.set()
     finally:
-        if media_server is not None:
-            try:
-                media_server.stop()
-            except BaseException:
-                pass
         if detector is not None:
             try:
                 detector.stop()

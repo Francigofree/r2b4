@@ -62,7 +62,6 @@ def command_catalog() -> dict[str, object]:
             "view_hz": [1, 5, 10],
             "pytest_profiles": list(pytest_profile_names()),
         },
-        "er2": {"commands": ["status", "preview", "stream"], "execution": "REAL_ONLY"},
         "local": sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES)),
     }
 
@@ -77,7 +76,6 @@ def print_help() -> None:
         "  r pytest [ARGS...]            raw pytest passthrough\n"
         "  r git | gitre | tools | tool  repo/developer helpers\n"
         "  r version                     repo revision + dirty state\n"
-        "  r er2 status|preview|stream   Gemini Robotics ER 2 (real execution only)\n"
         "\nHost diagnostics:\n"
         "  r cpu | cpu2 | disc | mem | temp | ps\n"
         "  r net | usb | i2c | host\n"
@@ -118,11 +116,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args[0] == "commands":
             return _commands(args[1:])
-        if args[0] == "er2":
-            # R2B4_ER2_P0_20260925: provider integration is a consumer of the
-            # canonical RobotInterface/ExternalRobotGateway, not a robot layer.
-            from r2b4_er2.cli import main as er2_main
-            return er2_main(args[1:], project_root=root)
         if args[0] in host_cli.COMMANDS:
             return host_cli.execute(args[0], args[1:], root)
         return interface_cli.main(args)

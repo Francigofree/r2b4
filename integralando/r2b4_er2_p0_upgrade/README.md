@@ -83,3 +83,7 @@ This does **not** call `v3.command.follow_person`; ER2 receives only the generic
 ## Important boundary
 
 ER2 is a host-side asynchronous consumer/agent. It is not L13, does not receive GPIO/L11/L12/motor authority, and cannot bypass R2B4 safety. Camera media leaves directly from the vision owner process; commands return through the canonical gateway/interface path.
+
+## P0R1 validator hotfix
+
+Fixes direct validator execution (`python tools/validate_er2_p0.py`) by adding the R2B4 project root to `sys.path` before importing the root-level `r2b4_er2` package. This is the failure seen as `ModuleNotFoundError: No module named 'r2b4_er2'`.
