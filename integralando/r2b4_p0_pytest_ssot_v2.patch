@@ -1,0 +1,240 @@
+diff --git a/v3/pytest_profiles.py b/v3/pytest_profiles.py
+--- a/v3/pytest_profiles.py
++++ b/v3/pytest_profiles.py
+@@ -24,136 +24,60 @@ _PROFILES: tuple[PytestProfile, ...] = (
+     PytestProfile(
+         "gate",
+         "gate",
+-        "Fast high-signal V3 validation before wider regression.",
+-        ("tests/test_v3_gate.py",),
++        "Fast high-signal curated CORE validation.",
++        ("tests/core/test_*.py",),
+     ),
+     PytestProfile(
+         "contract",
+         "contract",
+-        "V3 authority, layer-boundary, isolation and safety contracts.",
+-        (
+-            "tests/test_v3_*contract*.py",
+-            "tests/test_v3_architecture_boundaries.py",
+-            "tests/test_v3_control_process_isolation.py",
+-            "tests/test_v3_sterile_edges.py",
+-            "tests/test_v3_async_completion_boundary_fix.py",
+-            "tests/test_v3_observation.py",
+-            "tests/test_v3_gate.py",
+-        ),
++        "Curated CORE authority, safety and control-boundary contracts.",
++        ("tests/core/test_*.py",),
+     ),
+     PytestProfile(
+         "async",
+         "async_boundary",
+-        "Async edge, completion/input-closure, process transport and multirate tests.",
++        "Curated async isolation and multirate boundary tests.",
+         (
+-            "tests/test_v3_async_*.py",
+-            "tests/test_v3_control_process_isolation.py",
+-            "tests/test_v3_l6_planner_process.py",
+-            "tests/test_v3_multirate_*.py",
+-            "tests/test_v3_process_imu_device.py",
+-            "tests/test_v3_process_runtime.py",
+-            "tests/test_v3_runtime_phase_timing.py",
+-            "tests/test_v3_sterile_edges.py",
++            "tests/deep/test_*.py",
++            "tests/core/test_v3_multirate_inputs.py",
+         ),
+     ),
+     PytestProfile(
+         "runtime",
+         "runtime",
+-        "TickEngine, composition, bounded/resident/process runtime and scheduling tests.",
+-        (
+-            "tests/test_v3_*runtime*.py",
+-            "tests/test_v3_bounded_*.py",
+-            "tests/test_v3_tick_engine.py",
+-            "tests/test_v3_execution.py",
+-            "tests/test_v3_native_control_composition.py",
+-            "tests/test_v3_control_process_isolation.py",
+-            "tests/test_v3_multirate_*.py",
+-        ),
+-    ),
+-    PytestProfile(
+-        "replay",
+-        "replay",
+-        "Capture, replay, MCAP and deterministic evidence-path tests.",
++        "Curated runtime configuration, scheduling and composition checks.",
+         (
+-            "tests/test_v3_*replay*.py",
+-            "tests/test_v3_*capture*.py",
+-            "tests/test_v3_mcap_*.py",
++            "tests/core/test_v3_bounded_runtime_config.py",
++            "tests/core/test_v3_multirate_inputs.py",
++            "tests/core/test_v3_stop_only_composition.py",
++            "tests/feature/test_v3_person_detection_runtime_integration.py",
+         ),
+     ),
+     PytestProfile(
+         "control",
+         "control",
+-        "Mission/planner/motion/safety/motor tests for the canonical control chain.",
++        "Curated safety and motor-control boundary tests.",
+         (
+-            "tests/test_v3_l5_l9_*.py",
+-            "tests/test_v3_follow_person*.py",
+-            "tests/test_v3_face_person.py",
+-            "tests/test_v3_l6_*.py",
+-            "tests/test_v3_l7_*.py",
+-            "tests/test_v3_l8_*.py",
+-            "tests/test_v3_l9_*.py",
+-            "tests/test_v3_l10_*.py",
+-            "tests/test_v3_l11_*.py",
+-            "tests/test_v3_motion_*.py",
+-            "tests/test_v3_motor_*.py",
+-            "tests/test_v3_safety_*.py",
+-            "tests/test_v3_command_gateway*.py",
+-            "tests/test_v3_native_control_composition.py",
++            "tests/core/test_v3_gpio_motor.py",
++            "tests/core/test_v3_motor_pwm_contract.py",
++            "tests/core/test_v3_stop_only_composition.py",
+         ),
+     ),
+     PytestProfile(
+         "perception",
+         "perception",
+-        "Sensor-edge, localization, L4/world-model and perception tests.",
+-        (
+-            "tests/test_v3_l4_*.py",
+-            "tests/test_v3_*lidar*.py",
+-            "tests/test_v3_*imu*.py",
+-            "tests/test_v3_*encoder*.py",
+-            "tests/test_v3_*person*.py",
+-            "tests/test_r2b4_lidar_*.py",
+-        ),
+-    ),
+-    PytestProfile(
+-        "testhub",
+-        "testhub",
+-        "Offline Test Hub, portable evidence, quality and correlation tests.",
+-        (
+-            "tests/test_v3_test_hub_*.py",
+-            "tests/test_v3_runtime_correlation.py",
+-            "tests/test_v3_mcap_e2e.py",
+-            "tests/test_v3_pytest_profiles.py",
+-        ),
+-    ),
+-    PytestProfile(
+-        "voice",
+-        "voice",
+-        "Human/robot conversation, prompting, voice and robot-context tests.",
+-        (
+-            "tests/test_voice_*.py",
+-            "tests/test_r2b4_voice_*.py",
+-            "tests/test_r2b4_conversation_*.py",
+-            "tests/test_r2b4_prompting*.py",
+-            "tests/test_r2b4_*llm*.py",
+-            "tests/test_r2b4_ready_speaker.py",
+-            "tests/test_r2b4_robot_context*.py",
+-        ),
+-    ),
+-    PytestProfile(
+-        "providers",
+-        "providers",
+-        "External AI/provider adapter tests, kept separate from robot-core gates.",
+-        (
+-            "tests/test_r2b4_gemini_*.py",
+-            "tests/test_r2b4_groq_*.py",
+-            "tests/test_r2b4_llm_provider.py",
+-        ),
++        "Curated sensor and perception feature tests.",
++        ("tests/feature/test_*.py",),
+     ),
+     PytestProfile(
+         "full",
+         None,
+-        "Entire pytest suite selected by pytest testpaths.",
+-        ("tests/test_*.py",),
++        "Entire curated CORE + FEATURE + DEEP suite.",
++        (
++            "tests/core/test_*.py",
++            "tests/feature/test_*.py",
++            "tests/deep/test_*.py",
++        ),
+         explicit_targets=False,
+     ),
+ )
+diff --git a/v3/test_hub_next.py b/v3/test_hub_next.py
+--- a/v3/test_hub_next.py
++++ b/v3/test_hub_next.py
+@@ -538,6 +538,6 @@
+     compare.add_argument("--output")
+ 
+     tests = commands.add_parser("test", help="run pytest under the Test Hub umbrella")
+-    tests.add_argument("--scope", choices=pytest_profile_names(), default="testhub")
++    tests.add_argument("--scope", choices=pytest_profile_names(), default="gate")
+     tests.add_argument("--output")
+     return parser
+diff --git a/v3/test_runner.py b/v3/test_runner.py
+--- a/v3/test_runner.py
++++ b/v3/test_runner.py
+@@ -1,53 +1,22 @@
+ from __future__ import annotations
+ 
+-import subprocess
+ import sys
++from collections.abc import Sequence
+ from pathlib import Path
+ 
+-ROOT = Path(__file__).resolve().parents[1]
+-TESTS = ROOT / "tests"
++from v3.host_cli import profile_test
+ 
+-FOCUSED = {
+-    "follow": ("feature", "follow"),
+-    "roomcruise": ("feature", "room_cruise or roomcruise or cruise or explore"),
+-    "room_cruise": ("feature", "room_cruise or roomcruise or cruise or explore"),
+-    "localization": ("feature", "localization or pose or estimator"),
+-    "perception": ("feature", "perception or person or camera or lidar"),
+-    "motion": ("feature", "motion or forward or turn or trajectory"),
+-    "async": ("deep", "async or worker or delayed or deadline"),
+-    "process": ("deep", "process or crash or isolation or worker"),
+-    "replay": ("deep", "replay or checkpoint or restore or determin"),
+-}
+ 
++ROOT = Path(__file__).resolve().parents[1]
+ 
+-def _run(paths, k=None):
+-    cmd = [sys.executable, "-m", "pytest", "-q", *[str(p) for p in paths]]
+-    if k:
+-        cmd += ["-k", k]
+-    return subprocess.call(cmd, cwd=ROOT)
+ 
++def main(argv: Sequence[str] | None = None) -> int:
++    """Compatibility entry point.
+ 
+-def main(argv=None):
++    Pytest profile authority lives exclusively in v3.pytest_profiles.
++    """
+     args = list(sys.argv[1:] if argv is None else argv)
+-    mode = args.pop(0) if args else "core"
+-    if args:
+-        print("Unexpected extra arguments. Use: ./r test [full|follow|roomcruise|localization|perception|motion|async|process|replay]", file=sys.stderr)
+-        return 2
+-    if mode in {"core", "quick"}:
+-        return _run([TESTS / "core"])
+-    if mode == "full":
+-        return _run([TESTS / "core", TESTS / "feature", TESTS / "deep"])
+-    if mode in FOCUSED:
+-        layer, expr = FOCUSED[mode]
+-        return _run([TESTS / layer], expr)
+-    if mode in {"list", "help", "-h", "--help"}:
+-        print("./r test            CORE (~20-30)")
+-        print("./r test follow     Follow scenarios")
+-        print("./r test full       CORE + FEATURE + DEEP (~80-140, hard cap 150)")
+-        print("Other focused modes: roomcruise localization perception motion async process replay")
+-        return 0
+-    print(f"Unknown test mode: {mode}", file=sys.stderr)
+-    return 2
++    return profile_test(ROOT, args)
+ 
+ 
+ if __name__ == "__main__":
