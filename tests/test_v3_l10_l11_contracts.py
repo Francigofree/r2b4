@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import dataclasses
 import json
 from pathlib import Path
@@ -28,7 +29,7 @@ from v3.layers.l12_safety_final import FinalSafetyGate
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PI_CONFIG = WheelPiConfig(
+PI_CONFIG = configured(WheelPiConfig, 
     kp=0.25,
     ki=0.08,
     integrator_limit=0.18,

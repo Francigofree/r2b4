@@ -90,59 +90,59 @@ def _wrapped_angle(value: float) -> float:
 @dataclass(frozen=True, slots=True)
 class WorldModelConfig:
     # Existing fields stay first and in their original order for compatibility.
-    max_track_age_ns: int = 500_000_000
-    local_costmap_resolution_m: float = 0.10
-    local_costmap_radius_m: float = 2.50
-    local_costmap_max_cell_age_ns: int = 750_000_000
-    local_costmap_max_cells: int = 1_200
-    local_costmap_max_points_per_scan: int = 96
-    person_tracking_enabled: bool = True
-    person_camera_horizontal_fov_rad: float = 1.1519173063162575  # 66 deg Camera Module 3
-    person_camera_yaw_offset_rad: float = 0.0
-    person_lidar_max_skew_ns: int = 150_000_000
-    person_lidar_angular_margin_rad: float = 0.04
-    person_lidar_cluster_depth_m: float = 0.30
-    person_lidar_min_points: int = 1
-    person_track_max_association_distance_m: float = 0.75
-    person_track_max_speed_mps: float = 6.0
-    person_track_radius_m: float = 0.30
-    person_track_max_age_ns: int = 500_000_000
-    person_track_reacquire_max_age_ns: int = 2_500_000_000
+    max_track_age_ns: int
+    local_costmap_resolution_m: float
+    local_costmap_radius_m: float
+    local_costmap_max_cell_age_ns: int
+    local_costmap_max_cells: int
+    local_costmap_max_points_per_scan: int
+    person_tracking_enabled: bool
+    person_camera_horizontal_fov_rad: float  # 66 deg Camera Module 3
+    person_camera_yaw_offset_rad: float
+    person_lidar_max_skew_ns: int
+    person_lidar_angular_margin_rad: float
+    person_lidar_cluster_depth_m: float
+    person_lidar_min_points: int
+    person_track_max_association_distance_m: float
+    person_track_max_speed_mps: float
+    person_track_radius_m: float
+    person_track_max_age_ns: int
+    person_track_reacquire_max_age_ns: int
 
     # TEMPORAL-1 private implementation bounds. No public contract changes.
-    pose_history_max_age_ns: int = 2_000_000_000
-    pose_history_max_samples: int = 128
-    pose_lookup_max_skew_ns: int = 250_000_000
-    scan_history_max_age_ns: int = 1_000_000_000
-    scan_history_max_scans: int = 32
-    occupancy_hit_increment: int = 1
-    occupancy_free_decrement: int = 1
-    occupancy_max_score: int = 8
-    person_track_alpha: float = 0.85
-    person_track_beta: float = 0.35
-    person_track_prediction_max_age_ns: int = 350_000_000
+    pose_history_max_age_ns: int
+    pose_history_max_samples: int
+    pose_lookup_max_skew_ns: int
+    scan_history_max_age_ns: int
+    scan_history_max_scans: int
+    occupancy_hit_increment: int
+    occupancy_free_decrement: int
+    occupancy_max_score: int
+    person_track_alpha: float
+    person_track_beta: float
+    person_track_prediction_max_age_ns: int
 
     # TEMPORAL-2 structural local-memory bounds. Still L4-private.
-    structural_memory_enabled: bool = True
-    structural_max_age_ns: int = 30_000_000_000
-    structural_max_cells: int = 4_096
-    structural_hit_increment: int = 1
-    structural_free_decrement: int = 1
-    structural_max_score: int = 12
-    structural_confirm_score: int = 8
-    structural_deconfirm_score: int | None = None
-    structural_confirm_min_hits: int = 8
-    structural_confirm_min_span_ns: int = 1_000_000_000
-    structural_clear_score: int = 1
-    structural_dynamic_mask_margin_m: float = 0.15
-    structural_dynamic_mask_min_speed_mps: float = 0.05
-    structural_dynamic_mask_max_tracks: int = 32
-    structural_max_position_variance: float = 0.20
-    structural_max_yaw_variance: float = 0.15
-    continuity_translation_base_m: float = 0.25
-    continuity_translation_rate_mps: float = 1.50
-    continuity_yaw_base_rad: float = 0.35
-    continuity_yaw_rate_rad_s: float = 4.0
+    structural_memory_enabled: bool
+    structural_max_age_ns: int
+    structural_max_cells: int
+    structural_hit_increment: int
+    structural_free_decrement: int
+    structural_max_score: int
+    structural_confirm_score: int
+    structural_deconfirm_score: int | None
+    structural_confirm_min_hits: int
+    structural_confirm_min_span_ns: int
+    structural_clear_score: int
+    structural_dynamic_mask_margin_m: float
+    structural_dynamic_mask_min_speed_mps: float
+    structural_dynamic_mask_max_tracks: int
+    structural_max_position_variance: float
+    structural_max_yaw_variance: float
+    continuity_translation_base_m: float
+    continuity_translation_rate_mps: float
+    continuity_yaw_base_rad: float
+    continuity_yaw_rate_rad_s: float
 
     def __post_init__(self) -> None:
         for name in (
@@ -320,7 +320,7 @@ class ShadowWorldModel:
         "_track_store",
     )
 
-    def __init__(self, config: WorldModelConfig = WorldModelConfig()) -> None:
+    def __init__(self, config: WorldModelConfig) -> None:
         self._config = config
         self._last_lidar_measurement_ns: int | None = None
         self._last_lidar_sequence: int | None = None

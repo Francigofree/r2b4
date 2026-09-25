@@ -12,16 +12,15 @@ from collections.abc import Callable, Mapping
 
 from v3.adapters.bno055_device import NativeBno055Device, NativeBno055DeviceConfig
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.config_types import ImuProcessConfig
 from v3.async_capability import TransportSemantics
 
 
-_HISTORY_SIZE = 16
 _VALUE_COUNT = 11
-_PERIOD_NS = 20_000_000
 
 
 def _acquire_imu(config, open_bus, lock, sequence, times, values,
-                 ready, stop, failed, worker_cpu, strict_affinity) -> None:
+                 ready, stop, failed, worker_cpu, strict_affinity, process_config) -> None:
     device = None
     try:
         if worker_cpu is not None:
@@ -40,17 +39,17 @@ def _acquire_imu(config, open_bus, lock, sequence, times, values,
             )
             with lock:
                 revision = int(sequence.value)
-                slot = revision % _HISTORY_SIZE
+                slot = revision % process_config.history_size
                 for offset, value in enumerate(fields):
                     values[slot * _VALUE_COUNT + offset] = value
                 times[slot * 2] = acquired_ns
                 times[slot * 2 + 1] = time.monotonic_ns()
                 sequence.value = revision + 1
             ready.set()
-            deadline += _PERIOD_NS
+            deadline += process_config.sample_period_ns
             now = time.monotonic_ns()
             if deadline <= now:
-                deadline += ((now - deadline) // _PERIOD_NS + 1) * _PERIOD_NS
+                deadline += ((now - deadline) // process_config.sample_period_ns + 1) * process_config.sample_period_ns
             stop.wait(max(0, deadline - now) / 1e9)
     except BaseException:
         failed.set()
@@ -66,16 +65,20 @@ class ProcessBno055Device:
     transport_semantics = TransportSemantics.LATEST_STATE
 
     def __init__(self, config: NativeBno055DeviceConfig, *, open_bus: Callable,
-                 worker_cpu: int | None = None, strict_affinity: bool = False) -> None:
+                 worker_cpu: int | None = None, strict_affinity: bool = False,
+                 process_config: ImuProcessConfig) -> None:
         if not isinstance(config, NativeBno055DeviceConfig):
             raise TypeError("config must be NativeBno055DeviceConfig")
         if not callable(open_bus):
             raise TypeError("open_bus must be callable")
+        if not isinstance(process_config, ImuProcessConfig):
+            raise TypeError("process_config must be ImuProcessConfig")
+        self._process_config = process_config
         context = multiprocessing.get_context("spawn")
         self._lock = context.Lock()
         self._sequence = context.RawValue("Q", 0)
-        self._times = context.RawArray("q", _HISTORY_SIZE * 2)
-        self._values = context.RawArray("d", _HISTORY_SIZE * _VALUE_COUNT)
+        self._times = context.RawArray("q", self._process_config.history_size * 2)
+        self._values = context.RawArray("d", self._process_config.history_size * _VALUE_COUNT)
         self._ready = context.Event()
         self._stop = context.Event()
         self._failed = context.Event()
@@ -87,12 +90,12 @@ class ProcessBno055Device:
             target=_acquire_imu,
             args=(config, open_bus, self._lock, self._sequence, self._times,
                   self._values, self._ready, self._stop, self._failed,
-                  worker_cpu, strict_affinity),
+                  worker_cpu, strict_affinity, process_config),
             name="v3-imu-owner", daemon=False,
         )
         with temporary_current_affinity(worker_cpu, role="imu-start", strict=strict_affinity):
             self._process.start()
-        if not self._ready.wait(5.0) or self._failed.is_set() or not self._process.is_alive():
+        if not self._ready.wait(process_config.ready_timeout_s) or self._failed.is_set() or not self._process.is_alive():
             self.close()
             raise RuntimeError("BNO055 acquisition process failed during startup")
         self.initialized = True
@@ -107,8 +110,8 @@ class ProcessBno055Device:
         if self._lock.acquire(False):
             try:
                 latest = int(self._sequence.value)
-                for revision in range(latest - 1, max(-1, latest - _HISTORY_SIZE - 1), -1):
-                    slot = revision % _HISTORY_SIZE
+                for revision in range(latest - 1, max(-1, latest - self._process_config.history_size - 1), -1):
+                    slot = revision % self._process_config.history_size
                     if self._times[slot * 2 + 1] > captured_monotonic_ns:
                         continue
                     data = tuple(self._values[slot * _VALUE_COUNT + i] for i in range(_VALUE_COUNT))
@@ -136,9 +139,9 @@ class ProcessBno055Device:
         self._closed = True
         self.initialized = self.sensor_ok = False
         self._stop.set()
-        self._process.join(timeout=2.0)
+        self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             self._process.terminate()
-            self._process.join(timeout=2.0)
+            self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             raise RuntimeError("BNO055 acquisition process did not stop")

@@ -29,14 +29,11 @@ from v3.contracts import (
 )
 
 
-_PLANNING_BUCKET_SIZE_M = 0.50
 _POINT_CLEARANCE_EPSILON_M = 1e-9
 # This is footprint-to-obstacle clearance, not LiDAR-origin range. 0.12 m
 # corresponds approximately to the production L12 front envelope after robot
 # half-length/cell radius are accounted for. It gives L6 room to replan before
 # L12 has to reject the same forward command repeatedly.
-_LOCAL_ESCAPE_TRIGGER_CLEARANCE_M = 0.12
-_LOCAL_ESCAPE_REVERSE_MAX_V_MPS = 0.12
 _MOTION_EPSILON = 1e-9
 
 
@@ -86,61 +83,68 @@ class FollowPersonEvidence:
 
 @dataclass(frozen=True, slots=True)
 class NavigationConfig:
-    max_world_freshness_ns: int = 250_000_000
-    obstacle_confidence_floor: float = 0.5
-    max_costmap_freshness_ns: int = 250_000_000
-    trajectory_replan_interval_ns: int = 100_000_000
+    max_world_freshness_ns: int
+    obstacle_confidence_floor: float
+    max_costmap_freshness_ns: int
+    trajectory_replan_interval_ns: int
     # Preserve the nominal 10 Hz replan cadence at a 50 Hz control rate,
     # while guaranteeing cheap control ticks after an over-budget replan.
-    trajectory_replan_min_tick_gap: int = 5
-    coverage_cell_size_m: float = 0.35
-    coverage_max_cells: int = 256
-    local_goal_distance_m: float = 1.00
-    local_goal_tolerance_m: float = 0.20
-    local_goal_max_age_ns: int = 8_000_000_000
-    local_goal_heading_samples: int = 16
-    rollout_linear_samples: int = 6
-    rollout_angular_samples: int = 9
-    rollout_horizon_ns: int = 1_200_000_000
-    rollout_step_count: int = 8
-    footprint_length_m: float = 0.46
-    footprint_width_m: float = 0.38
-    footprint_safety_margin_m: float = 0.05
-    clearance_score_cap_m: float = 0.75
-    progress_weight: float = 0.38
-    clearance_weight: float = 0.25
-    smoothness_weight: float = 0.15
-    novelty_weight: float = 0.22
+    trajectory_replan_min_tick_gap: int
+    coverage_cell_size_m: float
+    coverage_max_cells: int
+    local_goal_distance_m: float
+    local_goal_tolerance_m: float
+    local_goal_max_age_ns: int
+    local_goal_heading_samples: int
+    rollout_linear_samples: int
+    rollout_angular_samples: int
+    rollout_horizon_ns: int
+    rollout_step_count: int
+    footprint_length_m: float
+    footprint_width_m: float
+    footprint_safety_margin_m: float
+    clearance_score_cap_m: float
+    progress_weight: float
+    clearance_weight: float
+    smoothness_weight: float
+    novelty_weight: float
     # Minimum predicted normalized improvement required for a normal trajectory.
     # Progress may be translational or angular alignment toward the local goal.
-    progress_viability_floor: float = 0.02
-    face_person_min_confidence: float = 0.60
-    face_person_align_tolerance_rad: float = 0.10
-    face_person_release_tolerance_rad: float = 0.16
-    follow_person_min_confidence: float = 0.60
-    follow_person_align_tolerance_rad: float = 0.22
-    follow_person_release_tolerance_rad: float = 0.30
-    follow_person_stand_off_m: float = 1.05
-    follow_person_distance_deadband_m: float = 0.15
-    follow_person_min_safe_distance_m: float = 0.75
-    follow_person_lost_hold_ns: int = 400_000_000
+    progress_viability_floor: float
+    face_person_min_confidence: float
+    face_person_align_tolerance_rad: float
+    face_person_release_tolerance_rad: float
+    follow_person_min_confidence: float
+    follow_person_align_tolerance_rad: float
+    follow_person_release_tolerance_rad: float
+    follow_person_stand_off_m: float
+    follow_person_distance_deadband_m: float
+    follow_person_min_safe_distance_m: float
+    follow_person_lost_hold_ns: int
     # Recovery is bounded, rotation-only and deterministic. The first search
     # step looks at the last known heading before sweeping either side.
-    follow_person_search_timeout_ns: int = 2_000_000_000
-    follow_person_search_sweep_rad: float = 0.45
+    follow_person_search_timeout_ns: int
+    follow_person_search_sweep_rad: float
     # Compatibility field only; search advancement is now yaw-completion-driven.
-    follow_person_search_step_ns: int = 400_000_000
-    follow_person_search_yaw_tolerance_rad: float = 0.08
-    follow_person_pivot_enter_rad: float = 0.55
-    follow_person_hold_release_margin_m: float = 0.05
-    follow_person_slowdown_distance_m: float = 0.18
-    follow_person_minimum_follow_speed_mps: float = 0.10
-    follow_person_heading_min_factor: float = 0.75
+    follow_person_search_step_ns: int
+    follow_person_search_yaw_tolerance_rad: float
+    follow_person_pivot_enter_rad: float
+    follow_person_hold_release_margin_m: float
+    follow_person_slowdown_distance_m: float
+    follow_person_minimum_follow_speed_mps: float
+    follow_person_heading_min_factor: float
     # None preserves the acquisition threshold for configs without retention tuning.
-    follow_person_retention_min_confidence: float | None = None
+    follow_person_retention_min_confidence: float | None
     # Search allows ideal travel time plus search_timeout_ns settling/stall slack,
     # under this hard cap even for very small operator angular-speed limits.
-    follow_person_search_max_duration_ns: int = 10_000_000_000
+    follow_person_search_max_duration_ns: int
+
+    planning_bucket_size_m: float
+    local_escape_trigger_clearance_m: float
+    local_escape_reverse_max_v_mps: float
+    local_goal_novelty_weight: float
+    local_goal_clearance_weight: float
+    local_goal_forward_weight: float
 
     def __post_init__(self) -> None:
         for name in (
@@ -412,15 +416,15 @@ class TrajectoryRolloutBackend(Protocol):
 class AsyncL6PlannerConfig:
     """Deterministic handoff policy; process placement is not layer state."""
 
-    enabled: bool = False
-    completion_inputs: bool = False
-    request_timeout_ns: int = 300_000_000
+    enabled: bool
+    completion_inputs: bool
+    request_timeout_ns: int
     # Legacy replay compatibility. New production handoffs use release_delay_ns.
-    release_tick_gap: int = 5
-    max_plan_age_ns: int = 350_000_000
-    release_delay_ns: int | None = None
+    release_tick_gap: int
+    max_plan_age_ns: int
+    release_delay_ns: int | None
     # Missing delivery is a separate hard failure, not a computation deadline.
-    transport_timeout_ns: int = 2_000_000_000
+    transport_timeout_ns: int
 
     def __post_init__(self) -> None:
         if type(self.completion_inputs) is not bool:
@@ -552,15 +556,16 @@ class TrajectoryNavigator:
 
     def __init__(
         self,
-        config: NavigationConfig = NavigationConfig(),
+        config: NavigationConfig,
         *,
         rollout_backend: TrajectoryRolloutBackend | None = None,
-        rollout_release_tick_gap: int = 5,
-        rollout_release_delay_ns: int | None = None,
-        max_plan_age_ns: int = 350_000_000,
-        completion_inputs: bool = False,
-        request_timeout_ns: int = 300_000_000,
+        async_config: AsyncL6PlannerConfig,
     ) -> None:
+        rollout_release_tick_gap = async_config.release_tick_gap
+        rollout_release_delay_ns = async_config.release_delay_ns
+        max_plan_age_ns = async_config.max_plan_age_ns
+        completion_inputs = async_config.completion_inputs
+        request_timeout_ns = async_config.request_timeout_ns
         if rollout_backend is not None:
             for method_name in ("submit", "take", "abandon", "close"):
                 if not callable(getattr(rollout_backend, method_name, None)):
@@ -1564,7 +1569,7 @@ class TrajectoryNavigator:
             cache_key = _costmap_cache_key(costmap)
             cached = self._static_planning_index
             if cached is None or cached.cache_key != cache_key:
-                cached = _build_static_planning_index(costmap)
+                cached = _build_static_planning_index(costmap, self._config.planning_bucket_size_m)
                 self._static_planning_index = cached
             static_index = cached
         dynamic_obstacles = tuple(
@@ -1882,7 +1887,9 @@ class TrajectoryNavigator:
             novelty = 1.0 / (1.0 + visits)
             clearance_score = min(1.0, clearance / self._config.clearance_score_cap_m)
             forward_preference = 0.5 * (math.cos(offset) + 1.0)
-            score = 0.65 * novelty + 0.25 * clearance_score + 0.10 * forward_preference
+            score = (self._config.local_goal_novelty_weight * novelty
+                     + self._config.local_goal_clearance_weight * clearance_score
+                     + self._config.local_goal_forward_weight * forward_preference)
             options.append((score, index, goal))
         if not options:
             return Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad)
@@ -1938,7 +1945,7 @@ class TrajectoryNavigator:
             return tuple(evaluations)
 
         evaluations = []
-        reverse_limit_mps = min(_LOCAL_ESCAPE_REVERSE_MAX_V_MPS, max_v_mps)
+        reverse_limit_mps = min(self._config.local_escape_reverse_max_v_mps, max_v_mps)
         for linear_index in range(self._config.rollout_linear_samples):
             v_mps = (
                 0.0
@@ -2043,7 +2050,7 @@ class TrajectoryNavigator:
 
         if (
             v_mps > _MOTION_EPSILON
-            and min_clearance <= _LOCAL_ESCAPE_TRIGGER_CLEARANCE_M
+            and min_clearance <= self._config.local_escape_trigger_clearance_m
         ):
             collision = True
 
@@ -2122,7 +2129,7 @@ class TrajectoryRolloutComputer:
             cache_key = _costmap_cache_key(costmap)
             cached = self._static_planning_index
             if cached is None or cached.cache_key != cache_key:
-                cached = _build_static_planning_index(costmap)
+                cached = _build_static_planning_index(costmap, self._config.planning_bucket_size_m)
                 self._static_planning_index = cached
             static_index = cached
         dynamic_obstacles = tuple(
@@ -2190,7 +2197,7 @@ class TrajectoryRolloutComputer:
         ):
             evaluations = []
             reverse_limit_mps = min(
-                _LOCAL_ESCAPE_REVERSE_MAX_V_MPS,
+                config.local_escape_reverse_max_v_mps,
                 request.max_v_mps,
             )
             for linear_index in range(config.rollout_linear_samples):
@@ -2302,7 +2309,7 @@ class TrajectoryRolloutComputer:
                 )
         if (
             v_mps > _MOTION_EPSILON
-            and min_clearance <= _LOCAL_ESCAPE_TRIGGER_CLEARANCE_M
+            and min_clearance <= config.local_escape_trigger_clearance_m
         ):
             collision = True
 
@@ -2534,7 +2541,7 @@ def _bucket_key(x_m: float, y_m: float, bucket_size_m: float) -> tuple[int, int]
     return math.floor(x_m / bucket_size_m), math.floor(y_m / bucket_size_m)
 
 
-def _build_static_planning_index(costmap: RollingLocalCostmap) -> _StaticPlanningIndex:
+def _build_static_planning_index(costmap: RollingLocalCostmap, bucket_size_m: float) -> _StaticPlanningIndex:
     cell_radius_m = costmap.resolution_m / math.sqrt(2.0)
     bucket_lists: dict[tuple[int, int], list[_ObstacleDisc]] = {}
     for cell in costmap.occupied_cells:
@@ -2543,11 +2550,11 @@ def _build_static_planning_index(costmap: RollingLocalCostmap) -> _StaticPlannin
             (cell.grid_y + 0.5) * costmap.resolution_m,
             cell_radius_m,
         )
-        key = _bucket_key(obstacle.x_m, obstacle.y_m, _PLANNING_BUCKET_SIZE_M)
+        key = _bucket_key(obstacle.x_m, obstacle.y_m, bucket_size_m)
         bucket_lists.setdefault(key, []).append(obstacle)
     return _StaticPlanningIndex(
         cache_key=_costmap_cache_key(costmap),
-        bucket_size_m=_PLANNING_BUCKET_SIZE_M,
+        bucket_size_m=bucket_size_m,
         cell_radius_m=cell_radius_m,
         costmap_radius_m=costmap.radius_m,
         buckets={key: tuple(items) for key, items in bucket_lists.items()},
@@ -2559,7 +2566,7 @@ def _scene_from_world(
     config: NavigationConfig,
 ) -> _LocalPlanningScene:
     static_index = (
-        _build_static_planning_index(world.local_costmap)
+        _build_static_planning_index(world.local_costmap, config.planning_bucket_size_m)
         if world.local_costmap is not None
         else None
     )

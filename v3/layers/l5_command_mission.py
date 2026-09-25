@@ -18,13 +18,7 @@ from v3.contracts import (
 
 @dataclass(frozen=True, slots=True)
 class MissionConfig:
-    default_constraints: MissionConstraints = MissionConstraints(
-        max_v_mps=0.35,
-        max_omega_rad_s=1.2,
-        corridor_radius_m=0.30,
-        goal_tolerance_m=0.08,
-        yaw_tolerance_rad=0.10,
-    )
+    default_constraints: MissionConstraints
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +33,7 @@ class MissionManager:
 
     __slots__ = ("_active_command", "_config")
 
-    def __init__(self, config: MissionConfig = MissionConfig()) -> None:
+    def __init__(self, config: MissionConfig) -> None:
         self._config = config
         self._active_command: tuple[str, CommandMode, tuple[DataField, ...]] | None = None
 
@@ -187,7 +181,7 @@ def force_stop_mission(command: CommandRequest) -> MissionIntent:
         mode=CommandMode.STOP,
         target_pose=None,
         velocity_target=None,
-        constraints=MissionConfig().default_constraints,
+        constraints=MissionConstraints(1.0, 1.0, 0.0, 0.0, 0.0),  # inert STOP-only sentinel
         lifecycle=MissionLifecycle.IDLE,
         stop_reason="STOP_ONLY_SLICE",
     )

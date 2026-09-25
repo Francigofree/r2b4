@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import queue
 import time
@@ -106,7 +107,7 @@ def test_planner_input_completion_can_only_reference_an_earlier_tick():
 
 def test_request_queue_full_is_explicit_and_bounded():
     backend = ProcessTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         worker_cpu=None,
         strict_affinity=False,
     )
@@ -130,7 +131,7 @@ def test_request_queue_full_is_explicit_and_bounded():
 
 def test_worker_exit_becomes_explicit_collector_error():
     backend = ProcessTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         worker_cpu=None,
         strict_affinity=False,
     )
@@ -149,7 +150,7 @@ def test_worker_exit_becomes_explicit_collector_error():
 
 
 def test_unconsumed_completions_are_superseded_without_result_backlog():
-    backend = ProcessTrajectoryRolloutBackend(NavigationConfig(), worker_cpu=None, strict_affinity=False)
+    backend = ProcessTrajectoryRolloutBackend(configured(NavigationConfig, ), worker_cpu=None, strict_affinity=False)
     try:
         ids = []
         for tick_id in range(8):
@@ -168,7 +169,7 @@ def test_unconsumed_completions_are_superseded_without_result_backlog():
 
 def test_abandoned_old_request_cannot_leak_into_new_request():
     backend = ProcessTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         worker_cpu=None,
         strict_affinity=False,
     )
@@ -196,7 +197,7 @@ def test_running_plus_one_latest_replacement_dispatches_only_a_then_d():
     from v3.adapters.l6_planner_process import _WorkResult
     from v3.layers.l6_navigation import TrajectoryRolloutComputer
 
-    backend = ProcessTrajectoryRolloutBackend(NavigationConfig(), worker_cpu=None, strict_affinity=False)
+    backend = ProcessTrajectoryRolloutBackend(configured(NavigationConfig, ), worker_cpu=None, strict_affinity=False)
     real_queue = backend._request_queue
 
     class HeldQueue:
@@ -218,7 +219,7 @@ def test_running_plus_one_latest_replacement_dispatches_only_a_then_d():
             assert len(backend._request_sources) == 2
             assert len(backend._abandoned) == 1
         # Old generation cannot discharge the current running slot.
-        backend._result_queue.put(_WorkResult(0, a, TrajectoryRolloutComputer(NavigationConfig()).compute(_request(0))))
+        backend._result_queue.put(_WorkResult(0, a, TrajectoryRolloutComputer(configured(NavigationConfig, )).compute(_request(0))))
         _wait_until(lambda: backend.capability_snapshot(time.monotonic_ns()).counters.late_rejected == 1)
         with backend._lock:
             assert backend._running.request_id == a
@@ -228,7 +229,7 @@ def test_running_plus_one_latest_replacement_dispatches_only_a_then_d():
         assert all(backend.take(old_id) is None for old_id in (a, b, c))
         completion = backend.take_completion(d)
         assert completion.identity == backend.request_identity(d, _request(3).context)
-        assert completion.result == TrajectoryRolloutComputer(NavigationConfig()).compute(_request(3))
+        assert completion.result == TrajectoryRolloutComputer(configured(NavigationConfig, )).compute(_request(3))
         timing = completion.timing
         assert timing.submit_ns <= timing.worker_start_ns <= timing.worker_completed_ns <= timing.collector_received_ns
         assert backend.capability_snapshot(time.monotonic_ns()).counters.superseded == 3
@@ -239,7 +240,7 @@ def test_running_plus_one_latest_replacement_dispatches_only_a_then_d():
 
 
 def test_hung_running_worker_watchdog_survives_replacement_submission():
-    backend = ProcessTrajectoryRolloutBackend(NavigationConfig(), worker_cpu=None, strict_affinity=False)
+    backend = ProcessTrajectoryRolloutBackend(configured(NavigationConfig, ), worker_cpu=None, strict_affinity=False)
     real_queue = backend._request_queue
 
     class HeldQueue:

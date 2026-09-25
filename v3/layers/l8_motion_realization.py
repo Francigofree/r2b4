@@ -19,17 +19,17 @@ from v3.contracts import (
 
 @dataclass(frozen=True, slots=True)
 class MotionRealizationConfig:
-    cruise_v_mps: float = 0.5
-    distance_gain: float = 1.0
-    heading_gain: float = 1.8
-    max_requested_omega_rad_s: float = 2.0
-    heading_stop_threshold_rad: float = 0.7
-    max_world_freshness_ns: int = 250_000_000
-    horizon_ns: int = 100_000_000
-    cross_track_gain: float = 3.0
-    angular_velocity_gain: float = 0.25
-    max_tracking_correction_rad_s: float = 0.6
-    max_control_gap_ns: int = 250_000_000
+    cruise_v_mps: float
+    distance_gain: float
+    heading_gain: float
+    max_requested_omega_rad_s: float
+    heading_stop_threshold_rad: float
+    max_world_freshness_ns: int
+    horizon_ns: int
+    cross_track_gain: float
+    angular_velocity_gain: float
+    max_tracking_correction_rad_s: float
+    max_control_gap_ns: int
 
     def __post_init__(self) -> None:
         positive = (
@@ -64,7 +64,7 @@ class MotionRealizer:
 
     def __init__(
         self,
-        config: MotionRealizationConfig = MotionRealizationConfig(),
+        config: MotionRealizationConfig,
     ) -> None:
         self._config = config
         self._state = MotionRealizationStateCheckpoint()

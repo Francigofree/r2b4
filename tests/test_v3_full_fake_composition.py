@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -99,8 +100,8 @@ def _inputs(count: int, *, target_x_m: float = 20.0) -> tuple[TickInputs, ...]:
 
 def test_long_full_stack_replay_is_deterministic_and_commits_once_per_tick():
     inputs = _inputs(256)
-    first = FullFakeComposition()
-    second = FullFakeComposition()
+    first = configured(FullFakeComposition, )
+    second = configured(FullFakeComposition, )
 
     first_trace = first.run_replay(inputs)
     second_trace = second.run_replay(inputs)
@@ -116,7 +117,7 @@ def test_long_full_stack_replay_is_deterministic_and_commits_once_per_tick():
 
 @pytest.mark.parametrize("layer", tuple(f"L{number}" for number in range(1, 12)))
 def test_each_upstream_layer_fault_is_fail_closed_and_next_tick_reanchors(layer: str):
-    composition = FullFakeComposition(faults=(LayerFault(8, layer),))
+    composition = configured(FullFakeComposition, faults=(LayerFault(8, layer),))
 
     traces = composition.run_replay(_inputs(11))
 
@@ -138,8 +139,8 @@ def test_each_upstream_layer_fault_is_fail_closed_and_next_tick_reanchors(layer:
 def test_faulted_long_replay_is_direct_value_deterministic():
     inputs = _inputs(80)
     faults = (LayerFault(17, "L4"), LayerFault(43, "L10"))
-    first = FullFakeComposition(faults=faults)
-    second = FullFakeComposition(faults=faults)
+    first = configured(FullFakeComposition, faults=faults)
+    second = configured(FullFakeComposition, faults=faults)
 
     first_trace = first.run_replay(inputs)
     second_trace = second.run_replay(inputs)
@@ -152,7 +153,7 @@ def test_faulted_long_replay_is_direct_value_deterministic():
 
 
 def test_l12_writer_fault_has_one_attempt_and_no_retry():
-    composition = FullFakeComposition(faults=(LayerFault(3, "L12"),))
+    composition = configured(FullFakeComposition, faults=(LayerFault(3, "L12"),))
     inputs = _inputs(5)
     for item in inputs[:3]:
         composition.run_tick(item)
@@ -165,7 +166,7 @@ def test_l12_writer_fault_has_one_attempt_and_no_retry():
 
 def test_non_active_full_stack_tick_still_runs_typed_chain_but_commits_zero():
     item = replace(_inputs(1)[0], lifecycle=LifecycleState.IDLE)
-    composition = FullFakeComposition()
+    composition = configured(FullFakeComposition, )
 
     result = composition.run_tick(item)
 

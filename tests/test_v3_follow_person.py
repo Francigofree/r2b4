@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import json
 import math
@@ -12,7 +13,7 @@ from v3.adapters.resident_command import (
     ResidentCommandClient,
     ResidentCommandMailboxConfig,
 )
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import (
     CommandMode,
     CommandRequest,
@@ -100,7 +101,7 @@ def _mission(
     max_v_mps: float = 0.15,
     max_omega_rad_s: float = 0.30,
 ):
-    return MissionManager().evaluate(
+    return configured(MissionManager, ).evaluate(
         CommandRequest(
             context=context,
             command_id=command_id,
@@ -135,7 +136,7 @@ def test_follow_person_is_active_targetless_mission():
 def test_follow_person_aligns_before_translation():
     context = TickContext(2, 1_020_000_000)
     estimate = _estimate(context)
-    navigator = TrajectoryNavigator(_production_navigation())
+    navigator = configured(TrajectoryNavigator, _production_navigation())
     plan = navigator.evaluate(
         _mission(context),
         estimate,
@@ -148,7 +149,7 @@ def test_follow_person_aligns_before_translation():
     assert plan.route[0].x_m == pytest.approx(estimate.x_m)
     assert plan.route[0].y_m == pytest.approx(estimate.y_m)
 
-    motion = MotionRealizer().evaluate(select_motion(plan), estimate, _world(
+    motion = configured(MotionRealizer, ).evaluate(select_motion(plan), estimate, _world(
         context, _person("person-1", 1.5, 1.0)
     ))
     assert motion.requested_v_mps == 0.0
@@ -158,7 +159,7 @@ def test_follow_person_aligns_before_translation():
 def test_follow_person_far_and_aligned_advances_with_bounded_safe_motion():
     context = TickContext(3, 1_040_000_000)
     estimate = _estimate(context)
-    navigator = TrajectoryNavigator(_production_navigation())
+    navigator = configured(TrajectoryNavigator, _production_navigation())
     world = _world(context, _person("person-1", 2.0, 0.0))
 
     plan = navigator.evaluate(_mission(context), estimate, world)
@@ -174,7 +175,7 @@ def test_follow_person_far_and_aligned_advances_with_bounded_safe_motion():
     assert objective.trajectory is not None
     assert objective.trajectory.collision is False
 
-    motion = MotionRealizer().evaluate(objective, estimate, world)
+    motion = configured(MotionRealizer, ).evaluate(objective, estimate, world)
     assert motion.requested_v_mps > 0.0
     assert motion.requested_v_mps <= 0.15 + 1e-12
 
@@ -183,7 +184,7 @@ def test_follow_person_holds_inside_standoff_band_and_never_reverses():
     context = TickContext(4, 1_060_000_000)
     estimate = _estimate(context)
     config = _production_navigation()
-    navigator = TrajectoryNavigator(config)
+    navigator = configured(TrajectoryNavigator, config)
     hold_enter = (
         config.follow_person_stand_off_m
         + config.follow_person_distance_deadband_m
@@ -197,7 +198,7 @@ def test_follow_person_holds_inside_standoff_band_and_never_reverses():
 
     assert plan.status is NavigationStatus.IDLE
     assert plan.reason == "PERSON_DISTANCE_HOLD"
-    motion = MotionRealizer().evaluate(select_motion(plan), estimate, world)
+    motion = configured(MotionRealizer, ).evaluate(select_motion(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
     assert motion.requested_omega_rad_s == 0.0
 
@@ -205,7 +206,7 @@ def test_follow_person_holds_inside_standoff_band_and_never_reverses():
 def test_follow_person_too_close_is_fail_closed():
     context = TickContext(5, 1_080_000_000)
     config = _production_navigation()
-    navigator = TrajectoryNavigator(config)
+    navigator = configured(TrajectoryNavigator, config)
     too_close = config.follow_person_min_safe_distance_m * 0.9
     plan = navigator.evaluate(
         _mission(context),
@@ -220,7 +221,7 @@ def test_follow_person_too_close_is_fail_closed():
 
 def test_follow_person_requires_costmap_only_when_translation_is_needed():
     context = TickContext(6, 1_100_000_000)
-    navigator = TrajectoryNavigator(_production_navigation())
+    navigator = configured(TrajectoryNavigator, _production_navigation())
 
     aligned_far = navigator.evaluate(
         _mission(context, command_id="follow-costmap"),
@@ -237,7 +238,7 @@ def test_follow_person_requires_costmap_only_when_translation_is_needed():
 
 def test_follow_person_locks_target_and_never_silently_switches():
     config = _production_navigation()
-    navigator = TrajectoryNavigator(config)
+    navigator = configured(TrajectoryNavigator, config)
     command_id = "follow-sticky"
     distance = 1.8
     locked_angle = 0.70
@@ -285,7 +286,7 @@ def test_follow_person_locks_target_and_never_silently_switches():
         _estimate(c3),
         lost_world,
     )
-    hold_motion = MotionRealizer().evaluate(
+    hold_motion = configured(MotionRealizer, ).evaluate(
         select_motion(hold),
         _estimate(c3),
         lost_world,
@@ -305,7 +306,7 @@ def test_follow_person_locks_target_and_never_silently_switches():
         _estimate(c4),
         recovery_world,
     )
-    recovery_motion = MotionRealizer().evaluate(
+    recovery_motion = configured(MotionRealizer, ).evaluate(
         select_motion(recovery),
         _estimate(c4),
         recovery_world,
@@ -339,7 +340,7 @@ def test_follow_person_locks_target_and_never_silently_switches():
 
 
 def test_follow_person_target_loss_is_fail_closed_but_reacquirable():
-    navigator = TrajectoryNavigator(_production_navigation())
+    navigator = configured(TrajectoryNavigator, _production_navigation())
     command_id = "follow-loss"
 
     c1 = TickContext(20, 3_000_000_000)

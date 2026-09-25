@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import FrozenInstanceError
 import math
 
@@ -96,7 +97,7 @@ def _config(**changes) -> NativeStateEstimatorConfig:
         "track_width_m": 0.3557,
     }
     values.update(changes)
-    return NativeStateEstimatorConfig(**values)
+    return configured(NativeStateEstimatorConfig, **values)
 
 
 @pytest.mark.parametrize("reference_dt_s", (0.020, 0.040))

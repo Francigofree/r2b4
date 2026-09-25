@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import pytest
 
 from v3.contracts import (
@@ -74,8 +75,8 @@ def _frame(
 
 
 def test_l4_builds_and_retains_a_bounded_map_frame_rolling_costmap():
-    model = ShadowWorldModel(
-        WorldModelConfig(
+    model = configured(ShadowWorldModel, 
+        configured(WorldModelConfig, 
             local_costmap_resolution_m=0.1,
             local_costmap_radius_m=2.5,
             local_costmap_max_cell_age_ns=200,
@@ -135,11 +136,11 @@ def test_l4_rejects_malformed_or_non_robot_frame_local_perception():
     )
 
     with pytest.raises(ValueError, match="ROBOT_BASE"):
-        ShadowWorldModel()(AdmittedFrame(context, (health, malformed), ()), _estimate(context))
+        configured(ShadowWorldModel, )(AdmittedFrame(context, (health, malformed), ()), _estimate(context))
 
 
 def test_l4_accepts_an_exact_repeated_scan_without_counting_it_twice():
-    model = ShadowWorldModel()
+    model = configured(ShadowWorldModel, )
     first_context = TickContext(0, 1_000)
     points = ((0.25, 0.05, 10),)
     first = model(

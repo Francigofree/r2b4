@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 import multiprocessing
 import queue
@@ -14,6 +13,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from v3.lidar_config import LidarMatcherConfig
 from v3.lidar_matcher_process import matcher_process_main, put_latest
 
 from .latest_lidar import (
@@ -79,17 +79,6 @@ def _mapping(value: object, name: str) -> Mapping[str, object]:
     return value
 
 
-def _load_json(path_value: str | Path, name: str) -> Mapping[str, object]:
-    path = Path(path_value)
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"{name} must be a regular non-symlink file")
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"{name} must contain valid UTF-8 JSON") from exc
-    return _mapping(value, name)
-
-
 def _optional_string(value: object, name: str) -> str | None:
     if value is None:
         return None
@@ -104,7 +93,7 @@ class NativeLidarPortConfig:
 
     driver: RplidarC1Config
     danger_zone_m: float
-    matcher_config_json: str
+    matcher: LidarMatcherConfig
     poll_interval_s: float = 1.0 / 120.0
     process_ready_timeout_s: float = 8.0
     process_stop_timeout_s: float = 1.0
@@ -129,8 +118,6 @@ class NativeLidarPortConfig:
             (self.maximum_result_age_ns, "maximum_result_age_ns"),
         ):
             _positive_int(value, name)
-            if value != MATCHER_MAX_AGE_NS:
-                raise ValueError(f"{name} must be {MATCHER_MAX_AGE_NS}")
         expected = {
             "matcher_start_method": MATCHER_START_METHOD,
             "input_queue_capacity": MATCHER_QUEUE_CAPACITY,
@@ -139,118 +126,22 @@ class NativeLidarPortConfig:
         for name, value in expected.items():
             if getattr(self, name) != value:
                 raise ValueError(f"{name} must be {value}")
-        if not isinstance(self.matcher_config_json, str):
-            raise TypeError("matcher_config_json must be a string")
-        try:
-            matcher_config = json.loads(self.matcher_config_json)
-        except json.JSONDecodeError as exc:
-            raise ValueError("matcher_config_json must contain valid JSON") from exc
-        if not isinstance(matcher_config, dict):
-            raise ValueError("matcher_config_json must contain one JSON object")
+        if not isinstance(self.matcher, LidarMatcherConfig):
+            raise TypeError("matcher must be LidarMatcherConfig")
 
     @property
     def matcher_config(self) -> dict[str, object]:
-        return dict(json.loads(self.matcher_config_json))
+        return self.matcher.as_mapping()
 
 
-def load_native_lidar_port_config(
-    hardware_path: str | Path,
-    control_path: str | Path,
-    *,
-    danger_zone_m: float,
-) -> NativeLidarPortConfig:
-    """Close the active LiDAR JSON leaves before hardware ownership starts."""
-
-    hardware = _load_json(hardware_path, "hardware config")
-    control = _load_json(control_path, "control config")
-    lidar = _mapping(hardware.get("lidar"), "hardware config lidar")
-    pose = _mapping(control.get("lidar_pose"), "control config lidar_pose")
-    runtime = _mapping(control.get("lidar_runtime"), "control config lidar_runtime")
-
-    protected = {
-        "matcher_process_start_method": MATCHER_START_METHOD,
-        "latest_scan_queue_size": MATCHER_QUEUE_CAPACITY,
-        "latest_result_queue_size": MATCHER_QUEUE_CAPACITY,
-        "matcher_max_input_age_s": MATCHER_MAX_AGE_NS / 1_000_000_000.0,
-        "matcher_max_result_age_s": MATCHER_MAX_AGE_NS / 1_000_000_000.0,
-    }
-    for name, expected in protected.items():
-        actual = runtime.get(name, expected)
-        if isinstance(expected, float):
-            matches = (
-                isinstance(actual, (int, float))
-                and not isinstance(actual, bool)
-                and math.isfinite(float(actual))
-                and math.isclose(float(actual), expected, rel_tol=0.0, abs_tol=1e-12)
-            )
-        else:
-            matches = actual == expected and type(actual) is type(expected)
-        if not matches:
-            raise ValueError(f"control config lidar_runtime.{name} must be {expected}")
-
-    minimum_distance_m = _positive_float(
-        lidar.get("min_distance_m", pose.get("min_valid_distance_m", 0.05)),
-        "hardware config lidar.min_distance_m",
-    )
-    maximum_distance_m = _positive_float(
-        lidar.get("max_distance_m", pose.get("max_valid_distance_m", 12.0)),
-        "hardware config lidar.max_distance_m",
-    )
-    driver = RplidarC1Config(
-        port=_optional_string(lidar.get("port"), "hardware config lidar.port"),
-        baudrate=_positive_int(
-            lidar.get("baudrate", 460_800),
-            "hardware config lidar.baudrate",
-        ),
-        minimum_distance_m=minimum_distance_m,
-        maximum_distance_m=maximum_distance_m,
-        read_chunk_size=_positive_int(
-            lidar.get("read_chunk_size", 512),
-            "hardware config lidar.read_chunk_size",
-        ),
-        read_timeout_s=_positive_float(
-            lidar.get("read_timeout_s", 0.1),
-            "hardware config lidar.read_timeout_s",
-        ),
-        stale_timeout_s=_positive_float(
-            lidar.get("stale_timeout_s", 0.5),
-            "hardware config lidar.stale_timeout_s",
-        ),
-        startup_grace_s=_positive_float(
-            lidar.get("startup_grace_s", 10.0),
-            "hardware config lidar.startup_grace_s",
-        ),
-        reconnect_interval_s=_positive_float(
-            lidar.get("reconnect_interval_s", 0.4),
-            "hardware config lidar.reconnect_interval_s",
-        ),
-        command_settle_s=_positive_float(
-            lidar.get("command_settle_s", 0.5),
-            "hardware config lidar.command_settle_s",
-        ),
-        stop_join_timeout_s=_positive_float(
-            lidar.get("stop_join_timeout_s", 1.0),
-            "hardware config lidar.stop_join_timeout_s",
-        ),
-    )
-    poll_hz = _positive_float(
-        runtime.get("driver_poll_hz", 120.0),
-        "control config lidar_runtime.driver_poll_hz",
-    )
-    return NativeLidarPortConfig(
-        driver=driver,
-        danger_zone_m=_positive_float(danger_zone_m, "danger_zone_m"),
-        matcher_config_json=json.dumps(dict(pose), sort_keys=True, separators=(",", ":")),
-        poll_interval_s=1.0 / poll_hz,
-        process_ready_timeout_s=_positive_float(
-            runtime.get("matcher_process_ready_timeout_s", 8.0),
-            "control config lidar_runtime.matcher_process_ready_timeout_s",
-        ),
-        process_stop_timeout_s=_positive_float(
-            runtime.get("matcher_stop_timeout_s", 1.0),
-            "control config lidar_runtime.matcher_stop_timeout_s",
-        ),
-    )
+def load_native_lidar_port_config(hardware_path, control_path, *, danger_zone_m):
+    """Compatibility entrypoint delegated to the sole resolver."""
+    from v3.config import ConfigResolver
+    control = Path(control_path)
+    resolved = ConfigResolver(hardware_path, control.with_name("fizika.json"), control.with_name("speed_map.json"), control).resolve()
+    if danger_zone_m != resolved.lidar.danger_zone_m:
+        raise ValueError("LiDAR danger zone conflicts with resolved config")
+    return resolved.lidar
 
 
 def _freeze(value: object) -> object:
@@ -684,7 +575,7 @@ class NativeLidarPort:
                     "measurement_monotonic_ns": scan.measurement_monotonic_ns,
                     "maximum_input_age_ns": self._config.maximum_input_age_ns,
                     "danger_zone_m": self._config.danger_zone_m,
-                    "matcher_config": self._config.matcher_config,
+                    "matcher_config": self._config.matcher,
                     "pose_reference": pose_reference.pose,
                     "pose_reference_monotonic_ns": pose_reference.monotonic_ns,
                     "scan_pose_alignment_delta_ns": alignment_delta_ns,

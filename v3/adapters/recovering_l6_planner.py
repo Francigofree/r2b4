@@ -21,6 +21,7 @@ from v3.async_capability import (
     source_is_stale,
 )
 from v3.contracts.planner import PlannerCompletion, TrajectoryRolloutRequest
+from v3.config_types import PlannerProcessConfig
 from v3.layers.l6_navigation import NavigationConfig
 from .l6_planner_process import ProcessTrajectoryRolloutBackend
 
@@ -96,6 +97,7 @@ class RecoveringTrajectoryRolloutBackend:
         "_lock",
         "_next_id",
         "_policy",
+        "_process_config",
         "_produced_count",
         "_recovering",
         "_recovery_error",
@@ -117,6 +119,7 @@ class RecoveringTrajectoryRolloutBackend:
         strict_affinity: bool = True,
         recovery_policy: PlannerRecoveryPolicy | None = None,
         backend_factory: BackendFactory = ProcessTrajectoryRolloutBackend,
+        process_config: PlannerProcessConfig,
     ) -> None:
         if not isinstance(config, NavigationConfig):
             raise TypeError("config must be NavigationConfig")
@@ -138,6 +141,7 @@ class RecoveringTrajectoryRolloutBackend:
         self._worker_cpu = worker_cpu
         self._strict_affinity = strict_affinity
         self._policy = policy
+        self._process_config = process_config
         self._backend_factory = backend_factory
         self._lock = threading.RLock()
         self._recovery_stop = threading.Event()
@@ -174,6 +178,7 @@ class RecoveringTrajectoryRolloutBackend:
             worker_cpu=self._worker_cpu,
             strict_affinity=self._strict_affinity,
             ready_timeout_s=float(self._policy.ready_timeout_s),
+            process_config=self._process_config,
         )
 
     @property
@@ -656,7 +661,7 @@ class RecoveringTrajectoryRolloutBackend:
             worker = self._recovery_thread
         self._close_backend(backend)
         if worker is not None and worker is not threading.current_thread():
-            worker.join(timeout=2.0)
+            worker.join(timeout=self._process_config.stop_timeout_s)
         with self._lock:
             self._request_states.clear()
             self._latest_request_id = None

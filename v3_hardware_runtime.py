@@ -362,6 +362,7 @@ class NativeHardwareSensorOwner:
         open_camera: Picamera2Factory = default_picamera2_factory,
         open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
         affinity_config: RuntimeAffinityConfig | None = None,
+        runtime_edges=None,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -390,7 +391,7 @@ class NativeHardwareSensorOwner:
         person_evidence: AsyncPersonPhotoEvidenceRecorder | None = None
         inputs: NativeSensorInputOwner | None = None
         encoder_source_override: ProcessEncoderSource | None = None
-        pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id)
+        pose_feedback = NativePoseFeedback(config.inputs.lidar_source.pose_frame_id, **({"capacity": runtime_edges.pose_history_capacity} if runtime_edges is not None else {}))
         try:
             if open_imu_device is not None:
                 imu = open_imu_device(config.imu_device)
@@ -409,6 +410,7 @@ class NativeHardwareSensorOwner:
                     config.inputs.encoder_counter,
                     config.inputs.encoder_backend,
                     config.inputs.encoder_source,
+                    **({"process_config": runtime_edges.encoder_process} if runtime_edges is not None else {}),
                     worker_cpu=(affinity.io_cpu if affinity.enabled else None),
                     strict_affinity=(affinity.strict if affinity.enabled else False),
                 )
@@ -759,6 +761,7 @@ def run_native_hardware_resident_control(
     affinity_config: RuntimeAffinityConfig | None = None,
     enable_multirate_inputs: bool = True,
     open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
+    runtime_edges=None,
 ) -> ResidentRuntimeReport:
     """Own all hardware for one resident session behind an explicit cutover gate."""
 
@@ -809,6 +812,7 @@ def run_native_hardware_resident_control(
         open_imu_bus,
         open_lidar_port,
         config.sensor_inputs,
+        runtime_edges=runtime_edges,
         affinity_config=affinity_config,
         open_imu_device=open_imu_device,
         monotonic_ns=monotonic_ns,
@@ -820,6 +824,7 @@ def run_native_hardware_resident_control(
         if async_l6.enabled:
             rollout_backend = RecoveringTrajectoryRolloutBackend(
                 config.composition.live_control.control.navigation,
+                **({"recovery_policy": runtime_edges.planner_recovery, "process_config": runtime_edges.planner_process} if runtime_edges is not None else {}),
                 worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
                 strict_affinity=(affinity.strict if affinity.enabled else False),
             )
@@ -847,6 +852,7 @@ def run_native_hardware_resident_control(
             ),
             trajectory_rollout_backend=rollout_backend,
             enable_multirate_inputs=enable_multirate_inputs,
+            multirate_config=runtime_edges.multirate if runtime_edges is not None else None,
             # Critical encoder/IMU acquisition stays on the dedicated I/O CPU;
             # camera/person inference is isolated on vision_cpu so it cannot starve it.
             input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),

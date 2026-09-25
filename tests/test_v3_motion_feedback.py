@@ -1,4 +1,5 @@
 """Disturbance rejection with approximate maps; no hardware or fitted plant."""
+from v3_config_fixtures import configured
 
 from collections import deque
 from dataclasses import replace
@@ -58,7 +59,7 @@ def test_load_compensation_survives_measurement_error_zero_crossing(direction):
 
 @pytest.mark.parametrize("direction", [-1, 1])
 def test_saturation_unwinds_and_reversal_does_not_reuse_load(direction):
-    pi = WheelPiConfig(kp=0.25, ki=0.6, integrator_limit=0.5, max_normalized_output=0.25)
+    pi = configured(WheelPiConfig, kp=0.25, ki=0.6, integrator_limit=0.5, max_normalized_output=0.25)
     controller = WheelActuatorController(CONFIG.speed_map, pi)
     for tick in range(300):
         output = wheel_step(controller, tick, direction * 0.4, 0.0)
@@ -131,7 +132,7 @@ def realize(controller, tick, *, v=0.15, omega=0.0, **pose):
 
 @pytest.mark.parametrize("v", [0.15, -0.15])
 def test_parallel_path_displacement_is_corrected_in_both_directions(v):
-    controller = MotionRealizer()
+    controller = configured(MotionRealizer, )
     realize(controller, 0, v=v)
     correction = realize(controller, 1, v=v, y=0.08)
     assert correction.requested_omega_rad_s * v < 0.0
@@ -139,7 +140,7 @@ def test_parallel_path_displacement_is_corrected_in_both_directions(v):
 
 
 def test_heading_wrap_zero_command_and_changed_target_reanchor():
-    controller = MotionRealizer()
+    controller = configured(MotionRealizer, )
     realize(controller, 0, yaw=math.pi - 0.01)
     correction = realize(controller, 1, yaw=-math.pi + 0.01)
     assert -0.1 < correction.requested_omega_rad_s < 0
@@ -154,17 +155,17 @@ def test_heading_wrap_zero_command_and_changed_target_reanchor():
 
 def test_motion_checkpoint_preserves_path_and_pivot_phase():
     for v, omega in [(0.15, 0.0), (0.15, -0.2), (0.0, 0.3)]:
-        first = MotionRealizer()
+        first = configured(MotionRealizer, )
         for tick in range(20):
             realize(first, tick, v=v, omega=omega, x=tick * 0.001, y=0.01)
-        second = MotionRealizer()
+        second = configured(MotionRealizer, )
         second.restore(first.checkpoint())
         assert realize(first, 20, v=v, omega=omega, x=0.02, y=0.03) == realize(
             second, 20, v=v, omega=omega, x=0.02, y=0.03)
 
 
 def test_world_stale_discards_reference_and_stationary_limit_does_not_move_it():
-    controller = MotionRealizer()
+    controller = configured(MotionRealizer, )
     for tick in range(100):
         motion = realize(controller, tick, v=0.15, x=0.0, y=0.0)
         assert motion.requested_omega_rad_s == 0.0
@@ -178,7 +179,7 @@ def test_world_stale_discards_reference_and_stationary_limit_does_not_move_it():
 
 
 def test_stationary_selected_trajectory_cannot_create_corrective_motion():
-    controller = MotionRealizer()
+    controller = configured(MotionRealizer, )
     realize(controller, 0)
     trajectory = TrajectoryEvaluation(
         "stationary", 0.0, 0.0, 100_000_000,

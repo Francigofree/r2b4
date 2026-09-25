@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import FrozenInstanceError
 import math
 
@@ -138,7 +139,7 @@ def _layer(result, name: str):
 def test_live_input_composition_polls_three_sources_once_and_commits_one_stop():
     context = TickContext(0, 1_000)
     encoder, imu, lidar, backends, order = _sources(context)
-    runtime = LiveInputComposition(encoder, imu, lidar)
+    runtime = configured(LiveInputComposition, encoder, imu, lidar)
 
     result = runtime.tick(context)
 
@@ -170,7 +171,7 @@ def test_live_input_lidar_pose_revision_is_never_reapplied():
         first_context,
         lidar_revisions={0: 7, 1: 7, 2: 6},
     )
-    runtime = LiveInputComposition(encoder, imu, lidar)
+    runtime = configured(LiveInputComposition, encoder, imu, lidar)
 
     first = runtime.tick(first_context)
     duplicate = runtime.tick(TickContext(1, 20_001_000))
@@ -201,7 +202,7 @@ def test_live_input_source_failure_closes_one_l12_fault_without_retry():
         context,
         encoder_result=OSError("injected encoder failure"),
     )
-    runtime = LiveInputComposition(encoder, imu, lidar)
+    runtime = configured(LiveInputComposition, encoder, imu, lidar)
 
     result = runtime.tick(context)
 
@@ -220,11 +221,11 @@ def test_live_input_source_failure_closes_one_l12_fault_without_retry():
 def test_live_input_composition_config_is_immutable_and_source_roles_are_typed():
     context = TickContext(0, 1_000)
     encoder, imu, lidar, _, _ = _sources(context)
-    config = LiveInputCompositionConfig()
+    config = configured(LiveInputCompositionConfig, )
 
     with pytest.raises(FrozenInstanceError):
         config.world_model = config.world_model
     with pytest.raises(TypeError, match="encoder_source"):
-        LiveInputComposition(imu, imu, lidar)
+        configured(LiveInputComposition, imu, imu, lidar)
     with pytest.raises(TypeError, match="context must be TickContext"):
-        LiveInputComposition(encoder, imu, lidar).tick(1)
+        configured(LiveInputComposition, encoder, imu, lidar).tick(1)

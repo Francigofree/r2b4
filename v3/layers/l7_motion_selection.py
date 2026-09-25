@@ -21,7 +21,7 @@ _SCORE_EPSILON = 1e-12
 class MotionSelectionConfig:
     """Deterministic temporal-continuity policy for L7 trajectory selection."""
 
-    continuity_score_band: float = 0.005
+    continuity_score_band: float
 
     def __post_init__(self) -> None:
         value = self.continuity_score_band
@@ -81,7 +81,7 @@ class MotionSelector:
 
     def __init__(
         self,
-        config: MotionSelectionConfig = MotionSelectionConfig(),
+        config: MotionSelectionConfig,
     ) -> None:
         if not isinstance(config, MotionSelectionConfig):
             raise TypeError("config must be MotionSelectionConfig")

@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import pytest
 
 from v3.composition import MissionNavigationComposition, MissionNavigationInputs
@@ -81,8 +82,8 @@ def test_navigation_scenario_replay_is_deterministic_and_progresses_l5_to_l9():
         _frame(2, 1_200_000_000, x_m=0.2),
     )
 
-    first = MissionNavigationComposition().replay(frames)
-    second = MissionNavigationComposition().replay(frames)
+    first = configured(MissionNavigationComposition, ).replay(frames)
+    second = configured(MissionNavigationComposition, ).replay(frames)
 
     assert first == second
     assert tuple(trace.navigation.progress for trace in first) == pytest.approx((0.0, 0.1, 0.2))
@@ -99,7 +100,7 @@ def test_navigation_scenario_replay_is_deterministic_and_progresses_l5_to_l9():
 
 
 def test_navigation_progress_does_not_regress_and_completion_is_latched_per_mission():
-    runtime = MissionNavigationComposition()
+    runtime = configured(MissionNavigationComposition, )
 
     traces = runtime.replay(
         (
@@ -121,7 +122,7 @@ def test_navigation_progress_does_not_regress_and_completion_is_latched_per_miss
 def test_obstructed_global_line_produces_a_safe_selected_motion():
     obstacle = ObstacleTrack("blocking", 0.5, 0.0, 0.10, 0.0, 0.0, 0.9)
 
-    trace = MissionNavigationComposition().run_tick(
+    trace = configured(MissionNavigationComposition, ).run_tick(
         _frame(0, 1_000_000_000, obstacles=(obstacle,))
     )
 
@@ -155,7 +156,7 @@ def test_explore_state_is_continuous_while_trajectory_replans_at_10_hz():
         for tick_id, x_m in enumerate(positions)
     )
 
-    traces = MissionNavigationComposition().replay(frames)
+    traces = configured(MissionNavigationComposition, ).replay(frames)
     plans = tuple(trace.navigation for trace in traces)
 
     assert {trace.mission.mission_id for trace in traces} == {
@@ -180,7 +181,7 @@ def test_goal_position_and_heading_completion_produce_an_explicit_stop():
         DataField("yaw_rad", 0.25),
     )
 
-    trace = MissionNavigationComposition().run_tick(
+    trace = configured(MissionNavigationComposition, ).run_tick(
         _frame(0, 1_000_000_000, goal=goal, x_m=1.0, yaw_rad=0.25)
     )
 
@@ -204,7 +205,7 @@ def test_teleop_scenario_applies_mission_limits_then_stateful_acceleration_limit
         _frame(1, 1_100_000_000, mode=CommandMode.TELEOP, goal=goal),
     )
 
-    traces = MissionNavigationComposition().replay(frames)
+    traces = configured(MissionNavigationComposition, ).replay(frames)
     constrained = traces[-1].constrained
 
     assert traces[-1].objective.kind is MotionObjectiveKind.VELOCITY
@@ -219,7 +220,7 @@ def test_teleop_scenario_applies_mission_limits_then_stateful_acceleration_limit
 
 
 def test_degraded_localization_stops_a_valid_motion_objective_at_l9():
-    runtime = MissionNavigationComposition()
+    runtime = configured(MissionNavigationComposition, )
     runtime.run_tick(_frame(0, 1_000_000_000))
 
     trace = runtime.run_tick(
@@ -235,11 +236,11 @@ def test_degraded_localization_stops_a_valid_motion_objective_at_l9():
 
 
 def test_invalid_command_and_reused_command_id_fail_closed_without_a_motion_target():
-    runtime = MissionNavigationComposition()
+    runtime = configured(MissionNavigationComposition, )
     invalid = runtime.run_tick(
         _frame(0, 1_000_000_000, goal=(DataField("x_m", 1.0),))
     )
-    runtime = MissionNavigationComposition()
+    runtime = configured(MissionNavigationComposition, )
     runtime.run_tick(_frame(0, 1_000_000_000))
     reused = runtime.run_tick(
         _frame(
@@ -259,7 +260,7 @@ def test_invalid_command_and_reused_command_id_fail_closed_without_a_motion_targ
 
 
 def test_scenario_replay_rejects_noncontiguous_tick_order():
-    runtime = MissionNavigationComposition()
+    runtime = configured(MissionNavigationComposition, )
     runtime.run_tick(_frame(0, 1_000_000_000))
 
     with pytest.raises(ValueError, match="tick order"):

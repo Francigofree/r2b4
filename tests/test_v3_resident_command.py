@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import json
 import os
 from pathlib import Path
@@ -253,7 +254,7 @@ def test_client_heartbeats_advance_revision_without_changing_logical_command_id(
         ttl_ns=150_000,
     )
     second = gateway.snapshot(TickContext(2, 120_000))
-    missions = MissionManager()
+    missions = configured(MissionManager, )
     first_mission = missions.evaluate(first)
     second_mission = missions.evaluate(second)
 

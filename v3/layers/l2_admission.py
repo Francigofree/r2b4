@@ -19,7 +19,7 @@ class AdmissionConfig:
     """Immutable time-alignment limits injected into the L2 state owner."""
 
     max_sample_age_ns: int
-    max_future_skew_ns: int = 0
+    max_future_skew_ns: int
 
     def __post_init__(self) -> None:
         for name in ("max_sample_age_ns", "max_future_skew_ns"):

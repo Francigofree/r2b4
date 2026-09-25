@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -292,7 +293,7 @@ def _runtime_config() -> BoundedPhysicalRuntimeConfig:
                     max_v_mps=0.10,
                     max_omega_rad_s=0.20,
                 ),
-                NativeControlCompositionConfig(speed_map=_speed_map()),
+                configured(NativeControlCompositionConfig, speed_map=_speed_map()),
             ),
             GpioMotorFrameSinkConfig(
                 MotorChannelPhysicalConfig(12, 13),

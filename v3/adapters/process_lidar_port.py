@@ -17,6 +17,7 @@ from collections import deque
 from collections.abc import Mapping
 from typing import Any, Callable
 
+from v3.config_types import LidarProcessConfig
 from v3.async_capability import TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
@@ -31,12 +32,6 @@ from .native_lidar_port import (
 from .rplidar_c1 import RplidarPoint
 
 _PROCESS_START_METHOD = "spawn"
-_POSE_HISTORY_CAPACITY = 64
-_STATE_QUEUE_CAPACITY = 2
-_RAW_QUEUE_CAPACITY = 2
-_STATE_HEARTBEAT_NS = 100_000_000
-_READY_TIMEOUT_S = 12.0
-_STOP_TIMEOUT_S = 3.0
 
 
 def _plain(value: object) -> object:
@@ -220,10 +215,11 @@ def _unwire_matcher(value: object | None) -> NativeMatcherResult | None:
 
 
 class _SharedPoseHistory:
-    __slots__ = ("_capacity", "_lock", "_sequence", "_times", "_values")
+    __slots__ = ("_capacity", "_lock", "_sequence", "_times", "_values", "_lock_timeout_s")
 
-    def __init__(self, capacity: int, lock: Any, sequence: Any, times: Any, values: Any) -> None:
+    def __init__(self, capacity: int, lock: Any, sequence: Any, times: Any, values: Any, lock_timeout_s: float) -> None:
         self._capacity = capacity
+        self._lock_timeout_s = lock_timeout_s
         self._lock = lock
         self._sequence = sequence
         self._times = times
@@ -232,7 +228,7 @@ class _SharedPoseHistory:
     def publish(self, pose: TimedPoseReference) -> None:
         if not isinstance(pose, TimedPoseReference):
             raise TypeError("pose must be TimedPoseReference")
-        if not self._lock.acquire(timeout=0.05):
+        if not self._lock.acquire(timeout=self._lock_timeout_s):
             raise RuntimeError("LiDAR pose history publisher lock timed out")
         try:
             sequence = int(self._sequence.value)
@@ -330,10 +326,10 @@ def _put_raw_evidence(target: Any, payload: object, superseded_count: int) -> in
 
 
 def _put_raw_end(target: Any, *, last_revision: int, produced_count: int,
-                 superseded_count: int) -> None:
+                 superseded_count: int, timeout_s: float) -> None:
     marker = ("raw_end", int(last_revision), int(produced_count), int(superseded_count))
     try:
-        target.put(marker, timeout=0.5)
+        target.put(marker, timeout=timeout_s)
         return
     except queue.Full:
         pass
@@ -345,7 +341,7 @@ def _put_raw_end(target: Any, *, last_revision: int, produced_count: int,
         superseded_count += 1
     marker = ("raw_end", int(last_revision), int(produced_count), int(superseded_count))
     try:
-        target.put(marker, timeout=0.5)
+        target.put(marker, timeout=timeout_s)
     except queue.Full:
         return
 
@@ -365,6 +361,7 @@ def _lidar_owner_process_main(
     control_minimum_range_m: float,
     control_maximum_range_m: float,
     control_maximum_points: int,
+    process_config: LidarProcessConfig,
 ) -> None:
     port = None
     raw_produced_count = 0
@@ -375,7 +372,7 @@ def _lidar_owner_process_main(
             apply_current_affinity(worker_cpu, role="lidar-owner-process", strict=strict_affinity)
         import serial
 
-        pose_history = _SharedPoseHistory(_POSE_HISTORY_CAPACITY, pose_lock, pose_sequence, pose_times, pose_values)
+        pose_history = _SharedPoseHistory(process_config.pose_history_capacity, pose_lock, pose_sequence, pose_times, pose_values, process_config.pose_lock_timeout_s)
         port = open_native_lidar_port(config, pose_history.lookup, serial.Serial)
         initial_raw = port.get_raw_scan_snapshot()
         initial_matcher = port.get_matcher_result()
@@ -422,7 +419,7 @@ def _lidar_owner_process_main(
                     maximum_range_m=control_maximum_range_m,
                     maximum_points=control_maximum_points,
                 )
-            if raw_changed or matcher_revision != last_matcher_revision or now_ns - last_status_ns >= _STATE_HEARTBEAT_NS:
+            if raw_changed or matcher_revision != last_matcher_revision or now_ns - last_status_ns >= process_config.state_heartbeat_ns:
                 status = dict(port.get_runtime_status())
                 _put_latest(
                     state_queue,
@@ -453,6 +450,7 @@ def _lidar_owner_process_main(
             raw_queue,
             last_revision=last_raw_revision,
             produced_count=raw_produced_count,
+                timeout_s=process_config.raw_end_timeout_s,
             superseded_count=raw_superseded_count,
         )
 
@@ -467,7 +465,7 @@ class ProcessLidarPort:
         "_raw_snapshot", "_capture_raw_snapshot", "_capture_raw_revision",
         "_ready_event", "_state_queue", "_raw_queue", "_status", "_stop_event",
         "_stopped", "_collector", "_collector_stop", "_pending_poses",
-        "_external_raw_queue",
+        "_external_raw_queue", "_process_config",
     )
 
     def __init__(
@@ -481,6 +479,7 @@ class ProcessLidarPort:
         control_maximum_range_m: float = 2.5,
         control_maximum_points: int = 96,
         capture_raw_queue: Any | None = None,
+        process_config: LidarProcessConfig,
     ) -> None:
         if not isinstance(config, NativeLidarPortConfig):
             raise TypeError("config must be NativeLidarPortConfig")
@@ -501,15 +500,16 @@ class ProcessLidarPort:
         context = multiprocessing.get_context(_PROCESS_START_METHOD)
         pose_lock = context.Lock()
         pose_sequence = context.RawValue("Q", 0)
-        pose_times = context.RawArray("q", _POSE_HISTORY_CAPACITY)
-        pose_values = context.RawArray("d", _POSE_HISTORY_CAPACITY * 3)
-        self._pose_history = _SharedPoseHistory(_POSE_HISTORY_CAPACITY, pose_lock, pose_sequence, pose_times, pose_values)
+        pose_times = context.RawArray("q", process_config.pose_history_capacity)
+        pose_values = context.RawArray("d", process_config.pose_history_capacity * 3)
+        self._pose_history = _SharedPoseHistory(process_config.pose_history_capacity, pose_lock, pose_sequence, pose_times, pose_values, process_config.pose_lock_timeout_s)
         self._config = config
-        self._state_queue = context.Queue(maxsize=_STATE_QUEUE_CAPACITY)
+        self._process_config = process_config
+        self._state_queue = context.Queue(maxsize=process_config.state_queue_capacity)
         self._external_raw_queue = capture_raw_queue is not None
         self._raw_queue = (
             capture_raw_queue if self._external_raw_queue
-            else context.Queue(maxsize=_RAW_QUEUE_CAPACITY)
+            else context.Queue(maxsize=process_config.raw_queue_capacity)
         )
         self._ready_event = context.Event()
         self._stop_event = context.Event()
@@ -520,6 +520,7 @@ class ProcessLidarPort:
                 self._state_queue, self._raw_queue, self._ready_event, self._stop_event,
                 worker_cpu, strict_affinity,
                 float(control_minimum_range_m), float(control_maximum_range_m), int(control_maximum_points),
+                process_config,
             ),
             name="v3-lidar-owner-process",
             daemon=False,
@@ -542,7 +543,7 @@ class ProcessLidarPort:
         self._fatal_error = ""
         self._stopped = False
         self._collector_stop = threading.Event()
-        self._pending_poses: deque[TimedPoseReference] = deque(maxlen=_POSE_HISTORY_CAPACITY)
+        self._pending_poses: deque[TimedPoseReference] = deque(maxlen=process_config.pose_history_capacity)
         self._collector: threading.Thread | None = None
         self._process.start()
         # Parent receives only compact state when evidence is sent to a sidecar.
@@ -552,7 +553,7 @@ class ProcessLidarPort:
                 self._raw_queue._writer.close()
         except (AttributeError, OSError):
             pass
-        ready_timeout = max(_READY_TIMEOUT_S, config.process_ready_timeout_s)
+        ready_timeout = max(process_config.ready_timeout_s, config.process_ready_timeout_s)
         if not self._ready_event.wait(ready_timeout):
             self.stop()
             raise RuntimeError("process-isolated LiDAR owner did not become ready")
@@ -596,7 +597,7 @@ class ProcessLidarPort:
     def _collect_state(self) -> None:
         try:
             while not self._collector_stop.is_set():
-                for _ in range(_POSE_HISTORY_CAPACITY):
+                for _ in range(self._process_config.pose_history_capacity):
                     try:
                         pose = self._pending_poses.popleft()
                     except IndexError:
@@ -609,7 +610,7 @@ class ProcessLidarPort:
 
     def _drain_state(self) -> None:
         newest: object | None = None
-        for _ in range(_STATE_QUEUE_CAPACITY):
+        for _ in range(self._process_config.state_queue_capacity):
             try:
                 message = self._state_queue.get_nowait()
             except queue.Empty:
@@ -638,7 +639,7 @@ class ProcessLidarPort:
 
     def _drain_capture_raw(self) -> None:
         newest: object | None = None
-        for _ in range(_RAW_QUEUE_CAPACITY):
+        for _ in range(self._process_config.raw_queue_capacity):
             try:
                 newest = self._raw_queue.get_nowait()
             except queue.Empty:
@@ -739,15 +740,15 @@ class ProcessLidarPort:
         self._stop_event.set()
         # Keep draining compact state while the child flushes its queue feeders.
         # Stopping the reader first can strand the child in Queue finalization.
-        self._process.join(timeout=_STOP_TIMEOUT_S)
+        self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             self._process.terminate()
-            self._process.join(timeout=_STOP_TIMEOUT_S)
+            self._process.join(timeout=self._process_config.stop_timeout_s)
         self._collector_stop.set()
         if self._process.is_alive():
             raise RuntimeError("process-isolated LiDAR owner did not stop")
         if self._collector is not None:
-            self._collector.join(timeout=_STOP_TIMEOUT_S)
+            self._collector.join(timeout=self._process_config.stop_timeout_s)
             if self._collector.is_alive():
                 raise RuntimeError("LiDAR state collector did not stop")
         owned_queues = (
@@ -771,6 +772,7 @@ def open_process_lidar_port(
     control_maximum_range_m: float = 2.5,
     control_maximum_points: int = 96,
     capture_raw_queue: Any | None = None,
+    process_config: LidarProcessConfig,
 ) -> ProcessLidarPort:
     return ProcessLidarPort(
         config,
@@ -781,6 +783,7 @@ def open_process_lidar_port(
         control_maximum_range_m=control_maximum_range_m,
         control_maximum_points=control_maximum_points,
         capture_raw_queue=capture_raw_queue,
+        process_config=process_config,
     )
 
 

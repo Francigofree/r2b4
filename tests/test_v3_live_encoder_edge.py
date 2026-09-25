@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -104,7 +105,7 @@ def test_invalid_measurement_timing_is_degraded_without_device_failure():
     context = TickContext(5, 1_000)
     source, _ = _source(_reading(timing_valid=False))
     batch = NativeLiveInputReader((source,)).read(context)
-    admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100))(
+    admitted = InputAdmission(configured(AdmissionConfig, max_sample_age_ns=100))(
         AcquisitionFrame(batch.context, batch.samples, batch.device_health)
     )
 

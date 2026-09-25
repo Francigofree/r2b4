@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from v3.async_capability import (
     CapabilityCounters, CapabilityState, TransportSemantics, WorkerIdentity,
     latest_state_snapshot, request_result_snapshot,
@@ -126,6 +127,6 @@ def test_sensor_stale_flag_is_rejected_even_when_receipt_age_is_fresh():
     for kind in ("wheel_velocity", "ekf_heading", "person_detection", "lidar_pose"):
         frame = AcquisitionFrame(context, (DeviceSample("sensor", kind, 1, 990,
             (DataField("measurement_stale", True),)),), (DeviceHealth("sensor", DeviceHealthState.OK),))
-        admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100))(frame)
+        admitted = InputAdmission(configured(AdmissionConfig, max_sample_age_ns=100))(frame)
         assert not admitted.accepted
         assert admitted.rejected[0].reason is RejectionReason.STALE

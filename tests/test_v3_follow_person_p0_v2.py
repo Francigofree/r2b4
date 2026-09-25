@@ -1,10 +1,11 @@
 # R2B4_FOLLOW_PERSON_P0_V2_20260923
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import json
 from pathlib import Path
 
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import CommandMode, CommandRequest, DataField, ObstacleTrack, RobotEstimate, RollingLocalCostmap, TickContext, WorldSnapshot
 from v3.layers.l5_command_mission import MissionManager
 from v3.layers.l6_navigation import FollowPersonEvidence, TrajectoryNavigator
@@ -28,10 +29,10 @@ def _world(c: TickContext, *tracks: ObstacleTrack) -> WorldSnapshot:
     return WorldSnapshot(c, "R2B4_BOOT_ROBOT_MAP", 1, tuple(tracks), 0, costmap)
 
 def _mission(c: TickContext):
-    return MissionManager().evaluate(CommandRequest(c, "p0-v2-follow", CommandMode.FOLLOW_PERSON, (DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.30)), c.tick_id))
+    return configured(MissionManager, ).evaluate(CommandRequest(c, "p0-v2-follow", CommandMode.FOLLOW_PERSON, (DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.30)), c.tick_id))
 
 def test_follow_evidence_exposes_locked_uid_and_config():
-    config = _config().navigation; nav = TrajectoryNavigator(config); c = TickContext(1, 1_000_000_000)
+    config = _config().navigation; nav = configured(TrajectoryNavigator, config); c = TickContext(1, 1_000_000_000)
     nav.evaluate(_mission(c), _estimate(c), _world(c, _person("person-7")))
     evidence = nav.follow_person_evidence
     assert isinstance(evidence, FollowPersonEvidence)

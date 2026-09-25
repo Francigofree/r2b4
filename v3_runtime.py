@@ -512,6 +512,7 @@ def run_owned_resident_physical_control(
     input_worker_cpu: int | None = None,
     lidar_input_worker_cpu: int | None = None,
     input_worker_strict_affinity: bool = False,
+    multirate_config=None,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
 
@@ -560,6 +561,7 @@ def run_owned_resident_physical_control(
             input_reader = MultiRateLiveInputReader(
                 (*sensor_inputs.sources, *sensor_inputs.auxiliary_sources),
                 critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS,
+                config=multirate_config,
                 monotonic_ns=monotonic_ns,
                 worker_initializer=worker_initializer,
             )

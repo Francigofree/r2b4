@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import math
 from pathlib import Path
@@ -65,7 +66,7 @@ def _person(track_id: str, x: float, y: float, confidence: float = 0.9) -> Obsta
 
 
 def _mission(context: TickContext, *, command_id: str = "face-1"):
-    return MissionManager().evaluate(
+    return configured(MissionManager, ).evaluate(
         CommandRequest(
             context=context,
             command_id=command_id,
@@ -91,20 +92,20 @@ def test_face_person_uses_existing_l7_l8_path_and_never_requests_translation(y_m
     context = TickContext(2, 1_020_000_000)
     estimate = _estimate(context)
     world = _world(context, _person("person-1", 1.0, y_m))
-    plan = TrajectoryNavigator().evaluate(_mission(context), estimate, world)
+    plan = configured(TrajectoryNavigator, ).evaluate(_mission(context), estimate, world)
     assert plan.status is NavigationStatus.ACTIVE
     assert len(plan.route) == 1
     assert plan.route[0].x_m == pytest.approx(estimate.x_m)
     assert plan.route[0].y_m == pytest.approx(estimate.y_m)
 
-    motion = MotionRealizer().evaluate(select_motion(plan), estimate, world)
+    motion = configured(MotionRealizer, ).evaluate(select_motion(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
     assert math.copysign(1.0, motion.requested_omega_rad_s) == sign
 
 
 def test_face_person_alignment_hysteresis_prevents_chatter():
-    navigator = TrajectoryNavigator(
-        NavigationConfig(
+    navigator = configured(TrajectoryNavigator, 
+        configured(NavigationConfig, 
             face_person_align_tolerance_rad=0.10,
             face_person_release_tolerance_rad=0.16,
         )
@@ -140,7 +141,7 @@ def test_face_person_alignment_hysteresis_prevents_chatter():
 
 
 def test_face_person_keeps_selected_track_until_it_is_lost():
-    navigator = TrajectoryNavigator()
+    navigator = configured(TrajectoryNavigator, )
     command_id = "face-sticky"
 
     c1 = TickContext(20, 2_000_000_000)
@@ -178,7 +179,7 @@ def test_face_person_keeps_selected_track_until_it_is_lost():
 
 
 def test_face_person_target_loss_is_fail_closed_but_reacquirable():
-    navigator = TrajectoryNavigator()
+    navigator = configured(TrajectoryNavigator, )
     command_id = "face-loss"
 
     c1 = TickContext(30, 3_000_000_000)
@@ -201,7 +202,7 @@ def test_face_person_target_loss_is_fail_closed_but_reacquirable():
 
 
 def test_face_person_checkpoint_restores_target_identity_and_alignment():
-    nav = TrajectoryNavigator()
+    nav = configured(TrajectoryNavigator, )
     c1 = TickContext(40, 4_000_000_000)
     nav.evaluate(
         _mission(c1, command_id="face-checkpoint"),
@@ -212,7 +213,7 @@ def test_face_person_checkpoint_restores_target_identity_and_alignment():
     assert checkpoint.face_person_track_id == "person-9"
     assert checkpoint.face_person_aligned is True
 
-    restored = TrajectoryNavigator()
+    restored = configured(TrajectoryNavigator, )
     restored.restore(checkpoint)
     assert restored.checkpoint().face_person_track_id == "person-9"
     assert restored.checkpoint().face_person_aligned is True

@@ -1,4 +1,5 @@
 """Physical edge evidence: resolution, dynamics, failures and canonical replay."""
+from v3_config_fixtures import configured
 
 from bisect import bisect_right
 from dataclasses import replace
@@ -258,7 +259,7 @@ def test_bad_timestamp_or_lost_evidence_fails_closed_through_admission(bad):
     assert values["left_mps"] == values["right_mps"] == values["trust"] == 0.0
     assert not values["measurement_timing_valid"]
     assert values["rejection_code"] == "INVALID_EDGE_TIMING"
-    frame = InputAdmission(AdmissionConfig(100_000_000))(AcquisitionFrame(snapshot.context, snapshot.samples, (snapshot.health,)))
+    frame = InputAdmission(configured(AdmissionConfig, 100_000_000))(AcquisitionFrame(snapshot.context, snapshot.samples, (snapshot.health,)))
     assert frame.degraded_sources == ("encoder",)
 
 
@@ -304,7 +305,7 @@ def test_native_source_l2_pi_and_persisted_replay_are_deterministic(tmp_path):
     from v3.layers.l11_actuator_control import WheelActuatorController
     config = control_config()
     pi = WheelActuatorController(config.speed_map, config.wheel_pi)
-    admission = InputAdmission(AdmissionConfig(100_000_000))
+    admission = InputAdmission(configured(AdmissionConfig, 100_000_000))
     outputs = []
     for base in inputs[20:-1]:
         raw = base.raw_devices

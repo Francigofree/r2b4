@@ -1,4 +1,5 @@
 """Motion regressions motivated by the September 23 sampled live runs."""
+from v3_config_fixtures import configured
 
 from dataclasses import replace
 import math
@@ -17,7 +18,7 @@ def _rollout(config, goal, *, tracks=()):
     request = TrajectoryRolloutRequest(
         context, _estimate(context), _world(context, *tracks), goal, 0.30, 0.60, (),
     )
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     direct = nav._trajectory_rollout(
         request.estimate, request.world, nav._build_planning_scene(request.world),
         goal, request.max_v_mps, request.max_omega_rad_s,
@@ -52,12 +53,12 @@ def test_goal_alignment_overcomes_wrong_way_smoothness_and_continuity(side, dist
     estimate = replace(_estimate(context), v_mps=0.10, omega_rad_s=-side * 0.08)
     request = TrajectoryRolloutRequest(context, estimate, _world(context), goal, 0.12, 0.30, ())
     candidates = TrajectoryRolloutComputer(config).compute(request).trajectory_candidates
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     assert candidates == nav._trajectory_rollout(
         estimate, request.world, nav._build_planning_scene(request.world), goal, 0.12, 0.30,
     )
     plan = _plan(candidates)
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     selector.restore(MotionSelectionStateCheckpoint(plan.mission_id, "previous", 0.12, -side * 0.075))
     chosen = selector.evaluate(plan).trajectory
     assert chosen is not None and chosen.progress_viable and not chosen.collision
@@ -73,7 +74,7 @@ def test_clearance_recovery_prefers_retreat_over_unproductive_pivot():
     candidates = _rollout(_production_navigation(), Waypoint(0.6, 0.0), tracks=(obstacle,))
     from test_v3_progress_viability import _plan
 
-    objective = MotionSelector().evaluate(_plan(candidates))
+    objective = configured(MotionSelector, ).evaluate(_plan(candidates))
     assert objective.trajectory is not None
     assert objective.trajectory.v_mps < 0.0
     assert objective.trajectory.omega_rad_s == 0.0
@@ -86,14 +87,14 @@ def test_empty_recovery_cannot_spin_without_predicted_improvement():
     from test_v3_progress_viability import _plan
 
     candidates = _rollout(_production_navigation(), Waypoint(0.0, 0.0))
-    objective = MotionSelector().evaluate(_plan(candidates))
+    objective = configured(MotionSelector, ).evaluate(_plan(candidates))
     assert objective.kind.value == 'STOP'
     assert objective.selection_reason == 'NO_PROGRESS_VIABLE_TRAJECTORY'
 
 
 def test_locked_person_survives_confidence_dip_but_is_not_acquired_at_low_confidence():
     config = _production_navigation()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c0 = TickContext(0, 1_000_000_000)
     low = _person('person-1', 2.0, 0.0, 0.45703125)
     first = nav.evaluate(_mission(c0), _estimate(c0), _world(c0, low))
@@ -101,7 +102,7 @@ def test_locked_person_survives_confidence_dip_but_is_not_acquired_at_low_confid
     c1 = TickContext(1, 1_020_000_000)
     high = replace(low, confidence=0.60546875)
     nav.evaluate(_mission(c1), _estimate(c1), _world(c1, high))
-    restored = TrajectoryNavigator(config)
+    restored = configured(TrajectoryNavigator, config)
     restored.restore(nav.checkpoint())
     for tick in range(2, 160):
         context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
@@ -118,7 +119,7 @@ def test_transient_world_staleness_preserves_navigation_progress_and_coverage(mo
     from v3.contracts import CommandMode
 
     config = _production_navigation()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     for tick in (0, 1):
         c = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
         mission = replace(_mission(c), mode=CommandMode(mode),
@@ -142,7 +143,7 @@ def test_transient_world_staleness_preserves_navigation_progress_and_coverage(mo
                                     (_person('person-1', 2.0, 0.0, 0.44),)])
 def test_retention_does_not_bypass_loss_or_switch_identity(tracks):
     config = _production_navigation()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c0 = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(c0), _estimate(c0), _world(c0, _person('person-1', 2.0, 0.0)))
     deadline = (1_020_000_000 + config.follow_person_lost_hold_ns

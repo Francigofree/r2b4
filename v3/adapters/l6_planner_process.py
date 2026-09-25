@@ -8,6 +8,7 @@ import threading
 import time
 from dataclasses import dataclass
 
+from v3.config_types import PlannerProcessConfig
 from v3.async_capability import (
     CapabilityCounters,
     CompletionTiming,
@@ -24,8 +25,6 @@ from v3.layers.l6_navigation import (
 )
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
-_RESULT_BUFFER_CAPACITY = 4
-_RESULT_COLLECTOR_POLL_S = 0.05
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,16 +92,19 @@ class ProcessTrajectoryRolloutBackend:
         "_late_rejected_count", "_error_count", "_last_completed_request_id",
         "_last_completed_source_ns", "_request_sources",
         "_running", "_pending", "_deadline_missed_count", "_last_timing",
-        "_accepted_count",
+        "_accepted_count", "_process_config",
     )
 
-    def __init__(self, config: NavigationConfig, *, worker_cpu=None, strict_affinity=True, ready_timeout_s=5.0):
+    def __init__(self, config: NavigationConfig, *, worker_cpu=None, strict_affinity=True, ready_timeout_s, process_config: PlannerProcessConfig):
         if not isinstance(config, NavigationConfig):
             raise TypeError("config must be NavigationConfig")
+        if not isinstance(process_config, PlannerProcessConfig):
+            raise TypeError("process_config must be PlannerProcessConfig")
+        self._process_config = process_config
         context = mp.get_context("spawn")
         self._generation = 1
         self._request_queue = context.Queue(maxsize=1)
-        self._result_queue = context.Queue(maxsize=_RESULT_BUFFER_CAPACITY)
+        self._result_queue = context.Queue(maxsize=self._process_config.result_buffer_capacity)
         self._process = context.Process(
             target=_worker_main,
             args=(self._generation, config, self._request_queue, self._result_queue, worker_cpu, strict_affinity),
@@ -186,7 +188,7 @@ class ProcessTrajectoryRolloutBackend:
             self._collector_ready.set()
             while not self._collector_stop.is_set():
                 try:
-                    message = self._result_queue.get(timeout=_RESULT_COLLECTOR_POLL_S)
+                    message = self._result_queue.get(timeout=self._process_config.collector_poll_s)
                 except queue.Empty:
                     if self._collector_stop.is_set():
                         return
@@ -234,7 +236,7 @@ class ProcessTrajectoryRolloutBackend:
                             self._abandoned.discard(message.request_id)
                             self._request_sources.pop(message.request_id, None)
                             self._late_rejected_count += 1
-                        elif len(self._buffer) >= _RESULT_BUFFER_CAPACITY:
+                        elif len(self._buffer) >= self._process_config.result_buffer_capacity:
                             self._collector_error = "ASYNC_L6_RESULT_BUFFER_FULL"
                             self._error_count += 1
                             return
@@ -408,18 +410,18 @@ class ProcessTrajectoryRolloutBackend:
         try:
             if self._process.is_alive():
                 try:
-                    self._request_queue.put(("stop",), timeout=0.2)
+                    self._request_queue.put(("stop",), timeout=self._process_config.stop_enqueue_timeout_s)
                 except (queue.Full, OSError, ValueError):
                     pass
-                self._process.join(timeout=1.0)
+                self._process.join(timeout=self._process_config.stop_timeout_s)
                 if self._process.is_alive():
                     self._process.terminate()
-                    self._process.join(timeout=1.0)
+                    self._process.join(timeout=self._process_config.stop_timeout_s)
         finally:
             self._collector_stop.set()
             collector = self._collector_thread
             if collector is not None and collector is not threading.current_thread():
-                collector.join(timeout=1.0)
+                collector.join(timeout=self._process_config.stop_timeout_s)
             for item in (self._request_queue, self._result_queue):
                 try:
                     item.close()

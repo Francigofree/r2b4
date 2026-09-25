@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 from v3.contracts import (
     MissionConstraints,
@@ -99,7 +100,7 @@ def _world(context: TickContext) -> WorldSnapshot:
 
 def _rollout(goal: Waypoint):
     context = TickContext(1, 1_000_000_000)
-    config = NavigationConfig(
+    config = configured(NavigationConfig, 
         rollout_horizon_ns=800_000_000,
         progress_viability_floor=0.02,
     )

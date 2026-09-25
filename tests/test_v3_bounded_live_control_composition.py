@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -147,7 +148,7 @@ def _config() -> BoundedLiveControlConfig:
             max_v_mps=0.10,
             max_omega_rad_s=0.20,
         ),
-        control=NativeControlCompositionConfig(speed_map=_speed_map()),
+        control=configured(NativeControlCompositionConfig, speed_map=_speed_map()),
         max_preflight_age_ns=150_000_000,
     )
 

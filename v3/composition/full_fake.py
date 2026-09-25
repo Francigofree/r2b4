@@ -12,8 +12,8 @@ from v3.layers.l2_admission import AdmissionConfig, InputAdmission
 from v3.layers.l3_state_estimation import ShadowStateEstimator, StateEstimatorConfig
 from v3.layers.l4_world_model import ShadowWorldModel, WorldModelConfig
 from v3.layers.l5_command_mission import MissionConfig, MissionManager
-from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
-from v3.layers.l7_motion_selection import MotionSelector
+from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator, AsyncL6PlannerConfig
+from v3.layers.l7_motion_selection import MotionSelector, MotionSelectionConfig
 from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
 from v3.layers.l9_operational_constraints import (
     OperationalConstraintLayer,
@@ -65,24 +65,18 @@ def _offline_speed_map() -> WheelSpeedMap:
 class FullFakeConfig:
     """Immutable configuration closed before the offline composition starts."""
 
-    admission: AdmissionConfig = AdmissionConfig(max_sample_age_ns=250_000_000)
-    estimation: StateEstimatorConfig = StateEstimatorConfig(
-        frame_id="R2B4_BOOT_ROBOT_MAP",
-        track_width_m=0.42,
-    )
-    world_model: WorldModelConfig = WorldModelConfig()
-    mission: MissionConfig = MissionConfig()
-    navigation: NavigationConfig = NavigationConfig()
-    motion_realization: MotionRealizationConfig = MotionRealizationConfig()
-    operational_constraints: OperationalConstraintsConfig = OperationalConstraintsConfig()
-    chassis_control: ChassisControlConfig = ChassisControlConfig(track_width_m=0.42)
-    speed_map: WheelSpeedMap = field(default_factory=_offline_speed_map)
-    wheel_pi: WheelPiConfig = WheelPiConfig(
-        kp=0.25,
-        ki=0.10,
-        integrator_limit=0.5,
-        max_normalized_output=1.0,
-    )
+    admission: AdmissionConfig
+    estimation: StateEstimatorConfig
+    world_model: WorldModelConfig
+    mission: MissionConfig
+    navigation: NavigationConfig
+    async_l6: AsyncL6PlannerConfig
+    motion_selection: MotionSelectionConfig
+    motion_realization: MotionRealizationConfig
+    operational_constraints: OperationalConstraintsConfig
+    chassis_control: ChassisControlConfig
+    speed_map: WheelSpeedMap
+    wheel_pi: WheelPiConfig
 
     def __post_init__(self) -> None:
         if self.estimation.track_width_m != self.chassis_control.track_width_m:
@@ -163,7 +157,7 @@ class FullFakeComposition:
 
     def __init__(
         self,
-        config: FullFakeConfig = FullFakeConfig(),
+        config: FullFakeConfig,
         *,
         faults: tuple[LayerFault, ...] = (),
     ) -> None:
@@ -179,8 +173,8 @@ class FullFakeComposition:
         estimation = ShadowStateEstimator(config.estimation)
         world_model = ShadowWorldModel(config.world_model)
         mission = MissionManager(config.mission)
-        navigation = TrajectoryNavigator(config.navigation)
-        selection = MotionSelector()
+        navigation = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
+        selection = MotionSelector(config.motion_selection)
         realization = MotionRealizer(config.motion_realization)
         constraints = OperationalConstraintLayer(config.operational_constraints)
         chassis = DifferentialDriveKinematics(config.chassis_control)

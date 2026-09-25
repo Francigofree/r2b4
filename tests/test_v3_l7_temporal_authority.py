@@ -1,4 +1,5 @@
 """Temporal authority, prediction and transitions through the canonical layers."""
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -40,7 +41,7 @@ def _pending(plan, tick, ns=None):
 
 @pytest.mark.parametrize("kind", ["trajectory", "route", "velocity"])
 def test_pending_retains_each_objective_without_renewing_lineage_or_expiry(kind):
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     plan = _guidance(kind=kind)
     original = selector.evaluate(plan)
     for tick in range(2, 11):
@@ -59,7 +60,7 @@ def test_pending_retains_each_objective_without_renewing_lineage_or_expiry(kind)
 
 @pytest.mark.parametrize("change", ["mission", "frame", "scope", "gap", "backwards", "invalid", "idle", "complete", "collision"])
 def test_invalidation_never_revives_old_authority(change):
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     plan = _guidance()
     selector.evaluate(plan)
     next_plan = _pending(plan, 2)
@@ -83,7 +84,7 @@ def test_invalidation_never_revives_old_authority(change):
 
 
 def test_pending_tightens_limits_and_checkpoint_preserves_original_validity():
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     plan = _guidance()
     original = selector.evaluate(plan)
     pending = _pending(plan, 2)
@@ -91,7 +92,7 @@ def test_pending_tightens_limits_and_checkpoint_preserves_original_validity():
     held = selector.evaluate(pending)
     assert held.constraints.max_v_mps == 0.1
     assert held.validity == original.validity
-    restored = MotionSelector()
+    restored = configured(MotionSelector, )
     restored.restore(selector.checkpoint())
     for tick in (3, 4, 5):
         request = _pending(plan, tick)
@@ -102,19 +103,19 @@ def test_pending_tightens_limits_and_checkpoint_preserves_original_validity():
 
 def test_l8_rechecks_monotonic_expiry_and_frame_even_with_fresh_tick_token():
     plan = _guidance(until=1_020_000_000)
-    objective = MotionSelector().evaluate(plan)
+    objective = configured(MotionSelector, ).evaluate(plan)
     now = TickContext(2, 1_020_000_001)
     expired = replace(objective, context=now, expiry_tick=100)
-    motion = MotionRealizer().evaluate(expired, _estimate(now), _world(now))
+    motion = configured(MotionRealizer, ).evaluate(expired, _estimate(now), _world(now))
     assert motion.stop_reason == "OBJECTIVE_EXPIRED"
     assert motion.requested_v_mps == motion.requested_omega_rad_s == 0
     wrong_frame = replace(objective, validity=replace(objective.validity, frame_id="other"))
-    assert MotionRealizer().evaluate(wrong_frame, _estimate(plan.context), _world(plan.context)).stop_reason == "FRAME_MISMATCH"
+    assert configured(MotionRealizer, ).evaluate(wrong_frame, _estimate(plan.context), _world(plan.context)).stop_reason == "FRAME_MISMATCH"
 
 
 def test_follow_pivot_to_planner_pending_retains_l7_objective_until_replacement():
-    navigator = TrajectoryNavigator(completion_inputs=True)
-    selector = MotionSelector()
+    navigator = configured(TrajectoryNavigator, completion_inputs=True)
+    selector = configured(MotionSelector, )
     ctx = TickContext(1, 1_000_000_000)
     person = _person("person-1", 2.0, 1.5)
     first = navigator.evaluate(_mission(ctx), _estimate(ctx), _world(ctx, person))
@@ -127,8 +128,8 @@ def test_follow_pivot_to_planner_pending_retains_l7_objective_until_replacement(
     assert held.target_waypoint == pivot.target_waypoint
     assert held.validity == pivot.validity
     request = navigator.pending_rollout_request
-    computer = TrajectoryRolloutComputer(NavigationConfig())
-    restored_nav, restored_selector = TrajectoryNavigator(completion_inputs=True), MotionSelector()
+    computer = TrajectoryRolloutComputer(configured(NavigationConfig, ))
+    restored_nav, restored_selector = configured(TrajectoryNavigator, completion_inputs=True), configured(MotionSelector, )
     restored_nav.restore(navigator.checkpoint())
     restored_selector.restore(selector.checkpoint())
     ctx = TickContext(3, 1_040_000_000)
@@ -147,7 +148,7 @@ def test_observation_dropout_uses_prediction_then_degraded_hold_without_losing_i
                                max_speed_mps=6.0)
     store.upsert_external(_person("person-1", 2.0, 0.0), 1_000_000_000,
                           observed_ns=1_020_000_000)
-    navigator, selector = TrajectoryNavigator(), MotionSelector()
+    navigator, selector = configured(TrajectoryNavigator, ), configured(MotionSelector, )
     for tick, now, expected in ((1, 1_020_000_000, "OBSERVED"),
                                 (2, 1_120_000_000, "PREDICTED"),
                                 (3, 1_350_000_001, "DEGRADED")):
@@ -180,7 +181,7 @@ def test_observation_dropout_uses_prediction_then_degraded_hold_without_losing_i
 
 @pytest.mark.parametrize("target", [0.0, -0.5, 0.2])
 def test_normal_angular_target_changes_have_bounded_deceleration_and_reversal(target):
-    layer = OperationalConstraintLayer()
+    layer = configured(OperationalConstraintLayer, )
     constraints = MissionConstraints(0.4, 1.2, 0.3, 0.1, 0.1)
     first_context = TickContext(1, 1_000_000_000)
     layer.evaluate(MotionIntent(first_context, 0.0, 0.5, 100_000_000, constraints), _estimate(first_context))
@@ -199,7 +200,7 @@ def test_normal_angular_target_changes_have_bounded_deceleration_and_reversal(ta
 
 
 def test_arrival_and_guidance_kind_changes_preserve_l9_transition_state():
-    selector, realizer, limits = MotionSelector(), MotionRealizer(), OperationalConstraintLayer()
+    selector, realizer, limits = configured(MotionSelector, ), configured(MotionRealizer, ), configured(OperationalConstraintLayer, )
     previous = 0.0
     for tick in range(1, 20):
         kind = "route" if tick < 12 else "velocity" if tick < 16 else "trajectory"
@@ -217,7 +218,7 @@ def test_arrival_and_guidance_kind_changes_preserve_l9_transition_state():
 
 
 def test_newly_colliding_previous_command_cannot_authorize_braking_continuity():
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     first = _guidance()
     selector.evaluate(first)
     replacement = replace(_guidance(2), trajectory_candidates=(
@@ -230,7 +231,7 @@ def test_newly_colliding_previous_command_cannot_authorize_braking_continuity():
 
 
 def test_reduced_mission_envelope_and_revoked_transition_take_effect_immediately():
-    limits = OperationalConstraintLayer()
+    limits = configured(OperationalConstraintLayer, )
     constraints = _guidance().constraints
     for tick in range(1, 20):
         context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)

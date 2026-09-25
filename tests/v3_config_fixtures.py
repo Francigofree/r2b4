@@ -1,0 +1,54 @@
+"""Explicit offline fixtures for tests that previously used Python tuning defaults.
+
+This file is never imported by production. Integration tests use ConfigResolver
+and the checked-in robot config; these historical unit fixtures keep isolated
+algorithm tests independent of robot tuning.
+"""
+from __future__ import annotations
+
+from dataclasses import is_dataclass, replace
+from functools import lru_cache
+import inspect
+import json
+from pathlib import Path
+from typing import get_type_hints
+
+_DEFAULTS = json.loads((Path(__file__).parent / "fixtures/v3_unit_config.json").read_text())
+
+
+def _complete(value):
+    if isinstance(value, dict):
+        return {k:_complete(v) for k,v in {**_DEFAULTS.get(value.get("__type__"), {}), **value}.items()}
+    if isinstance(value, list):
+        return [_complete(v) for v in value]
+    return value
+
+
+@lru_cache(maxsize=1)
+def robot_config():
+    from v3.config import ConfigResolver
+    return ConfigResolver.for_project(Path(__file__).resolve().parents[1]).resolve()
+
+
+def navigation_from_control(control):
+    from v3.config import ConfigResolver
+    root=Path(__file__).resolve().parents[1]/"conf"
+    return ConfigResolver.from_documents(*(json.loads((root/name).read_text()) for name in ("hardver.json", "fizika.json", "speed_map.json")), control).navigation
+
+
+def configured(cls, *args, **kwargs):
+    from v3.replay import _decode_production_value
+    name=cls.__name__
+    signature=inspect.signature(cls)
+    bound=signature.bind_partial(*args, **{k:v for k,v in kwargs.items() if k in signature.parameters})
+    hints=get_type_hints(cls if is_dataclass(cls) else cls.__init__)
+    values={k:_decode_production_value(_complete(v), hints[k], f"unit_fixture.{name}.{k}")
+            for k,v in _DEFAULTS.get(name,{}).items() if k not in bound.arguments}
+    if name == "TrajectoryNavigator":
+        policy=values.get("async_config",kwargs.get("async_config"))
+        aliases={"rollout_release_tick_gap":"release_tick_gap","rollout_release_delay_ns":"release_delay_ns",
+                 "max_plan_age_ns":"max_plan_age_ns","completion_inputs":"completion_inputs","request_timeout_ns":"request_timeout_ns"}
+        changes={target:kwargs.pop(source) for source,target in aliases.items() if source in kwargs}
+        if changes: values["async_config"]=replace(policy,**changes)
+    values.update(kwargs)
+    return cls(*args,**values)

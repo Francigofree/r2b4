@@ -1,6 +1,7 @@
 """Regression tests for the 2026-09-15 encoder robustness incident."""
 
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import pytest
 
@@ -263,7 +264,7 @@ def _feedback_frame(
 
 
 def _pi_config():
-    return WheelPiConfig(
+    return configured(WheelPiConfig, 
         kp=0.25,
         ki=0.08,
         integrator_limit=0.18,

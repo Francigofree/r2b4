@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import math
 
 import pytest
@@ -61,7 +62,7 @@ def test_gateway_is_stop_outside_and_teleop_only_inside_absolute_tick_window():
 
 def test_active_command_is_accepted_by_existing_l5_then_stop_cancels_it():
     gateway = BoundedTeleopCommandGateway(_profile())
-    mission = MissionManager()
+    mission = configured(MissionManager, )
 
     active = mission.evaluate(gateway.snapshot(_context(3)))
     stopped = mission.evaluate(gateway.snapshot(_context(5)))
@@ -130,7 +131,7 @@ def test_bounded_explore_is_a_high_level_consumer_of_the_same_l5_gateway():
 
     before = gateway.snapshot(_context(2))
     command = gateway.snapshot(_context(3))
-    mission = MissionManager().evaluate(command)
+    mission = configured(MissionManager, ).evaluate(command)
     after = gateway.snapshot(_context(5))
 
     assert before.mode is CommandMode.STOP

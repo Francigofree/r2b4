@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import math
 
 import pytest
@@ -92,7 +93,7 @@ def _batch(
 
 def _estimator() -> NativeStateEstimator:
     return NativeStateEstimator(
-        NativeStateEstimatorConfig(
+        configured(NativeStateEstimatorConfig, 
             frame_id=FRAME_ID,
             track_width_m=TRACK_WIDTH_M,
         )
@@ -101,7 +102,7 @@ def _estimator() -> NativeStateEstimator:
 
 def _admission() -> InputAdmission:
     return InputAdmission(
-        AdmissionConfig(
+        configured(AdmissionConfig, 
             max_sample_age_ns=250_000_000,
             max_future_skew_ns=10_000_000,
         )
@@ -188,7 +189,7 @@ def test_native_l3_bootstrap_still_fails_closed_without_fresh_imu():
             (DeviceHealth("WHEEL_ENCODERS", DeviceHealthState.OK),),
         )
     )
-    admitted = InputAdmission(AdmissionConfig(250_000_000))(frame)
+    admitted = InputAdmission(configured(AdmissionConfig, 250_000_000))(frame)
 
     with pytest.raises(ValueError, match="bootstrap requires admitted wheel_velocity and ekf_heading"):
         estimator(admitted)

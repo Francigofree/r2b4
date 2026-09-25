@@ -6,7 +6,6 @@ mission, safety, sensor or motor authority and it is not replay state.
 
 from __future__ import annotations
 
-import json
 import math
 import os
 import threading
@@ -81,36 +80,10 @@ def _mapping(value: object, name: str) -> Mapping[str, object]:
 
 
 def load_runtime_affinity_config(path_value: str | Path) -> RuntimeAffinityConfig:
-    """Load the optional operational scheduling policy from control JSON."""
-
+    """Compatibility entrypoint; policy is resolved with all robot files."""
+    from v3.config import ConfigResolver
     path = Path(path_value)
-    if path.is_symlink() or not path.is_file():
-        raise ValueError("runtime affinity config source must be a regular file")
-    try:
-        root = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError("runtime affinity config source must contain valid JSON") from exc
-    root = _mapping(root, "control config")
-    raw = root.get("runtime_affinity")
-    if raw is None:
-        return RuntimeAffinityConfig(enabled=False)
-    value = _mapping(raw, "control config runtime_affinity")
-    allowed = {"enabled", "strict", "runtime_cpu", "lidar_cpu", "vision_cpu", "io_cpu"}
-    unknown = sorted(set(value) - allowed)
-    if unknown:
-        raise ValueError("unknown runtime_affinity keys: " + ", ".join(unknown))
-    enabled = value.get("enabled", False)
-    strict = value.get("strict", True)
-    if type(enabled) is not bool or type(strict) is not bool:
-        raise ValueError("runtime_affinity enabled/strict must be bool")
-    return RuntimeAffinityConfig(
-        enabled=enabled,
-        strict=strict,
-        runtime_cpu=int(value.get("runtime_cpu", 3)),
-        lidar_cpu=int(value.get("lidar_cpu", 2)),
-        vision_cpu=int(value.get("vision_cpu", 1)),
-        io_cpu=int(value.get("io_cpu", 0)),
-    )
+    return ConfigResolver(path.with_name("hardver.json"), path.with_name("fizika.json"), path.with_name("speed_map.json"), path).resolve().affinity
 
 
 def _set_linux_task_name(role: str) -> None:

@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 from v3.contracts import TickContext
+from v3.config_types import EncoderProcessConfig
 from v3.async_capability import TransportSemantics
 from v3.runtime_performance import apply_current_affinity
 
@@ -20,10 +21,6 @@ from .gpio_counter import GpioCounterPairConfig, NativeGpioSignedCounterPair
 from .live_encoder import EncoderVelocityReading, NativeEncoderConfig, NativeEncoderSource
 
 _START_METHOD = "spawn"
-_QUEUE_CAPACITY = 2
-_SAMPLE_PERIOD_NS = 20_000_000
-_READY_TIMEOUT_S = 5.0
-_STOP_TIMEOUT_S = 2.0
 
 
 def _put_latest(target: Any, payload: object) -> None:
@@ -50,6 +47,7 @@ def _encoder_process_main(
     stop_event: Any,
     worker_cpu: int | None,
     strict_affinity: bool,
+    process_config: EncoderProcessConfig,
 ) -> None:
     counter_pair: NativeGpioSignedCounterPair | None = None
     try:
@@ -82,11 +80,11 @@ def _encoder_process_main(
             if sequence == 0:
                 ready_event.set()
             sequence += 1
-            next_deadline_ns += _SAMPLE_PERIOD_NS
+            next_deadline_ns += process_config.sample_period_ns
             completed_ns = time.monotonic_ns()
             if next_deadline_ns <= completed_ns:
-                missed = (completed_ns - next_deadline_ns) // _SAMPLE_PERIOD_NS + 1
-                next_deadline_ns += missed * _SAMPLE_PERIOD_NS
+                missed = (completed_ns - next_deadline_ns) // process_config.sample_period_ns + 1
+                next_deadline_ns += missed * process_config.sample_period_ns
     except BaseException as exc:
         _put_latest(result_queue, ("error", type(exc).__name__, str(exc)))
         ready_event.set()
@@ -104,6 +102,7 @@ class ProcessEncoderBackend:
     transport_semantics = TransportSemantics.LATEST_STATE
 
     __slots__ = (
+        "_process_config",
         "_closed",
         "_fatal_error",
         "_latest",
@@ -120,7 +119,7 @@ class ProcessEncoderBackend:
         *,
         worker_cpu: int | None = None,
         strict_affinity: bool = False,
-        ready_timeout_s: float = _READY_TIMEOUT_S,
+        process_config: EncoderProcessConfig,
     ) -> None:
         if not isinstance(counter_config, GpioCounterPairConfig):
             raise TypeError("counter_config must be GpioCounterPairConfig")
@@ -132,11 +131,15 @@ class ProcessEncoderBackend:
             raise ValueError("worker_cpu must be non-negative or None")
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
+        if not isinstance(process_config, EncoderProcessConfig):
+            raise TypeError("process_config must be EncoderProcessConfig")
+        self._process_config = process_config
+        ready_timeout_s = process_config.ready_timeout_s
         if not isinstance(ready_timeout_s, (int, float)) or ready_timeout_s <= 0:
             raise ValueError("ready_timeout_s must be positive")
 
         context = mp.get_context(_START_METHOD)
-        self._queue = context.Queue(maxsize=_QUEUE_CAPACITY)
+        self._queue = context.Queue(maxsize=process_config.queue_capacity)
         self._ready_event = context.Event()
         self._stop_event = context.Event()
         self._process = context.Process(
@@ -149,6 +152,7 @@ class ProcessEncoderBackend:
                 self._stop_event,
                 worker_cpu,
                 strict_affinity,
+                process_config,
             ),
             name="v3-encoder-owner-process",
             daemon=False,
@@ -196,7 +200,7 @@ class ProcessEncoderBackend:
             self._fatal_error = "ENCODER_TRANSPORT_INVALID"
 
     def _drain(self) -> None:
-        for _ in range(_QUEUE_CAPACITY):
+        for _ in range(process_config.queue_capacity):
             try:
                 message = self._queue.get_nowait()
             except queue.Empty:
@@ -222,10 +226,10 @@ class ProcessEncoderBackend:
             return
         self._closed = True
         self._stop_event.set()
-        self._process.join(timeout=_STOP_TIMEOUT_S)
+        self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             self._process.terminate()
-            self._process.join(timeout=_STOP_TIMEOUT_S)
+            self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             raise RuntimeError("process-isolated encoder did not stop")
         try:
@@ -247,12 +251,14 @@ class ProcessEncoderSource(NativeEncoderSource):
         *,
         worker_cpu: int | None = None,
         strict_affinity: bool = False,
+        process_config: EncoderProcessConfig,
     ) -> None:
         backend = ProcessEncoderBackend(
             counter_config,
             backend_config,
             worker_cpu=worker_cpu,
             strict_affinity=strict_affinity,
+            process_config=process_config,
         )
         try:
             super().__init__(backend, source_config)

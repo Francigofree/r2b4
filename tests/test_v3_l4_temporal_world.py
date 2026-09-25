@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import math
 
 import pytest
@@ -113,7 +114,7 @@ def _frame(
 
 
 def test_person_image_identity_uses_measurement_time_camera_orientation():
-    model = ShadowWorldModel()
+    model = configured(ShadowWorldModel, )
     first = TickContext(0, 1_000_000_000)
     model(_frame(first, sequence=0, lidar_points=((2.0, 0.0, 10),)),
           _estimate(first, yaw_rad=0.20))
@@ -131,7 +132,7 @@ def test_person_image_identity_uses_measurement_time_camera_orientation():
 
 
 def test_temporal_l4_projects_delayed_lidar_with_measurement_time_pose():
-    model = ShadowWorldModel()
+    model = configured(ShadowWorldModel, )
     first_context = TickContext(0, 1_000_000_000)
     model(_frame(first_context, sequence=1, lidar_points=None), _estimate(first_context, x_m=0.0))
 
@@ -151,7 +152,7 @@ def test_temporal_l4_projects_delayed_lidar_with_measurement_time_pose():
 
 
 def test_temporal_l4_uses_historical_scan_for_delayed_person_result():
-    model = ShadowWorldModel()
+    model = configured(ShadowWorldModel, )
     first_context = TickContext(0, 2_000_000_000)
     model(
         _frame(first_context, sequence=1, lidar_points=((1.0, 0.0, 10),)),
@@ -176,7 +177,7 @@ def test_temporal_l4_uses_historical_scan_for_delayed_person_result():
 
 
 def test_temporal_l4_free_space_clears_old_hit_on_same_ray():
-    model = ShadowWorldModel(WorldModelConfig(local_costmap_resolution_m=0.1))
+    model = configured(ShadowWorldModel, configured(WorldModelConfig, local_costmap_resolution_m=0.1))
     first_context = TickContext(0, 3_000_000_000)
     first = model(
         _frame(first_context, sequence=1, lidar_points=((1.0, 0.0, 10),)),
@@ -197,7 +198,7 @@ def test_temporal_l4_free_space_clears_old_hit_on_same_ray():
 
 
 def test_temporal_l4_projects_person_track_to_current_tick_and_restores_deterministically():
-    model = ShadowWorldModel()
+    model = configured(ShadowWorldModel, )
     first_context = TickContext(0, 4_000_000_000)
     model(
         _frame(
@@ -233,7 +234,7 @@ def test_temporal_l4_projects_person_track_to_current_tick_and_restores_determin
     frame = _frame(fourth_context, sequence=4, lidar_points=((1.25, 0.0, 10),))
     expected = model(frame, _estimate(fourth_context))
 
-    restored = ShadowWorldModel()
+    restored = configured(ShadowWorldModel, )
     restored.restore(checkpoint)
     actual = restored(frame, _estimate(fourth_context))
     assert actual == expected

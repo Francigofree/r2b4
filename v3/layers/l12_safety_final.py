@@ -34,8 +34,8 @@ class LidarSafetyConfig:
 
     device_id: str
     minimum_clearance_m: float
-    maximum_sample_age_ns: int = 250_000_000
-    movement_epsilon: float = 1e-6
+    maximum_sample_age_ns: int
+    movement_epsilon: float
 
     def __post_init__(self) -> None:
         if not isinstance(self.device_id, str) or not self.device_id.strip():

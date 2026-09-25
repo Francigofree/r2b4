@@ -17,8 +17,8 @@ from v3.contracts import (
     WorldSnapshot,
 )
 from v3.layers.l5_command_mission import MissionConfig, MissionManager
-from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator
-from v3.layers.l7_motion_selection import MotionSelector
+from v3.layers.l6_navigation import NavigationConfig, TrajectoryNavigator, AsyncL6PlannerConfig
+from v3.layers.l7_motion_selection import MotionSelector, MotionSelectionConfig
 from v3.layers.l8_motion_realization import MotionRealizationConfig, MotionRealizer
 from v3.layers.l9_operational_constraints import (
     OperationalConstraintLayer,
@@ -78,14 +78,16 @@ class MissionNavigationComposition:
     def __init__(
         self,
         *,
-        mission_config: MissionConfig = MissionConfig(),
-        navigation_config: NavigationConfig = NavigationConfig(),
-        motion_config: MotionRealizationConfig = MotionRealizationConfig(),
-        constraints_config: OperationalConstraintsConfig = OperationalConstraintsConfig(),
+        mission_config: MissionConfig,
+        navigation_config: NavigationConfig,
+        async_config: AsyncL6PlannerConfig,
+        selection_config: MotionSelectionConfig,
+        motion_config: MotionRealizationConfig,
+        constraints_config: OperationalConstraintsConfig,
     ) -> None:
         self._mission = MissionManager(mission_config)
-        self._navigation = TrajectoryNavigator(navigation_config)
-        self._motion_selection = MotionSelector()
+        self._navigation = TrajectoryNavigator(navigation_config, async_config=async_config)
+        self._motion_selection = MotionSelector(selection_config)
         self._motion = MotionRealizer(motion_config)
         self._constraints = OperationalConstraintLayer(constraints_config)
         self._last_context: TickContext | None = None

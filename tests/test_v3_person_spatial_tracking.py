@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import pytest
 
 from v3.contracts import AdmittedFrame, DataField, Observation, RobotEstimate, TickContext
@@ -118,7 +119,7 @@ def _frame(
 
 def test_l4_localizes_person_from_camera_bearing_and_lidar_depth():
     context = TickContext(0, 1_000_000_000)
-    world = ShadowWorldModel()(
+    world = configured(ShadowWorldModel, )(
         _frame(
             context,
             sequence=1,
@@ -139,7 +140,7 @@ def test_l4_localizes_person_from_camera_bearing_and_lidar_depth():
 
 
 def test_l4_keeps_person_identity_and_derives_velocity():
-    model = ShadowWorldModel(WorldModelConfig(person_track_max_speed_mps=6.0))
+    model = configured(ShadowWorldModel, configured(WorldModelConfig, person_track_max_speed_mps=6.0))
     first_context = TickContext(0, 1_000_000_000)
     model(
         _frame(
@@ -169,8 +170,8 @@ def test_l4_keeps_person_identity_and_derives_velocity():
 
 
 def test_l4_does_not_fuse_person_with_time_misaligned_lidar():
-    config = WorldModelConfig(person_lidar_max_skew_ns=50_000_000)
-    model = ShadowWorldModel(config)
+    config = configured(WorldModelConfig, person_lidar_max_skew_ns=50_000_000)
+    model = configured(ShadowWorldModel, config)
     context = TickContext(0, 1_000_000_000)
     world = model(
         _frame(
@@ -187,8 +188,8 @@ def test_l4_does_not_fuse_person_with_time_misaligned_lidar():
 
 
 def test_l4_person_tracking_checkpoint_restore_is_deterministic():
-    config = WorldModelConfig()
-    model = ShadowWorldModel(config)
+    config = configured(WorldModelConfig, )
+    model = configured(ShadowWorldModel, config)
     first_context = TickContext(0, 1_000_000_000)
     model(
         _frame(
@@ -210,7 +211,7 @@ def test_l4_person_tracking_checkpoint_restore_is_deterministic():
     )
     expected = model(frame, _estimate(second_context))
 
-    restored = ShadowWorldModel(config)
+    restored = configured(ShadowWorldModel, config)
     restored.restore(checkpoint)
     actual = restored(frame, _estimate(second_context))
     assert actual == expected
@@ -220,7 +221,7 @@ def test_live_world_path_preserves_measurement_through_empty_detection_and_dropo
     from dataclasses import replace
     from v3.contracts import TrackEstimateStatus
 
-    model = ShadowWorldModel()
+    model = configured(ShadowWorldModel, )
     context = TickContext(0, 1_000_000_000)
     frame = _frame(context, sequence=1, lidar_points=((2.0, 0.0, 10),),
                    person_boxes=((0.9, 0.43, 0.57),))
@@ -236,7 +237,7 @@ def test_live_world_path_preserves_measurement_through_empty_detection_and_dropo
         assert track.measurement_monotonic_ns == observed.measurement_monotonic_ns
         assert track.prediction_valid_until_ns == observed.prediction_valid_until_ns
         assert track.estimate_status is (TrackEstimateStatus.DEGRADED if tick == 3 else TrackEstimateStatus.PREDICTED)
-    restored = ShadowWorldModel()
+    restored = configured(ShadowWorldModel, )
     restored.restore(model.checkpoint())
     context = TickContext(4, 1_400_000_000)
     frame = _frame(context, sequence=5, lidar_points=((2.0, 0.0, 10),), person_boxes=((0.9, 0.43, 0.57),))

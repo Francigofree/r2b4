@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -69,7 +70,7 @@ def _speed_map() -> WheelSpeedMap:
 
 
 def _config() -> NativeControlCompositionConfig:
-    return NativeControlCompositionConfig(speed_map=_speed_map())
+    return configured(NativeControlCompositionConfig, speed_map=_speed_map())
 
 
 def _context(tick_id: int) -> TickContext:

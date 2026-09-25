@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import math
 from dataclasses import replace
 
@@ -109,8 +110,8 @@ def test_indexed_clearance_preserves_the_capped_legacy_result():
         ObstacleTrack("ignored-low-confidence", 0.0, 0.0, 1.0, 0.0, 0.0, 0.49),
     )
     world = _world(cells, tracks)
-    config = NavigationConfig()
-    navigator = TrajectoryNavigator(config)
+    config = configured(NavigationConfig, )
+    navigator = configured(TrajectoryNavigator, config)
     scene = navigator._build_planning_scene(world)
 
     poses = (
@@ -140,7 +141,7 @@ def test_indexed_clearance_preserves_the_capped_legacy_result():
 def test_static_index_is_reused_but_dynamic_tracks_are_refreshed():
     cells = tuple(CostmapCell(index - 10, index % 7 - 3, 1) for index in range(20))
     first_world = _world(cells)
-    navigator = TrajectoryNavigator()
+    navigator = configured(TrajectoryNavigator, )
 
     first_scene = navigator._build_planning_scene(first_world)
     second_world = replace(
@@ -171,7 +172,7 @@ def test_static_index_is_reused_but_dynamic_tracks_are_refreshed():
 
 def test_restore_discards_only_the_derived_static_index():
     world = _world((CostmapCell(4, 0, 1),))
-    navigator = TrajectoryNavigator()
+    navigator = configured(TrajectoryNavigator, )
     before = navigator._build_planning_scene(world)
     checkpoint = navigator.checkpoint()
 
@@ -191,7 +192,7 @@ def test_bucket_query_reduces_the_static_candidate_set():
         for grid_y in range(-15, 15)
     )
     world = _world(cells)
-    navigator = TrajectoryNavigator()
+    navigator = configured(TrajectoryNavigator, )
     scene = navigator._build_planning_scene(world)
     static_index = scene.static_index
     assert static_index is not None

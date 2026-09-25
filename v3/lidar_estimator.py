@@ -213,13 +213,17 @@ def _subsample_points(points: np.ndarray, max_points: int) -> np.ndarray:
     return np.asarray(points[idx], dtype=float)
 
 
+from v3.lidar_config import LidarMatcherConfig
+
+
 class LidarEstimator:
     def __init__(
         self,
-        danger_zone=0.3,
+        danger_zone,
+        *,
         pose_provider: Optional[Callable[[], object]] = None,
         motion_reference_provider: Optional[Callable[[], object]] = None,
-        scan_match_cfg: Optional[dict] = None,
+        scan_match_cfg: LidarMatcherConfig,
     ):
         """
         danger_zone: obstacle safety distance in meters (default 30 cm).
@@ -237,194 +241,10 @@ class LidarEstimator:
         # Matcher seed pose can be refreshed independently from accepted chain.
         self._matcher_seed_pose: Optional[Tuple[float, float, float]] = None
 
-        cfg = dict(scan_match_cfg or {})
-        self._scan_match_cfg = {
-            # Scan-to-map search parameters.
-            "enabled": bool(cfg.get("enabled", True)),
-            "dx_range": tuple(cfg.get("dx_range", (-0.30, 0.30))),
-            "dy_range": tuple(cfg.get("dy_range", (-0.30, 0.30))),
-            "dtheta_range": tuple(cfg.get("dtheta_range", (-1.0, 1.0))),
-            "dx_step": float(cfg.get("dx_step", 0.02)),
-            "dy_step": float(cfg.get("dy_step", 0.02)),
-            "dtheta_step": float(cfg.get("dtheta_step", 0.05)),
-            "max_points": int(cfg.get("max_points", 64)),
-            "adaptive_max_points_enabled": bool(cfg.get("adaptive_max_points_enabled", True)),
-            "adaptive_max_points_min": max(12, int(cfg.get("adaptive_max_points_min", 24))),
-            "matcher_budget_ms": max(5.0, float(cfg.get("matcher_budget_ms", 45.0))),
-            "slow_path_budget_ms": max(10.0, float(cfg.get("slow_path_budget_ms", 120.0))),
-            "confidence_min": float(cfg.get("confidence_min", 0.25)),
-            "min_filtered_points": max(3, int(cfg.get("min_filtered_points", 10))),
-            "min_valid_distance_m": max(0.01, float(cfg.get("min_valid_distance_m", 0.05))),
-            "max_valid_distance_m": float(cfg.get("max_valid_distance_m", 12.0)),
-
-            # New scan-to-map + local-map pipeline.
-            "scan_to_map_enabled": bool(cfg.get("scan_to_map_enabled", True)),
-            "local_map_enabled": bool(cfg.get("local_map_enabled", True)),
-            "local_map_radius_m": max(0.30, float(cfg.get("local_map_radius_m", 2.5))),
-            "local_map_max_keyframes": max(4, int(cfg.get("local_map_max_keyframes", 40))),
-            "local_map_min_points": max(12, int(cfg.get("local_map_min_points", 36))),
-            "local_map_points_per_keyframe": max(16, int(cfg.get("local_map_points_per_keyframe", 96))),
-            "keyframe_translation_m": max(0.01, float(cfg.get("keyframe_translation_m", 0.12))),
-            "keyframe_rotation_rad": max(0.01, float(cfg.get("keyframe_rotation_rad", 0.12))),
-            "tracking_reacquire_consecutive_scans": max(
-                1,
-                int(cfg.get("tracking_reacquire_consecutive_scans", 3)),
-            ),
-            "tracking_reacquire_max_delta_m": max(
-                0.01,
-                float(cfg.get("tracking_reacquire_max_delta_m", 0.25)),
-            ),
-            "tracking_reacquire_max_delta_rad": max(
-                0.01,
-                float(cfg.get("tracking_reacquire_max_delta_rad", 0.35)),
-            ),
-            "tracking_direction_min_wheel_speed_mps": max(
-                0.0,
-                float(cfg.get("tracking_direction_min_wheel_speed_mps", 0.03)),
-            ),
-            "tracking_direction_backtrack_tolerance_m": max(
-                0.0,
-                float(
-                    cfg.get(
-                        "tracking_direction_backtrack_tolerance_m",
-                        cfg.get("dx_step", 0.02),
-                    )
-                ),
-            ),
-            "matcher_seed_low_confidence_to_pose_ref": bool(
-                cfg.get("matcher_seed_low_confidence_to_pose_ref", True)
-            ),
-            "matcher_seed_translation_prior_weight": max(
-                0.0,
-                float(cfg.get("matcher_seed_translation_prior_weight", 1.0)),
-            ),
-            "matcher_seed_rotation_prior_weight": max(
-                0.0,
-                float(cfg.get("matcher_seed_rotation_prior_weight", 0.05)),
-            ),
-            "robust_inlier_distance_m": max(
-                0.03,
-                float(cfg.get("robust_inlier_distance_m", 0.18)),
-            ),
-            "robust_trim_fraction": min(
-                1.0,
-                max(0.50, float(cfg.get("robust_trim_fraction", 0.80))),
-            ),
-            "confidence_residual_scale_m": max(
-                0.01,
-                float(cfg.get("confidence_residual_scale_m", 0.15)),
-            ),
-            "confidence_sector_count": max(
-                4,
-                int(cfg.get("confidence_sector_count", 12)),
-            ),
-            "confidence_target_sector_coverage": min(
-                1.0,
-                max(0.10, float(cfg.get("confidence_target_sector_coverage", 0.50))),
-            ),
-            "ambiguity_translation_m": max(
-                0.01,
-                float(cfg.get("ambiguity_translation_m", 0.08)),
-            ),
-            "ambiguity_rotation_rad": max(
-                0.01,
-                float(cfg.get("ambiguity_rotation_rad", 0.12)),
-            ),
-            "ambiguity_margin_scale": max(
-                0.01,
-                float(cfg.get("ambiguity_margin_scale", 0.20)),
-            ),
-            "ambiguity_residual_margin_scale_m": max(
-                0.005,
-                float(cfg.get("ambiguity_residual_margin_scale_m", 0.04)),
-            ),
-            "ambiguity_basin_top_k": max(
-                1,
-                min(8, int(cfg.get("ambiguity_basin_top_k", 3))),
-            ),
-            "ambiguity_basin_refine_iters": max(
-                1,
-                min(6, int(cfg.get("ambiguity_basin_refine_iters", 2))),
-            ),
-            "ambiguity_basin_barrier_scale": max(
-                1e-6,
-                float(
-                    cfg.get(
-                        "ambiguity_basin_barrier_scale",
-                        cfg.get("observability_cost_scale", 0.0004),
-                    )
-                ),
-            ),
-            "observability_translation_step_m": max(
-                0.005,
-                float(cfg.get("observability_translation_step_m", cfg.get("dx_step", 0.02))),
-            ),
-            "observability_rotation_step_rad": max(
-                0.005,
-                float(cfg.get("observability_rotation_step_rad", cfg.get("dtheta_step", 0.05))),
-            ),
-            "observability_cost_scale": max(
-                1e-6,
-                float(cfg.get("observability_cost_scale", 0.0004)),
-            ),
-
-            # Relocalization.
-            "relocalization_enabled": bool(cfg.get("relocalization_enabled", True)),
-            "relocalization_confidence_min": float(cfg.get("relocalization_confidence_min", 0.28)),
-            "relocalization_cooldown_s": max(0.0, float(cfg.get("relocalization_cooldown_s", 1.0))),
-            "relocalization_dx_range": tuple(cfg.get("relocalization_dx_range", (-0.90, 0.90))),
-            "relocalization_dy_range": tuple(cfg.get("relocalization_dy_range", (-0.90, 0.90))),
-            "relocalization_dtheta_range": tuple(cfg.get("relocalization_dtheta_range", (-0.80, 0.80))),
-            "relocalization_dx_step": float(cfg.get("relocalization_dx_step", 0.08)),
-            "relocalization_dy_step": float(cfg.get("relocalization_dy_step", 0.08)),
-            "relocalization_dtheta_step": float(cfg.get("relocalization_dtheta_step", 0.08)),
-            "relocalization_seed_keyframes": max(1, int(cfg.get("relocalization_seed_keyframes", 8))),
-            "relocalization_direct_apply_max_delta_m": max(
-                0.02,
-                float(cfg.get("relocalization_direct_apply_max_delta_m", 0.20)),
-            ),
-            "relocalization_direct_apply_max_delta_rad": max(
-                0.02,
-                float(cfg.get("relocalization_direct_apply_max_delta_rad", 0.30)),
-            ),
-            "relocalization_step_limit_m": max(
-                0.01,
-                float(cfg.get("relocalization_step_limit_m", 0.10)),
-            ),
-            "relocalization_step_limit_rad": max(
-                0.01,
-                float(cfg.get("relocalization_step_limit_rad", 0.15)),
-            ),
-
-            # Loop closure.
-            "loop_closure_enabled": bool(cfg.get("loop_closure_enabled", True)),
-            "loop_closure_radius_m": max(0.05, float(cfg.get("loop_closure_radius_m", 0.30))),
-            "loop_closure_angle_rad": max(0.05, float(cfg.get("loop_closure_angle_rad", 0.35))),
-            "loop_closure_min_keyframes": max(3, int(cfg.get("loop_closure_min_keyframes", 8))),
-            "loop_closure_cooldown_s": max(0.0, float(cfg.get("loop_closure_cooldown_s", 2.0))),
-            "loop_closure_blend": min(1.0, max(0.0, float(cfg.get("loop_closure_blend", 0.30)))),
-            "loop_closure_max_correction_m": max(0.02, float(cfg.get("loop_closure_max_correction_m", 0.25))),
-            "loop_closure_max_correction_rad": max(0.02, float(cfg.get("loop_closure_max_correction_rad", 0.45))),
-            "loop_closure_direct_apply_max_delta_m": max(
-                0.02,
-                float(cfg.get("loop_closure_direct_apply_max_delta_m", 0.14)),
-            ),
-            "loop_closure_direct_apply_max_delta_rad": max(
-                0.02,
-                float(cfg.get("loop_closure_direct_apply_max_delta_rad", 0.20)),
-            ),
-            "loop_closure_step_limit_m": max(
-                0.01,
-                float(cfg.get("loop_closure_step_limit_m", 0.07)),
-            ),
-            "loop_closure_step_limit_rad": max(
-                0.01,
-                float(cfg.get("loop_closure_step_limit_rad", 0.10)),
-            ),
-        }
-
-        if self._scan_match_cfg["max_valid_distance_m"] <= 0.0:
-            self._scan_match_cfg["max_valid_distance_m"] = float("inf")
+        if not isinstance(scan_match_cfg, LidarMatcherConfig):
+            raise TypeError("scan_match_cfg must be resolved LidarMatcherConfig")
+        self._config = scan_match_cfg
+        self._scan_match_cfg = scan_match_cfg.as_mapping()
 
         # Local-map runtime state.
         self._keyframes: List[Dict[str, Any]] = []
@@ -805,7 +625,7 @@ class LidarEstimator:
         )
 
     def _append_keyframe(self, scan_data, pose: Tuple[float, float, float], now_mono: float) -> bool:
-        if not self._scan_match_cfg.get("local_map_enabled", True):
+        if not self._scan_match_cfg['local_map_enabled']:
             return False
         points = self._scan_to_world_points(scan_data, pose)
         if points.shape[0] < 3:
@@ -893,15 +713,15 @@ class LidarEstimator:
             dtheta_step = float(self._scan_match_cfg["dtheta_step"])
 
         base_max_points = int(self._scan_match_cfg["max_points"])
-        if bool(self._scan_match_cfg.get("adaptive_max_points_enabled", True)):
-            adaptive_min = max(8, int(self._scan_match_cfg.get("adaptive_max_points_min", 24)))
+        if bool(self._scan_match_cfg['adaptive_max_points_enabled']):
+            adaptive_min = max(8, int(self._scan_match_cfg['adaptive_max_points_min']))
             if relocalization:
                 # Slow-path relocalization: keep robust but trim peak CPU.
-                max_points = max(adaptive_min, int(base_max_points * 0.80))
+                max_points = max(adaptive_min, int(base_max_points * self._config.adaptive_relocalization_point_factor))
             else:
                 map_point_count = int(map_points.shape[0]) if isinstance(map_points, np.ndarray) else 0
-                if map_point_count > max(256, base_max_points * 4):
-                    max_points = max(adaptive_min, int(base_max_points * 0.85))
+                if map_point_count > max(self._config.adaptive_map_point_floor, base_max_points * self._config.adaptive_map_point_multiplier):
+                    max_points = max(adaptive_min, int(base_max_points * self._config.adaptive_tracking_point_factor))
                 else:
                     max_points = base_max_points
         else:
@@ -913,6 +733,7 @@ class LidarEstimator:
         return match_scan_to_map(
             map_points,
             scan_data,
+            quality_config=self._config,
             seed_pose=seed_pose,
             dx_range=dx_range,
             dy_range=dy_range,
@@ -1079,7 +900,7 @@ class LidarEstimator:
             "timed_out": False,
             "quality": {},
         }
-        if not bool(self._scan_match_cfg.get("relocalization_enabled", True)):
+        if not bool(self._scan_match_cfg['relocalization_enabled']):
             out["reason"] = "disabled"
             return out
         cooldown_s = float(self._scan_match_cfg["relocalization_cooldown_s"])
@@ -1184,7 +1005,7 @@ class LidarEstimator:
             "pose": pose,
             "reason": "not_detected",
         }
-        if not bool(self._scan_match_cfg.get("loop_closure_enabled", True)):
+        if not bool(self._scan_match_cfg['loop_closure_enabled']):
             out["reason"] = "disabled"
             return out
         min_keyframes = int(self._scan_match_cfg["loop_closure_min_keyframes"])
@@ -1277,8 +1098,8 @@ class LidarEstimator:
         y_lidar_raw = None
         theta_lidar_raw = None
 
-        min_valid_distance_m = float(self._scan_match_cfg.get("min_valid_distance_m", 0.05))
-        max_valid_distance_m = float(self._scan_match_cfg.get("max_valid_distance_m", float("inf")))
+        min_valid_distance_m = float(self._scan_match_cfg['min_valid_distance_m'])
+        max_valid_distance_m = float(self._scan_match_cfg['max_valid_distance_m'])
         max_valid_distance_arg = None if not math.isfinite(max_valid_distance_m) else max_valid_distance_m
 
         scan_count_raw = len(scan_data) if scan_data else 0
@@ -1298,8 +1119,8 @@ class LidarEstimator:
         matcher_replay_input: Optional[Dict[str, Any]] = None
         relocalization_timed_out = False
         relocalization_seed_attempts = 0
-        fast_budget_ms = max(1.0, float(self._scan_match_cfg.get("matcher_budget_ms", 45.0)))
-        slow_budget_ms = max(1.0, float(self._scan_match_cfg.get("slow_path_budget_ms", 120.0)))
+        fast_budget_ms = max(1.0, float(self._scan_match_cfg['matcher_budget_ms']))
+        slow_budget_ms = max(1.0, float(self._scan_match_cfg['slow_path_budget_ms']))
         fast_deadline = time.monotonic() + (fast_budget_ms / 1000.0)
 
         relocalization_attempted = False
@@ -1377,7 +1198,7 @@ class LidarEstimator:
                 "x_lidar_raw": x_lidar_raw,
                 "y_lidar_raw": y_lidar_raw,
                 "theta_lidar_raw": theta_lidar_raw,
-                "local_map_enabled": bool(self._scan_match_cfg.get("local_map_enabled", True)),
+                "local_map_enabled": bool(self._scan_match_cfg['local_map_enabled']),
                 "local_map_keyframes": int(local_map_keyframes),
                 "local_map_points": int(local_map_points),
                 "local_map_generation": int(self._local_map_generation),
@@ -1429,12 +1250,12 @@ class LidarEstimator:
         elif pose_ref_current is not None:
             lidar_pose_x, lidar_pose_y, lidar_pose_theta = pose_ref_current
 
-        min_filtered_points = int(self._scan_match_cfg.get("min_filtered_points", 10))
-        match_enabled = bool(self._scan_match_cfg.get("enabled", True))
+        min_filtered_points = int(self._scan_match_cfg['min_filtered_points'])
+        match_enabled = bool(self._scan_match_cfg['enabled'])
 
         # Bootstrap map with very first valid scan near pose reference.
         if (
-            bool(self._scan_match_cfg.get("local_map_enabled", True))
+            bool(self._scan_match_cfg['local_map_enabled'])
             and scan_to_map_seed is not None
             and not self._keyframes
             and scan_count_filtered >= min_filtered_points
@@ -1443,7 +1264,7 @@ class LidarEstimator:
 
         # Keep map selection and scan-to-map search in the EKF-owned frame.
         map_center = scan_to_map_seed
-        if bool(self._scan_match_cfg.get("local_map_enabled", True)):
+        if bool(self._scan_match_cfg['local_map_enabled']):
             self._refresh_local_map(map_center)
 
         local_map_points = int(self._local_map_points.shape[0])
@@ -1455,10 +1276,10 @@ class LidarEstimator:
             matcher_reason = "MATCHER_NOT_RUN"
         else:
             scan_to_map_ready = bool(
-                self._scan_match_cfg.get("scan_to_map_enabled", True)
+                self._scan_match_cfg['scan_to_map_enabled']
                 and scan_to_map_seed is not None
                 and scan_count_filtered >= min_filtered_points
-                and local_map_points >= int(self._scan_match_cfg.get("local_map_min_points", 36))
+                and local_map_points >= int(self._scan_match_cfg['local_map_min_points'])
             )
 
             if scan_to_map_ready:
@@ -1671,7 +1492,7 @@ class LidarEstimator:
 
                     if keyframe_motion_observed and self._should_add_keyframe(accepted_pose):
                         self._append_keyframe(scan_data, accepted_pose, now_mono)
-                    if bool(self._scan_match_cfg.get("local_map_enabled", True)):
+                    if bool(self._scan_match_cfg['local_map_enabled']):
                         self._refresh_local_map(accepted_pose)
                         local_map_points = int(self._local_map_points.shape[0])
                         local_map_keyframes = int(len(self._local_map_keyframe_ids))
@@ -1687,7 +1508,7 @@ class LidarEstimator:
             self._tracking_direction_backtrack_debt_m = 0.0
             self._tracking_direction_motion_sign = 0
             self._tracking_direction_candidate_pose = None
-            if bool(self._scan_match_cfg.get("matcher_seed_low_confidence_to_pose_ref", True)) and pose_ref_current is not None:
+            if bool(self._scan_match_cfg['matcher_seed_low_confidence_to_pose_ref']) and pose_ref_current is not None:
                 self._matcher_seed_pose = (
                     float(pose_ref_current[0]),
                     float(pose_ref_current[1]),
@@ -1850,7 +1671,7 @@ class LidarEstimator:
             "x_lidar_raw": x_lidar_raw,
             "y_lidar_raw": y_lidar_raw,
             "theta_lidar_raw": theta_lidar_raw,
-            "local_map_enabled": bool(self._scan_match_cfg.get("local_map_enabled", True)),
+            "local_map_enabled": bool(self._scan_match_cfg['local_map_enabled']),
             "local_map_keyframes": int(local_map_keyframes),
             "local_map_points": int(local_map_points),
             "local_map_generation": int(self._local_map_generation),

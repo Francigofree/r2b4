@@ -24,12 +24,9 @@ from .input_shadow import InputShadowComposition
 class LiveInputCompositionConfig:
     """Immutable L2-L4 configuration closed before source polling begins."""
 
-    admission: AdmissionConfig = AdmissionConfig(max_sample_age_ns=250_000_000)
-    estimation: NativeStateEstimatorConfig = NativeStateEstimatorConfig(
-        frame_id="R2B4_BOOT_ROBOT_MAP",
-        track_width_m=0.3557,
-    )
-    world_model: WorldModelConfig = WorldModelConfig()
+    admission: AdmissionConfig
+    estimation: NativeStateEstimatorConfig
+    world_model: WorldModelConfig
 
 
 class LiveInputComposition:
@@ -47,7 +44,7 @@ class LiveInputComposition:
         encoder_source: NativeEncoderSource,
         imu_source: NativeImuSource,
         lidar_source: NativeLidarSource,
-        config: LiveInputCompositionConfig = LiveInputCompositionConfig(),
+        config: LiveInputCompositionConfig,
         *,
         auxiliary_sources: tuple[LiveDeviceSource, ...] = (),
     ) -> None:

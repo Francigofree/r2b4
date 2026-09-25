@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -67,7 +68,7 @@ def _mission(context: TickContext, mode: CommandMode):
             DataField("max_omega_rad_s", 0.60),
         )
     )
-    return MissionManager().evaluate(
+    return configured(MissionManager, ).evaluate(
         CommandRequest(
             context,
             f"generic-{mode.value.lower()}",
@@ -80,14 +81,14 @@ def _mission(context: TickContext, mode: CommandMode):
 
 @pytest.mark.parametrize("mode", (CommandMode.EXPLORE, CommandMode.NAVIGATE))
 def test_explore_and_navigate_share_the_same_generic_trajectory_contract(mode):
-    config = NavigationConfig()
+    config = configured(NavigationConfig, )
     context = TickContext(0, 1_000_000_000)
     estimate = _estimate(context)
     world = _world(context)
     mission = _mission(context, mode)
 
-    first = TrajectoryNavigator(config).evaluate(mission, estimate, world)
-    second = TrajectoryNavigator(config).evaluate(mission, estimate, world)
+    first = configured(TrajectoryNavigator, config).evaluate(mission, estimate, world)
+    second = configured(TrajectoryNavigator, config).evaluate(mission, estimate, world)
 
     assert first == second
     assert first.status is NavigationStatus.ACTIVE
@@ -106,7 +107,7 @@ def test_explore_and_navigate_share_the_same_generic_trajectory_contract(mode):
         v_mps=objective.trajectory.v_mps,
         omega_rad_s=objective.trajectory.omega_rad_s,
     )
-    realized = MotionRealizer().evaluate(objective, tracking_estimate, world)
+    realized = configured(MotionRealizer, ).evaluate(objective, tracking_estimate, world)
     assert realized.requested_v_mps == pytest.approx(
         objective.trajectory.v_mps
     )
@@ -119,7 +120,7 @@ def test_obstacle_never_reaches_motion_realization_as_a_colliding_trajectory():
     context = TickContext(0, 1_000_000_000)
     estimate = _estimate(context)
     world = _world(context, (CostmapCell(4, 0, 3),))
-    plan = TrajectoryNavigator().evaluate(
+    plan = configured(TrajectoryNavigator, ).evaluate(
         _mission(context, CommandMode.EXPLORE),
         estimate,
         world,
@@ -130,7 +131,7 @@ def test_obstacle_never_reaches_motion_realization_as_a_colliding_trajectory():
     assert objective.trajectory is not None
     assert objective.trajectory.collision is False
 
-    realized = MotionRealizer().evaluate(objective, estimate, world)
+    realized = configured(MotionRealizer, ).evaluate(objective, estimate, world)
     # L8 is a tracking controller: it may add bounded angular correction above
     # the planner's nominal omega. Mission constraints are carried forward for
     # the downstream operational-constraint layer (L9), which owns the clamp.
@@ -138,7 +139,7 @@ def test_obstacle_never_reaches_motion_realization_as_a_colliding_trajectory():
     assert abs(realized.requested_v_mps) <= plan.constraints.max_v_mps + 1e-12
     assert (
         abs(realized.requested_omega_rad_s)
-        <= MotionRealizationConfig().max_requested_omega_rad_s + 1e-12
+        <= configured(MotionRealizationConfig, ).max_requested_omega_rad_s + 1e-12
     )
 
 
@@ -146,14 +147,14 @@ def test_start_collision_fails_closed_at_motion_output():
     context = TickContext(0, 1_000_000_000)
     estimate = _estimate(context)
     world = _world(context, (CostmapCell(0, 0, 1),))
-    plan = TrajectoryNavigator().evaluate(
+    plan = configured(TrajectoryNavigator, ).evaluate(
         _mission(context, CommandMode.EXPLORE),
         estimate,
         world,
     )
 
     objective = select_motion(plan)
-    realized = MotionRealizer().evaluate(objective, estimate, world)
+    realized = configured(MotionRealizer, ).evaluate(objective, estimate, world)
 
     assert objective.kind is MotionObjectiveKind.STOP
     assert objective.selection_reason == "NO_COLLISION_FREE_TRAJECTORY"
@@ -174,7 +175,7 @@ def test_local_escape_never_drives_forward_into_a_close_front_obstacle():
     )
     estimate = _estimate(context)
     world = _world(context, tracks=(obstacle,))
-    plan = TrajectoryNavigator().evaluate(
+    plan = configured(TrajectoryNavigator, ).evaluate(
         _mission(context, CommandMode.NAVIGATE),
         estimate,
         world,
@@ -185,7 +186,7 @@ def test_local_escape_never_drives_forward_into_a_close_front_obstacle():
     assert objective.trajectory is not None
     assert objective.trajectory.collision is False
 
-    realized = MotionRealizer().evaluate(objective, estimate, world)
+    realized = configured(MotionRealizer, ).evaluate(objective, estimate, world)
     assert realized.requested_v_mps <= 1e-12
     if realized.requested_v_mps < -1e-12:
         assert abs(realized.requested_omega_rad_s) <= 1e-12
@@ -196,7 +197,7 @@ def test_local_escape_never_drives_forward_into_a_close_front_obstacle():
 def test_generic_rollout_budget_is_bounded_not_hard_coded_to_one_tuning():
     with pytest.raises(ValueError, match="30 to 60"):
         replace(
-            NavigationConfig(),
+            configured(NavigationConfig, ),
             rollout_linear_samples=3,
             rollout_angular_samples=3,
         )

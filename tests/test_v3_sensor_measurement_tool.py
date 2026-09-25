@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from types import MappingProxyType
 
 from tools.v3_sensor_measurement import _json_value, summarize_report
@@ -52,7 +53,7 @@ def test_summary_exposes_health_ranges_estimate_and_zero_commit():
         ),
         NativeLidarConfig("RPLIDAR_C1", 0.2, 100),
     )
-    result = LiveInputComposition(encoder, imu, lidar).tick(context)
+    result = configured(LiveInputComposition, encoder, imu, lidar).tick(context)
 
     summary = summarize_report(SensorMeasurementReport((result,), False))
 

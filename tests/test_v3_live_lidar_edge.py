@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -150,7 +151,7 @@ def test_invalid_lidar_timing_is_rejected_by_existing_l2_admission():
     context = TickContext(5, 1_000)
     source, _ = _source(_reading(timing_valid=False))
     batch = NativeLiveInputReader((source,)).read(context)
-    admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100))(
+    admitted = InputAdmission(configured(AdmissionConfig, max_sample_age_ns=100))(
         AcquisitionFrame(batch.context, batch.samples, batch.device_health)
     )
 
@@ -165,7 +166,7 @@ def test_native_lidar_sample_drives_existing_l4_revision_and_freshness():
     context = TickContext(5, 1_000)
     source, _ = _source(_reading())
     batch = NativeLiveInputReader((source,)).read(context)
-    admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100))(
+    admitted = InputAdmission(configured(AdmissionConfig, max_sample_age_ns=100))(
         AcquisitionFrame(batch.context, batch.samples, batch.device_health)
     )
     estimate = RobotEstimate(
@@ -179,7 +180,7 @@ def test_native_lidar_sample_drives_existing_l4_revision_and_freshness():
         covariance_5x5=(0.0,) * 25,
     )
 
-    world = ShadowWorldModel()(admitted, estimate)
+    world = configured(ShadowWorldModel, )(admitted, estimate)
 
     assert world.map_revision == 2
     assert world.freshness_ns == 10

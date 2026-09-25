@@ -12,6 +12,9 @@ from v3.contracts.lidar import (
 )
 
 
+from v3.lidar_config import LidarMatcherConfig
+
+
 def _clamp_scalar(value: float, lower: float, upper: float) -> float:
     """Clamp one scalar without entering NumPy's array-dispatch hot path."""
     number = float(value)
@@ -315,12 +318,13 @@ def _normal_geometry_observability(
     inlier_distance_m: float,
     translation_step_m: float,
     rotation_step_rad: float,
+    quality_config: LidarMatcherConfig,
 ) -> Optional[float]:
     """Estimate SE(2) rank from local map normals around correspondences."""
     map_points = np.asarray(getattr(tree, "data", np.zeros((0, 2))), dtype=float)
-    if map_points.shape[0] < 6 or transformed_points.shape[0] < 6:
+    if map_points.shape[0] < quality_config.normal_neighbor_count or transformed_points.shape[0] < quality_config.normal_neighbor_count:
         return None
-    neighbor_count = min(6, int(map_points.shape[0]))
+    neighbor_count = min(quality_config.normal_neighbor_count, int(map_points.shape[0]))
     distances, indices = tree.query(
         transformed_points,
         k=neighbor_count,
@@ -347,7 +351,7 @@ def _normal_geometry_observability(
         if not np.isfinite(eigenvalues).all() or float(eigenvalues[-1]) <= 1e-10:
             continue
         # A local line has a stable surface normal. Isotropic clusters do not.
-        if float(eigenvalues[0] / eigenvalues[-1]) > 0.35:
+        if float(eigenvalues[0] / eigenvalues[-1]) > quality_config.normal_isotropy_ratio_max:
             continue
         normal = eigenvectors[:, 0]
         rel_x = float(point[0]) - float(pose_x)
@@ -360,7 +364,7 @@ def _normal_geometry_observability(
                 yaw_derivative * float(rotation_step_rad),
             )
         )
-    if len(rows) < 6:
+    if len(rows) < quality_config.normal_neighbor_count:
         return None
     jacobian = np.asarray(rows, dtype=float)
     information = jacobian.T @ jacobian / max(1, int(jacobian.shape[0]))
@@ -368,8 +372,8 @@ def _normal_geometry_observability(
     if not np.isfinite(eigenvalues).all() or float(eigenvalues[-1]) <= 1e-12:
         return 0.0
     rank_ratio = max(0.0, float(eigenvalues[0] / eigenvalues[-1]))
-    rank_score = float(np.clip(rank_ratio / 0.03, 0.0, 1.0))
-    support_score = float(np.clip(len(rows) / 12.0, 0.0, 1.0))
+    rank_score = float(np.clip(rank_ratio / quality_config.normal_rank_ratio_scale, 0.0, 1.0))
+    support_score = float(np.clip(len(rows) / quality_config.normal_support_scale, 0.0, 1.0))
     return float(rank_score * support_score)
 
 
@@ -394,6 +398,7 @@ def match_scan_to_map(
     map_points_xy: Sequence[Sequence[float]] | np.ndarray,
     current_scan: List[dict],
     *,
+    quality_config: LidarMatcherConfig,
     seed_pose: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     dx_range: Tuple[float, float] = (-0.25, 0.25),
     dy_range: Tuple[float, float] = (-0.25, 0.25),
@@ -1093,6 +1098,7 @@ def match_scan_to_map(
             inlier_distance_m=inlier_distance_m,
             translation_step_m=obs_translation_step,
             rotation_step_rad=obs_rotation_step,
+            quality_config=quality_config,
         )
         deadline_reached("normal_observability")
     if normal_observability is not None:
@@ -1105,7 +1111,7 @@ def match_scan_to_map(
         1.0 / (1.0 + (float(best_metrics["rmse_m"]) / residual_scale) ** 2)
     )
     inlier_score = float(
-        np.clip((float(best_metrics["inlier_ratio"]) - 0.20) / 0.75, 0.0, 1.0)
+        np.clip((float(best_metrics["inlier_ratio"]) - quality_config.confidence_inlier_offset) / quality_config.confidence_inlier_scale, 0.0, 1.0)
     )
     coverage_score = float(
         np.clip(
@@ -1118,8 +1124,8 @@ def match_scan_to_map(
     base_quality = float(
         residual_score * math.sqrt(max(0.0, inlier_score * coverage_score))
     )
-    ambiguity_factor = float(0.05 + 0.95 * uniqueness_score)
-    observability_factor = float(0.20 + 0.80 * observability_score)
+    ambiguity_factor = float(quality_config.confidence_ambiguity_floor + (1.0 - quality_config.confidence_ambiguity_floor) * uniqueness_score)
+    observability_factor = float(quality_config.confidence_observability_floor + (1.0 - quality_config.confidence_observability_floor) * observability_score)
     measurement_confidence = float(
         np.clip(base_quality * observability_factor, 0.0, 1.0)
     )
@@ -1132,23 +1138,23 @@ def match_scan_to_map(
     )
 
     degeneracy_reasons = []
-    if float(best_metrics["inlier_ratio"]) < 0.35:
+    if float(best_metrics["inlier_ratio"]) < quality_config.integrity_min_inlier_ratio:
         degeneracy_reasons.append("low_inlier_ratio")
-    if float(best_metrics["sector_coverage"]) < 0.25:
+    if float(best_metrics["sector_coverage"]) < quality_config.integrity_min_sector_coverage:
         degeneracy_reasons.append("partial_angular_support")
-    if uniqueness_score < 0.20:
+    if uniqueness_score < quality_config.integrity_min_uniqueness:
         degeneracy_reasons.append("ambiguous_alternative")
-    if observability_score < 0.12:
+    if observability_score < quality_config.integrity_min_observability:
         degeneracy_reasons.append("weak_observability")
     if timed_out:
         integrity_state = "INCOMPLETE"
-    elif float(best_metrics["inlier_ratio"]) < 0.35 or float(
+    elif float(best_metrics["inlier_ratio"]) < quality_config.integrity_min_inlier_ratio or float(
         best_metrics["sector_coverage"]
-    ) < 0.25:
+    ) < quality_config.integrity_min_sector_coverage:
         integrity_state = "INSUFFICIENT_SUPPORT"
-    elif uniqueness_score < 0.20:
+    elif uniqueness_score < quality_config.integrity_min_uniqueness:
         integrity_state = "MULTIMODAL"
-    elif observability_score < 0.12:
+    elif observability_score < quality_config.integrity_min_observability:
         integrity_state = "DEGRADED_OBSERVABILITY"
     else:
         integrity_state = "OK"

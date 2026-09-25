@@ -26,7 +26,7 @@ from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.adapters.native_lidar_port import (
     TimedPoseReference,
-    load_native_lidar_port_config,
+    NativeLidarPortConfig,
     open_native_lidar_port,
 )
 from v3.adapters.process_lidar_port import open_process_lidar_port
@@ -46,7 +46,6 @@ from v3.execution import CaptureRecord
 from v3.runtime_performance import (
     RuntimeAffinityConfig,
     apply_process_affinity_layout,
-    load_runtime_affinity_config,
     temporary_current_affinity,
 )
 from v3_bounded_config import (
@@ -70,6 +69,7 @@ class ResidentStatusConfig:
 
     path: Path
     file_mode: int = 0o600
+    effective_config: object | None = None
 
     def __post_init__(self) -> None:
         path = Path(self.path)
@@ -380,6 +380,7 @@ def run_v3_resident_process(
     open_imu_device: Callable | None = None,
     run_hardware: Callable[..., ResidentRuntimeReport] = run_native_hardware_resident_control,
     capture_hz: int = CONTROL_CAPTURE_HZ,
+    runtime_edges=None,
 ) -> ResidentRuntimeReport:
     """Run one process ownership session and stop if status publication fails."""
 
@@ -454,6 +455,8 @@ def run_v3_resident_process(
             "stop_requested": combined_stop,
             "readiness_observer": status_publisher.publish_tick,
         }
+        if runtime_edges is not None:
+            hardware_kwargs["runtime_edges"] = runtime_edges
         if affinity_config is not None:
             hardware_kwargs["affinity_config"] = affinity_config
         if open_imu_device is not None:
@@ -510,58 +513,16 @@ def run_v3_resident_process(
     return report
 
 
-def native_sensor_policy() -> NativeSensorPolicyConfig:
-    """Return the policy proven by the live resident Test Hub session."""
-
-    return NativeSensorPolicyConfig(
-        encoder_maximum_sample_interval_ns=100_000_000,
-        encoder_maximum_abs_velocity_mps=1.5,
-        encoder_minimum_trust=0.5,
-        imu_maximum_sample_age_ns=100_000_000,
-        imu_heading_clockwise_positive=True,
-        imu_yaw_rate_axis=2,
-        imu_yaw_rate_clockwise_positive=False,
-        imu_yaw_offset_rad=0.0,
-        imu_minimum_confidence=0.5,
-        imu_minimum_calibration=2,
-        imu_allow_rate_only=True,
-        lidar_maximum_result_age_ns=250_000_000,
-        lidar_maximum_future_skew_ns=10_000_000,
-        lidar_pose_r_scale=1.0,
-        lidar_minimum_confidence=0.2,
-        lidar_maximum_measurement_age_ns=250_000_000,
-        encoder_minimum_estimation_pulses=4,
-        encoder_minimum_estimation_window_ns=40_000_000,
-        encoder_maximum_estimation_window_ns=160_000_000,
-    )
-
-
 def load_resident_runtime_config(project_root: Path = PROJECT_ROOT) -> ResidentPhysicalRuntimeConfig:
-    """Close canonical static config and discard the bounded-only command profile."""
-
-    bounded = load_bounded_physical_runtime_config(
-        project_root / "conf" / "hardver.json",
-        project_root / "conf" / "fizika.json",
-        project_root / "conf" / "speed_map.json",
-        BoundedTeleopProfile(
-            command_id="resident-config-loader-not-executed",
-            start_tick_id=1,
-            active_tick_count=1,
-            v_mps=0.01,
-            omega_rad_s=0.0,
-            max_v_mps=0.01,
-            max_omega_rad_s=0.01,
-        ),
-        sensor_policy=native_sensor_policy(),
-        control_path=project_root / "conf" / "vezerles.json",
-    )
-    return ResidentPhysicalRuntimeConfig.from_bounded(bounded)
+    """Compatibility entrypoint delegated to the sole production resolver."""
+    from v3.config import ConfigResolver
+    return ConfigResolver.for_project(project_root).resolve().runtime
 
 
 def native_lidar_factory(
     sensors: NativeSensorHardwareConfig,
     serial_factory: Callable[..., object],
-    project_root: Path = PROJECT_ROOT,
+    lidar_config: NativeLidarPortConfig,
     affinity_config: RuntimeAffinityConfig | None = None,
 ) -> Callable[[Callable[[int], TimedPoseReference | None]], object]:
     """Close active LiDAR config once and return the sole production opener."""
@@ -575,11 +536,10 @@ def native_lidar_factory(
     ):
         raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
     affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
-    lidar_config = load_native_lidar_port_config(
-        project_root / "conf" / "hardver.json",
-        project_root / "conf" / "vezerles.json",
-        danger_zone_m=sensors.lidar_danger_zone_m,
-    )
+    if not isinstance(lidar_config, NativeLidarPortConfig):
+        raise TypeError("lidar_config must be resolved NativeLidarPortConfig")
+    if lidar_config.danger_zone_m != sensors.lidar_danger_zone_m:
+        raise ValueError("LiDAR safety config mismatch")
 
     def open_lidar(
         pose_provider: Callable[[int], TimedPoseReference | None],
@@ -596,10 +556,11 @@ def native_lidar_factory(
 
 def process_lidar_factory(
     sensors: NativeSensorHardwareConfig,
-    project_root: Path = PROJECT_ROOT,
+    lidar_config: NativeLidarPortConfig,
     affinity_config: RuntimeAffinityConfig | None = None,
     *,
     capture_raw_queue: Any | None = None,
+    process_config=None,
 ) -> Callable[[Callable[[int], TimedPoseReference | None]], object]:
     """Close LiDAR config in parent and move serial/driver ownership to child."""
 
@@ -610,11 +571,10 @@ def process_lidar_factory(
     ):
         raise TypeError("affinity_config must be RuntimeAffinityConfig or None")
     affinity = affinity_config or RuntimeAffinityConfig(enabled=False)
-    lidar_config = load_native_lidar_port_config(
-        project_root / "conf" / "hardver.json",
-        project_root / "conf" / "vezerles.json",
-        danger_zone_m=sensors.lidar_danger_zone_m,
-    )
+    if not isinstance(lidar_config, NativeLidarPortConfig):
+        raise TypeError("lidar_config must be resolved NativeLidarPortConfig")
+    if lidar_config.danger_zone_m != sensors.lidar_danger_zone_m:
+        raise ValueError("LiDAR safety config mismatch")
 
     def open_lidar(
         pose_provider: Callable[[int], TimedPoseReference | None],
@@ -622,6 +582,7 @@ def process_lidar_factory(
         return open_process_lidar_port(
             lidar_config,
             pose_provider,
+            process_config=process_config,
             worker_cpu=(affinity.lidar_cpu if affinity.enabled else None),
             strict_affinity=(affinity.strict if affinity.enabled else False),
             control_minimum_range_m=sensors.inputs.lidar_source.local_perception_min_range_m,
@@ -645,24 +606,11 @@ def _runtime_owned_path(value: str, project_root: Path) -> Path:
     return path
 
 
-def _capture_configuration(
-    project_root: Path,
-    runtime_config: ResidentPhysicalRuntimeConfig | None = None,
-) -> dict[str, object]:
-    if runtime_config is not None:
-        return {"resolved_runtime": runtime_config}
-    documents: dict[str, object] = {}
-    for name, relative in (
-        ("physics", "conf/fizika.json"),
-        ("speed_map", "conf/speed_map.json"),
-        ("hardware", "conf/hardver.json"),
-        ("control", "conf/vezerles.json"),
-    ):
-        payload = json.loads((project_root / relative).read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError(f"{relative} must contain a JSON object")
-        documents[name] = payload
-    return documents
+def _capture_configuration(resolved) -> dict[str, object]:
+    from v3.config import ResolvedRobotConfig
+    if not isinstance(resolved, ResolvedRobotConfig):
+        raise TypeError("capture requires the immutable resolved robot snapshot")
+    return {"resolved_robot": resolved, "snapshot_id": resolved.snapshot_id}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -729,10 +677,10 @@ def main(argv: list[str] | None = None) -> int:
             process_paths.append(capture_path)
         if len(set(process_paths)) != len(process_paths):
             raise ValueError("command, status and capture paths must differ")
-        runtime_config = load_resident_runtime_config()
-        affinity_config = load_runtime_affinity_config(
-            PROJECT_ROOT / "conf" / "vezerles.json"
-        )
+        from v3.config import ConfigResolver
+        resolved = ConfigResolver.for_project(PROJECT_ROOT).resolve()
+        runtime_config = resolved.runtime
+        affinity_config = resolved.affinity
         command_gateway = AsyncResidentCommandGateway(
             ResidentCommandMailboxConfig(path=command_path),
             worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
@@ -740,7 +688,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         # P0_CONTROL_PROCESS_ISOLATION_20260920: status formatting/I/O is out-of-process.
         status_publisher = ProcessResidentStatusPublisher(
-            ResidentStatusConfig(path=status_path),
+            ResidentStatusConfig(path=status_path, effective_config=resolved),
             worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
             strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
@@ -748,7 +696,7 @@ def main(argv: list[str] | None = None) -> int:
             ProcessMcapCaptureSession(
                 capture_path.stem,
                 capture_path,
-                configuration=_capture_configuration(PROJECT_ROOT, runtime_config),
+                configuration=_capture_configuration(resolved),
                 metadata={
                     "runtime": "v3_process_runtime",
                     "command_gateway": "AtomicResidentCommandGateway",
@@ -788,12 +736,15 @@ def main(argv: list[str] | None = None) -> int:
         # P0_CONTROL_PROCESS_ISOLATION_20260920: serial/driver/pump live in child.
         open_lidar = process_lidar_factory(
             runtime_config.sensor_inputs,
+            resolved.lidar,
+            process_config=resolved.edges.lidar_process,
             affinity_config=affinity_config,
             capture_raw_queue=(capture_session.raw_lidar_queue if capture_session is not None else None),
         )
         open_imu_device = partial(
             ProcessBno055Device,
             open_bus=smbus2.SMBus,
+            process_config=resolved.edges.imu_process,
             worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
             strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
@@ -815,6 +766,7 @@ def main(argv: list[str] | None = None) -> int:
             affinity_config=affinity_config,
             open_imu_device=open_imu_device,
             capture_hz=args.capture_hz,
+            runtime_edges=resolved.edges,
         )
         output = report.as_dict()
         if capture_session is not None:
@@ -862,6 +814,5 @@ __all__ = [
     "main",
     "native_lidar_factory",
     "process_lidar_factory",
-    "native_sensor_policy",
     "run_v3_resident_process",
 ]

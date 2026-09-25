@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import pytest
 
 from v3.contracts import AdmittedFrame, DataField, Observation, RobotEstimate, TickContext
@@ -79,8 +80,8 @@ def _frame(
 
 
 def _model() -> ShadowWorldModel:
-    return ShadowWorldModel(
-        WorldModelConfig(
+    return configured(ShadowWorldModel, 
+        configured(WorldModelConfig, 
             structural_confirm_score=4,
             structural_confirm_min_hits=4,
             structural_confirm_min_span_ns=300_000_000,

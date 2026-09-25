@@ -17,13 +17,13 @@ from v3.contracts import (
 
 @dataclass(frozen=True, slots=True)
 class OperationalConstraintsConfig:
-    max_v_mps: float = 0.45
-    max_omega_rad_s: float = 1.5
-    max_acceleration_mps2: float = 0.60
-    max_angular_acceleration_rad_s2: float = 2.5
-    max_curvature_rad_per_m: float = 4.0
-    max_position_variance: float = 0.25
-    max_yaw_variance: float = 0.20
+    max_v_mps: float
+    max_omega_rad_s: float
+    max_acceleration_mps2: float
+    max_angular_acceleration_rad_s2: float
+    max_curvature_rad_per_m: float
+    max_position_variance: float
+    max_yaw_variance: float
 
     def __post_init__(self) -> None:
         values = (
@@ -53,7 +53,7 @@ class OperationalConstraintLayer:
 
     def __init__(
         self,
-        config: OperationalConstraintsConfig = OperationalConstraintsConfig(),
+        config: OperationalConstraintsConfig,
     ) -> None:
         self._config = config
         self._last_context: TickContext | None = None

@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import json
 import math
 import threading
@@ -513,7 +514,7 @@ def test_complete_nondefault_resolved_config_round_trips_without_legacy_authorit
     base = control_config()
     config = replace(
         base,
-        admission=AdmissionConfig(max_sample_age_ns=333_000_000, max_future_skew_ns=7),
+        admission=configured(AdmissionConfig, max_sample_age_ns=333_000_000, max_future_skew_ns=7),
         estimation=replace(
             base.estimation,
             max_dt_ns=222_000_000,

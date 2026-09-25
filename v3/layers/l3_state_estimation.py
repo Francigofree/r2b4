@@ -182,12 +182,12 @@ class StateEstimatorConfig:
 
     frame_id: str
     track_width_m: float
-    max_dt_ns: int = 250_000_000
-    initial_position_variance: float = 0.04
-    position_variance_per_m: float = 0.02
-    yaw_variance: float = 0.01
-    velocity_variance: float = 0.02
-    omega_variance: float = 0.02
+    max_dt_ns: int
+    initial_position_variance: float
+    position_variance_per_m: float
+    yaw_variance: float
+    velocity_variance: float
+    omega_variance: float
 
     def __post_init__(self) -> None:
         if not isinstance(self.frame_id, str) or not self.frame_id:
@@ -220,34 +220,28 @@ class NativeStateEstimatorConfig:
 
     frame_id: str
     track_width_m: float
-    max_dt_ns: int = 250_000_000
-    max_measurement_age_ns: int = 250_000_000
-    process_noise: tuple[float, ...] = (
-        0.001,
-        0.001,
-        0.0005,
-        0.01,
-        0.00001,
-    )
-    initial_covariance: tuple[float, ...] = (0.01, 0.01, 0.01, 0.01, 0.0001)
-    velocity_measurement_variance: float = 0.003
-    yaw_measurement_variance: float = 0.006
-    omega_measurement_variance: float = 0.006
-    lidar_measurement_variance: tuple[float, ...] = (0.08, 0.08, 0.03)
-    zupt_variance: float = 0.005
-    still_velocity_threshold_mps: float = 0.05
-    stationary_bias_gain: float = 0.05
-    stationary_bias_omega_max_rad_s: float = 0.1
-    encoder_disagreement_threshold_mps: float = 0.2
-    straight_omega_max_rad_s: float = 0.1
-    max_abs_wheel_velocity_mps: float = 1.5
-    velocity_nis_max: float = 18.0
-    yaw_nis_max: float = 35.0
-    lidar_nis_max: float = 35.0
-    minimum_measurement_quality: float = 0.05
-    covariance_min_diagonal: float = 1e-8
+    max_dt_ns: int
+    max_measurement_age_ns: int
+    process_noise: tuple[float, ...]
+    initial_covariance: tuple[float, ...]
+    velocity_measurement_variance: float
+    yaw_measurement_variance: float
+    omega_measurement_variance: float
+    lidar_measurement_variance: tuple[float, ...]
+    zupt_variance: float
+    still_velocity_threshold_mps: float
+    stationary_bias_gain: float
+    stationary_bias_omega_max_rad_s: float
+    encoder_disagreement_threshold_mps: float
+    straight_omega_max_rad_s: float
+    max_abs_wheel_velocity_mps: float
+    velocity_nis_max: float
+    yaw_nis_max: float
+    lidar_nis_max: float
+    minimum_measurement_quality: float
+    covariance_min_diagonal: float
     # process_noise variances are calibrated for this prediction interval.
-    process_noise_reference_dt_s: float = 0.020
+    process_noise_reference_dt_s: float
 
     def __post_init__(self) -> None:
         if not isinstance(self.frame_id, str) or not self.frame_id:

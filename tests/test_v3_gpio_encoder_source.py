@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -170,7 +171,7 @@ def test_owned_source_closes_gpio_counts_and_emits_one_typed_snapshot_per_tick()
     assert values["left_distance_delta_m"] == pytest.approx(0.02)
     assert values["right_distance_delta_m"] == pytest.approx(0.02)
     assert values["maximum_abs_velocity_mps"] == pytest.approx(1.0)
-    admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100_000_000))(
+    admitted = InputAdmission(configured(AdmissionConfig, max_sample_age_ns=100_000_000))(
         AcquisitionFrame(current.context, current.samples, (current.health,))
     )
     assert tuple(item.kind for item in admitted.accepted) == ("wheel_velocity",)

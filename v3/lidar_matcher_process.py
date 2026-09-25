@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from v3.adapters.latest_lidar import MATCHER_CONTRACT_ID
+from v3.lidar_config import LidarMatcherConfig
 from v3.lidar_estimator import LidarEstimator
 
 
@@ -140,11 +141,11 @@ def matcher_process_main(
                 continue
             if estimator is None:
                 matcher_config = packet.get("matcher_config")
-                if not isinstance(matcher_config, Mapping):
-                    raise TypeError("matcher_config must be a mapping")
+                if not isinstance(matcher_config, LidarMatcherConfig):
+                    raise TypeError("matcher_config must be resolved LidarMatcherConfig")
                 estimator = LidarEstimator(
                     danger_zone=_finite(packet.get("danger_zone_m"), 0.1),
-                    scan_match_cfg=dict(matcher_config),
+                    scan_match_cfg=matcher_config,
                 )
             pose_reference = packet.get("pose_reference")
             if (

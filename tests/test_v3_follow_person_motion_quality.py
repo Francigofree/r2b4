@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import json
 import math
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import (
     CommandMode,
     CommandRequest,
@@ -32,7 +33,7 @@ def test_follow_does_not_choose_a_pivot_when_safe_translation_is_available(side,
     from v3.layers.l6_navigation import TrajectoryRolloutComputer
 
     config = _config()
-    nav = TrajectoryNavigator(config, completion_inputs=closed)
+    nav = configured(TrajectoryNavigator, config, completion_inputs=closed)
     c = TickContext(0, 1_000_000_000)
     estimate = replace(_estimate(c), omega_rad_s=side * 0.15)
     world = _world(c, _person(1.613, side * 0.276))
@@ -54,7 +55,7 @@ def test_follow_does_not_choose_a_pivot_when_safe_translation_is_available(side,
 
 def test_approach_speed_tapers_to_hold_boundary_even_with_a_cached_plan():
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     boundary = config.follow_person_stand_off_m + config.follow_person_distance_deadband_m
     caps = []
     for tick, remaining in enumerate((0.20, 0.10, 0.04, 0.005, 0.001)):
@@ -75,7 +76,7 @@ def test_approach_speed_tapers_to_hold_boundary_even_with_a_cached_plan():
     c = TickContext(5, 1_100_000_000)
     world = _world(c, _person(boundary))
     plan = nav.evaluate(_mission(c, "follow-arrival"), _estimate(c), world)
-    intent = MotionRealizer().evaluate(select_motion(plan), _estimate(c), world)
+    intent = configured(MotionRealizer, ).evaluate(select_motion(plan), _estimate(c), world)
     assert intent.requested_v_mps == intent.requested_omega_rad_s == 0.0
 
 
@@ -84,7 +85,7 @@ def test_near_hold_planning_uses_the_same_arrival_boundary_as_the_speed_envelope
     c = TickContext(0, 1_000_000_000)
     boundary = config.follow_person_stand_off_m + config.follow_person_distance_deadband_m
     remaining = 0.005
-    plan = TrajectoryNavigator(config).evaluate(_mission(c, "follow-near"), _estimate(c),
+    plan = configured(TrajectoryNavigator, config).evaluate(_mission(c, "follow-near"), _estimate(c),
                                                _world(c, _person(boundary + remaining)))
     assert plan.local_goal.x_m == pytest.approx(remaining)
     selected = select_motion(plan).trajectory
@@ -152,7 +153,7 @@ def _mission(
     max_v_mps: float = 0.15,
     max_omega_rad_s: float = 0.30,
 ):
-    return MissionManager().evaluate(
+    return configured(MissionManager, ).evaluate(
         CommandRequest(
             context=context,
             command_id=command_id,
@@ -190,7 +191,7 @@ def test_motion_quality_config_preserves_behavioral_ordering():
 
 def test_hold_hysteresis_prevents_chatter_and_restarts_translation():
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     command_id = "motion-hold-release"
     hold_enter = (
         config.follow_person_stand_off_m
@@ -252,13 +253,13 @@ def test_more_follow_distance_restores_more_translation_authority():
     )
 
     c1 = TickContext(10, 2_000_000_000)
-    near = TrajectoryNavigator(config).evaluate(
+    near = configured(TrajectoryNavigator, config).evaluate(
         _mission(c1, "motion-distance-near"),
         _estimate(c1),
         _world(c1, _person(near_distance)),
     )
     c2 = TickContext(11, 2_020_000_000)
-    far = TrajectoryNavigator(config).evaluate(
+    far = configured(TrajectoryNavigator, config).evaluate(
         _mission(c2, "motion-distance-far"),
         _estimate(c2),
         _world(c2, _person(far_distance)),
@@ -275,7 +276,7 @@ def test_medium_heading_error_keeps_translation_available():
         config.follow_person_align_tolerance_rad
         + config.follow_person_pivot_enter_rad
     )
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c1 = TickContext(20, 3_000_000_000)
     plan = nav.evaluate(
         _mission(c1, "motion-heading-medium"),
@@ -296,7 +297,7 @@ def test_large_nonpivot_heading_error_keeps_bounded_translation():
             - config.follow_person_release_tolerance_rad
         ),
     )
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c1 = TickContext(30, 4_000_000_000)
     plan = nav.evaluate(
         _mission(c1, "motion-heading-large"),
@@ -317,7 +318,7 @@ def test_pivot_threshold_stops_translation_and_turns_toward_person():
         math.pi - 0.01,
         config.follow_person_pivot_enter_rad + 0.05,
     )
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c1 = TickContext(40, 5_000_000_000)
     world = _world(c1, _person(2.0, angle))
     estimate = _estimate(c1)
@@ -326,7 +327,7 @@ def test_pivot_threshold_stops_translation_and_turns_toward_person():
         estimate,
         world,
     )
-    motion = MotionRealizer().evaluate(
+    motion = configured(MotionRealizer, ).evaluate(
         select_motion(plan),
         estimate,
         world,
@@ -348,7 +349,7 @@ def test_minimum_follow_speed_never_overrides_a_lower_operator_limit():
         0.01,
         0.25 * config.follow_person_slowdown_distance_m,
     )
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c1 = TickContext(50, 6_000_000_000)
     plan = nav.evaluate(
         _mission(c1, "motion-low-limit", max_v_mps=operator_limit),

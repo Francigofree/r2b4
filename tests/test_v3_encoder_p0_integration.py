@@ -1,6 +1,7 @@
 """P0 integration regressions for encoder reacquisition and L3/L11 safety."""
 
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import pytest
 
@@ -84,7 +85,7 @@ def _feedback(
 
 
 def _pi(timeout_ns: int = 100_000_000) -> WheelPiConfig:
-    return WheelPiConfig(
+    return configured(WheelPiConfig, 
         kp=0.25,
         ki=0.08,
         integrator_limit=0.18,
@@ -94,7 +95,7 @@ def _pi(timeout_ns: int = 100_000_000) -> WheelPiConfig:
 
 
 def test_production_composition_uses_explicit_250_ms_feedback_reacquisition_budget():
-    config = NativeControlCompositionConfig(speed_map=_speed_map())
+    config = configured(NativeControlCompositionConfig, speed_map=_speed_map())
     assert config.wheel_pi.max_feedback_uncertainty_ns == 250_000_000
 
 
@@ -205,7 +206,7 @@ def _estimator_frame(
 
 def test_l3_baseline_skips_velocity_and_zupt_but_keeps_raw_distance_prediction():
     estimator = NativeStateEstimator(
-        NativeStateEstimatorConfig(
+        configured(NativeStateEstimatorConfig, 
             frame_id="R2B4_BOOT_ROBOT_MAP",
             track_width_m=0.3557,
         )

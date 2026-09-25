@@ -89,7 +89,24 @@
     "loop_closure_direct_apply_max_delta_m": 0.14,
     "loop_closure_direct_apply_max_delta_rad": 0.2,
     "loop_closure_step_limit_m": 0.07,
-    "loop_closure_step_limit_rad": 0.1
+    "loop_closure_step_limit_rad": 0.1,
+    "enabled": true,
+    "adaptive_relocalization_point_factor": 0.8,
+    "adaptive_tracking_point_factor": 0.85,
+    "adaptive_map_point_floor": 256,
+    "adaptive_map_point_multiplier": 4,
+    "normal_neighbor_count": 6,
+    "normal_isotropy_ratio_max": 0.35,
+    "normal_rank_ratio_scale": 0.03,
+    "normal_support_scale": 12.0,
+    "confidence_inlier_offset": 0.2,
+    "confidence_inlier_scale": 0.75,
+    "confidence_ambiguity_floor": 0.05,
+    "confidence_observability_floor": 0.2,
+    "integrity_min_inlier_ratio": 0.35,
+    "integrity_min_sector_coverage": 0.25,
+    "integrity_min_uniqueness": 0.2,
+    "integrity_min_observability": 0.12
   },
   "lidar_runtime": {
     "matcher_process_start_method": "spawn",
@@ -101,91 +118,6 @@
     "matcher_max_result_age_s": 0.25,
     "driver_poll_hz": 120
   },
-  "v3_navigation": {
-    "contract": "R2B4_V3_NAVIGATION_V1",
-    "local_perception": {
-      "min_range_m": 0.08,
-      "max_range_m": 2.5,
-      "max_points": 96
-    },
-    "rolling_costmap": {
-      "resolution_m": 0.1,
-      "radius_m": 2.5,
-      "max_cell_age_ns": 750000000,
-      "max_cells": 1200
-    },
-    "exploration": {
-      "coverage_cell_size_m": 0.25,
-      "coverage_max_cells": 512,
-      "local_goal_distance_m": 0.6,
-      "local_goal_tolerance_m": 0.15,
-      "local_goal_max_age_ns": 8000000000,
-      "local_goal_heading_samples": 32
-    },
-    "trajectory_rollout": {
-      "replan_interval_ns": 100000000,
-      "linear_samples": 6,
-      "angular_samples": 9,
-      "horizon_ns": 800000000,
-      "step_count": 8,
-      "footprint_length_m": 0.46,
-      "footprint_width_m": 0.38,
-      "footprint_safety_margin_m": 0.05,
-      "clearance_score_cap_m": 1.0,
-      "progress_weight": 0.6,
-      "clearance_weight": 0.1,
-      "smoothness_weight": 0.16,
-      "novelty_weight": 0.14,
-      "progress_viability_floor": 0.02
-    },
-    "person_tracking": {
-      "enabled": true,
-      "camera_horizontal_fov_rad": 1.1519173063162575,
-      "camera_yaw_offset_rad": 0.0,
-      "lidar_max_skew_ns": 150000000,
-      "lidar_angular_margin_rad": 0.04,
-      "lidar_cluster_depth_m": 0.3,
-      "lidar_min_points": 1,
-      "max_association_distance_m": 0.75,
-      "max_speed_mps": 6.0,
-      "track_radius_m": 0.3,
-      "track_max_age_ns": 500000000,
-      "reacquire_max_age_ns": 2500000000
-    },
-    "async_l6": {
-      "enabled": true,
-      "completion_inputs": true,
-      "request_timeout_ns": 300000000,
-      "release_tick_gap": 5,
-      "release_delay_ns": 100000000,
-      "max_plan_age_ns": 350000000
-    },
-    "face_person": {
-      "minimum_confidence": 0.6,
-      "align_tolerance_rad": 0.1,
-      "release_tolerance_rad": 0.16
-    },
-    "follow_person": {
-      "minimum_confidence": 0.6,
-      "retention_minimum_confidence": 0.45,
-      "align_tolerance_rad": 0.22,
-      "release_tolerance_rad": 0.3,
-      "stand_off_m": 1.05,
-      "distance_deadband_m": 0.15,
-      "min_safe_distance_m": 0.75,
-      "lost_hold_ns": 400000000,
-      "search_timeout_ns": 2000000000,
-      "search_max_duration_ns": 10000000000,
-      "search_sweep_rad": 0.45,
-      "search_step_ns": 400000000,
-      "pivot_enter_rad": 0.55,
-      "slowdown_distance_m": 0.18,
-      "hold_release_margin_m": 0.05,
-      "minimum_follow_speed_mps": 0.1,
-      "heading_min_factor": 0.75,
-      "search_yaw_tolerance_rad": 0.08
-    }
-  },
   "runtime_affinity": {
     "enabled": true,
     "strict": true,
@@ -193,5 +125,325 @@
     "lidar_cpu": 2,
     "vision_cpu": 1,
     "io_cpu": 0
+  },
+  "lidar_driver": {
+    "read_chunk_size": 512,
+    "read_timeout_s": 0.1,
+    "stale_timeout_s": 0.5,
+    "startup_grace_s": 10.0,
+    "reconnect_interval_s": 0.4,
+    "command_settle_s": 0.5,
+    "stop_join_timeout_s": 2.0
+  },
+  "local_perception": {
+    "min_range_m": 0.08,
+    "max_range_m": 2.5,
+    "max_points": 96
+  },
+  "layers": {
+    "admission": {
+      "max_sample_age_ns": 250000000,
+      "max_future_skew_ns": 10000000
+    },
+    "estimation": {
+      "max_dt_ns": 250000000,
+      "max_measurement_age_ns": 250000000,
+      "process_noise": [
+        0.001,
+        0.001,
+        0.0005,
+        0.01,
+        1e-05
+      ],
+      "initial_covariance": [
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.0001
+      ],
+      "velocity_measurement_variance": 0.003,
+      "yaw_measurement_variance": 0.006,
+      "omega_measurement_variance": 0.006,
+      "lidar_measurement_variance": [
+        0.08,
+        0.08,
+        0.03
+      ],
+      "zupt_variance": 0.005,
+      "still_velocity_threshold_mps": 0.05,
+      "stationary_bias_gain": 0.05,
+      "stationary_bias_omega_max_rad_s": 0.1,
+      "encoder_disagreement_threshold_mps": 0.2,
+      "straight_omega_max_rad_s": 0.1,
+      "max_abs_wheel_velocity_mps": 1.5,
+      "velocity_nis_max": 18.0,
+      "yaw_nis_max": 35.0,
+      "lidar_nis_max": 35.0,
+      "minimum_measurement_quality": 0.05,
+      "covariance_min_diagonal": 1e-08,
+      "process_noise_reference_dt_s": 0.02
+    },
+    "world_model": {
+      "max_track_age_ns": 500000000,
+      "local_costmap_resolution_m": 0.1,
+      "local_costmap_radius_m": 2.5,
+      "local_costmap_max_cell_age_ns": 750000000,
+      "local_costmap_max_cells": 1200,
+      "person_tracking_enabled": true,
+      "person_camera_horizontal_fov_rad": 1.1519173063162575,
+      "person_camera_yaw_offset_rad": 0.0,
+      "person_lidar_max_skew_ns": 150000000,
+      "person_lidar_angular_margin_rad": 0.04,
+      "person_lidar_cluster_depth_m": 0.3,
+      "person_lidar_min_points": 1,
+      "person_track_max_association_distance_m": 0.75,
+      "person_track_max_speed_mps": 6.0,
+      "person_track_radius_m": 0.3,
+      "person_track_max_age_ns": 500000000,
+      "person_track_reacquire_max_age_ns": 2500000000,
+      "pose_history_max_age_ns": 2000000000,
+      "pose_history_max_samples": 128,
+      "pose_lookup_max_skew_ns": 250000000,
+      "scan_history_max_age_ns": 1000000000,
+      "scan_history_max_scans": 32,
+      "occupancy_hit_increment": 1,
+      "occupancy_free_decrement": 1,
+      "occupancy_max_score": 8,
+      "person_track_alpha": 0.85,
+      "person_track_beta": 0.35,
+      "person_track_prediction_max_age_ns": 350000000,
+      "structural_memory_enabled": true,
+      "structural_max_age_ns": 30000000000,
+      "structural_max_cells": 4096,
+      "structural_hit_increment": 1,
+      "structural_free_decrement": 1,
+      "structural_max_score": 12,
+      "structural_confirm_score": 8,
+      "structural_deconfirm_score": null,
+      "structural_confirm_min_hits": 8,
+      "structural_confirm_min_span_ns": 1000000000,
+      "structural_clear_score": 1,
+      "structural_dynamic_mask_margin_m": 0.15,
+      "structural_dynamic_mask_min_speed_mps": 0.05,
+      "structural_dynamic_mask_max_tracks": 32,
+      "structural_max_position_variance": 0.2,
+      "structural_max_yaw_variance": 0.15,
+      "continuity_translation_base_m": 0.25,
+      "continuity_translation_rate_mps": 1.5,
+      "continuity_yaw_base_rad": 0.35,
+      "continuity_yaw_rate_rad_s": 4.0
+    },
+    "mission": {
+      "default_constraints": {
+        "max_v_mps": 0.35,
+        "max_omega_rad_s": 1.2,
+        "corridor_radius_m": 0.3,
+        "goal_tolerance_m": 0.08,
+        "yaw_tolerance_rad": 0.1
+      }
+    },
+    "navigation": {
+      "max_world_freshness_ns": 250000000,
+      "obstacle_confidence_floor": 0.5,
+      "max_costmap_freshness_ns": 250000000,
+      "trajectory_replan_interval_ns": 100000000,
+      "trajectory_replan_min_tick_gap": 5,
+      "coverage_cell_size_m": 0.25,
+      "coverage_max_cells": 512,
+      "local_goal_distance_m": 0.6,
+      "local_goal_tolerance_m": 0.15,
+      "local_goal_max_age_ns": 8000000000,
+      "local_goal_heading_samples": 32,
+      "rollout_linear_samples": 6,
+      "rollout_angular_samples": 9,
+      "rollout_horizon_ns": 800000000,
+      "rollout_step_count": 8,
+      "footprint_safety_margin_m": 0.05,
+      "clearance_score_cap_m": 1.0,
+      "progress_weight": 0.6,
+      "clearance_weight": 0.1,
+      "smoothness_weight": 0.16,
+      "novelty_weight": 0.14,
+      "progress_viability_floor": 0.02,
+      "face_person_min_confidence": 0.6,
+      "face_person_align_tolerance_rad": 0.1,
+      "face_person_release_tolerance_rad": 0.16,
+      "follow_person_min_confidence": 0.6,
+      "follow_person_align_tolerance_rad": 0.22,
+      "follow_person_release_tolerance_rad": 0.3,
+      "follow_person_stand_off_m": 1.05,
+      "follow_person_distance_deadband_m": 0.15,
+      "follow_person_min_safe_distance_m": 0.75,
+      "follow_person_lost_hold_ns": 400000000,
+      "follow_person_search_timeout_ns": 2000000000,
+      "follow_person_search_sweep_rad": 0.45,
+      "follow_person_search_step_ns": 400000000,
+      "follow_person_search_yaw_tolerance_rad": 0.08,
+      "follow_person_pivot_enter_rad": 0.55,
+      "follow_person_hold_release_margin_m": 0.05,
+      "follow_person_slowdown_distance_m": 0.18,
+      "follow_person_minimum_follow_speed_mps": 0.1,
+      "follow_person_heading_min_factor": 0.75,
+      "follow_person_retention_min_confidence": 0.45,
+      "follow_person_search_max_duration_ns": 10000000000,
+      "planning_bucket_size_m": 0.5,
+      "local_escape_trigger_clearance_m": 0.12,
+      "local_escape_reverse_max_v_mps": 0.12,
+      "local_goal_novelty_weight": 0.65,
+      "local_goal_clearance_weight": 0.25,
+      "local_goal_forward_weight": 0.1
+    },
+    "async_l6": {
+      "enabled": true,
+      "completion_inputs": true,
+      "request_timeout_ns": 300000000,
+      "release_tick_gap": 5,
+      "max_plan_age_ns": 350000000,
+      "release_delay_ns": 100000000,
+      "transport_timeout_ns": 2000000000
+    },
+    "motion_realization": {
+      "cruise_v_mps": 0.5,
+      "distance_gain": 1.0,
+      "heading_gain": 1.8,
+      "max_requested_omega_rad_s": 2.0,
+      "heading_stop_threshold_rad": 0.7,
+      "max_world_freshness_ns": 250000000,
+      "horizon_ns": 100000000,
+      "cross_track_gain": 3.0,
+      "angular_velocity_gain": 0.25,
+      "max_tracking_correction_rad_s": 0.6,
+      "max_control_gap_ns": 250000000
+    },
+    "operational_constraints": {
+      "max_v_mps": 0.45,
+      "max_omega_rad_s": 1.5,
+      "max_acceleration_mps2": 0.6,
+      "max_angular_acceleration_rad_s2": 2.5,
+      "max_curvature_rad_per_m": 4.0,
+      "max_position_variance": 0.25,
+      "max_yaw_variance": 0.2
+    },
+    "wheel_pi": {
+      "kp": 0.25,
+      "ki": 0.6,
+      "integrator_limit": 0.75,
+      "max_normalized_output": 1.0,
+      "max_control_gap_ns": 250000000,
+      "max_feedback_uncertainty_ns": 250000000,
+      "max_feedback_age_ns": 250000000
+    },
+    "lidar_safety": {
+      "minimum_clearance_m": 0.4,
+      "movement_epsilon": 1e-06
+    },
+    "motion_selection": {
+      "continuity_score_band": 0.005
+    }
+  },
+  "sensor_policy": {
+    "encoder_maximum_sample_interval_ns": 100000000,
+    "encoder_maximum_abs_velocity_mps": 1.5,
+    "encoder_minimum_trust": 0.5,
+    "imu_maximum_sample_age_ns": 100000000,
+    "imu_minimum_confidence": 0.5,
+    "imu_minimum_calibration": 2,
+    "imu_allow_rate_only": true,
+    "lidar_maximum_result_age_ns": 250000000,
+    "lidar_maximum_future_skew_ns": 10000000,
+    "lidar_pose_r_scale": 1.0,
+    "lidar_minimum_confidence": 0.2,
+    "lidar_maximum_measurement_age_ns": 250000000,
+    "encoder_minimum_estimation_pulses": 4,
+    "encoder_minimum_estimation_window_ns": 40000000,
+    "encoder_maximum_estimation_window_ns": 160000000
+  },
+  "motor": {
+    "pwm_frequency_hz": 8000,
+    "pwm_decay_mode": "brake"
+  },
+  "encoder": {
+    "a_debounce_micros": 150,
+    "direction_guard_micros": 50,
+    "direction_change_confirm_edges": 3,
+    "direction_change_confirm_window_micros": 250000
+  },
+  "imu": {
+    "operation_mode": "NDOF",
+    "startup_timeout_ns": 1000000000,
+    "startup_poll_interval_ns": 50000000
+  },
+  "runtime": {
+    "tick_period_ns": 20000000,
+    "max_preflight_age_ns": 250000000,
+    "required_lidar_preflight_revisions": 3,
+    "multirate": {
+      "critical_default_period_ns": 20000000,
+      "auxiliary_default_period_ns": 50000000,
+      "history_size": 8,
+      "max_snapshot_age_ns": 250000000,
+      "worker_join_timeout_s": 2.0,
+      "source_periods": [
+        {
+          "device_id": "WHEEL_ENCODERS",
+          "period_ns": 20000000
+        },
+        {
+          "device_id": "BNO055_IMU",
+          "period_ns": 20000000
+        },
+        {
+          "device_id": "RPLIDAR_C1",
+          "period_ns": 20000000
+        },
+        {
+          "device_id": "CAMERA_FRONT",
+          "period_ns": 40000000
+        },
+        {
+          "device_id": "PERSON_DETECTOR_FRONT",
+          "period_ns": 80000000
+        },
+        {
+          "device_id": "MICROPHONE_FRONT",
+          "period_ns": 40000000
+        }
+      ]
+    },
+    "planner_recovery": {
+      "max_attempts": 3,
+      "retry_backoff_ns": 50000000,
+      "ready_timeout_s": 1.25
+    },
+    "pose_history_capacity": 64,
+    "encoder_process": {
+      "sample_period_ns": 20000000,
+      "queue_capacity": 2,
+      "ready_timeout_s": 5.0,
+      "stop_timeout_s": 2.0
+    },
+    "imu_process": {
+      "sample_period_ns": 20000000,
+      "history_size": 16,
+      "ready_timeout_s": 5.0,
+      "stop_timeout_s": 2.0
+    },
+    "lidar_process": {
+      "pose_history_capacity": 64,
+      "state_queue_capacity": 2,
+      "raw_queue_capacity": 2,
+      "state_heartbeat_ns": 100000000,
+      "ready_timeout_s": 12.0,
+      "stop_timeout_s": 3.0,
+      "pose_lock_timeout_s": 0.05,
+      "raw_end_timeout_s": 0.5
+    },
+    "planner_process": {
+      "result_buffer_capacity": 4,
+      "collector_poll_s": 0.05,
+      "stop_enqueue_timeout_s": 0.2,
+      "stop_timeout_s": 1.0
+    }
   }
 }

@@ -1,5 +1,6 @@
 # R2B4_FOLLOW_PERSON_P0_V2_20260923
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import json
 import math
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import CommandMode, CommandRequest, DataField, MissionConstraints, MotionObjectiveKind, NavigationPlan, NavigationStatus, ObstacleTrack, RobotEstimate, RollingLocalCostmap, TickContext, TrajectoryEvaluation, TrajectoryPose, Waypoint, WorldSnapshot
 from v3.layers.l4_temporal_tracking import PersonMeasurement, TemporalTrackStore
 from v3.layers.l5_command_mission import MissionManager
@@ -47,10 +48,10 @@ def _world(context: TickContext, *tracks: ObstacleTrack) -> WorldSnapshot:
     return WorldSnapshot(context=context, frame_id="R2B4_BOOT_ROBOT_MAP", map_revision=1, obstacle_tracks=tuple(tracks), freshness_ns=0, local_costmap=costmap)
 
 def _mission(context: TickContext):
-    return MissionManager().evaluate(CommandRequest(context=context, command_id="modern-follow", mode=CommandMode.FOLLOW_PERSON, goal=(DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.30)), expiry_tick=context.tick_id))
+    return configured(MissionManager, ).evaluate(CommandRequest(context=context, command_id="modern-follow", mode=CommandMode.FOLLOW_PERSON, goal=(DataField("max_v_mps", 0.15), DataField("max_omega_rad_s", 0.30)), expiry_tick=context.tick_id))
 
 def test_follow_search_target_is_completion_driven_not_timer_flipped():
-    config = _navigation_config(); nav = TrajectoryNavigator(config)
+    config = _navigation_config(); nav = configured(TrajectoryNavigator, config)
     c1 = TickContext(1, 1_000_000_000); nav.evaluate(_mission(c1), _estimate(c1), _world(c1, _person("person-1")))
     c2 = TickContext(2, 1_020_000_000); nav.evaluate(_mission(c2), _estimate(c2), _world(c2, _person("person-2")))
 
@@ -90,7 +91,7 @@ def _plan(tick: int, candidates: tuple[TrajectoryEvaluation, ...]) -> Navigation
     return NavigationPlan(context=context, mission_id="follow-motion", route=(), velocity_target=None, constraints=MissionConstraints(0.15, 0.30, 0.30, 0.08, 0.10), corridor_radius_m=0.30, progress=0.0, status=NavigationStatus.ACTIVE, local_goal=Waypoint(1.0, 0.0), trajectory_candidates=candidates)
 
 def test_l7_continuity_survives_candidate_id_change_and_avoids_sign_flip():
-    selector = MotionSelector(); first = selector.evaluate(_plan(1, (_candidate("old-grid", 1.0, -0.20), _candidate("other", 0.9, 0.20))))
+    selector = configured(MotionSelector, ); first = selector.evaluate(_plan(1, (_candidate("old-grid", 1.0, -0.20), _candidate("other", 0.9, 0.20))))
     assert first.kind is MotionObjectiveKind.TRACK_TRAJECTORY
     second = selector.evaluate(_plan(2, (_candidate("new-best", 1.000, 0.20), _candidate("new-continuous", 0.997, -0.18))))
     assert second.trajectory is not None and second.trajectory.candidate_id == "new-continuous"

@@ -133,7 +133,8 @@ def _navigation_configuration(reader: object) -> tuple[Mapping[str, object], str
         return nav, "CAPTURE_RUNTIME.v3_navigation"
 
     # Production already captures the exact resolved runtime dataclasses.
-    runtime = _map(configuration.get("resolved_runtime"))
+    robot = _map(configuration.get("resolved_robot"))
+    runtime = _map(robot.get("runtime")) if robot else _map(configuration.get("resolved_runtime"))
     composition = _map(runtime.get("composition"))
     live_control = _map(composition.get("live_control"))
     control = _map(live_control.get("control"))

@@ -39,7 +39,6 @@ from .composition.native_control import (
     NativeControlComposition,
     NativeControlCompositionConfig,
     NativeControlStateCheckpoint,
-    v3_navigation_config_from_mapping,
 )
 from .contracts import DeviceHealth, LifecycleState, SafetyDecision, TickContext
 from .device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
@@ -764,6 +763,13 @@ def _production_control_config(
     """
 
     configuration = _mapping(payload.get("configuration"), "capture.configuration")
+    from v3.config import ResolvedRobotConfig, ConfigResolver
+    robot_value = _find_unique_typed_value(configuration, ResolvedRobotConfig.__name__)
+    if robot_value is not None:
+        robot = _decode_production_value(robot_value, ResolvedRobotConfig, "capture.configuration.resolved_robot")
+        if configuration.get("snapshot_id") != robot.snapshot_id:
+            raise V3ReplayError("resolved config snapshot hash mismatch")
+        return robot.runtime.composition.live_control.control, "RESOLVED_ROBOT_SNAPSHOT"
     encoded = _find_unique_typed_value(
         configuration,
         NativeControlCompositionConfig.__name__,
@@ -810,45 +816,13 @@ def _production_control_config(
     )
 
 
-def _compat_control_config_from_documents(
-    physics: Mapping[str, object],
-    speed_map_raw: Mapping[str, object],
-    hardware: Mapping[str, object],
-    inputs: Sequence[TickInputs],
-    control: Mapping[str, object] | None = None,
-) -> NativeControlCompositionConfig:
-    track_width = _number(
-        physics.get("nyomtav_szelesseg_m"),
-        "physics.nyomtav_szelesseg_m",
-    )
-    if track_width <= 0.0:
-        raise V3ReplayError("physics.nyomtav_szelesseg_m must be positive")
-    lidar_safety = _compat_lidar_safety_config(hardware, inputs)
-    navigation = (
-        v3_navigation_config_from_mapping(dict(control))
-        if control is not None and "v3_navigation" in control
-        else None
-    )
-    navigation_kwargs = (
-        {
-            "world_model": navigation.world_model,
-            "navigation": navigation.navigation,
-            "async_l6": navigation.async_l6,
-        }
-        if navigation is not None
-        else {}
-    )
-    return NativeControlCompositionConfig(
-        speed_map=WheelSpeedMap.from_mapping(speed_map_raw),
-        estimation=NativeStateEstimatorConfig(
-            frame_id="R2B4_BOOT_ROBOT_MAP",
-            track_width_m=track_width,
-        ),
-        chassis_control=ChassisControlConfig(track_width),
-        lidar_safety=lidar_safety,
-        critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS,
-        **navigation_kwargs,
-    )
+def _compat_control_config_from_documents(physics, speed_map_raw, hardware, inputs, control=None):
+    """Document captures must contain the same complete schema as startup."""
+    from v3.config import ConfigResolver
+    try:
+        return ConfigResolver.from_documents(dict(hardware), dict(physics), dict(speed_map_raw), dict(control or {})).runtime.composition.live_control.control
+    except (ValueError, TypeError, KeyError) as exc:
+        raise V3ReplayError("capture has no complete resolved robot configuration; legacy defaults are not authoritative") from exc
 
 
 def _compat_lidar_safety_config(

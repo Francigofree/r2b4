@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import FrozenInstanceError
 import math
 
@@ -132,7 +133,7 @@ def test_invalid_imu_timing_is_rejected_by_existing_l2_admission():
     context = TickContext(5, 1_000)
     source, _ = _source(_reading(timing_valid=False))
     batch = NativeLiveInputReader((source,)).read(context)
-    admitted = InputAdmission(AdmissionConfig(max_sample_age_ns=100))(
+    admitted = InputAdmission(configured(AdmissionConfig, max_sample_age_ns=100))(
         AcquisitionFrame(batch.context, batch.samples, batch.device_health)
     )
 

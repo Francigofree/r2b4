@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import dataclass, replace
 
 import pytest
@@ -328,7 +329,7 @@ def test_l12_uses_direct_l1_lidar_clearance_without_changing_device_health():
     writer = RecordingWriter([])
     gate = FinalSafetyGate(
         writer,
-        LidarSafetyConfig("RPLIDAR_C1", minimum_clearance_m=0.2),
+        configured(LidarSafetyConfig, "RPLIDAR_C1", minimum_clearance_m=0.2),
     )
     request = ActuatorRequest(context, 0.2, 0.2)
 
@@ -351,7 +352,7 @@ def test_l12_allows_safe_scan_completed_after_tick_start_with_zero_age():
     writer = RecordingWriter([])
     gate = FinalSafetyGate(
         writer,
-        LidarSafetyConfig("RPLIDAR_C1", minimum_clearance_m=0.4),
+        configured(LidarSafetyConfig, "RPLIDAR_C1", minimum_clearance_m=0.4),
     )
 
     allowed = gate.finalize(
@@ -375,7 +376,7 @@ def test_l12_allows_safe_scan_completed_after_tick_start_with_zero_age():
 
 def test_l12_stale_scan_stops_and_malformed_sample_faults():
     context = TickContext(0, 1_000_000_000)
-    config = LidarSafetyConfig(
+    config = configured(LidarSafetyConfig, 
         "RPLIDAR_C1",
         minimum_clearance_m=0.4,
         maximum_sample_age_ns=250_000_000,
@@ -417,7 +418,7 @@ def test_l12_multirate_reused_lidar_snapshot_uses_control_time_freshness():
     # the control decision, while its immutable source-read-time age field
     # still contained 75.923400 ms.
     context = TickContext(101, 13_313_231_521_575)
-    config = LidarSafetyConfig(
+    config = configured(LidarSafetyConfig, 
         "RPLIDAR_C1",
         minimum_clearance_m=0.2,
         maximum_sample_age_ns=250_000_000,
@@ -456,7 +457,7 @@ def test_l12_multirate_reused_lidar_snapshot_uses_control_time_freshness():
 
 def test_l12_multirate_frozen_declared_age_cannot_hide_true_stale_scan():
     context = TickContext(102, 13_313_500_000_000)
-    config = LidarSafetyConfig(
+    config = configured(LidarSafetyConfig, 
         "RPLIDAR_C1",
         minimum_clearance_m=0.2,
         maximum_sample_age_ns=250_000_000,
@@ -494,7 +495,7 @@ def test_l12_multirate_frozen_declared_age_cannot_hide_true_stale_scan():
 
 def test_l12_directional_lidar_gate_fails_closed_for_missing_or_unseen_sector():
     context = TickContext(0, 1_000)
-    config = LidarSafetyConfig("RPLIDAR_C1", minimum_clearance_m=0.2)
+    config = configured(LidarSafetyConfig, "RPLIDAR_C1", minimum_clearance_m=0.2)
 
     missing = FinalSafetyGate(RecordingWriter([]), config).finalize(
         context,

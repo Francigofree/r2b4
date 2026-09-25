@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import json
 from pathlib import Path
 
@@ -80,14 +81,14 @@ def _control_config() -> NativeControlCompositionConfig:
     assert isinstance(physics, dict)
     assert isinstance(hardware, dict)
     track_width_m = float(physics["nyomtav_szelesseg_m"])
-    return NativeControlCompositionConfig(
+    return configured(NativeControlCompositionConfig, 
         speed_map=WheelSpeedMap.from_mapping(configuration["speed_map"]),
-        estimation=NativeStateEstimatorConfig(
+        estimation=configured(NativeStateEstimatorConfig, 
             frame_id="R2B4_BOOT_ROBOT_MAP",
             track_width_m=track_width_m,
         ),
         chassis_control=ChassisControlConfig(track_width_m),
-        lidar_safety=LidarSafetyConfig(
+        lidar_safety=configured(LidarSafetyConfig, 
             "RPLIDAR_C1",
             float(hardware["lidar"]["biztonsagi_zona_m"]),
         ),
@@ -276,7 +277,7 @@ def test_arc_safety_is_fail_closed_below_040_m(omega_rad_s: float) -> None:
     clear_writer = _Writer()
     clear = FinalSafetyGate(
         clear_writer,
-        LidarSafetyConfig("RPLIDAR_C1", 0.40),
+        configured(LidarSafetyConfig, "RPLIDAR_C1", 0.40),
     ).finalize(
         context,
         request,
@@ -289,7 +290,7 @@ def test_arc_safety_is_fail_closed_below_040_m(omega_rad_s: float) -> None:
     blocked_writer = _Writer()
     blocked = FinalSafetyGate(
         blocked_writer,
-        LidarSafetyConfig("RPLIDAR_C1", 0.40),
+        configured(LidarSafetyConfig, "RPLIDAR_C1", 0.40),
     ).finalize(
         context,
         request,

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import ast
 from dataclasses import replace
@@ -112,7 +113,7 @@ def test_result_collector_is_the_runtime_result_queue_consumer():
 
 def test_process_backend_roundtrip_is_collected_before_control_thread_take():
     backend = ProcessTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         worker_cpu=None,
         strict_affinity=False,
     )
@@ -125,7 +126,7 @@ def test_process_backend_roundtrip_is_collected_before_control_thread_take():
         result = _wait_for_result(backend, request_id)
         assert result.source_context == request.context
         assert result.trajectory_candidates
-        assert result == TrajectoryRolloutComputer(NavigationConfig()).compute(request)
+        assert result == TrajectoryRolloutComputer(configured(NavigationConfig, )).compute(request)
     finally:
         backend.close()
     assert collector is not None
@@ -134,7 +135,7 @@ def test_process_backend_roundtrip_is_collected_before_control_thread_take():
 
 def test_abandoned_result_is_never_returned_or_left_buffered():
     backend = ProcessTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         worker_cpu=None,
         strict_affinity=False,
     )

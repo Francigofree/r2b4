@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import time
 import threading
@@ -58,7 +59,7 @@ def _wait_state(backend, expected: CapabilityState, timeout_s: float = 1.0):
 def test_recovery_exposes_restarting_then_new_generation():
     factory = _BlockingFactory()
     backend = RecoveringTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         strict_affinity=False,
         recovery_policy=PlannerRecoveryPolicy(
             max_attempts=2,
@@ -85,7 +86,7 @@ def test_recovery_exposes_restarting_then_new_generation():
 
 def test_recovery_exhaustion_is_explicit_failed_state():
     backend = RecoveringTrajectoryRolloutBackend(
-        NavigationConfig(),
+        configured(NavigationConfig, ),
         strict_affinity=False,
         recovery_policy=PlannerRecoveryPolicy(
             max_attempts=2,

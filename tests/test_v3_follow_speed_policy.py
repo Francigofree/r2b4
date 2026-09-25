@@ -1,5 +1,6 @@
 # R2B4_FOLLOW_SPEED_SMOOTH_P0_20260923
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import inspect
 import json
@@ -13,7 +14,7 @@ from v3.action_catalog import (
     action_descriptor,
 )
 from v3.adapters.v3_control import V3ControlInterfaceAdapter
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import (
     CommandMode,
     CommandRequest,
@@ -90,7 +91,7 @@ def _world(context: TickContext, x_m: float) -> WorldSnapshot:
 
 
 def _mission(context: TickContext):
-    return MissionManager().evaluate(
+    return configured(MissionManager, ).evaluate(
         CommandRequest(
             context=context,
             command_id="follow-speed-policy",
@@ -154,13 +155,13 @@ def test_robot_interface_adapter_default_cannot_fall_back_to_old_015():
 def test_nominal_downstream_static_caps_are_above_follow_default():
     # This guards accidental future static caps. Dynamic distance/heading,
     # localization, acceleration, obstacle and L12 safety limits remain valid.
-    assert MotionRealizationConfig().cruise_v_mps >= FOLLOW_PERSON_DEFAULT_MAX_V_MPS
-    assert OperationalConstraintsConfig().max_v_mps >= FOLLOW_PERSON_DEFAULT_MAX_V_MPS
+    assert configured(MotionRealizationConfig, ).cruise_v_mps >= FOLLOW_PERSON_DEFAULT_MAX_V_MPS
+    assert configured(OperationalConstraintsConfig, ).max_v_mps >= FOLLOW_PERSON_DEFAULT_MAX_V_MPS
 
 
 def test_far_aligned_follow_exposes_full_025_planning_envelope():
     context = TickContext(1, 1_000_000_000)
-    navigator = TrajectoryNavigator(_navigation_config())
+    navigator = configured(TrajectoryNavigator, _navigation_config())
     plan = navigator.evaluate(
         _mission(context),
         _estimate(context),
@@ -179,7 +180,7 @@ def test_far_aligned_follow_exposes_full_025_planning_envelope():
 def test_normal_distance_hold_is_active_arrival_not_stop_revocation():
     config = _navigation_config()
     context = TickContext(1, 2_000_000_000)
-    navigator = TrajectoryNavigator(config)
+    navigator = configured(TrajectoryNavigator, config)
     plan = navigator.evaluate(
         _mission(context),
         _estimate(context),
@@ -189,5 +190,5 @@ def test_normal_distance_hold_is_active_arrival_not_stop_revocation():
     assert plan.status.value == "ACTIVE"
     assert plan.reason == "PERSON_DISTANCE_HOLD"
     assert plan.route
-    objective = MotionSelector().evaluate(plan)
+    objective = configured(MotionSelector, ).evaluate(plan)
     assert objective.kind is MotionObjectiveKind.TRACK_PLAN

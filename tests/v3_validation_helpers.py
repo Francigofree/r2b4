@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 import json
 from pathlib import Path
 
@@ -6,7 +7,6 @@ from v3.capture import CaptureSink
 from v3.composition.native_control import (
     NativeControlComposition,
     NativeControlCompositionConfig,
-    v3_navigation_config_from_mapping,
 )
 from v3.contracts import (
     CommandMode,
@@ -80,33 +80,15 @@ def configuration_documents() -> dict[str, object]:
     }
 
 
+def resolved_configuration():
+    from v3_config_fixtures import robot_config
+    from v3_process_runtime import _capture_configuration
+    return _capture_configuration(robot_config())
+
+
 def control_config() -> NativeControlCompositionConfig:
-    documents = configuration_documents()
-    physics = documents["physics"]
-    speed_map = documents["speed_map"]
-    hardware = documents["hardware"]
-    control = documents["control"]
-    assert isinstance(physics, dict)
-    assert isinstance(speed_map, dict)
-    assert isinstance(hardware, dict)
-    assert isinstance(control, dict)
-    navigation = v3_navigation_config_from_mapping(control)
-    track_width = float(physics["nyomtav_szelesseg_m"])
-    return NativeControlCompositionConfig(
-        speed_map=WheelSpeedMap.from_mapping(speed_map),
-        estimation=NativeStateEstimatorConfig(
-            frame_id="R2B4_BOOT_ROBOT_MAP",
-            track_width_m=track_width,
-        ),
-        chassis_control=ChassisControlConfig(track_width),
-        lidar_safety=LidarSafetyConfig(
-            "RPLIDAR_C1",
-            float(hardware["lidar"]["biztonsagi_zona_m"]),
-        ),
-        world_model=navigation.world_model,
-        navigation=navigation.navigation,
-        async_l6=navigation.async_l6,
-    )
+    from v3_config_fixtures import robot_config
+    return robot_config().runtime.composition.live_control.control
 
 
 def tick_inputs(count: int = 5) -> tuple[TickInputs, ...]:
@@ -198,7 +180,7 @@ def create_general_capture(tmp_path: Path, *, capture_id: str = "general-v3") ->
     production = NativeControlComposition(motor_sink, control_config())
     capture_sink = CaptureSink(
         capture_id,
-        configuration=configuration_documents(),
+        configuration=resolved_configuration(),
         metadata={"purpose": "general-v3-validation"},
     )
     ExecutionBoundary(production).run(IterableInputSource(tick_inputs()), capture_sink)
@@ -254,7 +236,7 @@ def create_explore_capture(tmp_path: Path, *, capture_id: str = "explore-v3") ->
     production = NativeControlComposition(motor_sink, control_config())
     capture_sink = CaptureSink(
         capture_id,
-        configuration=configuration_documents(),
+        configuration=resolved_configuration(),
         metadata={"purpose": "generic-navigation-explore-replay"},
     )
     source = ClosingInputSource(
@@ -289,7 +271,7 @@ def create_fault_capture(tmp_path: Path, *, capture_id: str = "fault-v3") -> Pat
     production = NativeControlComposition(motor_sink, control_config())
     capture_sink = CaptureSink(
         capture_id,
-        configuration=configuration_documents(),
+        configuration=resolved_configuration(),
         metadata={"purpose": "fail-closed-v3-validation"},
     )
     ExecutionBoundary(production).run(IterableInputSource((fault_input,)), capture_sink)

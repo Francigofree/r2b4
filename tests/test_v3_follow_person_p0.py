@@ -1,4 +1,5 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 import json
 import math
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import (
     CommandMode,
     CommandRequest,
@@ -81,7 +82,7 @@ def _world(context: TickContext, *tracks: ObstacleTrack) -> WorldSnapshot:
 
 
 def _mission(context: TickContext, command_id: str = "follow-p0"):
-    return MissionManager().evaluate(
+    return configured(MissionManager, ).evaluate(
         CommandRequest(
             context=context,
             command_id=command_id,
@@ -124,7 +125,7 @@ def test_search_hard_cap_must_be_integer_and_cover_timeout(cap):
 
 
 def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
-    nav = TrajectoryNavigator(_config())
+    nav = configured(TrajectoryNavigator, _config())
     c1 = TickContext(1, 1_000_000_000)
     nav.evaluate(
         _mission(c1),
@@ -172,7 +173,7 @@ def test_p0_lost_hold_ignores_other_people_then_uses_bounded_target_recovery():
 @pytest.mark.parametrize("omega", [0.3, 1.2, 1e-300])
 def test_search_budget_covers_sweep_at_command_speed_but_is_bounded(omega):
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     first = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
     lost = TickContext(1, 1_020_000_000)
@@ -194,7 +195,7 @@ def test_search_budget_covers_sweep_at_command_speed_but_is_bounded(omega):
 
 def test_search_completes_both_sides_after_old_timeout_and_does_not_restart():
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     first = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
     lost = TickContext(1, 1_020_000_000)
@@ -210,7 +211,7 @@ def test_search_completes_both_sides_after_old_timeout_and_does_not_restart():
         plan = nav.evaluate(_mission(c), _estimate(c, yaw), _world(c))
         assert plan.status is NavigationStatus.ACTIVE
         assert nav.follow_person_evidence.search_phase == phase
-    restored = TrajectoryNavigator(config)
+    restored = configured(TrajectoryNavigator, config)
     restored.restore(nav.checkpoint())
     for tick, offset in ((6, 5_200_000_000), (7, 5_220_000_000)):
         c = TickContext(tick, start + offset)
@@ -226,7 +227,7 @@ def test_search_completes_both_sides_after_old_timeout_and_does_not_restart():
 
 
 def test_p0_same_locked_target_can_return_without_identity_switch():
-    nav = TrajectoryNavigator(_config())
+    nav = configured(TrajectoryNavigator, _config())
     c1 = TickContext(10, 2_000_000_000)
     nav.evaluate(_mission(c1), _estimate(c1), _world(c1, _person("person-a", 1.8, 0.0)))
 
@@ -243,7 +244,7 @@ def test_p0_same_locked_target_can_return_without_identity_switch():
 
 
 def test_p0_medium_heading_error_uses_curved_rollout_not_pivot():
-    nav = TrajectoryNavigator(_config())
+    nav = configured(TrajectoryNavigator, _config())
     c1 = TickContext(20, 3_000_000_000)
     angle = 0.30
     distance = 2.0
@@ -261,7 +262,7 @@ def test_p0_medium_heading_error_uses_curved_rollout_not_pivot():
 
 
 def test_p0_large_heading_error_pivots_until_release_threshold():
-    nav = TrajectoryNavigator(_config())
+    nav = configured(TrajectoryNavigator, _config())
     command_id = "follow-pivot"
     c1 = TickContext(30, 4_000_000_000)
     angle = 0.70
@@ -295,7 +296,7 @@ def test_p0_large_heading_error_pivots_until_release_threshold():
 
 def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_motion():
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     command_id = "follow-distance-hysteresis"
     hold_enter = (
         config.follow_person_stand_off_m
@@ -345,7 +346,7 @@ def test_p0_standoff_hysteresis_prevents_chatter_and_restarts_motion():
 
 def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     command_id = "follow-checkpoint"
 
     c1 = TickContext(50, 6_000_000_000)
@@ -365,7 +366,7 @@ def test_p0_checkpoint_restore_preserves_target_lock_and_behavior_state():
     assert checkpoint.follow_person_lost_since_ns == c2.monotonic_ns
     assert checkpoint.follow_person_last_heading_rad == pytest.approx(0.0)
 
-    restored = TrajectoryNavigator(config)
+    restored = configured(TrajectoryNavigator, config)
     restored.restore(checkpoint)
     after = restored.checkpoint()
     assert after.follow_person_track_id == "person-a"
@@ -380,7 +381,7 @@ def test_world_stale_stops_motion_but_retains_lock_for_low_confidence_recovery()
     from v3.layers.l8_motion_realization import MotionRealizer
 
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     first = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
     stale = TickContext(1, 1_020_000_000)
@@ -388,12 +389,12 @@ def test_world_stale_stops_motion_but_retains_lock_for_low_confidence_recovery()
     plan = nav.evaluate(_mission(stale), _estimate(stale), world)
     assert plan.reason == "WORLD_STALE"
     assert not plan.route and not plan.trajectory_candidates and plan.velocity_target is None
-    intent = MotionRealizer().evaluate(select_motion(plan), _estimate(stale), world)
+    intent = configured(MotionRealizer, ).evaluate(select_motion(plan), _estimate(stale), world)
     assert intent.requested_v_mps == intent.requested_omega_rad_s == 0.0
     checkpoint = nav.checkpoint()
     assert checkpoint.follow_person_track_id == "person-a"
     assert not checkpoint.trajectory_candidates
-    restored = TrajectoryNavigator(config)
+    restored = configured(TrajectoryNavigator, config)
     restored.restore(checkpoint)
     fresh = TickContext(2, 1_040_000_000)
     world = _world(fresh, _person("person-a", 2, 0, 0.48), _person("person-b", 1.5, 0, 0.99))
@@ -409,7 +410,7 @@ def test_world_stale_stops_motion_but_retains_lock_for_low_confidence_recovery()
 def test_stale_world_does_not_keep_lock_across_mission_reset(reset):
     from v3.contracts import MissionLifecycle
 
-    nav = TrajectoryNavigator(_config())
+    nav = configured(TrajectoryNavigator, _config())
     first = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
     stale = TickContext(1, 1_020_000_000)
@@ -429,7 +430,7 @@ def test_stale_world_discards_closed_rollout_and_requires_a_fresh_request():
     from v3.layers.l6_navigation import TrajectoryRolloutComputer
 
     config = _config()
-    nav = TrajectoryNavigator(config, completion_inputs=True)
+    nav = configured(TrajectoryNavigator, config, completion_inputs=True)
     c0 = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(c0), _estimate(c0), _world(c0, _person("person-a", 2, 0)), PlannerInput(c0))
     old_request = nav.pending_rollout_request
@@ -441,7 +442,7 @@ def test_stale_world_discards_closed_rollout_and_requires_a_fresh_request():
     assert plan.reason == "WORLD_STALE" and not plan.trajectory_candidates
     assert nav.pending_rollout_request is None
     checkpoint = nav.checkpoint()
-    restored = TrajectoryNavigator(config, completion_inputs=True)
+    restored = configured(TrajectoryNavigator, config, completion_inputs=True)
     restored.restore(checkpoint)
     for navigator in (nav, restored):
         for tick in (2, 3):
@@ -462,7 +463,7 @@ def test_stale_world_discards_closed_rollout_and_requires_a_fresh_request():
 
 def test_stale_world_does_not_restart_search_or_extend_its_deadline():
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     c0 = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(c0), _estimate(c0), _world(c0, _person("person-a", 2, 0)))
     c1 = TickContext(1, 1_020_000_000)
@@ -488,7 +489,7 @@ def test_search_and_realization_share_completion_tolerance(mission_tolerance):
     from v3.layers.l8_motion_realization import MotionRealizer
 
     config = _config()
-    nav = TrajectoryNavigator(config)
+    nav = configured(TrajectoryNavigator, config)
     first = TickContext(0, 1_000_000_000)
     nav.evaluate(_mission(first), _estimate(first), _world(first, _person("person-a", 2, 0)))
     lost = TickContext(1, 1_020_000_000)
@@ -504,5 +505,5 @@ def test_search_and_realization_share_completion_tolerance(mission_tolerance):
         assert plan.constraints.yaw_tolerance_rad == effective
         assert nav.follow_person_evidence.search_yaw_tolerance_rad == effective
         assert nav.follow_person_evidence.search_phase == (1 if tick == 4 else 0)
-        intent = MotionRealizer().evaluate(select_motion(plan), _estimate(c, yaw), _world(c))
+        intent = configured(MotionRealizer, ).evaluate(select_motion(plan), _estimate(c, yaw), _world(c))
         assert abs(intent.requested_omega_rad_s) > 0.0

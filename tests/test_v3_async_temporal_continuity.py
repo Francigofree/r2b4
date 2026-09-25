@@ -1,4 +1,5 @@
 """P0/P1 invariants at the real closure, mission and process boundaries."""
+from v3_config_fixtures import configured
 from dataclasses import replace
 
 import pytest
@@ -106,10 +107,10 @@ def test_collector_delay_preserves_success_and_closed_tick_immutability():
 
 @pytest.mark.parametrize("mode", [CommandMode.EXPLORE, CommandMode.NAVIGATE, CommandMode.FOLLOW_PERSON])
 def test_each_mission_preserves_identity_during_stale_hold_and_fresh_resume(mode):
-    config = NavigationConfig()
-    navigator = TrajectoryNavigator(config, completion_inputs=True, max_plan_age_ns=350_000_000)
+    config = configured(NavigationConfig, )
+    navigator = configured(TrajectoryNavigator, config, completion_inputs=True, max_plan_age_ns=350_000_000)
     computer = TrajectoryRolloutComputer(config)
-    manager = MissionManager()
+    manager = configured(MissionManager, )
 
     def evaluate(tick, ns, completion=None):
         context = TickContext(tick, ns)

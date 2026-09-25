@@ -1,3 +1,4 @@
+from v3_config_fixtures import configured
 from dataclasses import fields, replace
 
 import pytest
@@ -111,7 +112,7 @@ def test_id_hold_uses_measured_0_005_score_band(
     expected_id,
     expected_prefix,
 ):
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     _prime_previous(selector)
 
     objective = selector.evaluate(
@@ -129,7 +130,7 @@ def test_id_hold_uses_measured_0_005_score_band(
 
 
 def test_zero_band_disables_temporal_hold():
-    selector = MotionSelector(MotionSelectionConfig(0.0))
+    selector = configured(MotionSelector, configured(MotionSelectionConfig, 0.0))
     _prime_previous(selector)
     assert _selected_id(
         selector,
@@ -144,7 +145,7 @@ def test_zero_band_disables_temporal_hold():
 
 
 def test_previous_collision_can_never_be_held():
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     _prime_previous(selector)
     objective = selector.evaluate(
         _plan(
@@ -161,7 +162,7 @@ def test_previous_collision_can_never_be_held():
 
 
 def test_missing_previous_candidate_falls_back_to_current_best():
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     _prime_previous(selector)
     assert _selected_id(
         selector,
@@ -176,7 +177,7 @@ def test_missing_previous_candidate_falls_back_to_current_best():
 
 
 def test_mission_change_cannot_reuse_old_candidate_identity():
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     _prime_previous(selector)
     objective = selector.evaluate(
         _plan(
@@ -194,7 +195,7 @@ def test_mission_change_cannot_reuse_old_candidate_identity():
 
 
 def test_nontrajectory_branch_retains_objective_without_old_candidate_bias():
-    selector = MotionSelector()
+    selector = configured(MotionSelector, )
     _prime_previous(selector)
 
     base = _plan(2, (_candidate("previous", 1.0),))
@@ -223,11 +224,11 @@ def test_nontrajectory_branch_retains_objective_without_old_candidate_bias():
 
 
 def test_checkpoint_restore_preserves_next_l7_decision():
-    original = MotionSelector()
+    original = configured(MotionSelector, )
     _prime_previous(original)
     checkpoint = original.checkpoint()
 
-    restored = MotionSelector()
+    restored = configured(MotionSelector, )
     restored.restore(checkpoint)
 
     next_plan = _plan(
@@ -254,4 +255,4 @@ def test_native_control_checkpoint_has_backward_compatible_l7_default():
 @pytest.mark.parametrize("value", (-0.001, 1.001, float("inf"), float("nan")))
 def test_motion_selection_band_rejects_invalid_values(value):
     with pytest.raises(ValueError):
-        MotionSelectionConfig(value)
+        configured(MotionSelectionConfig, value)

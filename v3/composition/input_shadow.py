@@ -56,12 +56,9 @@ class InputShadowComposition:
     def __init__(
         self,
         *,
-        admission_config: AdmissionConfig = AdmissionConfig(max_sample_age_ns=250_000_000),
-        estimator_config: StateEstimatorConfig = StateEstimatorConfig(
-            frame_id="R2B4_BOOT_ROBOT_MAP",
-            track_width_m=0.3557,
-        ),
-        world_config: WorldModelConfig = WorldModelConfig(),
+        admission_config: AdmissionConfig,
+        estimator_config: StateEstimatorConfig,
+        world_config: WorldModelConfig,
         state_estimator: Callable[[AdmittedFrame], RobotEstimate] | None = None,
     ) -> None:
         if state_estimator is not None and not callable(state_estimator):

@@ -9,45 +9,27 @@
       "gpio_in1": 18,
       "gpio_in2": 19,
       "invert": true
-    },
-    "pwm_decay_mode": "brake"
+    }
   },
   "encoderek": {
     "bal_a_pin": 23,
     "bal_b_pin": 24,
     "jobb_a_pin": 25,
     "jobb_b_pin": 16,
-    "counts_per_revolution": 663,
     "count_mode": "X1_A_RISING",
-    "forward_b_level": 1,
-    "a_debounce_micros": 150,
     "input_pull_up": false,
     "invert_bal": true,
-    "invert_jobb": false,
-    "direction_guard_micros": 50,
-    "direction_change_confirm_edges": 3,
-    "direction_change_confirm_window_micros": 250000
+    "invert_jobb": false
   },
   "lidar": {
-    "biztonsagi_zona_m": 0.4,
-    "stop_join_timeout_s": 2.0
+    "port": null,
+    "baudrate": 460800
   },
   "imu": {
     "provider": "bno055",
     "bno055": {
       "bus": 1,
       "address": "0x28",
-      "operation_mode": "NDOF",
-      "axis_order": [
-        0,
-        1,
-        2
-      ],
-      "axis_sign": [
-        1,
-        1,
-        1
-      ],
       "use_external_crystal": false
     }
   },
@@ -87,5 +69,6 @@
       "rearm_misses": 5,
       "minimum_interval_ns": 5000000000
     }
-  }
+  },
+  "gpio_chip": 0
 }

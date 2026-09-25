@@ -1,10 +1,11 @@
 from __future__ import annotations
+from v3_config_fixtures import configured
 
 from dataclasses import replace
 
 import pytest
 
-from v3.composition.native_control import v3_navigation_config_from_mapping
+from v3_config_fixtures import navigation_from_control as v3_navigation_config_from_mapping
 from v3.contracts import (
     CommandMode,
     CommandRequest,
@@ -84,12 +85,12 @@ def _evaluate(navigator, manager, tick_id: int):
 
 
 def test_pure_rollout_computer_matches_the_canonical_synchronous_l6_kernel():
-    config = NavigationConfig()
+    config = configured(NavigationConfig, )
     context = TickContext(0, 1_000_000_000)
     estimate = _estimate(context, 0.0)
     world = _world(context)
     goal = Waypoint(0.60, 0.0)
-    navigator = TrajectoryNavigator(config)
+    navigator = configured(TrajectoryNavigator, config)
     scene = navigator._build_planning_scene(world)
     expected = navigator._trajectory_rollout(
         estimate,
@@ -114,16 +115,16 @@ def test_pure_rollout_computer_matches_the_canonical_synchronous_l6_kernel():
 
 
 def test_async_latest_plan_handoff_and_pending_checkpoint_restore_are_deterministic():
-    config = NavigationConfig()
+    config = configured(NavigationConfig, )
     original_backend = InlineTrajectoryRolloutBackend(config)
     restored_backend = InlineTrajectoryRolloutBackend(config)
-    original = TrajectoryNavigator(
+    original = configured(TrajectoryNavigator, 
         config,
         rollout_backend=original_backend,
         rollout_release_tick_gap=5,
         max_plan_age_ns=350_000_000,
     )
-    original_manager = MissionManager()
+    original_manager = configured(MissionManager, )
     plans = []
     checkpoint = None
     for tick_id in range(6):
@@ -137,14 +138,14 @@ def test_async_latest_plan_handoff_and_pending_checkpoint_restore_are_determinis
     assert checkpoint.pending_release_not_before_ns is None
     assert plans[5].trajectory_candidates == plans[4].trajectory_candidates
 
-    restored = TrajectoryNavigator(
+    restored = configured(TrajectoryNavigator, 
         config,
         rollout_backend=restored_backend,
         rollout_release_tick_gap=5,
         max_plan_age_ns=350_000_000,
     )
     restored.restore(checkpoint)
-    restored_manager = MissionManager()
+    restored_manager = configured(MissionManager, )
     restored_manager.restore(original_manager.checkpoint())
 
     for tick_id in range(6, 11):
@@ -184,14 +185,14 @@ class _NeverReadyBackend:
 
 
 def test_async_rollout_deadline_miss_fails_closed_as_l6_error():
-    config = NavigationConfig()
-    navigator = TrajectoryNavigator(
+    config = configured(NavigationConfig, )
+    navigator = configured(TrajectoryNavigator, 
         config,
         rollout_backend=_NeverReadyBackend(),
         rollout_release_tick_gap=5,
         max_plan_age_ns=350_000_000,
     )
-    manager = MissionManager()
+    manager = configured(MissionManager, )
     for tick_id in range(10):
         _evaluate(navigator, manager, tick_id)
     with pytest.raises(RuntimeError, match="ASYNC_L6_DEADLINE_MISSED"):
@@ -239,7 +240,7 @@ def test_async_l6_config_is_explicit_and_defaults_off_for_old_documents():
         }
     }
     old = v3_navigation_config_from_mapping(base)
-    assert old.async_l6 == AsyncL6PlannerConfig()
+    assert old.async_l6 == configured(AsyncL6PlannerConfig, )
     assert old.async_l6.enabled is False
 
     enabled = replace(
@@ -262,15 +263,15 @@ def test_async_l6_config_is_explicit_and_defaults_off_for_old_documents():
 def test_previous_plan_staleness_holds_before_release_tick():
     """The P0 fix must not weaken pre-release fail-closed freshness."""
 
-    config = NavigationConfig()
+    config = configured(NavigationConfig, )
     backend = InlineTrajectoryRolloutBackend(config)
-    navigator = TrajectoryNavigator(
+    navigator = configured(TrajectoryNavigator, 
         config,
         rollout_backend=backend,
         rollout_release_tick_gap=5,
         max_plan_age_ns=100_000_000,
     )
-    manager = MissionManager()
+    manager = configured(MissionManager, )
 
     for tick_id in range(6):
         _evaluate(navigator, manager, tick_id)
@@ -296,19 +297,19 @@ def _evaluate_at(navigator, manager, tick_id: int, monotonic_ns: int):
 def test_time_based_async_handoff_is_stable_under_control_tick_jitter():
     """Reproduce the live failure shape without tying 100 ms to five ticks."""
 
-    config = NavigationConfig(
+    config = configured(NavigationConfig, 
         trajectory_replan_interval_ns=100_000_000,
         trajectory_replan_min_tick_gap=5,
     )
     backend = InlineTrajectoryRolloutBackend(config)
-    navigator = TrajectoryNavigator(
+    navigator = configured(TrajectoryNavigator, 
         config,
         rollout_backend=backend,
         rollout_release_tick_gap=5,
         rollout_release_delay_ns=100_000_000,
         max_plan_age_ns=350_000_000,
     )
-    manager = MissionManager()
+    manager = configured(MissionManager, )
 
     times = {
         0: 1_000_000_000,
@@ -360,7 +361,7 @@ def test_time_based_async_handoff_budget_must_fit_inside_plan_freshness():
         ValueError,
         match="release_delay_ns must be shorter than max_plan_age_ns",
     ):
-        AsyncL6PlannerConfig(
+        configured(AsyncL6PlannerConfig, 
             enabled=True,
             release_tick_gap=5,
             max_plan_age_ns=100_000_000,
@@ -390,16 +391,16 @@ class _LateReadyBackend:
 
 
 def test_late_async_rollout_keeps_fresh_previous_plan():
-    config = NavigationConfig(trajectory_replan_interval_ns=100_000_000)
+    config = configured(NavigationConfig, trajectory_replan_interval_ns=100_000_000)
     backend = _LateReadyBackend(config)
-    navigator = TrajectoryNavigator(
+    navigator = configured(TrajectoryNavigator, 
         config,
         rollout_backend=backend,
         rollout_release_tick_gap=5,
         rollout_release_delay_ns=100_000_000,
         max_plan_age_ns=350_000_000,
     )
-    manager = MissionManager()
+    manager = configured(MissionManager, )
 
     seed = _evaluate_at(navigator, manager, 0, 1_000_000_000)
     previous_candidates = seed.trajectory_candidates
@@ -416,15 +417,15 @@ def test_late_async_rollout_keeps_fresh_previous_plan():
 
 
 def test_async_rollout_holds_when_previous_plan_becomes_stale():
-    config = NavigationConfig(trajectory_replan_interval_ns=100_000_000)
-    navigator = TrajectoryNavigator(
+    config = configured(NavigationConfig, trajectory_replan_interval_ns=100_000_000)
+    navigator = configured(TrajectoryNavigator, 
         config,
         rollout_backend=_NeverReadyBackend(),
         rollout_release_tick_gap=5,
         rollout_release_delay_ns=100_000_000,
         max_plan_age_ns=350_000_000,
     )
-    manager = MissionManager()
+    manager = configured(MissionManager, )
 
     _evaluate_at(navigator, manager, 0, 1_000_000_000)
     _evaluate_at(navigator, manager, 5, 1_100_000_000)

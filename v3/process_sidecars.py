@@ -210,6 +210,7 @@ def _status_sidecar_main(
     failed_event: Any,
     worker_cpu: int | None,
     strict_affinity: bool,
+    effective_config=None,
 ) -> None:
     try:
         if worker_cpu is not None:
@@ -219,11 +220,14 @@ def _status_sidecar_main(
                 strict=strict_affinity,
             )
         target = Path(path)
+        configuration = ({"effective_config": effective_config.as_dict(), "config_snapshot_id": effective_config.snapshot_id}
+                         if effective_config is not None else {})
         _atomic_private_json(
             target,
             {
                 "schema": RESIDENT_PROCESS_STATUS_SCHEMA,
                 "state": "BOOTING",
+                **configuration,
                 "monotonic_ns": time.monotonic_ns(),
             },
             file_mode,
@@ -251,7 +255,7 @@ def _status_sidecar_main(
                     "error_type": error_type,
                     "error": error_text,
                 }
-                _atomic_private_json(target, payload, file_mode)
+                _atomic_private_json(target, {**payload, **configuration}, file_mode)
                 finishing = True
                 continue
 
@@ -263,7 +267,7 @@ def _status_sidecar_main(
                 continue
             _atomic_private_json(
                 target,
-                snapshot,
+                {**snapshot, **configuration},
                 file_mode,
             )
         result_queue.put(("done",))
@@ -543,6 +547,7 @@ class ProcessResidentStatusPublisher:
                 self._failed_event,
                 worker_cpu,
                 strict_affinity,
+                getattr(config, "effective_config", None),
             ),
             name="v3-observer-status",
             daemon=False,

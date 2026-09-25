@@ -189,9 +189,9 @@ class WheelPiConfig:
     ki: float
     integrator_limit: float
     max_normalized_output: float
-    max_control_gap_ns: int = 250_000_000
-    max_feedback_uncertainty_ns: int = 100_000_000
-    max_feedback_age_ns: int = 250_000_000
+    max_control_gap_ns: int
+    max_feedback_uncertainty_ns: int
+    max_feedback_age_ns: int
 
     def __post_init__(self) -> None:
         for name in ("kp", "ki", "integrator_limit", "max_normalized_output"):
