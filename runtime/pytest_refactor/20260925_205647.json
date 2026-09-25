@@ -1,0 +1,379 @@
+{
+  "after_collected": 83,
+  "auto_removed_stale_failures": [],
+  "backup": "/home/alba/project_r2b4/.upgrade_backups/pytest_refactor_v2_20260925_20260925_205647",
+  "before_collected": 529,
+  "budget": {
+    "hard_cap": 150,
+    "layers": {
+      "core": {
+        "max": 30,
+        "min": 20,
+        "target": 25
+      },
+      "deep": {
+        "max": 40,
+        "min": 0,
+        "target": 30
+      },
+      "feature": {
+        "max": 70,
+        "min": 40,
+        "target": 55
+      }
+    },
+    "total_max": 140,
+    "total_min": 80
+  },
+  "counts": {
+    "core": 25,
+    "deep": 3,
+    "feature": 55
+  },
+  "created_at_local": "2026-09-25T20:56:47",
+  "known_stale_baseline_files_20260925": [
+    "test_r2b4_conversation_contracts.py",
+    "test_r2b4_conversation_service.py",
+    "test_r2b4_llm_provider.py",
+    "test_v3_async_capability_convergence.py",
+    "test_v3_async_command_gateway.py",
+    "test_v3_async_l6_planner.py",
+    "test_v3_async_planner_edges.py",
+    "test_v3_async_recovery_p0.py",
+    "test_v3_capture.py",
+    "test_v3_control_process_isolation.py",
+    "test_v3_differential_drive_arcs.py",
+    "test_v3_follow_person.py",
+    "test_v3_hardware_runtime.py",
+    "test_v3_l6_planner_process.py",
+    "test_v3_live_input_composition.py",
+    "test_v3_mcap_e2e.py",
+    "test_v3_motion_feedback.py",
+    "test_v3_native_lidar_estimator.py",
+    "test_v3_native_lidar_port.py",
+    "test_v3_operator_controller.py",
+    "test_v3_process_imu_device.py",
+    "test_v3_process_runtime.py",
+    "test_v3_scan_matching_batch.py",
+    "test_v3_sensor_measurement_tool.py",
+    "test_v3_sterile_edges.py",
+    "test_v3_transient_sensor_timing.py"
+  ],
+  "obsolete_removed": [
+    "tests/fixtures/v3_unit_config.json"
+  ],
+  "pytest_profiles_registry": "retained_shared_testhub_cli_registry",
+  "rejected_count": 72,
+  "rejected_examples": {
+    "test_action_catalog_ssot.py::test_unknown_action_fails_closed_without_private_voice_allowlist": [
+      "private"
+    ],
+    "test_interface_p0_hardening.py::test_active_owner_death_publishes_stop_before_new_heartbeat": [
+      "private_attribute"
+    ],
+    "test_interface_p0_hardening.py::test_active_watchdog_publishes_stop": [
+      "private_attribute"
+    ],
+    "test_interface_p0_hardening.py::test_spawn_injects_owner_and_watchdog_before_subcommand": [
+      "private_attribute"
+    ],
+    "test_r2b4_conversation_contracts.py::test_action_validator_accepts_bounded_face_person": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_contracts.py::test_action_validator_rejects_out_of_range_parameter": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_contracts.py::test_action_validator_rejects_unavailable_action": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_contracts.py::test_journal_is_append_only_ndjson_and_0600": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_contracts.py::test_llm_decision_requires_text_or_action": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_contracts.py::test_user_turn_is_bounded": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_service.py::test_service_journals_and_keeps_actions_shadow_only": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_conversation_service.py::test_service_records_llm_error": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_lidar_l4_latency_probe_cutoff.py::test_publication_pairing_uses_tick_cutoff_not_l2_execution_time": [
+      "private_attribute"
+    ],
+    "test_r2b4_llm_provider.py::test_gemini_is_default_provider": [
+      "default"
+    ],
+    "test_r2b4_llm_provider.py::test_groq_remains_explicit_fallback": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_llm_provider.py::test_provider_validation": [
+      "known_stale_20260925"
+    ],
+    "test_r2b4_voice_acoustic_p0_p1.py::test_default_vad_threshold_tracks_runtime_noise_without_runaway": [
+      "default"
+    ],
+    "test_r2b4_voice_acoustic_p0_p1.py::test_highpass_removes_dc_without_changing_pcm_shape": [
+      "private_attribute"
+    ],
+    "test_r2b4_voice_acoustic_p0_p1.py::test_stt_accuracy_model_is_default": [
+      "default"
+    ],
+    "test_v3_async_person_photo_evidence.py::test_person_photo_downstream_work_is_not_in_control_observer_method": [
+      "private_attribute"
+    ],
+    "test_v3_camera_foundation.py::test_missing_configured_critical_device_stops_fail_closed": [
+      "configured"
+    ],
+    "test_v3_capture_hz.py": [
+      "cross_test_import"
+    ],
+    "test_v3_capture_reliable_transport_p0.py::test_raw_lidar_evidence_transport_has_large_bounded_burst_reserve": [
+      "private_attribute"
+    ],
+    "test_v3_config_p0_authority.py::test_l7_reversal_threshold_is_configured_and_behavioral": [
+      "configured",
+      "private_attribute"
+    ],
+    "test_v3_config_p0_authority.py::test_replay_hashes_captured_snapshot_before_schema_migration": [
+      "migration"
+    ],
+    "test_v3_contracts.py::test_scalar_capture_leaf_pickle_preserves_value_type_and_immutability": [
+      "private_attribute"
+    ],
+    "test_v3_control_cli.py::test_active_heartbeat_keeps_identity_and_ctrl_c_publishes_stop": [
+      "private_attribute"
+    ],
+    "test_v3_control_cli.py::test_active_heartbeat_period_includes_publish_latency": [
+      "private_attribute"
+    ],
+    "test_v3_counter_encoder_backend.py::test_constructor_does_not_create_an_untimed_counter_baseline": [
+      "constructor"
+    ],
+    "test_v3_device_health_policy.py::test_legacy_none_policy_preserves_all_device_semantics": [
+      "legacy"
+    ],
+    "test_v3_encoder_ab_direction_robustness.py::test_generic_defaults_preserve_existing_one_edge_reversal_semantics": [
+      "default"
+    ],
+    "test_v3_external_gateway.py::test_positive_execute_is_denied_by_default": [
+      "default"
+    ],
+    "test_v3_gpio_counter_owner.py::test_pair_owns_one_handle_and_claims_four_configured_alerts": [
+      "configured"
+    ],
+    "test_v3_launcher_cli.py::test_command_catalog_uses_current_capture_and_pytest_ssot": [
+      "pytest_profile_infra"
+    ],
+    "test_v3_launcher_cli.py::test_testhub_cli_exposes_shared_pytest_scope": [
+      "private_attribute"
+    ],
+    "test_v3_lidar_duplicate_work_cache.py::test_duplicate_raw_revision_reuses_immutable_point_conversion_but_updates_age": [
+      "private_attribute"
+    ],
+    "test_v3_lidar_duplicate_work_cache.py::test_duplicate_revision_reuses_local_points_device_sample_only": [
+      "private_attribute"
+    ],
+    "test_v3_live_input_edge.py::test_native_live_reader_rejects_snapshot_from_the_wrong_configured_device": [
+      "configured"
+    ],
+    "test_v3_live_lidar.py::test_local_point_bound_preserves_nearest_angular_surface_and_density": [
+      "private_attribute"
+    ],
+    "test_v3_native_lidar_estimator.py::test_native_estimator_stateful_summary_sequence_is_deterministic": [
+      "known_stale_20260925"
+    ],
+    "test_v3_native_lidar_estimator.py::test_native_scan_matcher_has_stable_result_and_diagnostics": [
+      "known_stale_20260925"
+    ],
+    "test_v3_native_lidar_estimator.py::test_native_sector_summary_characterizes_directional_clearance": [
+      "known_stale_20260925"
+    ],
+    "test_v3_native_lidar_port.py::test_active_json_closes_to_protected_native_port_config": [
+      "known_stale_20260925"
+    ],
+    "test_v3_native_lidar_port.py::test_delayed_scan_packet_uses_scan_time_pose_not_latest_pose": [
+      "private_attribute"
+    ],
+    "test_v3_native_lidar_port.py::test_native_owner_cleans_matcher_process_when_driver_start_raises": [
+      "known_stale_20260925"
+    ],
+    "test_v3_native_lidar_port.py::test_native_owner_starts_and_stops_one_real_latest_only_matcher_process": [
+      "known_stale_20260925"
+    ],
+    "test_v3_native_lidar_port.py::test_native_port_accepts_fresh_matcher_lineage_as_independent_result": [
+      "private_attribute"
+    ],
+    "test_v3_native_lidar_port.py::test_native_port_publishes_raw_safety_before_optional_matcher_result": [
+      "private_attribute"
+    ],
+    "test_v3_p0_cpu_headroom_fault_evidence_20260920.py::test_native_control_tick_evidence_includes_ekf_fault_and_follow_evidence": [
+      "private_attribute"
+    ],
+    "test_v3_p0_cpu_headroom_fault_evidence_20260920.py::test_tick_engine_keeps_bounded_exception_type_and_message_as_evidence": [
+      "private_attribute"
+    ],
+    "test_v3_person_detection.py::test_stop_timeout_does_not_allow_second_worker": [
+      "private_attribute"
+    ],
+    "test_v3_process_imu_device.py::test_busy_publisher_preserves_sequence_timestamp_and_stale_gate": [
+      "private_attribute"
+    ],
+    "test_v3_process_imu_device.py::test_imu_acquisition_continues_while_parent_holds_gil": [
+      "known_stale_20260925"
+    ],
+    "test_v3_process_imu_device.py::test_worker_failure_is_fail_closed_and_cannot_reuse_healthy_sample": [
+      "private_attribute"
+    ],
+    "test_v3_pytest_profiles.py::test_all_profiles_resolve_to_existing_tests": [
+      "known_stale_20260925"
+    ],
+    "test_v3_pytest_profiles.py::test_async_profile_covers_new_completion_and_process_boundaries": [
+      "known_stale_20260925"
+    ],
+    "test_v3_pytest_profiles.py::test_full_profile_delegates_to_pytest_testpaths_without_explicit_targets": [
+      "known_stale_20260925"
+    ],
+    "test_v3_pytest_profiles.py::test_markers_are_derived_from_the_same_profile_registry": [
+      "known_stale_20260925"
+    ],
+    "test_v3_pytest_profiles.py::test_testhub_profile_is_pattern_based_and_contains_profile_contract_test": [
+      "pytest_profile_infra"
+    ],
+    "test_v3_runtime_correlation.py": [
+      "cross_test_import"
+    ],
+    "test_v3_scan_matching_batch.py::test_batched_residuals_equal_scalar_oracle_including_outliers": [
+      "private_attribute"
+    ],
+    "test_v3_scan_matching_batch.py::test_complete_search_matches_scalar_scoring_and_keeps_quality_gates": [
+      "private_attribute"
+    ],
+    "test_v3_scan_matching_batch.py::test_expired_deadline_never_returns_positive_confidence": [
+      "known_stale_20260925"
+    ],
+    "test_v3_sterile_edges.py": [
+      "cross_test_import"
+    ],
+    "test_v3_test_hub_analysis.py": [
+      "cross_test_import"
+    ],
+    "test_v3_test_hub_behavior.py": [
+      "cross_test_import"
+    ],
+    "test_v3_test_hub_quality.py": [
+      "cross_test_import"
+    ],
+    "test_v3_test_hub_task_evidence.py": [
+      "cross_test_import"
+    ],
+    "test_voice_hri_p0.py::test_interrupt_exact_stop_executes_canonical_stop_and_latches_turn": [
+      "private_attribute"
+    ],
+    "test_voice_hri_p0.py::test_interrupt_non_stop_text_has_no_robot_effect": [
+      "private_attribute"
+    ],
+    "test_voice_llm_execution_bridge.py::test_voice_supervisor_defaults_to_canonical_execution_gate": [
+      "default"
+    ],
+    "test_voice_v3_context_projection.py::test_tick_status_exposes_read_only_l4_l5_l6_summary": [
+      "private_attribute"
+    ]
+  },
+  "schema": "R2B4_PYTEST_SUITE_V1",
+  "selected_test_files": [
+    "test_v3_async_peripheral_isolation.py",
+    "test_v3_bno055_imu_backend.py",
+    "test_v3_bounded_runtime_config.py",
+    "test_v3_camera_foundation.py",
+    "test_v3_config_p0_authority.py",
+    "test_v3_counter_encoder_backend.py",
+    "test_v3_encoder_ab_direction_robustness.py",
+    "test_v3_gpio_motor.py",
+    "test_v3_latest_lidar_backend.py",
+    "test_v3_live_lidar.py",
+    "test_v3_motor_pwm_contract.py",
+    "test_v3_multirate_inputs.py",
+    "test_v3_person_detection.py",
+    "test_v3_person_detection_runtime_integration.py",
+    "test_v3_rplidar_c1.py",
+    "test_v3_stop_only_composition.py"
+  ],
+  "selected_test_functions": [
+    "test_v3_async_peripheral_isolation.py::test_blocked_critical_source_does_not_stall_other_critical_streams",
+    "test_v3_async_peripheral_isolation.py::test_critical_first_read_has_bounded_startup_wait",
+    "test_v3_async_peripheral_isolation.py::test_liveness_snapshot_reports_measurement_publication_and_overruns",
+    "test_v3_bno055_imu_backend.py::test_malformed_atomic_sample_fails_closed_without_retry",
+    "test_v3_bno055_imu_backend.py::test_stale_and_device_failure_map_through_existing_native_source_health",
+    "test_v3_bounded_runtime_config.py::test_loader_rejects_duplicate_encoder_calibration_authority",
+    "test_v3_bounded_runtime_config.py::test_loader_rejects_motor_encoder_pin_collision",
+    "test_v3_bounded_runtime_config.py::test_loader_rejects_non_x1_encoder_count_mode",
+    "test_v3_bounded_runtime_config.py::test_loader_rejects_noncanonical_speed_map",
+    "test_v3_bounded_runtime_config.py::test_loader_rejects_symlink_before_reading_config",
+    "test_v3_bounded_runtime_config.py::test_loader_rejects_unknown_motor_decay_mode",
+    "test_v3_bounded_runtime_config.py::test_sensor_loader_rejects_implicit_or_malformed_bno055_values",
+    "test_v3_bounded_runtime_config.py::test_sensor_policy_is_explicit_and_rejected_before_config_paths_are_opened",
+    "test_v3_camera_foundation.py::test_live_camera_marks_stale_frame_degraded",
+    "test_v3_camera_foundation.py::test_noncritical_failed_camera_does_not_gain_l12_motor_authority",
+    "test_v3_config_p0_authority.py::test_camera_freshness_is_explicit_resolved_authority",
+    "test_v3_config_p0_authority.py::test_camera_freshness_missing_fails_closed",
+    "test_v3_config_p0_authority.py::test_l7_old_capture_field_shape_decodes_with_historical_value",
+    "test_v3_config_p0_authority.py::test_l7_reversal_threshold_conflict_fails_closed",
+    "test_v3_counter_encoder_backend.py::test_first_read_from_stopped_counter_is_invalid_zero_baseline",
+    "test_v3_counter_encoder_backend.py::test_initial_two_by_one_edge_fill_is_untrusted_without_becoming_stale",
+    "test_v3_counter_encoder_backend.py::test_processing_gap_with_old_dual_wheel_edge_windows_remains_stale",
+    "test_v3_counter_encoder_backend.py::test_processing_gap_without_dual_wheel_edge_proof_remains_stale",
+    "test_v3_counter_encoder_backend.py::test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch",
+    "test_v3_counter_encoder_backend.py::test_signed_delta_uses_the_same_read_api_baseline_and_tick_time",
+    "test_v3_counter_encoder_backend.py::test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery",
+    "test_v3_counter_encoder_backend.py::test_stopped_counter_is_timing_invalid_untrusted_and_zero",
+    "test_v3_encoder_ab_direction_robustness.py::test_b_transition_inside_guard_rejects_a_without_hard_gpio_error",
+    "test_v3_encoder_ab_direction_robustness.py::test_direction_confirmation_count_is_bounded",
+    "test_v3_encoder_ab_direction_robustness.py::test_one_false_opposite_a_candidate_never_enters_signed_edge_history",
+    "test_v3_encoder_ab_direction_robustness.py::test_raw_ab_diagnostic_trace_preserves_callback_and_physical_a_time",
+    "test_v3_encoder_ab_direction_robustness.py::test_three_consistent_opposite_candidates_confirm_real_reversal_retroactively",
+    "test_v3_encoder_ab_direction_robustness.py::test_two_false_opposite_candidates_do_not_create_direction_boundary",
+    "test_v3_gpio_motor.py::test_stop_and_fault_cancel_pwm_hold_verified_low_and_keep_ownership",
+    "test_v3_latest_lidar_backend.py::test_matcher_drift_does_not_fail_physical_scan_and_pose_is_not_admitted",
+    "test_v3_latest_lidar_backend.py::test_measurement_age_and_runtime_stale_health_are_degraded",
+    "test_v3_latest_lidar_backend.py::test_missing_latest_result_keeps_independent_physical_safety_without_pose",
+    "test_v3_latest_lidar_backend.py::test_one_latest_result_preserves_identity_frame_pose_and_measurement_age",
+    "test_v3_latest_lidar_backend.py::test_protected_config_identifiers_cannot_be_overridden",
+    "test_v3_latest_lidar_backend.py::test_raw_scan_beyond_observation_future_skew_remains_failed_closed",
+    "test_v3_latest_lidar_backend.py::test_recent_completion_does_not_rejuvenate_or_retimestamp_measurement",
+    "test_v3_latest_lidar_backend.py::test_result_beyond_explicit_same_tick_skew_remains_failed",
+    "test_v3_latest_lidar_backend.py::test_same_tick_raw_scan_uses_measurement_age_despite_recent_completion",
+    "test_v3_live_lidar.py::test_localization_quality_does_not_change_physical_health",
+    "test_v3_live_lidar.py::test_native_lidar_pose_contract_is_immutable_and_fail_closed",
+    "test_v3_live_lidar.py::test_native_lidar_source_closes_health_and_pose_from_one_matcher_result",
+    "test_v3_live_lidar.py::test_physical_scan_staleness_degrades_device_but_keeps_localization_separate",
+    "test_v3_motor_pwm_contract.py::test_stop_and_fault_close_into_one_paired_all_pin_zero_frame",
+    "test_v3_multirate_inputs.py::test_worker_initializer_failure_aborts_before_runtime_use",
+    "test_v3_person_detection.py::test_backend_failure_isolated_in_detector_status",
+    "test_v3_person_detection.py::test_litert_backend_filters_person_class_and_threshold",
+    "test_v3_person_detection.py::test_person_box_rejects_zero_area",
+    "test_v3_person_detection.py::test_person_detector_publishes_frame_lineage_and_primary",
+    "test_v3_person_detection.py::test_picamera2_rgb888_memory_is_reordered_to_model_rgb",
+    "test_v3_person_detection_runtime_integration.py::test_canonical_runtime_config_closes_noncritical_person_capability",
+    "test_v3_person_detection_runtime_integration.py::test_failed_person_detector_does_not_gain_motor_safety_authority",
+    "test_v3_person_detection_runtime_integration.py::test_photo_evidence_counts_only_new_l2_admitted_results_and_explore",
+    "test_v3_person_detection_runtime_integration.py::test_photo_evidence_rearms_after_real_person_free_detector_results",
+    "test_v3_person_detection_runtime_integration.py::test_photo_request_uses_existing_camera_owner_and_is_bounded",
+    "test_v3_rplidar_c1.py::test_driver_config_is_immutable_and_rejects_unbounded_distance_contract",
+    "test_v3_rplidar_c1.py::test_mid_revolution_join_waits_for_two_boundaries_before_first_scan",
+    "test_v3_rplidar_c1.py::test_native_driver_recovers_alignment_and_publishes_only_complete_scan",
+    "test_v3_rplidar_c1.py::test_same_packets_and_clock_produce_same_scan_measurement_timestamp",
+    "test_v3_rplidar_c1.py::test_standard_packet_decode_preserves_framing_angle_distance_and_quality",
+    "test_v3_stop_only_composition.py::test_edge_snapshot_failure_commits_one_zero_fault",
+    "test_v3_stop_only_composition.py::test_fault_latch_keeps_later_healthy_request_at_zero",
+    "test_v3_stop_only_composition.py::test_mismatched_edge_context_fails_closed_before_l1",
+    "test_v3_stop_only_composition.py::test_missing_and_mismatched_actuator_requests_latch_zero_fault",
+    "test_v3_stop_only_composition.py::test_stop_only_lifecycle_cannot_leave_fault_or_shutdown_for_idle",
+    "test_v3_stop_only_composition.py::test_writer_failure_is_single_zero_attempt_and_faults_lifecycle"
+  ],
+  "status": "PASS",
+  "upgrade_id": "pytest_refactor_v2_20260925"
+}

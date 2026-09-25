@@ -1,22 +1,9 @@
 {
-  "upgrade_id": "pytest_refactor_v4_20260925",
-  "date": "2026-09-25",
-  "hard_budget": {
-    "core_min": 20,
-    "feature_min": 40,
-    "total_min": 80,
-    "total_max": 140,
-    "test_files_max": 20
-  },
-  "soft_target": {
-    "deep_min": 20,
-    "deep_max": 40
-  },
-  "preserve": [
-    "v3/pytest_profiles.py"
-  ],
-  "exclude_dependency_root": [
-    "tests/v3_config_fixtures.py"
-  ],
-  "source_first_reason": "Do not reintroduce obsolete or implementation-coupled tests merely to satisfy a per-layer numeric target."
+  "upgrade_id": "pytest_refactor_v5_20260925",
+  "scope": "pytest staging/project-root correction",
+  "production_changes": false,
+  "config_changes": false,
+  "cause": "legacy flat-test __file__ project-root calculation became one level wrong after curation into tests/core|feature|deep",
+  "staging_authority": "R2B4_ROOT",
+  "post_install_validation": "full curated pytest with R2B4_ROOT unset"
 }

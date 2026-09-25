@@ -1,38 +1,19 @@
-R2B4 pytest refactor V4 hotfix validation - 2026-09-25
+R2B4 pytest refactor V5 validation - 2026-09-25
 
-Reason for V4
--------------
-Real R2B4 V3 dry-run result supplied by user:
-- obsolete v3_config_fixtures dependency closure: 74 Python files
-- after exclusion: 529 current pytest items
-- safe high-signal candidates: 320
-- rejected implementation-coupled/legacy: 72
-- selected staged suite before budget rejection: CORE=25, FEATURE=55, DEEP=3, TOTAL=83, FILES=16
-- rejection reason was only DEEP hard minimum 20
+Observed real R2B4 V4 dry-run evidence:
+- selected suite: CORE 25 / FEATURE 55 / DEEP 3 = 83, 16 files
+- staged execution: 11 failures, 72 passes
+- every shown failure resolves config under /tmp/.../tests/conf instead of repo conf
+- failure is before config-content validation: FileNotFoundError/expected regular file
 
-V4 policy
----------
-Hard guards:
-- CORE >= 20
-- FEATURE >= 40
-- TOTAL 80..140
-- <= 20 test files
-- V2 staging/pytest must pass
+Root cause:
+Moving tests from tests/test_*.py to tests/core|feature|deep/test_*.py invalidates legacy
+Path(__file__).resolve().parents[1] (and equivalent parent.parent) repo-root calculations.
 
-Soft target:
-- DEEP 20..40
-
-V4 never reintroduces the obsolete v3_config_fixtures dependency closure merely to pad DEEP.
-
-Mechanical validation
----------------------
-1) V2 budget patch recognized and passed three representations:
-   - {'deep': (20, 40)} range tuple/list
-   - MIN_COUNTS={'deep': 20}
-   - direct counts['deep'] < 20 comparison in the budget-building function
-2) --check restores all temporarily excluded files.
-3) Full install simulation with CORE=25 / FEATURE=55 / DEEP=3 / TOTAL=83 / 16 files: PASS.
-4) Invalid install simulation with TOTAL=61: rejected; independent full tests-tree rollback restored originals.
-5) Temporary patched V2 source is removed after each run.
-6) Original integralando/installer.py is never overwritten.
-7) v3/pytest_profiles.py remains untouched.
+Mechanical validation:
+- synthetic nested 83-test staging suite: 83/83 PASS
+- --check restores original root-coupled test source
+- install: 83/83 staging PASS
+- post-install full suite with R2B4_ROOT deliberately unset: 83/83 PASS
+- forced V4 install failure: V5 restored the full original tests tree
+- production config/source not modified by V5

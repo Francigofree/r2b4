@@ -1,0 +1,389 @@
+from v3_config_fixtures import configured
+from dataclasses import FrozenInstanceError
+import math
+
+import pytest
+
+from v3.contracts import AdmittedFrame, DataField, Observation, TickContext
+from v3.layers.l3_state_estimation import (
+    NativeStateEstimator,
+    NativeStateEstimatorConfig,
+)
+
+
+def _frame(
+    tick_id: int,
+    *,
+    left_mps: float,
+    right_mps: float,
+    yaw_rad: float,
+    omega_rad_s: float = 0.0,
+    trust: float = 0.9,
+    confidence: float = 0.9,
+    omega_confidence: float | None = None,
+    lidar_pose: tuple[float, float, float] | None = None,
+    lidar_confidence: float = 1.0,
+    lidar_r_scale: float = 1.0,
+    lidar_sequence: int | None = None,
+    wheel_distance_delta: tuple[float, float] | None = None,
+    step_ns: int = 20_000_000,
+) -> AdmittedFrame:
+    context = TickContext(tick_id, tick_id * step_ns)
+    observations = [
+        Observation(
+            "wheel_velocity",
+            "KIT0085_ENCODER",
+            tick_id,
+            context.monotonic_ns,
+            (
+                DataField("left_mps", left_mps),
+                DataField("right_mps", right_mps),
+                DataField("trust", trust),
+            )
+            + (
+                (
+                    DataField("left_distance_delta_m", wheel_distance_delta[0]),
+                    DataField("right_distance_delta_m", wheel_distance_delta[1]),
+                )
+                if wheel_distance_delta is not None
+                else ()
+            ),
+        ),
+        Observation(
+            "ekf_heading",
+            "BNO055_IMU",
+            tick_id,
+            context.monotonic_ns,
+            (
+                DataField("yaw_rad", yaw_rad),
+                DataField("omega_rad_s", omega_rad_s),
+                DataField("confidence", confidence),
+            )
+            + (
+                (DataField("omega_confidence", omega_confidence),)
+                if omega_confidence is not None
+                else ()
+            ),
+        ),
+    ]
+    if lidar_pose is not None:
+        observations.append(
+            Observation(
+                "lidar_pose",
+                "LIDAR_LOCALIZATION",
+                tick_id if lidar_sequence is None else lidar_sequence,
+                context.monotonic_ns,
+                (
+                    DataField("frame_id", "R2B4_BOOT_ROBOT_MAP"),
+                    DataField("x_m", lidar_pose[0]),
+                    DataField("y_m", lidar_pose[1]),
+                    DataField("yaw_rad", lidar_pose[2]),
+                    DataField("confidence", lidar_confidence),
+                    DataField("r_scale", lidar_r_scale),
+                ),
+            )
+        )
+    return AdmittedFrame(
+        context,
+        tuple(observations),
+        (),
+        (),
+    )
+
+
+def _config(**changes) -> NativeStateEstimatorConfig:
+    values = {
+        "frame_id": "R2B4_BOOT_ROBOT_MAP",
+        "track_width_m": 0.3557,
+    }
+    values.update(changes)
+    return configured(NativeStateEstimatorConfig, **values)
+
+
+@pytest.mark.parametrize("reference_dt_s", (0.020, 0.040))
+def test_native_predict_uses_configured_process_noise_reference_interval(reference_dt_s):
+    estimator = NativeStateEstimator(_config(process_noise_reference_dt_s=reference_dt_s))
+
+    estimator._predict(0.0, reference_dt_s, None)
+
+    # Velocity and bias have no incoming covariance coupling in prediction.
+    covariance = estimator.checkpoint().covariance
+    assert covariance[3][3] == pytest.approx(0.02)
+    assert covariance[4][4] == pytest.approx(0.00011)
+
+
+@pytest.mark.parametrize("reference_dt_s", (0.0, -0.020, math.nan, math.inf, True, "0.02"))
+def test_native_config_rejects_invalid_process_noise_reference_interval(reference_dt_s):
+    with pytest.raises(ValueError, match="process_noise_reference_dt_s"):
+        _config(process_noise_reference_dt_s=reference_dt_s)
+
+
+def test_native_predict_preserves_nominal_20_ms_covariance():
+    estimator = NativeStateEstimator(_config())
+
+    estimator._predict(0.0, 0.020, None)
+
+    expected = (
+        (0.011004, 0.0, 0.0, 0.0002, 0.0),
+        (0.0, 0.011, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.01050004, 0.0, -0.000002),
+        (0.0002, 0.0, 0.0, 0.02, 0.0),
+        (0.0, 0.0, -0.000002, 0.0, 0.00011),
+    )
+    for actual_row, expected_row in zip(estimator.checkpoint().covariance, expected):
+        assert actual_row == pytest.approx(expected_row)
+
+
+@pytest.mark.parametrize("step_ns", (10_000_000, 40_000_000))
+@pytest.mark.parametrize("use_wheel_distance", (False, True))
+def test_native_predict_covariance_tracks_elapsed_time_across_tick_rates(
+    step_ns, use_wheel_distance,
+):
+    def predict_one_second(interval_ns):
+        estimator = NativeStateEstimator(_config())
+        estimator(_frame(0, left_mps=0.2, right_mps=0.2, yaw_rad=math.pi / 6.0))
+        dt_s = interval_ns / 1_000_000_000
+        distance_delta = (0.2 * dt_s, 0.2 * dt_s) if use_wheel_distance else None
+        # Isolate prediction noise from the frequency of measurement corrections.
+        for _ in range(1_000_000_000 // interval_ns):
+            estimator._predict(0.0, dt_s, distance_delta)
+        return estimator.checkpoint()
+
+    nominal = predict_one_second(20_000_000)
+    actual = predict_one_second(step_ns)
+
+    assert actual.state == pytest.approx(nominal.state)
+    # F P F^T propagation retains bounded discretization error in coupled
+    # covariance terms; 40 ms batching is just under 5% from the 20 ms reference.
+    for actual_row, nominal_row in zip(actual.covariance, nominal.covariance):
+        assert actual_row == pytest.approx(nominal_row, rel=0.05, abs=1e-10)
+
+
+@pytest.mark.parametrize("initial_yaw", (0.0, math.pi / 2.0))
+def test_native_predict_and_encoder_core_matches_linear_motion_contract(initial_yaw):
+    native = NativeStateEstimator(_config())
+    native_estimate = None
+    for tick_id in range(251):
+        native_estimate = native(
+            _frame(
+                tick_id,
+                left_mps=0.2,
+                right_mps=0.2,
+                yaw_rad=initial_yaw,
+            )
+        )
+
+    assert native_estimate is not None
+    assert native_estimate.yaw_rad == pytest.approx(initial_yaw, abs=0.01)
+    if initial_yaw == 0.0:
+        assert native_estimate.x_m == pytest.approx(1.0, abs=0.02)
+        assert abs(native_estimate.y_m) < 0.01
+    else:
+        assert abs(native_estimate.x_m) < 0.01
+        assert native_estimate.y_m == pytest.approx(1.0, abs=0.02)
+
+
+def test_native_heading_nis_gate_rejects_an_extreme_wrapped_outlier():
+    estimator = NativeStateEstimator(_config())
+    estimator(_frame(0, left_mps=0.1, right_mps=0.1, yaw_rad=0.0))
+
+    estimate = estimator(
+        _frame(1, left_mps=0.1, right_mps=0.1, yaw_rad=3.0)
+    )
+
+    assert abs(estimate.yaw_rad) < 0.1
+    assert estimate.x_m > 0.0
+    yaw = next(item for item in estimator.last_update_evidence if item.update_type == "YAW")
+    assert yaw.accepted is False
+    assert yaw.nis > yaw.threshold
+    assert len(yaw.innovation) == 1
+
+
+def test_native_lidar_pose_update_has_stable_three_axis_characterization():
+    native = NativeStateEstimator(_config())
+    native_estimate = native(
+        _frame(
+            0,
+            left_mps=0.0,
+            right_mps=0.0,
+            yaw_rad=0.0,
+            lidar_pose=(0.25, -0.10, 0.20),
+        )
+    )
+
+    assert native_estimate.x_m == pytest.approx(0.027777777777777776)
+    assert native_estimate.y_m == pytest.approx(-0.011111111111111112)
+    assert native_estimate.yaw_rad == pytest.approx(0.05)
+    assert native_estimate.covariance_5x5[0] == pytest.approx(
+        0.008888888888888889
+    )
+    assert native_estimate.covariance_5x5[12] == pytest.approx(0.0075)
+
+
+def test_native_lidar_joint_nis_gate_rejects_extreme_position_outlier():
+    estimator = NativeStateEstimator(_config())
+    estimator(_frame(0, left_mps=0.1, right_mps=0.1, yaw_rad=0.0))
+
+    estimate = estimator(
+        _frame(
+            1,
+            left_mps=0.1,
+            right_mps=0.1,
+            yaw_rad=0.0,
+            lidar_pose=(100.0, 100.0, 0.0),
+        )
+    )
+
+    assert 0.0 < estimate.x_m < 0.01
+    assert abs(estimate.y_m) < 0.01
+    lidar = next(
+        item
+        for item in estimator.last_update_evidence
+        if item.update_type == "LIDAR_POSE"
+    )
+    assert lidar.accepted is False
+    assert lidar.nis > lidar.threshold
+    assert len(lidar.innovation) == 3
+
+
+def test_native_lidar_yaw_innovation_wraps_across_pi():
+    estimator = NativeStateEstimator(_config(lidar_nis_max=100.0))
+
+    estimate = estimator(
+        _frame(
+            0,
+            left_mps=0.0,
+            right_mps=0.0,
+            yaw_rad=math.pi - 0.01,
+            lidar_pose=(0.0, 0.0, -math.pi + 0.01),
+        )
+    )
+
+    assert abs(estimate.yaw_rad) > 3.0
+    assert abs(abs(estimate.yaw_rad) - math.pi) < 0.02
+
+
+def test_native_stationary_zupt_drives_velocity_toward_zero():
+    estimator = NativeStateEstimator(_config())
+    moving = estimator(_frame(0, left_mps=0.3, right_mps=0.3, yaw_rad=0.0))
+    stopped = estimator(_frame(1, left_mps=0.0, right_mps=0.0, yaw_rad=0.0))
+
+    assert moving.v_mps == pytest.approx(0.3)
+    assert abs(stopped.v_mps) < 0.05
+
+
+def test_native_position_uses_raw_pulse_distance_not_windowed_velocity():
+    estimator = NativeStateEstimator(_config())
+    estimator(_frame(0, left_mps=0.5, right_mps=0.5, yaw_rad=0.0))
+
+    estimate = estimator(
+        _frame(
+            1,
+            left_mps=0.25,
+            right_mps=0.25,
+            yaw_rad=0.0,
+            wheel_distance_delta=(0.001, 0.003),
+        )
+    )
+
+    assert estimate.x_m == pytest.approx(0.002)
+    assert estimate.y_m == pytest.approx(0.0)
+
+
+def test_native_uses_wheel_yaw_rate_when_heading_rate_has_zero_confidence():
+    estimator = NativeStateEstimator(_config(track_width_m=0.4))
+
+    estimate = estimator(
+        _frame(
+            0,
+            left_mps=0.1,
+            right_mps=0.3,
+            yaw_rad=0.0,
+            omega_rad_s=9.0,
+            confidence=0.0,
+        )
+    )
+
+    assert estimate.omega_rad_s == pytest.approx(0.5)
+
+
+def test_native_uses_calibrated_gyro_rate_without_trusting_absolute_heading():
+    estimator = NativeStateEstimator(_config(track_width_m=0.4))
+
+    estimate = estimator(
+        _frame(
+            0,
+            left_mps=0.1,
+            right_mps=0.3,
+            yaw_rad=0.0,
+            omega_rad_s=0.4,
+            confidence=0.0,
+            omega_confidence=1.0,
+        )
+    )
+
+    assert estimate.omega_rad_s == pytest.approx(0.4)
+
+
+def test_native_gap_reanchors_without_integrating_stale_motion():
+    estimator = NativeStateEstimator(_config(max_dt_ns=100_000_000))
+    estimator(_frame(0, left_mps=0.2, right_mps=0.2, yaw_rad=0.0))
+
+    estimate = estimator(
+        _frame(
+            2,
+            left_mps=0.2,
+            right_mps=0.2,
+            yaw_rad=0.0,
+            step_ns=500_000_000,
+        )
+    )
+
+    assert estimate.x_m == 0.0
+    assert estimate.y_m == 0.0
+
+
+def test_native_state_and_covariance_are_deterministic_finite_and_symmetric():
+    first = NativeStateEstimator(_config())
+    second = NativeStateEstimator(_config())
+    first_outputs = []
+    second_outputs = []
+    for tick_id in range(20):
+        frame = _frame(
+            tick_id,
+            left_mps=0.10,
+            right_mps=0.12,
+            yaw_rad=0.002 * tick_id,
+            omega_rad_s=0.1,
+        )
+        first_outputs.append(first(frame))
+        second_outputs.append(second(frame))
+
+    assert first_outputs == second_outputs
+    covariance = first_outputs[-1].covariance_5x5
+    assert len(covariance) == 25
+    assert all(math.isfinite(value) for value in covariance)
+    assert all(covariance[index * 5 + index] > 0.0 for index in range(5))
+    assert all(
+        covariance[row * 5 + column] == pytest.approx(
+            covariance[column * 5 + row]
+        )
+        for row in range(5)
+        for column in range(5)
+    )
+
+
+def test_native_config_is_immutable_and_input_validation_fails_closed():
+    config = _config()
+    with pytest.raises(FrozenInstanceError):
+        config.velocity_nis_max = 10.0
+    with pytest.raises(ValueError, match="process_noise"):
+        _config(process_noise=(0.1, 0.1))
+    with pytest.raises(ValueError, match="minimum_measurement_quality"):
+        _config(minimum_measurement_quality=1.1)
+    with pytest.raises(ValueError, match="lidar_measurement_variance"):
+        _config(lidar_measurement_variance=(0.1, 0.1))
+
+    estimator = NativeStateEstimator(config)
+    with pytest.raises(ValueError, match="physical range"):
+        estimator(_frame(0, left_mps=2.0, right_mps=0.0, yaw_rad=0.0))

@@ -1,0 +1,779 @@
+import pytest
+
+from v3.adapters.counter_encoder import (
+    CounterEncoderBackendConfig,
+    NativeCounterEncoderBackend,
+    SignedPulseCounterSnapshot,
+    SignedPulseEdge,
+)
+from v3.adapters.live_encoder import NativeEncoderConfig, NativeEncoderSource
+from v3.adapters.live_encoder import EncoderRejectionCode
+from v3.contracts import DeviceHealthState, TickContext
+
+
+class Counter:
+    def __init__(
+        self,
+        snapshots: tuple[SignedPulseCounterSnapshot, ...],
+        *,
+        running: bool = True,
+    ) -> None:
+        self._snapshots = iter(snapshots)
+        self.running = running
+        self.calls = 0
+
+    def snapshot(self) -> SignedPulseCounterSnapshot:
+        self.calls += 1
+        return next(self._snapshots)
+
+
+def _snapshot(
+    pulses: int,
+    *,
+    read_errors: int = 0,
+    invalid_alerts: int = 0,
+    edge_history: tuple[SignedPulseEdge, ...] = (),
+) -> SignedPulseCounterSnapshot:
+    return SignedPulseCounterSnapshot(
+        pulses,
+        read_errors,
+        invalid_alerts,
+        edge_history,
+    )
+
+
+def _timed(pulses, start_count=0, start_ns=1_000_000_000, end_ns=1_100_000_000, **diagnostics):
+    delta = pulses - start_count
+    sign = 1 if delta > 0 else -1
+    edges = tuple(
+        SignedPulseEdge(start_ns + round(i * (end_ns - start_ns) / abs(delta)),
+                        start_count + sign * i)
+        for i in range(abs(delta) + 1)
+    ) if delta else ()
+    return _snapshot(pulses, edge_history=edges, **diagnostics)
+
+
+def _config() -> CounterEncoderBackendConfig:
+    return CounterEncoderBackendConfig(
+        left_step_distance_m=0.001,
+        right_step_distance_m=0.002,
+        maximum_sample_interval_ns=200_000_000,
+        maximum_abs_velocity_mps=1.5,
+    )
+
+
+def _backend(
+    left_values: tuple[SignedPulseCounterSnapshot, ...],
+    right_values: tuple[SignedPulseCounterSnapshot, ...],
+):
+    left = Counter(left_values)
+    right = Counter(right_values)
+    backend = NativeCounterEncoderBackend(left, right, _config())
+    return backend, left, right
+
+
+def _assert_rejected(reading) -> None:
+    assert reading.trust == 0.0
+    assert reading.left_mps == 0.0
+    assert reading.right_mps == 0.0
+
+
+def _sample_values(snapshot) -> dict[str, object]:
+    return {
+        field.key: field.value
+        for field in snapshot.samples[0].values
+    }
+
+
+def test_constructor_does_not_create_an_untimed_counter_baseline():
+    backend, left, right = _backend(
+        (_snapshot(100),),
+        (_snapshot(200),),
+    )
+
+    assert left.calls == 0
+    assert right.calls == 0
+    baseline_context = TickContext(7, 1_000_000_000)
+    baseline = backend.read(baseline_context)
+
+    _assert_rejected(baseline)
+    assert baseline.sequence == baseline_context.tick_id
+    assert baseline.captured_monotonic_ns == baseline_context.monotonic_ns
+    assert baseline.timing_valid is True
+    assert baseline.stale is False
+    assert baseline.diagnostics is not None
+    assert baseline.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert baseline.diagnostics.raw_left_pulse_count == 100
+    assert baseline.diagnostics.raw_right_pulse_count == 200
+    assert baseline.diagnostics.left_pulse_delta is None
+    assert baseline.diagnostics.right_pulse_delta is None
+    assert baseline.diagnostics.sample_interval_ns is None
+    assert baseline.diagnostics.computed_left_mps is None
+    assert baseline.diagnostics.computed_right_mps is None
+    assert left.calls == 1
+    assert right.calls == 1
+
+
+def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
+    backend, left, right = _backend(
+        (_snapshot(100), _timed(110, 100)),
+        (_snapshot(200), _timed(195, 200)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    assert reading.left_mps == pytest.approx(0.1)
+    assert reading.right_mps == pytest.approx(-0.1)
+    assert reading.trust == 1.0
+    assert reading.stale is False
+    assert reading.timing_valid is True
+    assert reading.diagnostics is not None
+    assert reading.diagnostics.rejection_code is EncoderRejectionCode.NONE
+    assert reading.diagnostics.raw_left_pulse_count == 110
+    assert reading.diagnostics.raw_right_pulse_count == 195
+    assert reading.diagnostics.left_pulse_delta == 10
+    assert reading.diagnostics.right_pulse_delta == -5
+    assert reading.diagnostics.sample_interval_ns == 100_000_000
+    assert reading.diagnostics.computed_left_mps == pytest.approx(0.1)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(-0.1)
+    assert left.calls == 2
+    assert right.calls == 2
+    assert not hasattr(backend, "set_last_pwm")
+
+
+
+
+def test_delayed_multi_pulse_batch_uses_physical_edge_window_not_tick_window():
+    edges = tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            (10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000),
+            start=1,
+        )
+    )
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(5, edge_history=edges)),
+        (_snapshot(0), _snapshot(5, edge_history=edges)),
+    )
+    backend.read(TickContext(0, 50_000_000))
+
+    reading = backend.read(TickContext(1, 70_000_000))
+
+    assert reading.left_mps == pytest.approx(4 * 0.001 / 0.040)
+    assert reading.right_mps == pytest.approx(4 * 0.002 / 0.040)
+    assert reading.trust == 1.0
+    diagnostics = reading.diagnostics
+    assert diagnostics is not None
+    assert diagnostics.sample_interval_ns == 20_000_000
+    assert diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert diagnostics.left_estimation_window_ns == 40_000_000
+    assert diagnostics.right_estimation_window_ns == 40_000_000
+    assert diagnostics.left_estimation_pulse_delta == 4
+    assert diagnostics.right_estimation_pulse_delta == 4
+    assert diagnostics.left_estimation_start_edge_timestamp_ns == 10_000_000
+    assert diagnostics.left_estimation_end_edge_timestamp_ns == 50_000_000
+    assert diagnostics.left_edge_history_count == 5
+    assert diagnostics.right_edge_history_count == 5
+
+
+def test_edge_window_prevents_delayed_batch_from_false_velocity_rejection():
+    edges = tuple(
+        SignedPulseEdge(pulse_count * 2_000_000, pulse_count)
+        for pulse_count in range(1, 51)
+    )
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(50, edge_history=edges)),
+        (_snapshot(0), _snapshot(50, edge_history=edges)),
+    )
+    backend.read(TickContext(0, 100_000_000))
+
+    reading = backend.read(TickContext(1, 120_000_000))
+
+    assert reading.diagnostics is not None
+    assert reading.diagnostics.instantaneous_left_mps == pytest.approx(2.5)
+    assert reading.diagnostics.instantaneous_right_mps == pytest.approx(5.0)
+    assert reading.diagnostics.rejection_code is EncoderRejectionCode.NONE
+    assert reading.left_mps == pytest.approx(0.5)
+    assert reading.right_mps == pytest.approx(1.0)
+
+
+def test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch():
+    initial_edges = tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            range(910_000_000, 1_000_000_001, 10_000_000),
+            start=1,
+        )
+    )
+    delayed_edges = initial_edges + tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            range(1_010_000_000, 1_050_000_001, 10_000_000),
+            start=11,
+        )
+    )
+    snapshots = (
+        _snapshot(5, edge_history=initial_edges[:5]),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(10, edge_history=initial_edges),
+        _snapshot(15, edge_history=delayed_edges),
+    )
+    backend, _, _ = _backend(snapshots, snapshots)
+
+    readings = [
+        backend.read(TickContext(tick_id, 1_000_000_000 + tick_id * 40_000_000))
+        for tick_id in range(len(snapshots))
+    ]
+
+    for reading in readings[1:]:
+        assert reading.left_mps == pytest.approx(0.1)
+        assert reading.right_mps == pytest.approx(0.2)
+        assert reading.trust == 1.0
+        assert reading.stale is False
+        assert reading.diagnostics is not None
+        assert reading.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+        assert reading.diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
+
+    assert readings[4].diagnostics is not None
+    assert readings[4].diagnostics.raw_left_pulse_count == 10
+    assert readings[4].diagnostics.left_pulse_delta == 0
+    assert readings[4].diagnostics.raw_left_distance_m == pytest.approx(0.01)
+    assert readings[4].diagnostics.left_distance_delta_m == pytest.approx(0.0)
+    assert readings[5].diagnostics is not None
+    assert readings[5].diagnostics.raw_left_pulse_count == 15
+    assert readings[5].diagnostics.left_pulse_delta == 5
+    assert readings[5].diagnostics.raw_left_distance_m == pytest.approx(0.015)
+    assert readings[5].diagnostics.left_distance_delta_m == pytest.approx(0.005)
+
+
+def test_initial_two_by_one_edge_fill_is_untrusted_without_becoming_stale():
+    left_edges = (
+        SignedPulseEdge(1_010_000_000, 1),
+        SignedPulseEdge(1_020_000_000, 2),
+    )
+    right_edges = (
+        SignedPulseEdge(1_015_000_000, 1),
+        SignedPulseEdge(1_025_000_000, 2),
+    )
+    backend, _, _ = _backend(
+        (
+            _snapshot(0),
+            _snapshot(2, edge_history=left_edges),
+            _snapshot(2, edge_history=left_edges),
+        ),
+        (
+            _snapshot(0),
+            _snapshot(1, edge_history=right_edges[:1]),
+            _snapshot(2, edge_history=right_edges),
+        ),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    filling = backend.read(TickContext(1, 1_030_000_000))
+    ready = backend.read(TickContext(2, 1_040_000_000))
+
+    _assert_rejected(filling)
+    assert filling.stale is False
+    assert filling.timing_valid is True
+    assert filling.diagnostics is not None
+    assert filling.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+    assert filling.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert filling.diagnostics.right_estimation_timebase is None
+    assert ready.stale is False
+    assert ready.trust > 0.0
+    assert ready.diagnostics is not None
+    assert ready.diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert ready.diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
+
+
+def test_initial_edge_fill_ages_into_bounded_stationary_evidence():
+    left_edges = (
+        SignedPulseEdge(1_010_000_000, 1),
+        SignedPulseEdge(1_020_000_000, 2),
+    )
+    right_edge = (SignedPulseEdge(1_015_000_000, 1),)
+    backend, _, _ = _backend(
+        (
+            _snapshot(0),
+            _snapshot(2, edge_history=left_edges),
+            _snapshot(2, edge_history=left_edges),
+        ),
+        (
+            _snapshot(0),
+            _snapshot(1, edge_history=right_edge),
+            _snapshot(1, edge_history=right_edge),
+        ),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    filling = backend.read(TickContext(1, 1_030_000_000))
+    stationary = backend.read(TickContext(2, 1_230_000_000))
+
+    assert filling.stale is False
+    assert filling.diagnostics is not None
+    assert filling.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+
+    # No new pulse in a fresh counter snapshot is bounded standstill evidence,
+    # not device staleness.  Old edge speed must disappear from control output.
+    assert stationary.left_mps == stationary.right_mps == 0.0
+    assert stationary.trust == pytest.approx(0.84)
+    assert stationary.stale is False
+    assert stationary.timing_valid is True
+    assert stationary.diagnostics is not None
+    assert stationary.diagnostics.sample_interval_ns == 200_000_000
+    assert stationary.diagnostics.left_measurement_trust == pytest.approx(0.84)
+    assert stationary.diagnostics.right_measurement_trust == pytest.approx(0.86)
+    assert stationary.diagnostics.left_estimation_timebase == "TICK_SNAPSHOT"
+    assert stationary.diagnostics.right_estimation_timebase == "TICK_SNAPSHOT"
+    assert stationary.diagnostics.rejection_code is EncoderRejectionCode.BASELINE
+
+
+def test_processing_gap_uses_fresh_dual_wheel_physical_edge_windows():
+    edges = tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            (
+                1_250_000_000,
+                1_260_000_000,
+                1_270_000_000,
+                1_280_000_000,
+                1_290_000_000,
+            ),
+            start=1,
+        )
+    )
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(5, edge_history=edges)),
+        (_snapshot(0), _snapshot(5, edge_history=edges)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_300_000_000))
+
+    assert reading.stale is False
+    assert reading.timing_valid is True
+    assert reading.trust == 1.0
+    assert reading.left_mps == pytest.approx(4 * 0.001 / 0.040)
+    assert reading.right_mps == pytest.approx(4 * 0.002 / 0.040)
+    diagnostics = reading.diagnostics
+    assert diagnostics is not None
+    assert diagnostics.sample_interval_ns == 300_000_000
+    assert diagnostics.rejection_code is EncoderRejectionCode.NONE
+    assert diagnostics.left_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert diagnostics.right_estimation_timebase == "GPIO_EDGE_HISTORY"
+    assert diagnostics.left_estimation_window_ns == 40_000_000
+    assert diagnostics.right_estimation_window_ns == 40_000_000
+
+
+def test_processing_gap_without_dual_wheel_edge_proof_remains_stale():
+    edges = tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            (
+                1_250_000_000,
+                1_260_000_000,
+                1_270_000_000,
+                1_280_000_000,
+                1_290_000_000,
+            ),
+            start=1,
+        )
+    )
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(5, edge_history=edges)),
+        (_snapshot(0), _snapshot(5)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_300_000_000))
+
+    _assert_rejected(reading)
+    assert reading.stale is True
+    assert reading.timing_valid is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.INVALID_EDGE_TIMING
+    )
+
+
+def test_processing_gap_with_old_dual_wheel_edge_windows_remains_stale():
+    old_edges = tuple(
+        SignedPulseEdge(timestamp_ns, pulse_count)
+        for pulse_count, timestamp_ns in enumerate(
+            (10_000_000, 20_000_000, 30_000_000, 40_000_000, 50_000_000),
+            start=1,
+        )
+    )
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(5, edge_history=old_edges)),
+        (_snapshot(0), _snapshot(5, edge_history=old_edges)),
+    )
+    backend.read(TickContext(0, 1_260_000_000))
+
+    reading = backend.read(TickContext(1, 1_300_000_000))
+
+    _assert_rejected(reading)
+    assert reading.stale is True
+    assert reading.timing_valid is True
+    assert reading.diagnostics is not None
+    assert reading.diagnostics.sample_interval_ns == 40_000_000
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+    )
+
+
+def test_stale_interval_is_untrusted_zero_and_reanchors_for_recovery():
+    backend, _, _ = _backend(
+        (_snapshot(0), _timed(20, end_ns=1_050_000_000), _timed(25, 20, 1_300_000_000, 1_400_000_000)),
+        (_snapshot(0), _timed(10, end_ns=1_050_000_000), _timed(12, 10, 1_300_000_000, 1_400_000_000)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    stale = backend.read(TickContext(1, 1_300_000_000))
+    recovered = backend.read(TickContext(2, 1_400_000_000))
+
+    _assert_rejected(stale)
+    assert stale.stale is True
+    assert stale.timing_valid is True
+    assert stale.diagnostics is not None
+    assert (
+        stale.diagnostics.rejection_code
+        is EncoderRejectionCode.SAMPLE_INTERVAL_EXCEEDED
+    )
+    assert stale.diagnostics.left_pulse_delta == 20
+    assert stale.diagnostics.right_pulse_delta == 10
+    assert stale.diagnostics.sample_interval_ns == 300_000_000
+    assert stale.diagnostics.computed_left_mps == pytest.approx(0.0666666667)
+    assert stale.diagnostics.computed_right_mps == pytest.approx(0.0666666667)
+    assert recovered.trust == 1.0
+    assert recovered.left_mps == pytest.approx(0.05)
+    assert recovered.right_mps == pytest.approx(0.04)
+
+
+@pytest.mark.parametrize(
+    ("side", "diagnostic"),
+    (
+        ("left", {"read_errors": 1}),
+        ("left", {"invalid_alerts": 1}),
+        ("right", {"read_errors": 1}),
+        ("right", {"invalid_alerts": 1}),
+    ),
+)
+def test_counter_diagnostic_error_is_untrusted_and_zero(side, diagnostic):
+    left_current = _snapshot(1, **diagnostic) if side == "left" else _snapshot(1)
+    right_current = _snapshot(1, **diagnostic) if side == "right" else _snapshot(1)
+    backend, _, _ = _backend(
+        (_snapshot(0), left_current),
+        (_snapshot(0), right_current),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.timing_valid is True
+    # The diagnostic error is the primary rejection reason, while the changed
+    # count still lacks physical edge proof and is therefore stale evidence too.
+    assert reading.stale is True
+    assert reading.diagnostics is not None
+    expected_code = (
+        EncoderRejectionCode.COUNTER_READ_ERROR_CHANGED
+        if "read_errors" in diagnostic
+        else EncoderRejectionCode.COUNTER_INVALID_ALERT_CHANGED
+    )
+    assert reading.diagnostics.rejection_code is expected_code
+    assert reading.diagnostics.left_read_error_delta == (
+        1 if side == "left" and "read_errors" in diagnostic else 0
+    )
+    assert reading.diagnostics.right_read_error_delta == (
+        1 if side == "right" and "read_errors" in diagnostic else 0
+    )
+    assert reading.diagnostics.left_invalid_alert_delta == (
+        1 if side == "left" and "invalid_alerts" in diagnostic else 0
+    )
+    assert reading.diagnostics.right_invalid_alert_delta == (
+        1 if side == "right" and "invalid_alerts" in diagnostic else 0
+    )
+
+
+@pytest.mark.parametrize(
+    ("side", "diagnostic"),
+    (
+        ("left", {"read_errors": 1}),
+        ("left", {"invalid_alerts": 1}),
+        ("right", {"read_errors": 1}),
+        ("right", {"invalid_alerts": 1}),
+    ),
+)
+def test_counter_diagnostic_reanchors_then_recovers_when_total_stays_constant(
+    side,
+    diagnostic,
+):
+    left_error = _snapshot(10, **diagnostic) if side == "left" else _snapshot(10)
+    right_error = _snapshot(5, **diagnostic) if side == "right" else _snapshot(5)
+    left_clean = _timed(14, 10, 1_100_000_000, 1_200_000_000, **diagnostic) if side == "left" else _timed(14, 10, 1_100_000_000, 1_200_000_000)
+    right_clean = _timed(7, 5, 1_100_000_000, 1_200_000_000, **diagnostic) if side == "right" else _timed(7, 5, 1_100_000_000, 1_200_000_000)
+    backend, _, _ = _backend(
+        (_snapshot(0), left_error, left_clean),
+        (_snapshot(0), right_error, right_clean),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    rejected = backend.read(TickContext(1, 1_100_000_000))
+    recovered = backend.read(TickContext(2, 1_200_000_000))
+
+    _assert_rejected(rejected)
+    assert recovered.trust == 1.0
+    assert recovered.left_mps == pytest.approx(0.04)
+    assert recovered.right_mps == pytest.approx(0.04)
+
+
+def test_stopped_counter_is_timing_invalid_untrusted_and_zero():
+    backend, left, _ = _backend(
+        (_snapshot(0), _snapshot(10)),
+        (_snapshot(0), _snapshot(10)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+    left.running = False
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.timing_valid is False
+    assert reading.stale is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.COUNTER_NOT_RUNNING
+    )
+    assert reading.diagnostics.left_counter_running is False
+    assert reading.diagnostics.right_counter_running is True
+    assert reading.diagnostics.computed_left_mps == pytest.approx(0.1)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.2)
+
+
+def test_impossible_velocity_is_untrusted_and_zero():
+    backend, _, _ = _backend(
+        (_snapshot(0), _timed(1_000)),
+        (_snapshot(0), _timed(1)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.timing_valid is True
+    assert reading.stale is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.LEFT_VELOCITY_LIMIT_EXCEEDED
+    )
+    assert reading.diagnostics.left_pulse_delta == 1_000
+    assert reading.diagnostics.right_pulse_delta == 1
+    assert reading.diagnostics.computed_left_mps == pytest.approx(10.0)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.02)
+    assert reading.diagnostics.maximum_abs_velocity_mps == pytest.approx(1.5)
+
+
+def test_nonincreasing_tick_time_is_invalid_zero_and_does_not_reanchor():
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(1), _timed(2)),
+        (_snapshot(0), _snapshot(1), _timed(2)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    invalid = backend.read(TickContext(1, 1_000_000_000))
+    recovered = backend.read(TickContext(2, 1_100_000_000))
+
+    _assert_rejected(invalid)
+    assert invalid.timing_valid is False
+    assert invalid.diagnostics is not None
+    assert (
+        invalid.diagnostics.rejection_code
+        is EncoderRejectionCode.NONINCREASING_TICK_TIME
+    )
+    assert invalid.diagnostics.sample_interval_ns == 0
+    assert invalid.diagnostics.left_pulse_delta == 1
+    assert invalid.diagnostics.right_pulse_delta == 1
+    assert invalid.diagnostics.computed_left_mps is None
+    assert invalid.diagnostics.computed_right_mps is None
+    assert recovered.trust == 1.0
+    assert recovered.left_mps == pytest.approx(0.02)
+    assert recovered.right_mps == pytest.approx(0.04)
+
+
+def test_native_encoder_source_sees_low_trust_baseline_then_ok_delta():
+    backend, _, _ = _backend(
+        (_snapshot(0), _timed(10)),
+        (_snapshot(0), _timed(5)),
+    )
+    source = NativeEncoderSource(backend, NativeEncoderConfig("encoder", 0.5))
+
+    baseline = source.read(TickContext(0, 1_000_000_000))
+    current = source.read(TickContext(1, 1_100_000_000))
+
+    assert baseline.health.state is DeviceHealthState.OK
+    assert baseline.health.reason is None
+    baseline_values = _sample_values(baseline)
+    assert (baseline_values["left_mps"], baseline_values["right_mps"]) == (0.0, 0.0)
+    assert baseline_values["trust"] == 0.0
+    assert baseline_values["rejection_code"] == "BASELINE"
+    assert baseline_values["raw_left_pulse_count"] == 0
+    assert baseline_values["raw_right_pulse_count"] == 0
+    assert baseline_values["left_pulse_delta"] is None
+    assert baseline_values["right_pulse_delta"] is None
+    assert current.health.state is DeviceHealthState.OK
+    assert current.samples[0].sequence == 1
+    current_values = _sample_values(current)
+    assert (
+        current_values["left_mps"],
+        current_values["right_mps"],
+        current_values["trust"],
+    ) == pytest.approx((0.1, 0.1, 1.0))
+    assert current_values["rejection_code"] == "NONE"
+    assert current_values["raw_left_pulse_count"] == 10
+    assert current_values["raw_right_pulse_count"] == 5
+    assert current_values["left_pulse_delta"] == 10
+    assert current_values["right_pulse_delta"] == 5
+    assert current_values["sample_interval_ns"] == 100_000_000
+    assert current_values["raw_left_distance_m"] == pytest.approx(0.01)
+    assert current_values["raw_right_distance_m"] == pytest.approx(0.01)
+    assert current_values["left_distance_delta_m"] == pytest.approx(0.01)
+    assert current_values["right_distance_delta_m"] == pytest.approx(0.01)
+    assert current_values["computed_left_mps"] == pytest.approx(0.1)
+    assert current_values["computed_right_mps"] == pytest.approx(0.1)
+
+
+def test_concrete_counter_diagnostic_degrades_device_health_separately():
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(1, read_errors=1)),
+        (_snapshot(0), _snapshot(1)),
+    )
+    source = NativeEncoderSource(backend, NativeEncoderConfig("encoder", 0.5))
+    source.read(TickContext(0, 1_000_000_000))
+
+    snapshot = source.read(TickContext(1, 1_100_000_000))
+
+    assert snapshot.health.state is DeviceHealthState.DEGRADED
+    assert snapshot.health.reason == "ENCODER_COUNTER_DIAGNOSTIC"
+    assert _sample_values(snapshot)["trust"] == 0.0
+
+
+
+
+
+
+def test_first_read_from_stopped_counter_is_invalid_zero_baseline():
+    left = Counter((_snapshot(5),), running=False)
+    right = Counter((_snapshot(8),))
+    backend = NativeCounterEncoderBackend(left, right, _config())
+
+    reading = backend.read(TickContext(0, 1_000))
+
+    _assert_rejected(reading)
+    assert reading.timing_valid is False
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.COUNTER_NOT_RUNNING
+    )
+
+
+def test_combined_counter_diagnostics_have_one_exact_code_and_per_side_deltas():
+    backend, _, _ = _backend(
+        (_snapshot(0), _snapshot(4, read_errors=2)),
+        (_snapshot(0), _snapshot(3, invalid_alerts=1)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.COUNTER_READ_ERROR_AND_INVALID_ALERT_CHANGED
+    )
+    assert reading.diagnostics.left_read_error_delta == 2
+    assert reading.diagnostics.right_read_error_delta == 0
+    assert reading.diagnostics.left_invalid_alert_delta == 0
+    assert reading.diagnostics.right_invalid_alert_delta == 1
+    assert reading.diagnostics.computed_left_mps == pytest.approx(0.04)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(0.06)
+
+
+def test_both_velocity_limits_have_a_distinct_rejection_code():
+    backend, _, _ = _backend(
+        (_snapshot(0), _timed(200)),
+        (_snapshot(0), _timed(-100)),
+    )
+    backend.read(TickContext(0, 1_000_000_000))
+
+    reading = backend.read(TickContext(1, 1_100_000_000))
+
+    _assert_rejected(reading)
+    assert reading.diagnostics is not None
+    assert (
+        reading.diagnostics.rejection_code
+        is EncoderRejectionCode.BOTH_VELOCITY_LIMIT_EXCEEDED
+    )
+    assert reading.diagnostics.computed_left_mps == pytest.approx(2.0)
+    assert reading.diagnostics.computed_right_mps == pytest.approx(-2.0)
+
+
+def test_malformed_snapshot_is_rejected_without_a_second_left_read():
+    class BadCounter:
+        running = True
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def snapshot(self):
+            self.calls += 1
+            return object()
+
+    left = BadCounter()
+    right = Counter((_snapshot(0),))
+    backend = NativeCounterEncoderBackend(
+        left,  # type: ignore[arg-type]
+        right,
+        _config(),
+    )
+
+    with pytest.raises(TypeError, match="SignedPulseCounterSnapshot"):
+        backend.read(TickContext(0, 1))
+
+    assert left.calls == 1
+    assert right.calls == 0
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    (
+        {"left_step_distance_m": 0.0},
+        {"right_step_distance_m": float("nan")},
+        {"maximum_sample_interval_ns": 0},
+        {"maximum_abs_velocity_mps": -1.0},
+        {"minimum_estimation_pulses": 0},
+        {"minimum_estimation_window_ns": 0},
+        {"maximum_estimation_window_ns": 0},
+    ),
+)
+def test_backend_config_rejects_invalid_geometry_or_bounds(kwargs):
+    values = {
+        "left_step_distance_m": 0.001,
+        "right_step_distance_m": 0.001,
+        "maximum_sample_interval_ns": 1,
+        "maximum_abs_velocity_mps": 1.0,
+    }
+    values.update(kwargs)
+
+    with pytest.raises(ValueError):
+        CounterEncoderBackendConfig(**values)
