@@ -1,36 +1,22 @@
 {
-  "adds": [
-    "tests/core",
-    "tests/feature",
-    "tests/deep",
-    "tests/rig.py",
-    "tests/suite_manifest.json",
-    "v3/test_runner.py",
-    "docs/PYTEST_POLICY.md"
+  "upgrade_id": "pytest_refactor_v4_20260925",
+  "date": "2026-09-25",
+  "hard_budget": {
+    "core_min": 20,
+    "feature_min": 40,
+    "total_min": 80,
+    "total_max": 140,
+    "test_files_max": 20
+  },
+  "soft_target": {
+    "deep_min": 20,
+    "deep_max": 40
+  },
+  "preserve": [
+    "v3/pytest_profiles.py"
   ],
-  "commands": [
-    "./r test",
-    "./r test follow",
-    "./r test full"
-  ],
-  "notes": [
-    "v3/pytest_profiles.py retained because current source uses it as shared Test Hub/CLI profile registry",
-    "v3_unit_config and reflection fixtures still removed"
-  ],
-  "production_control_changes": 0,
-  "removes": [
-    "pytest_profiles.py (only after non-test reference preflight)",
-    "v3_unit_config.json",
+  "exclude_dependency_root": [
     "tests/v3_config_fixtures.py"
   ],
-  "target": {
-    "core": "20-30",
-    "deep": "20-40",
-    "feature": "40-70",
-    "hard_cap": 150,
-    "test_files_max": 20,
-    "total": "80-140"
-  },
-  "type": "test_infrastructure_refactor",
-  "upgrade_id": "pytest_refactor_v2_20260925"
+  "source_first_reason": "Do not reintroduce obsolete or implementation-coupled tests merely to satisfy a per-layer numeric target."
 }

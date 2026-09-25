@@ -1,0 +1,2038 @@
+{
+  "actionable_incident_count": 2,
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "FAULT",
+  "behavioral_trends": {
+    "commands": {
+      "observed_change_count": 115,
+      "observed_unique_count": 116
+    },
+    "domain_sample_counts": {
+      "command": 203,
+      "mission": 203,
+      "navigation": 203,
+      "pose": 203,
+      "safety": 203
+    },
+    "localization": {
+      "sample_count": 203
+    },
+    "maximum_contiguous_sample_gap_s": 0.3,
+    "missing_domains": [],
+    "missions": {
+      "lifecycle_sample_counts": {
+        "ACTIVE": 86,
+        "IDLE": 117
+      },
+      "observed_lifecycle_change_count": 1,
+      "observed_unique_count": 116
+    },
+    "motion": {
+      "blocked_sample_count": 1,
+      "longest_observed_blocked_span_s": 0.0
+    },
+    "navigation": {
+      "stagnation": null,
+      "status_sample_counts": {
+        "ACTIVE": 85,
+        "IDLE": 117,
+        "PENDING": 1
+      }
+    },
+    "safety": {
+      "unsafe_output_sample_count": 0
+    },
+    "trend_window_s": 5.0
+  },
+  "capture": {
+    "capture_id": "v3_20260925_202520_6372_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 0,
+          "before": 6
+        },
+        {
+          "after": 6,
+          "before": 11
+        },
+        {
+          "after": 11,
+          "before": 16
+        },
+        {
+          "after": 16,
+          "before": 21
+        },
+        {
+          "after": 21,
+          "before": 26
+        },
+        {
+          "after": 26,
+          "before": 31
+        },
+        {
+          "after": 31,
+          "before": 36
+        },
+        {
+          "after": 36,
+          "before": 41
+        },
+        {
+          "after": 41,
+          "before": 46
+        },
+        {
+          "after": 46,
+          "before": 51
+        },
+        {
+          "after": 51,
+          "before": 56
+        },
+        {
+          "after": 56,
+          "before": 61
+        },
+        {
+          "after": 61,
+          "before": 66
+        },
+        {
+          "after": 66,
+          "before": 71
+        },
+        {
+          "after": 71,
+          "before": 75
+        },
+        {
+          "after": 75,
+          "before": 81
+        },
+        {
+          "after": 81,
+          "before": 86
+        },
+        {
+          "after": 86,
+          "before": 91
+        },
+        {
+          "after": 91,
+          "before": 95
+        },
+        {
+          "after": 95,
+          "before": 101
+        },
+        {
+          "after": 101,
+          "before": 106
+        },
+        {
+          "after": 106,
+          "before": 111
+        },
+        {
+          "after": 111,
+          "before": 116
+        },
+        {
+          "after": 116,
+          "before": 121
+        },
+        {
+          "after": 121,
+          "before": 126
+        },
+        {
+          "after": 126,
+          "before": 131
+        },
+        {
+          "after": 131,
+          "before": 136
+        },
+        {
+          "after": 136,
+          "before": 141
+        },
+        {
+          "after": 141,
+          "before": 146
+        },
+        {
+          "after": 146,
+          "before": 151
+        },
+        {
+          "after": 151,
+          "before": 156
+        },
+        {
+          "after": 156,
+          "before": 161
+        },
+        {
+          "after": 161,
+          "before": 166
+        },
+        {
+          "after": 166,
+          "before": 171
+        },
+        {
+          "after": 171,
+          "before": 176
+        },
+        {
+          "after": 176,
+          "before": 181
+        },
+        {
+          "after": 181,
+          "before": 186
+        },
+        {
+          "after": 186,
+          "before": 191
+        },
+        {
+          "after": 191,
+          "before": 196
+        },
+        {
+          "after": 196,
+          "before": 201
+        },
+        {
+          "after": 201,
+          "before": 206
+        },
+        {
+          "after": 206,
+          "before": 211
+        },
+        {
+          "after": 211,
+          "before": 216
+        },
+        {
+          "after": 216,
+          "before": 221
+        },
+        {
+          "after": 221,
+          "before": 226
+        },
+        {
+          "after": 226,
+          "before": 231
+        },
+        {
+          "after": 231,
+          "before": 236
+        },
+        {
+          "after": 236,
+          "before": 241
+        },
+        {
+          "after": 241,
+          "before": 246
+        },
+        {
+          "after": 246,
+          "before": 251
+        },
+        {
+          "after": 251,
+          "before": 256
+        },
+        {
+          "after": 256,
+          "before": 261
+        },
+        {
+          "after": 261,
+          "before": 266
+        },
+        {
+          "after": 266,
+          "before": 271
+        },
+        {
+          "after": 271,
+          "before": 276
+        },
+        {
+          "after": 276,
+          "before": 281
+        },
+        {
+          "after": 281,
+          "before": 286
+        },
+        {
+          "after": 286,
+          "before": 291
+        },
+        {
+          "after": 291,
+          "before": 296
+        },
+        {
+          "after": 296,
+          "before": 301
+        },
+        {
+          "after": 301,
+          "before": 306
+        },
+        {
+          "after": 306,
+          "before": 311
+        },
+        {
+          "after": 311,
+          "before": 316
+        },
+        {
+          "after": 316,
+          "before": 321
+        },
+        {
+          "after": 321,
+          "before": 326
+        },
+        {
+          "after": 326,
+          "before": 331
+        },
+        {
+          "after": 331,
+          "before": 336
+        },
+        {
+          "after": 336,
+          "before": 341
+        },
+        {
+          "after": 341,
+          "before": 346
+        },
+        {
+          "after": 346,
+          "before": 351
+        },
+        {
+          "after": 351,
+          "before": 356
+        },
+        {
+          "after": 356,
+          "before": 361
+        },
+        {
+          "after": 361,
+          "before": 366
+        },
+        {
+          "after": 366,
+          "before": 371
+        },
+        {
+          "after": 371,
+          "before": 376
+        },
+        {
+          "after": 376,
+          "before": 381
+        },
+        {
+          "after": 381,
+          "before": 386
+        },
+        {
+          "after": 386,
+          "before": 391
+        },
+        {
+          "after": 391,
+          "before": 396
+        },
+        {
+          "after": 396,
+          "before": 401
+        },
+        {
+          "after": 401,
+          "before": 406
+        },
+        {
+          "after": 406,
+          "before": 411
+        },
+        {
+          "after": 411,
+          "before": 416
+        },
+        {
+          "after": 416,
+          "before": 421
+        },
+        {
+          "after": 421,
+          "before": 426
+        },
+        {
+          "after": 426,
+          "before": 431
+        },
+        {
+          "after": 431,
+          "before": 436
+        },
+        {
+          "after": 436,
+          "before": 441
+        },
+        {
+          "after": 441,
+          "before": 446
+        },
+        {
+          "after": 446,
+          "before": 451
+        },
+        {
+          "after": 451,
+          "before": 456
+        },
+        {
+          "after": 456,
+          "before": 461
+        },
+        {
+          "after": 461,
+          "before": 466
+        },
+        {
+          "after": 466,
+          "before": 471
+        },
+        {
+          "after": 471,
+          "before": 476
+        },
+        {
+          "after": 476,
+          "before": 481
+        },
+        {
+          "after": 481,
+          "before": 486
+        },
+        {
+          "after": 486,
+          "before": 491
+        },
+        {
+          "after": 491,
+          "before": 496
+        },
+        {
+          "after": 496,
+          "before": 501
+        },
+        {
+          "after": 501,
+          "before": 506
+        },
+        {
+          "after": 506,
+          "before": 511
+        },
+        {
+          "after": 511,
+          "before": 516
+        },
+        {
+          "after": 516,
+          "before": 521
+        },
+        {
+          "after": 521,
+          "before": 526
+        },
+        {
+          "after": 526,
+          "before": 531
+        },
+        {
+          "after": 531,
+          "before": 536
+        },
+        {
+          "after": 536,
+          "before": 540
+        },
+        {
+          "after": 540,
+          "before": 546
+        },
+        {
+          "after": 546,
+          "before": 551
+        },
+        {
+          "after": 551,
+          "before": 556
+        },
+        {
+          "after": 556,
+          "before": 561
+        },
+        {
+          "after": 561,
+          "before": 566
+        },
+        {
+          "after": 566,
+          "before": 571
+        },
+        {
+          "after": 571,
+          "before": 575
+        },
+        {
+          "after": 575,
+          "before": 581
+        },
+        {
+          "after": 581,
+          "before": 586
+        },
+        {
+          "after": 586,
+          "before": 591
+        },
+        {
+          "after": 591,
+          "before": 596
+        },
+        {
+          "after": 596,
+          "before": 601
+        },
+        {
+          "after": 601,
+          "before": 606
+        },
+        {
+          "after": 606,
+          "before": 611
+        },
+        {
+          "after": 611,
+          "before": 616
+        },
+        {
+          "after": 616,
+          "before": 621
+        },
+        {
+          "after": 621,
+          "before": 625
+        },
+        {
+          "after": 625,
+          "before": 630
+        },
+        {
+          "after": 630,
+          "before": 635
+        },
+        {
+          "after": 635,
+          "before": 640
+        },
+        {
+          "after": 640,
+          "before": 645
+        },
+        {
+          "after": 645,
+          "before": 650
+        },
+        {
+          "after": 650,
+          "before": 655
+        },
+        {
+          "after": 655,
+          "before": 660
+        },
+        {
+          "after": 660,
+          "before": 665
+        },
+        {
+          "after": 665,
+          "before": 670
+        },
+        {
+          "after": 670,
+          "before": 675
+        },
+        {
+          "after": 675,
+          "before": 679
+        },
+        {
+          "after": 679,
+          "before": 685
+        },
+        {
+          "after": 685,
+          "before": 690
+        },
+        {
+          "after": 690,
+          "before": 695
+        },
+        {
+          "after": 695,
+          "before": 700
+        },
+        {
+          "after": 700,
+          "before": 705
+        },
+        {
+          "after": 705,
+          "before": 709
+        },
+        {
+          "after": 709,
+          "before": 715
+        },
+        {
+          "after": 715,
+          "before": 720
+        },
+        {
+          "after": 720,
+          "before": 725
+        },
+        {
+          "after": 725,
+          "before": 730
+        },
+        {
+          "after": 730,
+          "before": 735
+        },
+        {
+          "after": 735,
+          "before": 739
+        },
+        {
+          "after": 739,
+          "before": 744
+        },
+        {
+          "after": 744,
+          "before": 748
+        },
+        {
+          "after": 748,
+          "before": 754
+        },
+        {
+          "after": 755,
+          "before": 760
+        },
+        {
+          "after": 760,
+          "before": 766
+        },
+        {
+          "after": 766,
+          "before": 771
+        },
+        {
+          "after": 771,
+          "before": 776
+        },
+        {
+          "after": 776,
+          "before": 780
+        },
+        {
+          "after": 780,
+          "before": 786
+        },
+        {
+          "after": 786,
+          "before": 790
+        },
+        {
+          "after": 790,
+          "before": 796
+        },
+        {
+          "after": 796,
+          "before": 801
+        },
+        {
+          "after": 801,
+          "before": 805
+        },
+        {
+          "after": 805,
+          "before": 811
+        },
+        {
+          "after": 811,
+          "before": 816
+        },
+        {
+          "after": 816,
+          "before": 821
+        },
+        {
+          "after": 821,
+          "before": 826
+        },
+        {
+          "after": 826,
+          "before": 831
+        },
+        {
+          "after": 831,
+          "before": 836
+        },
+        {
+          "after": 836,
+          "before": 840
+        },
+        {
+          "after": 840,
+          "before": 845
+        },
+        {
+          "after": 845,
+          "before": 850
+        },
+        {
+          "after": 850,
+          "before": 855
+        },
+        {
+          "after": 855,
+          "before": 860
+        },
+        {
+          "after": 860,
+          "before": 864
+        },
+        {
+          "after": 864,
+          "before": 870
+        },
+        {
+          "after": 870,
+          "before": 875
+        },
+        {
+          "after": 875,
+          "before": 880
+        },
+        {
+          "after": 880,
+          "before": 884
+        },
+        {
+          "after": 884,
+          "before": 889
+        },
+        {
+          "after": 889,
+          "before": 894
+        },
+        {
+          "after": 894,
+          "before": 898
+        },
+        {
+          "after": 898,
+          "before": 903
+        },
+        {
+          "after": 903,
+          "before": 909
+        },
+        {
+          "after": 909,
+          "before": 914
+        },
+        {
+          "after": 914,
+          "before": 918
+        },
+        {
+          "after": 918,
+          "before": 924
+        },
+        {
+          "after": 924,
+          "before": 929
+        },
+        {
+          "after": 929,
+          "before": 934
+        },
+        {
+          "after": 934,
+          "before": 938
+        },
+        {
+          "after": 938,
+          "before": 944
+        },
+        {
+          "after": 944,
+          "before": 949
+        },
+        {
+          "after": 949,
+          "before": 954
+        },
+        {
+          "after": 954,
+          "before": 959
+        },
+        {
+          "after": 959,
+          "before": 964
+        },
+        {
+          "after": 964,
+          "before": 969
+        },
+        {
+          "after": 969,
+          "before": 973
+        },
+        {
+          "after": 973,
+          "before": 979
+        },
+        {
+          "after": 979,
+          "before": 984
+        },
+        {
+          "after": 984,
+          "before": 989
+        },
+        {
+          "after": 989,
+          "before": 994
+        },
+        {
+          "after": 994,
+          "before": 999
+        },
+        {
+          "after": 999,
+          "before": 1004
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "8dc7dcd30e18b59e681cf6c6096f9116df6ec1b34550f08046f2050b4ff3e983",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 411,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 411,
+        "first_lost_sequence": null,
+        "high_water_mark": 6,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 411,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": true,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 207,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": true,
+      "raw_transport_produced_count": 207,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 10
+    },
+    "status": "FAULT",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "incident_count": 48,
+  "incidents": [
+    {
+      "category": "SAFETY",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 189541818,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 280036819,
+            "rejected[1].reason": "STALE"
+          },
+          "L3": {
+            "omega_rad_s": 0.39255555853995466,
+            "v_mps": -0.07942117754372441
+          },
+          "L4": {
+            "freshness_ns": 89022428,
+            "local_costmap.freshness_ns": 89022428,
+            "local_costmap.revision": 319,
+            "map_revision": 707,
+            "obstacle_tracks[0].confidence": 0.45703125,
+            "obstacle_tracks[0].estimate_status": "DEGRADED"
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "progress": 0.017578125,
+            "reason": null,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 1005,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-00-07",
+            "trajectory.min_clearance_m": 0.06841429853452707,
+            "trajectory.omega_rad_s": 0.44999999999999996,
+            "trajectory.progress_potential_score": 0.14531094820540158,
+            "trajectory.progress_score": 0.0,
+            "trajectory.progress_viable": true,
+            "trajectory.v_mps": 0.0
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": 0.46436111036501126,
+            "requested_v_mps": 0.0,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": 0.46436111036501126,
+            "allowed_v_mps": 0.0,
+            "requested_omega_rad_s": 0.46436111036501126,
+            "requested_v_mps": 0.0
+          }
+        }
+      },
+      "id": "safety-fault-1004",
+      "layer": "L12",
+      "monotonic_ns": 5671735932819,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 1004
+    },
+    {
+      "category": "LOCALIZATION",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 5.108808784759676,
+        "last_trace": 0.23551608497742105,
+        "max_trace": 0.33261973103616144,
+        "sample_count": 203
+      },
+      "id": "covariance-growth-1004",
+      "layer": "L3",
+      "monotonic_ns": 5671735932819,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 1004
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 5651514565486,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 5651632136909,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-11",
+      "layer": "L1",
+      "monotonic_ns": 5651732148733,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 11
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 5651832131391,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-21",
+      "layer": "L1",
+      "monotonic_ns": 5651932130900,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 21
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-26",
+      "layer": "L1",
+      "monotonic_ns": 5652032137076,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 26
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-31",
+      "layer": "L1",
+      "monotonic_ns": 5652132159196,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 31
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 289862720,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 18
+          }
+        ]
+      },
+      "id": "l2-reject-111",
+      "layer": "L2",
+      "monotonic_ns": 5653733655647,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 111
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 278603664,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 109
+          }
+        ]
+      },
+      "id": "l2-reject-566",
+      "layer": "L2",
+      "monotonic_ns": 5662833461830,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 566
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 274180242,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 220
+          }
+        ]
+      },
+      "id": "l2-reject-606",
+      "layer": "L2",
+      "monotonic_ns": 5663632204242,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 606
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 274158213,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 221
+          }
+        ]
+      },
+      "id": "l2-reject-611",
+      "layer": "L2",
+      "monotonic_ns": 5663732153213,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 611
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 274460778,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 222
+          }
+        ]
+      },
+      "id": "l2-reject-616",
+      "layer": "L2",
+      "monotonic_ns": 5663832423778,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 616
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 279493909,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-625",
+      "layer": "L2",
+      "monotonic_ns": 5664032192312,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 625
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 280894464,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 122
+          }
+        ]
+      },
+      "id": "l2-reject-630",
+      "layer": "L2",
+      "monotonic_ns": 5664134027535,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 630
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 283769878,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 134
+          },
+          {
+            "age_ns": 325671240,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 237
+          }
+        ]
+      },
+      "id": "l2-reject-690",
+      "layer": "L2",
+      "monotonic_ns": 5665333252240,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 690
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 286210299,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 135
+          }
+        ]
+      },
+      "id": "l2-reject-695",
+      "layer": "L2",
+      "monotonic_ns": 5665436137820,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 695
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 274913927,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 240
+          }
+        ]
+      },
+      "id": "l2-reject-705",
+      "layer": "L2",
+      "monotonic_ns": 5665632414927,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 705
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 257157538,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 241
+          }
+        ]
+      },
+      "id": "l2-reject-709",
+      "layer": "L2",
+      "monotonic_ns": 5665714626538,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 709
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 275631685,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 244
+          }
+        ]
+      },
+      "id": "l2-reject-725",
+      "layer": "L2",
+      "monotonic_ns": 5666033022685,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 725
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 277926724,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 245
+          }
+        ]
+      },
+      "id": "l2-reject-730",
+      "layer": "L2",
+      "monotonic_ns": 5666135290724,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 730
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 277431745,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 248
+          }
+        ]
+      },
+      "id": "l2-reject-744",
+      "layer": "L2",
+      "monotonic_ns": 5666434711745,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 744
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 260652066,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 249
+          }
+        ]
+      },
+      "id": "l2-reject-748",
+      "layer": "L2",
+      "monotonic_ns": 5666517913066,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 748
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 270667591,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 148
+          },
+          {
+            "age_ns": 263796415,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 251
+          }
+        ]
+      },
+      "id": "l2-reject-755",
+      "layer": "L2",
+      "monotonic_ns": 5666721003415,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 755
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 257457053,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 252
+          }
+        ]
+      },
+      "id": "l2-reject-760",
+      "layer": "L2",
+      "monotonic_ns": 5666814633053,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 760
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 275801776,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 253
+          }
+        ]
+      },
+      "id": "l2-reject-766",
+      "layer": "L2",
+      "monotonic_ns": 5666932949776,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 766
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 275016131,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 254
+          }
+        ]
+      },
+      "id": "l2-reject-771",
+      "layer": "L2",
+      "monotonic_ns": 5667032139131,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 771
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 277848044,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 255
+          }
+        ]
+      },
+      "id": "l2-reject-776",
+      "layer": "L2",
+      "monotonic_ns": 5667134944044,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 776
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 259878247,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 256
+          }
+        ]
+      },
+      "id": "l2-reject-780",
+      "layer": "L2",
+      "monotonic_ns": 5667216952247,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 780
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 277605447,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 257
+          }
+        ]
+      },
+      "id": "l2-reject-786",
+      "layer": "L2",
+      "monotonic_ns": 5667334649447,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 786
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 260644841,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 258
+          }
+        ]
+      },
+      "id": "l2-reject-790",
+      "layer": "L2",
+      "monotonic_ns": 5667417662841,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 790
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 276194048,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 259
+          }
+        ]
+      },
+      "id": "l2-reject-796",
+      "layer": "L2",
+      "monotonic_ns": 5667533194048,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 796
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 275159253,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 260
+          }
+        ]
+      },
+      "id": "l2-reject-801",
+      "layer": "L2",
+      "monotonic_ns": 5667632126253,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 801
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 278170045,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 262
+          }
+        ]
+      },
+      "id": "l2-reject-811",
+      "layer": "L2",
+      "monotonic_ns": 5667835082045,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 811
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 287287805,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 163
+          }
+        ]
+      },
+      "id": "l2-reject-831",
+      "layer": "L2",
+      "monotonic_ns": 5668232120172,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 831
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 293258060,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 164
+          }
+        ]
+      },
+      "id": "l2-reject-836",
+      "layer": "L2",
+      "monotonic_ns": 5668338541512,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 836
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 283382847,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 173
+          }
+        ]
+      },
+      "id": "l2-reject-880",
+      "layer": "L2",
+      "monotonic_ns": 5669232187381,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 880
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 283920406,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 174
+          },
+          {
+            "age_ns": 325588166,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 276
+          }
+        ]
+      },
+      "id": "l2-reject-884",
+      "layer": "L2",
+      "monotonic_ns": 5669332121166,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 884
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 326385437,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 277
+          }
+        ]
+      },
+      "id": "l2-reject-889",
+      "layer": "L2",
+      "monotonic_ns": 5669432890437,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 889
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 308931899,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 280
+          }
+        ]
+      },
+      "id": "l2-reject-903",
+      "layer": "L2",
+      "monotonic_ns": 5669715358899,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 903
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 325797655,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 284
+          }
+        ]
+      },
+      "id": "l2-reject-924",
+      "layer": "L2",
+      "monotonic_ns": 5670132118655,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 924
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 326909909,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 285
+          }
+        ]
+      },
+      "id": "l2-reject-929",
+      "layer": "L2",
+      "monotonic_ns": 5670233204909,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 929
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 276244063,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 296
+          }
+        ]
+      },
+      "id": "l2-reject-984",
+      "layer": "L2",
+      "monotonic_ns": 5671332239063,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 984
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 288346855,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 195
+          }
+        ]
+      },
+      "id": "l2-reject-989",
+      "layer": "L2",
+      "monotonic_ns": 5671432857852,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 989
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 279897977,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 299
+          }
+        ]
+      },
+      "id": "l2-reject-999",
+      "layer": "L2",
+      "monotonic_ns": 5671635821977,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 999
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 280036819,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 300
+          }
+        ]
+      },
+      "id": "l2-reject-1004",
+      "layer": "L2",
+      "monotonic_ns": 5671735932819,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1004
+    },
+    {
+      "category": "PRODUCTION_FAULT",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 189541818,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 280036819,
+            "rejected[1].reason": "STALE"
+          },
+          "L3": {
+            "omega_rad_s": 0.39255555853995466,
+            "v_mps": -0.07942117754372441
+          },
+          "L4": {
+            "freshness_ns": 89022428,
+            "local_costmap.freshness_ns": 89022428,
+            "local_costmap.revision": 319,
+            "map_revision": 707,
+            "obstacle_tracks[0].confidence": 0.45703125,
+            "obstacle_tracks[0].estimate_status": "DEGRADED"
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "progress": 0.017578125,
+            "reason": null,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 1005,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-00-07",
+            "trajectory.min_clearance_m": 0.06841429853452707,
+            "trajectory.omega_rad_s": 0.44999999999999996,
+            "trajectory.progress_potential_score": 0.14531094820540158,
+            "trajectory.progress_score": 0.0,
+            "trajectory.progress_viable": true,
+            "trajectory.v_mps": 0.0
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": 0.46436111036501126,
+            "requested_v_mps": 0.0,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": 0.46436111036501126,
+            "allowed_v_mps": 0.0,
+            "requested_omega_rad_s": 0.46436111036501126,
+            "requested_v_mps": 0.0
+          }
+        }
+      },
+      "id": "fault-layer-1004",
+      "layer": "L11",
+      "monotonic_ns": 5671735932819,
+      "reason": "L11_ERROR",
+      "severity": "WARNING",
+      "tick_id": 1004
+    }
+  ],
+  "localization": {
+    "first_trace": 0.0461,
+    "growth_ratio": 5.108808784759676,
+    "last_trace": 0.23551608497742105,
+    "max_trace": 0.33261973103616144,
+    "sample_count": 203
+  },
+  "motion": {
+    "behavior_status": "FAULT",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 1.5162559679218057,
+    "requested_motion_tick_count": 85
+  },
+  "navigation": {
+    "stagnation": null
+  },
+  "root_cause_candidate": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "safety-fault-1004"
+    ],
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L11_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 1004
+  },
+  "safety": {
+    "ALLOW": 85,
+    "FAULT": 1,
+    "STOP": 117,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 9,
+    "l2_actionable_rejection_count": 41,
+    "l2_duplicate_count": 483,
+    "l2_rejection_count": 524,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 483,
+      "STALE": 41
+    }
+  },
+  "ticks": {
+    "count": 203,
+    "first_monotonic_ns": 5651514565486,
+    "first_tick_id": 0,
+    "last_monotonic_ns": 5671735932819,
+    "last_tick_id": 1004
+  },
+  "timing": {
+    "max_ms": 120.294382,
+    "p50_ms": 100.008824,
+    "p95_ms": 117.081123,
+    "p99_ms": 119.605396,
+    "sample_count": 202,
+    "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+  },
+  "warning_count": 46
+}

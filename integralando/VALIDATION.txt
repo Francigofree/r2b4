@@ -1,16 +1,38 @@
-R2B4 pytest refactor V2 validation - 2026-09-25
+R2B4 pytest refactor V4 hotfix validation - 2026-09-25
 
-Validated mechanically on a synthetic current-shape repo with production/CLI imports of v3.pytest_profiles:
-- before: 128 collected
-- retained shared v3/pytest_profiles.py registry and all importing modules
-- staged: CORE 30 / FEATURE 63 / DEEP 35 = 128
-- staged pytest: 128 passed
-- committed install: PASS
-- ./r test: 30 passed
-- ./r test full: 128 passed
-- v3/pytest_profiles.py still exists after install
+Reason for V4
+-------------
+Real R2B4 V3 dry-run result supplied by user:
+- obsolete v3_config_fixtures dependency closure: 74 Python files
+- after exclusion: 529 current pytest items
+- safe high-signal candidates: 320
+- rejected implementation-coupled/legacy: 72
+- selected staged suite before budget rejection: CORE=25, FEATURE=55, DEEP=3, TOTAL=83, FILES=16
+- rejection reason was only DEEP hard minimum 20
 
-V2 correction:
-- v3/pytest_profiles.py is NOT deleted. Current source uses it from Test Hub/host/interface/launcher modules.
-- v3_unit_config.json and tests/v3_config_fixtures.py remain removal targets.
-- No production control algorithm is changed by this upgrade.
+V4 policy
+---------
+Hard guards:
+- CORE >= 20
+- FEATURE >= 40
+- TOTAL 80..140
+- <= 20 test files
+- V2 staging/pytest must pass
+
+Soft target:
+- DEEP 20..40
+
+V4 never reintroduces the obsolete v3_config_fixtures dependency closure merely to pad DEEP.
+
+Mechanical validation
+---------------------
+1) V2 budget patch recognized and passed three representations:
+   - {'deep': (20, 40)} range tuple/list
+   - MIN_COUNTS={'deep': 20}
+   - direct counts['deep'] < 20 comparison in the budget-building function
+2) --check restores all temporarily excluded files.
+3) Full install simulation with CORE=25 / FEATURE=55 / DEEP=3 / TOTAL=83 / 16 files: PASS.
+4) Invalid install simulation with TOTAL=61: rejected; independent full tests-tree rollback restored originals.
+5) Temporary patched V2 source is removed after each run.
+6) Original integralando/installer.py is never overwritten.
+7) v3/pytest_profiles.py remains untouched.

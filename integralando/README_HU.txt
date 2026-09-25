@@ -1,83 +1,45 @@
-R2B4 pytest refaktor – 2026-09-25
-=================================
+R2B4 pytest refactor V4 hotfix - 2026-09-25
 
-Cél
----
-A jelenlegi ~1200 pytest-eset helyett 80–140 magas jelértékű, robot-szintű teszt.
-CORE 20–30, FEATURE 40–70, DEEP 20–40. Hard cap: 150.
+MIERT KELL V4?
+A V3 source-first szurese utan a valodi repo ezt adta:
+  CORE=25, FEATURE=55, DEEP=3, TOTAL=83, files=16
+A TOTAL mar a kivant 80-140 tartomanyban van, CORE es FEATURE is jo.
+A V2 csak azert utasitotta el, mert a DEEP 20-as also hatarat hard limitnek vette.
 
-Fontos
-------
-A telepítő source-first módon a HELYI, aktuális /home/alba/project_r2b4 repót elemzi.
-Nem tartalmaz lefagyasztott régi tesztlistát, és nem módosít production robot-logikát azért,
-hogy régi pytest elvárások átmenjenek.
+V4 SZABALY
+Hard:
+- CORE >= 20
+- FEATURE >= 40
+- TOTAL 80..140
+- max 20 tesztfajl
+- staging/pytest 0 failure
 
-A telepítő először stagingben építi fel az új suite-ot. Csak akkor ír a repóba, ha:
-- a production/non-test source nem hivatkozik a törlendő pytest-infrastruktúrára;
-- 80–140 tesztesetből álló, rétegenként is budgeten belüli suite építhető;
-- legfeljebb 20 test_*.py fájl kell;
-- a staging suite 0 FAIL;
-- nincs elrejtett magas szintű AssertionError / safety-contract hiba.
+Soft target:
+- DEEP 20..40
 
-Amit eltávolít
---------------
-- pytest_profiles.py (ha nincs production hivatkozása)
-- v3_unit_config.json
-- tests/v3_config_fixtures.py reflection/config-copy rendszer
-- privát mezőket, constructor signature-t, régi migrációt vagy exact tuningértéket védő tesztek
+A V4 NEM hoz vissza obsolete vagy implementation-coupled teszteket csak azert,
+hogy DEEP=20 legyen.
 
-Amit létrehoz
--------------
-tests/core/
-tests/feature/
-tests/deep/
-tests/rig.py                    production ConfigResolverből olvas
-tests/suite_manifest.json       pontos kiválasztási/budget riport
-v3/test_runner.py
-docs/PYTEST_POLICY.md
+MEGMARAD:
+- v3/pytest_profiles.py (shared Test Hub / CLI registry)
 
-Telepítés
----------
-cd /home/alba/project_r2b4/integralando
-unzip r2b4_pytest_refactor_v2_20260925.zip
-cd r2b4_pytest_refactor_v2_20260925
+KIZARVA MARAD:
+- tests/v3_config_fixtures.py
+- tests/v3_validation_helpers.py, ha a fenti obsolete fixture-re epul
+- az obsolete fixture teljes dependency closure-e
 
-# Kötelező első lépés: teljes source-first dry-run, nem ír semmit
-python3 installer.py --check
+HASZNALAT
+A regi integralando/installer.py (V2) maradjon a helyen.
 
-# Csak ha CHECK PASS
-python3 installer.py
+  cd /home/alba/project_r2b4/integralando
+  python3 r2b4_pytest_refactor_v4_20260925/installer_v4.py --check
 
-Használat
----------
-./r test
-./r test follow
-./r test full
+Ha V4 CHECK PASS:
 
-További fókusz módok:
-./r test roomcruise
-./r test localization
-./r test perception
-./r test motion
-./r test async
-./r test process
-./r test replay
+  python3 r2b4_pytest_refactor_v4_20260925/installer_v4.py
+  cd /home/alba/project_r2b4
+  ./r test
+  ./r test full
 
-Biztonság
----------
-A telepítő timestampes backupot készít .upgrade_backups/ alatt és post-install validáció
-hiba esetén automatikusan visszaállítja az eredeti tests/ fát és a módosított fájlokat.
-Production control/motor/config algoritmust nem módosít.
-
-FONTOS V2 PONTOSITAS
---------------------
-A v3/pytest_profiles.py NEM torlodik. A jelenlegi source-ban ezt a Test Hub,
-host_cli, interface_cli es launcher_cli is hasznalja, tehat ez mar kozos
-diagnosztikai/CLI profil-registry, nem egyszeru pytest-segedfajl. A pytest
-ritkitashoz nem kell hozzanyulni.
-
-Tovabbra is kikerul:
-- v3_unit_config.json
-- tests/v3_config_fixtures.py / configured() reflection
-- regi implementacio-reszlet tesztek
-- a nagy, ~1200 elemu tesztfa helyett a kuralt 80-140-es suite
+A V4 csak ideiglenes masolatban modositja a V2 budget logikajat. Az eredeti
+integralando/installer.py fajlt nem irja at.
