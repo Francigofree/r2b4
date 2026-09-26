@@ -56,19 +56,20 @@ Capture mintavétel alapértelmezése 10 Hz. Választható: `c 50`, `c 10`, `c 5
 ./r cap status
 ```
 
-Test Hub és közös pytest-profilok:
+Test Hub és pytest:
 
 ```bash
 ./r th
 ./r th run
-./r th run --pytest control
 ./r test
-./r test async
-./r test --list
+./r test follow
+./r test full
+./r test list
 ```
 
-A pytest-profilok egyetlen forrása a `v3/pytest_profiles.py`; a launcher és a Test Hub
-ezt a közös listát használja. Nyers pytest továbbra is elérhető: `./r pytest ...`.
+A canonical pytest modell a `tests/core/`, `tests/feature/` és `tests/deep/` réteg,
+a policy forrása a `docs/PYTEST_POLICY.md`, a launcher futtatója pedig a
+`v3/test_runner.py`. Nyers pytest továbbra is elérhető: `./r pytest ...`.
 
 Fejlesztő/host segédek például: `r git`, `r gitre`, `r tools`, `r tool NAME`,
 `r cpu`, `r cpu2`, `r disc`, `r mem`, `r temp`, `r ps`, `r net`, `r usb`, `r i2c`,

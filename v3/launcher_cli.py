@@ -15,7 +15,7 @@ from collections.abc import Sequence
 
 from v3 import host_cli, interface_cli
 from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ
-from v3.pytest_profiles import pytest_profile_names
+from v3.test_runner import FOCUSED
 
 
 class LauncherError(RuntimeError):
@@ -58,9 +58,11 @@ def command_catalog() -> dict[str, object]:
             "hz": list(CAPTURE_HZ_VALUES),
             "modes": ["alap", "full", "nincs"],
         },
+        "tests": {
+            "modes": ["core", *FOCUSED, "full"],
+        },
         "testhub": {
             "view_hz": [1, 5, 10],
-            "pytest_profiles": list(pytest_profile_names()),
         },
         "er2": {"commands": ["status", "preview", "stream"], "execution": "REAL_ONLY"},
         "local": sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES)),
@@ -73,7 +75,7 @@ def print_help() -> None:
     print(
         "\nLauncher/development:\n"
         "  r commands [--json]          discover current command surface\n"
-        "  r test [PROFILE] [PYTEST...] shared pytest profile; default gate\n"
+        "  r test [MODE]                curated pytest mode; default core\n"
         "  r pytest [ARGS...]            raw pytest passthrough\n"
         "  r git | gitre | tools | tool  repo/developer helpers\n"
         "  r version                     repo revision + dirty state\n"
@@ -104,7 +106,7 @@ def _commands(argv: list[str]) -> int:
         + "/".join(map(str, capture["hz"]))
         + " | modes " + "/".join(capture["modes"])
     )
-    print("Test profiles: " + ", ".join(catalog["testhub"]["pytest_profiles"]))
+    print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
     print("Local: " + ", ".join(catalog["local"]))
     return 0
 

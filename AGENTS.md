@@ -38,7 +38,7 @@ Ne vezess be új A/C/O számozott rétegrendet vagy `L13`-at; az egyetlen produc
 
 A célzott teszt az alapértelmezett.
 
-A pytest célzott scope-jainak egyetlen forrása a `v3/pytest_profiles.py`; ugyanezeket a profilokat használja a Test Hub. A `gate` legyen az első gyors kapu, majd a változás természetének megfelelő `contract`/`async`/`runtime`/`replay`/`control`/`perception` profil következzen. A `full` nem helyettesíti a célzott tesztet.
+A pytest fejlesztési policy authorityja a `docs/PYTEST_POLICY.md`; a canonical launcher a `v3/test_runner.py`. Normál agentváltozás után `./r test` (CORE) fusson először. Viselkedés-specifikus változásnál a releváns `./r test <mode>` (`follow`/`roomcruise`/`localization`/`perception`/`motion`/`async`/`process`/`replay`) következzen. A `./r test full` a teljes CORE+FEATURE+DEEP regresszió; nem helyettesíti a célzott tesztet.
 
 Releváns capture esetén használd a natív Replayer/Test Hub utat a V3 contractok szerint.
 

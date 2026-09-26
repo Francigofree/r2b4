@@ -16,7 +16,7 @@ import sys
 import time
 from collections.abc import Iterator, Sequence
 
-from v3.pytest_profiles import get_pytest_profile, pytest_profile_names, resolve_pytest_targets
+from v3 import test_runner
 
 
 class HostCliError(RuntimeError):
@@ -86,19 +86,7 @@ def version(root: Path) -> int:
 
 
 def profile_test(root: Path, argv: list[str]) -> int:
-    if argv and argv[0] in {"--list", "-l"}:
-        for name in pytest_profile_names():
-            profile = get_pytest_profile(name)
-            print(f"  {name:<12} {profile.description}")
-        return 0
-    profile_name = "gate"
-    extra = list(argv)
-    if extra and not extra[0].startswith("-"):
-        profile_name = extra.pop(0)
-    get_pytest_profile(profile_name)
-    targets = resolve_pytest_targets(root, profile_name)
-    print(f"pytest profile: {profile_name}")
-    return _run([sys.executable, "-m", "pytest", *targets, *extra], root=root)
+    return test_runner.main(argv)
 
 
 def list_tools(root: Path) -> int:
