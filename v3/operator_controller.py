@@ -709,21 +709,24 @@ class OperatorController:
     # Public API: integrated physical test sequence
     # ------------------------------------------------------------------
 
-    @_serialized_operator_transition
     def run_proba(
         self, *, capture_mode: str = DEFAULT_CAPTURE_MODE, capture_hz: int = DEFAULT_CAPTURE_HZ
     ) -> None:
         mode = self._validate_capture_mode(capture_mode)
         hz = self._validate_capture_hz(capture_hz)
-        self.ensure_runtime(mode, hz)
-        self.stop()
-        if mode == "alap":
-            self._ensure_fresh_capture_slot()
-            self._write_private_text(self.movement_capture_file, "movement")
-        else:
-            self._unlink(self.movement_capture_file)
+        with self.operator_transition():
+            self.ensure_runtime(mode, hz)
+            self.stop()
+            if mode == "alap":
+                self._ensure_fresh_capture_slot()
+                self._write_private_text(self.movement_capture_file, "movement")
+            else:
+                self._unlink(self.movement_capture_file)
+            # The existing sequence marker also identifies this invocation. STOP
+            # revokes it for every caller (launcher, interface, embedded host).
+            sequence_owner = f"{os.getpid()}\n{time.monotonic_ns()}"
+            self._write_private_text(self.sequence_pid_file, sequence_owner)
 
-        self._write_private_text(self.sequence_pid_file, str(os.getpid()))
         try:
             track = self._track_width()
             arc_v = 0.15
@@ -742,17 +745,17 @@ class OperatorController:
                 (10, "balra 180°, jobb kerék célja 0", -pivot_omega * track / 2, pivot_omega, math.pi),
             )
             for index, label, v, omega, angle in phases:
-                self._run_proba_phase(index, label, v, omega, angle)
+                self._run_proba_phase(index, label, v, omega, angle, sequence_owner=sequence_owner)
                 self._proba_idle(5.0 if index < 10 else 0.0)
             self._emit("info", "proba: kész, IDLE")
         except KeyboardInterrupt:
             self._emit("warning", "proba: megszakítva")
             raise
         finally:
-            try:
-                self.stop(wait_idle=False)
-            finally:
-                self._unlink(self.sequence_pid_file)
+            with self.operator_transition():
+                # A revoked/older sequence must not stop a newer owner's command.
+                if self._proba_owner() == sequence_owner:
+                    self.stop(wait_idle=False)
 
     # ------------------------------------------------------------------
     # Internal worker API used by operator_cli.  Not a motor bypass.
@@ -972,14 +975,17 @@ class OperatorController:
                 f"motors={status.get('left_output')}/{status.get('right_output')}",
             )
 
-    def _run_proba_phase(self, index: int, label: str, v: float, omega: float, angle: float) -> None:
+    def _proba_owner(self) -> str | None:
+        try:
+            return self.sequence_pid_file.read_text(encoding="ascii").strip()
+        except (OSError, UnicodeError):
+            return None
+
+    def _run_proba_phase(
+        self, index: int, label: str, v: float, omega: float, angle: float,
+        *, sequence_owner: str,
+    ) -> None:
         self._emit("info", f"proba {index}/10: {label}")
-        # STOP expires during the quiet pause. Refresh it before each ACTIVE
-        # request and observe the runtime's own readiness decision.
-        self._publish_stop()
-        self.wait_idle()
-        initial = self._runtime_status()
-        previous_yaw = self._yaw(initial) if angle else 0.0
 
         command_id = f"operator-proba-{os.getpid()}-{index}-{time.monotonic_ns()}"
         command = [
@@ -990,13 +996,25 @@ class OperatorController:
             "--max-v-mps", "0.25",
             "--max-omega-rad-s", "0.60",
         ]
-        phase_start_ns = time.monotonic_ns()
         turned = 0.0
         started = time.monotonic()
         allowed = False
         try:
-            pid = self._spawn_control_process(command)
+            with self.operator_transition():
+                if self._proba_owner() != sequence_owner:
+                    raise OperatorError("proba sequence cancelled by STOP or a newer command")
+                # Check ownership and start under the same transition as STOP.
+                self._publish_stop()
+                self.wait_idle()
+                initial = self._runtime_status()
+                previous_yaw = self._yaw(initial) if angle else 0.0
+                phase_start_ns = time.monotonic_ns()
+                pid = self._spawn_control_process(
+                    command, session_owner_pid=os.getpid(), session_watchdog_s=35.0,
+                )
             while True:
+                if self._proba_owner() != sequence_owner:
+                    raise OperatorError("proba sequence cancelled by STOP or a newer command")
                 if not self._pid_matches(pid, ("v3.control_cli",)):
                     raise OperatorError("phase command producer stopped unexpectedly")
                 now = time.monotonic()
@@ -1033,10 +1051,12 @@ class OperatorController:
                     break
                 time.sleep(0.05)
         finally:
-            try:
-                self._stop_control_cli_only()
-            finally:
-                self._publish_stop()
+            with self.operator_transition():
+                if self._proba_owner() == sequence_owner:
+                    try:
+                        self._stop_control_cli_only()
+                    finally:
+                        self._publish_stop()
 
     def _proba_idle(self, pause: float) -> None:
         # Quiet pause: the next phase requests fresh readiness. The operator
@@ -1319,16 +1339,17 @@ class OperatorController:
             raise OperatorError(f"control_cli STOP failed: {result.stderr.strip() or result.stdout.strip()}")
 
     def _stop_command_producers(self) -> None:
+        sequence_owner = self._proba_owner()
         seq = self._read_pid_file(self.sequence_pid_file)
-        if seq is not None and seq != os.getpid() and self._pid_matches(seq, ("v3.operator_cli", "proba")):
+        self._unlink(self.sequence_pid_file)
+        # Older PID-only sequences do not check revocation between phases.
+        if sequence_owner == str(seq) and seq is not None and seq != os.getpid() and self._pid_matches(seq, ("v3.operator_cli", "proba")):
             try:
                 os.kill(seq, signal.SIGTERM)
             except ProcessLookupError:
                 pass
             if not self._wait_gone(seq, 2.0):
                 raise OperatorError(f"proba sequence did not stop (PID {seq})")
-        if seq != os.getpid():
-            self._unlink(self.sequence_pid_file)
         # A sequence started by the previous shell launcher may still exist.
         legacy = self._find_pid(("r2b4-proba",))
         if legacy is not None:
@@ -1489,8 +1510,8 @@ class OperatorController:
     def _read_pid_file(path: Path) -> int | None:
         try:
             raw = path.read_text(encoding="ascii").strip()
-            value = int(raw)
-        except (OSError, ValueError):
+            value = int(raw.splitlines()[0])
+        except (OSError, ValueError, IndexError):
             return None
         return value if value > 0 else None
 

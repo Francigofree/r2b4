@@ -43,6 +43,8 @@ COMMANDS = frozenset({
 HARDWARE_TOOLS = frozenset({
     "r2b4_voice_mic_test", "v3_camera_test", "v3_encoder_ab_probe",
     "v3_person_detection_test", "v3_sensor_measurement",
+    "v3_mcap_measurement", "r2b4_imu_control_diag",
+    "r2b4_periferial_control_diag", "r2b4_control_rootcause_diag",
 })
 
 
@@ -104,10 +106,15 @@ def list_tools(root: Path) -> int:
 
 
 def _find_tool(root: Path, name: str) -> Path:
+    if Path(name).name != name:
+        raise HostCliError("tool must be a name from 'r tools', not a path")
     filename = name if name.endswith(".py") else f"{name}.py"
     for path in (root / "tools" / filename, root / filename):
         if path.is_file():
-            return path
+            resolved = path.resolve()
+            if resolved.parent not in {root.resolve(), (root / "tools").resolve()}:
+                raise HostCliError("tool must stay in the repository root or tools directory")
+            return resolved
     raise HostCliError(f"tool not found: {name}; use 'r tools'")
 
 
@@ -131,6 +138,8 @@ def run_tool(root: Path, argv: list[str]) -> int:
     if not argv:
         raise HostCliError("tool name required; use 'r tools'")
     path = _find_tool(root, argv[0])
+    if path.stem == "v3_process_runtime":
+        raise HostCliError("resident runtime lifecycle requires 'r runtime start', not 'r tool'")
     command = [sys.executable, str(path), *argv[1:]]
     if path.stem in HARDWARE_TOOLS:
         with hardware_guard(root):

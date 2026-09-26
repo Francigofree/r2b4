@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import os
+import threading
 import time
 from collections.abc import Mapping
 
@@ -32,6 +33,10 @@ def _jsonable(value: object) -> object:
 
 class Er2ToolError(RuntimeError):
     pass
+
+
+class Er2SafetyError(Er2ToolError):
+    """A physical tool could not confirm STOP; the provider must terminate."""
 
 
 def _tool_result_metadata(result: Mapping[str, object]) -> dict[str, object]:
@@ -126,9 +131,15 @@ class Er2RobotTools:
         return response
 
     def robot_stop(self) -> dict[str, object]:
-        return self._handle("stop")
+        result = self._handle("stop")
+        if result["status"] != "COMPLETED":
+            raise Er2SafetyError(f"robot STOP failed: {result.get('error') or result['status']}")
+        return result
 
-    def robot_drive(self, *, v_mps: float, omega_rad_s: float, duration_s: float) -> dict[str, object]:
+    def robot_drive(
+        self, *, v_mps: float, omega_rad_s: float, duration_s: float,
+        cancel_event: threading.Event | None = None,
+    ) -> dict[str, object]:
         for value, name in ((v_mps, "v_mps"), (omega_rad_s, "omega_rad_s"), (duration_s, "duration_s")):
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
                 raise Er2ToolError(f"{name} must be finite numeric")
@@ -143,32 +154,38 @@ class Er2RobotTools:
             raise Er2ToolError(f"duration_s must stay within [0.10, {self.config.max_segment_s:g}]")
         if abs(v) <= 1e-12 and abs(omega) <= 1e-12:
             return self.robot_stop()
+        if cancel_event is not None and cancel_event.is_set():
+            raise Er2ToolError("robot drive cancelled before execution")
 
         operator = self._handle("read", "operator.status")
         operator_payload = operator.get("result") if isinstance(operator, Mapping) else None
         current_mode = operator_payload.get("capture_mode") if isinstance(operator_payload, Mapping) else None
         current_hz = operator_payload.get("capture_hz") if isinstance(operator_payload, Mapping) else None
-        command = self._handle(
-            "execute",
-            "v3.command.teleop",
-            {
-                "v_mps": v,
-                "omega_rad_s": omega,
-                "max_v_mps": self.config.max_v_mps,
-                "max_omega_rad_s": self.config.max_omega_rad_s,
-                # Never force-restart a resident runtime merely to change capture.
-                "capture": False,
-                "capture_mode": current_mode if isinstance(current_mode, str) else "nincs",
-                "capture_hz": current_hz if isinstance(current_hz, int) else 10,
-            },
-        )
-        if command["status"] not in {"ACCEPTED", "COMPLETED"}:
-            raise Er2ToolError(f"robot drive rejected: {command.get('error') or command['status']}")
-
-        started = self._monotonic()
         interrupted: dict[str, object] | None = None
         try:
+            if cancel_event is not None and cancel_event.is_set():
+                raise Er2ToolError("robot drive cancelled before execution")
+            command = self._handle(
+                "execute",
+                "v3.command.teleop",
+                {
+                    "v_mps": v,
+                    "omega_rad_s": omega,
+                    "max_v_mps": self.config.max_v_mps,
+                    "max_omega_rad_s": self.config.max_omega_rad_s,
+                    # Never force-restart a resident runtime merely to change capture.
+                    "capture": False,
+                    "capture_mode": current_mode if isinstance(current_mode, str) else "nincs",
+                    "capture_hz": current_hz if isinstance(current_hz, int) else 10,
+                },
+            )
+            if command["status"] not in {"ACCEPTED", "COMPLETED"}:
+                raise Er2ToolError(f"robot drive rejected: {command.get('error') or command['status']}")
+            started = self._monotonic()
             while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    interrupted = {"reason": "CANCELLED"}
+                    break
                 elapsed = self._monotonic() - started
                 if elapsed >= duration:
                     break
@@ -198,7 +215,10 @@ class Er2RobotTools:
             "final": final,
         }
 
-    def execute(self, name: str, arguments: Mapping[str, object] | None = None) -> dict[str, object]:
+    def execute(
+        self, name: str, arguments: Mapping[str, object] | None = None,
+        *, cancel_event: threading.Event | None = None,
+    ) -> dict[str, object]:
         args = dict(arguments or {})
         self._emit("ER2_TOOL_CALL", tool_name=name, arguments=_jsonable(args))
         try:
@@ -222,6 +242,7 @@ class Er2RobotTools:
                     v_mps=args["v_mps"],  # type: ignore[arg-type]
                     omega_rad_s=args["omega_rad_s"],  # type: ignore[arg-type]
                     duration_s=args["duration_s"],  # type: ignore[arg-type]
+                    cancel_event=cancel_event,
                 )
             else:
                 raise Er2ToolError(f"unknown ER2 tool: {name}")
@@ -295,4 +316,4 @@ def _upper_schema(value: object) -> object:
     return value
 
 
-__all__ = ["Er2RobotTools", "Er2ToolError"]
+__all__ = ["Er2RobotTools", "Er2SafetyError", "Er2ToolError"]

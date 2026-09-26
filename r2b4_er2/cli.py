@@ -197,10 +197,10 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
             return 0
     finally:
         try:
-            tools.robot_stop()
-        except Exception:
-            pass
-        lease.close()
+            if args.command == "stream" or args.tools:
+                tools.robot_stop()
+        finally:
+            lease.close()
     return 1
 
 

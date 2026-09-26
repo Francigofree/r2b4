@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import asyncio
+import math
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from .config import Er2Config, api_key_from_env
 from .evidence import Er2Evidence
 from .media import VisionMediaClient
-from .tool_bridge import Er2RobotTools
+from .tool_bridge import Er2RobotTools, Er2SafetyError
 
 
 class Er2StreamingError(RuntimeError):
@@ -59,8 +61,11 @@ class Er2StreamingClient:
     async def run_async(self, task: str, *, duration_s: float | None = None) -> Er2StreamingResult:
         if not isinstance(task, str) or not task.strip():
             raise ValueError("task must be non-empty")
-        if duration_s is not None and duration_s <= 0:
-            raise ValueError("duration_s must be positive or None")
+        if duration_s is not None and (
+            isinstance(duration_s, bool) or not isinstance(duration_s, (int, float))
+            or not math.isfinite(duration_s) or duration_s <= 0
+        ):
+            raise ValueError("duration_s must be finite and positive or None")
 
         client, types = self._sdk()
         stop_event = asyncio.Event()
@@ -68,6 +73,7 @@ class Er2StreamingClient:
         deadline = None if duration_s is None else asyncio.get_running_loop().time() + float(duration_s)
         initial_task = task.strip()
         first_connection = True
+        self._resume_handle = None
         clean = False
         self._emit(
             "ER2_STREAM_START",
@@ -80,6 +86,8 @@ class Er2StreamingClient:
                 if deadline is not None and asyncio.get_running_loop().time() >= deadline:
                     clean = True
                     break
+                if not first_connection and not self._resume_handle:
+                    raise Er2StreamingError("ER2 session continuity lost: no valid resumption handle")
                 resumed = bool(self._resume_handle)
                 self._emit(
                     "ER2_STREAM_CONNECT_ATTEMPT",
@@ -159,20 +167,26 @@ class Er2StreamingClient:
                             if timer_task is not None and timer_task in done:
                                 clean = True
                                 stop_event.set()
+                            # Task failure has priority over reconnect and the timer.
+                            # In particular, failed STOP must never become a retry.
+                            for completed in (recv_task, heartbeat_task):
+                                if completed in done:
+                                    completed.result()
                             if reconnect_requested.is_set():
                                 reconnect_count += 1
                                 self._emit("ER2_STREAM_RECONNECT", reason="GO_AWAY", reconnect_count=reconnect_count)
                             elif recv_task in done and not stop_event.is_set():
                                 reconnect_count += 1
                                 self._emit("ER2_STREAM_RECONNECT", reason="RECEIVE_ENDED", reconnect_count=reconnect_count)
-                            elif heartbeat_task in done and heartbeat_task.exception() is not None:
-                                raise heartbeat_task.exception()  # type: ignore[misc]
                         finally:
                             tasks = [t for t in (heartbeat_task, timer_task, recv_task) if t is not None]
                             for task_obj in tasks:
                                 if not task_obj.done():
                                     task_obj.cancel()
-                            await asyncio.gather(*tasks, return_exceptions=True)
+                            results = await asyncio.gather(*tasks, return_exceptions=True)
+                            for result in results:
+                                if isinstance(result, Er2SafetyError):
+                                    raise result
                             self._emit(
                                 "ER2_STREAM_DISCONNECTED",
                                 resumed=resumed,
@@ -180,6 +194,8 @@ class Er2StreamingClient:
                                 reconnect_requested=reconnect_requested.is_set(),
                             )
                 except asyncio.CancelledError:
+                    raise
+                except Er2SafetyError:
                     raise
                 except Exception as exc:
                     if stop_event.is_set():
@@ -212,10 +228,7 @@ class Er2StreamingClient:
             )
             raise
         finally:
-            try:
-                await asyncio.to_thread(self.tools.robot_stop)
-            except Exception:
-                pass
+            await asyncio.to_thread(self.tools.robot_stop)
         result = Er2StreamingResult(reconnect_count, self._resume_handle, clean)
         self._emit(
             "ER2_STREAM_COMPLETE",
@@ -229,52 +242,97 @@ class Er2StreamingClient:
     def run(self, task: str, *, duration_s: float | None = None) -> Er2StreamingResult:
         return asyncio.run(self.run_async(task, duration_s=duration_s))
 
+    async def _execute_tool(self, name: str, args: Mapping[str, object]) -> dict[str, object]:
+        # Cancelling to_thread only cancels its waiter. Keep ownership of the
+        # physical operation until its worker has exited and issued final STOP.
+        cancelled = threading.Event()
+        worker = asyncio.create_task(asyncio.to_thread(
+            self.tools.execute, name, args, cancel_event=cancelled,
+        ))
+        try:
+            return await asyncio.shield(worker)
+        except asyncio.CancelledError:
+            cancelled.set()
+            try:
+                await asyncio.to_thread(self.tools.robot_stop)
+            finally:
+                # This also covers cancellation while command startup was blocked:
+                # its late return cannot outlive cleanup or overlap a reconnect.
+                try:
+                    await asyncio.shield(worker)
+                except Er2SafetyError:
+                    raise
+                except Exception:
+                    pass
+            raise
+
     async def _receive_loop(self, session, types, turn_done: asyncio.Event, reconnect_requested: asyncio.Event, stop_event: asyncio.Event) -> None:
-        async for message in session.receive():
-            update = getattr(message, "session_resumption_update", None)
-            if update is not None and getattr(update, "resumable", False):
-                handle = getattr(update, "new_handle", None)
-                if isinstance(handle, str) and handle:
-                    self._resume_handle = handle
-                    self._emit("ER2_STREAM_RESUMABLE", has_handle=True)
-
-            go_away = getattr(message, "go_away", None)
-            if go_away is not None:
-                reconnect_requested.set()
-                self._emit(
-                    "ER2_STREAM_GOAWAY",
-                    time_left=str(getattr(go_away, "time_left", ""))[:120],
-                    resumable=bool(self._resume_handle),
-                )
-
-            server_content = getattr(message, "server_content", None)
-            if server_content is not None:
-                model_turn = getattr(server_content, "model_turn", None)
-                for part in tuple(getattr(model_turn, "parts", ()) or ()):
-                    text = getattr(part, "text", None)
-                    if isinstance(text, str) and text:
-                        self._on_text(text)
-                if getattr(server_content, "turn_complete", False):
-                    turn_done.set()
-
-            tool_call = getattr(message, "tool_call", None)
-            if tool_call is not None:
-                responses = []
-                for call in tuple(getattr(tool_call, "function_calls", ()) or ()):
-                    name = getattr(call, "name", None)
-                    args = getattr(call, "args", {}) or {}
-                    call_id = getattr(call, "id", None)
-                    if not isinstance(name, str) or not isinstance(args, Mapping):
-                        result = {"status": "ERROR", "error": "malformed ER2 tool call"}
+        # google-genai receive() ends after each complete model turn.
+        # Only an iterator ending without turn_complete is a disconnect.
+        while not stop_event.is_set():
+            completed_turn = False
+            async for message in session.receive():
+                update = getattr(message, "session_resumption_update", None)
+                if update is not None:
+                    if not getattr(update, "resumable", False):
+                        self._resume_handle = None
                     else:
-                        try:
-                            result = await asyncio.to_thread(self.tools.execute, name, args)
-                        except Exception as exc:
-                            result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
-                    responses.append(types.FunctionResponse(name=name or "invalid", response=result, id=call_id))
-                if responses:
-                    await session.send_tool_response(function_responses=responses)
-            if reconnect_requested.is_set() or stop_event.is_set():
+                        handle = getattr(update, "new_handle", None)
+                        if isinstance(handle, str) and handle:
+                            self._resume_handle = handle
+                            self._emit("ER2_STREAM_RESUMABLE", has_handle=True)
+
+                go_away = getattr(message, "go_away", None)
+                if go_away is not None:
+                    reconnect_requested.set()
+                    self._emit(
+                        "ER2_STREAM_GOAWAY",
+                        time_left=str(getattr(go_away, "time_left", ""))[:120],
+                        resumable=bool(self._resume_handle),
+                    )
+                if reconnect_requested.is_set() or stop_event.is_set():
+                    return
+
+                server_content = getattr(message, "server_content", None)
+                if server_content is not None:
+                    model_turn = getattr(server_content, "model_turn", None)
+                    for part in tuple(getattr(model_turn, "parts", ()) or ()):
+                        text = getattr(part, "text", None)
+                        if isinstance(text, str) and text:
+                            self._on_text(text)
+                    if getattr(server_content, "turn_complete", False):
+                        completed_turn = True
+                        turn_done.set()
+
+                tool_call = getattr(message, "tool_call", None)
+                if tool_call is not None:
+                    responses = []
+                    drive_attempted = False
+                    for call in tuple(getattr(tool_call, "function_calls", ()) or ()):
+                        if stop_event.is_set():
+                            return
+                        name = getattr(call, "name", None)
+                        args = getattr(call, "args", {}) or {}
+                        call_id = getattr(call, "id", None)
+                        if not isinstance(name, str) or not isinstance(args, Mapping):
+                            result = {"status": "ERROR", "error": "malformed ER2 tool call"}
+                        elif name == "robot_drive" and drive_attempted:
+                            result = {"status": "ERROR", "error": "ONE_ROBOT_DRIVE_PER_TOOL_ROUND"}
+                        else:
+                            if name == "robot_drive":
+                                drive_attempted = True
+                            try:
+                                result = await self._execute_tool(name, args)
+                            except Er2SafetyError:
+                                raise
+                            except Exception as exc:
+                                result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
+                        responses.append(types.FunctionResponse(name=name or "invalid", response=result, id=call_id))
+                    if responses:
+                        await session.send_tool_response(function_responses=responses)
+                if reconnect_requested.is_set() or stop_event.is_set():
+                    return
+            if not completed_turn:
                 return
 
     async def _heartbeat_loop(

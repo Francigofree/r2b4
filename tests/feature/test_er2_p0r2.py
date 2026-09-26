@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,10 +13,10 @@ from r2b4_er2.cli import _probe_media
 from r2b4_er2.config import Er2Config
 from r2b4_er2.evidence import Er2Evidence
 from r2b4_er2.media import Er2MediaUnavailable
-from r2b4_er2.preview import Er2PreviewClient
+from r2b4_er2.preview import Er2PreviewClient, Er2PreviewError
 from r2b4_er2.speech import Er2SpeechReporter
-from r2b4_er2.streaming import Er2StreamingClient
-from r2b4_er2.tool_bridge import Er2RobotTools
+from r2b4_er2.streaming import Er2StreamingClient, Er2StreamingError
+from r2b4_er2.tool_bridge import Er2RobotTools, Er2SafetyError
 from v3.external_gateway import ExternalRobotGateway, GatewayPolicy
 from v3.hri_evidence import HRI_EVENT_SCHEMA, HriEventJournal
 
@@ -164,11 +166,23 @@ class _MissingMedia:
         raise Er2MediaUnavailable("not running")
 
 
-def test_status_media_probe_reports_real_jpeg_probe_and_failure() -> None:
+def test_status_media_probe_reports_real_jpeg_probe_and_failure(monkeypatch, tmp_path) -> None:
     ready = _probe_media(_ReadyMedia())
     missing = _probe_media(_MissingMedia())
     assert ready["available"] is True and ready["jpeg_bytes"] == 7
     assert missing["available"] is False and "not running" in str(missing["error"])
+
+    # Observation-only preview must not STOP another client's motion on exit.
+    from r2b4_er2 import cli
+    calls = []
+    interface = SimpleNamespace(robot_stop=lambda: calls.append("STOP"))
+    monkeypatch.setattr(cli, "RobotInterface", lambda **kwargs: interface)
+    monkeypatch.setattr(cli.Er2RobotTools, "from_interface", lambda *args, **kwargs: interface)
+    monkeypatch.setattr(cli, "Er2PreviewClient", lambda *args, **kwargs: SimpleNamespace(
+        run=lambda *args, **kwargs: SimpleNamespace(text="observation", interaction_id="1", tool_rounds=0),
+    ))
+    assert cli.main(["preview", "observe"], project_root=tmp_path) == 0
+    assert calls == []
 
 
 class _FakeInterface:
@@ -286,3 +300,142 @@ def test_preview_executes_at_most_one_physical_drive_per_model_tool_round() -> N
     rejected = json.loads(returned[1]["result"][0]["text"])
     assert rejected["status"] == "ERROR"
     assert "ONE_ROBOT_DRIVE_PER_TOOL_ROUND" in rejected["error"]
+
+
+class _LiveSdk:
+    def __init__(self, messages):
+        self.messages = messages
+        self.connections = 0
+        self.responses = []
+        self.aio = SimpleNamespace(live=self)
+
+    @asynccontextmanager
+    async def connect(self, **kwargs):
+        self.connections += 1
+        yield self
+
+    async def send_client_content(self, **kwargs):
+        pass
+
+    async def send_realtime_input(self, **kwargs):
+        pass
+
+    async def send_tool_response(self, *, function_responses):
+        self.responses.extend(function_responses)
+
+    async def receive(self):
+        # Match the installed SDK: each receive iterator covers one model turn.
+        while self.messages:
+            message = self.messages.pop(0)
+            yield message
+            if getattr(getattr(message, "server_content", None), "turn_complete", False):
+                return
+        await asyncio.Event().wait()
+
+
+def _drive_message(*, count=1):
+    return SimpleNamespace(tool_call=SimpleNamespace(function_calls=tuple(
+        SimpleNamespace(name="robot_drive", id=f"drive-{index}", args={
+            "v_mps": 0.1, "omega_rad_s": 0.0, "duration_s": 0.1,
+        }) for index in range(count)
+    )))
+
+
+def _tools(interface, **kwargs):
+    return Er2RobotTools(
+        ExternalRobotGateway(interface, policy=GatewayPolicy(allow_execute=True)),
+        Er2Config(), **kwargs,
+    )
+
+
+@pytest.mark.async_boundary
+def test_stream_cancellation_drains_late_motion_before_return_or_reconnect():
+    async def scenario(cancel_by_timer):
+        entered = threading.Event()
+        release = threading.Event()
+        events = []
+
+        class Interface(_FakeInterface):
+            def execute(self, action, **parameters):
+                entered.set()
+                assert release.wait(5), "cleanup did not request STOP during startup"
+                events.append("ACTIVE")
+                return {"command_id": "late-drive"}
+
+            def stop(self):
+                events.append("STOP")
+                release.set()
+                return {"status": "STOPPED"}
+
+        sdk = _LiveSdk([_drive_message()])
+        client = Er2StreamingClient(_tools(Interface()), _FakeMedia(), client=sdk)
+        task = asyncio.create_task(client.run_async("drive", duration_s=0.15 if cancel_by_timer else None))
+        try:
+            assert await asyncio.to_thread(entered.wait, 5)
+            if cancel_by_timer:
+                result = await asyncio.wait_for(task, 2)
+                assert result.stopped_cleanly
+            else:
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 2)
+            assert sdk.connections == 1
+            assert events.count("ACTIVE") == 1
+            assert events[-1] == "STOP"
+            assert events.index("STOP") < events.index("ACTIVE") < len(events) - 1
+            assert sdk.responses == []
+        finally:
+            release.set()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario(False))
+    asyncio.run(scenario(True))
+
+
+def test_failed_stop_aborts_preview_and_stream_without_success_or_retry():
+    class Interface(_FakeInterface):
+        def stop(self):
+            raise RuntimeError("injected STOP failure")
+
+    tools = _tools(Interface(), sleep=lambda seconds: None, monotonic=iter([0.0, 1.0]).__next__)
+    sdk = SimpleNamespace(interactions=_TwoDriveInteractions())
+    with pytest.raises(Er2PreviewError, match="STOP failed"):
+        Er2PreviewClient(client=sdk).run("drive", tools=tools)
+    assert len(sdk.interactions.calls) == 1
+
+    sdk = _LiveSdk([SimpleNamespace(tool_call=SimpleNamespace(function_calls=(
+        SimpleNamespace(name="robot_stop", id="stop-1", args={}),
+    )))])
+    with pytest.raises(Er2SafetyError, match="STOP failed"):
+        Er2StreamingClient(_tools(Interface()), _FakeMedia(), client=sdk).run("stop", duration_s=0.1)
+    assert sdk.connections == 1 and sdk.responses == []
+
+
+def test_stream_retains_connection_across_turns_and_bounds_physical_tool_batch():
+    drives = []
+    texts = []
+
+    class Interface(_FakeInterface):
+        def execute(self, action, **parameters):
+            drives.append(action)
+            return {"command_id": "drive-1"}
+
+    complete = lambda text: SimpleNamespace(server_content=SimpleNamespace(
+        turn_complete=True, model_turn=SimpleNamespace(parts=[SimpleNamespace(text=text)]),
+    ))
+    sdk = _LiveSdk([_drive_message(count=2), complete("first"), complete("second")])
+    tools = _tools(Interface(), sleep=lambda seconds: None, monotonic=iter([0.0, 1.0, 1.0]).__next__)
+    result = Er2StreamingClient(tools, _FakeMedia(), client=sdk, on_text=texts.append).run("drive", duration_s=0.15)
+    assert texts == ["first", "second"]
+    assert sdk.connections == 1 and result.reconnect_count == 0 and result.stopped_cleanly
+    assert drives == ["v3.command.teleop"]
+    assert len(sdk.responses) == 2
+    assert sdk.responses[1].response["error"] == "ONE_ROBOT_DRIVE_PER_TOOL_ROUND"
+
+    # Losing resumption must not silently start a new session without the task.
+    sdk = _LiveSdk([SimpleNamespace(go_away=SimpleNamespace(time_left="0s"))])
+    with pytest.raises(Er2StreamingError, match="continuity lost"):
+        Er2StreamingClient(_tools(Interface()), _FakeMedia(), client=sdk).run("drive")
+    assert sdk.connections == 1

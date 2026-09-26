@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from .config import Er2Config, api_key_from_env
 from .evidence import Er2Evidence
-from .tool_bridge import Er2RobotTools
+from .tool_bridge import Er2RobotTools, Er2SafetyError
 
 
 class Er2PreviewError(RuntimeError):
@@ -143,10 +143,12 @@ class Er2PreviewClient:
                             "error": "ONE_ROBOT_DRIVE_PER_TOOL_ROUND: wait for the prior segment result, then request the next segment in a new tool round",
                         }
                     else:
+                        if name == "robot_drive":
+                            physical_drive_executed = True
                         try:
                             result = tools.execute(name, arguments)
-                            if name == "robot_drive":
-                                physical_drive_executed = True
+                        except Er2SafetyError:
+                            raise
                         except Exception as exc:
                             result = {"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
                     # Interactions API function results are content blocks. Keep the

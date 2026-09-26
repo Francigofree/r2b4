@@ -104,14 +104,16 @@ class FakeLiveSession:
         self.message = message
         self.responses = []
     async def receive(self):
-        yield self.message
+        if self.message is not None:
+            message, self.message = self.message, None
+            yield message
     async def send_tool_response(self, *, function_responses):
         self.responses.extend(function_responses)
 
 
 class FakeLiveTools:
     config = Er2Config()
-    def execute(self, name, args):
+    def execute(self, name, args, *, cancel_event=None):
         assert name == "robot_stop"
         return {"status": "COMPLETED"}
     def robot_stop(self):
