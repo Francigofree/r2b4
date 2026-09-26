@@ -1,0 +1,3542 @@
+{
+  "actionable_incident_count": 12,
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "FAULT",
+  "behavioral_trends": {
+    "commands": {
+      "observed_change_count": 12,
+      "observed_unique_count": 13
+    },
+    "domain_sample_counts": {
+      "command": 244,
+      "mission": 244,
+      "navigation": 244,
+      "pose": 244,
+      "safety": 244
+    },
+    "localization": {
+      "sample_count": 244
+    },
+    "maximum_contiguous_sample_gap_s": 0.3,
+    "missing_domains": [],
+    "missions": {
+      "lifecycle_sample_counts": {
+        "ACTIVE": 230,
+        "IDLE": 14
+      },
+      "observed_lifecycle_change_count": 1,
+      "observed_unique_count": 13
+    },
+    "motion": {
+      "blocked_sample_count": 1,
+      "longest_observed_blocked_span_s": 0.0
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "monotonic_ns": 10343544954774,
+        "observed_span_s": 5.099662138,
+        "tick_id": 475
+      },
+      "status_sample_counts": {
+        "ACTIVE": 154,
+        "IDLE": 53,
+        "INVALIDATED": 9,
+        "PENDING": 28
+      }
+    },
+    "safety": {
+      "unsafe_output_sample_count": 0
+    },
+    "trend_window_s": 5.0
+  },
+  "capture": {
+    "capture_id": "v3_20260926_191243_26302_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 0,
+          "before": 6
+        },
+        {
+          "after": 6,
+          "before": 11
+        },
+        {
+          "after": 11,
+          "before": 16
+        },
+        {
+          "after": 16,
+          "before": 21
+        },
+        {
+          "after": 21,
+          "before": 26
+        },
+        {
+          "after": 26,
+          "before": 31
+        },
+        {
+          "after": 31,
+          "before": 36
+        },
+        {
+          "after": 36,
+          "before": 41
+        },
+        {
+          "after": 41,
+          "before": 46
+        },
+        {
+          "after": 46,
+          "before": 51
+        },
+        {
+          "after": 51,
+          "before": 55
+        },
+        {
+          "after": 55,
+          "before": 61
+        },
+        {
+          "after": 61,
+          "before": 66
+        },
+        {
+          "after": 66,
+          "before": 71
+        },
+        {
+          "after": 71,
+          "before": 76
+        },
+        {
+          "after": 76,
+          "before": 81
+        },
+        {
+          "after": 81,
+          "before": 85
+        },
+        {
+          "after": 85,
+          "before": 91
+        },
+        {
+          "after": 91,
+          "before": 95
+        },
+        {
+          "after": 95,
+          "before": 101
+        },
+        {
+          "after": 101,
+          "before": 105
+        },
+        {
+          "after": 105,
+          "before": 111
+        },
+        {
+          "after": 111,
+          "before": 116
+        },
+        {
+          "after": 116,
+          "before": 121
+        },
+        {
+          "after": 121,
+          "before": 126
+        },
+        {
+          "after": 126,
+          "before": 131
+        },
+        {
+          "after": 131,
+          "before": 136
+        },
+        {
+          "after": 136,
+          "before": 141
+        },
+        {
+          "after": 141,
+          "before": 146
+        },
+        {
+          "after": 146,
+          "before": 151
+        },
+        {
+          "after": 151,
+          "before": 156
+        },
+        {
+          "after": 156,
+          "before": 161
+        },
+        {
+          "after": 161,
+          "before": 166
+        },
+        {
+          "after": 166,
+          "before": 171
+        },
+        {
+          "after": 171,
+          "before": 176
+        },
+        {
+          "after": 176,
+          "before": 181
+        },
+        {
+          "after": 181,
+          "before": 186
+        },
+        {
+          "after": 186,
+          "before": 191
+        },
+        {
+          "after": 191,
+          "before": 196
+        },
+        {
+          "after": 196,
+          "before": 201
+        },
+        {
+          "after": 201,
+          "before": 206
+        },
+        {
+          "after": 206,
+          "before": 211
+        },
+        {
+          "after": 211,
+          "before": 214
+        },
+        {
+          "after": 214,
+          "before": 220
+        },
+        {
+          "after": 220,
+          "before": 225
+        },
+        {
+          "after": 225,
+          "before": 230
+        },
+        {
+          "after": 230,
+          "before": 235
+        },
+        {
+          "after": 235,
+          "before": 240
+        },
+        {
+          "after": 240,
+          "before": 245
+        },
+        {
+          "after": 245,
+          "before": 250
+        },
+        {
+          "after": 250,
+          "before": 255
+        },
+        {
+          "after": 255,
+          "before": 260
+        },
+        {
+          "after": 260,
+          "before": 265
+        },
+        {
+          "after": 265,
+          "before": 270
+        },
+        {
+          "after": 270,
+          "before": 275
+        },
+        {
+          "after": 275,
+          "before": 280
+        },
+        {
+          "after": 280,
+          "before": 285
+        },
+        {
+          "after": 285,
+          "before": 290
+        },
+        {
+          "after": 290,
+          "before": 295
+        },
+        {
+          "after": 295,
+          "before": 300
+        },
+        {
+          "after": 300,
+          "before": 305
+        },
+        {
+          "after": 305,
+          "before": 309
+        },
+        {
+          "after": 309,
+          "before": 315
+        },
+        {
+          "after": 315,
+          "before": 319
+        },
+        {
+          "after": 319,
+          "before": 325
+        },
+        {
+          "after": 325,
+          "before": 330
+        },
+        {
+          "after": 330,
+          "before": 335
+        },
+        {
+          "after": 335,
+          "before": 340
+        },
+        {
+          "after": 340,
+          "before": 345
+        },
+        {
+          "after": 345,
+          "before": 350
+        },
+        {
+          "after": 350,
+          "before": 355
+        },
+        {
+          "after": 355,
+          "before": 360
+        },
+        {
+          "after": 360,
+          "before": 365
+        },
+        {
+          "after": 365,
+          "before": 370
+        },
+        {
+          "after": 370,
+          "before": 375
+        },
+        {
+          "after": 375,
+          "before": 380
+        },
+        {
+          "after": 380,
+          "before": 385
+        },
+        {
+          "after": 385,
+          "before": 390
+        },
+        {
+          "after": 390,
+          "before": 395
+        },
+        {
+          "after": 395,
+          "before": 400
+        },
+        {
+          "after": 400,
+          "before": 405
+        },
+        {
+          "after": 405,
+          "before": 410
+        },
+        {
+          "after": 410,
+          "before": 415
+        },
+        {
+          "after": 415,
+          "before": 419
+        },
+        {
+          "after": 419,
+          "before": 425
+        },
+        {
+          "after": 425,
+          "before": 429
+        },
+        {
+          "after": 429,
+          "before": 435
+        },
+        {
+          "after": 435,
+          "before": 439
+        },
+        {
+          "after": 439,
+          "before": 445
+        },
+        {
+          "after": 445,
+          "before": 450
+        },
+        {
+          "after": 450,
+          "before": 455
+        },
+        {
+          "after": 455,
+          "before": 460
+        },
+        {
+          "after": 460,
+          "before": 465
+        },
+        {
+          "after": 465,
+          "before": 470
+        },
+        {
+          "after": 470,
+          "before": 475
+        },
+        {
+          "after": 475,
+          "before": 480
+        },
+        {
+          "after": 480,
+          "before": 485
+        },
+        {
+          "after": 485,
+          "before": 490
+        },
+        {
+          "after": 490,
+          "before": 495
+        },
+        {
+          "after": 495,
+          "before": 500
+        },
+        {
+          "after": 500,
+          "before": 504
+        },
+        {
+          "after": 504,
+          "before": 510
+        },
+        {
+          "after": 510,
+          "before": 515
+        },
+        {
+          "after": 515,
+          "before": 520
+        },
+        {
+          "after": 520,
+          "before": 525
+        },
+        {
+          "after": 525,
+          "before": 530
+        },
+        {
+          "after": 530,
+          "before": 535
+        },
+        {
+          "after": 535,
+          "before": 540
+        },
+        {
+          "after": 540,
+          "before": 545
+        },
+        {
+          "after": 545,
+          "before": 550
+        },
+        {
+          "after": 550,
+          "before": 554
+        },
+        {
+          "after": 554,
+          "before": 559
+        },
+        {
+          "after": 559,
+          "before": 565
+        },
+        {
+          "after": 565,
+          "before": 570
+        },
+        {
+          "after": 570,
+          "before": 575
+        },
+        {
+          "after": 575,
+          "before": 579
+        },
+        {
+          "after": 579,
+          "before": 585
+        },
+        {
+          "after": 585,
+          "before": 590
+        },
+        {
+          "after": 590,
+          "before": 595
+        },
+        {
+          "after": 595,
+          "before": 600
+        },
+        {
+          "after": 600,
+          "before": 605
+        },
+        {
+          "after": 605,
+          "before": 609
+        },
+        {
+          "after": 609,
+          "before": 615
+        },
+        {
+          "after": 615,
+          "before": 620
+        },
+        {
+          "after": 620,
+          "before": 625
+        },
+        {
+          "after": 625,
+          "before": 630
+        },
+        {
+          "after": 630,
+          "before": 635
+        },
+        {
+          "after": 635,
+          "before": 640
+        },
+        {
+          "after": 640,
+          "before": 645
+        },
+        {
+          "after": 645,
+          "before": 649
+        },
+        {
+          "after": 649,
+          "before": 655
+        },
+        {
+          "after": 655,
+          "before": 660
+        },
+        {
+          "after": 660,
+          "before": 665
+        },
+        {
+          "after": 665,
+          "before": 670
+        },
+        {
+          "after": 670,
+          "before": 674
+        },
+        {
+          "after": 674,
+          "before": 680
+        },
+        {
+          "after": 680,
+          "before": 684
+        },
+        {
+          "after": 684,
+          "before": 690
+        },
+        {
+          "after": 690,
+          "before": 695
+        },
+        {
+          "after": 695,
+          "before": 699
+        },
+        {
+          "after": 699,
+          "before": 704
+        },
+        {
+          "after": 704,
+          "before": 709
+        },
+        {
+          "after": 709,
+          "before": 715
+        },
+        {
+          "after": 715,
+          "before": 720
+        },
+        {
+          "after": 720,
+          "before": 725
+        },
+        {
+          "after": 725,
+          "before": 730
+        },
+        {
+          "after": 730,
+          "before": 735
+        },
+        {
+          "after": 735,
+          "before": 740
+        },
+        {
+          "after": 740,
+          "before": 745
+        },
+        {
+          "after": 745,
+          "before": 749
+        },
+        {
+          "after": 749,
+          "before": 755
+        },
+        {
+          "after": 755,
+          "before": 759
+        },
+        {
+          "after": 759,
+          "before": 765
+        },
+        {
+          "after": 765,
+          "before": 770
+        },
+        {
+          "after": 770,
+          "before": 775
+        },
+        {
+          "after": 775,
+          "before": 779
+        },
+        {
+          "after": 779,
+          "before": 784
+        },
+        {
+          "after": 784,
+          "before": 790
+        },
+        {
+          "after": 790,
+          "before": 794
+        },
+        {
+          "after": 794,
+          "before": 799
+        },
+        {
+          "after": 799,
+          "before": 805
+        },
+        {
+          "after": 805,
+          "before": 809
+        },
+        {
+          "after": 809,
+          "before": 813
+        },
+        {
+          "after": 813,
+          "before": 817
+        },
+        {
+          "after": 817,
+          "before": 823
+        },
+        {
+          "after": 823,
+          "before": 827
+        },
+        {
+          "after": 827,
+          "before": 833
+        },
+        {
+          "after": 833,
+          "before": 838
+        },
+        {
+          "after": 838,
+          "before": 843
+        },
+        {
+          "after": 843,
+          "before": 848
+        },
+        {
+          "after": 848,
+          "before": 852
+        },
+        {
+          "after": 852,
+          "before": 858
+        },
+        {
+          "after": 858,
+          "before": 863
+        },
+        {
+          "after": 863,
+          "before": 868
+        },
+        {
+          "after": 868,
+          "before": 873
+        },
+        {
+          "after": 873,
+          "before": 877
+        },
+        {
+          "after": 877,
+          "before": 883
+        },
+        {
+          "after": 883,
+          "before": 888
+        },
+        {
+          "after": 888,
+          "before": 893
+        },
+        {
+          "after": 893,
+          "before": 898
+        },
+        {
+          "after": 898,
+          "before": 903
+        },
+        {
+          "after": 903,
+          "before": 908
+        },
+        {
+          "after": 908,
+          "before": 913
+        },
+        {
+          "after": 913,
+          "before": 918
+        },
+        {
+          "after": 918,
+          "before": 923
+        },
+        {
+          "after": 923,
+          "before": 928
+        },
+        {
+          "after": 928,
+          "before": 933
+        },
+        {
+          "after": 933,
+          "before": 938
+        },
+        {
+          "after": 938,
+          "before": 943
+        },
+        {
+          "after": 943,
+          "before": 947
+        },
+        {
+          "after": 947,
+          "before": 953
+        },
+        {
+          "after": 953,
+          "before": 958
+        },
+        {
+          "after": 958,
+          "before": 962
+        },
+        {
+          "after": 962,
+          "before": 968
+        },
+        {
+          "after": 968,
+          "before": 973
+        },
+        {
+          "after": 973,
+          "before": 978
+        },
+        {
+          "after": 978,
+          "before": 983
+        },
+        {
+          "after": 983,
+          "before": 988
+        },
+        {
+          "after": 988,
+          "before": 993
+        },
+        {
+          "after": 993,
+          "before": 998
+        },
+        {
+          "after": 998,
+          "before": 1003
+        },
+        {
+          "after": 1003,
+          "before": 1008
+        },
+        {
+          "after": 1008,
+          "before": 1013
+        },
+        {
+          "after": 1013,
+          "before": 1017
+        },
+        {
+          "after": 1017,
+          "before": 1022
+        },
+        {
+          "after": 1022,
+          "before": 1028
+        },
+        {
+          "after": 1028,
+          "before": 1033
+        },
+        {
+          "after": 1033,
+          "before": 1038
+        },
+        {
+          "after": 1038,
+          "before": 1043
+        },
+        {
+          "after": 1043,
+          "before": 1048
+        },
+        {
+          "after": 1048,
+          "before": 1052
+        },
+        {
+          "after": 1052,
+          "before": 1057
+        },
+        {
+          "after": 1057,
+          "before": 1063
+        },
+        {
+          "after": 1063,
+          "before": 1067
+        },
+        {
+          "after": 1067,
+          "before": 1073
+        },
+        {
+          "after": 1073,
+          "before": 1078
+        },
+        {
+          "after": 1078,
+          "before": 1082
+        },
+        {
+          "after": 1082,
+          "before": 1088
+        },
+        {
+          "after": 1088,
+          "before": 1093
+        },
+        {
+          "after": 1093,
+          "before": 1098
+        },
+        {
+          "after": 1098,
+          "before": 1103
+        },
+        {
+          "after": 1103,
+          "before": 1107
+        },
+        {
+          "after": 1107,
+          "before": 1112
+        },
+        {
+          "after": 1112,
+          "before": 1118
+        },
+        {
+          "after": 1118,
+          "before": 1123
+        },
+        {
+          "after": 1123,
+          "before": 1128
+        },
+        {
+          "after": 1128,
+          "before": 1132
+        },
+        {
+          "after": 1132,
+          "before": 1137
+        },
+        {
+          "after": 1137,
+          "before": 1142
+        },
+        {
+          "after": 1142,
+          "before": 1147
+        },
+        {
+          "after": 1147,
+          "before": 1153
+        },
+        {
+          "after": 1153,
+          "before": 1158
+        },
+        {
+          "after": 1158,
+          "before": 1162
+        },
+        {
+          "after": 1162,
+          "before": 1168
+        },
+        {
+          "after": 1168,
+          "before": 1173
+        },
+        {
+          "after": 1173,
+          "before": 1177
+        },
+        {
+          "after": 1177,
+          "before": 1183
+        },
+        {
+          "after": 1183,
+          "before": 1188
+        },
+        {
+          "after": 1188,
+          "before": 1192
+        },
+        {
+          "after": 1192,
+          "before": 1197
+        },
+        {
+          "after": 1197,
+          "before": 1203
+        },
+        {
+          "after": 1203,
+          "before": 1208
+        },
+        {
+          "after": 1208,
+          "before": 1211
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "444937ea3de0c16f24ae167f8a58121285604f4f9d7e81624ac1915d1d1db5b4",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 495,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 495,
+        "first_lost_sequence": null,
+        "high_water_mark": 5,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 495,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": true,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 250,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": true,
+      "raw_transport_produced_count": 250,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 10
+    },
+    "status": "FAULT",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "incident_count": 128,
+  "incidents": [
+    {
+      "category": "SAFETY",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 167346948,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 167346948,
+            "rejected[1].reason": "DUPLICATE",
+            "rejected[2].age_ns": 86137952,
+            "rejected[2].reason": "DUPLICATE",
+            "rejected[3].age_ns": 186117952,
+            "rejected[3].reason": "DUPLICATE"
+          },
+          "L3": {
+            "omega_rad_s": 0.540332273162763,
+            "v_mps": -3.723366330843763e-05
+          },
+          "L4": {
+            "freshness_ns": 167346948,
+            "local_costmap.freshness_ns": 167346948,
+            "local_costmap.revision": 403,
+            "map_revision": 838,
+            "obstacle_tracks[0].confidence": 0.60546875,
+            "obstacle_tracks[0].estimate_status": "PREDICTED",
+            "obstacle_tracks[1].confidence": 0.45703125,
+            "obstacle_tracks[1].estimate_status": "PREDICTED"
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.3,
+            "constraints.max_v_mps": 0.25,
+            "lifecycle": "ACTIVE",
+            "mode": "FOLLOW_PERSON",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.3,
+            "constraints.max_v_mps": 0.25,
+            "progress": 0.0,
+            "reason": "PLANNER_PENDING",
+            "status": "PENDING"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.3,
+            "constraints.max_v_mps": 0.25,
+            "expiry_tick": 1212,
+            "selection_reason": "PLANNER_PENDING_CONTINUITY"
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.3,
+            "constraints.max_v_mps": 0.25,
+            "requested_omega_rad_s": 0.6790076354025797,
+            "requested_v_mps": 0.0,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [
+              "MISSION_LIMIT"
+            ],
+            "allowed_omega_rad_s": 0.3,
+            "allowed_v_mps": 0.0,
+            "requested_omega_rad_s": 0.6790076354025797,
+            "requested_v_mps": 0.0
+          }
+        }
+      },
+      "id": "safety-fault-1211",
+      "layer": "L12",
+      "monotonic_ns": 10358312570952,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 1211
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-71",
+      "layer": "L6",
+      "monotonic_ns": 10335447546996,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 71
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-76",
+      "layer": "L6",
+      "monotonic_ns": 10335544653250,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 76
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-81",
+      "layer": "L6",
+      "monotonic_ns": 10335645223990,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 81
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-85",
+      "layer": "L6",
+      "monotonic_ns": 10335727148100,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 85
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-91",
+      "layer": "L6",
+      "monotonic_ns": 10335844613885,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 91
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-95",
+      "layer": "L6",
+      "monotonic_ns": 10335928690511,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 95
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-101",
+      "layer": "L6",
+      "monotonic_ns": 10336044608118,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 101
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-105",
+      "layer": "L6",
+      "monotonic_ns": 10336132901625,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 105
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-111",
+      "layer": "L6",
+      "monotonic_ns": 10336247553927,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 111
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.0,
+        "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+        "monotonic_ns": 10343544954774,
+        "observed_span_s": 5.099662138,
+        "tick_id": 475
+      },
+      "id": "behavior-navigation_progress_stagnation-475",
+      "layer": "L6",
+      "monotonic_ns": 10343544954774,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "HIGH",
+      "tick_id": 475
+    },
+    {
+      "category": "LOCALIZATION",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 4.231250571623743,
+        "last_trace": 0.19506065135185457,
+        "max_trace": 0.2880664761205788,
+        "sample_count": 244
+      },
+      "id": "covariance-growth-1211",
+      "layer": "L3",
+      "monotonic_ns": 10358312570952,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 1211
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 10334027009834,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 10334144593083,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-11",
+      "layer": "L1",
+      "monotonic_ns": 10334244588505,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 11
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 10334344590853,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-21",
+      "layer": "L1",
+      "monotonic_ns": 10334444585571,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 21
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-26",
+      "layer": "L1",
+      "monotonic_ns": 10334544587808,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 26
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-31",
+      "layer": "L1",
+      "monotonic_ns": 10334645760793,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 31
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-36",
+      "layer": "L1",
+      "monotonic_ns": 10334745332101,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 36
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-41",
+      "layer": "L1",
+      "monotonic_ns": 10334844661074,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 41
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-46",
+      "layer": "L1",
+      "monotonic_ns": 10334944665163,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 46
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-51",
+      "layer": "L1",
+      "monotonic_ns": 10335044730566,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 51
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-55",
+      "layer": "L1",
+      "monotonic_ns": 10335129528938,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 55
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 284355203,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 5
+          }
+        ]
+      },
+      "id": "l2-reject-55",
+      "layer": "L2",
+      "monotonic_ns": 10335129528938,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 55
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-61",
+      "layer": "L1",
+      "monotonic_ns": 10335246200439,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 61
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-66",
+      "layer": "L1",
+      "monotonic_ns": 10335350984876,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 66
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-71",
+      "layer": "L1",
+      "monotonic_ns": 10335447546996,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 71
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-76",
+      "layer": "L1",
+      "monotonic_ns": 10335544653250,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 76
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-81",
+      "layer": "L1",
+      "monotonic_ns": 10335645223990,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 81
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-85",
+      "layer": "L1",
+      "monotonic_ns": 10335727148100,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 85
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-91",
+      "layer": "L1",
+      "monotonic_ns": 10335844613885,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 91
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-95",
+      "layer": "L1",
+      "monotonic_ns": 10335928690511,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 95
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-101",
+      "layer": "L1",
+      "monotonic_ns": 10336044608118,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 101
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-105",
+      "layer": "L1",
+      "monotonic_ns": 10336132901625,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 105
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-111",
+      "layer": "L1",
+      "monotonic_ns": 10336247553927,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 111
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-116",
+      "layer": "L1",
+      "monotonic_ns": 10336345541464,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 116
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-121",
+      "layer": "L1",
+      "monotonic_ns": 10336449346672,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 121
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-126",
+      "layer": "L1",
+      "monotonic_ns": 10336545611660,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 126
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-131",
+      "layer": "L1",
+      "monotonic_ns": 10336647840098,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 131
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-136",
+      "layer": "L1",
+      "monotonic_ns": 10336744840036,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 136
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-141",
+      "layer": "L1",
+      "monotonic_ns": 10336845531000,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 141
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-146",
+      "layer": "L1",
+      "monotonic_ns": 10336944640767,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 146
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-151",
+      "layer": "L1",
+      "monotonic_ns": 10337047513802,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 151
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-156",
+      "layer": "L1",
+      "monotonic_ns": 10337148662065,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 156
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-161",
+      "layer": "L1",
+      "monotonic_ns": 10337244636922,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 161
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 262663922,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 54
+          }
+        ]
+      },
+      "id": "l2-reject-161",
+      "layer": "L2",
+      "monotonic_ns": 10337244636922,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 161
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-166",
+      "layer": "L1",
+      "monotonic_ns": 10337345256366,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 166
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 263310366,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 55
+          }
+        ]
+      },
+      "id": "l2-reject-166",
+      "layer": "L2",
+      "monotonic_ns": 10337345256366,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 166
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-171",
+      "layer": "L1",
+      "monotonic_ns": 10337446162294,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 171
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 264236294,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 56
+          }
+        ]
+      },
+      "id": "l2-reject-171",
+      "layer": "L2",
+      "monotonic_ns": 10337446162294,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 171
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-176",
+      "layer": "L1",
+      "monotonic_ns": 10337548151304,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 176
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 266257304,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 57
+          }
+        ]
+      },
+      "id": "l2-reject-176",
+      "layer": "L2",
+      "monotonic_ns": 10337548151304,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 176
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-181",
+      "layer": "L1",
+      "monotonic_ns": 10337645460059,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 181
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-186",
+      "layer": "L1",
+      "monotonic_ns": 10337745727705,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 186
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-191",
+      "layer": "L1",
+      "monotonic_ns": 10337845662441,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 191
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 313829441,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 61
+          }
+        ]
+      },
+      "id": "l2-reject-191",
+      "layer": "L2",
+      "monotonic_ns": 10337845662441,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 191
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-196",
+      "layer": "L1",
+      "monotonic_ns": 10337945053248,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 196
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-201",
+      "layer": "L1",
+      "monotonic_ns": 10338045744749,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 201
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-206",
+      "layer": "L1",
+      "monotonic_ns": 10338144732274,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 206
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 262990274,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 65
+          }
+        ]
+      },
+      "id": "l2-reject-206",
+      "layer": "L2",
+      "monotonic_ns": 10338144732274,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 206
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-211",
+      "layer": "L1",
+      "monotonic_ns": 10338248859003,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 211
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 267143003,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 66
+          }
+        ]
+      },
+      "id": "l2-reject-211",
+      "layer": "L2",
+      "monotonic_ns": 10338248859003,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 211
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-214",
+      "layer": "L1",
+      "monotonic_ns": 10338327734221,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 214
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-220",
+      "layer": "L1",
+      "monotonic_ns": 10338445292636,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 220
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 263627636,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 68
+          }
+        ]
+      },
+      "id": "l2-reject-220",
+      "layer": "L2",
+      "monotonic_ns": 10338445292636,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 220
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-225",
+      "layer": "L1",
+      "monotonic_ns": 10338545806173,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 225
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 264168173,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 69
+          }
+        ]
+      },
+      "id": "l2-reject-225",
+      "layer": "L2",
+      "monotonic_ns": 10338545806173,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 225
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-230",
+      "layer": "L1",
+      "monotonic_ns": 10338646352932,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 230
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 264740932,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 70
+          }
+        ]
+      },
+      "id": "l2-reject-230",
+      "layer": "L2",
+      "monotonic_ns": 10338646352932,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 230
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-235",
+      "layer": "L1",
+      "monotonic_ns": 10338750170788,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 235
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-240",
+      "layer": "L1",
+      "monotonic_ns": 10338844698542,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 240
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 263142542,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 72
+          }
+        ]
+      },
+      "id": "l2-reject-240",
+      "layer": "L2",
+      "monotonic_ns": 10338844698542,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 240
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-245",
+      "layer": "L1",
+      "monotonic_ns": 10338947721244,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 245
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 266187244,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 73
+          }
+        ]
+      },
+      "id": "l2-reject-245",
+      "layer": "L2",
+      "monotonic_ns": 10338947721244,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 245
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-250",
+      "layer": "L1",
+      "monotonic_ns": 10339044623385,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 250
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 263115385,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 74
+          }
+        ]
+      },
+      "id": "l2-reject-250",
+      "layer": "L2",
+      "monotonic_ns": 10339044623385,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 250
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-255",
+      "layer": "L1",
+      "monotonic_ns": 10339146163151,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 255
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 264686151,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 75
+          }
+        ]
+      },
+      "id": "l2-reject-255",
+      "layer": "L2",
+      "monotonic_ns": 10339146163151,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 255
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-260",
+      "layer": "L1",
+      "monotonic_ns": 10339244761656,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 260
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 263311656,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 76
+          }
+        ]
+      },
+      "id": "l2-reject-260",
+      "layer": "L2",
+      "monotonic_ns": 10339244761656,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 260
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-265",
+      "layer": "L1",
+      "monotonic_ns": 10339345236229,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 265
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-270",
+      "layer": "L1",
+      "monotonic_ns": 10339446306325,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 270
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-275",
+      "layer": "L1",
+      "monotonic_ns": 10339547995351,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 275
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-280",
+      "layer": "L1",
+      "monotonic_ns": 10339644891140,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 280
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-285",
+      "layer": "L1",
+      "monotonic_ns": 10339748270141,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 285
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-290",
+      "layer": "L1",
+      "monotonic_ns": 10339846210808,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 290
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-295",
+      "layer": "L1",
+      "monotonic_ns": 10339945216056,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 295
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-300",
+      "layer": "L1",
+      "monotonic_ns": 10340044667233,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 300
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 278298910,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 55
+          }
+        ]
+      },
+      "id": "l2-reject-300",
+      "layer": "L2",
+      "monotonic_ns": 10340044667233,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 300
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-305",
+      "layer": "L1",
+      "monotonic_ns": 10340148131994,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 305
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 282524329,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 56
+          }
+        ]
+      },
+      "id": "l2-reject-305",
+      "layer": "L2",
+      "monotonic_ns": 10340148131994,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 305
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-309",
+      "layer": "L1",
+      "monotonic_ns": 10340230113475,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 309
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-315",
+      "layer": "L1",
+      "monotonic_ns": 10340345574671,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 315
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-319",
+      "layer": "L1",
+      "monotonic_ns": 10340427346169,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 319
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-325",
+      "layer": "L1",
+      "monotonic_ns": 10340545384180,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 325
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-330",
+      "layer": "L1",
+      "monotonic_ns": 10340645541344,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 330
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-335",
+      "layer": "L1",
+      "monotonic_ns": 10340745106837,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 335
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-340",
+      "layer": "L1",
+      "monotonic_ns": 10340846074043,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 340
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-345",
+      "layer": "L1",
+      "monotonic_ns": 10340948734872,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 345
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-350",
+      "layer": "L1",
+      "monotonic_ns": 10341045351196,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 350
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-355",
+      "layer": "L1",
+      "monotonic_ns": 10341145563360,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 355
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-360",
+      "layer": "L1",
+      "monotonic_ns": 10341244863148,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 360
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-365",
+      "layer": "L1",
+      "monotonic_ns": 10341345039626,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 365
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-370",
+      "layer": "L1",
+      "monotonic_ns": 10341445102604,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 370
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-375",
+      "layer": "L1",
+      "monotonic_ns": 10341544843209,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 375
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-380",
+      "layer": "L1",
+      "monotonic_ns": 10341645630636,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 380
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-385",
+      "layer": "L1",
+      "monotonic_ns": 10341745401742,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 385
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-390",
+      "layer": "L1",
+      "monotonic_ns": 10341848167849,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 390
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 282057639,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 73
+          }
+        ]
+      },
+      "id": "l2-reject-390",
+      "layer": "L2",
+      "monotonic_ns": 10341848167849,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 390
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-395",
+      "layer": "L1",
+      "monotonic_ns": 10341944635469,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 395
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-400",
+      "layer": "L1",
+      "monotonic_ns": 10342044614687,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 400
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-405",
+      "layer": "L1",
+      "monotonic_ns": 10342147881835,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 405
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-410",
+      "layer": "L1",
+      "monotonic_ns": 10342245251516,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 410
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-415",
+      "layer": "L1",
+      "monotonic_ns": 10342344633230,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 415
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-419",
+      "layer": "L1",
+      "monotonic_ns": 10342429083061,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 419
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-425",
+      "layer": "L1",
+      "monotonic_ns": 10342546920182,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 425
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-429",
+      "layer": "L1",
+      "monotonic_ns": 10342627603931,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 429
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-435",
+      "layer": "L1",
+      "monotonic_ns": 10342745894055,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 435
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-439",
+      "layer": "L1",
+      "monotonic_ns": 10342828746320,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 439
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-445",
+      "layer": "L1",
+      "monotonic_ns": 10342944624890,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 445
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-450",
+      "layer": "L1",
+      "monotonic_ns": 10343045797357,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 450
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-455",
+      "layer": "L1",
+      "monotonic_ns": 10343144677234,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 455
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-460",
+      "layer": "L1",
+      "monotonic_ns": 10343248928352,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 460
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-465",
+      "layer": "L1",
+      "monotonic_ns": 10343348662383,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 465
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-470",
+      "layer": "L1",
+      "monotonic_ns": 10343444646980,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 470
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-475",
+      "layer": "L1",
+      "monotonic_ns": 10343544954774,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 475
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-480",
+      "layer": "L1",
+      "monotonic_ns": 10343646855487,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 480
+    }
+  ],
+  "localization": {
+    "first_trace": 0.0461,
+    "growth_ratio": 4.231250571623743,
+    "last_trace": 0.19506065135185457,
+    "max_trace": 0.2880664761205788,
+    "sample_count": 244
+  },
+  "motion": {
+    "behavior_status": "FAULT",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 0.8718257185513238,
+    "requested_motion_tick_count": 89
+  },
+  "navigation": {
+    "stagnation": {
+      "last_progress": 0.0,
+      "mission_id": "mission-operator-followperson-1790442763100908901-26302",
+      "monotonic_ns": 10343544954774,
+      "observed_span_s": 5.099662138,
+      "tick_id": 475
+    }
+  },
+  "root_cause_candidate": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "safety-fault-1211"
+    ],
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L11_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 1211
+  },
+  "safety": {
+    "ALLOW": 229,
+    "FAULT": 1,
+    "STOP": 14,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 251,
+    "l2_actionable_rejection_count": 56,
+    "l2_duplicate_count": 712,
+    "l2_rejection_count": 768,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 712,
+      "STALE": 56
+    }
+  },
+  "ticks": {
+    "count": 244,
+    "first_monotonic_ns": 10334027009834,
+    "first_tick_id": 0,
+    "last_monotonic_ns": 10358312570952,
+    "last_tick_id": 1211
+  },
+  "timing": {
+    "max_ms": 120.620436,
+    "p50_ms": 100.039978,
+    "p95_ms": 117.431969,
+    "p99_ms": 118.884999,
+    "sample_count": 243,
+    "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+  },
+  "warning_count": 116
+}
