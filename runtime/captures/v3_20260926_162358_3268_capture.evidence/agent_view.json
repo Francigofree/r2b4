@@ -1,0 +1,208 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260926_162358_3268_capture.mcap",
+    "capture_name": "v3_20260926_162358_3268_capture.mcap",
+    "capture_sha256": "cb84e90c2e43b1ad816c814ab23f8fcc46e698c896ee1843def45f107324a6a7",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 0,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "data_coverage": {
+    "/r2b4/checkpoint": {
+      "captured": 10,
+      "usage": "REPLAY"
+    },
+    "/r2b4/event": {
+      "captured": 18,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/raw_lidar": {
+      "captured": 105,
+      "usage": "METADATA_SUMMARY_POINTS_ON_DEMAND"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 103,
+      "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
+    }
+  },
+  "default_view_hz": 10,
+  "diagnosis_status": "WARNING",
+  "evidence_status": "PASS",
+  "hri": {
+    "authority": "MCAP_EVENT_TOPIC",
+    "availability": "PRESENT",
+    "command_count": 0,
+    "correlated_event_count": 0,
+    "event_count": 16,
+    "event_type_counts": {
+      "ER2_PREVIEW_COMPLETE": 3,
+      "ER2_PREVIEW_START": 3,
+      "ER2_TOOL_CALL": 5,
+      "ER2_TOOL_RESULT": 5
+    },
+    "interaction_count": 3,
+    "latencies": [],
+    "policy": "DERIVED_READ_ONLY_NO_ROBOT_AUTHORITY",
+    "schema": "R2B4_TEST_HUB_HRI_V1",
+    "stop_interrupt_count": 0,
+    "timeline": "hri_timeline.ndjson",
+    "turn_count": 0
+  },
+  "hri_timeline": "hri_timeline.ndjson",
+  "incident_groups": [
+    {
+      "category": "ADMISSION",
+      "count": 2,
+      "first_tick": 12548,
+      "last_tick": 12643,
+      "layer": "L2",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "representative": {
+        "category": "ADMISSION",
+        "evidence": {
+          "rejected": [
+            {
+              "age_ns": 276073595,
+              "reason": "STALE",
+              "source_device_id": "RPLIDAR_C1",
+              "source_sequence": 2516
+            }
+          ]
+        },
+        "id": "l2-reject-12548",
+        "layer": "L2",
+        "monotonic_ns": 462072329730,
+        "reason": "OBSERVATION_REJECTED:STALE",
+        "severity": "WARNING",
+        "tick_id": 12548
+      },
+      "severity": "WARNING"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "ADMISSION",
+      "count": 2,
+      "first_tick": 12548,
+      "group_index": 1,
+      "last_tick": 12643,
+      "path": "01_OBSERVATION_REJECTED_STALE.ndjson",
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "rows": 4,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "motion_tuning": {
+    "capture_tick_sample_hz": 10,
+    "policy": "DESCRIPTIVE_TUNING_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_MOTION_TUNING_V1",
+    "segment_count": 0,
+    "segments": "motion_tuning_segments.ndjson",
+    "signal_sample_counts": {
+      "actuator_output": 103,
+      "allowed_motion": 103,
+      "body_state": 103,
+      "planner_candidates": 0,
+      "requested_motion": 103,
+      "wheel_feedback": 103,
+      "wheel_target": 103
+    },
+    "summary": "motion_tuning_summary.json"
+  },
+  "overview": "overview_10hz.ndjson",
+  "phases": [
+    {
+      "end_s": 10.199993889,
+      "end_tick": 12737,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 12229,
+      "stop_ticks": 103,
+      "tick_count": 103
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [
+    {
+      "group_index": 1,
+      "path": "01_OBSERVATION_REJECTED_STALE.ndjson",
+      "raw_scan_count": 6,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "size_bytes": 65497,
+      "truncated": false
+    }
+  ],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "NOT_APPLICABLE",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "NOT_APPLICABLE",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "WARNING",
+  "suppressed_agent_noise": [],
+  "task_evidence": {
+    "episode_count": 0,
+    "episodes": "task_evidence_episodes.ndjson",
+    "mode_counts": {},
+    "policy": "DESCRIPTIVE_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_TASK_EVIDENCE_V1",
+    "summary": "task_evidence_summary.json",
+    "supported_mode_extractors": [
+      "NAVIGATE",
+      "EXPLORE",
+      "FOLLOW_PERSON"
+    ],
+    "timeline": "task_evidence_timeline.ndjson"
+  },
+  "timeline": "timeline.ndjson"
+}

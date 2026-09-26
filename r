@@ -16,4 +16,29 @@ else
 fi
 export R2B4_ROOT="$ROOT"
 cd "$ROOT"
+
+# Launcher-only ER2 shorthand/default normalization.
+#   r er2 "PROMPT"   -> r er2 preview "PROMPT" --camera --tools
+#   r er2 s "TASK"   -> r er2 stream "TASK"
+# Existing explicit ER2 commands remain unchanged.
+if [[ "${1:-}" == "er2" && $# -ge 2 ]]; then
+    case "$2" in
+        s)
+            shift 2
+            set -- er2 stream "$@"
+            ;;
+        status|preview|stream|-h|--help)
+            ;;
+        *)
+            if [[ $# -eq 2 ]]; then
+                set -- er2 preview "$2" --camera --tools
+            else
+                PROMPT="$2"
+                shift 2
+                set -- er2 preview "$PROMPT" "$@"
+            fi
+            ;;
+    esac
+fi
+
 exec python3 -m v3.launcher_cli "$@"

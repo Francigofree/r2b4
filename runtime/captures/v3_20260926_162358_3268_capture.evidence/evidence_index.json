@@ -1,0 +1,67 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "e42c2a4acff039b2d9e57f25186b2c0b17d11868d26b4d1010820c30b198dac8",
+      "size_bytes": 5683
+    },
+    "diagnosis.json": {
+      "sha256": "961b1184c7634c1b75f537d6f4919c6eec34b937157be2948dffb3b9dba5566d",
+      "size_bytes": 12144
+    },
+    "gui_manifest.json": {
+      "sha256": "07da8db53ad89c1007b5b71cdcf47daa1719aa2bd4984e3b9bdd636a2e79e168",
+      "size_bytes": 13238
+    },
+    "inspect.json": {
+      "sha256": "4fe04ba05dab318252cec1d74d2d98044ba941fcbff2d7fe11b0b817aca47298",
+      "size_bytes": 13900
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "34c0eef44d2f0d46603b0b760ec6ae6f198ebb3bfaa0d6b45c4e7c6f0a57a6ca",
+      "size_bytes": 403728
+    },
+    "timeline.ndjson": {
+      "sha256": "37b508d19a7f00e892d48ead7acc4f3c33ccc3afe650c9fbdd8e23966e258081",
+      "size_bytes": 236540
+    },
+    "triage.json": {
+      "sha256": "86b448e37b72f68ab847e9c87c6145bbc543b68b68fa5cd39ac4821040e60532",
+      "size_bytes": 13589
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260926_162358_3268_capture.mcap",
+    "sha256": "cb84e90c2e43b1ad816c814ab23f8fcc46e698c896ee1843def45f107324a6a7"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "created_at_utc": "2026-09-26T14:28:29Z",
+  "diagnosis_status": "WARNING",
+  "evidence_sha256": "d4047366171bcd181e76bc9b4ed5efc0a6fcef6717567bcfaed4c27bc36067b8",
+  "evidence_status": "PASS",
+  "root_cause": {
+    "confidence": "NOT_PROVEN",
+    "evidence_ids": [],
+    "kind": null,
+    "layer": null,
+    "reason": "NO_NON_NOMINAL_EVIDENCE_FOUND",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": null
+  },
+  "run_id": "v3_20260926_162358_3268_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "WARNING"
+}
