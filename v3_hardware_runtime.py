@@ -421,6 +421,7 @@ class NativeHardwareSensorOwner:
                     camera = ProcessVisionPort(
                         config.camera_device,
                         config.person_detection_backend,
+                        camera_geometry=config.camera_geometry,
                         worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
                         strict_affinity=(affinity.strict if affinity.enabled else False),
                     )
@@ -439,6 +440,7 @@ class NativeHardwareSensorOwner:
                 ):
                     camera = NativePicamera2Camera(
                         config.camera_device,
+                        camera_geometry_config=config.camera_geometry,
                         picamera_factory=open_camera,
                         sensor_timestamp_mapper=(
                             raspberry_pi_sensor_timestamp_to_monotonic_ns

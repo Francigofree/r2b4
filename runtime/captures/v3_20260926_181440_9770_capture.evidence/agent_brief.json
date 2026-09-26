@@ -1,0 +1,305 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "NOMINAL",
+  "budget": {
+    "actual_bytes": 6309,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260926_181440_9770_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; WARNING=sampled low-level observation only; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L4",
+      "L5",
+      "L6",
+      "L7",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260926_181440_9770_capture.evidence/interesting_slice.ndjson",
+    "rows": 3,
+    "size_bytes": 30456,
+    "tick_range": [
+      768,
+      778
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "behavioral_trends": {
+      "commands": {
+        "observed_change_count": 19,
+        "observed_unique_count": 20
+      },
+      "domain_sample_counts": {
+        "command": 227,
+        "mission": 227,
+        "navigation": 227,
+        "pose": 227,
+        "safety": 227
+      },
+      "localization": {
+        "sample_count": 227
+      },
+      "maximum_contiguous_sample_gap_s": 0.3,
+      "missing_domains": [],
+      "missions": {
+        "lifecycle_sample_counts": {
+          "ACTIVE": 203,
+          "CANCELLED": 1,
+          "IDLE": 23
+        },
+        "observed_lifecycle_change_count": 3,
+        "observed_unique_count": 20
+      },
+      "motion": {
+        "blocked_sample_count": 0,
+        "longest_observed_blocked_span_s": 0.0
+      },
+      "navigation": {
+        "stagnation": null,
+        "status_sample_counts": {
+          "ACTIVE": 104,
+          "IDLE": 47,
+          "INVALIDATED": 62,
+          "PENDING": 14
+        }
+      },
+      "safety": {
+        "unsafe_output_sample_count": 0
+      },
+      "trend_window_s": 5.0
+    },
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 3.3299239463607604,
+      "last_trace": 0.15350949392723107,
+      "max_trace": 0.31725329817966297,
+      "sample_count": 227
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 1.2844577556810808,
+      "requested_motion_tick_count": 106
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 203,
+      "FAULT": 0,
+      "STOP": 24,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 9,
+      "l2_actionable_rejection_count": 51,
+      "l2_duplicate_count": 735,
+      "l2_rejection_count": 786,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 735,
+        "STALE": 51
+      }
+    },
+    "ticks": {
+      "count": 227,
+      "first_monotonic_ns": 6851590137177,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 6874159348247,
+      "last_tick_id": 1116
+    },
+    "timing": {
+      "max_ms": 141.06435,
+      "p50_ms": 100.002735,
+      "p95_ms": 104.758328,
+      "p99_ms": 117.059901,
+      "sample_count": 226,
+      "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 770:783 --layers L4,L5,L6,L7,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 773:773 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "NOT_APPLICABLE"
+  },
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "behavior-navigation_unavailable-773"
+    ],
+    "kind": "NAVIGATION",
+    "layer": "L6",
+    "reason": "NAVIGATION_UNAVAILABLE",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 773
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l5_command_mission.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l6_navigation.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l7_motion_selection.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-773",
+      "layer": "L6",
+      "monotonic_ns": 6867207550593,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 773
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-778",
+      "layer": "L6",
+      "monotonic_ns": 6867310676588,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 778
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-783",
+      "layer": "L6",
+      "monotonic_ns": 6867407515722,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 783
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-788",
+      "layer": "L6",
+      "monotonic_ns": 6867507630472,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 788
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-793",
+      "layer": "L6",
+      "monotonic_ns": 6867607526017,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 793
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-798",
+      "layer": "L6",
+      "monotonic_ns": 6867707509249,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 798
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-803",
+      "layer": "L6",
+      "monotonic_ns": 6867807510683,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 803
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790439280657307536-9770",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-808",
+      "layer": "L6",
+      "monotonic_ns": 6867907757028,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 808
+    }
+  ]
+}

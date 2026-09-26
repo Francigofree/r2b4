@@ -11,6 +11,7 @@ from v3.adapters.bno055_imu import (
     NativeBno055ImuBackend,
 )
 from v3.adapters.bno055_device import NativeBno055DeviceConfig
+from v3.adapters.camera_geometry import CameraGeometryConfig
 from v3.adapters.counter_encoder import CounterEncoderBackendConfig
 from v3.adapters.gpio_counter import GpioCounterBackend, GpioCounterPairConfig
 from v3.adapters.gpio_encoder import NativeGpioEncoderSource
@@ -102,6 +103,7 @@ class NativeSensorHardwareConfig:
     inputs: NativeSensorInputConfig
     lidar_danger_zone_m: float
     camera_device: Picamera2CameraConfig | None = None
+    camera_geometry: CameraGeometryConfig | None = None
     person_detection_backend: LiteRtPersonDetectorConfig | None = None
     person_photo_evidence: PersonPhotoEvidenceConfig | None = None
 
@@ -114,6 +116,12 @@ class NativeSensorHardwareConfig:
             self.camera_device, Picamera2CameraConfig
         ):
             raise TypeError("camera_device must be Picamera2CameraConfig or None")
+        if self.camera_geometry is not None and not isinstance(
+            self.camera_geometry, CameraGeometryConfig
+        ):
+            raise TypeError("camera_geometry must be CameraGeometryConfig or None")
+        if (self.camera_device is None) != (self.camera_geometry is None):
+            raise ValueError("camera device and geometry configs must be enabled together")
         if (self.camera_device is None) != (self.inputs.camera_source is None):
             raise ValueError("camera device and source configs must be enabled together")
         if self.person_detection_backend is not None and not isinstance(

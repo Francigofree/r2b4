@@ -52,7 +52,11 @@ def _camera_config():
         raise SystemExit("conf/hardver.json camera must be enabled")
     # Device parser is intentionally strict, so keep person_detection outside
     # the physical camera mapping when that optional section is added later.
-    camera = {key: value for key, value in camera.items() if key != "person_detection"}
+    camera = {
+        key: value
+        for key, value in camera.items()
+        if key not in {"person_detection", "geometry"}
+    }
     return picamera2_camera_config_from_mapping(camera)
 
 

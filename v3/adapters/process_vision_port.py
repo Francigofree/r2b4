@@ -17,6 +17,7 @@ from typing import Any
 from v3.async_capability import TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
 
+from .camera_geometry import CameraGeometryConfig
 from .litert_person_detector import LiteRtPersonDetectorConfig, LiteRtSsdPersonDetector
 from .vision_media_socket import VisionMediaServer
 from .person_detection import (
@@ -143,6 +144,7 @@ def _unwire_camera(value: tuple[object, ...]) -> CameraEdgeSnapshot:
 
 def _vision_process_main(
     camera_config: Picamera2CameraConfig,
+    camera_geometry: CameraGeometryConfig | None,
     detector_config: LiteRtPersonDetectorConfig | None,
     state_queue: Any,
     command_queue: Any,
@@ -159,6 +161,7 @@ def _vision_process_main(
             apply_current_affinity(worker_cpu, role="vision-owner-process", strict=strict_affinity)
         camera = NativePicamera2Camera(
             camera_config,
+            camera_geometry_config=camera_geometry,
             picamera_factory=default_picamera2_factory,
             sensor_timestamp_mapper=raspberry_pi_sensor_timestamp_to_monotonic_ns,
             monotonic_ns=time.monotonic_ns,
@@ -267,6 +270,7 @@ class ProcessVisionPort:
         camera_config: Picamera2CameraConfig,
         detector_config: LiteRtPersonDetectorConfig | None,
         *,
+        camera_geometry: CameraGeometryConfig | None = None,
         worker_cpu: int | None = None,
         strict_affinity: bool = False,
         ready_timeout_s: float = _READY_TIMEOUT_S,
@@ -275,6 +279,8 @@ class ProcessVisionPort:
             raise TypeError("camera_config must be Picamera2CameraConfig")
         if detector_config is not None and not isinstance(detector_config, LiteRtPersonDetectorConfig):
             raise TypeError("detector_config must be LiteRtPersonDetectorConfig or None")
+        if camera_geometry is not None and not isinstance(camera_geometry, CameraGeometryConfig):
+            raise TypeError("camera_geometry must be CameraGeometryConfig or None")
         if worker_cpu is not None and (
             not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0
         ):
@@ -290,6 +296,7 @@ class ProcessVisionPort:
             target=_vision_process_main,
             args=(
                 camera_config,
+                camera_geometry,
                 detector_config,
                 self._state_queue,
                 self._command_queue,

@@ -1,0 +1,23 @@
+{
+  "upgrade_id": "camera_geometry_v1_20260926",
+  "repository": "Francigofree/r2b4",
+  "base_head": "87cec6c224d47b48cf02605eba50f5aff81e3bdd",
+  "new_files": [
+    "v3/adapters/camera_geometry.py",
+    "tests/feature/test_v3_camera_geometry.py"
+  ],
+  "patched_files": [
+    "conf/hardver.json",
+    "v3/config_hardware.py",
+    "v3/composition/native_sensor_inputs.py",
+    "v3/adapters/process_vision_port.py",
+    "v3_hardware_runtime.py",
+    "v3/adapters/picamera2_camera.py",
+    "tools/v3_camera_test.py",
+    "tools/v3_person_detection_test.py"
+  ],
+  "local_validation": {
+    "py_compile": "PASS",
+    "geometry_pytest": "8 passed"
+  }
+}

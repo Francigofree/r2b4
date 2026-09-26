@@ -47,7 +47,9 @@ def _config(args: argparse.Namespace) -> Picamera2CameraConfig:
         raise SystemExit(f"cannot load native camera config from {path}: {exc}") from exc
     if not isinstance(camera, dict) or camera.get("enabled") is not True:
         raise SystemExit("conf/hardver.json camera must be enabled for physical camera tests")
-    config = picamera2_camera_config_from_mapping(camera)
+    config = picamera2_camera_config_from_mapping(
+        {key: value for key, value in camera.items() if key != "geometry"}
+    )
     changes = {}
     if args.camera_index is not None:
         changes["camera_index"] = args.camera_index

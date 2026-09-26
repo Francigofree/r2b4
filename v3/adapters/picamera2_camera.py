@@ -25,6 +25,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from .camera_geometry import (
+    CameraGeometryConfig,
+    CameraGeometryStatus,
+    SensorCrop,
+    camera_geometry_status_from_properties,
+    sensor_crop_from_value,
+)
+
 
 class Picamera2Request(Protocol):
     def get_metadata(self) -> Mapping[str, object]: ...
@@ -264,6 +272,7 @@ class CameraFrameSnapshot:
     focus_state: str
     lens_position: float | None
     image_bytes: bytes
+    sensor_crop: SensorCrop | None = None
 
     def __post_init__(self) -> None:
         _positive_int(self.sequence, "sequence")
@@ -300,6 +309,8 @@ class CameraFrameSnapshot:
             raise ValueError("image_bytes must not be empty")
         if len(self.image_bytes) != self.frame_size_bytes:
             raise ValueError("camera payload size does not match configured frame size")
+        if self.sensor_crop is not None and not isinstance(self.sensor_crop, SensorCrop):
+            raise TypeError("sensor_crop must be SensorCrop or None")
 
     @property
     def completion_lag_ns(self) -> int:
@@ -349,6 +360,9 @@ class NativePicamera2Camera:
 
     __slots__ = (
         "_config",
+        "_camera_geometry_config",
+        "_camera_geometry_status",
+        "_default_sensor_crop",
         "_controls_factory",
         "_factory",
         "_frame_condition",
@@ -375,6 +389,7 @@ class NativePicamera2Camera:
         self,
         config: Picamera2CameraConfig,
         *,
+        camera_geometry_config: CameraGeometryConfig | None = None,
         picamera_factory: Picamera2Factory,
         sensor_timestamp_mapper: SensorTimestampMapper,
         camera_controls_factory: CameraControlsFactory | None = None,
@@ -382,6 +397,10 @@ class NativePicamera2Camera:
     ) -> None:
         if not isinstance(config, Picamera2CameraConfig):
             raise TypeError("config must be Picamera2CameraConfig")
+        if camera_geometry_config is not None and not isinstance(
+            camera_geometry_config, CameraGeometryConfig
+        ):
+            raise TypeError("camera_geometry_config must be CameraGeometryConfig or None")
         for callback, name in (
             (picamera_factory, "picamera_factory"),
             (sensor_timestamp_mapper, "sensor_timestamp_mapper"),
@@ -392,6 +411,9 @@ class NativePicamera2Camera:
         if camera_controls_factory is not None and not callable(camera_controls_factory):
             raise TypeError("camera_controls_factory must be callable or None")
         self._config = config
+        self._camera_geometry_config = camera_geometry_config
+        self._camera_geometry_status: CameraGeometryStatus | None = None
+        self._default_sensor_crop: SensorCrop | None = None
         self._factory = picamera_factory
         self._timestamp_mapper = sensor_timestamp_mapper
         self._controls_factory = camera_controls_factory
@@ -416,6 +438,14 @@ class NativePicamera2Camera:
     @property
     def config(self) -> Picamera2CameraConfig:
         return self._config
+
+    @property
+    def camera_geometry_config(self) -> CameraGeometryConfig | None:
+        return self._camera_geometry_config
+
+    def get_camera_geometry_status(self) -> CameraGeometryStatus | None:
+        with self._lock:
+            return self._camera_geometry_status
 
     def start(self) -> bool:
         with self._lock:
@@ -452,6 +482,13 @@ class NativePicamera2Camera:
             configuration = build_video_configuration(camera, self._config)
             camera.configure(configuration)
             geometry = camera_stream_geometry(camera, self._config.stream_name)
+            camera_geometry_status = None
+            default_sensor_crop = None
+            if self._camera_geometry_config is not None:
+                camera_geometry_status = camera_geometry_status_from_properties(
+                    self._camera_geometry_config, camera.camera_properties
+                )
+                default_sensor_crop = camera_geometry_status.sensor_crop
             controls = (
                 self._controls_factory()
                 if self._controls_factory is not None
@@ -476,6 +513,8 @@ class NativePicamera2Camera:
             self._picamera = camera
             self._geometry = geometry
             self._model = model
+            self._camera_geometry_status = camera_geometry_status
+            self._default_sensor_crop = default_sensor_crop
             self._running = True
             self._frame_condition.notify_all()
         thread = threading.Thread(
@@ -706,7 +745,10 @@ class NativePicamera2Camera:
             else None
         )
         focus_state = str(metadata.get("AfState", "UNKNOWN")) or "UNKNOWN"
+        sensor_crop = sensor_crop_from_value(metadata.get("ScalerCrop"))
         with self._lock:
+            if sensor_crop is None:
+                sensor_crop = self._default_sensor_crop
             previous_sensor_ns = self._last_sensor_timestamp_ns
             if previous_sensor_ns is not None and sensor_timestamp_ns <= previous_sensor_ns:
                 raise RuntimeError("camera SensorTimestamp did not increase")
@@ -729,6 +771,7 @@ class NativePicamera2Camera:
             focus_state=focus_state,
             lens_position=lens_position,
             image_bytes=image_bytes,
+            sensor_crop=sensor_crop,
         )
 
     def _checked_clock(self) -> int:

@@ -1,0 +1,74 @@
+{
+  "motorok": {
+    "bal_oldal": {
+      "gpio_in1": 12,
+      "gpio_in2": 13,
+      "invert": false
+    },
+    "jobb_oldal": {
+      "gpio_in1": 18,
+      "gpio_in2": 19,
+      "invert": true
+    }
+  },
+  "encoderek": {
+    "bal_a_pin": 23,
+    "bal_b_pin": 24,
+    "jobb_a_pin": 25,
+    "jobb_b_pin": 16,
+    "count_mode": "X1_A_RISING",
+    "input_pull_up": false,
+    "invert_bal": true,
+    "invert_jobb": false
+  },
+  "lidar": {
+    "port": null,
+    "baudrate": 460800
+  },
+  "imu": {
+    "provider": "bno055",
+    "bno055": {
+      "bus": 1,
+      "address": "0x28",
+      "use_external_crystal": false
+    }
+  },
+  "camera": {
+    "enabled": true,
+    "provider": "picamera2",
+    "camera_index": 0,
+    "expected_model": "imx708",
+    "stream_name": "lores",
+    "width": 640,
+    "height": 360,
+    "pixel_format": "RGB888",
+    "main_width": 1280,
+    "main_height": 720,
+    "main_pixel_format": "YUV420",
+    "fps": 20.0,
+    "buffer_count": 6,
+    "queue": false,
+    "continuous_autofocus": true,
+    "max_frame_completion_lag_ns": 500000000,
+    "stop_join_timeout_s": 2.0
+  },
+  "person_detection": {
+    "enabled": true,
+    "provider": "litert_ssd",
+    "model_path": "models/efficientdet_lite0.tflite",
+    "person_class_id": 0,
+    "score_threshold": 0.45,
+    "max_detections": 5,
+    "num_threads": 1,
+    "maximum_result_age_ns": 500000000,
+    "photo_evidence": {
+      "enabled": true,
+      "directory": "pic",
+      "stream_name": "main",
+      "confirm_results": 3,
+      "rearm_misses": 5,
+      "minimum_interval_ns": 5000000000
+    }
+  },
+  "gpio_chip": 0
+}

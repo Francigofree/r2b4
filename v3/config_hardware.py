@@ -9,6 +9,10 @@ from pathlib import Path
 
 from v3.adapters.bno055_device import NativeBno055DeviceConfig
 from v3.adapters.bno055_imu import Bno055ImuBackendConfig
+from v3.adapters.camera_geometry import (
+    CameraGeometryConfig,
+    camera_geometry_config_from_mapping,
+)
 from v3.adapters.bounded_command import BoundedExploreProfile, BoundedTeleopProfile
 from v3.adapters.counter_encoder import CounterEncoderBackendConfig
 from v3.adapters.gpio_counter import (
@@ -227,6 +231,7 @@ def _sensor_hardware_config(
         ),
     )
     camera_device: Picamera2CameraConfig | None = None
+    camera_geometry: CameraGeometryConfig | None = None
     camera_source: NativeCameraConfig | None = None
     camera_value = hardware.get("camera")
     if camera_value is not None:
@@ -237,7 +242,15 @@ def _sensor_hardware_config(
         if enabled:
             if camera.get("provider", "picamera2") != "picamera2":
                 raise ValueError("hardware config camera.provider must be picamera2")
-            camera_device = picamera2_camera_config_from_mapping(camera)
+            geometry_value = camera.get("geometry")
+            if geometry_value is None:
+                raise ValueError("enabled camera requires hardware config camera.geometry")
+            camera_geometry = camera_geometry_config_from_mapping(
+                _mapping(geometry_value, "hardware config camera.geometry")
+            )
+            camera_device = picamera2_camera_config_from_mapping(
+                {key: item for key, item in camera.items() if key != "geometry"}
+            )
             camera_source = NativeCameraConfig(
                 "CAMERA_FRONT",
                 policy.camera_maximum_frame_age_ns,
@@ -348,6 +361,7 @@ def _sensor_hardware_config(
         inputs=inputs,
         lidar_danger_zone_m=danger_zone_m,
         camera_device=camera_device,
+        camera_geometry=camera_geometry,
         person_detection_backend=person_detection_backend,
         person_photo_evidence=person_photo_evidence,
     )
