@@ -476,7 +476,11 @@ class NativeHardwareSensorOwner:
                             backend = LiteRtSsdPersonDetector(
                                 config.person_detection_backend
                             )
-                            detector = NativePersonDetector(camera, backend)
+                            detector = NativePersonDetector(
+                                camera,
+                                backend,
+                                camera_geometry_config=config.camera_geometry,
+                            )
                             if not detector.start():
                                 raise RuntimeError("person detector worker did not start")
                             person_detection_port = detector

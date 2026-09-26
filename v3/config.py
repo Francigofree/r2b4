@@ -15,6 +15,7 @@ from pathlib import Path
 import types
 from typing import Union, get_args, get_origin, get_type_hints
 
+from v3.adapters.camera_geometry import camera_geometry_config_from_mapping
 from v3.adapters.gpio_motor import GpioMotorFrameSinkConfig
 from v3.adapters.multirate_inputs import MultiRateInputConfig
 from v3.adapters.native_lidar_port import NativeLidarPortConfig
@@ -229,7 +230,11 @@ class ConfigResolver:
         for section, derived_names in {
             "estimation": {"frame_id", "track_width_m"},
             "navigation": {"footprint_length_m", "footprint_width_m"},
-            "world_model": {"local_costmap_max_points_per_scan"},
+            "world_model": {
+                "local_costmap_max_points_per_scan",
+                "person_camera_horizontal_fov_rad",
+                "person_camera_yaw_offset_rad",
+            },
             "lidar_safety": {"device_id", "maximum_sample_age_ns"},
         }.items():
             layer_type = get_type_hints(NativeControlCompositionConfig)[section]
@@ -237,9 +242,37 @@ class ConfigResolver:
                 layer_type = next(t for t in get_args(layer_type) if is_dataclass(t))
             _keys(layers[section], {f.name for f in fields(layer_type)} - derived_names, f"layers.{section}")
 
+        camera_geometry = None
+        camera_value = h.get("camera")
+        if isinstance(camera_value, dict) and camera_value.get("enabled") is True:
+            geometry_value = camera_value.get("geometry")
+            if not isinstance(geometry_value, dict):
+                raise ValueError("enabled camera requires hardver.camera.geometry")
+            camera_geometry = camera_geometry_config_from_mapping(geometry_value)
+        world_tracking_enabled = layers["world_model"].get("person_tracking_enabled")
+        if type(world_tracking_enabled) is not bool:
+            raise ValueError("layers.world_model.person_tracking_enabled must be bool")
+        if world_tracking_enabled and camera_geometry is None:
+            raise ValueError("person tracking requires enabled camera geometry")
+
         layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID}
         layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"]}
-        layers["world_model"] = {**layers["world_model"], "local_costmap_max_points_per_scan":local["max_points"]}
+        layers["world_model"] = {
+            **layers["world_model"],
+            "local_costmap_max_points_per_scan": local["max_points"],
+            # Compatibility-only fallback for historical observations/captures.
+            # New live person detections carry frame-specific projected bearings.
+            "person_camera_horizontal_fov_rad": (
+                None
+                if camera_geometry is None
+                else math.radians(camera_geometry.factory.horizontal_fov_deg)
+            ),
+            "person_camera_yaw_offset_rad": (
+                None
+                if camera_geometry is None
+                else math.radians(camera_geometry.mount.yaw_deg)
+            ),
+        }
         layers["lidar_safety"] = {**layers["lidar_safety"], "device_id":"RPLIDAR_C1", "maximum_sample_age_ns":policy.lidar_maximum_measurement_age_ns}
         derived = {"speed_map", "chassis_control", "critical_device_ids"}
         hints = get_type_hints(NativeControlCompositionConfig)

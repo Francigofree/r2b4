@@ -14,6 +14,12 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
+from .camera_geometry import (
+    CameraGeometryConfig,
+    CameraGeometryStatus,
+    effective_geometry,
+)
+
 
 def _positive_int(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -80,6 +86,25 @@ class PersonDetection:
 
 
 @dataclass(frozen=True, slots=True)
+class PersonDetectionProjection:
+    """Compact camera-geometry result in the robot base-frame convention."""
+
+    left_bearing_rad: float
+    right_bearing_rad: float
+    geometry_quality: str
+
+    def __post_init__(self) -> None:
+        for value, name in (
+            (self.left_bearing_rad, "left_bearing_rad"),
+            (self.right_bearing_rad, "right_bearing_rad"),
+        ):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"{name} must be finite")
+        if self.geometry_quality not in {"factory_nominal", "empirical", "degraded"}:
+            raise ValueError("geometry_quality is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class PersonDetectionSnapshot:
     """One semantic result tied to exactly one camera frame."""
 
@@ -89,6 +114,9 @@ class PersonDetectionSnapshot:
     completed_monotonic_ns: int
     inference_duration_ns: int
     detections: tuple[PersonDetection, ...]
+    geometry_state: str | None = None
+    geometry_reason: str | None = None
+    projections: tuple[PersonDetectionProjection, ...] = ()
 
     def __post_init__(self) -> None:
         _positive_int(self.sequence, "sequence")
@@ -104,6 +132,23 @@ class PersonDetectionSnapshot:
             raise TypeError("detections must be tuple[PersonDetection, ...]")
         if tuple(sorted(self.detections, key=lambda item: item.confidence, reverse=True)) != self.detections:
             raise ValueError("detections must be sorted by descending confidence")
+        if self.geometry_state is None:
+            if self.geometry_reason is not None or self.projections:
+                raise ValueError("legacy detection snapshots cannot carry geometry projection data")
+        else:
+            if self.geometry_state not in {"VALID", "DEGRADED", "INVALID"}:
+                raise ValueError("geometry_state is invalid")
+            if self.geometry_reason is not None and not isinstance(self.geometry_reason, str):
+                raise TypeError("geometry_reason must be str or None")
+            if not isinstance(self.projections, tuple) or not all(
+                isinstance(item, PersonDetectionProjection) for item in self.projections
+            ):
+                raise TypeError("projections must be tuple[PersonDetectionProjection, ...]")
+            if self.geometry_state == "INVALID":
+                if self.projections:
+                    raise ValueError("invalid geometry must not publish projected bearings")
+            elif len(self.projections) != len(self.detections):
+                raise ValueError("geometry projections must preserve detection ordering")
 
     @property
     def primary(self) -> PersonDetection | None:
@@ -167,6 +212,7 @@ class NativePersonDetector:
     __slots__ = (
         "_backend",
         "_camera",
+        "_camera_geometry_config",
         "_condition",
         "_last_error",
         "_latest",
@@ -185,6 +231,7 @@ class NativePersonDetector:
         camera: CameraFramePortLike,
         backend: PersonDetectorBackend,
         *,
+        camera_geometry_config: CameraGeometryConfig | None = None,
         worker_poll_s: float = 0.20,
         stop_join_timeout_s: float = 2.0,
         monotonic_ns=time.monotonic_ns,
@@ -195,6 +242,10 @@ class NativePersonDetector:
             raise TypeError("camera must provide get_edge_snapshot")
         if not callable(getattr(backend, "detect", None)):
             raise TypeError("backend must provide detect")
+        if camera_geometry_config is not None and not isinstance(
+            camera_geometry_config, CameraGeometryConfig
+        ):
+            raise TypeError("camera_geometry_config must be CameraGeometryConfig or None")
         for value, name in (
             (worker_poll_s, "worker_poll_s"),
             (stop_join_timeout_s, "stop_join_timeout_s"),
@@ -210,6 +261,7 @@ class NativePersonDetector:
             raise TypeError("monotonic_ns must be callable")
         self._camera = camera
         self._backend = backend
+        self._camera_geometry_config = camera_geometry_config
         self._worker_poll_s = float(worker_poll_s)
         self._stop_join_timeout_s = float(stop_join_timeout_s)
         self._monotonic_ns = monotonic_ns
@@ -306,6 +358,55 @@ class NativePersonDetector:
                     return None
                 self._condition.wait(remaining)
 
+    def _project_detections(
+        self,
+        frame: CameraFrameLike,
+        detections: tuple[PersonDetection, ...],
+    ) -> tuple[str | None, str | None, tuple[PersonDetectionProjection, ...]]:
+        config = self._camera_geometry_config
+        if config is None:
+            return None, None, ()
+        try:
+            status_getter = getattr(self._camera, "get_camera_geometry_status", None)
+            status = status_getter() if callable(status_getter) else None
+            if status is not None and not isinstance(status, CameraGeometryStatus):
+                return "INVALID", "CAMERA_GEOMETRY_STATUS_INVALID", ()
+            if status is not None and status.state == "INVALID":
+                return "INVALID", status.reason or "CAMERA_GEOMETRY_INVALID", ()
+            runtime_status = status
+            state = "DEGRADED" if status is None else status.state
+            reason = (
+                "CAMERA_GEOMETRY_STATUS_UNAVAILABLE"
+                if status is None
+                else (status.reason or None)
+            )
+            geometry = effective_geometry(
+                config,
+                output_width_px=frame.width,
+                output_height_px=frame.height,
+                sensor_crop=getattr(frame, "sensor_crop", None),
+                runtime_status=runtime_status,
+            )
+            projection_quality = (
+                "degraded" if state == "DEGRADED" else geometry.geometry_quality
+            )
+            projections: list[PersonDetectionProjection] = []
+            for detection in detections:
+                v_px = detection.box.center_y * frame.height
+                left_ray = geometry.pixel_to_base_ray(detection.box.xmin * frame.width, v_px)
+                right_ray = geometry.pixel_to_base_ray(detection.box.xmax * frame.width, v_px)
+                projections.append(
+                    PersonDetectionProjection(
+                        left_bearing_rad=math.atan2(left_ray[1], left_ray[0]),
+                        right_bearing_rad=math.atan2(right_ray[1], right_ray[0]),
+                        geometry_quality=projection_quality,
+                    )
+                )
+            return state, reason, tuple(projections)
+        except Exception as exc:
+            # 2D detections stay usable, but geometry-dependent spatial fusion must not.
+            return "INVALID", f"{type(exc).__name__}:{exc}", ()
+
     def _run(self) -> None:
         last_frame_sequence = 0
         try:
@@ -335,6 +436,9 @@ class NativePersonDetector:
                 ):
                     raise TypeError("person detector backend returned an invalid result")
                 ordered = tuple(sorted(detections, key=lambda item: item.confidence, reverse=True))
+                geometry_state, geometry_reason, projections = self._project_detections(
+                    frame, ordered
+                )
                 with self._condition:
                     self._result_sequence += 1
                     self._latest = PersonDetectionSnapshot(
@@ -344,6 +448,9 @@ class NativePersonDetector:
                         completed_monotonic_ns=completed_ns,
                         inference_duration_ns=max(0, completed_ns - started_ns),
                         detections=ordered,
+                        geometry_state=geometry_state,
+                        geometry_reason=geometry_reason,
+                        projections=projections,
                     )
                     self._condition.notify_all()
         except Exception as exc:
@@ -386,6 +493,7 @@ __all__ = [
     "NativePersonDetector",
     "PersonBox",
     "PersonDetection",
+    "PersonDetectionProjection",
     "PersonDetectionPort",
     "PersonDetectionRuntimeStatus",
     "PersonDetectionSnapshot",

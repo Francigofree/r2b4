@@ -174,7 +174,9 @@ def _vision_process_main(
         media_server.start()
         if detector_config is not None:
             backend = LiteRtSsdPersonDetector(detector_config)
-            detector = NativePersonDetector(camera, backend)
+            detector = NativePersonDetector(
+                camera, backend, camera_geometry_config=camera_geometry
+            )
             if not detector.start():
                 raise RuntimeError("person detector worker did not start")
         edge = camera.get_edge_snapshot()

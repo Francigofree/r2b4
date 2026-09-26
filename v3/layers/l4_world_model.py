@@ -97,8 +97,10 @@ class WorldModelConfig:
     local_costmap_max_cells: int
     local_costmap_max_points_per_scan: int
     person_tracking_enabled: bool
-    person_camera_horizontal_fov_rad: float  # 66 deg Camera Module 3
-    person_camera_yaw_offset_rad: float
+    # Compatibility-only fallback for historical captures that predate projected
+    # person bearings. New live observations receive geometry from the vision owner.
+    person_camera_horizontal_fov_rad: float | None
+    person_camera_yaw_offset_rad: float | None
     person_lidar_max_skew_ns: int
     person_lidar_angular_margin_rad: float
     person_lidar_cluster_depth_m: float
@@ -241,13 +243,20 @@ class WorldModelConfig:
             raise TypeError("person_tracking_enabled must be bool")
         if type(self.structural_memory_enabled) is not bool:
             raise TypeError("structural_memory_enabled must be bool")
-        if (
+        if self.person_tracking_enabled and (
+            self.person_camera_horizontal_fov_rad is None
+            or self.person_camera_yaw_offset_rad is None
+        ):
+            raise ValueError("person tracking requires legacy camera projection fallback")
+        if self.person_camera_horizontal_fov_rad is not None and (
             not math.isfinite(self.person_camera_horizontal_fov_rad)
             or not 0.0 < self.person_camera_horizontal_fov_rad < math.pi
         ):
-            raise ValueError("person_camera_horizontal_fov_rad must be in (0, pi)")
-        if not math.isfinite(self.person_camera_yaw_offset_rad):
-            raise ValueError("person_camera_yaw_offset_rad must be finite")
+            raise ValueError("person_camera_horizontal_fov_rad must be in (0, pi) or None")
+        if self.person_camera_yaw_offset_rad is not None and not math.isfinite(
+            self.person_camera_yaw_offset_rad
+        ):
+            raise ValueError("person_camera_yaw_offset_rad must be finite or None")
         if (
             not math.isfinite(self.person_lidar_angular_margin_rad)
             or not 0.0 <= self.person_lidar_angular_margin_rad < math.pi / 2.0
@@ -289,6 +298,8 @@ class _PersonImageDetection:
     xmax: float
     ymin: float | None = None
     ymax: float | None = None
+    left_bearing_rad: float | None = None
+    right_bearing_rad: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -833,6 +844,13 @@ class ShadowWorldModel:
         detected = _boolean(values, "person_detected")
         if not detected:
             return ()
+        projection_state = values.get("geometry_projection_state")
+        if projection_state is not None:
+            if projection_state not in {"VALID", "DEGRADED", "INVALID"}:
+                raise ValueError("person detection geometry_projection_state is invalid")
+            if projection_state == "INVALID":
+                # Preserve 2D detection capability, but fail closed for spatial fusion.
+                return ()
         emitted = values.get("emitted_person_count")
         if emitted is None:
             confidence = _unit_number(values, "primary_confidence")
@@ -841,7 +859,8 @@ class ShadowWorldModel:
             if xmax <= xmin:
                 raise ValueError("person detection bounding box must have positive width")
             ymin, ymax = self._person_vertical_extent(values, "primary")
-            return (_PersonImageDetection(confidence, xmin, xmax, ymin, ymax),)
+            left, right = self._person_projected_bearings(values, "primary", projection_state)
+            return (_PersonImageDetection(confidence, xmin, xmax, ymin, ymax, left, right),)
         count = _integer(values, "emitted_person_count")
         detections: list[_PersonImageDetection] = []
         for index in range(count):
@@ -852,8 +871,31 @@ class ShadowWorldModel:
             if xmax <= xmin:
                 raise ValueError("person detection bounding box must have positive width")
             ymin, ymax = self._person_vertical_extent(values, prefix)
-            detections.append(_PersonImageDetection(confidence, xmin, xmax, ymin, ymax))
+            left, right = self._person_projected_bearings(values, prefix, projection_state)
+            detections.append(
+                _PersonImageDetection(confidence, xmin, xmax, ymin, ymax, left, right)
+            )
         return tuple(detections)
+
+    @staticmethod
+    def _person_projected_bearings(
+        values: dict[str, object],
+        prefix: str,
+        projection_state: object,
+    ) -> tuple[float | None, float | None]:
+        left_key = f"{prefix}_bearing_left_rad"
+        right_key = f"{prefix}_bearing_right_rad"
+        has_left = left_key in values
+        has_right = right_key in values
+        if projection_state is None:
+            if has_left or has_right:
+                raise ValueError("legacy person detection must not carry partial projected bearings")
+            return None, None
+        if projection_state == "INVALID":
+            return None, None
+        if not has_left or not has_right:
+            raise ValueError("projected person detection is missing bearing bounds")
+        return _wrapped_angle(_number(values, left_key)), _wrapped_angle(_number(values, right_key))
 
     @staticmethod
     def _person_vertical_extent(
@@ -896,8 +938,14 @@ class ShadowWorldModel:
         used_points: set[int] = set()
         result: list[_PersonSpatialMeasurement] = []
         for detection in detections:
-            left = self._pixel_bearing(detection.xmin)
-            right = self._pixel_bearing(detection.xmax)
+            if detection.left_bearing_rad is None:
+                left = self._legacy_pixel_bearing(detection.xmin)
+                right = self._legacy_pixel_bearing(detection.xmax)
+            else:
+                if detection.right_bearing_rad is None:
+                    raise ValueError("projected person detection has incomplete bearing bounds")
+                left = detection.left_bearing_rad
+                right = detection.right_bearing_rad
             lower = min(left, right) - self._config.person_lidar_angular_margin_rad
             upper = max(left, right) + self._config.person_lidar_angular_margin_rad
             candidates = [
@@ -931,9 +979,14 @@ class ShadowWorldModel:
             ))
         return tuple(result)
 
-    def _pixel_bearing(self, normalized_x: float) -> float:
-        focal = 0.5 / math.tan(self._config.person_camera_horizontal_fov_rad * 0.5)
-        return self._config.person_camera_yaw_offset_rad + math.atan2(0.5 - normalized_x, focal)
+    def _legacy_pixel_bearing(self, normalized_x: float) -> float:
+        # Historical replay fallback only. Live detections carry geometry-owner bearings.
+        fov = self._config.person_camera_horizontal_fov_rad
+        yaw = self._config.person_camera_yaw_offset_rad
+        if fov is None or yaw is None:
+            raise ValueError("legacy person bearing fallback is unavailable")
+        focal = 0.5 / math.tan(fov * 0.5)
+        return yaw + math.atan2(0.5 - normalized_x, focal)
 
     # Kept as compatibility helpers for tests/tools that may inspect L4 directly.
     def _grid_key(self, x_m: float, y_m: float) -> tuple[int, int]:

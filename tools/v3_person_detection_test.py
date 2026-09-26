@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from v3.adapters.camera_geometry import camera_geometry_config_from_mapping  # noqa: E402
 from v3.adapters.litert_person_detector import (  # noqa: E402
     LiteRtPersonDetectorConfig,
     LiteRtSsdPersonDetector,
@@ -52,12 +53,16 @@ def _camera_config():
         raise SystemExit("conf/hardver.json camera must be enabled")
     # Device parser is intentionally strict, so keep person_detection outside
     # the physical camera mapping when that optional section is added later.
-    camera = {
+    geometry = camera.get("geometry")
+    if not isinstance(geometry, dict):
+        raise SystemExit("conf/hardver.json enabled camera requires geometry")
+    camera_geometry = camera_geometry_config_from_mapping(geometry)
+    camera_device = {
         key: value
         for key, value in camera.items()
         if key not in {"person_detection", "geometry"}
     }
-    return picamera2_camera_config_from_mapping(camera)
+    return picamera2_camera_config_from_mapping(camera_device), camera_geometry
 
 
 def main() -> int:
@@ -73,8 +78,10 @@ def main() -> int:
         parser.error("--seconds must be positive")
 
     _refuse_parallel_runtime_owner()
+    camera_config, camera_geometry = _camera_config()
     camera = NativePicamera2Camera(
-        _camera_config(),
+        camera_config,
+        camera_geometry_config=camera_geometry,
         picamera_factory=default_picamera2_factory,
         sensor_timestamp_mapper=raspberry_pi_sensor_timestamp_to_monotonic_ns,
     )
@@ -92,7 +99,9 @@ def main() -> int:
                 num_threads=args.threads,
             )
         )
-        detector = NativePersonDetector(camera, backend)
+        detector = NativePersonDetector(
+            camera, backend, camera_geometry_config=camera_geometry
+        )
         detector.start()
         first_result = 0
         last_result = 0
@@ -123,6 +132,17 @@ def main() -> int:
                     "source_frame_sequence": result.source_frame_sequence,
                     "person_count": len(result.detections),
                     "inference_ms": result.inference_duration_ns / 1_000_000.0,
+                    "geometry_state": result.geometry_state,
+                    "geometry_reason": result.geometry_reason,
+                    "primary_bearing": (
+                        {
+                            "left_rad": result.projections[0].left_bearing_rad,
+                            "right_rad": result.projections[0].right_bearing_rad,
+                            "quality": result.projections[0].geometry_quality,
+                        }
+                        if result.projections
+                        else None
+                    ),
                     "primary": (
                         {
                             "confidence": primary.confidence,

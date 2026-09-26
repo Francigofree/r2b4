@@ -96,8 +96,20 @@ class NativePersonDetectionSource:
             stale_after_ns=self._config.maximum_result_age_ns, running=True,
         )
         stale = self._last_capability.state is CapabilityState.STALE
-        state = DeviceHealthState.DEGRADED if stale else DeviceHealthState.OK
-        reason = "PERSON_DETECTOR_RESULT_STALE" if stale else None
+        geometry_degraded = result.geometry_state in {"DEGRADED", "INVALID"}
+        state = (
+            DeviceHealthState.DEGRADED
+            if stale or geometry_degraded
+            else DeviceHealthState.OK
+        )
+        if stale:
+            reason = "PERSON_DETECTOR_RESULT_STALE"
+        elif result.geometry_state == "INVALID":
+            reason = "PERSON_GEOMETRY_INVALID"
+        elif result.geometry_state == "DEGRADED":
+            reason = "PERSON_GEOMETRY_DEGRADED"
+        else:
+            reason = None
         detections = result.detections[: self._config.maximum_detections]
         primary = detections[0] if detections else None
         values = [
@@ -110,6 +122,11 @@ class NativePersonDetectionSource:
             DataField("emitted_person_count", len(detections)),
             DataField("person_detected", primary is not None),
         ]
+        if result.geometry_state is not None:
+            values.append(DataField("geometry_projection_state", result.geometry_state))
+            if result.geometry_reason:
+                values.append(DataField("geometry_projection_reason", result.geometry_reason))
+        projections = result.projections[: len(detections)]
         if primary is not None:
             values.extend(
                 (
@@ -123,6 +140,14 @@ class NativePersonDetectionSource:
                     DataField("primary_area", primary.box.area),
                 )
             )
+            if projections:
+                values.extend(
+                    (
+                        DataField("primary_bearing_left_rad", projections[0].left_bearing_rad),
+                        DataField("primary_bearing_right_rad", projections[0].right_bearing_rad),
+                        DataField("primary_geometry_quality", projections[0].geometry_quality),
+                    )
+                )
         for index, detection in enumerate(detections):
             prefix = f"person_{index:03d}"
             box = detection.box
@@ -138,6 +163,15 @@ class NativePersonDetectionSource:
                     DataField(f"{prefix}_area", box.area),
                 )
             )
+            if index < len(projections):
+                projection = projections[index]
+                values.extend(
+                    (
+                        DataField(f"{prefix}_bearing_left_rad", projection.left_bearing_rad),
+                        DataField(f"{prefix}_bearing_right_rad", projection.right_bearing_rad),
+                        DataField(f"{prefix}_geometry_quality", projection.geometry_quality),
+                    )
+                )
         sample = DeviceSample(
             device_id=self.device_id,
             kind="person_detection",
