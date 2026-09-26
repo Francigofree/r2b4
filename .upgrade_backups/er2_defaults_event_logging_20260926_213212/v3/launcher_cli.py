@@ -86,7 +86,7 @@ def command_catalog() -> dict[str, object]:
         "er2": {
             "commands": ["status", "preview", "stream"],
             "default_command": "stream",
-            "stream_defaults": ["camera", "tools", "speak", "json"],
+            "stream_defaults": ["camera", "tools"],
             "stream_options": ["--camera", "--tools", "--speak", "--json", "--seconds"],
             "execution": "REAL_ONLY",
         },
@@ -104,7 +104,7 @@ def print_help() -> None:
         "  r pytest [ARGS...]            raw pytest passthrough\n"
         "  r git | gitre | tools | tool  repo/developer helpers\n"
         "  r version                     repo revision + dirty state\n"
-        "  r er2 \"TASK\" [OPTIONS]        ER2 Streaming shorthand; camera + tools + speak + json default ON\n"
+        "  r er2 \"TASK\" [OPTIONS]        ER2 Streaming shorthand; camera + tools default ON\n"
         "  r er2 status|preview|stream   canonical Gemini Robotics ER 2 commands\n"
         "    stream options: --camera --tools --speak --json [--seconds N]\n"
         "\nHost diagnostics:\n"

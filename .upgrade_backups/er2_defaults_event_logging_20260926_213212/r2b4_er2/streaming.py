@@ -143,12 +143,6 @@ class Er2StreamingClient:
                                     ),
                                     turn_complete=True,
                                 )
-                                self._emit(
-                                    "ER2_STREAM_INITIAL_TURN_TX",
-                                    task_chars=len(initial_task),
-                                    frame_bytes=len(frame),
-                                    turn_complete=True,
-                                )
                                 first_connection = False
                             # First connection waits for the initial user turn to
                             # complete. A resumed connection has no new initial turn,
@@ -305,10 +299,8 @@ class Er2StreamingClient:
                     for part in tuple(getattr(model_turn, "parts", ()) or ()):
                         text = getattr(part, "text", None)
                         if isinstance(text, str) and text:
-                            self._emit("ER2_STREAM_TEXT_RX", chars=len(text))
                             self._on_text(text)
                     if getattr(server_content, "turn_complete", False):
-                        self._emit("ER2_STREAM_TURN_COMPLETE_RX")
                         completed_turn = True
                         turn_done.set()
 
@@ -322,13 +314,6 @@ class Er2StreamingClient:
                         name = getattr(call, "name", None)
                         args = getattr(call, "args", {}) or {}
                         call_id = getattr(call, "id", None)
-                        self._emit(
-                            "ER2_STREAM_TOOL_CALL_RX",
-                            tool_name=name if isinstance(name, str) else None,
-                            call_id=call_id if isinstance(call_id, str) else None,
-                            argument_count=len(args) if isinstance(args, Mapping) else None,
-                            physical=isinstance(name, str) and name in PHYSICAL_TOOLS,
-                        )
                         if not isinstance(name, str) or not isinstance(args, Mapping):
                             result = {"status": "ERROR", "error": "malformed ER2 tool call"}
                         elif name in PHYSICAL_TOOLS and motion_attempted:
@@ -345,7 +330,6 @@ class Er2StreamingClient:
                         responses.append(types.FunctionResponse(name=name or "invalid", response=result, id=call_id))
                     if responses:
                         await session.send_tool_response(function_responses=responses)
-                        self._emit("ER2_STREAM_TOOL_RESPONSE_TX", response_count=len(responses))
                 if reconnect_requested.is_set() or stop_event.is_set():
                     return
             if not completed_turn:
@@ -379,11 +363,6 @@ class Er2StreamingClient:
                     "If no movement is needed, do not invent one. Robot status: "
                     + _compact(status)
                 )
-            )
-            self._emit(
-                "ER2_STREAM_HEARTBEAT_TX",
-                frame_bytes=len(frame),
-                status_chars=len(_compact(status)),
             )
             await turn_done.wait()
             turn_done.clear()

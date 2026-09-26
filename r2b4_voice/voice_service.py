@@ -4,7 +4,7 @@ Data path:
     NativeUsbMicrophone -> local energy utterance gate -> Groq STT
     -> RobotInterface conversation.submit_text -> Gemini/Groq LLM
     -> LLMDecision proposal -> fresh VoiceActionExecutor gate -> canonical RobotInterface
-    -> Gemini TTS -> Linux/PipeWire speaker.
+    -> local Piper TTS (Gemini optional) -> Linux/PipeWire speaker.
 
 The service is host-side orchestration only.  It never writes motor/GPIO state; optional
 LLM proposals can execute only through the fresh-state canonical RobotInterface gate.  One process owns the microphone
@@ -36,7 +36,7 @@ from v3.hri_evidence import HriBehaviorObserver, HriEventJournal
 
 from .action_executor import VoiceActionExecutor
 from .conversation_interface import VoiceInterfaceBundle, build_voice_interface
-from .gemini_tts import GeminiTtsClient, GeminiTtsConfig
+from .tts_provider import build_tts_client, diagnose_tts
 from .groq_stt import GroqWakeTranscriber, WakeTranscriptionError
 from .llm_provider import default_model_for, resolve_llm_provider
 from .runtime_control import WakeRuntimeCoordinator, WakeRuntimeOutcome
@@ -828,8 +828,14 @@ def _diagnostic_check(root: Path) -> int:
 
     groq_key = _setting(project_env, "GROQ_API_KEY")
     gemini_key = _setting(project_env, "GEMINI_API_KEY")
-    tts_model = _setting(project_env, "R2B4_TTS_MODEL") or "gemini-3.1-flash-tts-preview"
-    tts_voice = _setting(project_env, "R2B4_TTS_VOICE") or "Kore"
+    try:
+        tts_diagnostic = diagnose_tts(root, project_env, gemini_api_key=gemini_key)
+    except Exception as exc:
+        tts_diagnostic = {
+            "tts_provider": _setting(project_env, "R2B4_TTS_PROVIDER") or "piper",
+            "tts_status": "FAIL",
+            "tts_error": f"{type(exc).__name__}: {exc}",
+        }
     result: dict[str, object] = {
         "project_root": str(root),
         "secret_file": str(root / "conf" / ".wake.env"),
@@ -837,10 +843,7 @@ def _diagnostic_check(root: Path) -> int:
         "llm_provider": provider,
         "llm_model": model,
         "llm_api_key": "PASS" if llm_key else "FAIL",
-        "tts_provider": "gemini",
-        "tts_model": tts_model,
-        "tts_voice": tts_voice,
-        "tts_api_key": "PASS" if gemini_key else "FAIL",
+        **tts_diagnostic,
         "action_mode": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).lower(),
         "motor_action_execution": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).lower() == "execute",
         "half_duplex_self_hearing_guard": True,
@@ -861,7 +864,7 @@ def _diagnostic_check(root: Path) -> int:
         (
             groq_key,
             llm_key,
-            gemini_key,
+            tts_diagnostic.get("tts_status") == "PASS",
             isinstance(result["microphone"], dict) and result["microphone"].get("status") == "PASS",
             isinstance(result["speaker"], dict) and result["speaker"].get("status") == "PASS",
         )
@@ -916,15 +919,11 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("GROQ_API_KEY is required for STT")
         if not llm_key:
             raise RuntimeError(f"missing API key for LLM provider {provider}")
-        if not gemini_key:
-            raise RuntimeError("GEMINI_API_KEY is required for Gemini TTS")
         transcriber = GroqWakeTranscriber(api_key=groq_key)
-        tts = GeminiTtsClient(
-            api_key=gemini_key,
-            config=GeminiTtsConfig(
-                model=_setting(project_env, "R2B4_TTS_MODEL") or "gemini-3.1-flash-tts-preview",
-                voice=_setting(project_env, "R2B4_TTS_VOICE") or "Kore",
-            ),
+        tts = build_tts_client(
+            root,
+            project_env,
+            gemini_api_key=gemini_key,
         )
     except Exception as exc:
         print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)

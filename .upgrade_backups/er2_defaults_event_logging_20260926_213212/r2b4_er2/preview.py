@@ -109,22 +109,7 @@ class Er2PreviewClient:
             tools_enabled=tools is not None,
         )
         try:
-            self._emit(
-                "ER2_PREVIEW_REQUEST_TX",
-                model=self.config.preview_model,
-                input_items=len(inputs),
-                image_bytes=len(image_bytes) if image_bytes is not None else 0,
-                tool_declarations=len(tool_declarations or ()),
-            )
             interaction = self.client.interactions.create(**kwargs)  # type: ignore[attr-defined]
-            steps = _interaction_steps(interaction)
-            self._emit(
-                "ER2_PREVIEW_RESPONSE_RX",
-                model=self.config.preview_model,
-                interaction_id=getattr(interaction, "id", None),
-                step_count=len(steps),
-                function_call_count=sum(1 for step in steps if getattr(step, "type", None) == "function_call"),
-            )
             rounds = 0
 
             while tools is not None:
@@ -149,14 +134,6 @@ class Er2PreviewClient:
                     call_id = getattr(call, "id", None)
                     if not isinstance(name, str) or arguments is None or not isinstance(call_id, str) or not call_id:
                         raise Er2PreviewError("ER2 returned malformed function call")
-                    self._emit(
-                        "ER2_PREVIEW_TOOL_CALL_RX",
-                        interaction_id=previous_id,
-                        tool_name=name,
-                        call_id=call_id,
-                        argument_count=len(arguments),
-                        physical=name in PHYSICAL_TOOLS,
-                    )
                     if name in PHYSICAL_TOOLS and physical_tool_executed:
                         # Never execute two physical goals selected from the same
                         # model turn. The model must observe the first blocking tool
@@ -198,26 +175,12 @@ class Er2PreviewClient:
                 rounds += 1
                 # tools and generation_config are interaction-scoped in the
                 # Interactions API, so they must be re-specified on every turn.
-                self._emit(
-                    "ER2_PREVIEW_TOOL_RESULTS_TX",
-                    previous_interaction_id=previous_id,
-                    tool_round=rounds,
-                    result_count=len(function_results),
-                )
                 interaction = self.client.interactions.create(  # type: ignore[attr-defined]
                     model=self.config.preview_model,
                     previous_interaction_id=previous_id,
                     input=function_results,
                     tools=tool_declarations,
                     generation_config=generation_config,
-                )
-                steps = _interaction_steps(interaction)
-                self._emit(
-                    "ER2_PREVIEW_RESPONSE_RX",
-                    model=self.config.preview_model,
-                    interaction_id=getattr(interaction, "id", None),
-                    step_count=len(steps),
-                    function_call_count=sum(1 for step in steps if getattr(step, "type", None) == "function_call"),
                 )
 
             text = getattr(interaction, "output_text", None)

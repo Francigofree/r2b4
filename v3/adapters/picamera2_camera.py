@@ -725,8 +725,22 @@ class NativePicamera2Camera:
         measurement_monotonic_ns = self._timestamp_mapper(sensor_timestamp_ns)
         _nonnegative_int(measurement_monotonic_ns, "mapped camera measurement timestamp")
 
-        raw_buffer = request.make_buffer(geometry.stream_name)
-        image_bytes = bytes(raw_buffer)
+        if hasattr(request, "stream_map") and hasattr(request, "picam2"):
+            from picamera2 import MappedArray
+
+            with MappedArray(
+                request,
+                geometry.stream_name,
+                reshape=False,
+                write=False,
+            ) as mapped:
+                if mapped.array is None:
+                    raise RuntimeError("camera mapped buffer is unavailable")
+                image_bytes = bytes(mapped.array)
+        else:
+            # Off-target/unit-test fallback for synthetic Picamera2Request objects.
+            raw_buffer = request.make_buffer(geometry.stream_name)
+            image_bytes = bytes(raw_buffer)
         if len(image_bytes) != geometry.frame_size_bytes:
             raise RuntimeError(
                 "camera buffer size does not match Picamera2 stream configuration"

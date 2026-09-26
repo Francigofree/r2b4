@@ -55,7 +55,7 @@ def _parser() -> argparse.ArgumentParser:
 
     stream = sub.add_parser(
         "stream",
-        help="live ER2 Streaming robot session; camera, robot tools, speech and JSON are enabled by default",
+        help="live ER2 Streaming robot session; camera and robot tools are enabled by default",
     )
     stream.add_argument("task")
     stream.add_argument(
@@ -73,15 +73,9 @@ def _parser() -> argparse.ArgumentParser:
     stream.add_argument(
         "--speak",
         action="store_true",
-        default=True,
-        help="speak the accumulated ER2 text through the existing TTS/audio path (enabled by default)",
+        help="speak the accumulated ER2 text through the existing TTS/audio path",
     )
-    stream.add_argument(
-        "--json",
-        action="store_true",
-        default=True,
-        help="emit one machine-readable JSON result (enabled by default)",
-    )
+    stream.add_argument("--json", action="store_true", help="emit one machine-readable JSON result")
     stream.add_argument("--seconds", type=float, default=None, help="optional bounded session duration")
     return parser
 
@@ -227,15 +221,6 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
                 if not args.json:
                     print(chunk, end="", flush=True)
 
-            evidence.emit(
-                "ER2_STREAM_CLI_START",
-                task_chars=len(args.task.strip()),
-                camera_enabled=bool(args.camera),
-                tools_enabled=bool(args.tools),
-                speak_enabled=bool(args.speak),
-                json_enabled=bool(args.json),
-                bounded_duration_s=args.seconds,
-            )
             result = Er2StreamingClient(
                 tools,
                 media,
@@ -255,23 +240,10 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
                 "text": text,
                 "camera": bool(args.camera),
                 "tools": bool(args.tools),
-                "speak": bool(args.speak),
-                "json": bool(args.json),
                 "reconnect_count": result.reconnect_count,
                 "resumption": bool(result.latest_resumption_handle),
                 "stopped_cleanly": result.stopped_cleanly,
             }
-            evidence.emit(
-                "ER2_STREAM_CLI_COMPLETE",
-                output_chars=len(text),
-                camera_enabled=bool(args.camera),
-                tools_enabled=bool(args.tools),
-                speak_enabled=bool(args.speak),
-                json_enabled=bool(args.json),
-                reconnect_count=result.reconnect_count,
-                resumable=bool(result.latest_resumption_handle),
-                stopped_cleanly=result.stopped_cleanly,
-            )
             if args.json:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             elif text_chunks:
