@@ -22,9 +22,6 @@ class LauncherError(RuntimeError):
     pass
 
 
-_ER2_CANONICAL_COMMANDS = frozenset({"status", "preview", "stream", "-h", "--help"})
-
-
 def project_root() -> Path:
     raw = os.environ.get("R2B4_ROOT")
     root = Path(raw).expanduser() if raw else Path(__file__).resolve().parents[1]
@@ -32,22 +29,6 @@ def project_root() -> Path:
     if not (root / "v3").is_dir() or not (root / "pytest.ini").is_file():
         raise LauncherError(f"invalid R2B4 root: {root}")
     return root
-
-
-def _normalize_er2_args(args: list[str]) -> list[str]:
-    """Map human ER2 shorthand onto the canonical streaming command.
-
-    Examples:
-      r er2 "fordulj 90 fokot"
-      r er2 "mit látsz?" --camera --tools --speak --json
-
-    Canonical status/preview/stream invocations are preserved unchanged.
-    """
-    if len(args) < 2 or args[0] != "er2":
-        return args
-    if args[1] in _ER2_CANONICAL_COMMANDS:
-        return args
-    return ["er2", "stream", *args[1:]]
 
 
 def _robot_catalog() -> list[dict[str, object]]:
@@ -83,13 +64,7 @@ def command_catalog() -> dict[str, object]:
         "testhub": {
             "view_hz": [1, 5, 10],
         },
-        "er2": {
-            "commands": ["status", "preview", "stream"],
-            "default_command": "stream",
-            "stream_defaults": ["camera", "tools"],
-            "stream_options": ["--camera", "--tools", "--speak", "--json", "--seconds"],
-            "execution": "REAL_ONLY",
-        },
+        "er2": {"commands": ["status", "preview", "stream"], "execution": "REAL_ONLY"},
         "local": sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES)),
     }
 
@@ -104,9 +79,7 @@ def print_help() -> None:
         "  r pytest [ARGS...]            raw pytest passthrough\n"
         "  r git | gitre | tools | tool  repo/developer helpers\n"
         "  r version                     repo revision + dirty state\n"
-        "  r er2 \"TASK\" [OPTIONS]        ER2 Streaming shorthand; camera + tools default ON\n"
-        "  r er2 status|preview|stream   canonical Gemini Robotics ER 2 commands\n"
-        "    stream options: --camera --tools --speak --json [--seconds N]\n"
+        "  r er2 status|preview|stream   Gemini Robotics ER 2 (real execution only)\n"
         "\nHost diagnostics:\n"
         "  r cpu | cpu2 | disc | mem | temp | ps\n"
         "  r net | usb | i2c | host\n"
@@ -140,7 +113,6 @@ def _commands(argv: list[str]) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    args = _normalize_er2_args(args)
     try:
         root = project_root()
         if not args or args[0] in {"help", "-h", "--help"}:
@@ -167,4 +139,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["command_catalog", "main", "project_root", "_normalize_er2_args"]
+__all__ = ["command_catalog", "main", "project_root"]

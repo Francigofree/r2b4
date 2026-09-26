@@ -53,29 +53,8 @@ def _parser() -> argparse.ArgumentParser:
     preview.add_argument("--speak", action="store_true", help="speak the final ER2 text through the existing TTS/audio path")
     preview.add_argument("--json", action="store_true")
 
-    stream = sub.add_parser(
-        "stream",
-        help="live ER2 Streaming robot session; camera and robot tools are enabled by default",
-    )
+    stream = sub.add_parser("stream", help="live ER2 Streaming robot session")
     stream.add_argument("task")
-    stream.add_argument(
-        "--camera",
-        action="store_true",
-        default=True,
-        help="use the canonical live camera feed (enabled by default)",
-    )
-    stream.add_argument(
-        "--tools",
-        action="store_true",
-        default=True,
-        help="allow canonical bounded robot tools (enabled by default)",
-    )
-    stream.add_argument(
-        "--speak",
-        action="store_true",
-        help="speak the accumulated ER2 text through the existing TTS/audio path",
-    )
-    stream.add_argument("--json", action="store_true", help="emit one machine-readable JSON result")
     stream.add_argument("--seconds", type=float, default=None, help="optional bounded session duration")
     return parser
 
@@ -214,40 +193,9 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
         if args.command == "stream":
             lease.ensure()
             media = VisionMediaClient(timeout_s=cfg.media_timeout_s)
-            text_chunks: list[str] = []
-
-            def on_text(chunk: str) -> None:
-                text_chunks.append(chunk)
-                if not args.json:
-                    print(chunk, end="", flush=True)
-
-            result = Er2StreamingClient(
-                tools,
-                media,
-                cfg,
-                on_text=on_text,
-                evidence=evidence,
-            ).run(args.task, duration_s=args.seconds)
-            text = "".join(text_chunks).strip()
-
-            if args.speak:
-                if not text:
-                    raise RuntimeError("ER2 Streaming returned no text to speak")
-                Er2SpeechReporter(evidence=evidence).speak(text)
-
-            payload = {
-                "mode": "stream",
-                "text": text,
-                "camera": bool(args.camera),
-                "tools": bool(args.tools),
-                "reconnect_count": result.reconnect_count,
-                "resumption": bool(result.latest_resumption_handle),
-                "stopped_cleanly": result.stopped_cleanly,
-            }
-            if args.json:
-                print(json.dumps(payload, ensure_ascii=False, indent=2))
-            elif text_chunks:
-                print()
+            result = Er2StreamingClient(tools, media, cfg, evidence=evidence).run(args.task, duration_s=args.seconds)
+            print()
+            print(json.dumps({"reconnect_count": result.reconnect_count, "resumption": bool(result.latest_resumption_handle), "stopped_cleanly": result.stopped_cleanly}, ensure_ascii=False))
             return 0
     finally:
         try:
@@ -262,7 +210,6 @@ __all__ = [
     "main",
     "PREVIEW_MODEL",
     "STREAMING_MODEL",
-    "_parser",
     "_probe_media",
     "_print_status",
     "_status_payload",
