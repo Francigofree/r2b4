@@ -16,7 +16,7 @@ from r2b4_er2.media import Er2MediaUnavailable
 from r2b4_er2.preview import Er2PreviewClient, Er2PreviewError
 from r2b4_er2.speech import Er2SpeechReporter
 from r2b4_er2.streaming import Er2StreamingClient, Er2StreamingError
-from r2b4_er2.tool_bridge import Er2RobotTools, Er2SafetyError
+from r2b4_er2.tool_bridge import Er2RobotTools, Er2SafetyError, Er2ToolError
 from v3.external_gateway import ExternalRobotGateway, GatewayPolicy
 from v3.hri_evidence import HRI_EVENT_SCHEMA, HriEventJournal
 
@@ -191,7 +191,13 @@ class _FakeInterface:
 
     def read(self, resource: str):
         if resource == "v3.status":
-            return {"state": "RUNNING", "ready_for_active": True}
+            return {
+                "state": "RUNNING", "ready_for_active": True,
+                "safety_decision": "ALLOW", "fault_layer": None,
+                "estimate": {"frame_id": "odom", "x_m": 1.0, "y_m": 2.0, "yaw_rad": 0.0},
+                "mission": {"mission_id": "mission-cmd-1", "mode": "NAVIGATE", "lifecycle": "ACTIVE"},
+                "navigation": {"mission_id": "mission-cmd-1", "status": "COMPLETE", "progress": 1.0},
+            }
         if resource == "operator.status":
             return {"runtime_running": True, "capture_mode": "full", "capture_hz": 10}
         if resource == "v3.safety":
@@ -257,49 +263,49 @@ def test_er2_spoken_report_reuses_host_tts_and_audio_without_robot_authority() -
     assert player.played.text == "Robot stopped safely."
     assert [name for name, _ in evidence.events] == ["ER2_SPEECH_START", "ER2_SPEECH_COMPLETE"]
 
-class _TwoDriveInteractions:
+class _TwoMotionInteractions:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
     def create(self, **kwargs):
         self.calls.append(dict(kwargs))
         if len(self.calls) == 1:
-            args = {"v_mps": 0.15, "omega_rad_s": 0.0, "duration_s": 1.0}
+            args = {"x_m": 1.0, "y_m": 2.0}
             return SimpleNamespace(
                 id="drive-round-1",
                 steps=(
-                    SimpleNamespace(type="function_call", name="robot_drive", arguments=args, id="drive-1"),
-                    SimpleNamespace(type="function_call", name="robot_drive", arguments=args, id="drive-2"),
+                    SimpleNamespace(type="function_call", name="robot_navigate_to_pose", arguments=args, id="drive-1"),
+                    SimpleNamespace(type="function_call", name="robot_turn_by", arguments={"angle_deg": 90}, id="drive-2"),
                 ),
                 output_text=None,
             )
         return SimpleNamespace(id="drive-round-2", steps=(), output_text="done")
 
 
-class _RecordingDriveTools:
+class _RecordingMotionTools:
     def __init__(self) -> None:
         self.executed: list[str] = []
 
     def interaction_tools(self):
-        return [{"type": "function", "name": "robot_drive", "parameters": {"type": "object", "properties": {}}}]
+        return [{"type": "function", "name": "robot_navigate_to_pose", "parameters": {"type": "object", "properties": {}}}]
 
     def execute(self, name, arguments):
         self.executed.append(name)
         return {"status": "COMPLETED"}
 
 
-def test_preview_executes_at_most_one_physical_drive_per_model_tool_round() -> None:
-    sdk = SimpleNamespace(interactions=_TwoDriveInteractions())
-    tools = _RecordingDriveTools()
+def test_preview_executes_at_most_one_physical_motion_per_model_tool_round() -> None:
+    sdk = SimpleNamespace(interactions=_TwoMotionInteractions())
+    tools = _RecordingMotionTools()
     result = Er2PreviewClient(Er2Config(), client=sdk).run("two segments", tools=tools)
     assert result.text == "done"
-    assert tools.executed == ["robot_drive"]
+    assert tools.executed == ["robot_navigate_to_pose"]
     returned = sdk.interactions.calls[1]["input"]
     assert returned[0]["call_id"] == "drive-1"
     assert json.loads(returned[0]["result"][0]["text"])["status"] == "COMPLETED"
     rejected = json.loads(returned[1]["result"][0]["text"])
     assert rejected["status"] == "ERROR"
-    assert "ONE_ROBOT_DRIVE_PER_TOOL_ROUND" in rejected["error"]
+    assert "ONE_PHYSICAL_TOOL_PER_ROUND" in rejected["error"]
 
 
 class _LiveSdk:
@@ -333,10 +339,10 @@ class _LiveSdk:
         await asyncio.Event().wait()
 
 
-def _drive_message(*, count=1):
+def _motion_message(*, count=1):
     return SimpleNamespace(tool_call=SimpleNamespace(function_calls=tuple(
-        SimpleNamespace(name="robot_drive", id=f"drive-{index}", args={
-            "v_mps": 0.1, "omega_rad_s": 0.0, "duration_s": 0.1,
+        SimpleNamespace(name="robot_navigate_to_pose", id=f"drive-{index}", args={
+            "x_m": 1.0, "y_m": 2.0,
         }) for index in range(count)
     )))
 
@@ -367,7 +373,7 @@ def test_stream_cancellation_drains_late_motion_before_return_or_reconnect():
                 release.set()
                 return {"status": "STOPPED"}
 
-        sdk = _LiveSdk([_drive_message()])
+        sdk = _LiveSdk([_motion_message()])
         client = Er2StreamingClient(_tools(Interface()), _FakeMedia(), client=sdk)
         task = asyncio.create_task(client.run_async("drive", duration_s=0.15 if cancel_by_timer else None))
         try:
@@ -399,8 +405,8 @@ def test_failed_stop_aborts_preview_and_stream_without_success_or_retry():
         def stop(self):
             raise RuntimeError("injected STOP failure")
 
-    tools = _tools(Interface(), sleep=lambda seconds: None, monotonic=iter([0.0, 1.0]).__next__)
-    sdk = SimpleNamespace(interactions=_TwoDriveInteractions())
+    tools = _tools(Interface(), sleep=lambda seconds: None, monotonic=lambda: 0.0)
+    sdk = SimpleNamespace(interactions=_TwoMotionInteractions())
     with pytest.raises(Er2PreviewError, match="STOP failed"):
         Er2PreviewClient(client=sdk).run("drive", tools=tools)
     assert len(sdk.interactions.calls) == 1
@@ -420,22 +426,144 @@ def test_stream_retains_connection_across_turns_and_bounds_physical_tool_batch()
     class Interface(_FakeInterface):
         def execute(self, action, **parameters):
             drives.append(action)
-            return {"command_id": "drive-1"}
+            return {"command_id": "cmd-1"}
 
     complete = lambda text: SimpleNamespace(server_content=SimpleNamespace(
         turn_complete=True, model_turn=SimpleNamespace(parts=[SimpleNamespace(text=text)]),
     ))
-    sdk = _LiveSdk([_drive_message(count=2), complete("first"), complete("second")])
+    sdk = _LiveSdk([_motion_message(count=2), complete("first"), complete("second")])
     tools = _tools(Interface(), sleep=lambda seconds: None, monotonic=iter([0.0, 1.0, 1.0]).__next__)
     result = Er2StreamingClient(tools, _FakeMedia(), client=sdk, on_text=texts.append).run("drive", duration_s=0.15)
     assert texts == ["first", "second"]
     assert sdk.connections == 1 and result.reconnect_count == 0 and result.stopped_cleanly
-    assert drives == ["v3.command.teleop"]
+    assert drives == ["v3.command.navigate"]
     assert len(sdk.responses) == 2
-    assert sdk.responses[1].response["error"] == "ONE_ROBOT_DRIVE_PER_TOOL_ROUND"
+    assert sdk.responses[1].response["error"] == "ONE_PHYSICAL_TOOL_PER_ROUND"
 
     # Losing resumption must not silently start a new session without the task.
     sdk = _LiveSdk([SimpleNamespace(go_away=SimpleNamespace(time_left="0s"))])
     with pytest.raises(Er2StreamingError, match="continuity lost"):
         Er2StreamingClient(_tools(Interface()), _FakeMedia(), client=sdk).run("drive")
     assert sdk.connections == 1
+
+
+def test_er2_motion_goals_transform_pose_and_expose_only_five_tools():
+    import math
+
+    calls = []
+
+    class Interface(_FakeInterface):
+        def read(self, resource):
+            result = super().read(resource)
+            if resource == "v3.status":
+                result["estimate"]["yaw_rad"] = math.pi / 2
+            return result
+
+        def execute(self, action, **parameters):
+            calls.append((action, parameters))
+            return super().execute(action, **parameters)
+
+    tools = _tools(Interface())
+    expected = {"robot_status", "robot_stop", "robot_navigate_to_pose", "robot_move_relative", "robot_turn_by"}
+    assert {item["name"] for item in tools.interaction_tools()} == expected
+    live = tools.live_tools()[0]["function_declarations"]
+    assert {item["name"] for item in live} == expected
+    assert all(item["behavior"] == "BLOCKING" for item in live)
+    result = tools.execute("robot_move_relative", {"forward_m": 1.0, "left_m": 0.4, "final_yaw_rad": math.pi / 2})
+    assert result["status"] == "COMPLETED"
+    action, params = calls[-1]
+    assert action == "v3.command.navigate"
+    assert (params["x_m"], params["y_m"], params["yaw_rad"]) == pytest.approx((0.6, 3.0, -math.pi))
+    assert params["capture"] is False and params["capture_mode"] == "full"
+    assert params["session_owner_pid"] > 0 and params["session_watchdog_s"] > 0
+    for angle, yaw in ((90, -math.pi), (-45, math.pi / 4), (180, -math.pi / 2)):
+        tools.execute("robot_turn_by", {"angle_deg": angle})
+        params = calls[-1][1]
+        assert (params["x_m"], params["y_m"], params["yaw_rad"]) == pytest.approx((1, 2, yaw))
+    before = len(calls)
+    for name, args in (
+        ("robot_drive", {"v_mps": 0.1, "omega_rad_s": 0.0, "duration_s": 0.1}),
+        ("robot_navigate_to_pose", {"x_m": float("nan"), "y_m": 0}),
+        ("robot_navigate_to_pose", {"x_m": 0, "y_m": True}),
+        ("robot_navigate_to_pose", {"x_m": 0, "y_m": 0, "max_v_mps": 0.5}),
+        ("robot_move_relative", {"forward_m": 1, "raw_motor": 1}),
+        ("robot_turn_by", {"angle_deg": 360}),
+    ):
+        with pytest.raises(Er2ToolError):
+            tools.execute(name, args)
+    assert len(calls) == before
+    debug = _tools(Interface(), debug_drive=True, monotonic=iter([0, 1, 1]).__next__)
+    assert "robot_drive" in {item["name"] for item in debug.interaction_tools()}
+    assert debug.execute("robot_drive", {"v_mps": 0.1, "omega_rad_s": 0.0, "duration_s": 0.1})["status"] == "COMPLETED"
+
+
+def test_er2_motion_completion_identity_failures_timeout_and_stop():
+    cases = {
+        "complete": "COMPLETE", "idle_complete": "COMPLETE", "pending": "COMPLETE",
+        "wrong_mission": "MISSION_REPLACED", "wrong_navigation": "NAVIGATION_IDENTITY_MISMATCH",
+        "no_path": "NO_PATH", "invalidated": "INVALIDATED", "failed": "MISSION_FAILED",
+        "safety": "SAFETY_STOP", "fault": "RUNTIME_FAULT", "lost_status": "STATUS_UNAVAILABLE",
+        "frame": "LOCALIZATION_FRAME_CHANGED", "timeout": "TIMEOUT", "cancel": "CANCELLED",
+    }
+    for case, expected in cases.items():
+        now = 0.0
+        events = []
+        cancel = threading.Event()
+        active = False
+        reads = 0
+
+        def sleep(seconds):
+            nonlocal now
+            now += seconds
+            if case == "cancel":
+                cancel.set()
+
+        class Interface(_FakeInterface):
+            def execute(self, action, **parameters):
+                nonlocal active
+                active = True
+                events.append(action)
+                return super().execute(action, **parameters)
+
+            def read(self, resource):
+                nonlocal reads
+                result = super().read(resource)
+                if resource != "v3.status" or not active:
+                    return result
+                reads += 1
+                if case == "lost_status":
+                    raise RuntimeError("stale status unavailable")
+                if case == "wrong_mission":
+                    result["mission"]["mission_id"] = "mission-old"
+                if case == "wrong_navigation":
+                    result["navigation"]["mission_id"] = "mission-old"
+                if case in {"no_path", "invalidated"}:
+                    result["navigation"].update(status=case.upper(), reason="injected")
+                if case in {"timeout", "cancel"} or (case == "pending" and reads == 1):
+                    result["navigation"]["status"] = "PENDING"
+                if case == "failed":
+                    result["mission"]["lifecycle"] = "FAILED"
+                if case == "safety":
+                    result.update(safety_decision="STOP", safety_reason="LIDAR_CLEARANCE_LOW")
+                if case == "idle_complete":
+                    result.update(safety_decision="STOP", safety_reason="NOT_ACTIVE")
+                if case == "fault":
+                    result.update(safety_decision="FAULT", fault_layer="L0")
+                if case == "frame":
+                    result["estimate"]["frame_id"] = "new-frame"
+                return result
+
+            def stop(self):
+                events.append("STOP")
+                return super().stop()
+
+        tools = _tools(Interface(), sleep=sleep, monotonic=lambda: now)
+        result = tools.execute("robot_navigate_to_pose", {"x_m": 1, "y_m": 2}, cancel_event=cancel)
+        assert result["reason"] == expected, case
+        assert result["status"] == ("COMPLETED" if expected == "COMPLETE" else "INTERRUPTED"), case
+        assert events == ["v3.command.navigate", "STOP"], case
+        assert result["mission_id"] == "mission-cmd-1"
+        if case == "pending":
+            assert reads == 2
+        if case == "timeout":
+            assert now < tools.gateway.policy.session_watchdog_s

@@ -110,9 +110,7 @@ def _p(name: str, description: str, *, required: bool = False,
     return ActionParameterDescriptor(name, description, required, minimum, maximum, default)
 
 
-# All current canonical robot actions are deliberately voice_exposed=True for this
-# development phase. The flag remains fail-closed by default so later selection is
-# a one-field catalog decision, not a voice-system refactor.
+# Voice exposure is opt-in; metric navigation is initially exposed through ER2.
 _DESCRIPTORS = (
     ActionDescriptor(
         "v3.command.stop",
@@ -143,6 +141,18 @@ _DESCRIPTORS = (
             _p("max_omega_rad_s", "Absolute angular speed limit.", minimum=0.01, maximum=1.20, default=1.20),
         ),
         voice_exposed=True,
+        session_watchdog=True,
+    ),
+    ActionDescriptor(
+        "v3.command.navigate",
+        "Navigate to a pose in the current localization frame using local closed-loop control.",
+        (
+            _p("x_m", "Target x in metres in the current localization frame.", required=True),
+            _p("y_m", "Target y in metres in the current localization frame.", required=True),
+            _p("yaw_rad", "Optional final heading in radians; omitted means any heading."),
+            _p("max_v_mps", "Maximum linear speed.", minimum=0.01, maximum=0.50, default=0.20),
+            _p("max_omega_rad_s", "Maximum turning speed.", minimum=0.01, maximum=1.20, default=0.60),
+        ),
         session_watchdog=True,
     ),
     ActionDescriptor(

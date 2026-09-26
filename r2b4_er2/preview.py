@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from .config import Er2Config, api_key_from_env
 from .evidence import Er2Evidence
-from .tool_bridge import Er2RobotTools, Er2SafetyError
+from .tool_bridge import PHYSICAL_TOOLS, Er2RobotTools, Er2SafetyError
 
 
 class Er2PreviewError(RuntimeError):
@@ -127,24 +127,24 @@ class Er2PreviewClient:
                     raise Er2PreviewError("ER2 Preview tool call is missing interaction id")
 
                 function_results: list[dict[str, object]] = []
-                physical_drive_executed = False
+                physical_tool_executed = False
                 for call in calls:
                     name = getattr(call, "name", None)
                     arguments = _function_call_arguments(call)
                     call_id = getattr(call, "id", None)
                     if not isinstance(name, str) or arguments is None or not isinstance(call_id, str) or not call_id:
                         raise Er2PreviewError("ER2 returned malformed function call")
-                    if name == "robot_drive" and physical_drive_executed:
-                        # Never execute two physical segments selected from the same
+                    if name in PHYSICAL_TOOLS and physical_tool_executed:
+                        # Never execute two physical goals selected from the same
                         # model turn. The model must observe the first blocking tool
-                        # result and choose the next segment in a fresh interaction.
+                        # result and choose the next goal in a fresh interaction.
                         result = {
                             "status": "ERROR",
-                            "error": "ONE_ROBOT_DRIVE_PER_TOOL_ROUND: wait for the prior segment result, then request the next segment in a new tool round",
+                            "error": "ONE_PHYSICAL_TOOL_PER_ROUND: wait for the prior mission result, then request the next goal in a new tool round",
                         }
                     else:
-                        if name == "robot_drive":
-                            physical_drive_executed = True
+                        if name in PHYSICAL_TOOLS:
+                            physical_tool_executed = True
                         try:
                             result = tools.execute(name, arguments)
                         except Er2SafetyError:

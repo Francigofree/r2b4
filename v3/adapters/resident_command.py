@@ -190,17 +190,18 @@ class AtomicResidentCommandGateway:
             mode = CommandMode(mode_value)
         except (TypeError, ValueError) as exc:
             raise ValueError(
-                "command mode must be STOP, TELEOP, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
+                "command mode must be STOP, TELEOP, NAVIGATE, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
             ) from exc
         if mode not in (
             CommandMode.STOP,
             CommandMode.TELEOP,
+            CommandMode.NAVIGATE,
             CommandMode.EXPLORE,
             CommandMode.FACE_PERSON,
             CommandMode.FOLLOW_PERSON,
         ):
             raise ValueError(
-                "command mode must be STOP, TELEOP, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
+                "command mode must be STOP, TELEOP, NAVIGATE, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
             )
         common_keys = {
             "schema",
@@ -213,7 +214,9 @@ class AtomicResidentCommandGateway:
         limit_keys = {"max_v_mps", "max_omega_rad_s"}
         motion_keys = {"v_mps", "omega_rad_s"} | limit_keys
         expected_keys = common_keys | (
-            motion_keys
+            {"x_m", "y_m"} | limit_keys | ({"yaw_rad"} if "yaw_rad" in payload else set())
+            if mode is CommandMode.NAVIGATE
+            else motion_keys
             if mode is CommandMode.TELEOP
             else limit_keys
             if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON)
@@ -275,6 +278,15 @@ class AtomicResidentCommandGateway:
         max_v_mps = _finite(payload.get("max_v_mps"), "max_v_mps")
         if not 0.0 < max_v_mps <= self._config.maximum_linear_speed_mps:
             raise ValueError("max_v_mps exceeds the resident process limit")
+        if mode is CommandMode.NAVIGATE:
+            keys = ("x_m", "y_m", "max_v_mps", "max_omega_rad_s")
+            if "yaw_rad" in payload:
+                keys += ("yaw_rad",)
+            return CommandRequest(
+                context=context, command_id=command_id, mode=mode,
+                goal=tuple(DataField(key, _finite(payload[key], key)) for key in keys),
+                expiry_tick=context.tick_id,
+            )
         if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON):
             return CommandRequest(
                 context=context,
@@ -413,6 +425,17 @@ class ResidentCommandClient:
             ttl_ns,
         )
 
+    def publish_navigate(
+        self, command_id: str, *, x_m: float, y_m: float,
+        max_v_mps: float, max_omega_rad_s: float, ttl_ns: int,
+        yaw_rad: float | None = None,
+    ) -> int:
+        values = {"x_m": x_m, "y_m": y_m, "max_v_mps": max_v_mps,
+                  "max_omega_rad_s": max_omega_rad_s}
+        if yaw_rad is not None:
+            values["yaw_rad"] = yaw_rad
+        return self._publish(command_id, CommandMode.NAVIGATE, values, ttl_ns)
+
     def publish_explore(
         self,
         command_id: str,
@@ -474,12 +497,13 @@ class ResidentCommandClient:
         if mode not in (
             CommandMode.STOP,
             CommandMode.TELEOP,
+            CommandMode.NAVIGATE,
             CommandMode.EXPLORE,
             CommandMode.FACE_PERSON,
             CommandMode.FOLLOW_PERSON,
         ):
             raise ValueError(
-                "client mode must be STOP, TELEOP, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
+                "client mode must be STOP, TELEOP, NAVIGATE, EXPLORE, FACE_PERSON or FOLLOW_PERSON"
             )
         ttl = _positive_int(ttl_ns, "ttl_ns")
         if ttl > self._config.maximum_ttl_ns:
@@ -511,7 +535,10 @@ class ResidentCommandClient:
         values: Mapping[str, object],
     ) -> dict[str, float]:
         expected = (
-            {"v_mps", "omega_rad_s", "max_v_mps", "max_omega_rad_s"}
+            {"x_m", "y_m", "max_v_mps", "max_omega_rad_s"}
+            | ({"yaw_rad"} if "yaw_rad" in values else set())
+            if mode is CommandMode.NAVIGATE
+            else {"v_mps", "omega_rad_s", "max_v_mps", "max_omega_rad_s"}
             if mode is CommandMode.TELEOP
             else {"max_v_mps", "max_omega_rad_s"}
             if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON)

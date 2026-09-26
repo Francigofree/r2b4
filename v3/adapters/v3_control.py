@@ -128,6 +128,18 @@ class V3ControlInterfaceAdapter:
                 v_mps=v_mps, omega_rad_s=omega_rad_s, max_v_mps=max_v,
                 max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
             )
+        if action == "v3.command.navigate":
+            x = self._required(params, "x_m")
+            y = self._required(params, "y_m")
+            yaw = params.pop("yaw_rad", None)
+            max_v = params.pop("max_v_mps", 0.20)
+            max_omega = params.pop("max_omega_rad_s", 0.60)
+            self._reject_unknown(params, set())
+            return self.controller.navigate(
+                x_m=x, y_m=y, yaw_rad=yaw, max_v_mps=max_v,
+                max_omega_rad_s=max_omega, capture=capture,
+                capture_mode=capture_mode, capture_hz=capture_hz, **session,
+            )
         if action == "v3.command.wheels":
             left = self._required(params, "left_mps")
             right = self._required(params, "right_mps")

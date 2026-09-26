@@ -167,6 +167,8 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
     lease = _RuntimeLease(interface)
     try:
         if args.command == "preview":
+            if args.tools:
+                lease.ensure()
             image_bytes = None
             if args.image is not None:
                 image_bytes = args.image.read_bytes()

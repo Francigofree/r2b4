@@ -858,6 +858,17 @@ class TrajectoryNavigator:
                 NavigationStatus.INVALIDATED,
                 "LOCAL_COSTMAP_STALE",
             )
+        if distance_m <= mission.constraints.goal_tolerance_m:
+            # Rollouts optimize travel toward x/y, not terminal yaw. Use the
+            # existing waypoint realization for the final in-place alignment.
+            self._clear_trajectory_plan()
+            return NavigationPlan(
+                context=mission.context, mission_id=mission.mission_id,
+                route=(target,), velocity_target=None, constraints=mission.constraints,
+                corridor_radius_m=mission.constraints.corridor_radius_m,
+                progress=self._progress, status=NavigationStatus.ACTIVE,
+            )
+
         disposition = self._accept_pending_rollout(mission.context)
         if self._replan_due(
             mission.context.monotonic_ns,

@@ -470,6 +470,36 @@ class OperatorController:
         )
         return MotionHandle(pid=pid, label=label, command_id=command_id, capture_mode=mode)
 
+    def navigate(
+        self, *, x_m: float, y_m: float, yaw_rad: float | None = None,
+        max_v_mps: float = 0.20, max_omega_rad_s: float = 0.60,
+        capture: bool = True, capture_mode: str = DEFAULT_CAPTURE_MODE,
+        capture_hz: int = DEFAULT_CAPTURE_HZ,
+        session_owner_pid: int | None = None,
+        session_watchdog_s: float | None = None,
+    ) -> MotionHandle:
+        x = self._finite(x_m, "x_m")
+        y = self._finite(y_m, "y_m")
+        yaw = None if yaw_rad is None else self._finite(yaw_rad, "yaw_rad")
+        max_v = self._finite(max_v_mps, "max_v_mps")
+        max_omega = self._finite(max_omega_rad_s, "max_omega_rad_s")
+        if not 0.0 < max_v <= 0.50 or not 0.0 < max_omega <= 1.20:
+            raise OperatorError("navigation speed limits must be >0, v<=0.50, omega<=1.20")
+        command_id = f"operator-navigate-{time.time_ns()}-{os.getpid()}"
+        args = [
+            self.python, "-m", "v3.control_cli", "navigate", "--command-id", command_id,
+            "--x-m", str(x), "--y-m", str(y),
+            "--max-v-mps", str(max_v), "--max-omega-rad-s", str(max_omega),
+        ]
+        if yaw is not None:
+            args += ["--yaw-rad", str(yaw)]
+        pid, mode = self._start_motion(
+            "navigate", capture, capture_mode, args, require_real_motion=False,
+            navigate_command_id=command_id, capture_hz=capture_hz,
+            session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
+        )
+        return MotionHandle(pid=pid, label="navigate", command_id=command_id, capture_mode=mode)
+
     def wheels(
         self,
         left_mps: float,
@@ -839,6 +869,7 @@ class OperatorController:
         *,
         capture_hz: int = DEFAULT_CAPTURE_HZ,
         require_real_motion: bool = True,
+        navigate_command_id: str | None = None,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> tuple[int, str]:
@@ -865,18 +896,25 @@ class OperatorController:
                     command, session_owner_pid=session_owner_pid,
                     session_watchdog_s=session_watchdog_s,
                 )
-            if require_real_motion:
+            if navigate_command_id is not None:
+                accepted = self._wait_allow(
+                    pid, baseline, label, require_real_motion=False,
+                    navigate_command_id=navigate_command_id,
+                )
+            elif require_real_motion:
                 accepted = self._wait_allow(pid, baseline, label)
             else:
                 accepted = self._wait_allow(pid, baseline, label, require_real_motion=False)
             if not accepted:
-                raise OperatorError(f"{label} did not reach ACTIVE ALLOW")
+                raise OperatorError(f"{label} was not acknowledged by the runtime")
         except BaseException:
             self.stop(wait_idle=False)
             raise
 
         self._emit("info", f"{label}: STARTED")
-        if require_real_motion:
+        if navigate_command_id is not None:
+            self._emit("info", "command: NAVIGATE mission acknowledged")
+        elif require_real_motion:
             self._emit("info", "motor: ALLOW confirmed")
         else:
             self._emit("info", "command: ACTIVE/ALLOW confirmed (zero motion is valid)")
@@ -937,6 +975,7 @@ class OperatorController:
         label: str,
         *,
         require_real_motion: bool = True,
+        navigate_command_id: str | None = None,
     ) -> bool:
         last: Mapping[str, object] | None = None
         for _ in range(50):
@@ -946,7 +985,7 @@ class OperatorController:
             if self._runtime_pid() is None:
                 self._failure_report(label, last)
                 return False
-            last = self._read_status_optional()
+            last = self.live_runtime_status() if navigate_command_id is not None else self._read_status_optional()
             if last is None:
                 time.sleep(0.05)
                 continue
@@ -954,6 +993,20 @@ class OperatorController:
                 if self._status_is_fault(last):
                     self._failure_report(label, last)
                     return False
+                if navigate_command_id is not None:
+                    # Acceptance is not motion or completion. An already reached
+                    # goal and an async planner pending tick may both be STOP.
+                    mission = last.get("mission")
+                    navigation = last.get("navigation")
+                    if (
+                        isinstance(mission, Mapping)
+                        and isinstance(navigation, Mapping)
+                        and mission.get("mission_id") == f"mission-{navigate_command_id}"
+                        and navigation.get("mission_id") == mission.get("mission_id")
+                    ):
+                        return True
+                    time.sleep(0.05)
+                    continue
                 allowed = (
                     self._status_has_real_allow(last)
                     if require_real_motion

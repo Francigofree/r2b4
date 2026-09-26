@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from .config import Er2Config, api_key_from_env
 from .evidence import Er2Evidence
 from .media import VisionMediaClient
-from .tool_bridge import Er2RobotTools, Er2SafetyError
+from .tool_bridge import PHYSICAL_TOOLS, Er2RobotTools, Er2SafetyError
 
 
 class Er2StreamingError(RuntimeError):
@@ -307,7 +307,7 @@ class Er2StreamingClient:
                 tool_call = getattr(message, "tool_call", None)
                 if tool_call is not None:
                     responses = []
-                    drive_attempted = False
+                    motion_attempted = False
                     for call in tuple(getattr(tool_call, "function_calls", ()) or ()):
                         if stop_event.is_set():
                             return
@@ -316,11 +316,11 @@ class Er2StreamingClient:
                         call_id = getattr(call, "id", None)
                         if not isinstance(name, str) or not isinstance(args, Mapping):
                             result = {"status": "ERROR", "error": "malformed ER2 tool call"}
-                        elif name == "robot_drive" and drive_attempted:
-                            result = {"status": "ERROR", "error": "ONE_ROBOT_DRIVE_PER_TOOL_ROUND"}
+                        elif name in PHYSICAL_TOOLS and motion_attempted:
+                            result = {"status": "ERROR", "error": "ONE_PHYSICAL_TOOL_PER_ROUND"}
                         else:
-                            if name == "robot_drive":
-                                drive_attempted = True
+                            if name in PHYSICAL_TOOLS:
+                                motion_attempted = True
                             try:
                                 result = await self._execute_tool(name, args)
                             except Er2SafetyError:
@@ -382,10 +382,12 @@ def _system_instruction(config: Er2Config) -> str:
         "You are the embodied high-level controller for the R2B4 differential-drive robot. "
         "The local R2B4 safety/control stack is authoritative. Never assume a motion succeeded: "
         "use tool results and fresh observations. Physical motion is available only through "
-        "robot_drive, which is bounded to short segments and blocks until STOP. For longer travel, "
-        "use multiple short robot_drive segments and inspect fresh robot_status between them. "
+        "robot_navigate_to_pose, robot_move_relative and robot_turn_by. They use local closed-loop "
+        "navigation and block until completion or failure followed by STOP. Inspect each mission result "
+        "before requesting the next goal. left_m is a destination offset, not strafing. "
         f"Limits: |v| <= {config.max_v_mps:g} m/s, |omega| <= {config.max_omega_rad_s:g} rad/s, "
-        f"segment <= {config.max_segment_s:g} s. If uncertain, call robot_stop or robot_status. "
+        f"Each mission is bounded by the {config.session_watchdog_s:g} s producer watchdog. "
+        "If uncertain, call robot_stop or robot_status. "
         "Do not request direct motor, GPIO, L12, safety-limit or configuration access."
     )
 
