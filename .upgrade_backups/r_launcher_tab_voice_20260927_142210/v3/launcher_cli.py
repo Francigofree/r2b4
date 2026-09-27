@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 from collections.abc import Sequence
 
-from v3 import host_cli, interface_cli, launcher_extras
+from v3 import host_cli, interface_cli
 from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ
 from v3.test_runner import FOCUSED
 
@@ -81,7 +81,7 @@ def command_catalog() -> dict[str, object]:
             "modes": ["alap", "full", "nincs"],
         },
         "tests": {
-            "modes": ["core", "quick", *FOCUSED, "full"],
+            "modes": ["core", *FOCUSED, "full"],
         },
         "testhub": {
             "view_hz": [1, 5, 10],
@@ -93,31 +93,10 @@ def command_catalog() -> dict[str, object]:
             "stream_options": ["--camera", "--tools", "--speak", "--json", "--seconds"],
             "execution": "REAL_ONLY",
         },
-        "voice": {
-            "command": "voice",
-            "aliases": ["wake"],
-            "operations": list(launcher_extras.VOICE_OPERATIONS),
-            "service": launcher_extras.VOICE_UNIT,
-            "authority": "USER_SYSTEMD_SERVICE",
-        },
-        "completion": {
-            "shell": "bash",
-            "source": "deploy/bash-completion/r",
-            "install": "r install",
-            "ssot": "launcher/interface/ER2 parsers",
-        },
         "local": sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES)),
         "local_details": [
-            {
-                "name": name,
-                "usage": f"r {name} {usage}".rstrip(),
-                "description": (
-                    "Az r launcher, Bash TAB help/completion és voice user-service unit telepítése; "
-                    "a voice wake-et nem kapcsolja be."
-                    if name == "install" else description
-                ),
-                "aliases": sorted(alias for alias, target in host_cli.ALIASES.items() if target == name),
-            }
+            {"name": name, "usage": f"r {name} {usage}".rstrip(), "description": description,
+             "aliases": sorted(alias for alias, target in host_cli.ALIASES.items() if target == name)}
             for name, (usage, description) in sorted(host_cli.COMMAND_HELP.items())
         ],
     }
@@ -147,11 +126,9 @@ def print_help() -> None:
         "  c alap / c full / c nincs  Capture-mód; nc = mozgás-trigger kihagyása\n"
         "  r th [status|run|batch]     Test Hub; alapértelmezés: status\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
-        "\nAI, voice, fejlesztés és gépállapot:\n"
+        "\nAI, fejlesztés és gépállapot:\n"
         "  r er2 \"FELADAT\"            ER2 stream; camera/tools/speak/json bekapcsolva\n"
         "  r er2 status|preview|stream ER2 részletes parancsok\n"
-        "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
-        "  r voice restart|check      Voice service újraindítás / diagnosztika\n"
         "  r test [MODE]              Tesztek; alap: core; módok: r test list\n"
         "  r pytest [ARGS...]         Nyers pytest\n"
         "  r git / r gitre            Git-segédek\n"
@@ -160,7 +137,6 @@ def print_help() -> None:
         "  r cpu / cpu2 / disc / mem / temp / ps / net / usb / i2c\n"
         "  r install / where / root / version\n"
         "\nSegítség és gépi használat:\n"
-        "  TAB                        Kontextusfüggő gyors help + kiegészítés (r install után)\n"
         "  r help PARANCS             Célzott súgó; például: r help fp\n"
         "  r commands [--json]        Teljes parancslista és rövidítések\n"
         "  r caps                     Élő robotképességek\n"
@@ -191,8 +167,6 @@ def _commands(argv: list[str]) -> int:
     )
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
     print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
-    print("Voice wake: r voice status|on|off|restart|check  (alias: r wake ...)")
-    print("TAB help: r install telepíti a Bash completiont")
     print("\nHost / fejlesztés:")
     for item in catalog["local_details"]:
         aliases = f" ({', '.join(item['aliases'])})" if item["aliases"] else ""
@@ -202,7 +176,7 @@ def _commands(argv: list[str]) -> int:
 
 def _unknown_command(command: str) -> int:
     known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
-    known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands"}
+    known |= set(host_cli.COMMANDS) | {"er2", "help", "commands"}
     matches = difflib.get_close_matches(command, sorted(known), n=3, cutoff=0.6)
     print(f"Ismeretlen parancs: {command!r}.", file=sys.stderr)
     if matches:
@@ -215,12 +189,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         root = project_root()
-
-        # Private, read-only shell completion transport. It is intentionally not
-        # listed as a user command and must run before any command normalization.
-        if args and args[0] == "__complete":
-            return launcher_extras.emit_completion(args[1:], root)
-
         if not args or args[0] in {"help", "-h", "--help"}:
             if len(args) <= 1:
                 print_help()
@@ -230,32 +198,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args[0] in host_cli.COMMANDS:
                 if len(args) != 1:
                     raise LauncherError("Használat: r help PARANCS")
-                if args[0] == "install":
-                    print(
-                        "Használat: r install\n\n"
-                        "Telepíti az r launcher symlinket, a Bash TAB help/completiont és "
-                        "a voice wake user-systemd unitot. A voice wake-et nem engedélyezi "
-                        "automatikusan; bekapcsolás: r voice on."
-                    )
-                else:
-                    host_cli.print_help(args[0])
+                host_cli.print_help(args[0])
                 return 0
             args.append("--help")
         args = _normalize_er2_args(args)
         if args[0] == "commands":
             return _commands(args[1:])
-        if args[0] == "voice" or args[0] == "wake":
-            return launcher_extras.voice_command(args[1:], root)
         if args[0] == "er2":
             # R2B4_ER2_P0_20260925: provider integration is a consumer of the
             # canonical RobotInterface/ExternalRobotGateway, not a robot layer.
             from r2b4_er2.cli import main as er2_main
             return er2_main(args[1:], project_root=root)
-        if args[0] == "install":
-            rc = host_cli.execute(args[0], args[1:], root)
-            if rc == 0 and not args[1:]:
-                return launcher_extras.install_extras(root)
-            return rc
         if args[0] in host_cli.COMMANDS:
             return host_cli.execute(args[0], args[1:], root)
         if not args[0].startswith("-"):

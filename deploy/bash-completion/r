@@ -1,0 +1,36 @@
+# Bash programmable completion for the R2B4 `r` launcher.
+# SSOT stays in Python parsers; this file only renders completion results.
+
+_r2b4_r_complete() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local row hint=""
+    local -a rows=() candidates=()
+
+    mapfile -t rows < <(
+        command "${COMP_WORDS[0]}" __complete "$COMP_CWORD" "${COMP_WORDS[@]:1}" 2>/dev/null
+    )
+
+    for row in "${rows[@]}"; do
+        case "$row" in
+            $'HINT\t'*) hint="${row#*$'\t'}" ;;
+            $'CAND\t'*) candidates+=("${row#*$'\t'}") ;;
+        esac
+    done
+
+    # Empty-word TAB is intentionally a compact context help, not only completion.
+    if [[ "${COMP_TYPE:-9}" -eq 9 && -z "$cur" && -n "$hint" ]]; then
+        printf '\n%s\n' "$hint" >&2
+        if ((${#candidates[@]})); then
+            printf '  %s\n' "${candidates[*]}" >&2
+        fi
+    fi
+
+    COMPREPLY=()
+    for row in "${candidates[@]}"; do
+        [[ "$row" == "$cur"* ]] && COMPREPLY+=("$row")
+    done
+}
+
+# bashdefault/default preserves filename completion where the launcher has no
+# semantic candidate (for example ER2 --image PATH or camera OUTPUT).
+complete -o bashdefault -o default -F _r2b4_r_complete r ./r
