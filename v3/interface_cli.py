@@ -8,6 +8,7 @@ capture/Test Hub finalization.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -21,7 +22,7 @@ from v3.action_catalog import (
     FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
     FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
 )
-from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
+from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent
 from v3.pytest_profiles import pytest_profile_names
 from v3.robot_interface import RobotInterface, RobotInterfaceError
@@ -139,11 +140,15 @@ def _extract_capture_selector(argv: Sequence[str]) -> tuple[list[str], str, int,
     return clean, mode, capture_hz, no_trigger
 
 
+class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
+    pass
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="r",
-        description="R2B4 short interface launcher. Timed motion = auto runtime + STOP + Test Hub.",
-        formatter_class=argparse.RawTextHelpFormatter,
+        description="R2B4 robotparancsok. Részletes súgó: r help PARANCS.",
+        formatter_class=_HelpFormatter,
         epilog=(
             "Timed examples (first number = seconds):\n"
             "  ./r rc 35              Room Cruise 35 s\n"
@@ -152,62 +157,83 @@ def _parser() -> argparse.ArgumentParser:
             "  ./r m 8 0.10 0.20      wheel targets for 8 s\n"
             "  ./r t 12 0.15 -0.20    TELEOP 12 s\n\n"
             "Use 0 seconds to leave a command running: ./r rc 0\n"
-            "Capture Hz: c 50 | c 10 | c 5 | c 1   (default: 10 Hz)\n"
+            f"Capture Hz: {' | '.join(f'c {hz}' for hz in CAPTURE_HZ_VALUES)}   (default: {DEFAULT_CAPTURE_HZ} Hz)\n"
             "Legacy capture mode: c alap | c full | c nincs\n"
             "Skip movement trigger: nc   (runtime shutdown may still finalize its capture slot)\n"
             "Useful: s=status, d=diag, x=STOP, th=Test Hub, cap=capture, rt=runtime."
         ),
     )
-    parser.add_argument("--json", action="store_true", help="machine-readable final output where applicable")
+    parser.add_argument("--json", action="store_true", help="egy JSON-eredmény stdout-on; folyamatjelzés stderr-en")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("status", aliases=["s"], help="short robot/runtime status")
-    sub.add_parser("diag", aliases=["d"], help="diagnostics")
-    sub.add_parser("caps", aliases=["ls"], help="live external capabilities")
-    sub.add_parser("stop", aliases=["x"], help="STOP motion; keep runtime if manually managed")
-    sub.add_parser("shutdown", aliases=["sd"], help="STOP + runtime shutdown + Test Hub progress")
-    sub.add_parser("panic", help="fail-safe STOP + runtime shutdown")
-    sub.add_parser("proba", aliases=["pr"], help="existing integrated physical test")
+    def add_command(name: str, *, help: str) -> argparse.ArgumentParser:
+        child = sub.add_parser(
+            name,
+            aliases=[alias for alias, target in ALIASES.items() if target == name],
+            help=help, description=help, formatter_class=_HelpFormatter,
+        )
+        child.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                           help="egy JSON-eredmény stdout-on; folyamatjelzés stderr-en")
+        if name in MOTION_COMMANDS or name in {"runtime", "capture", "proba"}:
+            child.epilog = (
+                f"Capture: c HZ / --capture-hz HZ ({', '.join(map(str, CAPTURE_HZ_VALUES))}; alap: {DEFAULT_CAPTURE_HZ} Hz)\n"
+                f"Mód: c MODE / --capture-mode MODE ({', '.join(sorted(CAPTURE_MODES))}; alap: {DEFAULT_CAPTURE_MODE})"
+            )
+        if name in MOTION_COMMANDS:
+            child.epilog += (
+                "\nAz első szám az idő másodpercben; 0 = folyamatos. STOP: r x; leállítás: r sd.\n"
+                "Időzített futás végén STOP; a parancs által indított runtime leáll, a már futó megmarad.\n"
+                "nc / --no-trigger: mozgás-trigger kihagyása; a runtime capture-je még lezárulhat."
+            )
+        return child
 
-    runtime = sub.add_parser("runtime", aliases=["rt"], help="manual runtime lifecycle")
+    add_command("status", help="Rövid robot- és runtime-állapot.")
+    add_command("diag", help="Részletes diagnosztika.")
+    add_command("caps", help="Élő RobotInterface-képességek.")
+    add_command("stop", help="Mozgás STOP; a runtime futva marad, ha jelen van.")
+    add_command("shutdown", help="STOP + runtime-leállítás + Test Hub folyamatjelzés.")
+    add_command("panic", help="Fail-safe STOP és runtime-leállítás.")
+    add_command("proba", help="Integrált fizikai mozgásteszt.")
+
+    runtime = add_command("runtime", help="Kézi runtime-indítás, leállítás és állapot.")
     runtime.add_argument("operation", choices=("start", "stop", "status", "diag"))
 
-    capture = sub.add_parser("capture", aliases=["cap"], help="capture control")
+    capture = add_command("capture", help="Capture indítása, leállítása és állapota.")
     capture.add_argument("operation", choices=("start", "stop", "status"))
 
-    forward = sub.add_parser("forward", aliases=["f"], help="forward: SECONDS [SPEED_MPS]")
-    forward.add_argument("seconds", type=float, nargs="?", default=0.0)
-    forward.add_argument("speed", type=float, nargs="?", default=0.15)
+    forward = add_command("forward", help="Előre: r f [SECONDS] [SPEED_MPS]. Példa: r f 10 0.15")
+    forward.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
+    forward.add_argument("speed", type=float, nargs="?", default=0.15, help="sebesség [m/s]")
 
-    backward = sub.add_parser("backward", aliases=["b"], help="backward: SECONDS [SPEED_MPS]")
-    backward.add_argument("seconds", type=float, nargs="?", default=0.0)
-    backward.add_argument("speed", type=float, nargs="?", default=0.15)
+    backward = add_command("backward", help="Hátra: r b [SECONDS] [SPEED_MPS]. Példa: r b 10 0.15")
+    backward.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
+    backward.add_argument("speed", type=float, nargs="?", default=0.15, help="sebesség [m/s]")
 
-    teleop = sub.add_parser("teleop", aliases=["t"], help="teleop: SECONDS V_MPS OMEGA_RAD_S")
-    teleop.add_argument("seconds", type=float)
-    teleop.add_argument("v", type=float)
-    teleop.add_argument("omega", type=float)
-    teleop.add_argument("--max-v", type=float, default=0.50)
-    teleop.add_argument("--max-omega", type=float, default=1.20)
+    teleop = add_command("teleop", help="Testsebesség: r t SECONDS V_MPS OMEGA_RAD_S")
+    teleop.add_argument("seconds", type=float, help="idő [s]; 0 = folyamatos")
+    teleop.add_argument("v", type=float, help="haladási sebesség [m/s]")
+    teleop.add_argument("omega", type=float, help="szögsebesség [rad/s]")
+    teleop.add_argument("--max-v", type=float, default=0.50, help="sebességkorlát [m/s]")
+    teleop.add_argument("--max-omega", type=float, default=1.20, help="szögsebességkorlát [rad/s]")
 
-    wheels = sub.add_parser("wheels", aliases=["m", "mozog"], help="wheels: SECONDS LEFT_MPS RIGHT_MPS")
-    wheels.add_argument("seconds", type=float)
-    wheels.add_argument("left", type=float)
-    wheels.add_argument("right", type=float)
+    wheels = add_command("wheels", help="Keréksebesség-célok: r m SECONDS LEFT_MPS RIGHT_MPS")
+    wheels.add_argument("seconds", type=float, help="idő [s]; 0 = folyamatos")
+    wheels.add_argument("left", type=float, help="bal kerék célsebessége [m/s]")
+    wheels.add_argument("right", type=float, help="jobb kerék célsebessége [m/s]")
 
-    room = sub.add_parser("roomcruise", aliases=["rc", "explore"], help="Room Cruise: [SECONDS]")
-    room.add_argument("seconds", type=float, nargs="?", default=0.0)
+    room = add_command("roomcruise", help="Room Cruise: r rc [SECONDS]. Példa: r rc 30 c 10")
+    room.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
 
-    face = sub.add_parser("faceperson", aliases=["fa"], help="face person: [SECONDS]")
-    face.add_argument("seconds", type=float, nargs="?", default=0.0)
-    face.add_argument("--max-omega", type=float, default=0.50)
+    face = add_command("faceperson", help="Személy felé fordulás: r fa [SECONDS]")
+    face.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
+    face.add_argument("--max-omega", type=float, default=0.50, help="szögsebességkorlát [rad/s]")
 
-    follow = sub.add_parser("followperson", aliases=["fp"], help="follow person: [SECONDS]")
-    follow.add_argument("seconds", type=float, nargs="?", default=0.0)
-    follow.add_argument("--max-v", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
-    follow.add_argument("--max-omega", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S)
+    follow = add_command("followperson", help="Személykövetés: r fp [SECONDS]. Példa: r fp 20")
+    follow.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
+    follow.add_argument("--max-v", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS, help="sebességkorlát [m/s]")
+    follow.add_argument("--max-omega", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S, help="szögsebességkorlát [rad/s]")
 
-    testhub = sub.add_parser("testhub", aliases=["th"], help="Test Hub status/run/batch")
+    testhub = add_command("testhub", help="Test Hub állapot, egy capture elemzése vagy batch futás.")
     testhub.add_argument("operation", nargs="?", choices=("status", "run", "batch"), default="status")
     testhub.add_argument("capture", nargs="?")
     testhub.add_argument("--replay", choices=("off", "incident", "full"), default="incident")
@@ -219,12 +245,12 @@ def _parser() -> argparse.ArgumentParser:
         help="run one shared pytest profile inside Test Hub",
     )
 
-    camera = sub.add_parser("camera", aliases=["cam"], help="exclusive camera diagnostics")
+    camera = add_command("camera", help="Exkluzív kameradiagnosztika: photo / video OUTPUT [SECONDS].")
     camera.add_argument("operation", choices=("photo", "video"))
     camera.add_argument("output")
     camera.add_argument("seconds", type=float, nargs="?", default=10.0)
 
-    sub.add_parser("system", aliases=["sys"], help="RPi/Linux host status")
+    add_command("system", help="RPi/Linux rendszerállapot.")
     return parser
 
 
@@ -570,93 +596,121 @@ def _run_testhub_with_progress(
     return value
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _execute(
+    interface: RobotInterface,
+    args: argparse.Namespace,
+    *,
+    capture_mode: str,
+    capture_hz: int,
+    no_trigger: bool,
+) -> object:
+    command = _canonical(args.command)
+    if command in MOTION_COMMANDS:
+        output = _run_timed_motion(
+            interface,
+            args,
+            capture_mode=capture_mode,
+            capture_hz=capture_hz,
+            no_trigger=no_trigger,
+        )
+    elif command == "status":
+        output = _status_line(interface) if args.json else _print_short_status(interface)
+    elif command == "diag":
+        output = interface.read("operator.diagnostics")
+        if not args.json:
+            _print_json(output)
+    elif command == "caps":
+        output = interface.capabilities()
+        if not args.json:
+            _print_json(output)
+    elif command == "stop":
+        output = interface.stop()
+        print("robot: IDLE (runtime kept running if present)")
+    elif command == "shutdown":
+        output = _shutdown_with_testhub_progress(interface, capture_mode=None)
+    elif command == "panic":
+        output = interface.execute("operator.panic")
+        print("robot: STOP + runtime shutdown requested")
+    elif command == "proba":
+        output = interface.execute(
+            "operator.proba", capture_mode=capture_mode, capture_hz=capture_hz
+        )
+    elif command == "runtime":
+        if args.operation == "start":
+            output = interface.execute(
+                "operator.runtime.start", capture_mode=capture_mode, capture_hz=capture_hz
+            )
+        elif args.operation == "stop":
+            output = _shutdown_with_testhub_progress(interface, capture_mode=None)
+        elif args.operation == "status":
+            output = _status_line(interface) if args.json else _print_short_status(interface)
+        else:
+            output = interface.read("operator.diagnostics")
+            if not args.json:
+                _print_json(output)
+    elif command == "capture":
+        if args.operation == "start":
+            output = interface.execute(
+                "capture.start", capture_mode=capture_mode, capture_hz=capture_hz
+            )
+        elif args.operation == "stop":
+            output = interface.execute("capture.stop")
+        else:
+            output = interface.read("capture.status")
+        if not args.json:
+            _print_json(output)
+    elif command == "testhub":
+        if args.operation == "status":
+            output = interface.read("testhub.status")
+            if not args.json:
+                _print_json(output)
+        elif args.operation == "run":
+            output = _run_testhub_with_progress(
+                interface,
+                capture=args.capture,
+                hz=args.hz,
+                replay=args.replay,
+                no_sweep=args.no_sweep,
+                pytest_scope=args.pytest_scope,
+            )
+        else:
+            output = interface.execute("testhub.batch", hz=args.hz, replay=args.replay)
+            if not args.json:
+                _print_json(output)
+    elif command == "camera":
+        if args.operation == "photo":
+            output = interface.execute("camera.photo", output=args.output)
+        else:
+            output = interface.execute("camera.video", output=args.output, duration_s=args.seconds)
+        if not args.json:
+            _print_json(output)
+    elif command == "system":
+        output = interface.read("system.status")
+        if not args.json:
+            _print_json(output)
+    else:  # pragma: no cover - argparse guarantees this
+        raise ValueError(f"unsupported command: {command}")
+    return output
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    project_root: str | Path | None = None,
+) -> int:
     raw = list(sys.argv[1:] if argv is None else argv)
     try:
         clean, capture_mode, capture_hz, no_trigger = _extract_capture_selector(raw)
         args = _parser().parse_args(clean)
-        command = _canonical(args.command)
-        interface = RobotInterface(event_sink=_event_printer)
-
-        if command in MOTION_COMMANDS:
-            output = _run_timed_motion(
-                interface,
-                args,
-                capture_mode=capture_mode,
-                capture_hz=capture_hz,
-                no_trigger=no_trigger,
+        # Progress, including shutdown/Test Hub worker messages, stays visible
+        # on stderr in JSON mode. stdout contains exactly one final document.
+        with contextlib.redirect_stdout(sys.stderr if args.json else sys.stdout):
+            interface = RobotInterface(project_root=project_root, event_sink=_event_printer)
+            output = _execute(
+                interface, args, capture_mode=capture_mode,
+                capture_hz=capture_hz, no_trigger=no_trigger,
             )
-        elif command == "status":
-            output = _print_short_status(interface)
-        elif command == "diag":
-            output = interface.read("operator.diagnostics")
-            _print_json(output)
-        elif command == "caps":
-            output = interface.capabilities()
-            _print_json(output)
-        elif command == "stop":
-            output = interface.stop()
-            print("robot: IDLE (runtime kept running if present)")
-        elif command == "shutdown":
-            output = _shutdown_with_testhub_progress(interface, capture_mode=None)
-        elif command == "panic":
-            output = interface.execute("operator.panic")
-            print("robot: STOP + runtime shutdown requested")
-        elif command == "proba":
-            output = interface.execute(
-                "operator.proba", capture_mode=capture_mode, capture_hz=capture_hz
-            )
-        elif command == "runtime":
-            if args.operation == "start":
-                output = interface.execute(
-                    "operator.runtime.start", capture_mode=capture_mode, capture_hz=capture_hz
-                )
-            elif args.operation == "stop":
-                output = _shutdown_with_testhub_progress(interface, capture_mode=None)
-            elif args.operation == "status":
-                output = _print_short_status(interface)
-            else:
-                output = interface.read("operator.diagnostics")
-                _print_json(output)
-        elif command == "capture":
-            if args.operation == "start":
-                output = interface.execute(
-                    "capture.start", capture_mode=capture_mode, capture_hz=capture_hz
-                )
-            elif args.operation == "stop":
-                output = interface.execute("capture.stop")
-            else:
-                output = interface.read("capture.status")
-            _print_json(output)
-        elif command == "testhub":
-            if args.operation == "status":
-                output = interface.read("testhub.status")
-                _print_json(output)
-            elif args.operation == "run":
-                output = _run_testhub_with_progress(
-                    interface,
-                    capture=args.capture,
-                    hz=args.hz,
-                    replay=args.replay,
-                    no_sweep=args.no_sweep,
-                    pytest_scope=args.pytest_scope,
-                )
-            else:
-                output = interface.execute("testhub.batch", hz=args.hz, replay=args.replay)
-                _print_json(output)
-        elif command == "camera":
-            if args.operation == "photo":
-                output = interface.execute("camera.photo", output=args.output)
-            else:
-                output = interface.execute("camera.video", output=args.output, duration_s=args.seconds)
-            _print_json(output)
-        elif command == "system":
-            output = interface.read("system.status")
-            _print_json(output)
-        else:  # pragma: no cover - argparse guarantees this
-            raise ValueError(f"unsupported command: {command}")
-
-        if args.json and command not in {"diag", "caps", "capture", "testhub", "camera", "system"}:
+        if args.json:
             _print_json(output)
         return 0
     except KeyboardInterrupt:

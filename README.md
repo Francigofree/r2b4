@@ -30,8 +30,11 @@ a host/developer segédek pedig külön launcher-infrastruktúrában maradnak.
 
 ```bash
 ./r help
+./r help fp
+./r help er2 stream
 ./r commands
 ./r commands --json
+./r s --json
 
 ./r s
 ./r d
@@ -42,9 +45,23 @@ a host/developer segédek pedig külön launcher-infrastruktúrában maradnak.
 ./r sd
 ```
 
-A timed mozgásparancsok a szükséges runtime-ot automatikusan elindítják, majd STOP,
-runtime shutdown és Test Hub finalizálás következik. `0` másodperc folyamatos módot
-jelent, ilyenkor a runtime futva marad explicit STOP/shutdown kérésig.
+A `r` argumentum nélkül csoportosított súgót ad. A `r help PARANCS` és a
+`r PARANCS --help` megmutatja a használatot; robotparancsoknál a rövidítések is
+működnek, és a mozgássúgó tartalmazza a mértékegységeket, alapértékeket és
+capture-választókat. Elírt parancsnál a launcher javítási javaslatot ad, és hibával
+kilép; a javasolt parancsot nem hajtja végre.
+
+A robotparancsok `--json` kapcsolója a parancs előtt és után is használható
+(`r --json s`, `r s --json`). Sikeres futáskor stdout-on egyetlen JSON-eredmény
+jelenik meg; a folyamatjelzések stderr-re kerülnek. Az ER2, Git és nyers pytest
+saját opciókezelése megmarad.
+
+A timed mozgásparancsok a szükséges runtime-ot automatikusan elindítják, majd STOP
+következik. A parancs által indított runtime leáll, és a capture/Test Hub
+finalizálása látható; a már előzőleg futó runtime és annak capture-beállításai
+megmaradnak. `0` másodperc folyamatos módot jelent, ilyenkor a runtime futva marad
+explicit STOP/shutdown kérésig. A pozicionális argumentumok sorrendje változatlan:
+először az idő, utána a sebességértékek.
 
 Capture mintavétel alapértelmezése 10 Hz. Választható: `c 50`, `c 10`, `c 5`,
 `c 1`; a capture mód továbbra is `c alap`, `c full` vagy `c nincs`. Példák:

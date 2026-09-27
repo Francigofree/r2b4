@@ -34,11 +34,43 @@ ALIASES = {
     "gittre": "gitre",
 }
 
-COMMANDS = frozenset({
-    "install", "where", "root", "version", "gitre", "git", "pytest", "test",
-    "tools", "tool", "cpu", "cpu2", "disc", "mem", "temp", "ps", "net", "usb",
-    "i2c", "host", *ALIASES.keys(),
-})
+# Usage and descriptions are shared by help and command discovery.
+COMMAND_HELP = {
+    "install": ("", "Az r parancs telepítése a felhasználó bin könyvtárába."),
+    "where": ("", "A launcher és a projekt elérési útja."),
+    "root": ("", "A projekt gyökérkönyvtára."),
+    "version": ("", "Git branch, commit és módosítottság."),
+    "gitre": ("[ARGS...]", "A projekt gitre segédprogramja."),
+    "git": ("[ARGS...]", "Git a projekt könyvtárában; az argumentumok változatlanul továbbmennek."),
+    "pytest": ("[ARGS...]", "Nyers pytest; az argumentumok változatlanul továbbmennek."),
+    "test": ("[MODE]", "Célzott tesztek; alapértelmezés: core. Módok: r test list."),
+    "tools": ("", "Elérhető Python segédprogramok listája."),
+    "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
+    "cpu": ("[SECONDS] [INTERVAL]", "CPU-mérés és naplózás; alapérték: 30 s, 1 s mintavétel."),
+    "cpu2": ("[ARGS...]", "Részletes CPU-diagnosztika; opciók: r cpu2 --help."),
+    "disc": ("", "Szabad lemezterület és R2B4-adatméretek."),
+    "mem": ("", "Memóriahasználat."),
+    "temp": ("", "CPU-hőmérséklet."),
+    "ps": ("", "Folyamatok CPU-használat szerint."),
+    "net": ("", "Hálózati címek és útvonalak."),
+    "usb": ("", "USB-eszközök."),
+    "i2c": ("", "I2C-keresés; csak leállított robot-runtime mellett."),
+    "host": ("", "Gép-, memória-, hőmérséklet- és lemezállapot."),
+}
+COMMANDS = frozenset({*COMMAND_HELP, *ALIASES})
+
+
+def print_help(command: str) -> None:
+    command = ALIASES.get(command, command)
+    if command == "test":
+        test_runner.main(["--help"])
+        return
+    usage, description = COMMAND_HELP[command]
+    print(f"Használat: r {command} {usage}".rstrip())
+    print(f"\n{description}")
+    aliases = [alias for alias, target in ALIASES.items() if target == command]
+    if aliases:
+        print("Rövidítések: " + ", ".join(aliases))
 
 HARDWARE_TOOLS = frozenset({
     "r2b4_voice_mic_test", "v3_camera_test", "v3_encoder_ab_probe",
@@ -246,6 +278,10 @@ def host(root: Path) -> int:
 
 def execute(command: str, argv: list[str], root: Path) -> int:
     command = ALIASES.get(command, command)
+    # Keep native help/argument semantics for passthrough programs.
+    if argv in (["-h"], ["--help"]) and command not in {"git", "gitre", "pytest", "test", "cpu2"}:
+        print_help(command)
+        return 0
     no_args = {"install", "where", "root", "version", "tools", "disc", "mem", "temp", "ps", "net", "usb", "i2c", "host"}
     if command in no_args and argv:
         raise HostCliError(f"usage: r {command}")

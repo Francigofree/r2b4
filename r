@@ -7,13 +7,21 @@ SELF_DIR="$(cd "$(dirname "$SELF")" && pwd)"
 DEFAULT_ROOT="/home/alba/project_r2b4"
 
 if [[ -n "${R2B4_ROOT:-}" ]]; then
-    ROOT="$(readlink -f "$R2B4_ROOT")"
+    ROOT="$(readlink -f -- "$R2B4_ROOT")" || {
+        printf 'ERROR: invalid R2B4_ROOT: %s\n' "$R2B4_ROOT" >&2
+        exit 2
+    }
 elif [[ -d "$SELF_DIR/v3" && -f "$SELF_DIR/pytest.ini" ]]; then
     ROOT="$SELF_DIR"
 elif [[ -d "$DEFAULT_ROOT/v3" && -f "$DEFAULT_ROOT/pytest.ini" ]]; then
     ROOT="$DEFAULT_ROOT"
 else
     printf 'ERROR: R2B4 repo not found. Set R2B4_ROOT=/path/to/project_r2b4\n' >&2
+    exit 2
+fi
+
+if [[ ! -d "$ROOT/v3" || ! -f "$ROOT/pytest.ini" ]]; then
+    printf 'ERROR: invalid R2B4 root: %s. Set R2B4_ROOT=/path/to/project_r2b4\n' "$ROOT" >&2
     exit 2
 fi
 
