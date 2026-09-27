@@ -1,0 +1,35 @@
+{
+  "upgrade": "system_behavior_contract_p0_v1",
+  "contract": "R2B4_SYSTEM_BEHAVIOR_CONTRACT_V1",
+  "source_preconditions": "per-file git blob SHA",
+  "full_repo_sha_gate": false,
+  "expected_blobs": {
+    "r2b4_voice/voice_service.py": "401912c790ddf03436ae3bd3de0ecbc557aa8e86",
+    "r2b4_voice/conversation_service.py": "c8e1db25eac6059f320b9d8a65c42a536e05a4c9",
+    "r2b4_voice/conversation_contracts.py": "6c3b6e4372aad2fb4dadb7bd58bc3c9ea2a953bc",
+    "r2b4_voice/llm_decision.py": "24a7aed66aaab6442bd3b7970d49925aefed7358",
+    "r2b4_voice/gemini_llm.py": "1746a92685ed3355a2a80d0ee1b002e1bef57e30",
+    "r2b4_voice/groq_llm.py": "b64ace055e395d4c7fc1ce63ea83a744689731e2",
+    "r2b4_voice/robot_context.py": "34d664fdc5caca87d9bc13cf92f81a6fa0d77ff1",
+    "r2b4_voice/prompting.py": "80304c92f2579159a677b501498979756ddf6a6c",
+    "conf/voice_llm_system.md": "c8197cb003d70c35b78938957ede99054a52f97b",
+    "r2b4_voice/action_executor.py": "4330df88a21f143d4912e1bbd3f72b6c32cfe870",
+    "r2b4_voice/wake_core.py": "d49fcc5e58a3fa0e0902864aa088614e6cf81d39",
+    "v3/adapters/camera.py": "641b7074a9bb3224ccd98f2f6ad331aef569895d",
+    "v3/adapters/camera_media.py": "44b11c2b8c80c297052d75cc6b64d7c3d70fc113"
+  },
+  "adds": [
+    "r2b4_voice/execution_mode.py",
+    "r2b4_voice/observation_executor.py",
+    "tests/feature/test_system_behavior_contract_p0.py"
+  ],
+  "scope": [
+    "wake no longer starts V3",
+    "voice session lifecycle: 10 s silence, independent of V3",
+    "default wake 'robot' and ready 'figyelek'",
+    "typed execution mode selector",
+    "V3-off calibrated camera.photo observation through canonical camera implementation",
+    "robot actions continue through RobotInterface/OperatorController/V3 canonical path",
+    "Gemini default and local Piper TTS remain unchanged"
+  ]
+}
