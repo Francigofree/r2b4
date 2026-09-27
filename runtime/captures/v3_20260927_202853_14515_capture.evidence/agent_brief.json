@@ -1,0 +1,351 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "FAULT",
+  "budget": {
+    "actual_bytes": 6298,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "FAULT",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260927_202853_14515_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; WARNING=sampled low-level observation only; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L10",
+      "L11",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260927_202853_14515_capture.evidence/interesting_slice.ndjson",
+    "rows": 2,
+    "size_bytes": 17631,
+    "tick_range": [
+      89,
+      99
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "behavioral_trends": {
+      "commands": {
+        "observed_change_count": 10,
+        "observed_unique_count": 11
+      },
+      "domain_sample_counts": {
+        "command": 20,
+        "mission": 19,
+        "navigation": 19,
+        "pose": 19,
+        "safety": 20
+      },
+      "localization": {
+        "sample_count": 19
+      },
+      "maximum_contiguous_sample_gap_s": 0.3,
+      "missing_domains": [],
+      "missions": {
+        "lifecycle_sample_counts": {
+          "ACTIVE": 7,
+          "IDLE": 12
+        },
+        "observed_lifecycle_change_count": 2,
+        "observed_unique_count": 11
+      },
+      "motion": {
+        "blocked_sample_count": 0,
+        "longest_observed_blocked_span_s": 0.0
+      },
+      "navigation": {
+        "stagnation": null,
+        "status_sample_counts": {
+          "ACTIVE": 6,
+          "IDLE": 12,
+          "PENDING": 1
+        }
+      },
+      "safety": {
+        "unsafe_output_sample_count": 0
+      },
+      "trend_window_s": 5.0
+    },
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 4.522942471137255,
+      "last_trace": 0.20850764791942747,
+      "max_trace": 0.3130800117589759,
+      "sample_count": 19
+    },
+    "motion": {
+      "behavior_status": "FAULT",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 0.07860524391498858,
+      "requested_motion_tick_count": 6
+    },
+    "navigation": {
+      "stagnation": null
+    },
+    "safety": {
+      "ALLOW": 7,
+      "FAULT": 1,
+      "STOP": 12,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 21,
+      "l2_actionable_rejection_count": 6,
+      "l2_duplicate_count": 55,
+      "l2_rejection_count": 61,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 55,
+        "STALE": 6
+      }
+    },
+    "ticks": {
+      "count": 20,
+      "first_monotonic_ns": 9450104663689,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 9451982230197,
+      "last_tick_id": 94
+    },
+    "timing": {
+      "max_ms": 117.710424,
+      "p50_ms": 100.004911,
+      "p95_ms": 102.559556,
+      "p99_ms": 117.710424,
+      "sample_count": 19,
+      "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 91:104 --layers L10,L11,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 94:94 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "NOT_APPLICABLE"
+  },
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "safety-fault-94"
+    ],
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L3_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 94
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l11_actuator_control.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l12_safety_final.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "SAFETY",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L3_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 192765918,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 105821197,
+            "rejected[1].reason": "DUPLICATE",
+            "rejected[2].age_ns": 293299197,
+            "rejected[2].reason": "STALE"
+          }
+        }
+      },
+      "id": "safety-fault-94",
+      "layer": "L12",
+      "monotonic_ns": 9451982230197,
+      "reason": "L3_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 94
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 9450104663689,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 9450222374113,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-11",
+      "layer": "L1",
+      "monotonic_ns": 9450322223930,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 11
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 9450422228841,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-21",
+      "layer": "L1",
+      "monotonic_ns": 9450522236641,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 21
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-26",
+      "layer": "L1",
+      "monotonic_ns": 9450622229496,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 26
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-31",
+      "layer": "L1",
+      "monotonic_ns": 9450722533094,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 31
+    }
+  ]
+}

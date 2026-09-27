@@ -1,0 +1,954 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "findings": [
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.05171654909296324,
+          "v_mps": 0.2999815106529756
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-603",
+      "layer": "L9",
+      "monotonic_ns": 9483209856421,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 603
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.05259058553646155,
+          "v_mps": 0.2999413781768934
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-608",
+      "layer": "L9",
+      "monotonic_ns": 9483309715664,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 608
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.023247519186703404,
+          "v_mps": 0.29999178020098605
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-613",
+      "layer": "L9",
+      "monotonic_ns": 9483410027725,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 613
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.020557489520525607,
+          "v_mps": 0.2999845491571412
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-618",
+      "layer": "L9",
+      "monotonic_ns": 9483509683096,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 618
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.003280646194959101,
+          "v_mps": 0.2999990359758637
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-623",
+      "layer": "L9",
+      "monotonic_ns": 9483609871489,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 623
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.005396021384796315,
+          "v_mps": 0.2999996598121996
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-628",
+      "layer": "L9",
+      "monotonic_ns": 9483709671047,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 628
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.003821248618426099,
+          "v_mps": 0.2999995779765867
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-633",
+      "layer": "L9",
+      "monotonic_ns": 9483809681958,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 633
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0008582995785933506,
+          "v_mps": 0.2999998701624788
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-638",
+      "layer": "L9",
+      "monotonic_ns": 9483909734332,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 638
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0023849317102034653,
+          "v_mps": 0.2999996781697001
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-643",
+      "layer": "L9",
+      "monotonic_ns": 9484009666149,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 643
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0016204113531689492,
+          "v_mps": 0.2999998784382974
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-648",
+      "layer": "L9",
+      "monotonic_ns": 9484110056266,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 648
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0005528535814419717,
+          "v_mps": 0.29999997214731833
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-653",
+      "layer": "L9",
+      "monotonic_ns": 9484210836940,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 653
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.00048270174786337885,
+          "v_mps": 0.29999998921291776
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-657",
+      "layer": "L9",
+      "monotonic_ns": 9484296456525,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 657
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.00016910897666287686,
+          "v_mps": 0.2999999935414234
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-663",
+      "layer": "L9",
+      "monotonic_ns": 9484409668532,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 663
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.00013387256990505202,
+          "v_mps": 0.29999999471855876
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-668",
+      "layer": "L9",
+      "monotonic_ns": 9484509686054,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 668
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.00043536890878427727,
+          "v_mps": 0.29999999995830556
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-673",
+      "layer": "L9",
+      "monotonic_ns": 9484609716891,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 673
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.000734661418023133,
+          "v_mps": 0.29999999643918057
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-678",
+      "layer": "L9",
+      "monotonic_ns": 9484773465793,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 678
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0001247382473581935,
+          "v_mps": 0.2999999978770423
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-679",
+      "layer": "L9",
+      "monotonic_ns": 9484796629431,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 679
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0004543964943534144,
+          "v_mps": 0.29999999967730445
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-685",
+      "layer": "L9",
+      "monotonic_ns": 9484911853784,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 685
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0007431586713280843,
+          "v_mps": 0.2999999937381762
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-690",
+      "layer": "L9",
+      "monotonic_ns": 9485009672644,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 690
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.00021998850701325105,
+          "v_mps": 0.2999999930897156
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-695",
+      "layer": "L9",
+      "monotonic_ns": 9485109679444,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 695
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0004744510109924903,
+          "v_mps": 0.2999999996082778
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-700",
+      "layer": "L9",
+      "monotonic_ns": 9485209686929,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 700
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -7.351417048840467e-05,
+          "v_mps": 0.29999999744789557
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-705",
+      "layer": "L9",
+      "monotonic_ns": 9485309748006,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 705
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.000494112077377055,
+          "v_mps": 0.2999999998209668
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-709",
+      "layer": "L9",
+      "monotonic_ns": 9485392924539,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 709
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 2.021897080142221e-05,
+          "v_mps": 0.29999999998107374
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-715",
+      "layer": "L9",
+      "monotonic_ns": 9485511361782,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 715
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0002574929233807557,
+          "v_mps": 0.299999999500397
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-720",
+      "layer": "L9",
+      "monotonic_ns": 9485609683256,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 720
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0004044807717429915,
+          "v_mps": 0.29999999998327154
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-725",
+      "layer": "L9",
+      "monotonic_ns": 9485709668537,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 725
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.000116283853417793,
+          "v_mps": 0.2999999999527735
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-730",
+      "layer": "L9",
+      "monotonic_ns": 9485809715615,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 730
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.000738571265658207,
+          "v_mps": 0.29999999989135234
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-735",
+      "layer": "L9",
+      "monotonic_ns": 9485909674118,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 735
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0010157584012127168,
+          "v_mps": 0.2999999945268946
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-740",
+      "layer": "L9",
+      "monotonic_ns": 9486009666806,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 740
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0002857953669453395,
+          "v_mps": 0.29999999917959647
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-745",
+      "layer": "L9",
+      "monotonic_ns": 9486109674772,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 745
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0006014110460050785,
+          "v_mps": 0.29999999842938374
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-750",
+      "layer": "L9",
+      "monotonic_ns": 9486209678479,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 750
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0005404939089012507,
+          "v_mps": 0.29999999927305127
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-755",
+      "layer": "L9",
+      "monotonic_ns": 9486309671501,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 755
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.000579041452656996,
+          "v_mps": 0.2999999987056567
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-760",
+      "layer": "L9",
+      "monotonic_ns": 9486409674060,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 760
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.00020956921740938772,
+          "v_mps": 0.29999999974064956
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-765",
+      "layer": "L9",
+      "monotonic_ns": 9486509697637,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 765
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0006343883625435497,
+          "v_mps": 0.29999999989198145
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-770",
+      "layer": "L9",
+      "monotonic_ns": 9486610533497,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 770
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0003689621739776996,
+          "v_mps": 0.29999999992445986
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-775",
+      "layer": "L9",
+      "monotonic_ns": 9486709704569,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 775
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0006988678913330017,
+          "v_mps": 0.2999999999840993
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-780",
+      "layer": "L9",
+      "monotonic_ns": 9486809772703,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 780
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0008234141954852397,
+          "v_mps": 0.2999999990831535
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-785",
+      "layer": "L9",
+      "monotonic_ns": 9486909704335,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 785
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0004647655235654179,
+          "v_mps": 0.29999999983866493
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-790",
+      "layer": "L9",
+      "monotonic_ns": 9487009688820,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 790
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.0004050287757236012,
+          "v_mps": 0.2999999964837088
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-795",
+      "layer": "L9",
+      "monotonic_ns": 9487109758286,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 795
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.000438049614930183,
+          "v_mps": 0.2999999999818832
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-800",
+      "layer": "L9",
+      "monotonic_ns": 9487209668455,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 800
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.00016198407885966736,
+          "v_mps": 0.29999999612387523
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-805",
+      "layer": "L9",
+      "monotonic_ns": 9487309697218,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 805
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": -0.0006104238879367319,
+          "v_mps": 0.29999999825425216
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-810",
+      "layer": "L9",
+      "monotonic_ns": 9487409664017,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 810
+    },
+    {
+      "category": "MOTION_BLOCKED",
+      "evidence": {
+        "constrained": {
+          "omega_rad_s": 0.0,
+          "v_mps": 0.0
+        },
+        "constraints": null,
+        "requested": {
+          "omega_rad_s": 0.00045987363346159955,
+          "v_mps": 0.2999999998432059
+        },
+        "safety_decision": "ALLOW"
+      },
+      "id": "motion-blocked-l9-815",
+      "layer": "L9",
+      "monotonic_ns": 9487509693391,
+      "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+      "severity": "HIGH",
+      "tick_id": 815
+    }
+  ],
+  "metrics": {
+    "behavior_status": "DEGRADED",
+    "constrained_to_zero_tick_count": 44,
+    "estimated_path_length_m": 0.9294442363887547,
+    "requested_motion_tick_count": 82
+  },
+  "sample_count": 109,
+  "schema": "R2B4_TEST_HUB_SAMPLED_MOTION_V1",
+  "status": "FINDING",
+  "trends": {
+    "blocked_sample_count": 44,
+    "longest_observed_blocked_span_s": 4.29983697
+  }
+}
