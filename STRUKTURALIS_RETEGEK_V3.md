@@ -214,6 +214,8 @@ A multi-rate út event-szemantikájú: ugyanazon `(device_id, kind, sequence)` i
 
 L4 a track observationt és a track estimate-et külön kezeli: az utolsó fizikai measurement ideje, a bounded prediction lejárata és az observed/predicted/degraded minőség a typed track része. Új observation nélküli tick nem új measurement és önmagában nem target-LOST. Érvényes predikciót L6 felhasználhat; lejárt/degraded becslés megőrizhet identityt és indokolhat HOLD/SEARCH állapotot, de nem adhat követési motion-authorityt. A target behavior (acquire/follow/hold/search/lost) L6 owned state, nem az observation-elérhetőség másolata.
 
+L4 minden control tickben friss `WorldSnapshot`-ot ad; a production 50 Hz-es control és L4 output-frekvencia nem a térképépítés frekvenciája. Track projection, freshness és pose-continuity minden tickben értékelendő. Temporal occupancy és structural evidence integráció csak új szenzormérésre történhet. A costmap immutable geometriája saját revisionhöz kötött cache; változatlan térképnél a tick csak ezt olvassa, az eredeti measurement időből számolt freshness frissül. Prune/maintenance ritkított vagy condition-driven: lejárat, kapacitás, lokális ablak változása vagy érvénytelenné válás indokolhatja. A frame/continuity- és minőségváltozás nem várhat ritkított ciklusra; a cache nem hosszabbíthatja meg az evidence érvényességét. A szükséges cache/invalidation állapot az L4-owned checkpoint része, azonos inputból replayelhető.
+
 ### 7.1 Encoder
 
 A fizikai count/delta és közvetlen elmozdulás RAW measurement; control-output vagy velocity filter nem írhatja át. Velocity estimation lehet stateful/időablakos, de bounded és determinisztikus. Pulse-window, debounce, CPR és tuning source/config, nem architektúra.

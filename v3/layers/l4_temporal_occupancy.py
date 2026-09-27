@@ -36,6 +36,7 @@ class TemporalOccupancyGrid:
         "_free_decrement",
         "_max_score",
         "_cells",
+        "_next_expiry_ns",
     )
 
     def __init__(
@@ -63,10 +64,17 @@ class TemporalOccupancyGrid:
         self._free_decrement = free_decrement
         self._max_score = max_score
         self._cells: dict[tuple[int, int], TemporalCell] = {}
+        self._next_expiry_ns: int | None = None
+
+    @property
+    def next_expiry_ns(self) -> int | None:
+        """Conservative expiry deadline; checking it never traverses cells."""
+        return self._next_expiry_ns
 
     def clear(self) -> bool:
         changed = bool(self._cells)
         self._cells.clear()
+        self._next_expiry_ns = None
         return changed
 
     def grid_key(self, x_m: float, y_m: float) -> tuple[int, int]:
@@ -144,6 +152,9 @@ class TemporalOccupancyGrid:
                     captured_ns,
                 )
             changed = True
+        if changed:
+            expiry_ns = captured_ns + self._max_age_ns + 1
+            self._next_expiry_ns = min(self._next_expiry_ns or expiry_ns, expiry_ns)
         return changed
 
     def prune(self, *, now_ns: int, center_x_m: float, center_y_m: float) -> bool:
@@ -171,7 +182,22 @@ class TemporalOccupancyGrid:
                 if key not in keep:
                     del self._cells[key]
                     changed = True
+        self._refresh_expiry()
         return changed
+
+    def window_margin_m(self, *, center_x_m: float, center_y_m: float) -> float:
+        """Travel possible before any cell can cross the rolling radius."""
+        return min(
+            (abs(self._radius_m - self.cell_distance_m(key, center_x_m, center_y_m))
+             for key in self._cells),
+            default=self._radius_m,
+        )
+
+    def _refresh_expiry(self) -> None:
+        self._next_expiry_ns = min(
+            (cell.last_update_ns + self._max_age_ns + 1 for cell in self._cells.values()),
+            default=None,
+        )
 
     def occupied_cells(self) -> tuple[tuple[int, int, int], ...]:
         return tuple(
@@ -195,6 +221,7 @@ class TemporalOccupancyGrid:
             (x_index, y_index): TemporalCell(score, count, last_update_ns)
             for x_index, y_index, score, count, last_update_ns in checkpoint.cells
         }
+        self._refresh_expiry()
 
     @staticmethod
     def _bresenham(start: tuple[int, int], end: tuple[int, int]) -> tuple[tuple[int, int], ...]:

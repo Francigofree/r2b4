@@ -316,10 +316,29 @@ class RollingLocalCostmap:
             require_finite(value, f"RollingLocalCostmap.{name}")
             if value <= 0.0:
                 raise ContractValidationError(f"RollingLocalCostmap.{name} must be positive")
+        if not isinstance(self.occupied_cells, tuple) or any(
+            not isinstance(item, CostmapCell) for item in self.occupied_cells
+        ):
+            raise ContractValidationError("RollingLocalCostmap.occupied_cells must be an immutable tuple of CostmapCell")
         cell_keys = tuple((item.grid_x, item.grid_y) for item in self.occupied_cells)
         _require_unique(self.occupied_cells, cell_keys, "RollingLocalCostmap.occupied_cells")
         require_nonnegative(self.source_sequence, "RollingLocalCostmap.source_sequence")
         require_nonnegative(self.freshness_ns, "RollingLocalCostmap.freshness_ns")
+
+    def with_freshness_ns(self, freshness_ns: int) -> RollingLocalCostmap:
+        """Refresh scalar age without revalidating unchanged immutable geometry."""
+        require_nonnegative(freshness_ns, "RollingLocalCostmap.freshness_ns")
+        if freshness_ns == self.freshness_ns:
+            return self
+        # All other fields were validated by construction and cannot change.
+        result = object.__new__(RollingLocalCostmap)
+        for name in (
+            "frame_id", "revision", "resolution_m", "radius_m",
+            "occupied_cells", "source_sequence",
+        ):
+            object.__setattr__(result, name, getattr(self, name))
+        object.__setattr__(result, "freshness_ns", freshness_ns)
+        return result
 
 
 @dataclass(frozen=True, slots=True)

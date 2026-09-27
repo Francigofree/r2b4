@@ -49,6 +49,7 @@ class StructuralMemoryGrid:
         "_cells",
         "_current_hit_keys",
         "_current_free_keys",
+        "_next_expiry_ns",
     )
 
     def __init__(
@@ -109,6 +110,12 @@ class StructuralMemoryGrid:
         self._cells: dict[tuple[int, int], StructuralCell] = {}
         self._current_hit_keys: tuple[tuple[int, int], ...] = ()
         self._current_free_keys: tuple[tuple[int, int], ...] = ()
+        self._next_expiry_ns: int | None = None
+
+    @property
+    def next_expiry_ns(self) -> int | None:
+        """Conservative expiry deadline; checking it never traverses cells."""
+        return self._next_expiry_ns
 
     @property
     def current_hit_keys(self) -> tuple[tuple[int, int], ...]:
@@ -123,6 +130,7 @@ class StructuralMemoryGrid:
         self._cells.clear()
         self._current_hit_keys = ()
         self._current_free_keys = ()
+        self._next_expiry_ns = None
         return changed
 
     def integrate(
@@ -198,6 +206,9 @@ class StructuralMemoryGrid:
 
         if self._enforce_bound():
             changed = True
+        if changed:
+            expiry_ns = captured_ns + self._max_age_ns + 1
+            self._next_expiry_ns = min(self._next_expiry_ns or expiry_ns, expiry_ns)
         return changed
 
     def prune(self, *, now_ns: int) -> bool:
@@ -211,7 +222,24 @@ class StructuralMemoryGrid:
         changed = bool(remove)
         if self._enforce_bound():
             changed = True
+        self._refresh_expiry()
         return changed
+
+    def window_margin_m(
+        self, *, center_x_m: float, center_y_m: float, radius_m: float,
+    ) -> float:
+        """Include remembered cells outside the window so re-entry invalidates it."""
+        return min(
+            (abs(radius_m - self._cell_distance_m(key, center_x_m, center_y_m))
+             for key, cell in self._cells.items() if cell.confirmed),
+            default=radius_m,
+        )
+
+    def _refresh_expiry(self) -> None:
+        self._next_expiry_ns = min(
+            (cell.last_observed_ns + self._max_age_ns + 1 for cell in self._cells.values()),
+            default=None,
+        )
 
     def confirmed_cells(
         self,
@@ -250,6 +278,7 @@ class StructuralMemoryGrid:
         self._cells = {(x_index, y_index): cell for x_index, y_index, cell in checkpoint.cells}
         self._current_hit_keys = checkpoint.current_hit_keys
         self._current_free_keys = checkpoint.current_free_keys
+        self._refresh_expiry()
 
     def _cell_distance_m(self, key: tuple[int, int], x_m: float, y_m: float) -> float:
         center_x = (key[0] + 0.5) * self._resolution_m

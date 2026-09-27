@@ -6,6 +6,11 @@ from navigation behavior. Structural memory uses dynamic masking and
 measurement-time quality.
 Fresh measurement-time-aligned LiDAR evidence always outranks remembered
 geometry; no navigation, persistence or I/O authority is added to L4.
+
+Snapshot/projection/freshness/continuity run at control rate. Map integration
+runs on new scans; maintenance is driven by expiry or rolling-window changes.
+Unchanged geometry is read from an immutable revision cache, including on
+checkpoint restore. No wall clock, worker or separate layer authority is used.
 """
 
 from __future__ import annotations
@@ -289,6 +294,9 @@ class WorldModelStateCheckpoint:
     structural_memory: StructuralMemoryCheckpoint | None = None
     last_continuity_pose: PoseSample | None = None
     structural_recall_ready: bool = False
+    cached_costmap: RollingLocalCostmap | None = None
+    costmap_window: tuple[float, float, float] | None = None
+    structural_active: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,6 +324,8 @@ class ShadowWorldModel:
     __slots__ = (
         "_config",
         "_costmap_revision",
+        "_cached_costmap",
+        "_costmap_window",
         "_last_continuity_pose",
         "_last_lidar_measurement_ns",
         "_last_lidar_sequence",
@@ -328,6 +338,7 @@ class ShadowWorldModel:
         "_scan_history",
         "_structural_memory",
         "_structural_recall_ready",
+        "_structural_active",
         "_track_store",
     )
 
@@ -340,8 +351,11 @@ class ShadowWorldModel:
         self._last_local_sequence: int | None = None
         self._last_local_values: tuple[DataField, ...] | None = None
         self._costmap_revision = 0
+        self._cached_costmap: RollingLocalCostmap | None = None
+        self._costmap_window: tuple[float, float, float] | None = None
         self._last_continuity_pose: PoseSample | None = None
         self._structural_recall_ready = False
+        self._structural_active = False
         self._pose_history = PoseHistory(
             config.pose_history_max_age_ns,
             config.pose_history_max_samples,
@@ -397,6 +411,9 @@ class ShadowWorldModel:
             self._structural_memory.checkpoint(),
             self._last_continuity_pose,
             self._structural_recall_ready,
+            self._cached_costmap,
+            self._costmap_window,
+            self._structural_active,
         )
 
     def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
@@ -419,6 +436,9 @@ class ShadowWorldModel:
             self._structural_memory.restore(checkpoint.structural_memory)
         self._last_continuity_pose = checkpoint.last_continuity_pose
         self._structural_recall_ready = checkpoint.structural_recall_ready
+        self._cached_costmap = checkpoint.cached_costmap
+        self._costmap_window = checkpoint.costmap_window
+        self._structural_active = checkpoint.structural_active
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
         if frame.context != estimate.context:
@@ -484,12 +504,30 @@ class ShadowWorldModel:
         if changed_tracks or expired_tracks:
             self._map_revision += 1
 
-        if self._occupancy.prune(
-            now_ns=frame.context.monotonic_ns,
-            center_x_m=estimate.x_m,
-            center_y_m=estimate.y_m,
+        now_ns = frame.context.monotonic_ns
+        window_changed = self._window_may_change(estimate)
+        occupancy_expiry = self._occupancy.next_expiry_ns
+        if costmap_changed or window_changed or (
+            occupancy_expiry is not None and now_ns >= occupancy_expiry
+        ):
+            costmap_changed = self._occupancy.prune(
+                now_ns=now_ns,
+                center_x_m=estimate.x_m,
+                center_y_m=estimate.y_m,
+            ) or costmap_changed
+        structural_expiry = self._structural_memory.next_expiry_ns
+        if structural_expiry is not None and now_ns >= structural_expiry:
+            costmap_changed = self._structural_memory.prune(now_ns=now_ns) or costmap_changed
+        structural_active = (
+            self._config.structural_memory_enabled
+            and self._structural_recall_ready
+            and self._structural_quality_ok(estimate)
+        )
+        if window_changed or (
+            self._cached_costmap is not None and structural_active != self._structural_active
         ):
             costmap_changed = True
+        self._structural_active = structural_active
         if costmap_changed:
             self._costmap_revision += 1
             self._map_revision += 1
@@ -500,20 +538,22 @@ class ShadowWorldModel:
         tracks = self._track_store.projected_tracks(frame.context.monotonic_ns)
         local_costmap = None
         if self._last_local_measurement_ns is not None and self._last_local_sequence is not None:
-            local_costmap = RollingLocalCostmap(
-                frame_id=estimate.frame_id,
-                revision=self._costmap_revision,
-                resolution_m=self._config.local_costmap_resolution_m,
-                radius_m=self._config.local_costmap_radius_m,
-                occupied_cells=tuple(
-                    CostmapCell(grid_x, grid_y, count)
-                    for grid_x, grid_y, count in self._assembled_occupied_cells(estimate)
-                ),
-                source_sequence=self._last_local_sequence,
-                freshness_ns=max(
-                    0,
-                    frame.context.monotonic_ns - self._last_local_measurement_ns,
-                ),
+            if self._cached_costmap is None or self._cached_costmap.revision != self._costmap_revision:
+                self._cached_costmap = RollingLocalCostmap(
+                    frame_id=estimate.frame_id,
+                    revision=self._costmap_revision,
+                    resolution_m=self._config.local_costmap_resolution_m,
+                    radius_m=self._config.local_costmap_radius_m,
+                    occupied_cells=tuple(
+                        CostmapCell(grid_x, grid_y, count)
+                        for grid_x, grid_y, count in self._assembled_occupied_cells(estimate)
+                    ),
+                    source_sequence=self._last_local_sequence,
+                    freshness_ns=max(0, now_ns - self._last_local_measurement_ns),
+                )
+                self._remember_costmap_window(estimate)
+            local_costmap = self._cached_costmap.with_freshness_ns(
+                max(0, now_ns - self._last_local_measurement_ns)
             )
         return WorldSnapshot(
             frame.context,
@@ -533,9 +573,32 @@ class ShadowWorldModel:
         self._last_local_sequence = None
         self._last_local_values = None
         self._structural_recall_ready = False
+        self._structural_active = False
+        self._cached_costmap = None
+        self._costmap_window = None
         if had_occupancy or had_structural or had_tracks:
             self._costmap_revision += 1
         self._map_revision += 1
+
+    def _window_may_change(self, estimate: RobotEstimate) -> bool:
+        if self._costmap_window is None:
+            return False
+        center_x, center_y, margin_m = self._costmap_window
+        distance_m = math.hypot(estimate.x_m - center_x, estimate.y_m - center_y)
+        # Triangle inequality guarantees that no cell can cross the radius
+        # inside this margin. Stationary and yaw-only ticks need no traversal.
+        return distance_m > 0.0 and distance_m >= max(0.0, margin_m - 1e-12)
+
+    def _remember_costmap_window(self, estimate: RobotEstimate) -> None:
+        margin_m = self._occupancy.window_margin_m(
+            center_x_m=estimate.x_m, center_y_m=estimate.y_m,
+        )
+        if self._structural_active:
+            margin_m = min(margin_m, self._structural_memory.window_margin_m(
+                center_x_m=estimate.x_m, center_y_m=estimate.y_m,
+                radius_m=self._config.local_costmap_radius_m,
+            ))
+        self._costmap_window = (estimate.x_m, estimate.y_m, margin_m)
 
     def _pose_discontinuity(self, estimate: RobotEstimate) -> bool:
         previous = self._last_continuity_pose
@@ -654,12 +717,7 @@ class ShadowWorldModel:
 
     def _assembled_occupied_cells(self, estimate: RobotEstimate) -> tuple[tuple[int, int, int], ...]:
         fast_all = self._occupancy.occupied_cells()
-        structural_active = (
-            self._config.structural_memory_enabled
-            and self._structural_recall_ready
-            and self._structural_quality_ok(estimate)
-        )
-        if not structural_active:
+        if not self._structural_active:
             return fast_all[: self._config.local_costmap_max_cells]
 
         # A trustworthy current ray that traverses a cell is stronger evidence
@@ -787,7 +845,6 @@ class ShadowWorldModel:
                     captured_ns=observation.captured_monotonic_ns,
                     ignored_hit_keys=ignored_hit_keys,
                 )
-                self._structural_memory.prune(now_ns=observation.captured_monotonic_ns)
                 self._structural_recall_ready = True
             else:
                 # Do not learn or clear long-lived geometry from a spatially
