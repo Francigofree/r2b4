@@ -10,6 +10,7 @@ import queue
 import threading
 from dataclasses import dataclass
 
+from v3.runtime_performance import CpuSet, temporary_current_affinity
 from v3.async_capability import TransportSemantics
 from v3.contracts import AdmittedFrame, MissionIntent
 
@@ -48,6 +49,8 @@ class AsyncPersonPhotoEvidenceRecorder:
         recorder: PersonPhotoEvidenceRecorder,
         *,
         capacity: int = 16,
+        worker_cpus: CpuSet | None = None,
+        strict_affinity: bool = False,
     ) -> None:
         if not isinstance(recorder, PersonPhotoEvidenceRecorder):
             raise TypeError("recorder must be PersonPhotoEvidenceRecorder")
@@ -74,7 +77,8 @@ class AsyncPersonPhotoEvidenceRecorder:
             name="r2b4-person-photo-evidence",
             daemon=True,
         )
-        self._thread.start()
+        with temporary_current_affinity(worker_cpus, role="person-evidence", strict=strict_affinity):
+            self._thread.start()
 
     @property
     def status(self) -> AsyncPersonPhotoEvidenceStatus:

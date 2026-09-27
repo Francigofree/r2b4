@@ -215,6 +215,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     try:
         root = project_root()
+        from v3.runtime_performance import apply_host_affinity
+        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tool", "cpu", "cpu2"} else "operator"
+        apply_host_affinity(root, role)
 
         # Private, read-only shell completion transport. It is intentionally not
         # listed as a user command and must run before any command normalization.

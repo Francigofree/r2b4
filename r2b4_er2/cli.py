@@ -172,6 +172,8 @@ def _print_status(data: Mapping[str, object]) -> None:
 def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None = None) -> int:
     args = _parser().parse_args(list(argv) if argv is not None else None)
     root = Path(project_root).resolve() if project_root is not None else Path(__file__).resolve().parents[1]
+    from v3.runtime_performance import apply_host_affinity
+    apply_host_affinity(root, "er2")
     cfg = Er2Config.from_env()
     interface = RobotInterface(project_root=root)
     evidence = Er2Evidence.from_project_root(root)

@@ -1,6 +1,6 @@
 # R2B4
 
-A robotarchitektúra authorityja a `STRUKTURALIS_RETEGEK_V3.md`. A live async/process végrehajtási elhelyezés kiegészítő contractja az `ASZINKRON_RUNTIME_CONTRACT_V3.md`. Ne duplikáld ezeket itt; robotikai változtatásnál a releváns contractot kövesd, a konkrét megvalósítást pedig source-first ellenőrizd.
+A teljes R2B4 robotrendszer kívánt felhasználói működésének és fejlesztési irányának authorityja a `R2B4_SYSTEM_BEHAVIOR_CONTRACT.md`. A production robotarchitektúra authorityja a `STRUKTURALIS_RETEGEK_V3.md`. A live async/process végrehajtási elhelyezés kiegészítő contractja az `ASZINKRON_RUNTIME_CONTRACT_V3.md`. Ne duplikáld ezeket itt; rendszerszintű vagy robotikai változtatásnál a releváns contractot kövesd, a konkrét megvalósítást pedig source-first ellenőrizd.
 
 ## Munkamód
 

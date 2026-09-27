@@ -211,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
         clean, capture_mode, capture_explicit = _extract_capture_selector(raw)
         clean = _normalize_legacy(clean)
         args = _parser().parse_args(clean)
+        from v3.runtime_performance import apply_host_affinity
+        apply_host_affinity(Path(__file__).resolve().parents[1], "operator")
         controller = OperatorController(event_sink=_event_printer)
 
         if args.command == "__runtime-session":

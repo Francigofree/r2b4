@@ -26,12 +26,38 @@ def test_camera_freshness_is_explicit_resolved_authority():
     assert camera is not None
     assert camera.maximum_frame_age_ns == expected == 250000000
 
-def test_camera_freshness_missing_fails_closed():
-    hardware, physics, speed_map, control = _documents()
+    # A missing physical freshness field must fail before hardware opens.
     control = deepcopy(control)
     control['sensor_policy'].pop('camera_maximum_frame_age_ns')
     with pytest.raises(ValueError, match='camera_maximum_frame_age_ns'):
         ConfigResolver.from_documents(hardware, physics, speed_map, control)
+
+def test_affinity_masks_keep_control_exclusive_and_replay_historical_policy():
+    from v3.runtime_performance import RuntimeAffinityConfig
+    hardware, physics, speed_map, control = _documents()
+    control['runtime_affinity']['capture_cpus'] = [2, 1]
+    control['runtime_affinity']['lidar_matcher_cpus'] = [1, 2]
+    resolved = ConfigResolver.from_documents(hardware, physics, speed_map, control)
+    assert resolved.affinity.capture_cpus == (1, 2)
+    assert resolved.affinity.lidar_matcher_cpus == (1, 2)
+    assert resolved.affinity.lidar_owner_cpus == (2,)
+    assert resolved.affinity.as_dict()['capture_cpus'] == [1, 2]
+    for field, invalid in (
+        ('capture_cpus', []), ('capture_cpus', [1, 1]), ('capture_cpus', [-1]),
+        ('capture_cpus', [True]), ('capture_cpus', [1.5]), ('capture_cpus', ['1']),
+        ('capture_cpus', 1), ('capture_cpus', [2, 3]), ('control_cpus', [2, 3]),
+        ('voice_cpus', [3]), ('l0_imu_cpus', [3]),
+    ):
+        candidate = deepcopy(control)
+        candidate['runtime_affinity'][field] = invalid
+        with pytest.raises(ValueError):
+            ConfigResolver.from_documents(hardware, physics, speed_map, candidate)
+    legacy = {'__type__': 'RuntimeAffinityConfig', 'enabled': True, 'strict': True,
+              'runtime_cpu': 3, 'lidar_cpu': 2, 'vision_cpu': 1, 'io_cpu': 0}
+    decoded = _decode_production_value(_migrate_legacy_resolved_config_snapshot(legacy),
+                                       RuntimeAffinityConfig, 'historical.affinity')
+    assert decoded.control_cpus == (3,) and decoded.capture_cpus == (0,)
+    assert decoded.planner_cpus == (1,) and decoded.lidar_matcher_cpus == (2,)
 
 def test_l7_reversal_threshold_conflict_fails_closed():
     hardware, physics, speed_map, control = _documents()

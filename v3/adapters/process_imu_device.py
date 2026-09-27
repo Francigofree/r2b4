@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Mapping
 
 from v3.adapters.bno055_device import NativeBno055Device, NativeBno055DeviceConfig
-from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 from v3.config_types import ImuProcessConfig
 from v3.async_capability import TransportSemantics
 
@@ -20,11 +20,11 @@ _VALUE_COUNT = 11
 
 
 def _acquire_imu(config, open_bus, lock, sequence, times, values,
-                 ready, stop, failed, worker_cpu, strict_affinity, process_config) -> None:
+                 ready, stop, failed, worker_cpus, strict_affinity, process_config) -> None:
     device = None
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(worker_cpu, role="imu-acquire", strict=strict_affinity)
+        if worker_cpus is not None:
+            apply_process_cpuset(worker_cpus, role="imu-acquire", strict=strict_affinity)
         device = NativeBno055Device(open_bus(config.bus_number), config)
         device.initialize()
         deadline = time.monotonic_ns()
@@ -65,7 +65,7 @@ class ProcessBno055Device:
     transport_semantics = TransportSemantics.LATEST_STATE
 
     def __init__(self, config: NativeBno055DeviceConfig, *, open_bus: Callable,
-                 worker_cpu: int | None = None, strict_affinity: bool = False,
+                 worker_cpus: int | CpuSet | None = None, strict_affinity: bool = False,
                  process_config: ImuProcessConfig) -> None:
         if not isinstance(config, NativeBno055DeviceConfig):
             raise TypeError("config must be NativeBno055DeviceConfig")
@@ -73,6 +73,10 @@ class ProcessBno055Device:
             raise TypeError("open_bus must be callable")
         if not isinstance(process_config, ImuProcessConfig):
             raise TypeError("process_config must be ImuProcessConfig")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
         self._process_config = process_config
         context = multiprocessing.get_context("spawn")
         self._lock = context.Lock()
@@ -90,10 +94,10 @@ class ProcessBno055Device:
             target=_acquire_imu,
             args=(config, open_bus, self._lock, self._sequence, self._times,
                   self._values, self._ready, self._stop, self._failed,
-                  worker_cpu, strict_affinity, process_config),
+                  worker_cpus, strict_affinity, process_config),
             name="v3-imu-owner", daemon=False,
         )
-        with temporary_current_affinity(worker_cpu, role="imu-start", strict=strict_affinity):
+        with temporary_current_affinity(worker_cpus, role="imu-start", strict=strict_affinity):
             self._process.start()
         if not self._ready.wait(process_config.ready_timeout_s) or self._failed.is_set() or not self._process.is_alive():
             self.close()

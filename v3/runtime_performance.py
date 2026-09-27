@@ -10,53 +10,84 @@ import math
 import os
 import threading
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Iterator, Mapping
 
 
+CpuSet = tuple[int, ...]
+
+
+def normalize_cpus(cpus: int | CpuSet) -> CpuSet:
+    """Canonical mask; integer input is retained for isolated adapter fixtures."""
+    values = (cpus,) if type(cpus) is int else cpus
+    if not isinstance(values, tuple) or not values:
+        raise ValueError("CPU set must be a non-empty tuple of CPU ids")
+    if any(type(cpu) is not int or cpu < 0 for cpu in values):
+        raise ValueError("CPU ids must be non-negative integers")
+    if len(set(values)) != len(values):
+        raise ValueError("CPU set must not contain duplicate ids")
+    return tuple(sorted(values))
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeAffinityConfig:
-    """Explicit four-core scheduling policy for the Raspberry Pi 5 runtime."""
+    """Scheduling masks only; control remains the sole L0–L12 execution lane."""
 
     enabled: bool = False
     strict: bool = True
-    runtime_cpu: int = 3
-    lidar_cpu: int = 2
-    vision_cpu: int = 1
-    io_cpu: int = 0
+    control_cpus: CpuSet = (3,)
+    runtime_background_cpus: CpuSet = (1, 2)
+    encoder_cpus: CpuSet = (0,)
+    imu_cpus: CpuSet = (0,)
+    lidar_owner_cpus: CpuSet = (2,)
+    lidar_matcher_cpus: CpuSet = (2,)
+    vision_cpus: CpuSet = (1,)
+    planner_cpus: CpuSet = (1,)
+    capture_cpus: CpuSet = (1, 2)
+    status_cpus: CpuSet = (1, 2)
+    command_cpus: CpuSet = (1, 2)
+    l0_encoder_cpus: CpuSet = (0,)
+    l0_imu_cpus: CpuSet = (0,)
+    l0_lidar_cpus: CpuSet = (2,)
+    l0_aux_cpus: CpuSet = (1, 2)
+    operator_cpus: CpuSet = (1, 2)
+    voice_cpus: CpuSet = (1, 2)
+    er2_cpus: CpuSet = (1, 2)
+    diagnostics_cpus: CpuSet = (1, 2)
 
     def __post_init__(self) -> None:
-        if type(self.enabled) is not bool:
-            raise TypeError("enabled must be bool")
-        if type(self.strict) is not bool:
-            raise TypeError("strict must be bool")
-        cpus = (self.runtime_cpu, self.lidar_cpu, self.vision_cpu, self.io_cpu)
-        for name, value in zip(
-            ("runtime_cpu", "lidar_cpu", "vision_cpu", "io_cpu"), cpus
-        ):
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                raise ValueError(f"{name} must be a non-negative integer")
-        if self.enabled and len(set(cpus)) != len(cpus):
-            raise ValueError("enabled runtime affinity requires four distinct CPU ids")
+        if type(self.enabled) is not bool or type(self.strict) is not bool:
+            raise TypeError("enabled and strict must be bool")
+        for name in self.cpu_roles():
+            value = getattr(self, name)
+            if not isinstance(value, tuple):
+                raise ValueError(f"{name} must be a CPU tuple")
+            try:
+                object.__setattr__(self, name, normalize_cpus(value))
+            except ValueError as exc:
+                raise ValueError(f"{name}: {exc}") from exc
+        if len(self.control_cpus) != 1:
+            raise ValueError("control_cpus must contain exactly one CPU")
+        for name, cpus in self.cpu_roles().items():
+            if name != "control_cpus" and set(cpus).intersection(self.control_cpus):
+                raise ValueError(f"{name} must be disjoint from control_cpus")
+
+    def cpu_roles(self) -> dict[str, CpuSet]:
+        return {field.name: getattr(self, field.name)
+                for field in fields(self) if field.name.endswith("_cpus")}
 
     def as_dict(self) -> dict[str, object]:
-        return {
-            "enabled": self.enabled,
-            "strict": self.strict,
-            "runtime_cpu": self.runtime_cpu,
-            "lidar_cpu": self.lidar_cpu,
-            "vision_cpu": self.vision_cpu,
-            "io_cpu": self.io_cpu,
-        }
+        return {"enabled": self.enabled, "strict": self.strict,
+                **{name: list(cpus) for name, cpus in self.cpu_roles().items()}}
 
 
 @dataclass(frozen=True, slots=True)
 class AffinityEvidence:
     role: str
-    requested_cpu: int
+    requested_cpus: CpuSet
     applied: bool
-    allowed_cpus: tuple[int, ...]
+    allowed_cpus: CpuSet
     pid: int
     native_id: int
     error: str | None = None
@@ -64,19 +95,13 @@ class AffinityEvidence:
     def as_dict(self) -> dict[str, object]:
         return {
             "role": self.role,
-            "requested_cpu": self.requested_cpu,
+            "requested_cpus": list(self.requested_cpus),
             "applied": self.applied,
             "allowed_cpus": list(self.allowed_cpus),
             "pid": self.pid,
             "native_id": self.native_id,
             "error": self.error,
         }
-
-
-def _mapping(value: object, name: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise ValueError(f"{name} must be an object")
-    return value
 
 
 def load_runtime_affinity_config(path_value: str | Path) -> RuntimeAffinityConfig:
@@ -107,58 +132,53 @@ def _current_allowed_cpus() -> tuple[int, ...]:
     return tuple(sorted(int(cpu) for cpu in getter(0)))
 
 
-def apply_current_affinity(
-    cpu: int,
-    *,
-    role: str,
-    strict: bool = True,
-    set_task_name: bool = True,
-) -> AffinityEvidence:
-    """Pin the calling Linux task (process main or worker thread) to one CPU."""
-
-    if not isinstance(cpu, int) or isinstance(cpu, bool) or cpu < 0:
-        raise ValueError("cpu must be a non-negative integer")
+def _apply_task_affinity(cpus: CpuSet, *, role: str, strict: bool,
+                         tid: int) -> AffinityEvidence:
     if not isinstance(role, str) or not role.strip():
         raise ValueError("role must be non-empty")
     if type(strict) is not bool:
         raise TypeError("strict must be bool")
-    native_id = threading.get_native_id()
     setter = getattr(os, "sched_setaffinity", None)
     getter = getattr(os, "sched_getaffinity", None)
-    if not callable(setter) or not callable(getter):
-        error = "OS_AFFINITY_UNAVAILABLE"
-        if strict:
-            raise RuntimeError(error)
-        return AffinityEvidence(role, cpu, False, (), os.getpid(), native_id, error)
+    allowed: CpuSet = ()
     try:
-        setter(0, {cpu})
-        allowed = _current_allowed_cpus()
-        if allowed != (cpu,):
+        if not callable(setter) or not callable(getter):
+            raise RuntimeError("OS_AFFINITY_UNAVAILABLE")
+        setter(tid, set(cpus))
+        allowed = tuple(sorted(getter(tid)))
+        if allowed != cpus:
             raise RuntimeError(f"affinity verification failed: {allowed!r}")
-        if set_task_name:
-            _set_linux_task_name(role)
-        return AffinityEvidence(role, cpu, True, allowed, os.getpid(), native_id)
+        return AffinityEvidence(role, cpus, True, allowed, os.getpid(), tid)
+    except ProcessLookupError:
+        raise  # A task that exited during /proc enumeration is no longer relevant.
     except (OSError, RuntimeError) as exc:
         if strict:
-            raise RuntimeError(f"cannot pin {role} to CPU{cpu}: {exc}") from exc
-        return AffinityEvidence(
-            role, cpu, False, _current_allowed_cpus(), os.getpid(), native_id,
-            f"{type(exc).__name__}:{exc}",
-        )
+            raise RuntimeError(f"cannot pin {role} to CPUs {cpus}: {exc}") from exc
+        return AffinityEvidence(role, cpus, False, allowed, os.getpid(), tid,
+                                f"{type(exc).__name__}:{exc}")
+
+
+def apply_current_affinity(
+    cpus: int | CpuSet, *, role: str, strict: bool = True,
+    set_task_name: bool = True,
+) -> AffinityEvidence:
+    """Set and verify the calling Linux task's complete CPU mask."""
+    evidence = _apply_task_affinity(normalize_cpus(cpus), role=role, strict=strict,
+                                    tid=threading.get_native_id())
+    if set_task_name:
+        _set_linux_task_name(role)
+    return evidence
 
 
 @contextmanager
 def temporary_current_affinity(
-    cpu: int | None,
-    *,
-    role: str,
-    strict: bool = True,
+    cpus: int | CpuSet | None, *, role: str, strict: bool = True,
 ) -> Iterator[None]:
-    """Temporarily pin the caller so newly-created workers inherit that CPU."""
-
-    if cpu is None:
+    """Give new threads/processes a mask, restoring even after startup failure."""
+    if cpus is None:
         yield
         return
+    cpus = normalize_cpus(cpus)
     getter = getattr(os, "sched_getaffinity", None)
     setter = getattr(os, "sched_setaffinity", None)
     if not callable(getter) or not callable(setter):
@@ -167,87 +187,84 @@ def temporary_current_affinity(
         yield
         return
     previous = set(getter(0))
-    apply_current_affinity(cpu, role=role, strict=strict, set_task_name=False)
+    comm = Path(f"/proc/self/task/{threading.get_native_id()}/comm")
     try:
+        previous_name = comm.read_text(encoding="ascii")
+    except (OSError, UnicodeError):
+        previous_name = None
+    try:
+        apply_current_affinity(cpus, role=role, strict=strict)
         yield
     finally:
+        if previous_name is not None:
+            try:
+                comm.write_text(previous_name, encoding="ascii")
+            except OSError:
+                pass
         try:
             setter(0, previous)
-        except OSError as exc:
-            if strict:
-                raise RuntimeError(
-                    f"cannot restore affinity after starting {role}: {exc}"
-                ) from exc
+            if set(getter(0)) != previous:
+                raise RuntimeError("restored affinity verification failed")
+        except (OSError, RuntimeError) as exc:
+            # A failed restore must never silently leave control on a worker CPU.
+            raise RuntimeError(f"cannot restore affinity after {role}: {exc}") from exc
+
+
+def apply_process_cpuset(
+    cpus: int | CpuSet, *, role: str, strict: bool = True,
+    set_task_name: bool = True,
+) -> tuple[AffinityEvidence, ...]:
+    """Pin all existing tasks; future helpers inherit their creator's mask.
+
+    Call at process startup, before starting component workers. Native helper
+    tasks already created by imports are included, not only the Python main.
+    """
+    cpus = normalize_cpus(cpus)
+    main_tid = threading.get_native_id()
+    evidence = [apply_current_affinity(cpus, role=role, strict=strict,
+                                       set_task_name=set_task_name)]
+    try:
+        tids = sorted(int(path.name) for path in Path("/proc/self/task").iterdir()
+                      if path.name.isdigit() and int(path.name) != main_tid)
+    except OSError as exc:
+        if strict:
+            raise RuntimeError(f"cannot enumerate process tasks: {exc}") from exc
+        evidence.append(AffinityEvidence(role, cpus, False, (), os.getpid(), main_tid,
+                                         f"cannot enumerate process tasks: {exc}"))
+        return tuple(evidence)
+    for tid in tids:
+        try:
+            evidence.append(_apply_task_affinity(cpus, role=role, strict=strict, tid=tid))
+        except ProcessLookupError:
+            continue
+    return tuple(evidence)
 
 
 def apply_process_affinity_layout(config: RuntimeAffinityConfig) -> tuple[AffinityEvidence, ...]:
-    """Pin the current main task and quarantine already-existing background tasks.
-
-    Python/native libraries may create helper threads during module import, before
-    the runtime has a chance to create the intentional capture/vision workers.
-    Leaving those helpers unrestricted would defeat core isolation.  Production
-    therefore puts the calling main task on ``runtime_cpu`` and every other
-    already-existing task in this process on ``io_cpu``.  Later workers inherit
-    explicit temporary masks from their creator.
-    """
-
+    """Keep imported helpers off control, then pin the sole control task."""
     if not isinstance(config, RuntimeAffinityConfig):
         raise TypeError("config must be RuntimeAffinityConfig")
     if not config.enabled:
         return ()
-    main_tid = threading.get_native_id()
-    evidence: list[AffinityEvidence] = [
-        apply_current_affinity(
-            config.runtime_cpu, role="runtime", strict=config.strict
-        )
-    ]
-    task_root = Path("/proc/self/task")
-    try:
-        tids = tuple(
-            sorted(
-                int(item.name)
-                for item in task_root.iterdir()
-                if item.name.isdigit() and int(item.name) != main_tid
-            )
-        )
-    except OSError as exc:
-        if config.strict:
-            raise RuntimeError(f"cannot enumerate process tasks: {exc}") from exc
-        return tuple(evidence)
-    setter = getattr(os, "sched_setaffinity", None)
-    getter = getattr(os, "sched_getaffinity", None)
-    if not callable(setter) or not callable(getter):
-        if config.strict:
-            raise RuntimeError("OS_AFFINITY_UNAVAILABLE")
-        return tuple(evidence)
-    for tid in tids:
-        try:
-            setter(tid, {config.io_cpu})
-            allowed = tuple(sorted(int(cpu) for cpu in getter(tid)))
-            if allowed != (config.io_cpu,):
-                raise RuntimeError(f"affinity verification failed: {allowed!r}")
-            evidence.append(
-                AffinityEvidence(
-                    "preexisting-io", config.io_cpu, True, allowed, os.getpid(), tid
-                )
-            )
-        except (OSError, RuntimeError) as exc:
-            if config.strict:
-                raise RuntimeError(
-                    f"cannot pin pre-existing task {tid} to CPU{config.io_cpu}: {exc}"
-                ) from exc
-            evidence.append(
-                AffinityEvidence(
-                    "preexisting-io",
-                    config.io_cpu,
-                    False,
-                    (),
-                    os.getpid(),
-                    tid,
-                    f"{type(exc).__name__}:{exc}",
-                )
-            )
-    return tuple(evidence)
+    # Verify OS/cgroup availability before any device startup. Inherited masks
+    # can be narrower than the configured roles, so getaffinity alone is not a
+    # usable availability test. Probe each distinct mask and restore the caller.
+    for cpus in set(config.cpu_roles().values()):
+        with temporary_current_affinity(cpus, role="startup-check", strict=config.strict):
+            pass
+    evidence = apply_process_cpuset(config.runtime_background_cpus,
+                                    role="background", strict=config.strict)
+    return (*evidence, apply_current_affinity(config.control_cpus,
+                                             role="control", strict=config.strict))
+
+
+def apply_host_affinity(project_root: str | Path, role: str) -> tuple[AffinityEvidence, ...]:
+    """Entry-point policy for standalone services and operator/diagnostic tools."""
+    config = load_runtime_affinity_config(Path(project_root) / "conf" / "vezerles.json")
+    cpus = config.cpu_roles()[role + "_cpus"]
+    if not config.enabled:
+        return ()
+    return apply_process_cpuset(cpus, role=role, strict=config.strict)
 
 
 _HISTOGRAM_STEP_NS = 100_000  # 0.1 ms resolution
@@ -526,6 +543,10 @@ __all__ = [
     "RuntimePhaseTimingEvidence",
     "RuntimeTimingAccumulator",
     "RuntimeTimingEvidence",
+    "CpuSet",
+    "normalize_cpus",
+    "apply_host_affinity",
+    "apply_process_cpuset",
     "apply_current_affinity",
     "apply_process_affinity_layout",
     "load_runtime_affinity_config",

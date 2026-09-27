@@ -34,6 +34,7 @@ from v3.ports import CommandGateway, DeviceReader
 from v3.runtime_performance import (
     RuntimeTimingAccumulator,
     RuntimeTimingEvidence,
+    RuntimeAffinityConfig,
     apply_current_affinity,
 )
 from v3_bounded_runtime import BoundedPhysicalRuntimeConfig, RUN_FAULT, RUN_OK
@@ -458,9 +459,7 @@ def run_owned_resident_physical_control(
     timing_enabled: bool = False,
     trajectory_rollout_backend: object | None = None,
     enable_multirate_inputs: bool = True,
-    input_worker_cpu: int | None = None,
-    lidar_input_worker_cpu: int | None = None,
-    input_worker_strict_affinity: bool = False,
+    input_affinity: RuntimeAffinityConfig | None = None,
     multirate_config=None,
 ) -> ResidentRuntimeReport:
     """Run the resident path and always close the sole concrete input owner."""
@@ -469,42 +468,29 @@ def run_owned_resident_physical_control(
         raise TypeError("sensor_inputs must be NativeSensorInputOwner")
     if type(enable_multirate_inputs) is not bool:
         raise TypeError("enable_multirate_inputs must be bool")
-    if input_worker_cpu is not None and (
-        not isinstance(input_worker_cpu, int)
-        or isinstance(input_worker_cpu, bool)
-        or input_worker_cpu < 0
-    ):
-        raise ValueError("input_worker_cpu must be non-negative or None")
-    if lidar_input_worker_cpu is not None and (
-        not isinstance(lidar_input_worker_cpu, int)
-        or isinstance(lidar_input_worker_cpu, bool)
-        or lidar_input_worker_cpu < 0
-    ):
-        raise ValueError("lidar_input_worker_cpu must be non-negative or None")
-    if type(input_worker_strict_affinity) is not bool:
-        raise TypeError("input_worker_strict_affinity must be bool")
+    if input_affinity is not None and not isinstance(input_affinity, RuntimeAffinityConfig):
+        raise TypeError("input_affinity must be RuntimeAffinityConfig or None")
 
     input_reader: MultiRateLiveInputReader | None = None
     try:
         if enable_multirate_inputs:
             worker_initializer: Callable[[str], None] | None = None
-            if input_worker_cpu is not None or lidar_input_worker_cpu is not None:
+            if input_affinity is not None and input_affinity.enabled:
+                worker_masks = {
+                    "l0-critical-WHEEL_ENCODERS": input_affinity.l0_encoder_cpus,
+                    "l0-critical-BNO055_IMU": input_affinity.l0_imu_cpus,
+                    "l0-critical-RPLIDAR_C1": input_affinity.l0_lidar_cpus,
+                    "l0-aux": input_affinity.l0_aux_cpus,
+                }
+
                 def _pin_input_worker(role: str) -> None:
-                    worker_cpu = (
-                        lidar_input_worker_cpu
-                        if (
-                            role == "l0-critical-RPLIDAR_C1"
-                            and lidar_input_worker_cpu is not None
-                        )
-                        else input_worker_cpu
-                    )
-                    if worker_cpu is None:
-                        return
-                    apply_current_affinity(
-                        worker_cpu,
-                        role=role,
-                        strict=input_worker_strict_affinity,
-                    )
+                    apply_current_affinity(worker_masks[role], role={
+                        "l0-critical-WHEEL_ENCODERS": "l0-encoder",
+                        "l0-critical-BNO055_IMU": "l0-imu",
+                        "l0-critical-RPLIDAR_C1": "l0-lidar",
+                        "l0-aux": "l0-aux",
+                    }[role],
+                                           strict=input_affinity.strict)
 
                 worker_initializer = _pin_input_worker
             input_reader = MultiRateLiveInputReader(

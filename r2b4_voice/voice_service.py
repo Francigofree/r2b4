@@ -900,6 +900,8 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     root = _project_root()
+    from v3.runtime_performance import apply_host_affinity
+    apply_host_affinity(root, "voice")
     if args.check:
         return _diagnostic_check(root)
 

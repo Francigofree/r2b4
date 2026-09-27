@@ -23,7 +23,7 @@ from v3.layers.l6_navigation import (
     TrajectoryRolloutRequest,
     TrajectoryRolloutResult,
 )
-from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_current_affinity, apply_process_cpuset, temporary_current_affinity
 
 
 
@@ -45,10 +45,10 @@ class _WorkResult:
     worker_completed_ns: int = 0
 
 
-def _worker_main(generation, config, request_queue, result_queue, worker_cpu, strict_affinity):
+def _worker_main(generation, config, request_queue, result_queue, worker_cpus, strict_affinity):
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(worker_cpu, role="l6-planner", strict=strict_affinity)
+        if worker_cpus is not None:
+            apply_process_cpuset(worker_cpus, role="l6-planner", strict=strict_affinity)
         computer = TrajectoryRolloutComputer(config)
         result_queue.put(("ready", generation))
         while True:
@@ -95,7 +95,11 @@ class ProcessTrajectoryRolloutBackend:
         "_accepted_count", "_process_config",
     )
 
-    def __init__(self, config: NavigationConfig, *, worker_cpu=None, strict_affinity=True, ready_timeout_s, process_config: PlannerProcessConfig):
+    def __init__(self, config: NavigationConfig, *, worker_cpus: int | CpuSet | None = None, strict_affinity=True, ready_timeout_s, process_config: PlannerProcessConfig):
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
         if not isinstance(config, NavigationConfig):
             raise TypeError("config must be NavigationConfig")
         if not isinstance(process_config, PlannerProcessConfig):
@@ -107,7 +111,7 @@ class ProcessTrajectoryRolloutBackend:
         self._result_queue = context.Queue(maxsize=self._process_config.result_buffer_capacity)
         self._process = context.Process(
             target=_worker_main,
-            args=(self._generation, config, self._request_queue, self._result_queue, worker_cpu, strict_affinity),
+            args=(self._generation, config, self._request_queue, self._result_queue, worker_cpus, strict_affinity),
             name="r2b4-l6plan",
             daemon=False,
         )
@@ -135,24 +139,25 @@ class ProcessTrajectoryRolloutBackend:
         self._deadline_missed_count = 0
         self._last_timing = None
 
-        self._process.start()
+        with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
+            self._process.start()
         try:
             message = self._result_queue.get(timeout=float(ready_timeout_s))
             if message != ("ready", self._generation):
                 raise RuntimeError(f"L6 planner worker failed to start: {message!r}")
-            with temporary_current_affinity(worker_cpu, role="l6-planner-feeder", strict=strict_affinity):
+            with temporary_current_affinity(worker_cpus, role="l6-planner-feeder", strict=strict_affinity):
                 self._request_queue.put(("warmup",), timeout=float(ready_timeout_s))
             message = self._result_queue.get(timeout=float(ready_timeout_s))
             if message != ("warmup", self._generation):
                 raise RuntimeError(f"L6 planner worker warmup failed: {message!r}")
             collector = threading.Thread(
                 target=self._collect_results,
-                args=(worker_cpu, strict_affinity),
+                args=(worker_cpus, strict_affinity),
                 name="r2b4-l6result",
                 daemon=False,
             )
             self._collector_thread = collector
-            with temporary_current_affinity(worker_cpu, role="l6-result-start", strict=strict_affinity):
+            with temporary_current_affinity(worker_cpus, role="l6-result-start", strict=strict_affinity):
                 collector.start()
             if not self._collector_ready.wait(timeout=float(ready_timeout_s)):
                 raise RuntimeError("L6 planner result collector did not start")
@@ -181,10 +186,10 @@ class ProcessTrajectoryRolloutBackend:
                 self._collector_error = error
                 self._error_count += 1
 
-    def _collect_results(self, worker_cpu, strict_affinity):
+    def _collect_results(self, worker_cpus, strict_affinity):
         try:
-            if worker_cpu is not None:
-                apply_current_affinity(worker_cpu, role="l6-result", strict=strict_affinity)
+            if worker_cpus is not None:
+                apply_current_affinity(worker_cpus, role="l6-result", strict=strict_affinity)
             self._collector_ready.set()
             while not self._collector_stop.is_set():
                 try:

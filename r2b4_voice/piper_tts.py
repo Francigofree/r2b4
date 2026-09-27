@@ -83,13 +83,21 @@ VoiceLoader = Callable[[str], Any]
 
 
 def _default_voice_loader(model_path: str) -> Any:
+    # Piper/ONNX creates native tasks with its own affinity during model load.
+    # Preserve the host service's mask (voice or ER2), including those helpers.
+    getter = getattr(os, "sched_getaffinity", None)
+    inherited_cpus = tuple(sorted(getter(0))) if callable(getter) else None
     module = ensure_piper_importable()
     try:
         voice_class = module.PiperVoice
     except AttributeError as exc:
         raise PiperTtsError("installed Piper package has no PiperVoice API") from exc
     try:
-        return voice_class.load(model_path)
+        voice = voice_class.load(model_path)
+        if inherited_cpus is not None:
+            from v3.runtime_performance import apply_process_cpuset
+            apply_process_cpuset(inherited_cpus, role="piper-native", set_task_name=False)
+        return voice
     except Exception as exc:
         raise PiperTtsError(
             f"failed to load Piper voice model: {type(exc).__name__}: {exc}"

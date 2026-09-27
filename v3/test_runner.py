@@ -28,6 +28,8 @@ def _run(paths, k=None):
 
 
 def main(argv=None):
+    from v3.runtime_performance import apply_host_affinity
+    apply_host_affinity(Path(__file__).resolve().parents[1], "diagnostics")
     args = list(sys.argv[1:] if argv is None else argv)
     mode = args.pop(0) if args else "core"
     if args:

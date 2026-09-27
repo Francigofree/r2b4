@@ -306,6 +306,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from v3.runtime_performance import apply_host_affinity
+    apply_host_affinity(Path(__file__).resolve().parents[1], "diagnostics")
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments or arguments[0] in {"run", "batch", "view", "compare", "test", "-h", "--help"}:
         from .test_hub_next import main as next_main

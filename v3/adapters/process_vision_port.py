@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from v3.async_capability import TransportSemantics, latest_state_snapshot
-from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 
 from .camera_geometry import CameraGeometryConfig
 from .litert_person_detector import LiteRtPersonDetectorConfig, LiteRtSsdPersonDetector
@@ -162,15 +162,15 @@ def _vision_process_main(
     command_queue: Any,
     ready_event: Any,
     stop_event: Any,
-    worker_cpu: int | None,
+    worker_cpus: int | CpuSet | None,
     strict_affinity: bool,
 ) -> None:
     camera: NativePicamera2Camera | None = None
     detector: NativePersonDetector | None = None
     media_server: VisionMediaServer | None = None
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(worker_cpu, role="vision-owner-process", strict=strict_affinity)
+        if worker_cpus is not None:
+            apply_process_cpuset(worker_cpus, role="vision-owner-process", strict=strict_affinity)
         camera = NativePicamera2Camera(
             camera_config,
             camera_geometry_config=camera_geometry,
@@ -285,7 +285,7 @@ class ProcessVisionPort:
         detector_config: LiteRtPersonDetectorConfig | None,
         *,
         camera_geometry: CameraGeometryConfig | None = None,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
         strict_affinity: bool = False,
         ready_timeout_s: float = _READY_TIMEOUT_S,
     ) -> None:
@@ -295,10 +295,8 @@ class ProcessVisionPort:
             raise TypeError("detector_config must be LiteRtPersonDetectorConfig or None")
         if camera_geometry is not None and not isinstance(camera_geometry, CameraGeometryConfig):
             raise TypeError("camera_geometry must be CameraGeometryConfig or None")
-        if worker_cpu is not None and (
-            not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0
-        ):
-            raise ValueError("worker_cpu must be non-negative or None")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
         context = mp.get_context(_START_METHOD)
@@ -316,7 +314,7 @@ class ProcessVisionPort:
                 self._command_queue,
                 self._ready_event,
                 self._stop_event,
-                worker_cpu,
+                worker_cpus,
                 strict_affinity,
             ),
             name="v3-vision-owner-process",
@@ -332,7 +330,8 @@ class ProcessVisionPort:
         self._collector_stop = threading.Event()
         self._collector: threading.Thread | None = None
         self._closed = False
-        self._process.start()
+        with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
+            self._process.start()
         if not self._ready_event.wait(float(ready_timeout_s)):
             self.stop()
             raise RuntimeError("process-isolated vision did not become ready")
@@ -349,7 +348,7 @@ class ProcessVisionPort:
             raise RuntimeError(f"process-isolated vision startup failed: {error}")
         collector = threading.Thread(target=self._collect_state, name="r2b4-vision-ipc", daemon=True)
         self._collector = collector
-        with temporary_current_affinity(worker_cpu, role="vision-ipc", strict=strict_affinity):
+        with temporary_current_affinity(worker_cpus, role="vision-ipc", strict=strict_affinity):
             collector.start()
 
     @property

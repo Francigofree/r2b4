@@ -181,6 +181,7 @@ def test_status_media_probe_reports_real_jpeg_probe_and_failure(monkeypatch, tmp
     monkeypatch.setattr(cli, "Er2PreviewClient", lambda *args, **kwargs: SimpleNamespace(
         run=lambda *args, **kwargs: SimpleNamespace(text="observation", interaction_id="1", tool_rounds=0),
     ))
+    monkeypatch.setattr("v3.runtime_performance.apply_host_affinity", lambda *args: ())
     assert cli.main(["preview", "observe"], project_root=tmp_path) == 0
     assert calls == []
 

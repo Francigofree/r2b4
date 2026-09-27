@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_affinity
 from v3.async_capability import (
     CapabilityCounters,
     CapabilitySnapshot,
@@ -108,14 +109,14 @@ class RecoveringTrajectoryRolloutBackend:
         "_restart_count",
         "_strict_affinity",
         "_superseded_count",
-        "_worker_cpu",
+        "_worker_cpus",
     )
 
     def __init__(
         self,
         config: NavigationConfig,
         *,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
         strict_affinity: bool = True,
         recovery_policy: PlannerRecoveryPolicy | None = None,
         backend_factory: BackendFactory = ProcessTrajectoryRolloutBackend,
@@ -123,12 +124,8 @@ class RecoveringTrajectoryRolloutBackend:
     ) -> None:
         if not isinstance(config, NavigationConfig):
             raise TypeError("config must be NavigationConfig")
-        if worker_cpu is not None and (
-            not isinstance(worker_cpu, int)
-            or isinstance(worker_cpu, bool)
-            or worker_cpu < 0
-        ):
-            raise ValueError("worker_cpu must be non-negative or None")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
         policy = recovery_policy or PlannerRecoveryPolicy()
@@ -138,7 +135,7 @@ class RecoveringTrajectoryRolloutBackend:
             raise TypeError("backend_factory must be callable")
 
         self._config = config
-        self._worker_cpu = worker_cpu
+        self._worker_cpus = worker_cpus
         self._strict_affinity = strict_affinity
         self._policy = policy
         self._process_config = process_config
@@ -175,7 +172,7 @@ class RecoveringTrajectoryRolloutBackend:
     def _new_backend(self) -> object:
         return self._backend_factory(
             self._config,
-            worker_cpu=self._worker_cpu,
+            worker_cpus=self._worker_cpus,
             strict_affinity=self._strict_affinity,
             ready_timeout_s=float(self._policy.ready_timeout_s),
             process_config=self._process_config,
@@ -265,9 +262,9 @@ class RecoveringTrajectoryRolloutBackend:
             _old, worker = self._detach_for_recovery_locked(reason)
         if worker is None:
             return
-        # Thread creation itself stays off the control CPU-affinity policy path.
-        # ProcessTrajectoryRolloutBackend pins the new child/feeder explicitly.
-        worker.start()
+        with temporary_current_affinity(self._worker_cpus, role="l6-recovery",
+                                        strict=self._strict_affinity):
+            worker.start()
 
     def request_recovery(self, reason: str = "MANUAL_RECOVERY") -> None:
         """Technical lifecycle hook; grants no navigation or control authority."""

@@ -14,7 +14,7 @@ from typing import Any
 from v3.contracts import TickContext
 from v3.config_types import EncoderProcessConfig
 from v3.async_capability import TransportSemantics
-from v3.runtime_performance import apply_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 
 from .counter_encoder import CounterEncoderBackendConfig, NativeCounterEncoderBackend
 from .gpio_counter import GpioCounterPairConfig, NativeGpioSignedCounterPair
@@ -45,15 +45,15 @@ def _encoder_process_main(
     result_queue: Any,
     ready_event: Any,
     stop_event: Any,
-    worker_cpu: int | None,
+    worker_cpus: int | CpuSet | None,
     strict_affinity: bool,
     process_config: EncoderProcessConfig,
 ) -> None:
     counter_pair: NativeGpioSignedCounterPair | None = None
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(
-                worker_cpu,
+        if worker_cpus is not None:
+            apply_process_cpuset(
+                worker_cpus,
                 role="encoder-owner-process",
                 strict=strict_affinity,
             )
@@ -117,7 +117,7 @@ class ProcessEncoderBackend:
         counter_config: GpioCounterPairConfig,
         backend_config: CounterEncoderBackendConfig,
         *,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
         strict_affinity: bool = False,
         process_config: EncoderProcessConfig,
     ) -> None:
@@ -125,10 +125,8 @@ class ProcessEncoderBackend:
             raise TypeError("counter_config must be GpioCounterPairConfig")
         if not isinstance(backend_config, CounterEncoderBackendConfig):
             raise TypeError("backend_config must be CounterEncoderBackendConfig")
-        if worker_cpu is not None and (
-            not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0
-        ):
-            raise ValueError("worker_cpu must be non-negative or None")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
         if not isinstance(process_config, EncoderProcessConfig):
@@ -150,7 +148,7 @@ class ProcessEncoderBackend:
                 self._queue,
                 self._ready_event,
                 self._stop_event,
-                worker_cpu,
+                worker_cpus,
                 strict_affinity,
                 process_config,
             ),
@@ -160,7 +158,8 @@ class ProcessEncoderBackend:
         self._latest: EncoderVelocityReading | None = None
         self._fatal_error = ""
         self._closed = False
-        self._process.start()
+        with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
+            self._process.start()
         if not self._ready_event.wait(float(ready_timeout_s)):
             self.stop()
             raise RuntimeError("process-isolated encoder did not become ready")
@@ -249,14 +248,14 @@ class ProcessEncoderSource(NativeEncoderSource):
         backend_config: CounterEncoderBackendConfig,
         source_config: NativeEncoderConfig,
         *,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
         strict_affinity: bool = False,
         process_config: EncoderProcessConfig,
     ) -> None:
         backend = ProcessEncoderBackend(
             counter_config,
             backend_config,
-            worker_cpu=worker_cpu,
+            worker_cpus=worker_cpus,
             strict_affinity=strict_affinity,
             process_config=process_config,
         )

@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 from v3.config_types import LidarProcessConfig
 from v3.async_capability import TransportSemantics, latest_state_snapshot
-from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 
 from .latest_lidar import MATCHER_CONFIDENCE_MODEL, MATCHER_CONTRACT_ID, MATCHER_TRANSPORT
 from .native_lidar_port import (
@@ -356,7 +356,8 @@ def _lidar_owner_process_main(
     raw_queue: Any,
     ready_event: Any,
     stop_event: Any,
-    worker_cpu: int | None,
+    worker_cpus: int | CpuSet | None,
+    matcher_cpus: CpuSet | None,
     strict_affinity: bool,
     control_minimum_range_m: float,
     control_maximum_range_m: float,
@@ -368,12 +369,15 @@ def _lidar_owner_process_main(
     raw_superseded_count = 0
     last_raw_revision = 0
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(worker_cpu, role="lidar-owner-process", strict=strict_affinity)
+        if worker_cpus is not None:
+            apply_process_cpuset(worker_cpus, role="lidar-owner-process", strict=strict_affinity)
         import serial
 
         pose_history = _SharedPoseHistory(process_config.pose_history_capacity, pose_lock, pose_sequence, pose_times, pose_values, process_config.pose_lock_timeout_s)
-        port = open_native_lidar_port(config, pose_history.lookup, serial.Serial)
+        port = open_native_lidar_port(
+            config, pose_history.lookup, serial.Serial,
+            matcher_cpus=matcher_cpus, strict_affinity=strict_affinity,
+        )
         initial_raw = port.get_raw_scan_snapshot()
         initial_matcher = port.get_matcher_result()
         initial_status = dict(port.get_runtime_status())
@@ -473,7 +477,8 @@ class ProcessLidarPort:
         config: NativeLidarPortConfig,
         pose_provider: Callable[[int], TimedPoseReference | None],
         *,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
+        matcher_cpus: CpuSet | None = None,
         strict_affinity: bool = False,
         control_minimum_range_m: float = 0.08,
         control_maximum_range_m: float = 2.5,
@@ -485,8 +490,10 @@ class ProcessLidarPort:
             raise TypeError("config must be NativeLidarPortConfig")
         if not callable(pose_provider):
             raise TypeError("pose_provider must be callable")
-        if worker_cpu is not None and (not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0):
-            raise ValueError("worker_cpu must be non-negative or None")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if matcher_cpus is not None:
+            matcher_cpus = normalize_cpus(matcher_cpus)
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
         for value, name in ((control_minimum_range_m, "control_minimum_range_m"), (control_maximum_range_m, "control_maximum_range_m")):
@@ -518,7 +525,7 @@ class ProcessLidarPort:
             args=(
                 config, pose_lock, pose_sequence, pose_times, pose_values,
                 self._state_queue, self._raw_queue, self._ready_event, self._stop_event,
-                worker_cpu, strict_affinity,
+                worker_cpus, matcher_cpus, strict_affinity,
                 float(control_minimum_range_m), float(control_maximum_range_m), int(control_maximum_points),
                 process_config,
             ),
@@ -545,7 +552,8 @@ class ProcessLidarPort:
         self._collector_stop = threading.Event()
         self._pending_poses: deque[TimedPoseReference] = deque(maxlen=process_config.pose_history_capacity)
         self._collector: threading.Thread | None = None
-        self._process.start()
+        with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
+            self._process.start()
         # Parent receives only compact state when evidence is sent to a sidecar.
         try:
             self._state_queue._writer.close()
@@ -581,7 +589,7 @@ class ProcessLidarPort:
             self.stop()
             raise RuntimeError("process-isolated LiDAR owner exited during startup")
         self._collector = threading.Thread(target=self._collect_state, name="r2b4-lidar-ipc", daemon=True)
-        with temporary_current_affinity(worker_cpu, role="lidar-ipc", strict=strict_affinity):
+        with temporary_current_affinity(worker_cpus, role="lidar-ipc", strict=strict_affinity):
             self._collector.start()
 
     @property
@@ -766,7 +774,8 @@ def open_process_lidar_port(
     config: NativeLidarPortConfig,
     pose_provider: Callable[[int], TimedPoseReference | None],
     *,
-    worker_cpu: int | None = None,
+    worker_cpus: int | CpuSet | None = None,
+    matcher_cpus: CpuSet | None = None,
     strict_affinity: bool = False,
     control_minimum_range_m: float = 0.08,
     control_maximum_range_m: float = 2.5,
@@ -777,7 +786,8 @@ def open_process_lidar_port(
     return ProcessLidarPort(
         config,
         pose_provider,
-        worker_cpu=worker_cpu,
+        worker_cpus=worker_cpus,
+        matcher_cpus=matcher_cpus,
         strict_affinity=strict_affinity,
         control_minimum_range_m=control_minimum_range_m,
         control_maximum_range_m=control_maximum_range_m,

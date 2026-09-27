@@ -776,7 +776,7 @@ def main() -> int:
         from v3.adapters.native_lidar_port import TimedPoseReference
         from v3.composition.native_sensor_inputs import NativeSensorInputOwner
         from v3.contracts import TickContext
-        from v3.runtime_performance import apply_process_affinity_layout, load_runtime_affinity_config
+        from v3.runtime_performance import apply_process_cpuset, load_runtime_affinity_config
         from v3_process_runtime import load_resident_runtime_config, native_lidar_factory
     except Exception as exc:
         raise SystemExit(
@@ -791,7 +791,7 @@ def main() -> int:
 
     affinity_evidence = []
     if affinity.enabled:
-        affinity_evidence = [item.as_dict() for item in apply_process_affinity_layout(affinity)]
+        affinity_evidence = [item.as_dict() for item in apply_process_cpuset(affinity.diagnostics_cpus, role="diagnostics", strict=affinity.strict)]
 
     print("R2B4 V3 PERIFERIAL CONTROL DIAG")
     print(f"repo:          {repo}")
@@ -802,7 +802,7 @@ def main() -> int:
     )
     print("ENCODER:       production lgpio owner + counter backend")
     print("LIDAR:         production NativeLidarPort + RPLIDAR + matcher process")
-    print(f"affinity:      {'production layout' if affinity.enabled else 'disabled'}")
+    print(f"affinity:      {'diagnostics policy' if affinity.enabled else 'disabled'}")
     print(
         f"phases:        baseline {args.baseline_samples} + encoder {args.samples} + "
         f"imu {args.samples} + lidar {args.samples} + core-L0 {args.samples} + baseline {args.baseline_samples}"

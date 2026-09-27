@@ -323,20 +323,23 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def pin_monitor_to_io_cpu(affinity: Mapping[str, object]) -> dict[str, object]:
-    cpu = affinity.get("io_cpu")
-    if affinity.get("enabled") is not True or not isinstance(cpu, int):
-        return {"attempted": False, "applied": False, "cpu": None}
-    setter = getattr(os, "sched_setaffinity", None)
-    getter = getattr(os, "sched_getaffinity", None)
-    if not callable(setter) or not callable(getter):
-        return {"attempted": True, "applied": False, "cpu": cpu, "error": "unavailable"}
-    try:
-        setter(0, {cpu})
-        allowed = sorted(int(v) for v in getter(0))
-        return {"attempted": True, "applied": allowed == [cpu], "cpu": cpu, "allowed_cpus": allowed}
-    except OSError as exc:
-        return {"attempted": True, "applied": False, "cpu": cpu, "error": f"{type(exc).__name__}:{exc}"}
+def parse_cpu_list(value: str) -> set[int]:
+    result: set[int] = set()
+    for part in value.split(","):
+        if not part:
+            continue
+        ends = part.split("-")
+        result.update(range(int(ends[0]), int(ends[-1]) + 1))
+    return result
+
+
+def pin_monitor_to_diagnostics_cpus(root: Path) -> dict[str, object]:
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from v3.runtime_performance import apply_host_affinity
+    evidence = apply_host_affinity(root, "diagnostics")
+    return {"attempted": bool(evidence), "tasks": [item.as_dict() for item in evidence],
+            "applied": bool(evidence) and all(item.applied for item in evidence)}
 
 
 def make_selftest_stat() -> str:
@@ -370,11 +373,9 @@ def run(root: Path, seconds: float, interval: float) -> int:
         return 3
 
     affinity = load_affinity(root)
-    monitor_affinity = pin_monitor_to_io_cpu(affinity)
-    expected_runtime_cpu = (
-        affinity.get("runtime_cpu")
-        if affinity.get("enabled") is True and isinstance(affinity.get("runtime_cpu"), int)
-        else None
+    monitor_affinity = pin_monitor_to_diagnostics_cpus(root)
+    expected_control_cpus = (
+        set(affinity["control_cpus"]) if affinity.get("enabled") is True else None
     )
 
     out_dir = root / "runtime/cpu"
@@ -485,7 +486,7 @@ def run(root: Path, seconds: float, interval: float) -> int:
                     main_voluntary += main["voluntary_ctxt_switches"]
                 if isinstance(main["nonvoluntary_ctxt_switches"], int):
                     main_involuntary += main["nonvoluntary_ctxt_switches"]
-                if expected_runtime_cpu is not None and str(main["allowed_cpus"]) != str(expected_runtime_cpu):
+                if expected_control_cpus is not None and parse_cpu_list(str(main["allowed_cpus"])) != expected_control_cpus:
                     affinity_mismatches += 1
 
             cur_children = {child: read_process_ticks(child) for child in descendants(pid)}
@@ -614,7 +615,7 @@ def run(root: Path, seconds: float, interval: float) -> int:
             "cpu_pct_max_one_core": max(proc_values) if proc_values else None,
         },
         "runtime_main_task": {
-            "expected_runtime_cpu": expected_runtime_cpu,
+            "expected_control_cpus": sorted(expected_control_cpus) if expected_control_cpus is not None else None,
             "processors_observed": sorted(main_processors),
             "allowed_cpu_sets_observed": sorted(main_allowed),
             "affinity_mismatch_sample_count": affinity_mismatches,

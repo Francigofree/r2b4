@@ -22,6 +22,33 @@ Aktív konfigurációk:
 - `conf/speed_map.json`
 - `conf/vezerles.json`
 
+## CPU-kiosztás
+
+A `conf/vezerles.json` `runtime_affinity` szekciója szerepenként CPU-listát ad.
+A `[1, 2]` maszk mindkét CPU-n engedi az ütemezést. A `control_cpus` pontosan
+egyelemű, és egyik másik szerep maszkja sem tartalmazhatja ezt a CPU-t. Üres,
+duplikált, negatív vagy nem egész CPU-azonosító indulási konfigurációs hiba.
+`strict: true` mellett a runtime a maszkok OS/cgroup szerinti elérhetőségét is
+ellenőrzi a hardverindítás előtt; az affinity alkalmazását visszaolvassa.
+
+Alapkiosztás: control `[3]`; encoder/IMU és a hozzájuk tartozó L0 acquisition
+`[0]`; LiDAR owner/matcher/L0 `[2]`; vision és planner `[1]`; capture, status,
+command, háttérmunka, L0 aux, operator, voice, ER2 és diagnosztika `[1, 2]`.
+A matcher és a planner saját beállítást kap. A child processzek, collectorok,
+queue feederek és a szolgáltatások natív helper threadjei is követik a maszkot.
+A Piper az őt futtató voice/ER2 szolgáltatás maszkját használja.
+
+A beállítás újraindításkor lép életbe; az effective config és a capture tárolja.
+A régi `runtime_cpu/lidar_cpu/vision_cpu/io_cpu` mezők live configként nem
+fogadhatók el; történeti capture replay dekódolásakor megőrzött régi értékekkel
+migrálódnak. `enabled: false` kikapcsolja a runtime-policy alkalmazását.
+
+Futó rendszer passzív ellenőrzése: `python3 tools/v3_performance_audit.py live`.
+Ez a runtime leszármazottait és az ugyanebből a projektből futó önálló R2B4
+szolgáltatásokat is vizsgálja: a control maszkjának egyeznie kell, a többi task
+maszkjának a saját konfigurált készletén belül kell maradnia. A policy az R2B4
+folyamatait helyezi el; más Linux-folyamatok vagy IRQ-k CPU-izolációját nem adja.
+
 ## Használat
 
 Az egyetlen ajánlott ember/agent belépő a gyökér `r` launcher. A `r` nem robotikai

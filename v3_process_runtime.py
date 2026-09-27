@@ -420,8 +420,8 @@ def run_v3_resident_process(
         apply_process_affinity_layout(affinity)
     if capture_session is not None:
         with temporary_current_affinity(
-            affinity.io_cpu if affinity.enabled else None,
-            role="io-start",
+            affinity.capture_cpus if affinity.enabled else None,
+            role="capture",
             strict=affinity.strict,
         ):
             capture_session.start()
@@ -445,8 +445,8 @@ def run_v3_resident_process(
         if isinstance(command_gateway, AsyncResidentCommandGateway):
             command_gateway.start()
         with temporary_current_affinity(
-            affinity.io_cpu if affinity.enabled else None,
-            role="io-start",
+            affinity.status_cpus if affinity.enabled else None,
+            role="status",
             strict=affinity.strict,
         ):
             status_publisher.start()
@@ -545,11 +545,15 @@ def native_lidar_factory(
         pose_provider: Callable[[int], TimedPoseReference | None],
     ) -> object:
         with temporary_current_affinity(
-            affinity.lidar_cpu if affinity.enabled else None,
+            affinity.lidar_owner_cpus if affinity.enabled else None,
             role="lidar",
             strict=affinity.strict,
         ):
-            return open_native_lidar_port(lidar_config, pose_provider, serial_factory)
+            return open_native_lidar_port(
+                lidar_config, pose_provider, serial_factory,
+                matcher_cpus=affinity.lidar_matcher_cpus if affinity.enabled else None,
+                strict_affinity=affinity.strict,
+            )
 
     return open_lidar
 
@@ -583,7 +587,8 @@ def process_lidar_factory(
             lidar_config,
             pose_provider,
             process_config=process_config,
-            worker_cpu=(affinity.lidar_cpu if affinity.enabled else None),
+            worker_cpus=(affinity.lidar_owner_cpus if affinity.enabled else None),
+            matcher_cpus=(affinity.lidar_matcher_cpus if affinity.enabled else None),
             strict_affinity=(affinity.strict if affinity.enabled else False),
             control_minimum_range_m=sensors.inputs.lidar_source.local_perception_min_range_m,
             control_maximum_range_m=sensors.inputs.lidar_source.local_perception_max_range_m,
@@ -681,6 +686,12 @@ def main(argv: list[str] | None = None) -> int:
         resolved = ConfigResolver.for_project(PROJECT_ROOT).resolve()
         runtime_config = resolved.runtime
         affinity_config = resolved.affinity
+        from multiprocessing import resource_tracker
+        with temporary_current_affinity(
+            affinity_config.runtime_background_cpus if affinity_config.enabled else None,
+            role="resource-tracker", strict=affinity_config.strict,
+        ):
+            resource_tracker.ensure_running()
         command_gateway = AsyncResidentCommandGateway(
             ResidentCommandMailboxConfig(path=command_path,
                 maximum_ttl_ns=resolved.edges.command_ingress.maximum_ttl_ns,
@@ -690,13 +701,13 @@ def main(argv: list[str] | None = None) -> int:
                 maximum_file_bytes=resolved.edges.command_ingress.maximum_file_bytes),
             reader_poll_s=resolved.edges.command_ingress.reader_poll_s,
             reader_stop_timeout_s=resolved.edges.command_ingress.reader_stop_timeout_s,
-            worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
+            worker_cpus=(affinity_config.command_cpus if affinity_config.enabled else None),
             strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
         # P0_CONTROL_PROCESS_ISOLATION_20260920: status formatting/I/O is out-of-process.
         status_publisher = ProcessResidentStatusPublisher(
             ResidentStatusConfig(path=status_path, effective_config=resolved),
-            worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
+            worker_cpus=(affinity_config.status_cpus if affinity_config.enabled else None),
             strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
         capture_session = (
@@ -723,8 +734,8 @@ def main(argv: list[str] | None = None) -> int:
                     tick_sample_hz=args.capture_hz,
                 ),
                 project_root=PROJECT_ROOT,
-                worker_cpu=(
-                    affinity_config.io_cpu if affinity_config.enabled else None
+                worker_cpus=(
+                    affinity_config.capture_cpus if affinity_config.enabled else None
                 ),
                 strict_affinity=(
                     affinity_config.strict if affinity_config.enabled else False
@@ -752,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
             ProcessBno055Device,
             open_bus=smbus2.SMBus,
             process_config=resolved.edges.imu_process,
-            worker_cpu=(affinity_config.io_cpu if affinity_config.enabled else None),
+            worker_cpus=(affinity_config.imu_cpus if affinity_config.enabled else None),
             strict_affinity=(affinity_config.strict if affinity_config.enabled else False),
         )
 

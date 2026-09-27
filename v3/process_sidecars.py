@@ -22,7 +22,7 @@ from v3.capture_ipc import CaptureCoreExpander
 from v3.hri_evidence import HRI_EVENT_TOPIC, load_hri_events_for_capture
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
-from v3.runtime_performance import apply_current_affinity, temporary_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 from v3.resident_status import (
     RESIDENT_PROCESS_STATUS_SCHEMA,
     _atomic_private_json,
@@ -55,14 +55,14 @@ def _capture_sidecar_main(
     failed_event: Any,
     expect_raw_lidar_end: bool,
     project_root: str,
-    worker_cpu: int | None,
+    worker_cpus: int | CpuSet | None,
     strict_affinity: bool,
 ) -> None:
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(
-                worker_cpu,
-                role="observer-sidecar",
+        if worker_cpus is not None:
+            apply_process_cpuset(
+                worker_cpus,
+                role="capture",
                 strict=strict_affinity,
             )
         hub = ObservationHub()
@@ -208,15 +208,15 @@ def _status_sidecar_main(
     result_queue: Any,
     ready_event: Any,
     failed_event: Any,
-    worker_cpu: int | None,
+    worker_cpus: int | CpuSet | None,
     strict_affinity: bool,
     effective_config=None,
 ) -> None:
     try:
-        if worker_cpu is not None:
-            apply_current_affinity(
-                worker_cpu,
-                role="status-sidecar",
+        if worker_cpus is not None:
+            apply_process_cpuset(
+                worker_cpus,
+                role="status",
                 strict=strict_affinity,
             )
         target = Path(path)
@@ -304,7 +304,7 @@ class ProcessMcapCaptureSession:
         "_started",
         "_strict_affinity",
         "_transport_capacity",
-        "_worker_cpu",
+        "_worker_cpus",
         "_expect_raw_lidar_end",
         "evidence",
     )
@@ -319,7 +319,7 @@ class ProcessMcapCaptureSession:
         config: McapCaptureConfig | None = None,
         capacity: int = 256,
         project_root: str | Path,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
         strict_affinity: bool = False,
         expect_raw_lidar_end: bool = False,
     ) -> None:
@@ -335,10 +335,8 @@ class ProcessMcapCaptureSession:
             raise TypeError("metadata must be a mapping or None")
         if not isinstance(capacity, int) or isinstance(capacity, bool) or capacity <= 0:
             raise ValueError("capacity must be a positive integer")
-        if worker_cpu is not None and (
-            not isinstance(worker_cpu, int) or isinstance(worker_cpu, bool) or worker_cpu < 0
-        ):
-            raise ValueError("worker_cpu must be non-negative or None")
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
         if type(strict_affinity) is not bool:
             raise TypeError("strict_affinity must be bool")
 
@@ -356,7 +354,7 @@ class ProcessMcapCaptureSession:
         self._ready_event = context.Event()
         self._failed_event = context.Event()
         self._project_root = Path(project_root)
-        self._worker_cpu = worker_cpu
+        self._worker_cpus = worker_cpus
         self._strict_affinity = strict_affinity
         self._expect_raw_lidar_end = bool(expect_raw_lidar_end)
         self._process = context.Process(
@@ -375,7 +373,7 @@ class ProcessMcapCaptureSession:
                 self._failed_event,
                 self._expect_raw_lidar_end,
                 str(self._project_root),
-                self._worker_cpu,
+                self._worker_cpus,
                 self._strict_affinity,
             ),
             name="v3-observer-capture",
@@ -407,7 +405,8 @@ class ProcessMcapCaptureSession:
     def start(self) -> None:
         if self._started:
             return
-        self._process.start()
+        with temporary_current_affinity(self._worker_cpus, role="worker-start", strict=self._strict_affinity):
+            self._process.start()
         self._started = True
         if not self._ready_event.wait(_SIDECAR_READY_TIMEOUT_S):
             self._terminate()
@@ -418,7 +417,7 @@ class ProcessMcapCaptureSession:
         # Queue feeders are created by the first put, not by Process.start().
         # Start serialization off the control CPU before accepting observations.
         with temporary_current_affinity(
-            self._worker_cpu, role="capture-feeder", strict=self._strict_affinity
+            self._worker_cpus, role="capture-feeder", strict=self._strict_affinity
         ):
             self._data_queue.put(("warmup", None), timeout=_SIDECAR_READY_TIMEOUT_S)
             self._control_queue.put(("warmup",), timeout=_SIDECAR_READY_TIMEOUT_S)
@@ -509,7 +508,7 @@ class ProcessResidentStatusPublisher:
         "_started",
         "_strict_affinity",
         "_tick_queue",
-        "_worker_cpu",
+        "_worker_cpus",
         "_error_text",
     )
 
@@ -517,9 +516,13 @@ class ProcessResidentStatusPublisher:
         self,
         config: object,
         *,
-        worker_cpu: int | None = None,
+        worker_cpus: int | CpuSet | None = None,
         strict_affinity: bool = False,
     ) -> None:
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
         path = getattr(config, "path", None)
         file_mode = getattr(config, "file_mode", None)
         if not isinstance(path, Path) or not path.is_absolute():
@@ -533,7 +536,7 @@ class ProcessResidentStatusPublisher:
         self._result_queue = context.Queue(maxsize=4)
         self._ready_event = context.Event()
         self._failed_event = context.Event()
-        self._worker_cpu = worker_cpu
+        self._worker_cpus = worker_cpus
         self._strict_affinity = strict_affinity
         self._process = context.Process(
             target=_status_sidecar_main,
@@ -545,7 +548,7 @@ class ProcessResidentStatusPublisher:
                 self._result_queue,
                 self._ready_event,
                 self._failed_event,
-                worker_cpu,
+                worker_cpus,
                 strict_affinity,
                 getattr(config, "effective_config", None),
             ),
@@ -585,7 +588,8 @@ class ProcessResidentStatusPublisher:
     def start(self) -> None:
         if self._started:
             raise RuntimeError("status publisher is already started")
-        self._process.start()
+        with temporary_current_affinity(self._worker_cpus, role="worker-start", strict=self._strict_affinity):
+            self._process.start()
         self._started = True
         if not self._ready_event.wait(_SIDECAR_READY_TIMEOUT_S):
             self._process.terminate()
@@ -595,7 +599,7 @@ class ProcessResidentStatusPublisher:
         if self._error_text is not None:
             raise RuntimeError(f"status sidecar failed: {self._error_text}")
         with temporary_current_affinity(
-            self._worker_cpu, role="status-feeder", strict=self._strict_affinity
+            self._worker_cpus, role="status-feeder", strict=self._strict_affinity
         ):
             self._tick_queue.put(None, timeout=_SIDECAR_READY_TIMEOUT_S)
 

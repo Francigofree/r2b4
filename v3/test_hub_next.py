@@ -544,6 +544,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from v3.runtime_performance import apply_host_affinity
+    apply_host_affinity(Path(__file__).resolve().parents[1], "diagnostics")
     args = _parser().parse_args(argv)
     command = args.command or "run"
     try:

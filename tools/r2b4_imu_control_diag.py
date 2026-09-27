@@ -561,7 +561,7 @@ def main() -> int:
         from v3.adapters.live_imu import NativeImuSource
         from v3.contracts import TickContext
         from v3.runtime_performance import (
-            apply_process_affinity_layout,
+            apply_process_cpuset,
             load_runtime_affinity_config,
         )
         from v3_process_runtime import load_resident_runtime_config
@@ -580,7 +580,7 @@ def main() -> int:
     affinity_evidence = []
     if affinity.enabled:
         affinity_evidence = [
-            item.as_dict() for item in apply_process_affinity_layout(affinity)
+            item.as_dict() for item in apply_process_cpuset(affinity.diagnostics_cpus, role="diagnostics", strict=affinity.strict)
         ]
 
     print("R2B4 V3 IMU CONTROL DIAG")
@@ -592,7 +592,7 @@ def main() -> int:
         f"mode={sensor_config.imu_device.operation_mode}"
     )
     if affinity.enabled:
-        print(f"affinity:      production layout, main task CPU{affinity.runtime_cpu}")
+        print(f"affinity:      diagnostics policy, diagnostic tasks CPUs {affinity.diagnostics_cpus}")
     else:
         print("affinity:      disabled by production config")
     print(f"samples:       baseline {args.baseline_samples} + IMU {args.samples} + baseline {args.baseline_samples}")

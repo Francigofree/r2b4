@@ -32,24 +32,6 @@ SCHEMA = "R2B4_P0_ASYNC_ACCEPTANCE_V1"
 DEFAULT_IDLE_SECONDS = 10.0
 DEFAULT_POLL_SECONDS = 0.10
 
-TARGETED_TESTS = (
-    "tests/test_v3_async_completion_boundary_fix.py",
-    "tests/test_v3_async_peripheral_isolation.py",
-    "tests/test_v3_async_planner_edges.py",
-    "tests/test_v3_async_recovery_p0.py",
-    "tests/test_v3_async_person_photo_evidence.py",
-    "tests/test_v3_capture_reliable_transport_p0.py",
-    "tests/test_v3_async_regressions.py",
-    "tests/test_v3_control_process_isolation.py",
-    "tests/test_v3_process_imu_device.py",
-    "tests/test_v3_process_runtime.py",
-    "tests/test_v3_resident_runtime.py",
-    "tests/test_v3_runtime_phase_timing.py",
-    "tests/test_v3_sterile_edges.py",
-    "tests/test_v3_mcap_e2e.py",
-    "tests/test_v3_replay.py",
-    "tests/test_v3_test_hub_cli.py",
-)
 
 REQUIRED_ANCHORS = (
     "AGENTS.md",
@@ -266,184 +248,29 @@ def _capture_delta(
 
 
 
-def _cpu_list(text: str) -> set[int]:
-    cpus: set[int] = set()
-    for part in text.strip().split(","):
-        if not part:
-            continue
-        if "-" in part:
-            lo, hi = part.split("-", 1)
-            cpus.update(range(int(lo), int(hi) + 1))
-        else:
-            cpus.add(int(part))
-    return cpus
-
-
-def _task_rows(pid: int) -> list[dict[str, object]]:
-    root = Path(f"/proc/{pid}/task")
-    rows: list[dict[str, object]] = []
-    try:
-        tasks = sorted(root.iterdir(), key=lambda item: int(item.name))
-    except OSError as exc:
-        raise AcceptanceError(f"cannot inspect /proc tasks for PID {pid}: {exc}") from exc
-    for task in tasks:
-        try:
-            tid = int(task.name)
-            name = (task / "comm").read_text(encoding="utf-8").strip()
-            status = (task / "status").read_text(encoding="utf-8")
-        except (OSError, UnicodeError, ValueError):
-            continue
-        allowed: set[int] = set()
-        for line in status.splitlines():
-            if line.startswith("Cpus_allowed_list:"):
-                allowed = _cpu_list(line.split(":", 1)[1])
-                break
-        rows.append(
-            {
-                "pid": pid,
-                "tid": tid,
-                "name": name,
-                "allowed_cpus": sorted(allowed),
-            }
-        )
-    return rows
-
-
-def _direct_children(pid: int) -> tuple[int, ...]:
-    children: list[int] = []
-    for item in Path("/proc").iterdir():
-        if not item.name.isdigit():
-            continue
-        try:
-            status = (item / "status").read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            continue
-        parent: int | None = None
-        for line in status.splitlines():
-            if line.startswith("PPid:"):
-                try:
-                    parent = int(line.split(":", 1)[1].strip())
-                except ValueError:
-                    parent = None
-                break
-        if parent == pid:
-            children.append(int(item.name))
-    return tuple(sorted(children))
-
-
-def _descendants(pid: int) -> tuple[int, ...]:
-    seen: set[int] = set()
-    queue = list(_direct_children(pid))
-    while queue:
-        child = queue.pop(0)
-        if child in seen:
-            continue
-        seen.add(child)
-        queue.extend(_direct_children(child))
-    return tuple(sorted(seen))
-
-
-def _runtime_affinity_config(root: Path) -> dict[str, object]:
-    control = _json_object(root / "conf" / "vezerles.json")
-    raw = control.get("runtime_affinity")
-    if not isinstance(raw, dict):
-        raise AcceptanceError("conf/vezerles.json has no runtime_affinity object")
-    if raw.get("enabled") is not True:
-        raise AcceptanceError(
-            "runtime_affinity.enabled must be true for P0 timing/affinity acceptance"
-        )
-    result: dict[str, object] = {"enabled": True}
-    for key in ("runtime_cpu", "lidar_cpu", "vision_cpu", "io_cpu"):
-        value = raw.get(key)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            raise AcceptanceError(f"invalid runtime_affinity.{key}={value!r}")
-        result[key] = value
+def _affinity_audit(root: Path, runtime_pid: int, *, require_capture: bool = False) -> dict[str, object]:
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from v3.runtime_performance import load_runtime_affinity_config
+    from v3.affinity_diagnostics import audit_affinity
+    config = load_runtime_affinity_config(root / "conf" / "vezerles.json")
+    if not config.enabled:
+        raise AcceptanceError("runtime_affinity.enabled must be true for live acceptance")
+    roles = ("encoder", "imu", "lidar_owner", "lidar_matcher", "vision", "planner",
+             "status", "command", "l0_encoder", "l0_imu", "l0_lidar", "l0_aux")
+    result = audit_affinity(config, runtime_pid, project_root=root,
+                            required_roles=roles + (("capture",) if require_capture else ()))
+    if result["status"] != "PASS":
+        raise AcceptanceError("affinity audit failed: " + json.dumps(result, sort_keys=True))
     return result
 
 
-def _affinity_audit(root: Path, runtime_pid: int) -> dict[str, object]:
-    config = _runtime_affinity_config(root)
-    runtime_cpu = int(config["runtime_cpu"])
-    lidar_cpu = int(config["lidar_cpu"])
-    vision_cpu = int(config["vision_cpu"])
-    io_cpu = int(config["io_cpu"])
-    role_cpus = {runtime_cpu, lidar_cpu, vision_cpu, io_cpu}
-
-    parent_rows = _task_rows(runtime_pid)
-    descendants = _descendants(runtime_pid)
-    child_rows: list[dict[str, object]] = []
-    for child in descendants:
-        child_rows.extend(_task_rows(child))
-    all_rows = parent_rows + child_rows
-    if not all_rows:
-        raise AcceptanceError("affinity audit found no runtime tasks")
-
-    def mask(row: Mapping[str, object]) -> set[int]:
-        raw = row.get("allowed_cpus")
-        return set(raw) if isinstance(raw, list) else set()
-
-    main = next(
-        (
-            row
-            for row in parent_rows
-            if row.get("tid") == runtime_pid
-        ),
-        None,
-    )
-    if main is None:
-        raise AcceptanceError("runtime main task is missing from /proc audit")
-
-    non_main_parent = [row for row in parent_rows if row.get("tid") != runtime_pid]
-    checks = {
-        "runtime_main_exact_cpu": mask(main) == {runtime_cpu},
-        "all_tasks_single_cpu": all(len(mask(row)) == 1 for row in all_rows),
-        "all_tasks_within_configured_role_cpus": all(
-            bool(mask(row)) and mask(row) <= role_cpus for row in all_rows
-        ),
-        "io_cpu_worker_present": any(mask(row) == {io_cpu} for row in all_rows),
-        "vision_cpu_worker_present": any(
-            mask(row) == {vision_cpu} for row in all_rows
-        ),
-        "lidar_cpu_worker_present": any(
-            mask(row) == {lidar_cpu} for row in all_rows
-        ),
-        "control_process_nonmain_not_on_lidar_cpu": all(
-            mask(row) != {lidar_cpu} for row in non_main_parent
-        ),
-    }
-    if not all(checks.values()):
-        failed = [name for name, value in checks.items() if not value]
-        raise AcceptanceError("affinity audit failed: " + ", ".join(failed))
-    return {
-        "status": "PASS",
-        "runtime_pid": runtime_pid,
-        "config": config,
-        "descendant_pids": list(descendants),
-        "checks": checks,
-        "tasks": all_rows,
-    }
-
-
-def _targeted_pytest(root: Path) -> CommandResult:
-    missing = [item for item in TARGETED_TESTS if not (root / item).is_file()]
-    if missing:
-        raise AcceptanceError(
-            "targeted acceptance tests missing: " + ", ".join(missing)
-        )
-    return _run(
-        [sys.executable, "-m", "pytest", "-q", *TARGETED_TESTS],
-        cwd=root,
-    )
-
-
-def _full_pytest(root: Path) -> CommandResult:
-    return _run([sys.executable, "-m", "pytest", "-q"], cwd=root)
-
-
 def run_offline(root: Path, *, full_pytest: bool) -> dict[str, object]:
-    commands = [_targeted_pytest(root)]
+    commands = [_run(["./r", "test"], cwd=root),
+                _run(["./r", "test", "process"], cwd=root),
+                _run(["./r", "test", "async"], cwd=root)]
     if full_pytest:
-        commands.append(_full_pytest(root))
+        commands.append(_run(["./r", "test", "full"], cwd=root))
     return {
         "status": "PASS",
         "full_pytest": full_pytest,
@@ -491,7 +318,7 @@ def _live_idle_session(
     started = False
     live_affinity: dict[str, object] | None = None
     try:
-        controller.runtime_start(mode)
+        controller.runtime_start(mode, capture_hz=50)
         started = True
         capture_path = controller.current_capture_path()
 
@@ -503,7 +330,7 @@ def _live_idle_session(
         runtime_pid = controller.snapshot().runtime_pid
         if runtime_pid is None:
             raise AcceptanceError(f"{mode}: runtime PID unavailable for affinity audit")
-        live_affinity = _affinity_audit(root, runtime_pid)
+        live_affinity = _affinity_audit(root, runtime_pid, require_capture=mode == "full")
 
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
@@ -550,6 +377,13 @@ def _live_idle_session(
             raise AcceptanceError(
                 f"FULL capture did not publish a finalized MCAP: {capture_path}"
             )
+        from v3.test_hub import inspect_capture
+        inspected = inspect_capture(capture_path)
+        profile = inspected.get("analysis_profile", {})
+        if (inspected.get("status") != "PASS"
+                or profile.get("tick_sample_hz") != 50
+                or profile.get("exact_replay_applicable") is not True):
+            raise AcceptanceError("FULL acceptance requires intact, replay-complete 50 Hz capture")
         diag_dir = root / "runtime" / "diag"
         diag_dir.mkdir(parents=True, exist_ok=True)
         replay_path = diag_dir / f"p0_async_acceptance_{stamp}_replay.json"
@@ -584,6 +418,8 @@ def _live_idle_session(
             )
         replay = {
             "capture_path": str(capture_path),
+            "capture_integrity": inspected["status"],
+            "capture_hz": profile["tick_sample_hz"],
             "result_path": str(replay_path),
             "status": replay_payload.get("status"),
             "first_divergence": replay_payload.get("first_divergence"),
@@ -686,6 +522,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         root = _project_root(args.project_root)
+        sys.path.insert(0, str(root))
+        from v3.runtime_performance import apply_host_affinity
+        apply_host_affinity(root, "diagnostics")
         if args.command == "offline":
             payload = {
                 "schema": SCHEMA,

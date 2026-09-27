@@ -411,7 +411,7 @@ class NativeHardwareSensorOwner:
                     config.inputs.encoder_backend,
                     config.inputs.encoder_source,
                     **({"process_config": runtime_edges.encoder_process} if runtime_edges is not None else {}),
-                    worker_cpu=(affinity.io_cpu if affinity.enabled else None),
+                    worker_cpus=(affinity.encoder_cpus if affinity.enabled else None),
                     strict_affinity=(affinity.strict if affinity.enabled else False),
                 )
 
@@ -422,7 +422,7 @@ class NativeHardwareSensorOwner:
                         config.camera_device,
                         config.person_detection_backend,
                         camera_geometry=config.camera_geometry,
-                        worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
+                        worker_cpus=(affinity.vision_cpus if affinity.enabled else None),
                         strict_affinity=(affinity.strict if affinity.enabled else False),
                     )
                 except Exception as exc:
@@ -434,7 +434,7 @@ class NativeHardwareSensorOwner:
                 camera, (ProcessVisionPort, UnavailableVisionPort)
             ):
                 with temporary_current_affinity(
-                    affinity.vision_cpu if affinity.enabled else None,
+                    affinity.vision_cpus if affinity.enabled else None,
                     role="vision",
                     strict=affinity.strict,
                 ):
@@ -468,7 +468,7 @@ class NativeHardwareSensorOwner:
                 else:
                     detector: NativePersonDetector | None = None
                     with temporary_current_affinity(
-                        affinity.vision_cpu if affinity.enabled else None,
+                        affinity.vision_cpus if affinity.enabled else None,
                         role="vision",
                         strict=affinity.strict,
                     ):
@@ -505,7 +505,9 @@ class NativeHardwareSensorOwner:
                             source_device_id=(
                                 config.inputs.person_detection_source.device_id
                             ),
-                        )
+                        ),
+                        worker_cpus=affinity.vision_cpus if affinity.enabled else None,
+                        strict_affinity=affinity.strict,
                     )
 
             inputs = NativeSensorInputOwner(
@@ -831,7 +833,7 @@ def run_native_hardware_resident_control(
             rollout_backend = RecoveringTrajectoryRolloutBackend(
                 config.composition.live_control.control.navigation,
                 **({"recovery_policy": runtime_edges.planner_recovery, "process_config": runtime_edges.planner_process} if runtime_edges is not None else {}),
-                worker_cpu=(affinity.vision_cpu if affinity.enabled else None),
+                worker_cpus=(affinity.planner_cpus if affinity.enabled else None),
                 strict_affinity=(affinity.strict if affinity.enabled else False),
             )
         def observe(result: TickResult) -> None:
@@ -859,15 +861,7 @@ def run_native_hardware_resident_control(
             trajectory_rollout_backend=rollout_backend,
             enable_multirate_inputs=enable_multirate_inputs,
             multirate_config=runtime_edges.multirate if runtime_edges is not None else None,
-            # Critical encoder/IMU acquisition stays on the dedicated I/O CPU;
-            # camera/person inference is isolated on vision_cpu so it cannot starve it.
-            input_worker_cpu=(affinity.io_cpu if affinity.enabled else None),
-            lidar_input_worker_cpu=(
-                affinity.lidar_cpu if affinity.enabled else None
-            ),
-            input_worker_strict_affinity=(
-                affinity.strict if affinity.enabled else False
-            ),
+            input_affinity=affinity,
         )
     finally:
         try:

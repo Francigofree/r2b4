@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from v3.adapters.latest_lidar import MATCHER_CONTRACT_ID
+from v3.runtime_performance import CpuSet, apply_process_cpuset
 from v3.lidar_config import LidarMatcherConfig
 from v3.lidar_estimator import LidarEstimator
 
@@ -62,9 +63,13 @@ def matcher_process_main(
     result_queue: Any,
     stop_event: Any,
     ready_event: Any,
+    matcher_cpus: CpuSet | None = None,
+    strict_affinity: bool = False,
 ) -> None:
     """Consume only the newest raw scan and publish only the newest result."""
 
+    if matcher_cpus is not None:
+        apply_process_cpuset(matcher_cpus, role="lidar-matcher", strict=strict_affinity)
     estimator: LidarEstimator | None = None
     input_drops = 0
     output_drops = 0

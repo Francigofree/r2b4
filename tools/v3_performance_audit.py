@@ -9,67 +9,6 @@ import os
 from pathlib import Path
 
 
-EXPECTED = {
-    "r2b4-runtime": 3,
-    "r2b4-io-start": 0,
-    "r2b4-vision": 1,
-    "r2b4-lidar": 2,
-}
-
-
-def _cpu_list(text: str) -> set[int]:
-    cpus: set[int] = set()
-    for part in text.strip().split(","):
-        if not part:
-            continue
-        if "-" in part:
-            lo, hi = part.split("-", 1)
-            cpus.update(range(int(lo), int(hi) + 1))
-        else:
-            cpus.add(int(part))
-    return cpus
-
-
-def _task_info(pid: int) -> list[tuple[int, str, set[int]]]:
-    root = Path(f"/proc/{pid}/task")
-    result = []
-    for task in sorted(root.iterdir(), key=lambda p: int(p.name)):
-        tid = int(task.name)
-        try:
-            name = (task / "comm").read_text().strip()
-            status = (task / "status").read_text()
-        except OSError:
-            continue
-        allowed = set()
-        for line in status.splitlines():
-            if line.startswith("Cpus_allowed_list:"):
-                allowed = _cpu_list(line.split(":", 1)[1])
-                break
-        result.append((tid, name, allowed))
-    return result
-
-
-def _children(pid: int) -> list[int]:
-    """Return direct child PIDs without relying on task/children availability."""
-
-    result: list[int] = []
-    for item in Path("/proc").iterdir():
-        if not item.name.isdigit():
-            continue
-        try:
-            status = (item / "status").read_text()
-        except OSError:
-            continue
-        parent = None
-        for line in status.splitlines():
-            if line.startswith("PPid:"):
-                parent = int(line.split(":", 1)[1].strip())
-                break
-        if parent == pid:
-            result.append(int(item.name))
-    return sorted(result)
-
-
 def _resolve_pid(args: argparse.Namespace) -> int:
     if args.pid is not None:
         return args.pid
@@ -79,38 +18,16 @@ def _resolve_pid(args: argparse.Namespace) -> int:
 
 def live(args: argparse.Namespace) -> int:
     pid = _resolve_pid(args)
-    parent_rows = _task_info(pid)
-    child_pids = _children(pid)
-    child_rows: list[tuple[int, str, set[int]]] = []
-    for child in child_pids:
-        child_rows.extend(_task_info(child))
-    print(f"runtime_pid={pid} children={child_pids}")
-    for tid, name, allowed in parent_rows:
-        print(f"parent tid={tid:<7} name={name:<16} allowed={','.join(map(str, sorted(allowed)))}")
-    for tid, name, allowed in child_rows:
-        print(f"child  tid={tid:<7} name={name:<16} allowed={','.join(map(str, sorted(allowed)))}")
-
-    main_mask = next((mask for tid, _, mask in parent_rows if tid == pid), set())
-    runtime_ok = main_mask == {3}
-    vision_ok = any(mask == {1} for tid, _, mask in parent_rows if tid != pid)
-    io_ok = any(mask == {0} for tid, _, mask in parent_rows if tid != pid)
-    lidar_ok = bool(child_rows) and all(mask == {2} for _, _, mask in child_rows)
-    parent_workers = tuple(mask for tid, _, mask in parent_rows if tid != pid)
-    parent_single_cpu = bool(parent_workers) and all(len(mask) == 1 for mask in parent_workers)
-    parent_cpu_roles_only = all(mask <= {0, 1, 3} for mask in parent_workers)
-    checks = {
-        "runtime_main_cpu3": runtime_ok,
-        "vision_worker_cpu1_present": vision_ok,
-        "io_worker_cpu0_present": io_ok,
-        "all_parent_tasks_single_cpu": parent_single_cpu,
-        "no_parent_task_leaks_to_lidar_cpu2": parent_cpu_roles_only,
-        "lidar_child_cpu2": lidar_ok,
-    }
-    for name, passed in checks.items():
-        print(f"{name}: {'PASS' if passed else 'FAIL'}")
-    ok = all(checks.values())
-    print("LIVE_AFFINITY_AUDIT=" + ("PASS" if ok else "FAIL"))
-    return 0 if ok else 1
+    root = Path(__file__).resolve().parents[1]
+    import sys
+    sys.path.insert(0, str(root))
+    from v3.runtime_performance import load_runtime_affinity_config, apply_host_affinity
+    from v3.affinity_diagnostics import audit_affinity
+    apply_host_affinity(root, "diagnostics")
+    result = audit_affinity(load_runtime_affinity_config(root / "conf" / "vezerles.json"),
+                            pid, project_root=root)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result["status"] == "PASS" else 1
 
 
 def report(args: argparse.Namespace) -> int:

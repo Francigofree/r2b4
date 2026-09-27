@@ -766,6 +766,19 @@ def _migrate_legacy_resolved_config_snapshot(value: object) -> object:
             and "reversal_min_omega_rad_s" not in migrated
         ):
             migrated["reversal_min_omega_rad_s"] = 0.05
+        if migrated.get("__type__") == "RuntimeAffinityConfig" and "runtime_cpu" in migrated:
+            # Scheduling is not replay state. Preserve the historical role masks
+            # after verifying the captured snapshot hash, without live defaults.
+            from v3.runtime_performance import RuntimeAffinityConfig
+            legacy_roles = {
+                "control_cpus": "runtime_cpu", "lidar_owner_cpus": "lidar_cpu",
+                "lidar_matcher_cpus": "lidar_cpu", "l0_lidar_cpus": "lidar_cpu",
+                "vision_cpus": "vision_cpu", "planner_cpus": "vision_cpu",
+            }
+            cpus = {name: [migrated[legacy_roles.get(name, "io_cpu")]]
+                    for name in RuntimeAffinityConfig().cpu_roles()}
+            migrated = {"__type__": "RuntimeAffinityConfig", "enabled": migrated["enabled"],
+                        "strict": migrated["strict"], **cpus}
         return migrated
     if isinstance(value, list):
         return [_migrate_legacy_resolved_config_snapshot(item) for item in value]

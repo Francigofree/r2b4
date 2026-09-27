@@ -86,6 +86,7 @@ def test_stream_json_and_speech_use_same_stream_text(monkeypatch, tmp_path, caps
     monkeypatch.setattr(er2_cli, "Er2StreamingClient", FakeStreamingClient)
     monkeypatch.setattr(er2_cli, "Er2SpeechReporter", FakeSpeechReporter)
 
+    monkeypatch.setattr("v3.runtime_performance.apply_host_affinity", lambda *args: ())
     rc = er2_cli.main([
         "stream",
         "fordulj 90 fokot",

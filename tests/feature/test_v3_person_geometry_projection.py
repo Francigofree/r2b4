@@ -145,7 +145,7 @@ def test_vision_owner_projects_bbox_from_camera_geometry_ssot():
     projection = result.projections[0]
     # Image-left is robot-left in the canonical base frame.
     assert projection.left_bearing_rad > projection.right_bearing_rad > 0.0
-    assert projection.geometry_quality == "factory_nominal"
+    assert projection.geometry_quality == "empirical"
 
 
 def test_invalid_runtime_geometry_keeps_2d_detection_but_blocks_spatial_projection():

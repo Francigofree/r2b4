@@ -137,15 +137,16 @@ def test_one_latest_result_preserves_identity_frame_pose_and_measurement_age():
     assert reading.scan.front_clearance_m == 1.2
     assert tuple(((point.angle_deg, point.distance_m, point.quality) for point in reading.scan.local_points)) == ((0.0, 1.0, 12), (90.0, 0.5, 9))
 
-@pytest.mark.parametrize(('result', 'status'), ((_result(summary=_summary(matcher_transport='thread')), _status()), (_result(summary=_summary(map_frame_id='wrong')), _status()), (_result(), _status(matcher_confidence_model='wrong')), (_result(), _status(matcher_process_alive=False)), (_result(timestamp=1.1), _status())))
-def test_matcher_drift_does_not_fail_physical_scan_and_pose_is_not_admitted(result, status):
-    port = Port(result, status)
-    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', 0.3, 250000000))
-    snapshot = source.read(TickContext(7, 1000000000))
-    assert port.result_calls == 1
-    assert port.status_calls == 1
-    assert snapshot.health.state is DeviceHealthState.OK
-    assert tuple((sample.kind for sample in snapshot.samples)) == ('lidar_health', 'lidar_safety_clearance', 'lidar_local_points', 'lidar_localization_health', 'lidar_matcher_diagnostics')
+def test_matcher_drift_does_not_fail_physical_scan_and_pose_is_not_admitted():
+    cases = ((_result(summary=_summary(matcher_transport='thread')), _status()), (_result(summary=_summary(map_frame_id='wrong')), _status()), (_result(), _status(matcher_confidence_model='wrong')), (_result(), _status(matcher_process_alive=False)), (_result(timestamp=1.1), _status()))
+    for result, status in cases:
+        port = Port(result, status)
+        source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', 0.3, 250000000))
+        snapshot = source.read(TickContext(7, 1000000000))
+        assert port.result_calls == 1
+        assert port.status_calls == 1
+        assert snapshot.health.state is DeviceHealthState.OK
+        assert tuple((sample.kind for sample in snapshot.samples)) == ('lidar_health', 'lidar_safety_clearance', 'lidar_local_points', 'lidar_localization_health', 'lidar_matcher_diagnostics')
 
 def test_missing_latest_result_keeps_independent_physical_safety_without_pose():
     port = Port()

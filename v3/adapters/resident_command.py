@@ -16,7 +16,7 @@ from typing import Callable
 
 from v3.contracts import CommandMode, CommandRequest, DataField, TickContext
 from v3.contracts.base import require_token
-from v3.runtime_performance import temporary_current_affinity
+from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_affinity
 
 
 RESIDENT_COMMAND_SCHEMA = "R2B4_V3_RESIDENT_COMMAND_V2"
@@ -326,12 +326,16 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
 
     def __init__(self, config: ResidentCommandMailboxConfig, *,
                  monotonic_ns: Callable[[], int] = time.monotonic_ns,
-                 worker_cpu: int | None = None, strict_affinity: bool = False,
+                 worker_cpus: int | CpuSet | None = None, strict_affinity: bool = False,
                  reader_poll_s: float, reader_stop_timeout_s: float) -> None:
+        if worker_cpus is not None:
+            worker_cpus = normalize_cpus(worker_cpus)
+        if type(strict_affinity) is not bool:
+            raise TypeError("strict_affinity must be bool")
         super().__init__(config, monotonic_ns=monotonic_ns)
         self._reader_poll_s = reader_poll_s
         self._reader_stop_timeout_s = reader_stop_timeout_s
-        self._worker_cpu = worker_cpu
+        self._worker_cpus = worker_cpus
         self._strict_affinity = strict_affinity
         self._mailbox: bytes | None = None
         self._read_error: Exception | None = None
@@ -345,7 +349,7 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
             target=self._acquire, name="r2b4-command", daemon=True
         )
         with temporary_current_affinity(
-            self._worker_cpu, role="command", strict=self._strict_affinity
+            self._worker_cpus, role="command", strict=self._strict_affinity
         ):
             self._reader.start()
 

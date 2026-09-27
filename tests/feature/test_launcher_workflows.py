@@ -57,6 +57,7 @@ def test_host_passthrough_preserves_arguments_aliases_and_exit_code(monkeypatch,
 def test_robot_json_output_and_project_root_reach_the_interface(tmp_path, monkeypatch, capsys):
     (tmp_path / "v3").mkdir()
     (tmp_path / "pytest.ini").touch()
+    monkeypatch.setattr("v3.runtime_performance.apply_host_affinity", lambda *args: ())
     monkeypatch.setenv("R2B4_ROOT", str(tmp_path))
     requests = []
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_affinity
 from v3.lidar_config import LidarMatcherConfig
 from v3.lidar_matcher_process import matcher_process_main, put_latest
 
@@ -311,6 +312,8 @@ class NativeLidarPort:
         *,
         driver: NativeScanDriver,
         process_context: Any | None = None,
+        matcher_cpus: CpuSet | None = None,
+        strict_affinity: bool = False,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -329,6 +332,8 @@ class NativeLidarPort:
         for name in ("start", "stop", "get_latest_scan", "get_runtime_status"):
             if not callable(getattr(self._driver, name, None)):
                 raise TypeError(f"driver must provide callable {name}")
+        self._matcher_cpus = normalize_cpus(matcher_cpus) if matcher_cpus is not None else None
+        self._strict_affinity = strict_affinity
         self._process_context = process_context
         self._monotonic_ns = monotonic_ns
         self._sleep = sleep
@@ -368,11 +373,14 @@ class NativeLidarPort:
         ready_event = context.Event()
         process = context.Process(
             target=matcher_process_main,
-            args=(input_queue, result_queue, stop_event, ready_event),
+            args=(input_queue, result_queue, stop_event, ready_event,
+                  self._matcher_cpus, self._strict_affinity),
             name="v3-lidar-matcher",
             daemon=False,
         )
-        process.start()
+        with temporary_current_affinity(self._matcher_cpus, role="lidar-matcher",
+                                        strict=self._strict_affinity):
+            process.start()
         if not ready_event.wait(timeout=self._config.process_ready_timeout_s):
             self._stop_process(process, input_queue, result_queue, stop_event)
             return False
@@ -739,6 +747,9 @@ def open_native_lidar_port(
     config: NativeLidarPortConfig,
     pose_provider: Callable[[int], TimedPoseReference | None],
     serial_factory: RplidarSerialFactory,
+    *,
+    matcher_cpus: CpuSet | None = None,
+    strict_affinity: bool = False,
 ) -> NativeLidarPort:
     """Create and start the production native owner or fail closed."""
 
@@ -746,6 +757,8 @@ def open_native_lidar_port(
         config,
         pose_provider,
         driver=NativeRplidarC1(config.driver, serial_factory=serial_factory),
+        matcher_cpus=matcher_cpus,
+        strict_affinity=strict_affinity,
     )
     try:
         if port.start() is not True:
