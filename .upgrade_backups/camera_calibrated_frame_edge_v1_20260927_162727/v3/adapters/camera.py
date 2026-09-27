@@ -17,24 +17,20 @@ class CameraInterfaceAdapter:
 
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
         running = bool(self.controller.status().get("runtime_running"))
-        reason = (
-            "OWNED_BY_V3_RUNTIME"
-            if running
-            else "CALIBRATED_MEDIA_ONLY"
-        )
+        reason = "OWNED_BY_V3_RUNTIME" if running else None
         return {
             "camera.photo": {
                 "kind": "action",
                 "supported": True,
-                "available": False,
-                "ready": False,
+                "available": True,
+                "ready": not running,
                 "reason": reason,
             },
             "camera.video": {
                 "kind": "action",
                 "supported": True,
-                "available": False,
-                "ready": False,
+                "available": True,
+                "ready": not running,
                 "reason": reason,
             },
         }

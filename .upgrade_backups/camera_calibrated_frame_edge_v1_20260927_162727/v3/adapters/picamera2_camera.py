@@ -25,8 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-import numpy as np
-
 from .camera_geometry import (
     CameraGeometryConfig,
     CameraGeometryStatus,
@@ -34,7 +32,6 @@ from .camera_geometry import (
     camera_geometry_status_from_properties,
     sensor_crop_from_value,
 )
-from .camera_rectification import CameraRectifier
 
 
 class Picamera2Request(Protocol):
@@ -98,17 +95,6 @@ def _positive_float(value: object, name: str) -> float:
     return float(value)
 
 
-def _nonnegative_float(value: object, name: str) -> float:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or value < 0.0
-    ):
-        raise ValueError(f"{name} must be finite and non-negative")
-    return float(value)
-
-
 def _nonempty_string(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string")
@@ -137,7 +123,6 @@ class Picamera2CameraConfig:
     buffer_count: int = 6
     queue: bool = False
     continuous_autofocus: bool = True
-    fixed_lens_position: float | None = None
     max_frame_completion_lag_ns: int = 500_000_000
     stop_join_timeout_s: float = 2.0
 
@@ -160,10 +145,6 @@ class Picamera2CameraConfig:
             raise TypeError("queue must be bool")
         if type(self.continuous_autofocus) is not bool:
             raise TypeError("continuous_autofocus must be bool")
-        if self.fixed_lens_position is not None:
-            _nonnegative_float(self.fixed_lens_position, "fixed_lens_position")
-        if self.continuous_autofocus and self.fixed_lens_position is not None:
-            raise ValueError("continuous autofocus and fixed lens position are mutually exclusive")
 
     @property
     def published_width(self) -> int:
@@ -201,7 +182,6 @@ def picamera2_camera_config_from_mapping(
         "buffer_count",
         "queue",
         "continuous_autofocus",
-        "fixed_lens_position",
         "max_frame_completion_lag_ns",
         "stop_join_timeout_s",
     }
@@ -240,11 +220,6 @@ def picamera2_camera_config_from_mapping(
         buffer_count=_positive_int(value.get("buffer_count", 6), "camera.buffer_count"),
         queue=bool_value("queue", False),
         continuous_autofocus=bool_value("continuous_autofocus", True),
-        fixed_lens_position=(
-            None
-            if value.get("fixed_lens_position") is None
-            else _nonnegative_float(value.get("fixed_lens_position"), "camera.fixed_lens_position")
-        ),
         max_frame_completion_lag_ns=_positive_int(
             value.get("max_frame_completion_lag_ns", 500_000_000),
             "camera.max_frame_completion_lag_ns",
@@ -297,10 +272,6 @@ class CameraFrameSnapshot:
     focus_state: str
     lens_position: float | None
     image_bytes: bytes
-    calibration_state: str
-    calibration_id: str
-    rectified_K: tuple[tuple[float, float, float], ...]
-    rectification_duration_ns: int
     sensor_crop: SensorCrop | None = None
 
     def __post_init__(self) -> None:
@@ -338,20 +309,6 @@ class CameraFrameSnapshot:
             raise ValueError("image_bytes must not be empty")
         if len(self.image_bytes) != self.frame_size_bytes:
             raise ValueError("camera payload size does not match configured frame size")
-        if self.calibration_state != "CALIBRATED":
-            raise ValueError("public camera frames must be CALIBRATED")
-        _nonempty_string(self.calibration_id, "calibration_id")
-        _nonnegative_int(self.rectification_duration_ns, "rectification_duration_ns")
-        if (
-            not isinstance(self.rectified_K, tuple)
-            or len(self.rectified_K) != 3
-            or any(not isinstance(row, tuple) or len(row) != 3 for row in self.rectified_K)
-        ):
-            raise TypeError("rectified_K must be an immutable 3x3 matrix")
-        for row in self.rectified_K:
-            for item in row:
-                if isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(item):
-                    raise ValueError("rectified_K must contain finite values")
         if self.sensor_crop is not None and not isinstance(self.sensor_crop, SensorCrop):
             raise TypeError("sensor_crop must be SensorCrop or None")
 
@@ -406,12 +363,10 @@ class NativePicamera2Camera:
         "_camera_geometry_config",
         "_camera_geometry_status",
         "_default_sensor_crop",
-        "_rectifier",
         "_controls_factory",
         "_factory",
         "_frame_condition",
         "_geometry",
-        "_main_geometry",
         "_last_error",
         "_last_sensor_timestamp_ns",
         "_latest",
@@ -459,7 +414,6 @@ class NativePicamera2Camera:
         self._camera_geometry_config = camera_geometry_config
         self._camera_geometry_status: CameraGeometryStatus | None = None
         self._default_sensor_crop: SensorCrop | None = None
-        self._rectifier: CameraRectifier | None = None
         self._factory = picamera_factory
         self._timestamp_mapper = sensor_timestamp_mapper
         self._controls_factory = camera_controls_factory
@@ -470,7 +424,6 @@ class NativePicamera2Camera:
         self._thread: threading.Thread | None = None
         self._picamera: Picamera2Device | None = None
         self._geometry: CameraStreamGeometry | None = None
-        self._main_geometry: CameraStreamGeometry | None = None
         self._latest: CameraFrameSnapshot | None = None
         self._sequence = 0
         self._last_sensor_timestamp_ns: int | None = None
@@ -507,7 +460,6 @@ class NativePicamera2Camera:
             # as the first frame of a restarted session.
             self._latest = None
             self._geometry = None
-            self._main_geometry = None
             self._last_sensor_timestamp_ns = None
             self._last_error = None
             self._model = None
@@ -516,24 +468,7 @@ class NativePicamera2Camera:
             self._photo_last_output = None
             self._photo_last_error = None
             self._stop_event.clear()
-            self._rectifier = None
             self._frame_condition.notify_all()
-
-        try:
-            geometry_config = self._camera_geometry_config
-            if (
-                geometry_config is None
-                or geometry_config.intrinsic.source != "empirical"
-                or not geometry_config.intrinsic.can_rectify
-            ):
-                raise RuntimeError("empirical camera K/D calibration is required")
-            rectifier = CameraRectifier(geometry_config)
-        except Exception as exc:
-            with self._frame_condition:
-                self._last_error = f"{type(exc).__name__}:{exc}"
-                self._running = False
-                self._frame_condition.notify_all()
-            return False
 
         camera: Picamera2Device | None = None
         try:
@@ -547,7 +482,6 @@ class NativePicamera2Camera:
             configuration = build_video_configuration(camera, self._config)
             camera.configure(configuration)
             geometry = camera_stream_geometry(camera, self._config.stream_name)
-            main_geometry = camera_stream_geometry(camera, "main")
             camera_geometry_status = None
             default_sensor_crop = None
             if self._camera_geometry_config is not None:
@@ -555,10 +489,6 @@ class NativePicamera2Camera:
                     self._camera_geometry_config, camera.camera_properties
                 )
                 default_sensor_crop = camera_geometry_status.sensor_crop
-                if camera_geometry_status.state == "INVALID":
-                    raise RuntimeError(
-                        "camera geometry invalid: " + (camera_geometry_status.reason or "unknown")
-                    )
             controls = (
                 self._controls_factory()
                 if self._controls_factory is not None
@@ -582,11 +512,9 @@ class NativePicamera2Camera:
         with self._frame_condition:
             self._picamera = camera
             self._geometry = geometry
-            self._main_geometry = main_geometry
             self._model = model
             self._camera_geometry_status = camera_geometry_status
             self._default_sensor_crop = default_sensor_crop
-            self._rectifier = rectifier
             self._running = True
             self._frame_condition.notify_all()
         thread = threading.Thread(
@@ -620,8 +548,6 @@ class NativePicamera2Camera:
         with self._frame_condition:
             self._picamera = None
             self._geometry = None
-            self._main_geometry = None
-            self._rectifier = None
             self._frame_condition.notify_all()
         if camera is not None:
             try:
@@ -658,10 +584,8 @@ class NativePicamera2Camera:
         path = Path(output).expanduser()
         if path.suffix.lower() not in {".jpg", ".jpeg"}:
             raise ValueError("camera photo output must use .jpg or .jpeg")
-        if stream_name not in {self._config.stream_name, "main"}:
-            raise ValueError(
-                "only calibrated canonical lores/main JPEG streams may be published"
-            )
+        if stream_name not in {"main", "lores"}:
+            raise ValueError("camera photo stream_name must be 'main' or 'lores'")
         with self._frame_condition:
             if not self._running or self._pending_photo is not None:
                 return False
@@ -752,15 +676,10 @@ class NativePicamera2Camera:
                 if pending_photo is not None:
                     output, stream_name = pending_photo
                     try:
-                        if stream_name == geometry.stream_name:
-                            saver = getattr(request, "save", None)
-                            if not callable(saver):
-                                raise RuntimeError("Picamera2 request.save is unavailable")
-                            saver(stream_name, output, format="jpeg")
-                        elif stream_name == "main":
-                            self._save_calibrated_main_jpeg(request, output, snapshot)
-                        else:
-                            raise RuntimeError("requested camera JPEG stream is not calibrated")
+                        saver = getattr(request, "save", None)
+                        if not callable(saver):
+                            raise RuntimeError("Picamera2 request.save is unavailable")
+                        saver(stream_name, output, format="jpeg")
                         with self._frame_condition:
                             self._photo_saved_count += 1
                             self._photo_last_output = output
@@ -788,37 +707,6 @@ class NativePicamera2Camera:
                     except Exception:
                         pass
 
-    def _save_calibrated_main_jpeg(
-        self,
-        request: Picamera2Request,
-        output: str,
-        snapshot: CameraFrameSnapshot,
-    ) -> None:
-        with self._lock:
-            geometry = self._main_geometry
-            rectifier = self._rectifier
-            geometry_status = self._camera_geometry_status
-        if geometry is None or rectifier is None:
-            raise RuntimeError("calibrated main JPEG pipeline is unavailable")
-        if geometry.pixel_format != "YUV420":
-            raise RuntimeError("calibrated main JPEG currently requires YUV420")
-        if not hasattr(request, "stream_map") or not hasattr(request, "picam2"):
-            raise RuntimeError("calibrated main JPEG requires a native Picamera2 request")
-        from picamera2 import MappedArray
-        with MappedArray(request, "main", reshape=True, write=False) as mapped:
-            if mapped.array is None:
-                raise RuntimeError("camera main YUV420 buffer is unavailable")
-            result = rectifier.rectify_yuv420_to_jpeg(
-                mapped.array,
-                width=geometry.width,
-                height=geometry.height,
-                stride_bytes=geometry.stride_bytes,
-                sensor_crop=snapshot.sensor_crop,
-                runtime_status=geometry_status,
-                lens_position=snapshot.lens_position,
-            )
-        Path(output).write_bytes(result.jpeg_bytes)
-
     def _snapshot_from_request(
         self,
         request: Picamera2Request,
@@ -836,6 +724,34 @@ class NativePicamera2Camera:
         )
         measurement_monotonic_ns = self._timestamp_mapper(sensor_timestamp_ns)
         _nonnegative_int(measurement_monotonic_ns, "mapped camera measurement timestamp")
+
+        if hasattr(request, "stream_map") and hasattr(request, "picam2"):
+            from picamera2 import MappedArray
+
+            with MappedArray(
+                request,
+                geometry.stream_name,
+                reshape=False,
+                write=False,
+            ) as mapped:
+                if mapped.array is None:
+                    raise RuntimeError("camera mapped buffer is unavailable")
+                image_bytes = bytes(mapped.array)
+        else:
+            # Off-target/unit-test fallback for synthetic Picamera2Request objects.
+            raw_buffer = request.make_buffer(geometry.stream_name)
+            image_bytes = bytes(raw_buffer)
+        if len(image_bytes) != geometry.frame_size_bytes:
+            raise RuntimeError(
+                "camera buffer size does not match Picamera2 stream configuration"
+            )
+        completed_monotonic_ns = self._checked_clock()
+        if measurement_monotonic_ns > completed_monotonic_ns:
+            raise ValueError("mapped camera timestamp is in the future")
+        lag_ns = completed_monotonic_ns - measurement_monotonic_ns
+        if lag_ns > self._config.max_frame_completion_lag_ns:
+            raise RuntimeError("camera frame completion lag exceeded configured bound")
+
         lens_raw = metadata.get("LensPosition")
         lens_position = (
             float(lens_raw)
@@ -847,64 +763,6 @@ class NativePicamera2Camera:
         with self._lock:
             if sensor_crop is None:
                 sensor_crop = self._default_sensor_crop
-            rectifier = self._rectifier
-            geometry_status = self._camera_geometry_status
-        if rectifier is None:
-            raise RuntimeError("camera calibrated-frame rectifier is unavailable")
-
-        if hasattr(request, "stream_map") and hasattr(request, "picam2"):
-            from picamera2 import MappedArray
-
-            with MappedArray(
-                request,
-                geometry.stream_name,
-                reshape=False,
-                write=True,
-            ) as mapped:
-                if mapped.array is None:
-                    raise RuntimeError("camera mapped buffer is unavailable")
-                raw_bytes = bytes(mapped.array)
-                rectified = rectifier.rectify_packed(
-                    raw_bytes,
-                    width=geometry.width,
-                    height=geometry.height,
-                    pixel_format=geometry.pixel_format,
-                    stride_bytes=geometry.stride_bytes,
-                    frame_size_bytes=geometry.frame_size_bytes,
-                    sensor_crop=sensor_crop,
-                    runtime_status=geometry_status,
-                    lens_position=lens_position,
-                )
-                flat = mapped.array.reshape(-1)
-                calibrated = np.frombuffer(rectified.image_bytes, dtype=np.uint8)
-                if flat.size != calibrated.size:
-                    raise RuntimeError("calibrated frame no longer matches Picamera2 buffer size")
-                flat[:] = calibrated
-                image_bytes = rectified.image_bytes
-        else:
-            # Off-target/unit-test fallback. Raw bytes remain local to this call;
-            # only the rectified result is allowed into CameraFrameSnapshot.
-            raw_buffer = request.make_buffer(geometry.stream_name)
-            rectified = rectifier.rectify_packed(
-                bytes(raw_buffer),
-                width=geometry.width,
-                height=geometry.height,
-                pixel_format=geometry.pixel_format,
-                stride_bytes=geometry.stride_bytes,
-                frame_size_bytes=geometry.frame_size_bytes,
-                sensor_crop=sensor_crop,
-                runtime_status=geometry_status,
-                lens_position=lens_position,
-            )
-            image_bytes = rectified.image_bytes
-
-        completed_monotonic_ns = self._checked_clock()
-        if measurement_monotonic_ns > completed_monotonic_ns:
-            raise ValueError("mapped camera timestamp is in the future")
-        lag_ns = completed_monotonic_ns - measurement_monotonic_ns
-        if lag_ns > self._config.max_frame_completion_lag_ns:
-            raise RuntimeError("camera frame completion lag exceeded configured bound")
-        with self._lock:
             previous_sensor_ns = self._last_sensor_timestamp_ns
             if previous_sensor_ns is not None and sensor_timestamp_ns <= previous_sensor_ns:
                 raise RuntimeError("camera SensorTimestamp did not increase")
@@ -927,10 +785,6 @@ class NativePicamera2Camera:
             focus_state=focus_state,
             lens_position=lens_position,
             image_bytes=image_bytes,
-            calibration_state="CALIBRATED",
-            calibration_id=rectified.calibration_id,
-            rectified_K=rectified.rectified_K,
-            rectification_duration_ns=rectified.rectification_duration_ns,
             sensor_crop=sensor_crop,
         )
 
@@ -992,19 +846,14 @@ def build_video_configuration(
 
 
 def default_camera_controls(config: Picamera2CameraConfig) -> Mapping[str, object]:
-    """Return Camera Module 3 focus controls closed to the calibration contract."""
+    """Return Camera Module 3 controls using libcamera's typed enums."""
 
-    if not config.continuous_autofocus and config.fixed_lens_position is None:
+    if not config.continuous_autofocus:
         return {}
     try:
         from libcamera import controls  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover - hardware/deployment path
         raise RuntimeError("libcamera Python controls are unavailable") from exc
-    if config.fixed_lens_position is not None:
-        return {
-            "AfMode": controls.AfModeEnum.Manual,
-            "LensPosition": config.fixed_lens_position,
-        }
     return {
         "AfMode": controls.AfModeEnum.Continuous,
         "AfSpeed": controls.AfSpeedEnum.Normal,

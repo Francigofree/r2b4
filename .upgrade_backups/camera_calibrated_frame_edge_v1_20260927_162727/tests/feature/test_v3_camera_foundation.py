@@ -80,7 +80,7 @@ class _Port:
         return self.edge
 
 def _frame(measurement_ns: int=900) -> CameraFrameSnapshot:
-    return CameraFrameSnapshot(sequence=7, sensor_timestamp_ns=900, measurement_monotonic_ns=measurement_ns, completed_monotonic_ns=950, exposure_time_ns=10, frame_duration_ns=50, width=2, height=2, pixel_format='RGB888', stride_bytes=6, frame_size_bytes=12, focus_state='2', lens_position=1.0, image_bytes=b'abcdefghijkl', calibration_state='CALIBRATED', calibration_id='test-calibration', rectified_K=((1.0, 0.0, 1.0), (0.0, 1.0, 1.0), (0.0, 0.0, 1.0)), rectification_duration_ns=0)
+    return CameraFrameSnapshot(sequence=7, sensor_timestamp_ns=900, measurement_monotonic_ns=measurement_ns, completed_monotonic_ns=950, exposure_time_ns=10, frame_duration_ns=50, width=2, height=2, pixel_format='RGB888', stride_bytes=6, frame_size_bytes=12, focus_state='2', lens_position=1.0, image_bytes=b'abcdefghijkl')
 
 def _edge(frame=None, *, running=True, error=None):
     frame = _frame() if frame is None and running else frame

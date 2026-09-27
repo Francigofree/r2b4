@@ -42,7 +42,7 @@ class VisionMediaClient:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
                 sock.settimeout(self.timeout_s)
                 sock.connect(str(self.socket_path))
-                sock.sendall(f"R2B4CJPEG1 {stream_name}\n".encode("ascii"))
+                sock.sendall(f"R2B4JPEG1 {stream_name}\n".encode("ascii"))
                 header = _recv_line(sock)
                 if header.startswith(b"ERR "):
                     raise Er2MediaUnavailable(header[4:].decode("utf-8", "replace").strip())

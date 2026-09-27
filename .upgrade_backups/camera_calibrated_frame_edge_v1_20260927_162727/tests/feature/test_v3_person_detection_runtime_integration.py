@@ -3,7 +3,6 @@ import threading
 import time
 from pathlib import Path
 from v3.adapters.person_photo_evidence import PersonPhotoEvidenceConfig, PersonPhotoEvidenceRecorder
-from v3.adapters.camera_geometry import camera_geometry_config_from_mapping
 from v3.adapters.picamera2_camera import NativePicamera2Camera, Picamera2CameraConfig
 from v3.contracts import AdmittedFrame, ActuatorRequest, CommandMode, DataField, DeviceHealth, DeviceHealthState, LifecycleState, MissionConstraints, MissionIntent, MissionLifecycle, Observation, SafetyDecision, TickContext
 from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
@@ -67,27 +66,6 @@ def test_photo_evidence_rearms_after_real_person_free_detector_results(tmp_path)
     now_ns = 1000000000
     assert recorder.observe(_admitted(6, now_ns, sequence=6, person=True), _mission(6, now_ns)) is True
     assert len(photo.requests) == 2
-
-def _empirical_geometry():
-    return camera_geometry_config_from_mapping(
-        {
-            "factory_profile": "imx708_wide_noir",
-            "mount": {
-                "x_m": 0.05, "y_m": 0.0, "z_m": 0.19,
-                "roll_deg": 0.0, "pitch_deg": 15.0, "yaw_deg": 0.0,
-            },
-            "intrinsic": {
-                "source": "empirical",
-                "reference_size": [4608, 2592],
-                "K": [[2400.0, 0.0, 2304.0], [0.0, 2400.0, 1296.0], [0.0, 0.0, 1.0]],
-                "distortion_model": "opencv_pinhole",
-                "distortion_coefficients": [0.0, 0.0, 0.0, 0.0, 0.0],
-                "reference_lens_position": 1.0,
-                "lens_position_tolerance": 0.05,
-            },
-        }
-    )
-
 
 class _SavingRequest:
 
@@ -162,7 +140,7 @@ def test_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path):
     def monotonic_ns():
         clock[0] += 50000000
         return clock[0]
-    owner = NativePicamera2Camera(Picamera2CameraConfig(max_frame_completion_lag_ns=2000000000), camera_geometry_config=_empirical_geometry(), picamera_factory=lambda index: camera, sensor_timestamp_mapper=lambda value: value, camera_controls_factory=lambda: {}, monotonic_ns=monotonic_ns)
+    owner = NativePicamera2Camera(Picamera2CameraConfig(max_frame_completion_lag_ns=2000000000), picamera_factory=lambda index: camera, sensor_timestamp_mapper=lambda value: value, camera_controls_factory=lambda: {}, monotonic_ns=monotonic_ns)
     assert owner.start()
     output = tmp_path / 'person.jpg'
     assert owner.request_jpeg(output, stream_name='lores') is True

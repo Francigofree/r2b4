@@ -97,8 +97,6 @@ class NativeCameraSource:
             )
         if status.frame_sequence != frame.sequence:
             return self._failed(context, "CAMERA_LINEAGE_INVALID")
-        if getattr(frame, "calibration_state", None) != "CALIBRATED":
-            return self._failed(context, "CAMERA_FRAME_UNCALIBRATED")
         if frame.measurement_monotonic_ns > context.monotonic_ns:
             return self._failed(context, "CAMERA_TIME_INVALID")
 
@@ -131,13 +129,6 @@ class NativeCameraSource:
                 DataField("frame_duration_ns", frame.frame_duration_ns),
                 DataField("focus_state", frame.focus_state),
                 DataField("lens_position", frame.lens_position),
-                DataField("calibration_state", frame.calibration_state),
-                DataField("calibration_id", frame.calibration_id),
-                DataField("rectification_duration_ns", frame.rectification_duration_ns),
-                DataField("rectified_fx_px", frame.rectified_K[0][0]),
-                DataField("rectified_fy_px", frame.rectified_K[1][1]),
-                DataField("rectified_cx_px", frame.rectified_K[0][2]),
-                DataField("rectified_cy_px", frame.rectified_K[1][2]),
                 # Process vision exposes metadata only; raw image bytes stay child-owned.
                 DataField("payload_bytes", frame.frame_size_bytes),
                 DataField("camera_model", status.camera_model),

@@ -48,7 +48,7 @@
     "fps": 16.0,
     "buffer_count": 6,
     "queue": false,
-    "continuous_autofocus": false,
+    "continuous_autofocus": true,
     "geometry": {
       "factory_profile": "imx708_wide_noir",
       "mount": {
@@ -60,43 +60,13 @@
         "yaw_deg": 0.0
       },
       "intrinsic": {
-        "source": "empirical",
-        "reference_size": [
-          4608,
-          2592
-        ],
-        "K": [
-          [
-            1997.0511477790833,
-            0.0,
-            2169.2194162891155
-          ],
-          [
-            0.0,
-            1977.9659429111284,
-            1172.701521366896
-          ],
-          [
-            0.0,
-            0.0,
-            1.0
-          ]
-        ],
-        "distortion_model": "opencv_pinhole",
-        "distortion_coefficients": [
-          -0.1397665172628304,
-          0.41135721852336143,
-          -0.010045449441570953,
-          -0.014678508191845057,
-          -0.4841991322195914
-        ],
-        "reference_lens_position": 1.0,
-        "lens_position_tolerance": 0.05
+        "source": "factory_nominal",
+        "distortion_model": "unknown",
+        "distortion_coefficients": null
       }
     },
     "max_frame_completion_lag_ns": 500000000,
-    "stop_join_timeout_s": 2.0,
-    "fixed_lens_position": 1.0
+    "stop_join_timeout_s": 2.0
   },
   "person_detection": {
     "enabled": true,

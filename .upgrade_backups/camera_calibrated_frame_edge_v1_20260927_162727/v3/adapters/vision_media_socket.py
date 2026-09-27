@@ -110,8 +110,8 @@ class VisionMediaServer:
                 try:
                     request = self._recv_line(conn)
                     parts = request.decode("ascii", "strict").strip().split()
-                    if len(parts) != 2 or parts[0] != "R2B4CJPEG1" or parts[1] not in {"lores", "main"}:
-                        raise ValueError("expected: R2B4CJPEG1 lores|main")
+                    if len(parts) != 2 or parts[0] != "R2B4JPEG1" or parts[1] not in {"lores", "main"}:
+                        raise ValueError("expected: R2B4JPEG1 lores|main")
                     payload = self._capture(parts[1])
                     conn.sendall(f"OK {len(payload)}\n".encode("ascii"))
                     conn.sendall(payload)

@@ -11,7 +11,6 @@ from dataclasses import asdict, replace
 from pathlib import Path
 
 from v3.adapters.camera_media import capture_h264_video, capture_photo
-from v3.adapters.camera_geometry import camera_geometry_config_from_mapping
 from v3.adapters.picamera2_camera import (
     NativePicamera2Camera,
     Picamera2CameraConfig,
@@ -61,21 +60,10 @@ def _config(args: argparse.Namespace) -> Picamera2CameraConfig:
     return replace(config, **changes) if changes else config
 
 
-def _geometry_config():
-    repo = Path(__file__).resolve().parents[1]
-    path = repo / "conf" / "hardver.json"
-    document = json.loads(path.read_text(encoding="utf-8"))
-    camera = document.get("camera")
-    if not isinstance(camera, dict) or not isinstance(camera.get("geometry"), dict):
-        raise SystemExit("conf/hardver.json camera.geometry is required")
-    return camera_geometry_config_from_mapping(camera["geometry"])
-
-
 def _status(args: argparse.Namespace) -> int:
     config = _config(args)
     owner = NativePicamera2Camera(
         config,
-        camera_geometry_config=_geometry_config(),
         picamera_factory=default_picamera2_factory,
         sensor_timestamp_mapper=raspberry_pi_sensor_timestamp_to_monotonic_ns,
     )
@@ -145,10 +133,6 @@ def _status(args: argparse.Namespace) -> int:
             "queue": config.queue,
             "buffer_count": config.buffer_count,
             "continuous_autofocus": config.continuous_autofocus,
-            "fixed_lens_position": config.fixed_lens_position,
-            "calibration_state": (final.frame.calibration_state if final.frame is not None else None),
-            "calibration_id": (final.frame.calibration_id if final.frame is not None else None),
-            "rectification_duration_ms": (final.frame.rectification_duration_ns / 1_000_000.0 if final.frame is not None else None),
         }
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0 if result["status"] == "PASS" else 1

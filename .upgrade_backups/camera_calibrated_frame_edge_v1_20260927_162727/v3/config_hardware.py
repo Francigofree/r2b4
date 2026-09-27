@@ -251,25 +251,6 @@ def _sensor_hardware_config(
             camera_device = picamera2_camera_config_from_mapping(
                 {key: item for key, item in camera.items() if key != "geometry"}
             )
-            intrinsic = camera_geometry.intrinsic
-            if intrinsic.source != "empirical" or not intrinsic.can_rectify:
-                raise ValueError(
-                    "enabled production camera requires empirical rectifiable K/D calibration"
-                )
-            if camera_device.stream_name != "lores" or camera_device.pixel_format not in {"RGB888", "BGR888"}:
-                raise ValueError(
-                    "canonical calibrated production stream must be packed RGB/BGR lores"
-                )
-            if camera_device.continuous_autofocus:
-                raise ValueError(
-                    "empirically calibrated production camera requires fixed focus"
-                )
-            if intrinsic.reference_lens_position is not None:
-                if camera_device.fixed_lens_position is None:
-                    raise ValueError("camera.fixed_lens_position is required by empirical calibration")
-                tolerance = intrinsic.lens_position_tolerance or 1e-6
-                if abs(camera_device.fixed_lens_position - intrinsic.reference_lens_position) > tolerance:
-                    raise ValueError("camera fixed lens position differs from empirical calibration")
             camera_source = NativeCameraConfig(
                 "CAMERA_FRONT",
                 policy.camera_maximum_frame_age_ns,

@@ -57,10 +57,6 @@ class CameraFrameControlSnapshot:
     frame_size_bytes: int
     focus_state: str
     lens_position: float | None
-    calibration_state: str
-    calibration_id: str
-    rectified_K: tuple[tuple[float, float, float], ...]
-    rectification_duration_ns: int
 
     @property
     def completion_lag_ns(self) -> int:
@@ -110,10 +106,6 @@ def _wire_camera(edge: CameraEdgeSnapshot) -> tuple[object, ...]:
             frame.frame_size_bytes,
             frame.focus_state,
             frame.lens_position,
-            frame.calibration_state,
-            frame.calibration_id,
-            frame.rectified_K,
-            frame.rectification_duration_ns,
         )
     return status_wire, frame_wire
 
@@ -144,10 +136,6 @@ def _unwire_camera(value: tuple[object, ...]) -> CameraEdgeSnapshot:
             frame_size_bytes=int(frame_wire[10]),
             focus_state=str(frame_wire[11]),
             lens_position=(None if frame_wire[12] is None else float(frame_wire[12])),
-            calibration_state=str(frame_wire[13]),
-            calibration_id=str(frame_wire[14]),
-            rectified_K=tuple(tuple(float(value) for value in row) for row in frame_wire[15]),
-            rectification_duration_ns=int(frame_wire[16]),
         )
     # CameraEdgeSnapshot performs no runtime frame-type coercion.  The parent
     # intentionally exposes the metadata-only compatible view above.
