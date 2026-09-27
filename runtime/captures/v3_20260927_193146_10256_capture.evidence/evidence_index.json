@@ -1,0 +1,58 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "d327e48771e1c111af40ab6556b0751a74563aff6574dca20f30e6a36bc6c063",
+      "size_bytes": 8377
+    },
+    "diagnosis.json": {
+      "sha256": "46e2c1f41febff951daac4c06582a288568f6cbbc6cdd19787f9d4c6f6322177",
+      "size_bytes": 4111
+    },
+    "gui_manifest.json": {
+      "sha256": "834174c9b94eba9554f0beb9b9a818a9fbc6443bb9346fa331df5afba5740fa1",
+      "size_bytes": 61542
+    },
+    "inspect.json": {
+      "sha256": "76a5010bf0e927ef45415f4aa433de70a068930c25657a25f9c4cf1f171b27a1",
+      "size_bytes": 6220
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "8bb3f086c1b2c86015f52d3f773aa89d434cf68460da97931091b7d5fdbf5384",
+      "size_bytes": 502189
+    },
+    "timeline.ndjson": {
+      "sha256": "3c9a46fe5f7401ddaa3c06a235d88ff856ef34e782c2a7e976fb0eea24211845",
+      "size_bytes": 1034936
+    },
+    "triage.json": {
+      "sha256": "b7bfbe61f6308b6f71af33d26a2482e2756c326bc38b2a59de0ea70939cfaa26",
+      "size_bytes": 60759
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260927_193146_10256_capture.mcap",
+    "sha256": "558cb6257cbd97f52502432b779005cc17bda4fd8f2c2e3c4e6c51bd222ce9c1"
+  },
+  "behavior_status": "DEGRADED",
+  "created_at_utc": "2026-09-27T17:32:28Z",
+  "diagnosis_status": "FAIL",
+  "evidence_sha256": "e63a585425de7e86b465faa8a34f6281368c92da2542f84f34e31c5075b021fd",
+  "evidence_status": "FAIL",
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "run_id": "v3_20260927_193146_10256_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FAIL"
+}
