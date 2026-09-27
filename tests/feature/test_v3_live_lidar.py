@@ -15,8 +15,8 @@ class _Backend:
         self.calls.append(context)
         return self.result
 
-def _reading(*, confidence: float=0.9, stale: bool=False):
-    return LidarHealthReading(revision=17, captured_monotonic_ns=980, measurement_age_ns=20, confidence=confidence, stale=stale, timing_valid=True, pose=LidarPoseReading(0.25, -0.1, 0.2, r_scale=0.8), diagnostics=LidarMatcherDiagnostics(candidate_id=17, source_raw_scan_id=31, source_raw_scan_timestamp_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, pose_reference_monotonic_ns=940, scan_pose_alignment_delta_ns=0, tracking_ready=True, matcher_timed_out=False, matcher_degenerate=False, matcher_runtime_ms=28.5, matcher_queue_delay_ms=1.25, matcher_input_age_ns=60, matcher_confidence=0.85, inlier_ratio=0.75, robust_rmse_m=0.012, sector_coverage=0.5, observability_score=0.8, ambiguity_margin=0.9, scan_to_map_seed=(0.2, -0.05, 0.1)), scan=LidarScanReading(revision=31, captured_monotonic_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, measurement_age_ns=40, health='OK', stale=False, timing_valid=True, point_count=80, front_clearance_m=1.2, rear_clearance_m=1.1, left_clearance_m=0.9, right_clearance_m=1.0, front_observation_count=20, rear_observation_count=20, left_observation_count=20, right_observation_count=20, local_points=(LidarPointReading(0.0, 1.0, 15), LidarPointReading(90.0, 0.5, 10))))
+def _reading(*, confidence: float=0.9, stale: bool=False, tracking_ready: bool | None=True):
+    return LidarHealthReading(revision=17, captured_monotonic_ns=980, measurement_age_ns=20, confidence=confidence, stale=stale, timing_valid=True, pose=LidarPoseReading(0.25, -0.1, 0.2, r_scale=0.8), diagnostics=LidarMatcherDiagnostics(candidate_id=17, source_raw_scan_id=31, source_raw_scan_timestamp_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, pose_reference_monotonic_ns=940, scan_pose_alignment_delta_ns=0, tracking_ready=tracking_ready, matcher_timed_out=False, matcher_degenerate=False, matcher_runtime_ms=28.5, matcher_queue_delay_ms=1.25, matcher_input_age_ns=60, matcher_confidence=0.85, inlier_ratio=0.75, robust_rmse_m=0.012, sector_coverage=0.5, observability_score=0.8, ambiguity_margin=0.9, scan_to_map_seed=(0.2, -0.05, 0.1)), scan=LidarScanReading(revision=31, captured_monotonic_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, measurement_age_ns=40, health='OK', stale=False, timing_valid=True, point_count=80, front_clearance_m=1.2, rear_clearance_m=1.1, left_clearance_m=0.9, right_clearance_m=1.0, front_observation_count=20, rear_observation_count=20, left_observation_count=20, right_observation_count=20, local_points=(LidarPointReading(0.0, 1.0, 15), LidarPointReading(90.0, 0.5, 10))))
 
 def _config() -> NativeLidarConfig:
     return NativeLidarConfig('LIDAR_LOCALIZATION', minimum_confidence=0.3, maximum_measurement_age_ns=250000000)
@@ -39,11 +39,30 @@ def test_native_lidar_source_closes_health_and_pose_from_one_matcher_result():
     assert {field.key: field.value for field in diagnostics.values} == {'candidate_id': 17, 'source_raw_scan_id': 31, 'source_raw_scan_timestamp_ns': 960, 'source_scan_revision': 31, 'scan_start_monotonic_ns': 920, 'scan_end_monotonic_ns': 960, 'measurement_monotonic_ns': 940, 'pose_reference_monotonic_ns': 940, 'scan_pose_alignment_delta_ns': 0, 'matcher_reason': '', 'tracking_ready': True, 'matcher_timed_out': False, 'matcher_degenerate': False, 'degeneracy_reasons': '', 'matcher_runtime_ms': 28.5, 'matcher_queue_delay_ms': 1.25, 'matcher_input_age_ns': 60, 'matcher_confidence': 0.85, 'inlier_ratio': 0.75, 'robust_rmse_m': 0.012, 'sector_coverage': 0.5, 'observability_score': 0.8, 'ambiguity_margin': 0.9, 'seed_pose_x_m': 0.2, 'seed_pose_y_m': -0.05, 'seed_pose_yaw_rad': 0.1}
     assert {field.key: field.value for field in pose.values} == {'frame_id': 'R2B4_BOOT_ROBOT_MAP', 'x_m': 0.25, 'y_m': -0.1, 'yaw_rad': 0.2, 'confidence': 0.9, 'r_scale': 0.8}
 
-@pytest.mark.parametrize('reading', (_reading(confidence=0.2), _reading(stale=True)))
+@pytest.mark.parametrize('reading', (_reading(confidence=0.2, tracking_ready=None), _reading(stale=True)))
 def test_localization_quality_does_not_change_physical_health(reading):
     snapshot = NativeLidarSource(_Backend(reading), _config()).read(TickContext(7, 1000))
     assert snapshot.health.state is DeviceHealthState.OK
     assert tuple((sample.kind for sample in snapshot.samples)) == ('lidar_health', 'lidar_safety_clearance', 'lidar_local_points', 'lidar_localization_health', 'lidar_matcher_diagnostics')
+
+def test_explicit_tracking_ready_is_publication_ssot_not_confidence_threshold():
+    source = NativeLidarSource(_Backend(_reading(confidence=0.2, tracking_ready=True)), _config())
+    snapshot = source.read(TickContext(7, 1000))
+    by_kind = {sample.kind: sample for sample in snapshot.samples}
+    localization = {field.key: field.value for field in by_kind['lidar_localization_health'].values}
+    pose = {field.key: field.value for field in by_kind['lidar_pose'].values}
+    assert localization['confidence'] == 0.2
+    assert localization['usable'] is True
+    assert pose['confidence'] == 0.2
+
+def test_tracking_not_ready_blocks_pose_without_rewriting_quality():
+    source = NativeLidarSource(_Backend(_reading(confidence=0.9, tracking_ready=False)), _config())
+    snapshot = source.read(TickContext(7, 1000))
+    by_kind = {sample.kind: sample for sample in snapshot.samples}
+    localization = {field.key: field.value for field in by_kind['lidar_localization_health'].values}
+    assert 'lidar_pose' not in by_kind
+    assert localization['confidence'] == 0.9
+    assert localization['usable'] is False
 
 def test_physical_scan_staleness_degrades_device_but_keeps_localization_separate():
     stale_scan = LidarScanReading(revision=31, captured_monotonic_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, measurement_age_ns=40, health='STALE', stale=True, timing_valid=True, point_count=80, front_clearance_m=1.2, rear_clearance_m=1.1, left_clearance_m=0.9, right_clearance_m=1.0, front_observation_count=20, rear_observation_count=20, left_observation_count=20, right_observation_count=20)

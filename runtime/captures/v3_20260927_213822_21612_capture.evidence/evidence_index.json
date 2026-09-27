@@ -1,0 +1,63 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "2576ac6d5dcc9c3fddff0712e2dc9dac7108832d4b2116a6ba31d3b8c1ea21e1",
+      "size_bytes": 10893
+    },
+    "diagnosis.json": {
+      "sha256": "adc3c84fded5895f68190dc644c5963a1da4dbbe950affc09ab386a8303e18fe",
+      "size_bytes": 6323
+    },
+    "gui_manifest.json": {
+      "sha256": "6c295547a6c64f17beba6725bf7e075ee01fd2f81fcb8bbf8ab0dd2893e11501",
+      "size_bytes": 16674
+    },
+    "inspect.json": {
+      "sha256": "4deef74a4aad5b1b7f014a0fbb88fc9ba5a74869d28de35dc2d07590eb1ac34c",
+      "size_bytes": 7541
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "3b9d5b0043eaf4b31429961daddf84f656e8121d5ce27d02f9a2ea082305c59a",
+      "size_bytes": 487510
+    },
+    "timeline.ndjson": {
+      "sha256": "d831c275b976963e663962fb4595dd4fa69a8f3e498a538eb5f1fac42882c86d",
+      "size_bytes": 39057
+    },
+    "triage.json": {
+      "sha256": "112dacd4ab02d9a1b6fb617beca0430ca6a3714296f02bfebcac0f0b0b8b718a",
+      "size_bytes": 17082
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260927_213822_21612_capture.mcap",
+    "sha256": "3d77c3e073c777e5a1f11a24561056a957cb75d9c1c6caa33fb47c9b5454e6b0"
+  },
+  "behavior_status": "FAULT",
+  "created_at_utc": "2026-09-27T19:38:36Z",
+  "diagnosis_status": "FAIL",
+  "evidence_sha256": "8177b5ee8f43fec9f66f64439f55f78990ec4514e81d5080a473e1f5826a344f",
+  "evidence_status": "FAIL",
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "run_id": "v3_20260927_213822_21612_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FAIL"
+}

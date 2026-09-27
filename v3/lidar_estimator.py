@@ -1537,12 +1537,10 @@ class LidarEstimator:
             localization_status = "matching_unavailable"
 
         final_confidence = float(lidar_pose_conf)
-        if tracking_ready:
-            final_confidence_emitted = float(final_confidence)
-        elif conf_min > 0.0:
-            final_confidence_emitted = float(min(final_confidence, max(0.0, conf_min - 1e-6)))
-        else:
-            final_confidence_emitted = 0.0
+        # Measurement quality and publication permission are separate contracts.
+        # The per-result `tracking_ready` flag owns publication; confidence must
+        # remain the matcher's measured quality so downstream EKF R scaling is real.
+        final_confidence_emitted = float(final_confidence)
         duration_ms = (time.perf_counter() - t_start) * 1000.0
         measurement_confidence = float(
             matcher_quality.get("measurement_confidence", final_confidence_emitted)

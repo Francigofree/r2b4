@@ -342,6 +342,24 @@ class LidarHealthReading:
             raise ValueError("scan must be LidarScanReading or None")
 
 
+def _localization_publication_ready(
+    reading: LidarHealthReading,
+    minimum_confidence: float,
+) -> bool:
+    """Resolve the matcher-owned publication gate without rewriting quality."""
+
+    if reading.pose is None:
+        return False
+    diagnostics = reading.diagnostics
+    if diagnostics is not None and diagnostics.tracking_ready is not None:
+        # Native matcher results expose an explicit per-result gate. This also
+        # covers one-scan direction rejection without destroying global tracking.
+        return bool(diagnostics.tracking_ready)
+    # Compatibility fallback for older/injected backends that do not expose the
+    # explicit matcher gate yet.
+    return reading.confidence >= minimum_confidence
+
+
 class LidarHealthBackend(Protocol):
     """Injected edge backend; process, queue and hardware owners stay outside."""
 
@@ -391,7 +409,11 @@ class NativeLidarSource:
             error=self._error,
             stale=reading is not None and reading.stale,
             timing_valid=reading is None or reading.timing_valid,
-            degraded=reading is not None and (reading.pose is None or reading.confidence < self._config.minimum_confidence),
+            degraded=reading is not None
+            and not _localization_publication_ready(
+                reading,
+                self._config.minimum_confidence,
+            ),
         )
 
     @property
@@ -531,12 +553,14 @@ class NativeLidarSource:
                 self._local_points_cache = local_sample
             samples.append(local_sample)
         localization_usable = bool(
-            reading.pose is not None
-            and reading.timing_valid
+            reading.timing_valid
             and not reading.stale
             and reading.measurement_age_ns
             <= self._config.maximum_measurement_age_ns
-            and reading.confidence >= self._config.minimum_confidence
+            and _localization_publication_ready(
+                reading,
+                self._config.minimum_confidence,
+            )
         )
         has_localization = bool(
             reading.revision > 0

@@ -1,0 +1,125 @@
+diff --git a/v3/lidar_estimator.py b/v3/lidar_estimator.py
+--- a/v3/lidar_estimator.py
++++ b/v3/lidar_estimator.py
+@@ -1537,12 +1537,10 @@
+             localization_status = "matching_unavailable"
+ 
+         final_confidence = float(lidar_pose_conf)
+-        if tracking_ready:
+-            final_confidence_emitted = float(final_confidence)
+-        elif conf_min > 0.0:
+-            final_confidence_emitted = float(min(final_confidence, max(0.0, conf_min - 1e-6)))
+-        else:
+-            final_confidence_emitted = 0.0
++        # Measurement quality and publication permission are separate contracts.
++        # The per-result `tracking_ready` flag owns publication; confidence must
++        # remain the matcher's measured quality so downstream EKF R scaling is real.
++        final_confidence_emitted = float(final_confidence)
+         duration_ms = (time.perf_counter() - t_start) * 1000.0
+         measurement_confidence = float(
+             matcher_quality.get("measurement_confidence", final_confidence_emitted)
+diff --git a/v3/adapters/live_lidar.py b/v3/adapters/live_lidar.py
+--- a/v3/adapters/live_lidar.py
++++ b/v3/adapters/live_lidar.py
+@@ -340,6 +340,24 @@
+             raise ValueError("diagnostics candidate_id must match revision")
+         if self.scan is not None and not isinstance(self.scan, LidarScanReading):
+             raise ValueError("scan must be LidarScanReading or None")
++
++
++def _localization_publication_ready(
++    reading: LidarHealthReading,
++    minimum_confidence: float,
++) -> bool:
++    """Resolve the matcher-owned publication gate without rewriting quality."""
++
++    if reading.pose is None:
++        return False
++    diagnostics = reading.diagnostics
++    if diagnostics is not None and diagnostics.tracking_ready is not None:
++        # Native matcher results expose an explicit per-result gate. This also
++        # covers one-scan direction rejection without destroying global tracking.
++        return bool(diagnostics.tracking_ready)
++    # Compatibility fallback for older/injected backends that do not expose the
++    # explicit matcher gate yet.
++    return reading.confidence >= minimum_confidence
+ 
+ 
+ class LidarHealthBackend(Protocol):
+@@ -391,7 +409,11 @@
+             error=self._error,
+             stale=reading is not None and reading.stale,
+             timing_valid=reading is None or reading.timing_valid,
+-            degraded=reading is not None and (reading.pose is None or reading.confidence < self._config.minimum_confidence),
++            degraded=reading is not None
++            and not _localization_publication_ready(
++                reading,
++                self._config.minimum_confidence,
++            ),
+         )
+ 
+     @property
+@@ -531,12 +553,14 @@
+                 self._local_points_cache = local_sample
+             samples.append(local_sample)
+         localization_usable = bool(
+-            reading.pose is not None
+-            and reading.timing_valid
++            reading.timing_valid
+             and not reading.stale
+             and reading.measurement_age_ns
+             <= self._config.maximum_measurement_age_ns
+-            and reading.confidence >= self._config.minimum_confidence
++            and _localization_publication_ready(
++                reading,
++                self._config.minimum_confidence,
++            )
+         )
+         has_localization = bool(
+             reading.revision > 0
+diff --git a/tests/feature/test_v3_live_lidar.py b/tests/feature/test_v3_live_lidar.py
+--- a/tests/feature/test_v3_live_lidar.py
++++ b/tests/feature/test_v3_live_lidar.py
+@@ -15,8 +15,8 @@
+         self.calls.append(context)
+         return self.result
+ 
+-def _reading(*, confidence: float=0.9, stale: bool=False):
+-    return LidarHealthReading(revision=17, captured_monotonic_ns=980, measurement_age_ns=20, confidence=confidence, stale=stale, timing_valid=True, pose=LidarPoseReading(0.25, -0.1, 0.2, r_scale=0.8), diagnostics=LidarMatcherDiagnostics(candidate_id=17, source_raw_scan_id=31, source_raw_scan_timestamp_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, pose_reference_monotonic_ns=940, scan_pose_alignment_delta_ns=0, tracking_ready=True, matcher_timed_out=False, matcher_degenerate=False, matcher_runtime_ms=28.5, matcher_queue_delay_ms=1.25, matcher_input_age_ns=60, matcher_confidence=0.85, inlier_ratio=0.75, robust_rmse_m=0.012, sector_coverage=0.5, observability_score=0.8, ambiguity_margin=0.9, scan_to_map_seed=(0.2, -0.05, 0.1)), scan=LidarScanReading(revision=31, captured_monotonic_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, measurement_age_ns=40, health='OK', stale=False, timing_valid=True, point_count=80, front_clearance_m=1.2, rear_clearance_m=1.1, left_clearance_m=0.9, right_clearance_m=1.0, front_observation_count=20, rear_observation_count=20, left_observation_count=20, right_observation_count=20, local_points=(LidarPointReading(0.0, 1.0, 15), LidarPointReading(90.0, 0.5, 10))))
++def _reading(*, confidence: float=0.9, stale: bool=False, tracking_ready: bool | None=True):
++    return LidarHealthReading(revision=17, captured_monotonic_ns=980, measurement_age_ns=20, confidence=confidence, stale=stale, timing_valid=True, pose=LidarPoseReading(0.25, -0.1, 0.2, r_scale=0.8), diagnostics=LidarMatcherDiagnostics(candidate_id=17, source_raw_scan_id=31, source_raw_scan_timestamp_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, pose_reference_monotonic_ns=940, scan_pose_alignment_delta_ns=0, tracking_ready=tracking_ready, matcher_timed_out=False, matcher_degenerate=False, matcher_runtime_ms=28.5, matcher_queue_delay_ms=1.25, matcher_input_age_ns=60, matcher_confidence=0.85, inlier_ratio=0.75, robust_rmse_m=0.012, sector_coverage=0.5, observability_score=0.8, ambiguity_margin=0.9, scan_to_map_seed=(0.2, -0.05, 0.1)), scan=LidarScanReading(revision=31, captured_monotonic_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, measurement_age_ns=40, health='OK', stale=False, timing_valid=True, point_count=80, front_clearance_m=1.2, rear_clearance_m=1.1, left_clearance_m=0.9, right_clearance_m=1.0, front_observation_count=20, rear_observation_count=20, left_observation_count=20, right_observation_count=20, local_points=(LidarPointReading(0.0, 1.0, 15), LidarPointReading(90.0, 0.5, 10))))
+ 
+ def _config() -> NativeLidarConfig:
+     return NativeLidarConfig('LIDAR_LOCALIZATION', minimum_confidence=0.3, maximum_measurement_age_ns=250000000)
+@@ -39,11 +39,30 @@
+     assert {field.key: field.value for field in diagnostics.values} == {'candidate_id': 17, 'source_raw_scan_id': 31, 'source_raw_scan_timestamp_ns': 960, 'source_scan_revision': 31, 'scan_start_monotonic_ns': 920, 'scan_end_monotonic_ns': 960, 'measurement_monotonic_ns': 940, 'pose_reference_monotonic_ns': 940, 'scan_pose_alignment_delta_ns': 0, 'matcher_reason': '', 'tracking_ready': True, 'matcher_timed_out': False, 'matcher_degenerate': False, 'degeneracy_reasons': '', 'matcher_runtime_ms': 28.5, 'matcher_queue_delay_ms': 1.25, 'matcher_input_age_ns': 60, 'matcher_confidence': 0.85, 'inlier_ratio': 0.75, 'robust_rmse_m': 0.012, 'sector_coverage': 0.5, 'observability_score': 0.8, 'ambiguity_margin': 0.9, 'seed_pose_x_m': 0.2, 'seed_pose_y_m': -0.05, 'seed_pose_yaw_rad': 0.1}
+     assert {field.key: field.value for field in pose.values} == {'frame_id': 'R2B4_BOOT_ROBOT_MAP', 'x_m': 0.25, 'y_m': -0.1, 'yaw_rad': 0.2, 'confidence': 0.9, 'r_scale': 0.8}
+ 
+-@pytest.mark.parametrize('reading', (_reading(confidence=0.2), _reading(stale=True)))
++@pytest.mark.parametrize('reading', (_reading(confidence=0.2, tracking_ready=None), _reading(stale=True)))
+ def test_localization_quality_does_not_change_physical_health(reading):
+     snapshot = NativeLidarSource(_Backend(reading), _config()).read(TickContext(7, 1000))
+     assert snapshot.health.state is DeviceHealthState.OK
+     assert tuple((sample.kind for sample in snapshot.samples)) == ('lidar_health', 'lidar_safety_clearance', 'lidar_local_points', 'lidar_localization_health', 'lidar_matcher_diagnostics')
++
++def test_explicit_tracking_ready_is_publication_ssot_not_confidence_threshold():
++    source = NativeLidarSource(_Backend(_reading(confidence=0.2, tracking_ready=True)), _config())
++    snapshot = source.read(TickContext(7, 1000))
++    by_kind = {sample.kind: sample for sample in snapshot.samples}
++    localization = {field.key: field.value for field in by_kind['lidar_localization_health'].values}
++    pose = {field.key: field.value for field in by_kind['lidar_pose'].values}
++    assert localization['confidence'] == 0.2
++    assert localization['usable'] is True
++    assert pose['confidence'] == 0.2
++
++def test_tracking_not_ready_blocks_pose_without_rewriting_quality():
++    source = NativeLidarSource(_Backend(_reading(confidence=0.9, tracking_ready=False)), _config())
++    snapshot = source.read(TickContext(7, 1000))
++    by_kind = {sample.kind: sample for sample in snapshot.samples}
++    localization = {field.key: field.value for field in by_kind['lidar_localization_health'].values}
++    assert 'lidar_pose' not in by_kind
++    assert localization['confidence'] == 0.9
++    assert localization['usable'] is False
+ 
+ def test_physical_scan_staleness_degrades_device_but_keeps_localization_separate():
+     stale_scan = LidarScanReading(revision=31, captured_monotonic_ns=960, scan_start_monotonic_ns=920, scan_end_monotonic_ns=960, measurement_monotonic_ns=940, measurement_age_ns=40, health='STALE', stale=True, timing_valid=True, point_count=80, front_clearance_m=1.2, rear_clearance_m=1.1, left_clearance_m=0.9, right_clearance_m=1.0, front_observation_count=20, rear_observation_count=20, left_observation_count=20, right_observation_count=20)
