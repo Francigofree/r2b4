@@ -40,7 +40,7 @@ def test_affinity_masks_keep_control_exclusive_and_replay_historical_policy():
     resolved = ConfigResolver.from_documents(hardware, physics, speed_map, control)
     assert resolved.affinity.capture_cpus == (1, 2)
     assert resolved.affinity.lidar_matcher_cpus == (1, 2)
-    assert resolved.affinity.lidar_owner_cpus == (2,)
+    assert resolved.affinity.lidar_owner_cpus == tuple(control["runtime_affinity"]["lidar_owner_cpus"])
     assert resolved.affinity.as_dict()['capture_cpus'] == [1, 2]
     for field, invalid in (
         ('capture_cpus', []), ('capture_cpus', [1, 1]), ('capture_cpus', [-1]),
