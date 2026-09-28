@@ -1,0 +1,3271 @@
+{
+  "actionable_incident_count": 100,
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "NOMINAL",
+  "behavioral_trends": {
+    "commands": {
+      "observed_change_count": 13,
+      "observed_unique_count": 14
+    },
+    "domain_sample_counts": {
+      "command": 319,
+      "mission": 319,
+      "navigation": 319,
+      "pose": 319,
+      "safety": 319
+    },
+    "localization": {
+      "sample_count": 319
+    },
+    "maximum_contiguous_sample_gap_s": 0.3,
+    "missing_domains": [],
+    "missions": {
+      "lifecycle_sample_counts": {
+        "ACTIVE": 302,
+        "IDLE": 17
+      },
+      "observed_lifecycle_change_count": 2,
+      "observed_unique_count": 14
+    },
+    "motion": {
+      "blocked_sample_count": 0,
+      "longest_observed_blocked_span_s": 0.0
+    },
+    "navigation": {
+      "stagnation": null,
+      "status_sample_counts": {
+        "ACTIVE": 166,
+        "IDLE": 43,
+        "INVALIDATED": 99,
+        "PENDING": 11
+      }
+    },
+    "safety": {
+      "unsafe_output_sample_count": 0
+    },
+    "trend_window_s": 5.0
+  },
+  "capture": {
+    "capture_id": "v3_20260928_112604_25984_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 0,
+          "before": 6
+        },
+        {
+          "after": 6,
+          "before": 10
+        },
+        {
+          "after": 10,
+          "before": 16
+        },
+        {
+          "after": 16,
+          "before": 20
+        },
+        {
+          "after": 20,
+          "before": 25
+        },
+        {
+          "after": 25,
+          "before": 30
+        },
+        {
+          "after": 30,
+          "before": 35
+        },
+        {
+          "after": 35,
+          "before": 40
+        },
+        {
+          "after": 40,
+          "before": 45
+        },
+        {
+          "after": 45,
+          "before": 50
+        },
+        {
+          "after": 50,
+          "before": 55
+        },
+        {
+          "after": 55,
+          "before": 59
+        },
+        {
+          "after": 59,
+          "before": 64
+        },
+        {
+          "after": 64,
+          "before": 69
+        },
+        {
+          "after": 69,
+          "before": 74
+        },
+        {
+          "after": 74,
+          "before": 79
+        },
+        {
+          "after": 79,
+          "before": 84
+        },
+        {
+          "after": 84,
+          "before": 89
+        },
+        {
+          "after": 89,
+          "before": 93
+        },
+        {
+          "after": 93,
+          "before": 99
+        },
+        {
+          "after": 99,
+          "before": 104
+        },
+        {
+          "after": 104,
+          "before": 109
+        },
+        {
+          "after": 109,
+          "before": 114
+        },
+        {
+          "after": 114,
+          "before": 119
+        },
+        {
+          "after": 119,
+          "before": 124
+        },
+        {
+          "after": 124,
+          "before": 129
+        },
+        {
+          "after": 129,
+          "before": 134
+        },
+        {
+          "after": 134,
+          "before": 139
+        },
+        {
+          "after": 139,
+          "before": 144
+        },
+        {
+          "after": 144,
+          "before": 149
+        },
+        {
+          "after": 149,
+          "before": 154
+        },
+        {
+          "after": 154,
+          "before": 159
+        },
+        {
+          "after": 159,
+          "before": 163
+        },
+        {
+          "after": 163,
+          "before": 168
+        },
+        {
+          "after": 168,
+          "before": 172
+        },
+        {
+          "after": 172,
+          "before": 177
+        },
+        {
+          "after": 177,
+          "before": 181
+        },
+        {
+          "after": 181,
+          "before": 185
+        },
+        {
+          "after": 185,
+          "before": 190
+        },
+        {
+          "after": 190,
+          "before": 195
+        },
+        {
+          "after": 195,
+          "before": 200
+        },
+        {
+          "after": 200,
+          "before": 205
+        },
+        {
+          "after": 205,
+          "before": 210
+        },
+        {
+          "after": 210,
+          "before": 214
+        },
+        {
+          "after": 214,
+          "before": 219
+        },
+        {
+          "after": 219,
+          "before": 224
+        },
+        {
+          "after": 224,
+          "before": 229
+        },
+        {
+          "after": 229,
+          "before": 234
+        },
+        {
+          "after": 234,
+          "before": 239
+        },
+        {
+          "after": 239,
+          "before": 244
+        },
+        {
+          "after": 244,
+          "before": 249
+        },
+        {
+          "after": 249,
+          "before": 254
+        },
+        {
+          "after": 254,
+          "before": 259
+        },
+        {
+          "after": 259,
+          "before": 264
+        },
+        {
+          "after": 264,
+          "before": 269
+        },
+        {
+          "after": 269,
+          "before": 274
+        },
+        {
+          "after": 274,
+          "before": 279
+        },
+        {
+          "after": 279,
+          "before": 284
+        },
+        {
+          "after": 284,
+          "before": 289
+        },
+        {
+          "after": 289,
+          "before": 294
+        },
+        {
+          "after": 294,
+          "before": 299
+        },
+        {
+          "after": 299,
+          "before": 304
+        },
+        {
+          "after": 304,
+          "before": 309
+        },
+        {
+          "after": 309,
+          "before": 314
+        },
+        {
+          "after": 314,
+          "before": 319
+        },
+        {
+          "after": 319,
+          "before": 324
+        },
+        {
+          "after": 324,
+          "before": 328
+        },
+        {
+          "after": 328,
+          "before": 332
+        },
+        {
+          "after": 332,
+          "before": 337
+        },
+        {
+          "after": 337,
+          "before": 342
+        },
+        {
+          "after": 342,
+          "before": 346
+        },
+        {
+          "after": 346,
+          "before": 351
+        },
+        {
+          "after": 351,
+          "before": 357
+        },
+        {
+          "after": 357,
+          "before": 362
+        },
+        {
+          "after": 362,
+          "before": 367
+        },
+        {
+          "after": 367,
+          "before": 372
+        },
+        {
+          "after": 372,
+          "before": 377
+        },
+        {
+          "after": 377,
+          "before": 382
+        },
+        {
+          "after": 382,
+          "before": 386
+        },
+        {
+          "after": 386,
+          "before": 392
+        },
+        {
+          "after": 392,
+          "before": 397
+        },
+        {
+          "after": 397,
+          "before": 402
+        },
+        {
+          "after": 402,
+          "before": 406
+        },
+        {
+          "after": 406,
+          "before": 410
+        },
+        {
+          "after": 410,
+          "before": 416
+        },
+        {
+          "after": 416,
+          "before": 421
+        },
+        {
+          "after": 421,
+          "before": 426
+        },
+        {
+          "after": 426,
+          "before": 430
+        },
+        {
+          "after": 430,
+          "before": 435
+        },
+        {
+          "after": 435,
+          "before": 440
+        },
+        {
+          "after": 440,
+          "before": 445
+        },
+        {
+          "after": 445,
+          "before": 450
+        },
+        {
+          "after": 450,
+          "before": 455
+        },
+        {
+          "after": 455,
+          "before": 458
+        },
+        {
+          "after": 458,
+          "before": 464
+        },
+        {
+          "after": 464,
+          "before": 468
+        },
+        {
+          "after": 468,
+          "before": 472
+        },
+        {
+          "after": 472,
+          "before": 477
+        },
+        {
+          "after": 477,
+          "before": 482
+        },
+        {
+          "after": 482,
+          "before": 487
+        },
+        {
+          "after": 487,
+          "before": 492
+        },
+        {
+          "after": 492,
+          "before": 497
+        },
+        {
+          "after": 497,
+          "before": 502
+        },
+        {
+          "after": 502,
+          "before": 507
+        },
+        {
+          "after": 507,
+          "before": 511
+        },
+        {
+          "after": 511,
+          "before": 515
+        },
+        {
+          "after": 515,
+          "before": 521
+        },
+        {
+          "after": 521,
+          "before": 526
+        },
+        {
+          "after": 526,
+          "before": 530
+        },
+        {
+          "after": 530,
+          "before": 536
+        },
+        {
+          "after": 536,
+          "before": 541
+        },
+        {
+          "after": 541,
+          "before": 546
+        },
+        {
+          "after": 546,
+          "before": 551
+        },
+        {
+          "after": 551,
+          "before": 556
+        },
+        {
+          "after": 556,
+          "before": 561
+        },
+        {
+          "after": 561,
+          "before": 566
+        },
+        {
+          "after": 566,
+          "before": 570
+        },
+        {
+          "after": 570,
+          "before": 576
+        },
+        {
+          "after": 576,
+          "before": 581
+        },
+        {
+          "after": 581,
+          "before": 585
+        },
+        {
+          "after": 585,
+          "before": 591
+        },
+        {
+          "after": 591,
+          "before": 596
+        },
+        {
+          "after": 596,
+          "before": 601
+        },
+        {
+          "after": 601,
+          "before": 606
+        },
+        {
+          "after": 606,
+          "before": 611
+        },
+        {
+          "after": 611,
+          "before": 616
+        },
+        {
+          "after": 616,
+          "before": 621
+        },
+        {
+          "after": 621,
+          "before": 626
+        },
+        {
+          "after": 626,
+          "before": 631
+        },
+        {
+          "after": 631,
+          "before": 636
+        },
+        {
+          "after": 636,
+          "before": 641
+        },
+        {
+          "after": 641,
+          "before": 646
+        },
+        {
+          "after": 646,
+          "before": 651
+        },
+        {
+          "after": 651,
+          "before": 656
+        },
+        {
+          "after": 656,
+          "before": 661
+        },
+        {
+          "after": 661,
+          "before": 666
+        },
+        {
+          "after": 666,
+          "before": 671
+        },
+        {
+          "after": 671,
+          "before": 676
+        },
+        {
+          "after": 676,
+          "before": 681
+        },
+        {
+          "after": 681,
+          "before": 686
+        },
+        {
+          "after": 686,
+          "before": 691
+        },
+        {
+          "after": 691,
+          "before": 696
+        },
+        {
+          "after": 696,
+          "before": 701
+        },
+        {
+          "after": 702,
+          "before": 706
+        },
+        {
+          "after": 706,
+          "before": 711
+        },
+        {
+          "after": 711,
+          "before": 716
+        },
+        {
+          "after": 716,
+          "before": 720
+        },
+        {
+          "after": 720,
+          "before": 724
+        },
+        {
+          "after": 724,
+          "before": 728
+        },
+        {
+          "after": 728,
+          "before": 732
+        },
+        {
+          "after": 732,
+          "before": 737
+        },
+        {
+          "after": 737,
+          "before": 741
+        },
+        {
+          "after": 741,
+          "before": 745
+        },
+        {
+          "after": 745,
+          "before": 751
+        },
+        {
+          "after": 751,
+          "before": 756
+        },
+        {
+          "after": 756,
+          "before": 761
+        },
+        {
+          "after": 761,
+          "before": 766
+        },
+        {
+          "after": 766,
+          "before": 771
+        },
+        {
+          "after": 771,
+          "before": 776
+        },
+        {
+          "after": 776,
+          "before": 780
+        },
+        {
+          "after": 780,
+          "before": 786
+        },
+        {
+          "after": 786,
+          "before": 791
+        },
+        {
+          "after": 791,
+          "before": 796
+        },
+        {
+          "after": 796,
+          "before": 801
+        },
+        {
+          "after": 801,
+          "before": 806
+        },
+        {
+          "after": 806,
+          "before": 811
+        },
+        {
+          "after": 811,
+          "before": 816
+        },
+        {
+          "after": 816,
+          "before": 821
+        },
+        {
+          "after": 821,
+          "before": 826
+        },
+        {
+          "after": 826,
+          "before": 831
+        },
+        {
+          "after": 831,
+          "before": 836
+        },
+        {
+          "after": 836,
+          "before": 841
+        },
+        {
+          "after": 841,
+          "before": 846
+        },
+        {
+          "after": 846,
+          "before": 851
+        },
+        {
+          "after": 851,
+          "before": 856
+        },
+        {
+          "after": 856,
+          "before": 861
+        },
+        {
+          "after": 861,
+          "before": 866
+        },
+        {
+          "after": 866,
+          "before": 871
+        },
+        {
+          "after": 871,
+          "before": 876
+        },
+        {
+          "after": 876,
+          "before": 881
+        },
+        {
+          "after": 881,
+          "before": 886
+        },
+        {
+          "after": 886,
+          "before": 891
+        },
+        {
+          "after": 891,
+          "before": 896
+        },
+        {
+          "after": 896,
+          "before": 901
+        },
+        {
+          "after": 901,
+          "before": 906
+        },
+        {
+          "after": 906,
+          "before": 911
+        },
+        {
+          "after": 911,
+          "before": 916
+        },
+        {
+          "after": 916,
+          "before": 921
+        },
+        {
+          "after": 921,
+          "before": 926
+        },
+        {
+          "after": 926,
+          "before": 931
+        },
+        {
+          "after": 931,
+          "before": 936
+        },
+        {
+          "after": 936,
+          "before": 941
+        },
+        {
+          "after": 941,
+          "before": 945
+        },
+        {
+          "after": 945,
+          "before": 951
+        },
+        {
+          "after": 951,
+          "before": 955
+        },
+        {
+          "after": 955,
+          "before": 960
+        },
+        {
+          "after": 960,
+          "before": 965
+        },
+        {
+          "after": 965,
+          "before": 970
+        },
+        {
+          "after": 970,
+          "before": 975
+        },
+        {
+          "after": 975,
+          "before": 980
+        },
+        {
+          "after": 980,
+          "before": 985
+        },
+        {
+          "after": 985,
+          "before": 990
+        },
+        {
+          "after": 990,
+          "before": 995
+        },
+        {
+          "after": 995,
+          "before": 999
+        },
+        {
+          "after": 999,
+          "before": 1004
+        },
+        {
+          "after": 1004,
+          "before": 1009
+        },
+        {
+          "after": 1009,
+          "before": 1014
+        },
+        {
+          "after": 1014,
+          "before": 1019
+        },
+        {
+          "after": 1019,
+          "before": 1024
+        },
+        {
+          "after": 1024,
+          "before": 1029
+        },
+        {
+          "after": 1029,
+          "before": 1034
+        },
+        {
+          "after": 1034,
+          "before": 1039
+        },
+        {
+          "after": 1039,
+          "before": 1044
+        },
+        {
+          "after": 1044,
+          "before": 1049
+        },
+        {
+          "after": 1049,
+          "before": 1054
+        },
+        {
+          "after": 1054,
+          "before": 1059
+        },
+        {
+          "after": 1059,
+          "before": 1064
+        },
+        {
+          "after": 1064,
+          "before": 1069
+        },
+        {
+          "after": 1069,
+          "before": 1074
+        },
+        {
+          "after": 1074,
+          "before": 1079
+        },
+        {
+          "after": 1079,
+          "before": 1084
+        },
+        {
+          "after": 1084,
+          "before": 1089
+        },
+        {
+          "after": 1089,
+          "before": 1094
+        },
+        {
+          "after": 1094,
+          "before": 1099
+        },
+        {
+          "after": 1099,
+          "before": 1104
+        },
+        {
+          "after": 1104,
+          "before": 1109
+        },
+        {
+          "after": 1109,
+          "before": 1114
+        },
+        {
+          "after": 1114,
+          "before": 1119
+        },
+        {
+          "after": 1119,
+          "before": 1124
+        },
+        {
+          "after": 1124,
+          "before": 1129
+        },
+        {
+          "after": 1129,
+          "before": 1134
+        },
+        {
+          "after": 1134,
+          "before": 1139
+        },
+        {
+          "after": 1139,
+          "before": 1144
+        },
+        {
+          "after": 1144,
+          "before": 1149
+        },
+        {
+          "after": 1149,
+          "before": 1154
+        },
+        {
+          "after": 1154,
+          "before": 1159
+        },
+        {
+          "after": 1159,
+          "before": 1164
+        },
+        {
+          "after": 1164,
+          "before": 1169
+        },
+        {
+          "after": 1169,
+          "before": 1174
+        },
+        {
+          "after": 1174,
+          "before": 1179
+        },
+        {
+          "after": 1179,
+          "before": 1184
+        },
+        {
+          "after": 1184,
+          "before": 1189
+        },
+        {
+          "after": 1189,
+          "before": 1194
+        },
+        {
+          "after": 1194,
+          "before": 1198
+        },
+        {
+          "after": 1198,
+          "before": 1204
+        },
+        {
+          "after": 1204,
+          "before": 1209
+        },
+        {
+          "after": 1209,
+          "before": 1214
+        },
+        {
+          "after": 1214,
+          "before": 1219
+        },
+        {
+          "after": 1219,
+          "before": 1224
+        },
+        {
+          "after": 1224,
+          "before": 1229
+        },
+        {
+          "after": 1229,
+          "before": 1234
+        },
+        {
+          "after": 1234,
+          "before": 1239
+        },
+        {
+          "after": 1239,
+          "before": 1244
+        },
+        {
+          "after": 1244,
+          "before": 1249
+        },
+        {
+          "after": 1249,
+          "before": 1254
+        },
+        {
+          "after": 1254,
+          "before": 1259
+        },
+        {
+          "after": 1259,
+          "before": 1264
+        },
+        {
+          "after": 1264,
+          "before": 1269
+        },
+        {
+          "after": 1269,
+          "before": 1274
+        },
+        {
+          "after": 1274,
+          "before": 1279
+        },
+        {
+          "after": 1279,
+          "before": 1284
+        },
+        {
+          "after": 1284,
+          "before": 1289
+        },
+        {
+          "after": 1289,
+          "before": 1294
+        },
+        {
+          "after": 1294,
+          "before": 1299
+        },
+        {
+          "after": 1299,
+          "before": 1304
+        },
+        {
+          "after": 1304,
+          "before": 1308
+        },
+        {
+          "after": 1308,
+          "before": 1313
+        },
+        {
+          "after": 1313,
+          "before": 1318
+        },
+        {
+          "after": 1318,
+          "before": 1323
+        },
+        {
+          "after": 1323,
+          "before": 1328
+        },
+        {
+          "after": 1328,
+          "before": 1333
+        },
+        {
+          "after": 1333,
+          "before": 1338
+        },
+        {
+          "after": 1338,
+          "before": 1343
+        },
+        {
+          "after": 1343,
+          "before": 1348
+        },
+        {
+          "after": 1348,
+          "before": 1353
+        },
+        {
+          "after": 1353,
+          "before": 1358
+        },
+        {
+          "after": 1358,
+          "before": 1363
+        },
+        {
+          "after": 1363,
+          "before": 1368
+        },
+        {
+          "after": 1368,
+          "before": 1373
+        },
+        {
+          "after": 1373,
+          "before": 1378
+        },
+        {
+          "after": 1378,
+          "before": 1383
+        },
+        {
+          "after": 1383,
+          "before": 1388
+        },
+        {
+          "after": 1388,
+          "before": 1393
+        },
+        {
+          "after": 1393,
+          "before": 1398
+        },
+        {
+          "after": 1398,
+          "before": 1403
+        },
+        {
+          "after": 1403,
+          "before": 1408
+        },
+        {
+          "after": 1408,
+          "before": 1413
+        },
+        {
+          "after": 1413,
+          "before": 1418
+        },
+        {
+          "after": 1418,
+          "before": 1423
+        },
+        {
+          "after": 1423,
+          "before": 1428
+        },
+        {
+          "after": 1428,
+          "before": 1433
+        },
+        {
+          "after": 1433,
+          "before": 1438
+        },
+        {
+          "after": 1438,
+          "before": 1443
+        },
+        {
+          "after": 1443,
+          "before": 1448
+        },
+        {
+          "after": 1448,
+          "before": 1453
+        },
+        {
+          "after": 1453,
+          "before": 1458
+        },
+        {
+          "after": 1458,
+          "before": 1463
+        },
+        {
+          "after": 1463,
+          "before": 1468
+        },
+        {
+          "after": 1468,
+          "before": 1473
+        },
+        {
+          "after": 1473,
+          "before": 1478
+        },
+        {
+          "after": 1478,
+          "before": 1483
+        },
+        {
+          "after": 1483,
+          "before": 1488
+        },
+        {
+          "after": 1488,
+          "before": 1493
+        },
+        {
+          "after": 1493,
+          "before": 1498
+        },
+        {
+          "after": 1498,
+          "before": 1503
+        },
+        {
+          "after": 1503,
+          "before": 1508
+        },
+        {
+          "after": 1508,
+          "before": 1513
+        },
+        {
+          "after": 1513,
+          "before": 1518
+        },
+        {
+          "after": 1518,
+          "before": 1523
+        },
+        {
+          "after": 1523,
+          "before": 1528
+        },
+        {
+          "after": 1528,
+          "before": 1533
+        },
+        {
+          "after": 1533,
+          "before": 1538
+        },
+        {
+          "after": 1538,
+          "before": 1543
+        },
+        {
+          "after": 1543,
+          "before": 1548
+        },
+        {
+          "after": 1548,
+          "before": 1553
+        },
+        {
+          "after": 1553,
+          "before": 1558
+        },
+        {
+          "after": 1558,
+          "before": 1562
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "4b66f3e2bc912450c775e2f5dea6219d7543578006a4d6c1afcd61e1204ae84f",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 322,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 322,
+        "first_lost_sequence": null,
+        "high_water_mark": 3,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 322,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": false,
+      "raw_evidence_requested": false,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 0,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": false,
+      "raw_transport_produced_count": 0,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 10
+    },
+    "status": "PASS",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "incident_count": 128,
+  "incidents": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1034",
+      "layer": "L6",
+      "monotonic_ns": 7951810139618,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1034
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1039",
+      "layer": "L6",
+      "monotonic_ns": 7951910233732,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1039
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1044",
+      "layer": "L6",
+      "monotonic_ns": 7952010138733,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1044
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1049",
+      "layer": "L6",
+      "monotonic_ns": 7952110865054,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1049
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1054",
+      "layer": "L6",
+      "monotonic_ns": 7952210474813,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1054
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1059",
+      "layer": "L6",
+      "monotonic_ns": 7952310122925,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1059
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1064",
+      "layer": "L6",
+      "monotonic_ns": 7952410153168,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1064
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1069",
+      "layer": "L6",
+      "monotonic_ns": 7952511023823,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1069
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1074",
+      "layer": "L6",
+      "monotonic_ns": 7952610378766,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1074
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1079",
+      "layer": "L6",
+      "monotonic_ns": 7952710205008,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1079
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1084",
+      "layer": "L6",
+      "monotonic_ns": 7952810134806,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1084
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1089",
+      "layer": "L6",
+      "monotonic_ns": 7952910122012,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1089
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1094",
+      "layer": "L6",
+      "monotonic_ns": 7953010134644,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1094
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1099",
+      "layer": "L6",
+      "monotonic_ns": 7953110163165,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1099
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1104",
+      "layer": "L6",
+      "monotonic_ns": 7953210203130,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1104
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1109",
+      "layer": "L6",
+      "monotonic_ns": 7953310216651,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1109
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1114",
+      "layer": "L6",
+      "monotonic_ns": 7953410139727,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1114
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1119",
+      "layer": "L6",
+      "monotonic_ns": 7953510119877,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1119
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1124",
+      "layer": "L6",
+      "monotonic_ns": 7953610125768,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1124
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1129",
+      "layer": "L6",
+      "monotonic_ns": 7953710253512,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1129
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1134",
+      "layer": "L6",
+      "monotonic_ns": 7953810122643,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1134
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1139",
+      "layer": "L6",
+      "monotonic_ns": 7953910103238,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1139
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1144",
+      "layer": "L6",
+      "monotonic_ns": 7954010124221,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1144
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1149",
+      "layer": "L6",
+      "monotonic_ns": 7954110262002,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1149
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1154",
+      "layer": "L6",
+      "monotonic_ns": 7954212118495,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1154
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1159",
+      "layer": "L6",
+      "monotonic_ns": 7954310124691,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1159
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1164",
+      "layer": "L6",
+      "monotonic_ns": 7954410262064,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1164
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1169",
+      "layer": "L6",
+      "monotonic_ns": 7954510124529,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1169
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1174",
+      "layer": "L6",
+      "monotonic_ns": 7954610126142,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1174
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1179",
+      "layer": "L6",
+      "monotonic_ns": 7954711569003,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1179
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1184",
+      "layer": "L6",
+      "monotonic_ns": 7954811808248,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1184
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1189",
+      "layer": "L6",
+      "monotonic_ns": 7954910112037,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1189
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1194",
+      "layer": "L6",
+      "monotonic_ns": 7955010122891,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1194
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1198",
+      "layer": "L6",
+      "monotonic_ns": 7955092900674,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1198
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1204",
+      "layer": "L6",
+      "monotonic_ns": 7955211780775,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1204
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1209",
+      "layer": "L6",
+      "monotonic_ns": 7955310280788,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1209
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1214",
+      "layer": "L6",
+      "monotonic_ns": 7955413828530,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1214
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1219",
+      "layer": "L6",
+      "monotonic_ns": 7955510136606,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1219
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1224",
+      "layer": "L6",
+      "monotonic_ns": 7955610304424,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1224
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1229",
+      "layer": "L6",
+      "monotonic_ns": 7955710299852,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1229
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1234",
+      "layer": "L6",
+      "monotonic_ns": 7955810124409,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1234
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1239",
+      "layer": "L6",
+      "monotonic_ns": 7955912385941,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1239
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1244",
+      "layer": "L6",
+      "monotonic_ns": 7956010173302,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1244
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1249",
+      "layer": "L6",
+      "monotonic_ns": 7956112351260,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1249
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1254",
+      "layer": "L6",
+      "monotonic_ns": 7956210266140,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1254
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1259",
+      "layer": "L6",
+      "monotonic_ns": 7956310157957,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1259
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1264",
+      "layer": "L6",
+      "monotonic_ns": 7956410106588,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1264
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1269",
+      "layer": "L6",
+      "monotonic_ns": 7956511210892,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1269
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1274",
+      "layer": "L6",
+      "monotonic_ns": 7956610340705,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1274
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1279",
+      "layer": "L6",
+      "monotonic_ns": 7956710577542,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1279
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1284",
+      "layer": "L6",
+      "monotonic_ns": 7956810150023,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1284
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1289",
+      "layer": "L6",
+      "monotonic_ns": 7956910180137,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1289
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1294",
+      "layer": "L6",
+      "monotonic_ns": 7957010135379,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1294
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1299",
+      "layer": "L6",
+      "monotonic_ns": 7957110936719,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1299
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1304",
+      "layer": "L6",
+      "monotonic_ns": 7957213090825,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1304
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1308",
+      "layer": "L6",
+      "monotonic_ns": 7957310130478,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1308
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1313",
+      "layer": "L6",
+      "monotonic_ns": 7957410129110,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1313
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1318",
+      "layer": "L6",
+      "monotonic_ns": 7957510116464,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1318
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1323",
+      "layer": "L6",
+      "monotonic_ns": 7957610136244,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1323
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1328",
+      "layer": "L6",
+      "monotonic_ns": 7957711105029,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1328
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1333",
+      "layer": "L6",
+      "monotonic_ns": 7957810374398,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1333
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1338",
+      "layer": "L6",
+      "monotonic_ns": 7957910237066,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1338
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1343",
+      "layer": "L6",
+      "monotonic_ns": 7958010225605,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1343
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1348",
+      "layer": "L6",
+      "monotonic_ns": 7958110182144,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1348
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1353",
+      "layer": "L6",
+      "monotonic_ns": 7958210961835,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1353
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1358",
+      "layer": "L6",
+      "monotonic_ns": 7958310130629,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1358
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1363",
+      "layer": "L6",
+      "monotonic_ns": 7958410389244,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1363
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1368",
+      "layer": "L6",
+      "monotonic_ns": 7958510136708,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1368
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1373",
+      "layer": "L6",
+      "monotonic_ns": 7958610292229,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1373
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1378",
+      "layer": "L6",
+      "monotonic_ns": 7958711009939,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1378
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1383",
+      "layer": "L6",
+      "monotonic_ns": 7958810309771,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1383
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1388",
+      "layer": "L6",
+      "monotonic_ns": 7958910229476,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1388
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1393",
+      "layer": "L6",
+      "monotonic_ns": 7959010153478,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1393
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1398",
+      "layer": "L6",
+      "monotonic_ns": 7959110131461,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1398
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1403",
+      "layer": "L6",
+      "monotonic_ns": 7959211981547,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1403
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1408",
+      "layer": "L6",
+      "monotonic_ns": 7959311244064,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1408
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1413",
+      "layer": "L6",
+      "monotonic_ns": 7959410105023,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1413
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1418",
+      "layer": "L6",
+      "monotonic_ns": 7959511489681,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1418
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1423",
+      "layer": "L6",
+      "monotonic_ns": 7959610119509,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1423
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1428",
+      "layer": "L6",
+      "monotonic_ns": 7959710136122,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1428
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1433",
+      "layer": "L6",
+      "monotonic_ns": 7959811217075,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1433
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1438",
+      "layer": "L6",
+      "monotonic_ns": 7959910129386,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1438
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1443",
+      "layer": "L6",
+      "monotonic_ns": 7960010555113,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1443
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1448",
+      "layer": "L6",
+      "monotonic_ns": 7960110970746,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1448
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1453",
+      "layer": "L6",
+      "monotonic_ns": 7960210200337,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1453
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1458",
+      "layer": "L6",
+      "monotonic_ns": 7960310155709,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1458
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1463",
+      "layer": "L6",
+      "monotonic_ns": 7960410176749,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1463
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1468",
+      "layer": "L6",
+      "monotonic_ns": 7960510132788,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1468
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1473",
+      "layer": "L6",
+      "monotonic_ns": 7960610414273,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1473
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1478",
+      "layer": "L6",
+      "monotonic_ns": 7960711800986,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1478
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1483",
+      "layer": "L6",
+      "monotonic_ns": 7960810123868,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1483
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1488",
+      "layer": "L6",
+      "monotonic_ns": 7960911118024,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1488
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1493",
+      "layer": "L6",
+      "monotonic_ns": 7961012312476,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1493
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1498",
+      "layer": "L6",
+      "monotonic_ns": 7961110288190,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1498
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1503",
+      "layer": "L6",
+      "monotonic_ns": 7961210615342,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1503
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1508",
+      "layer": "L6",
+      "monotonic_ns": 7961310253194,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1508
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1513",
+      "layer": "L6",
+      "monotonic_ns": 7961410326456,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1513
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1518",
+      "layer": "L6",
+      "monotonic_ns": 7961510171846,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1518
+    },
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "mission_id": "mission-operator-followperson-1790587564118917353-25984",
+        "status": "INVALIDATED"
+      },
+      "id": "behavior-navigation_unavailable-1523",
+      "layer": "L6",
+      "monotonic_ns": 7961611539763,
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "severity": "HIGH",
+      "tick_id": 1523
+    },
+    {
+      "category": "LOCALIZATION",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 4.728275685304496,
+        "last_trace": 0.21797350909253727,
+        "max_trace": 0.29651333577531536,
+        "sample_count": 319
+      },
+      "id": "covariance-growth-1562",
+      "layer": "L3",
+      "monotonic_ns": 7962374989738,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 1562
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 7930592558581,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 7930710132138,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-10",
+      "layer": "L1",
+      "monotonic_ns": 7930792596160,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 10
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 7930910117198,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-20",
+      "layer": "L1",
+      "monotonic_ns": 7931012983160,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 20
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-25",
+      "layer": "L1",
+      "monotonic_ns": 7931110398445,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 25
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 297081594,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 4
+          }
+        ]
+      },
+      "id": "l2-reject-25",
+      "layer": "L2",
+      "monotonic_ns": 7931110398445,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 25
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-30",
+      "layer": "L1",
+      "monotonic_ns": 7931210141465,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 30
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-35",
+      "layer": "L1",
+      "monotonic_ns": 7931311406048,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 35
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-40",
+      "layer": "L1",
+      "monotonic_ns": 7931410175784,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 40
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-45",
+      "layer": "L1",
+      "monotonic_ns": 7931510113323,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 45
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-50",
+      "layer": "L1",
+      "monotonic_ns": 7931610329771,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 50
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-55",
+      "layer": "L1",
+      "monotonic_ns": 7931712220821,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 55
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 254345983,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 10
+          }
+        ]
+      },
+      "id": "l2-reject-55",
+      "layer": "L2",
+      "monotonic_ns": 7931712220821,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 55
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-59",
+      "layer": "L1",
+      "monotonic_ns": 7931810189146,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 59
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-64",
+      "layer": "L1",
+      "monotonic_ns": 7931910469501,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 64
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-69",
+      "layer": "L1",
+      "monotonic_ns": 7932010174132,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 69
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-74",
+      "layer": "L1",
+      "monotonic_ns": 7932110127671,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 74
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-79",
+      "layer": "L1",
+      "monotonic_ns": 7932210133784,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 79
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-84",
+      "layer": "L1",
+      "monotonic_ns": 7932310441455,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 84
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-89",
+      "layer": "L1",
+      "monotonic_ns": 7932410134863,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 89
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-93",
+      "layer": "L1",
+      "monotonic_ns": 7932492875553,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 93
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 313639745,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 17
+          }
+        ]
+      },
+      "id": "l2-reject-93",
+      "layer": "L2",
+      "monotonic_ns": 7932492875553,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 93
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-99",
+      "layer": "L1",
+      "monotonic_ns": 7932612739604,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 99
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-104",
+      "layer": "L1",
+      "monotonic_ns": 7932710129203,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 104
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-109",
+      "layer": "L1",
+      "monotonic_ns": 7932810088131,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 109
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-114",
+      "layer": "L1",
+      "monotonic_ns": 7932910207542,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 114
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-119",
+      "layer": "L1",
+      "monotonic_ns": 7933010148711,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 119
+    }
+  ],
+  "localization": {
+    "first_trace": 0.0461,
+    "growth_ratio": 4.728275685304496,
+    "last_trace": 0.21797350909253727,
+    "max_trace": 0.29651333577531536,
+    "sample_count": 319
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 2.241493184495947,
+    "requested_motion_tick_count": 171
+  },
+  "navigation": {
+    "stagnation": null
+  },
+  "root_cause_candidate": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "behavior-navigation_unavailable-1034"
+    ],
+    "kind": "NAVIGATION",
+    "layer": "L6",
+    "reason": "NAVIGATION_UNAVAILABLE",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 1034
+  },
+  "safety": {
+    "ALLOW": 302,
+    "FAULT": 0,
+    "STOP": 17,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "device_non_ok_count": 320,
+    "l2_actionable_rejection_count": 21,
+    "l2_duplicate_count": 1041,
+    "l2_rejection_count": 1062,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 1041,
+      "STALE": 21
+    }
+  },
+  "ticks": {
+    "count": 319,
+    "first_monotonic_ns": 7930592558581,
+    "first_tick_id": 0,
+    "last_monotonic_ns": 7962374989738,
+    "last_tick_id": 1562
+  },
+  "timing": {
+    "max_ms": 122.390433,
+    "p50_ms": 100.002595,
+    "p95_ms": 105.1344,
+    "p99_ms": 117.573557,
+    "sample_count": 318,
+    "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+  },
+  "warning_count": 28
+}

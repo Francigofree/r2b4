@@ -1,0 +1,225 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "authority": {
+    "capture_local_path": "/home/alba/project_r2b4/runtime/captures/v3_20260928_112313_24164_capture.mcap",
+    "capture_name": "v3_20260928_112313_24164_capture.mcap",
+    "capture_sha256": "65fffc2f3c3e006360986efa7ab7e7c46c74b157c2a1135adcd71a2ffecfba46",
+    "mcap_remains_authority": true,
+    "portable_remote_analysis": true
+  },
+  "behavior": {
+    "correlation_keys": [
+      "command_id",
+      "mission_id"
+    ],
+    "episode_count": 1,
+    "episodes": "behavior_episodes.ndjson",
+    "schema": "R2B4_TEST_HUB_BEHAVIOR_V1",
+    "summary": "behavior_summary.json",
+    "timeline": "behavior_timeline.ndjson"
+  },
+  "behavior_status": "NOMINAL",
+  "data_coverage": {
+    "/r2b4/event": {
+      "captured": 7,
+      "usage": "FULL_EVENT_PRESERVATION"
+    },
+    "/r2b4/runtime": {
+      "captured": 1,
+      "usage": "CONFIGURATION"
+    },
+    "/r2b4/tick": {
+      "captured": 280,
+      "usage": "SAMPLED_BEHAVIORAL_ANALYSIS"
+    }
+  },
+  "default_view_hz": 10,
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "hri": {
+    "authority": "MCAP_EVENT_TOPIC",
+    "availability": "PRESENT",
+    "command_count": 0,
+    "correlated_event_count": 0,
+    "event_count": 6,
+    "event_type_counts": {
+      "ER2_PREVIEW_COMPLETE": 1,
+      "ER2_PREVIEW_START": 1,
+      "ER2_SPEECH_ERROR": 1,
+      "ER2_SPEECH_START": 1,
+      "ER2_TOOL_CALL": 1,
+      "ER2_TOOL_RESULT": 1
+    },
+    "interaction_count": 1,
+    "latencies": [],
+    "policy": "DERIVED_READ_ONLY_NO_ROBOT_AUTHORITY",
+    "schema": "R2B4_TEST_HUB_HRI_V1",
+    "stop_interrupt_count": 0,
+    "timeline": "hri_timeline.ndjson",
+    "turn_count": 0
+  },
+  "hri_timeline": "hri_timeline.ndjson",
+  "incident_groups": [
+    {
+      "category": "NAVIGATION",
+      "count": 128,
+      "first_tick": 36,
+      "last_tick": 1062,
+      "layer": "L6",
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "representative": {
+        "category": "NAVIGATION",
+        "evidence": {
+          "mission_id": "mission-operator-followperson-1790587393071034021-24164",
+          "status": "INVALIDATED"
+        },
+        "id": "behavior-navigation_unavailable-36",
+        "layer": "L6",
+        "monotonic_ns": 7760267918657,
+        "reason": "NAVIGATION_UNAVAILABLE",
+        "severity": "HIGH",
+        "tick_id": 36
+      },
+      "severity": "HIGH"
+    }
+  ],
+  "incident_slices": [
+    {
+      "category": "NAVIGATION",
+      "count": 128,
+      "first_tick": 36,
+      "group_index": 1,
+      "last_tick": 1062,
+      "path": "01_NAVIGATION_UNAVAILABLE.ndjson",
+      "reason": "NAVIGATION_UNAVAILABLE",
+      "rows": 5,
+      "truncated": false
+    }
+  ],
+  "lidar_summary": "lidar_summary.ndjson",
+  "motion_tuning": {
+    "capture_tick_sample_hz": 10,
+    "policy": "DESCRIPTIVE_TUNING_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_MOTION_TUNING_V1",
+    "segment_count": 6,
+    "segments": "motion_tuning_segments.ndjson",
+    "signal_sample_counts": {
+      "actuator_output": 280,
+      "allowed_motion": 280,
+      "body_state": 280,
+      "planner_candidates": 0,
+      "requested_motion": 280,
+      "wheel_feedback": 0,
+      "wheel_target": 280
+    },
+    "summary": "motion_tuning_summary.json"
+  },
+  "overview": "overview_10hz.ndjson",
+  "phases": [
+    {
+      "end_s": 0.617599355,
+      "end_tick": 31,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 0.0,
+      "start_tick": 0,
+      "stop_ticks": 7,
+      "tick_count": 7
+    },
+    {
+      "end_s": 26.922504208,
+      "end_tick": 1337,
+      "fault_ticks": 0,
+      "lifecycle": "ACTIVE",
+      "mode": "FOLLOW_PERSON",
+      "motion_requested_ticks": 65,
+      "start_s": 0.717702137,
+      "start_tick": 36,
+      "stop_ticks": 0,
+      "tick_count": 263
+    },
+    {
+      "end_s": 27.020993556,
+      "end_tick": 1342,
+      "fault_ticks": 0,
+      "lifecycle": "CANCELLED",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 27.020993556,
+      "start_tick": 1342,
+      "stop_ticks": 1,
+      "tick_count": 1
+    },
+    {
+      "end_s": 27.863536085,
+      "end_tick": 1385,
+      "fault_ticks": 0,
+      "lifecycle": "IDLE",
+      "mode": "STOP",
+      "motion_requested_ticks": 0,
+      "start_s": 27.119262495,
+      "start_tick": 1347,
+      "stop_ticks": 9,
+      "tick_count": 9
+    }
+  ],
+  "pytest_result": null,
+  "quality": {
+    "localization": {
+      "events": "localization_events.ndjson",
+      "finding_count": 0,
+      "status": "OK",
+      "summary": "localization_quality.json"
+    },
+    "motion": {
+      "details": "motion_quality_segments.ndjson",
+      "finding_count": 128,
+      "status": "FINDING",
+      "summary": "motion_quality.json"
+    }
+  },
+  "raw_lidar_incident_slices": [],
+  "remote_analysis_policy": {
+    "exact_nonexported_tick_or_raw_point_request_requires_local_mcap": true,
+    "full_raw_lidar_is_exported_only_around_representative_incidents": true,
+    "normal_analysis_requires_mcap": false
+  },
+  "replay_status": "NOT_APPLICABLE",
+  "replay_sweep": "replay_sweep.json",
+  "replay_sweep_status": "NOT_APPLICABLE",
+  "runtime_performance": "runtime_performance.json",
+  "schema": "R2B4_TEST_HUB_AGENT_V1",
+  "status": "FINDING",
+  "suppressed_agent_noise": [],
+  "task_evidence": {
+    "episode_count": 1,
+    "episodes": "task_evidence_episodes.ndjson",
+    "mode_counts": {
+      "FOLLOW_PERSON": 1
+    },
+    "policy": "DESCRIPTIVE_EVIDENCE_ONLY_NO_AUTOMATIC_VERDICT",
+    "schema": "R2B4_TEST_HUB_TASK_EVIDENCE_V1",
+    "summary": "task_evidence_summary.json",
+    "supported_mode_extractors": [
+      "NAVIGATE",
+      "EXPLORE",
+      "FOLLOW_PERSON"
+    ],
+    "timeline": "task_evidence_timeline.ndjson"
+  },
+  "timeline": "timeline.ndjson"
+}
