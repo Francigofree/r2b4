@@ -84,7 +84,12 @@ def _tick_status(
         ]
     estimate_payload: dict[str, object] | None = None
     if isinstance(estimate, RobotEstimate):
+        from v3.capture_encoding import encode_value
         estimate_payload = {
+            "local_pose": encode_value(estimate.local_pose),
+            "global_pose": encode_value(estimate.global_pose),
+            "map_to_odom": encode_value(estimate.map_to_odom),
+            "localization_quality": encode_value(estimate.localization_quality),
             "frame_id": estimate.frame_id,
             "x_m": estimate.x_m,
             "y_m": estimate.y_m,

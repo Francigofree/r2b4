@@ -219,6 +219,7 @@ def _parser() -> argparse.ArgumentParser:
     navigate.add_argument("--x-m", type=float, required=True)
     navigate.add_argument("--y-m", type=float, required=True)
     navigate.add_argument("--yaw-rad", type=float)
+    navigate.add_argument("--frame-id", choices=("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"), default="R2B4_BOOT_ROBOT_MAP")
     navigate.add_argument("--max-v-mps", type=float, default=0.20)
     navigate.add_argument("--max-omega-rad-s", type=float, default=0.60)
 
@@ -289,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.operation == "navigate":
             publish = lambda logical_id: client.publish_navigate(
-                logical_id, x_m=args.x_m, y_m=args.y_m, yaw_rad=args.yaw_rad,
+                logical_id, x_m=args.x_m, y_m=args.y_m, yaw_rad=args.yaw_rad, frame_id=args.frame_id,
                 max_v_mps=args.max_v_mps, max_omega_rad_s=args.max_omega_rad_s,
                 ttl_ns=ttl_ns,
             )

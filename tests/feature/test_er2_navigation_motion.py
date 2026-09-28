@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from rig import resolved_config
+from rig import healthy_localization, resolved_config
 from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig
 from v3.contracts import CommandMode, CommandRequest, DataField, NavigationStatus, RobotEstimate, RollingLocalCostmap, TickContext, WorldSnapshot
 from v3.layers.l5_command_mission import MissionManager
@@ -158,7 +158,7 @@ def test_navigate_motion_closed_loop_turn_translation_and_deterministic_replay()
             command = CommandRequest(context, "closed-loop", CommandMode.NAVIGATE,
                                      tuple(DataField(k, val) for k, val in dict(x_m=target_x, y_m=target_y, yaw_rad=target_yaw,
                                                                                max_v_mps=0.2, max_omega_rad_s=0.6).items()), tick)
-            estimate = RobotEstimate(context, "odom", x, y, yaw, v, omega, (0.0,) * 25)
+            estimate = RobotEstimate(context, "odom", x, y, yaw, v, omega, (0.0,) * 25, localization_quality=healthy_localization())
             costmap = RollingLocalCostmap("odom", tick, 0.05, 2.5, (), tick, 0)
             world = WorldSnapshot(context, "odom", tick, (), 0, costmap)
             frame = MissionNavigationInputs(context, command, estimate, world)
@@ -201,7 +201,7 @@ def test_navigate_motion_async_terminal_heading_discards_late_rollout_and_restor
     command = CommandRequest(context, "terminal-yaw", CommandMode.NAVIGATE,
                              (DataField("x_m", 0.4), DataField("y_m", 0.0), DataField("yaw_rad", 1.0)), 0)
     mission = manager.evaluate(command)
-    estimate = RobotEstimate(context, "odom", 0, 0, 0, 0, 0, (0.0,) * 25)
+    estimate = RobotEstimate(context, "odom", 0, 0, 0, 0, 0, (0.0,) * 25, localization_quality=healthy_localization())
     world = WorldSnapshot(context, "odom", 1, (), 0, RollingLocalCostmap("odom", 1, 0.05, 2.5, (), 1, 0))
     assert navigation.evaluate(mission, estimate, world).status is NavigationStatus.PENDING
     pending = navigation.pending_rollout_request

@@ -123,7 +123,7 @@ class MotionSelector:
                 or validity is None
                 or previous.validity.frame_id != validity.frame_id
                 or previous.validity.scope != validity.scope
-                or previous.validity.requires_global_position != validity.requires_global_position
+                or previous.validity.localization_requirement != validity.localization_requirement
             ))
         ):
             self._reset()

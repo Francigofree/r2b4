@@ -106,7 +106,13 @@
     "integrity_min_inlier_ratio": 0.35,
     "integrity_min_sector_coverage": 0.25,
     "integrity_min_uniqueness": 0.2,
-    "integrity_min_observability": 0.12
+    "integrity_min_observability": 0.12,
+    "relative_max_points": 192,
+    "relative_iterations": 12,
+    "relative_max_interval_ns": 500000000,
+    "relative_max_rmse_m": 0.08,
+    "relative_max_speed_mps": 1.5,
+    "relative_max_omega_rad_s": 2.5
   },
   "lidar_runtime": {
     "matcher_process_start_method": "spawn",
@@ -271,7 +277,20 @@
       "lidar_nis_max": 35.0,
       "minimum_measurement_quality": 0.05,
       "covariance_min_diagonal": 1e-08,
-      "process_noise_reference_dt_s": 0.02
+      "process_noise_reference_dt_s": 0.02,
+      "quality": {
+        "max_position_variance": 0.25,
+        "max_yaw_variance": 0.2,
+        "local_good_sigma_m": 0.06,
+        "local_lost_sigma_m": 0.18,
+        "global_fix_max_age_ns": 2000000000,
+        "relative_max_age_ns": 1500000000,
+        "consistency_good_m": 0.035,
+        "consistency_lost_m": 0.12,
+        "consistency_memory_s": 30.0,
+        "unverified_drift_per_m": 0.05,
+        "minimum_observability": 0.12
+      }
     },
     "world_model": {
       "max_track_age_ns": 500000000,
@@ -379,7 +398,11 @@
       "local_escape_reverse_max_v_mps": 0.12,
       "local_goal_novelty_weight": 0.65,
       "local_goal_clearance_weight": 0.25,
-      "local_goal_forward_weight": 0.1
+      "local_goal_forward_weight": 0.1,
+      "localization_recovery_timeout_ns": 5000000000,
+      "localization_recovery_omega_rad_s": 0.2,
+      "localization_degraded_speed_scale": 0.4,
+      "localization_inflation_sigma": 2.0
     },
     "async_l6": {
       "enabled": true,
@@ -409,8 +432,8 @@
       "max_acceleration_mps2": 0.6,
       "max_angular_acceleration_rad_s2": 2.5,
       "max_curvature_rad_per_m": 4.0,
-      "max_position_variance": 0.25,
-      "max_yaw_variance": 0.2
+      "degraded_velocity_scale": 0.4,
+      "degraded_acceleration_scale": 0.3
     },
     "wheel_pi": {
       "kp": 0.25,

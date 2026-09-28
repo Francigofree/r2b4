@@ -16,6 +16,7 @@ from v3.adapters.latest_lidar import MATCHER_CONTRACT_ID
 from v3.runtime_performance import CpuSet, apply_process_cpuset
 from v3.lidar_config import LidarMatcherConfig
 from v3.lidar_estimator import LidarEstimator
+from v3.lidar_relative_odometry import RelativeLidarOdometry
 
 
 def _finite(value: object, default: float) -> float:
@@ -71,6 +72,7 @@ def matcher_process_main(
     if matcher_cpus is not None:
         apply_process_cpuset(matcher_cpus, role="lidar-matcher", strict=strict_affinity)
     estimator: LidarEstimator | None = None
+    relative_estimator: RelativeLidarOdometry | None = None
     input_drops = 0
     output_drops = 0
     processed = 0
@@ -148,6 +150,7 @@ def matcher_process_main(
                 matcher_config = packet.get("matcher_config")
                 if not isinstance(matcher_config, LidarMatcherConfig):
                     raise TypeError("matcher_config must be resolved LidarMatcherConfig")
+                relative_estimator = RelativeLidarOdometry(matcher_config)
                 estimator = LidarEstimator(
                     danger_zone=_finite(packet.get("danger_zone_m"), 0.1),
                     scan_match_cfg=matcher_config,
@@ -174,6 +177,7 @@ def matcher_process_main(
             measurement_timestamp_s = measurement_ns / 1_000_000_000.0
             pose_reference_timestamp_s = pose_reference_ns / 1_000_000_000.0
             started = time.perf_counter()
+            relative_motion = relative_estimator.process(raw_scan, measurement_ns)
             summary = estimator.process_scan(
                 raw_scan,
                 driver_status=dict(packet.get("driver_status") or {}),
@@ -198,6 +202,7 @@ def matcher_process_main(
                     "raw_scan_completed_mono": raw_timestamp_s,
                 },
             )
+            summary["relative_motion"] = relative_motion
             runtime_ms = max(0.0, (time.perf_counter() - started) * 1_000.0)
             processed += 1
             output_drops += put_latest(

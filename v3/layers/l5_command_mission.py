@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from v3.contracts import (
     CommandMode,
+    GLOBAL_FRAME_ID, LOCAL_FRAME_ID,
     CommandRequest,
     DataField,
     MissionConstraints,
@@ -88,6 +89,7 @@ class MissionManager:
                     optional=frozenset(
                         {
                             "yaw_rad",
+                            "frame_id",
                             "max_v_mps",
                             "max_omega_rad_s",
                             "corridor_radius_m",
@@ -96,6 +98,8 @@ class MissionManager:
                         }
                     ),
                 )
+                if values.get("frame_id", GLOBAL_FRAME_ID) not in (GLOBAL_FRAME_ID, LOCAL_FRAME_ID):
+                    raise ValueError("unsupported navigation frame")
                 target_pose = Waypoint(
                     _number(values, "x_m"),
                     _number(values, "y_m"),
@@ -152,6 +156,7 @@ class MissionManager:
             velocity_target=velocity_target,
             constraints=constraints,
             lifecycle=MissionLifecycle.ACTIVE,
+            target_frame_id=values.get("frame_id", GLOBAL_FRAME_ID),
         )
 
     def _stopped(

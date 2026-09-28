@@ -472,12 +472,15 @@ class OperatorController:
 
     def navigate(
         self, *, x_m: float, y_m: float, yaw_rad: float | None = None,
+        frame_id: str = "R2B4_BOOT_ROBOT_MAP",
         max_v_mps: float = 0.20, max_omega_rad_s: float = 0.60,
         capture: bool = True, capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
+        if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+            raise OperatorError("unsupported navigation frame")
         x = self._finite(x_m, "x_m")
         y = self._finite(y_m, "y_m")
         yaw = None if yaw_rad is None else self._finite(yaw_rad, "yaw_rad")
@@ -488,7 +491,7 @@ class OperatorController:
         command_id = f"operator-navigate-{time.time_ns()}-{os.getpid()}"
         args = [
             self.python, "-m", "v3.control_cli", "navigate", "--command-id", command_id,
-            "--x-m", str(x), "--y-m", str(y),
+            "--x-m", str(x), "--y-m", str(y), "--frame-id", frame_id,
             "--max-v-mps", str(max_v), "--max-omega-rad-s", str(max_omega),
         ]
         if yaw is not None:

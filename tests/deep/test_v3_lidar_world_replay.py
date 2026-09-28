@@ -81,9 +81,9 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
             assert result.trace.fault_layer is None
             layers = {row.layer: row.output for row in result.trace.layers}
             costmap = layers["L4"].local_costmap
-            if tick < 350 and layers["L3"].covariance_5x5[0] > config.operational_constraints.max_position_variance:
+            if tick < 350 and layers["L3"].covariance_5x5[0] > config.estimation.quality.max_position_variance:
                 assert ConstraintCode.LOCALIZATION_DEGRADED not in layers["L9"].active_constraints
-                assert not layers["L8"].requires_global_position
+                assert not layers["L8"].localization_requirement.global_position
                 assert layers["L12"].safety_decision is SafetyDecision.ALLOW
                 assert abs(layers["L12"].left_output) + abs(layers["L12"].right_output) > 0
                 uncertain_motion_ticks += 1

@@ -5,6 +5,12 @@ import math
 
 @dataclass(frozen=True, slots=True)
 class LidarMatcherConfig:
+    relative_max_points: int
+    relative_iterations: int
+    relative_max_interval_ns: int
+    relative_max_rmse_m: float
+    relative_max_speed_mps: float
+    relative_max_omega_rad_s: float
     dx_range: tuple[float, float]
     dy_range: tuple[float, float]
     dtheta_range: tuple[float, float]

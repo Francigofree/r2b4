@@ -302,6 +302,23 @@ class LidarScanReading:
 
 
 @dataclass(frozen=True, slots=True)
+class LidarRelativeMotionReading:
+    start_ns: int
+    dx_m: float
+    dy_m: float
+    dyaw_rad: float
+    rmse_m: float
+    observability: float
+
+    def __post_init__(self) -> None:
+        _nonnegative_integer(self.start_ns, "start_ns")
+        for name in ("dx_m", "dy_m", "dyaw_rad", "rmse_m", "observability"):
+            _finite(getattr(self, name), name)
+        if self.rmse_m < 0 or not 0 <= self.observability <= 1:
+            raise ValueError("invalid relative registration quality")
+
+
+@dataclass(frozen=True, slots=True)
 class LidarHealthReading:
     """One physical scan plus the latest optional localization result."""
 
@@ -314,6 +331,7 @@ class LidarHealthReading:
     pose: LidarPoseReading | None = None
     diagnostics: LidarMatcherDiagnostics | None = None
     scan: LidarScanReading | None = None
+    relative_motion: LidarRelativeMotionReading | None = None
 
     def __post_init__(self) -> None:
         _nonnegative_integer(self.revision, "revision")
@@ -693,6 +711,15 @@ class NativeLidarSource:
                     ),
                 )
             )
+        relative = reading.relative_motion
+        if (relative is not None and reading.timing_valid and not reading.stale
+                and 0 <= context.monotonic_ns-reading.captured_monotonic_ns <= self._config.maximum_measurement_age_ns
+                and relative.start_ns < reading.captured_monotonic_ns):
+            samples.append(DeviceSample(
+                device_id=self.device_id, kind="lidar_relative_motion", sequence=reading.revision,
+                captured_monotonic_ns=reading.captured_monotonic_ns,
+                values=tuple(DataField(name, getattr(relative, name)) for name in relative.__dataclass_fields__),
+            ))
         if localization_usable:
             assert reading.pose is not None
             samples.append(

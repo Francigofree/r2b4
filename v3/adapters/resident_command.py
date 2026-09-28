@@ -433,8 +433,11 @@ class ResidentCommandClient:
         self, command_id: str, *, x_m: float, y_m: float,
         max_v_mps: float, max_omega_rad_s: float, ttl_ns: int,
         yaw_rad: float | None = None,
+        frame_id: str = "R2B4_BOOT_ROBOT_MAP",
     ) -> int:
-        values = {"x_m": x_m, "y_m": y_m, "max_v_mps": max_v_mps,
+        if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+            raise ValueError("unsupported navigation frame")
+        values = {"frame_id": frame_id, "x_m": x_m, "y_m": y_m, "max_v_mps": max_v_mps,
                   "max_omega_rad_s": max_omega_rad_s}
         if yaw_rad is not None:
             values["yaw_rad"] = yaw_rad

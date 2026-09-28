@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from v3.contracts import AdmittedFrame, Observation, RobotEstimate, TickContext
+from v3.contracts import (AdmittedFrame, Observation, RobotEstimate, TickContext, DataField,
+                          LocalizationQuality, QualityState, Pose2D, LOCAL_FRAME_ID)
 
 
 _ZERO_COVARIANCE = (0.0,) * 25
@@ -215,6 +216,29 @@ class StateEstimatorConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class LocalizationQualityConfig:
+    max_position_variance: float
+    max_yaw_variance: float
+    local_good_sigma_m: float
+    local_lost_sigma_m: float
+    global_fix_max_age_ns: int
+    relative_max_age_ns: int
+    consistency_good_m: float
+    consistency_lost_m: float
+    consistency_memory_s: float
+    unverified_drift_per_m: float
+    minimum_observability: float
+
+    def __post_init__(self) -> None:
+        for name in self.__dataclass_fields__:
+            _finite_positive(getattr(self, name), name)
+        if self.local_good_sigma_m >= self.local_lost_sigma_m or self.consistency_good_m >= self.consistency_lost_m:
+            raise ValueError("quality bounds must be ordered")
+        if self.minimum_observability > 1.0:
+            raise ValueError("invalid minimum observability")
+
+
+@dataclass(frozen=True, slots=True)
 class NativeStateEstimatorConfig:
     """Immutable native EKF geometry, noise model and fail-closed gates."""
 
@@ -242,6 +266,7 @@ class NativeStateEstimatorConfig:
     covariance_min_diagonal: float
     # process_noise variances are calibrated for this prediction interval.
     process_noise_reference_dt_s: float
+    quality: LocalizationQualityConfig
 
     def __post_init__(self) -> None:
         if not isinstance(self.frame_id, str) or not self.frame_id:
@@ -346,7 +371,7 @@ class OdometryPrediction:
 
 
 @dataclass(frozen=True, slots=True)
-class NativeEstimatorStateCheckpoint:
+class PoseFilterStateCheckpoint:
     state: tuple[float, ...]
     covariance: tuple[tuple[float, ...], ...]
     last_context: TickContext | None
@@ -372,7 +397,7 @@ class NativeEstimatorStateCheckpoint:
             raise ValueError("last_omega must be finite")
 
 
-class NativeStateEstimator:
+class _PoseFilter:
     """Minimal native five-state EKF over admitted wheel, IMU and lidar samples.
 
     Owned state is ``[x, y, yaw, velocity, gyro_bias]``. The implementation
@@ -427,8 +452,8 @@ class NativeStateEstimator:
     def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
         return tuple(self._last_update_evidence)
 
-    def checkpoint(self) -> NativeEstimatorStateCheckpoint:
-        return NativeEstimatorStateCheckpoint(
+    def checkpoint(self) -> PoseFilterStateCheckpoint:
+        return PoseFilterStateCheckpoint(
             tuple(self._state),
             tuple(tuple(row) for row in self._covariance),
             self._last_context,
@@ -439,8 +464,8 @@ class NativeStateEstimator:
             tuple(self._odometry_predictions),
         )
 
-    def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
-        if not isinstance(checkpoint, NativeEstimatorStateCheckpoint):
+    def restore(self, checkpoint: PoseFilterStateCheckpoint) -> None:
+        if not isinstance(checkpoint, PoseFilterStateCheckpoint):
             raise TypeError("checkpoint must be NativeEstimatorStateCheckpoint")
         self._state = list(checkpoint.state)
         self._covariance = [list(row) for row in checkpoint.covariance]
@@ -479,8 +504,7 @@ class NativeStateEstimator:
                     raise ValueError(f"L3 {name} measurement time is invalid")
                 setattr(self, f"_last_{name}_ns", measured_ns)
                 previous_ns = measured_ns
-            if previous_ns is None or frame.context.monotonic_ns - previous_ns > self._config.max_measurement_age_ns:
-                raise ValueError(f"L3 {name} measurement expired")
+
 
         left_mps = 0.0
         right_mps = 0.0
@@ -993,6 +1017,219 @@ class NativeStateEstimator:
                 value for row in output_covariance for value in row
             ),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class LocalPoseSample:
+    monotonic_ns: int
+    pose: Pose2D
+
+
+@dataclass(frozen=True, slots=True)
+class NativeEstimatorStateCheckpoint:
+    global_filter: PoseFilterStateCheckpoint
+    local_filter: PoseFilterStateCheckpoint
+    history: tuple[LocalPoseSample, ...]
+    last_lidar_ns: int | None
+    last_fix_ns: int | None
+    last_relative_ns: int | None
+    consistency_x_m: float
+    consistency_y_m: float
+    relative_rmse_m: float | None
+    observability: float
+    unverified_sigma_m: float
+    wheel_trusted: bool
+    heading_trusted: bool
+    generation: int
+    transform_revision: int
+    relative_sequence: int
+    slip_suspected: bool
+
+
+class NativeStateEstimator:
+    """Single L3 owner of independent local odometry and map localization.
+
+    Absolute corrections never enter the odometry filter. Both small filters
+    consume the same closed measurements; registration stays at the LiDAR edge.
+    map_to_odom is map_T_odom (it maps odometry coordinates into the map).
+    """
+
+    def __init__(self, config: NativeStateEstimatorConfig) -> None:
+        self._config = config
+        self._global = _PoseFilter(config)
+        self._local = _PoseFilter(replace(config, frame_id=LOCAL_FRAME_ID))
+        self._history: list[LocalPoseSample] = []
+        self._last_lidar_ns = self._last_fix_ns = self._last_relative_ns = None
+        self._consistency_x_m = self._consistency_y_m = 0.0
+        self._relative_rmse_m = None
+        self._observability = 0.0
+        self._unverified_sigma_m = 0.01
+        self._wheel_trusted = self._heading_trusted = False
+        self._generation = self._transform_revision = 0
+        self._relative_sequence = -1
+        self._slip_suspected = False
+
+    @property
+    def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
+        return self._global.last_update_evidence
+
+    def checkpoint(self) -> NativeEstimatorStateCheckpoint:
+        return NativeEstimatorStateCheckpoint(
+            self._global.checkpoint(), self._local.checkpoint(), tuple(self._history),
+            self._last_lidar_ns, self._last_fix_ns, self._last_relative_ns,
+            self._consistency_x_m, self._consistency_y_m, self._relative_rmse_m,
+            self._observability, self._unverified_sigma_m, self._wheel_trusted,
+            self._heading_trusted, self._generation, self._transform_revision,
+            self._relative_sequence, self._slip_suspected,
+        )
+
+    def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
+        if not isinstance(checkpoint, NativeEstimatorStateCheckpoint):
+            raise TypeError("dual-frame L3 checkpoint required")
+        self._global.restore(checkpoint.global_filter)
+        self._local.restore(checkpoint.local_filter)
+        self._history = list(checkpoint.history)
+        for name in checkpoint.__dataclass_fields__:
+            if name not in {"global_filter", "local_filter", "history"}:
+                setattr(self, "_" + name, getattr(checkpoint, name))
+
+    def _pose_at(self, ns: int) -> Pose2D | None:
+        if not self._history or ns < self._history[0].monotonic_ns or ns > self._history[-1].monotonic_ns:
+            return None
+        before = self._history[0]
+        for after in self._history:
+            if after.monotonic_ns == ns:
+                return after.pose
+            if after.monotonic_ns > ns:
+                ratio = (ns-before.monotonic_ns)/(after.monotonic_ns-before.monotonic_ns)
+                a, b = before.pose, after.pose
+                return Pose2D(LOCAL_FRAME_ID, a.x_m+ratio*(b.x_m-a.x_m),
+                              a.y_m+ratio*(b.y_m-a.y_m),
+                              _normalize_angle(a.yaw_rad+ratio*_normalize_angle(b.yaw_rad-a.yaw_rad)))
+            before = after
+        return None
+
+    def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
+        now = frame.context.monotonic_ns
+        cfg = self._config.quality
+        previous = self._local._last_context
+        continuous = previous is None or (
+            frame.context.tick_id == previous.tick_id+1
+            and 0 < now-previous.monotonic_ns <= self._config.max_dt_ns)
+        if not continuous:
+            self._generation += 1
+            self._history.clear()
+            self._unverified_sigma_m = cfg.local_lost_sigma_m
+        # Consumer freshness is evaluated here, even when L2 admits no new event.
+        fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= self._config.max_measurement_age_ns)
+        frame = replace(frame, accepted=fresh)
+        local = self._local(replace(frame, accepted=tuple(o for o in fresh if o.kind != "lidar_pose")))
+        pose = Pose2D(LOCAL_FRAME_ID, local.x_m, local.y_m, local.yaw_rad)
+        self._history.append(LocalPoseSample(now, pose))
+        self._history = self._history[-256:]
+        wheel = _optional_observation(frame, "wheel_velocity")
+        heading = _optional_observation(frame, "ekf_heading")
+        health = _optional_observation(frame, "lidar_health")
+        if health is not None:
+            self._last_lidar_ns = health.captured_monotonic_ns - int(_optional_numeric_value(health, "age_ns", 0))
+        if wheel is not None:
+            values = {v.key: v.value for v in wheel.values}
+            self._wheel_trusted = (_numeric_value(wheel, "trust") >= self._config.minimum_measurement_quality
+                                   and values.get("rejection_code", "NONE") == "NONE"
+                                   and values.get("measurement_timing_valid", True)
+                                   and not values.get("measurement_stale", False))
+        if heading is not None:
+            self._heading_trusted = _numeric_value(heading, "confidence") >= self._config.minimum_measurement_quality
+        if wheel is not None and heading is not None:
+            wheel_yaw = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
+            self._slip_suspected = abs(wheel_yaw-_numeric_value(heading, "omega_rad_s")) > 0.7
+        dt = 0.0 if previous is None else max(0, now-previous.monotonic_ns)/1e9
+        self._unverified_sigma_m += abs(local.v_mps)*min(dt, .25)*cfg.unverified_drift_per_m
+        self._relative_check(frame)
+
+        # Project delayed global measurements to this tick using only the local
+        # displacement over the actual measurement interval, never publication time.
+        lidar = _optional_observation(frame, "lidar_pose")
+        if lidar is not None:
+            measured_local = self._pose_at(lidar.captured_monotonic_ns)
+            if measured_local is None:
+                frame = replace(frame, accepted=tuple(o for o in fresh if o.kind != "lidar_pose"))
+            else:
+                values = {v.key: v.value for v in lidar.values}
+                delta = measured_local.inverse().apply(pose.x_m, pose.y_m, pose.yaw_rad)
+                observed = Pose2D(self._config.frame_id, values["x_m"], values["y_m"], values["yaw_rad"])
+                x, y, yaw = observed.apply(*delta)
+                values.update(x_m=x, y_m=y, yaw_rad=yaw)
+                projected = replace(lidar, values=tuple(DataField(k, v) for k, v in values.items()))
+                frame = replace(frame, accepted=tuple(projected if o is lidar else o for o in frame.accepted))
+        global_estimate = self._global(frame)
+        if any(e.update_type == "LIDAR_POSE" and e.accepted for e in self.last_update_evidence):
+            self._last_fix_ns = lidar.captured_monotonic_ns
+            self._transform_revision += 1
+        global_pose = Pose2D(self._config.frame_id, global_estimate.x_m, global_estimate.y_m, global_estimate.yaw_rad)
+        yaw = _normalize_angle(global_pose.yaw_rad-pose.yaw_rad)
+        c, s = math.cos(yaw), math.sin(yaw)
+        transform = Pose2D(self._config.frame_id, global_pose.x_m-c*pose.x_m+s*pose.y_m,
+                           global_pose.y_m-s*pose.x_m-c*pose.y_m, yaw)
+        age = lambda ns: 2**63-1 if ns is None else max(0, now-ns)
+        encoder_age, imu_age = age(self._local._last_wheel_ns), age(self._local._last_heading_ns)
+        lidar_age, fix_age, relative_age = age(self._last_lidar_ns), age(self._last_fix_ns), age(self._last_relative_ns)
+        disagreement = math.hypot(self._consistency_x_m, self._consistency_y_m)
+        sigma = max(self._unverified_sigma_m, disagreement, self._relative_rmse_m or 0.0)
+        local_state = QualityState.GOOD if sigma <= cfg.local_good_sigma_m else QualityState.DEGRADED
+        if sigma >= cfg.local_lost_sigma_m or disagreement >= cfg.consistency_lost_m or self._slip_suspected:
+            local_state = QualityState.LOST
+        elif disagreement >= cfg.consistency_good_m:
+            local_state = QualityState.DEGRADED
+        if not continuous or not self._wheel_trusted or encoder_age > self._config.max_measurement_age_ns:
+            local_state = QualityState.LOST
+        yaw_sigma = math.sqrt(local.covariance_5x5[12])
+        heading_state = QualityState.GOOD
+        if yaw_sigma**2 > cfg.max_yaw_variance*.5 or imu_age > self._config.max_measurement_age_ns//2:
+            heading_state = QualityState.DEGRADED
+        if not self._heading_trusted or imu_age > self._config.max_measurement_age_ns or yaw_sigma**2 > cfg.max_yaw_variance:
+            heading_state = QualityState.LOST
+        global_sigma = math.sqrt(max(global_estimate.covariance_5x5[0], global_estimate.covariance_5x5[6]))
+        global_state = QualityState.GOOD
+        if global_sigma**2 > cfg.max_position_variance or fix_age > cfg.global_fix_max_age_ns:
+            global_state = QualityState.DEGRADED
+        if global_sigma**2 > cfg.max_position_variance*4 or fix_age > cfg.global_fix_max_age_ns*3:
+            global_state = QualityState.LOST
+        quality = LocalizationQuality(local_state, heading_state, global_state, sigma, global_sigma,
+            yaw_sigma, encoder_age, imu_age, lidar_age, fix_age, continuous, not continuous,
+            self._relative_rmse_m, disagreement if self._last_relative_ns is not None else None,
+            self._generation, relative_age, self._slip_suspected, self._observability)
+        return replace(global_estimate, local_pose=pose, global_pose=global_pose,
+                       map_to_odom=transform, localization_quality=quality,
+                       transform_revision=self._transform_revision,
+                       local_v_mps=local.v_mps, local_omega_rad_s=local.omega_rad_s)
+
+    def _relative_check(self, frame: AdmittedFrame) -> None:
+        observation = _optional_observation(frame, "lidar_relative_motion")
+        if observation is None or observation.source_sequence <= self._relative_sequence:
+            return
+        self._relative_sequence = observation.source_sequence
+        cfg = self._config.quality
+        start_ns = int(_numeric_value(observation, "start_ns"))
+        end_ns = observation.captured_monotonic_ns
+        a, b = self._pose_at(start_ns), self._pose_at(end_ns)
+        self._observability = _numeric_value(observation, "observability")
+        if a is None or b is None or start_ns >= end_ns or self._observability < cfg.minimum_observability:
+            return
+        dx, dy, yaw = a.inverse().apply(b.x_m, b.y_m, b.yaw_rad)
+        error_x = dx-_numeric_value(observation, "dx_m")
+        error_y = dy-_numeric_value(observation, "dy_m")
+        # Non-overlapping scan intervals accumulate systematic slow encoder drift.
+        if self._last_relative_ns is not None and start_ns < self._last_relative_ns:
+            return
+        decay = math.exp(-(end_ns-start_ns)/1e9/cfg.consistency_memory_s)
+        self._consistency_x_m = decay*self._consistency_x_m + math.cos(a.yaw_rad)*error_x-math.sin(a.yaw_rad)*error_y
+        self._consistency_y_m = decay*self._consistency_y_m + math.sin(a.yaw_rad)*error_x+math.cos(a.yaw_rad)*error_y
+        self._relative_rmse_m = _numeric_value(observation, "rmse_m")
+        self._last_relative_ns = end_ns
+        self._unverified_sigma_m = .01 + self._relative_rmse_m
+        if abs(_normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))) > .2:
+            self._slip_suspected = True
 
 
 class ShadowStateEstimator:

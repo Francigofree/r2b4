@@ -129,6 +129,7 @@ class V3ControlInterfaceAdapter:
                 max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
             )
         if action == "v3.command.navigate":
+            frame_id = params.pop("frame_id", "R2B4_BOOT_ROBOT_MAP")
             x = self._required(params, "x_m")
             y = self._required(params, "y_m")
             yaw = params.pop("yaw_rad", None)
@@ -136,7 +137,7 @@ class V3ControlInterfaceAdapter:
             max_omega = params.pop("max_omega_rad_s", 0.60)
             self._reject_unknown(params, set())
             return self.controller.navigate(
-                x_m=x, y_m=y, yaw_rad=yaw, max_v_mps=max_v,
+                x_m=x, y_m=y, yaw_rad=yaw, frame_id=frame_id, max_v_mps=max_v,
                 max_omega_rad_s=max_omega, capture=capture,
                 capture_mode=capture_mode, capture_hz=capture_hz, **session,
             )

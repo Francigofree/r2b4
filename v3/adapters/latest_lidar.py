@@ -20,6 +20,7 @@ from v3.contracts.lidar import (
 
 from .live_lidar import (
     LidarHealthReading,
+    LidarRelativeMotionReading,
     LidarMatcherDiagnostics,
     LidarPointReading,
     LidarPoseReading,
@@ -530,7 +531,10 @@ class NativeLatestLidarBackend:
                 "scan_to_map_seed",
             ),
         )
+        relative = summary.get("relative_motion")
+        relative_reading = None if relative is None else LidarRelativeMotionReading(**dict(relative))
         return LidarHealthReading(
+            relative_motion=relative_reading,
             revision=revision,
             captured_monotonic_ns=measurement_ns,
             measurement_age_ns=max(0, measurement_age_ns),

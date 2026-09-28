@@ -19,6 +19,7 @@ from v3.contracts import (
     NavigationPlan,
     NavigationStatus,
     RobotEstimate,
+    LocalizationRequirement, QualityState, LOCAL_FRAME_ID, VelocityTarget,
     RollingLocalCostmap,
     TickContext,
     TrackEstimateStatus,
@@ -83,6 +84,10 @@ class FollowPersonEvidence:
 
 @dataclass(frozen=True, slots=True)
 class NavigationConfig:
+    localization_recovery_timeout_ns: int
+    localization_recovery_omega_rad_s: float
+    localization_degraded_speed_scale: float
+    localization_inflation_sigma: float
     max_world_freshness_ns: int
     obstacle_confidence_floor: float
     max_costmap_freshness_ns: int
@@ -147,6 +152,10 @@ class NavigationConfig:
     local_goal_forward_weight: float
 
     def __post_init__(self) -> None:
+        if self.localization_recovery_timeout_ns <= 0 or not 0 < self.localization_degraded_speed_scale <= 1:
+            raise ValueError("invalid localization recovery limits")
+        if not 0 < self.localization_recovery_omega_rad_s <= .5 or not 0 < self.localization_inflation_sigma <= 5:
+            raise ValueError("invalid localization preservation limits")
         for name in (
             "max_world_freshness_ns",
             "max_costmap_freshness_ns",
@@ -401,6 +410,10 @@ class NavigationStateCheckpoint:
     follow_person_search_phase: int | None = None
     follow_person_search_target_yaw_rad: float | None = None
     follow_person_search_budget_ns: int | None = None
+    localization_recovery_started_ns: int | None = None
+    localization_recovery_mission_id: str | None = None
+    localization_generation: int = -1
+    global_transform_revision: int = -1
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -510,12 +523,15 @@ class _StaticPlanningIndex:
 class _LocalPlanningScene:
     static_index: _StaticPlanningIndex | None
     dynamic_obstacles: tuple[_ObstacleDisc, ...]
+    uncertainty_m: float = 0.0
 
 
 class TrajectoryNavigator:
     """Own reusable trajectory evaluation plus deterministic exploration state."""
 
     __slots__ = (
+        "_localization_recovery_started_ns", "_localization_recovery_mission_id",
+        "_localization_generation", "_global_transform_revision",
         "_completed",
         "_completion_inputs",
         "_closed_completion",
@@ -591,6 +607,9 @@ class TrajectoryNavigator:
                 raise ValueError(
                     "rollout_release_delay_ns must be shorter than max_plan_age_ns"
                 )
+        self._localization_recovery_started_ns = None
+        self._localization_recovery_mission_id = None
+        self._localization_generation = self._global_transform_revision = -1
         self._completion_inputs = completion_inputs
         self._closed_completion: PlannerInput | None = None
         self._request_timeout_ns = request_timeout_ns
@@ -662,11 +681,17 @@ class TrajectoryNavigator:
             self._follow_person_search_phase,
             self._follow_person_search_target_yaw_rad,
             self._follow_person_search_budget_ns,
+            self._localization_recovery_started_ns, self._localization_recovery_mission_id,
+            self._localization_generation, self._global_transform_revision,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
         if not isinstance(checkpoint, NavigationStateCheckpoint):
             raise TypeError("checkpoint must be NavigationStateCheckpoint")
+        self._localization_recovery_started_ns = checkpoint.localization_recovery_started_ns
+        self._localization_recovery_mission_id = checkpoint.localization_recovery_mission_id
+        self._localization_generation = checkpoint.localization_generation
+        self._global_transform_revision = checkpoint.global_transform_revision
         self._abandon_pending_rollout()
         self._mission_id = checkpoint.mission_id
         self._initial_distance_m = checkpoint.initial_distance_m
@@ -732,6 +757,14 @@ class TrajectoryNavigator:
         world: WorldSnapshot,
         planner_input: PlannerInput | None = None,
     ) -> NavigationPlan:
+        estimate = estimate.in_local_frame()
+        if mission.lifecycle is MissionLifecycle.ACTIVE and mission.context == estimate.context == world.context:
+            recovery = self._localization_plan(mission, estimate, world)
+            if recovery is not None:
+                return recovery
+        else:
+            self._localization_recovery_started_ns = None
+            self._localization_recovery_mission_id = None
         plan = self._evaluate(mission, estimate, world, planner_input)
         if plan.status is NavigationStatus.ACTIVE:
             return replace(plan, motion_validity=self._guidance_validity(
@@ -765,12 +798,64 @@ class TrajectoryNavigator:
             if track is not None and track.usable_at(mission.context.monotonic_ns):
                 if track.prediction_valid_until_ns is not None:
                     until_ns = min(until_ns, track.prediction_valid_until_ns)
-        # Room Cruise chooses short local goals from the fresh rolling costmap.
-        # Global XY uncertainty is not a prerequisite for that relative motion;
-        # all other navigation keeps the conservative position requirement.
+        scope += f":odom{self._localization_generation}"
+        global_target = mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
+        if global_target:
+            scope += f":map{self._global_transform_revision}"
         return MotionValidity(
             source, until_ns, world.frame_id, scope,
-            requires_global_position=mission.mode is not CommandMode.EXPLORE,
+            localization_requirement=LocalizationRequirement(
+                mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP),
+                mission.mode is not CommandMode.STOP, global_target,
+            ),
+        )
+
+    def _localization_plan(self, mission, estimate, world):
+        quality = estimate.localization_quality
+        global_target = mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
+        if self._localization_generation != quality.generation:
+            self._clear_trajectory_plan()
+            self._coverage.clear()
+            self._localization_generation = quality.generation
+        if global_target and self._global_transform_revision != estimate.transform_revision:
+            self._clear_trajectory_plan()
+        self._global_transform_revision = estimate.transform_revision
+        translation_needed = mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP)
+        if mission.mode is CommandMode.TELEOP and mission.velocity_target is not None:
+            translation_needed = abs(mission.velocity_target.v_mps) > 1e-12
+        needs_recovery = ((translation_needed and quality.local_translation is QualityState.LOST)
+                          or quality.heading is QualityState.LOST
+                          or (global_target and quality.global_position is not QualityState.GOOD))
+        if not needs_recovery:
+            if self._localization_recovery_started_ns is not None:
+                self._clear_trajectory_plan()
+            self._localization_recovery_started_ns = None
+            self._localization_recovery_mission_id = None
+            return None
+        self._clear_trajectory_plan()
+        now = mission.context.monotonic_ns
+        if self._localization_recovery_mission_id != mission.mission_id:
+            self._localization_recovery_started_ns = now
+            self._localization_recovery_mission_id = mission.mission_id
+        elapsed = now - self._localization_recovery_started_ns
+        costmap = world.local_costmap
+        if (elapsed >= self._config.localization_recovery_timeout_ns
+                or quality.heading is not QualityState.GOOD
+                or quality.lidar_age_ns > self._config.max_costmap_freshness_ns
+                or estimate.frame_id != world.frame_id
+                or world.freshness_ns > self._config.max_world_freshness_ns
+                or costmap is None or costmap.freshness_ns > self._config.max_costmap_freshness_ns):
+            return self._inactive(mission, NavigationStatus.IDLE, "LOCALIZATION_HOLD")
+        # No translation; L12 independently verifies the raw side clearances.
+        return NavigationPlan(
+            context=mission.context, mission_id=mission.mission_id, route=(),
+            velocity_target=VelocityTarget(0.0, self._config.localization_recovery_omega_rad_s),
+            constraints=replace(mission.constraints, max_omega_rad_s=min(mission.constraints.max_omega_rad_s,
+                                                  self._config.localization_recovery_omega_rad_s)),
+            corridor_radius_m=0.0, progress=self._progress, status=NavigationStatus.ACTIVE,
+            reason="LOCALIZATION_REACQUIRE",
+            motion_validity=MotionValidity(mission.context, now+self._config.rollout_horizon_ns,
+                world.frame_id, f"REACQUIRE:{quality.generation}", LocalizationRequirement(False, True, False)),
         )
 
     def _evaluate(
@@ -830,6 +915,8 @@ class TrajectoryNavigator:
             self._reset()
             return self._inactive(mission, NavigationStatus.INVALIDATED, "TARGET_MISSING")
 
+        if mission.target_frame_id != LOCAL_FRAME_ID and estimate.map_to_odom is not None:
+            target = Waypoint(*estimate.map_to_odom.inverse().apply(target.x_m, target.y_m, target.yaw_rad))
         distance_m = math.hypot(target.x_m - estimate.x_m, target.y_m - estimate.y_m)
         if self._mission_id != mission.mission_id:
             self._reset()
@@ -1638,6 +1725,9 @@ class TrajectoryNavigator:
         scene: _LocalPlanningScene | None = None,
         goal_selected_ns: int | None = None,
     ) -> None:
+        if estimate.localization_quality.local_translation is QualityState.DEGRADED or estimate.localization_quality.heading is QualityState.DEGRADED:
+            max_v_mps *= self._config.localization_degraded_speed_scale
+            max_omega_rad_s *= self._config.localization_degraded_speed_scale
         backend = self._rollout_backend
         # Every new mission gets one synchronous seed. This avoids an ACTIVE
         # planner-warmup STOP and moves all recurring heavy replans off CPU3.
@@ -1921,6 +2011,7 @@ class TrajectoryNavigator:
         max_v_mps: float,
         max_omega_rad_s: float,
     ) -> tuple[TrajectoryEvaluation, ...]:
+        scene = replace(scene, uncertainty_m=self._config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m)
         start_clearance_m = _footprint_clearance(
             estimate.x_m,
             estimate.y_m,
@@ -2167,7 +2258,7 @@ class TrajectoryRolloutComputer:
         estimate = request.estimate
         world = request.world
         goal = request.goal
-        scene = self._planning_scene(world)
+        scene = replace(self._planning_scene(world), uncertainty_m=config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m)
         coverage = {
             (x_index, y_index): visits
             for x_index, y_index, visits in request.coverage
@@ -2695,8 +2786,8 @@ def _footprint_clearance(
     if scene is None:
         scene = _scene_from_world(world, config)
 
-    half_length = 0.5 * config.footprint_length_m
-    half_width = 0.5 * config.footprint_width_m
+    half_length = 0.5 * config.footprint_length_m + (scene.uncertainty_m if scene else 0.0)
+    half_width = 0.5 * config.footprint_width_m + (scene.uncertainty_m if scene else 0.0)
     yaw_cos = math.cos(yaw_rad)
     yaw_sin = math.sin(yaw_rad)
     minimum = config.clearance_score_cap_m

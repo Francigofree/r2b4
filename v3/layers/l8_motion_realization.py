@@ -10,6 +10,7 @@ from v3.contracts import (
     MotionObjective,
     MotionObjectiveKind,
     RobotEstimate,
+    LocalizationRequirement,
     TickContext,
     VelocityTarget,
     Waypoint,
@@ -89,6 +90,7 @@ class MotionRealizer:
         estimate: RobotEstimate,
         world: WorldSnapshot,
     ) -> MotionIntent:
+        estimate = estimate.in_local_frame()
         if objective.context != estimate.context or objective.context != world.context:
             return self._stopped(objective, "CONTEXT_MISMATCH")
         if estimate.frame_id != world.frame_id:
@@ -169,8 +171,8 @@ class MotionRealizer:
             horizon_ns=self._config.horizon_ns,
             constraints=objective.constraints,
             transition_allowed=objective.transition_allowed,
-            requires_global_position=(
-                objective.validity is None or objective.validity.requires_global_position
+            localization_requirement=(
+                LocalizationRequirement() if objective.validity is None else objective.validity.localization_requirement
             ),
         )
 

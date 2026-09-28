@@ -31,6 +31,7 @@ class ActionParameterDescriptor:
     minimum: float | None = None
     maximum: float | None = None
     default: float | None = None
+    value_type: str = "number"
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -54,7 +55,7 @@ class ActionParameterDescriptor:
 
     def to_jsonable(self) -> dict[str, object]:
         return {
-            "type": "number",
+            "type": self.value_type,
             "description": self.description,
             "required": self.required,
             "minimum": self.minimum,
@@ -106,8 +107,8 @@ class ActionDescriptor:
 
 def _p(name: str, description: str, *, required: bool = False,
        minimum: float | None = None, maximum: float | None = None,
-       default: float | None = None) -> ActionParameterDescriptor:
-    return ActionParameterDescriptor(name, description, required, minimum, maximum, default)
+       default: float | None = None, value_type: str = "number") -> ActionParameterDescriptor:
+    return ActionParameterDescriptor(name, description, required, minimum, maximum, default, value_type)
 
 
 # Voice exposure is opt-in; metric navigation is initially exposed through ER2.
@@ -147,6 +148,7 @@ _DESCRIPTORS = (
         "v3.command.navigate",
         "Navigate to a pose in the current localization frame using local closed-loop control.",
         (
+            _p("frame_id", "R2B4_BOOT_ROBOT_MAP (default) or R2B4_ODOM_LOCAL.", value_type="string"),
             _p("x_m", "Target x in metres in the current localization frame.", required=True),
             _p("y_m", "Target y in metres in the current localization frame.", required=True),
             _p("yaw_rad", "Optional final heading in radians; omitted means any heading."),

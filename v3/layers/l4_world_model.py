@@ -25,6 +25,7 @@ from v3.contracts import (
     ObstacleTrack,
     Observation,
     RobotEstimate,
+    QualityState,
     RollingLocalCostmap,
     WorldSnapshot,
 )
@@ -441,10 +442,11 @@ class ShadowWorldModel:
         self._structural_active = checkpoint.structural_active
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
+        estimate = estimate.in_local_frame()
         if frame.context != estimate.context:
             raise ValueError("L4 inputs must use the same tick context")
 
-        continuity_broken = self._pose_discontinuity(estimate)
+        continuity_broken = self._pose_discontinuity(estimate) or estimate.localization_quality.pose_discontinuity
         if continuity_broken:
             self._pose_history.clear()
         frame_changed = self._pose_history.add(estimate)
@@ -487,7 +489,7 @@ class ShadowWorldModel:
 
         costmap_changed = self._update_local_scan(frame, estimate)
 
-        if self._config.person_tracking_enabled:
+        if self._config.person_tracking_enabled and estimate.localization_quality.local_translation is not QualityState.LOST:
             person_observations = tuple(
                 item for item in frame.accepted if item.kind == "person_detection"
             )
@@ -622,7 +624,9 @@ class ShadowWorldModel:
 
     def _structural_quality_ok(self, estimate: RobotEstimate) -> bool:
         covariance = estimate.covariance_5x5
-        return self._structural_variance_ok(covariance[0], covariance[6], covariance[12])
+        return (estimate.localization_quality.global_position is QualityState.GOOD
+                and estimate.localization_quality.local_translation is QualityState.GOOD
+                and self._structural_variance_ok(covariance[0], covariance[6], covariance[12]))
 
     def _structural_pose_quality_ok(self, pose: PoseSample) -> bool:
         return self._structural_variance_ok(
@@ -773,6 +777,10 @@ class ShadowWorldModel:
             self._last_lidar_measurement_ns = measurement_ns
 
     def _update_local_scan(self, frame: AdmittedFrame, estimate: RobotEstimate) -> bool:
+        if (estimate.localization_quality.local_translation is QualityState.LOST
+                or estimate.localization_quality.heading is QualityState.LOST):
+            self._structural_recall_ready = False
+            return False
         local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
         if len(local) > 1:
             raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
@@ -834,7 +842,7 @@ class ShadowWorldModel:
             captured_ns=observation.captured_monotonic_ns,
         )
         if self._config.structural_memory_enabled:
-            if self._structural_pose_quality_ok(pose):
+            if self._structural_quality_ok(estimate) and self._structural_pose_quality_ok(pose):
                 ignored_hit_keys = self._dynamic_structural_hit_keys(
                     frame,
                     captured_ns=observation.captured_monotonic_ns,

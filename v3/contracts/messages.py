@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+
+from .localization import LocalizationQuality, LocalizationRequirement, Pose2D
 
 from .base import (
     ContractValidationError,
@@ -224,6 +226,25 @@ class RobotEstimate:
     v_mps: float
     omega_rad_s: float
     covariance_5x5: tuple[float, ...]
+    local_pose: Pose2D | None = None
+    global_pose: Pose2D | None = None
+    map_to_odom: Pose2D | None = None
+    localization_quality: LocalizationQuality = LocalizationQuality()
+    transform_revision: int = 0
+    local_v_mps: float | None = None
+    local_omega_rad_s: float | None = None
+
+    def in_local_frame(self) -> RobotEstimate:
+        if self.local_pose is None or self.frame_id == self.local_pose.frame_id:
+            return self
+        pose = self.local_pose
+        covariance = list(self.covariance_5x5)
+        covariance[0] = covariance[6] = self.localization_quality.local_sigma_m**2
+        covariance[12] = self.localization_quality.yaw_sigma_rad**2
+        return replace(self, frame_id=pose.frame_id, x_m=pose.x_m, y_m=pose.y_m,
+                       yaw_rad=pose.yaw_rad, covariance_5x5=tuple(covariance),
+                       v_mps=self.v_mps if self.local_v_mps is None else self.local_v_mps,
+                       omega_rad_s=self.omega_rad_s if self.local_omega_rad_s is None else self.local_omega_rad_s)
 
     def __post_init__(self) -> None:
         require_token(self.frame_id, "RobotEstimate.frame_id")
@@ -440,6 +461,7 @@ class MissionIntent:
     constraints: MissionConstraints
     lifecycle: MissionLifecycle
     stop_reason: str | None = None
+    target_frame_id: str = "R2B4_BOOT_ROBOT_MAP"
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "MissionIntent.mission_id")
@@ -562,7 +584,7 @@ class MotionValidity:
     valid_until_ns: int
     frame_id: str
     scope: str
-    requires_global_position: bool = True
+    localization_requirement: LocalizationRequirement = LocalizationRequirement()
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_context, TickContext):
@@ -570,8 +592,8 @@ class MotionValidity:
         require_nonnegative(self.valid_until_ns, "MotionValidity.valid_until_ns")
         require_token(self.frame_id, "MotionValidity.frame_id")
         require_token(self.scope, "MotionValidity.scope")
-        if type(self.requires_global_position) is not bool:
-            raise ContractValidationError("motion validity requires_global_position must be bool")
+        if not isinstance(self.localization_requirement, LocalizationRequirement):
+            raise ContractValidationError("motion validity localization_requirement must be typed")
         if self.valid_until_ns < self.source_context.monotonic_ns:
             raise ContractValidationError("motion validity expires before source")
 
@@ -705,7 +727,7 @@ class MotionIntent:
     constraints: MissionConstraints
     stop_reason: str | None = None
     transition_allowed: bool = False
-    requires_global_position: bool = True
+    localization_requirement: LocalizationRequirement = LocalizationRequirement()
 
     def __post_init__(self) -> None:
         require_finite(self.requested_v_mps, "MotionIntent.requested_v_mps")
@@ -714,8 +736,8 @@ class MotionIntent:
         _require_optional_token(self.stop_reason, "MotionIntent.stop_reason")
         if type(self.transition_allowed) is not bool:
             raise ContractValidationError("motion transition_allowed must be bool")
-        if type(self.requires_global_position) is not bool:
-            raise ContractValidationError("motion requires_global_position must be bool")
+        if not isinstance(self.localization_requirement, LocalizationRequirement):
+            raise ContractValidationError("motion localization_requirement must be typed")
         if self.stop_reason is not None and self.transition_allowed:
             raise ContractValidationError("stopped motion cannot authorize a transition")
         if self.stop_reason is not None and (

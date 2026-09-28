@@ -195,7 +195,8 @@ class _FakeInterface:
             return {
                 "state": "RUNNING", "ready_for_active": True,
                 "safety_decision": "ALLOW", "fault_layer": None,
-                "estimate": {"frame_id": "odom", "x_m": 1.0, "y_m": 2.0, "yaw_rad": 0.0},
+                "estimate": {"frame_id": "R2B4_BOOT_ROBOT_MAP", "x_m": 1.0, "y_m": 2.0, "yaw_rad": 0.0,
+                             "local_pose": {"frame_id": "R2B4_ODOM_LOCAL", "x_m": 1.0, "y_m": 2.0, "yaw_rad": 0.0}},
                 "mission": {"mission_id": "mission-cmd-1", "mode": "NAVIGATE", "lifecycle": "ACTIVE"},
                 "navigation": {"mission_id": "mission-cmd-1", "status": "COMPLETE", "progress": 1.0},
             }
@@ -458,6 +459,7 @@ def test_er2_motion_goals_transform_pose_and_expose_only_five_tools():
             result = super().read(resource)
             if resource == "v3.status":
                 result["estimate"]["yaw_rad"] = math.pi / 2
+                result["estimate"]["local_pose"]["yaw_rad"] = math.pi / 2
             return result
 
         def execute(self, action, **parameters):

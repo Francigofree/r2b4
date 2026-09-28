@@ -84,3 +84,6 @@ __all__ = [
     "WheelVelocitySetpoint",
     "WorldSnapshot",
 ]
+
+from .localization import (GLOBAL_FRAME_ID, LOCAL_FRAME_ID, LocalizationQuality, LocalizationRequirement, Pose2D, QualityState)
+__all__ += ["GLOBAL_FRAME_ID", "LOCAL_FRAME_ID", "LocalizationQuality", "LocalizationRequirement", "Pose2D", "QualityState"]

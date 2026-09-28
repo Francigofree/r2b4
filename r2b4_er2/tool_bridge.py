@@ -235,7 +235,7 @@ class Er2RobotTools:
             "final": final,
         }
 
-    def _pose_snapshot(self) -> Mapping[str, object]:
+    def _pose_snapshot(self, *, local: bool = False) -> Mapping[str, object]:
         response = self._handle("read", "v3.status")
         status = response.get("result")
         # V3ControlInterfaceAdapter only exposes fresh status from a live process.
@@ -246,6 +246,10 @@ class Er2RobotTools:
         pose = status.get("estimate")
         if not isinstance(pose, Mapping) or not isinstance(pose.get("frame_id"), str) or not pose["frame_id"]:
             raise Er2ToolError("current localization frame unavailable")
+        if local:
+            pose = pose.get("local_pose")
+            if not isinstance(pose, Mapping) or pose.get("frame_id") != "R2B4_ODOM_LOCAL":
+                raise Er2ToolError("continuous local odometry unavailable")
         for key in ("x_m", "y_m", "yaw_rad"):
             _finite(pose.get(key), key)
         return pose
@@ -269,7 +273,7 @@ class Er2RobotTools:
         forward = _finite(forward_m, "forward_m")
         left = _finite(left_m, "left_m")
         yaw_delta = None if final_yaw_rad is None else _finite(final_yaw_rad, "final_yaw_rad")
-        pose = self._pose_snapshot()
+        pose = self._pose_snapshot(local=True)
         yaw = float(pose["yaw_rad"])
         target = {
             "x_m": float(pose["x_m"]) + forward * math.cos(yaw) - left * math.sin(yaw),
@@ -286,7 +290,7 @@ class Er2RobotTools:
         angle = _finite(angle_deg, "angle_deg")
         if not -180.0 <= angle <= 180.0:
             raise Er2ToolError("angle_deg must stay within [-180, 180]; pose goals use the shortest turn")
-        pose = self._pose_snapshot()
+        pose = self._pose_snapshot(local=True)
         target = {"x_m": float(pose["x_m"]), "y_m": float(pose["y_m"]),
                   "yaw_rad": _wrap_yaw(float(pose["yaw_rad"]) + math.radians(angle))}
         return self._navigate(target, pose, None, max_omega_rad_s, cancel_event)
@@ -297,6 +301,7 @@ class Er2RobotTools:
         cancel_event: threading.Event | None,
     ) -> dict[str, object]:
         parameters = dict(target)
+        parameters["frame_id"] = pose["frame_id"]
         for name, requested, bound in (
             ("max_v_mps", max_v_mps, self.config.max_v_mps),
             ("max_omega_rad_s", max_omega_rad_s, self.config.max_omega_rad_s),
@@ -354,6 +359,8 @@ class Er2RobotTools:
                     if payload.get("state") != "RUNNING" or payload.get("fault_layer") or payload.get("safety_decision") == "FAULT":
                         reason = "RUNTIME_FAULT"
                         break
+                    if isinstance(estimate, Mapping) and pose["frame_id"] == "R2B4_ODOM_LOCAL":
+                        estimate = estimate.get("local_pose")
                     if not isinstance(estimate, Mapping) or estimate.get("frame_id") != pose["frame_id"]:
                         reason = "LOCALIZATION_FRAME_CHANGED"
                         break
@@ -372,7 +379,8 @@ class Er2RobotTools:
                         reason = "SAFETY_STATUS_UNAVAILABLE"
                         break
                     if decision == "STOP" and not (
-                        nav_status == "COMPLETE" and payload.get("safety_reason") == "NOT_ACTIVE"
+                        (nav_status == "COMPLETE" and payload.get("safety_reason") == "NOT_ACTIVE")
+                        or (nav_status == "IDLE" and navigation.get("reason") == "LOCALIZATION_HOLD")
                     ):
                         reason = "SAFETY_STOP"
                         break

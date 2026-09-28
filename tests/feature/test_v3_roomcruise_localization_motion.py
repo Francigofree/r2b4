@@ -1,9 +1,10 @@
 """Local motion remains available without global XY corrections."""
 from dataclasses import replace
 
-from rig import resolved_config
+from rig import resolved_config, healthy_localization
 from v3.contracts import (
     CommandMode, CommandRequest, ConstraintCode, DataField, MotionIntent,
+    LocalizationRequirement, QualityState,
     NavigationStatus, RobotEstimate, RollingLocalCostmap, TickContext, WorldSnapshot,
 )
 from v3.layers.l5_command_mission import MissionManager
@@ -17,7 +18,9 @@ def _scene(tick, position_variance=0.65, yaw_variance=0.01):
     context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
     covariance = tuple(position_variance if i in (0, 6) else yaw_variance if i == 12 else 0.0
                        for i in range(25))
-    estimate = RobotEstimate(context, "odom", 0, 0, 0, 0, 0, covariance)
+    estimate = RobotEstimate(context, "odom", 0, 0, 0, 0, 0, covariance, localization_quality=healthy_localization(
+        global_position=QualityState.LOST if position_variance > .25 else QualityState.GOOD,
+        heading=QualityState.LOST if yaw_variance > .2 else QualityState.GOOD))
     world = WorldSnapshot(context, "odom", 1, (), 0,
                           RollingLocalCostmap("odom", 1, 0.1, 2.5, (), 1, 0))
     return estimate, world
@@ -34,10 +37,10 @@ def _chain():
     )
 
 
-def test_roomcruise_localization_motion_continues_across_variance_boundary():
+def test_roomcruise_localization_motion_requires_independent_local_quality():
     config, manager, navigator, selector, realizer, limiter = _chain()
-    # Observed 10:43 and 11:01 variances, plus prolonged absence of corrections.
-    for tick, variance in enumerate((0.2465, 0.2517, 0.5017, 0.6497, 4.0, 0.2386)):
+    # Global covariance alone never establishes local motion quality.
+    for tick, variance in enumerate((0.2465, 0.2517, 0.5017, 0.6497, 0.9, 0.2386)):
         estimate, world = _scene(tick, variance)
         command = CommandRequest(estimate.context, "cruise", CommandMode.EXPLORE, (), tick)
         plan = navigator.evaluate(manager.evaluate(command), estimate, world)
@@ -45,8 +48,8 @@ def test_roomcruise_localization_motion_continues_across_variance_boundary():
         motion = realizer.evaluate(objective, estimate, world)
         allowed = limiter.evaluate(motion, estimate)
         assert plan.status is NavigationStatus.ACTIVE
-        assert not plan.motion_validity.requires_global_position
-        assert not motion.requires_global_position
+        assert not plan.motion_validity.localization_requirement.global_position
+        assert not motion.localization_requirement.global_position
         assert ConstraintCode.LOCALIZATION_DEGRADED not in allowed.active_constraints
         if tick:
             assert abs(allowed.allowed_v_mps) + abs(allowed.allowed_omega_rad_s) > 0
@@ -58,8 +61,10 @@ def test_roomcruise_localization_motion_continues_across_variance_boundary():
                              (DataField("x_m", 1.0), DataField("y_m", 0.0)), 6)
     plan = navigator.evaluate(manager.evaluate(command), estimate, world)
     motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
-    assert motion.requires_global_position
-    allowed = limiter.evaluate(motion, estimate)
+    assert plan.reason == "LOCALIZATION_REACQUIRE"
+    assert motion.requested_v_mps == 0
+    denied = replace(motion, localization_requirement=LocalizationRequirement())
+    allowed = limiter.evaluate(denied, estimate)
     assert allowed.active_constraints == (ConstraintCode.LOCALIZATION_DEGRADED,)
     assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
 
@@ -83,14 +88,14 @@ def test_roomcruise_localization_motion_keeps_freshness_heading_and_stop_gates()
     expired = replace(objective, context=late_context, expiry_tick=2)
     assert realizer.evaluate(expired, replace(estimate, context=late_context),
                              replace(world, context=late_context)).stop_reason == "OBJECTIVE_EXPIRED"
-    bad_heading, _ = _scene(0, yaw_variance=config.operational_constraints.max_yaw_variance + 0.01)
+    bad_heading, _ = _scene(0, yaw_variance=config.estimation.quality.max_yaw_variance + 0.01)
     motion = realizer.evaluate(objective, bad_heading, world)
     assert limiter.evaluate(motion, bad_heading).active_constraints == (ConstraintCode.LOCALIZATION_DEGRADED,)
     assert limiter.evaluate(motion, replace(estimate, context=late_context)).allowed_v_mps == 0.0
     # Missing lineage and callers constructing MotionIntent directly keep the
     # conservative default; no implicit local-motion exemption exists.
     no_lineage = realizer.evaluate(replace(objective, validity=None), estimate, world)
-    assert no_lineage.requires_global_position
+    assert no_lineage.localization_requirement.global_position
     direct = MotionIntent(estimate.context, 0.2, 0.0, 100_000_000, objective.constraints)
     assert limiter.evaluate(direct, estimate).active_constraints == (ConstraintCode.LOCALIZATION_DEGRADED,)
     for broken in (
@@ -121,14 +126,14 @@ def test_roomcruise_localization_pending_keeps_original_dependency_and_expiry():
                       local_goal=None, trajectory_candidates=(), reason="PLANNER_PENDING")
     retained = selector.evaluate(pending)
     assert retained.validity == original.validity
-    assert not realizer.evaluate(retained, estimate, world).requires_global_position
+    assert not realizer.evaluate(retained, estimate, world).localization_requirement.global_position
     restored = MotionSelector(config.motion_selection)
     restored.restore(checkpoint)
     assert restored.evaluate(pending) == retained
     # A tightened dependency invalidates the old objective even when frame and
     # scope match. Pending cannot silently retain less restrictive authority.
     tightened = replace(pending, motion_validity=replace(pending.motion_validity,
-                                                       requires_global_position=True))
+                                                       localization_requirement=LocalizationRequirement()))
     restored.restore(checkpoint)
     stopped = realizer.evaluate(restored.evaluate(tightened), estimate, world)
     assert stopped.stop_reason == "PLANNER_PENDING_NO_VALID_OBJECTIVE"

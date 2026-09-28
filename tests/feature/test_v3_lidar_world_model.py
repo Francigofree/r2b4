@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-from rig import resolved_config
+from rig import resolved_config, healthy_localization
 from v3.contracts import (
     AdmittedFrame, CostmapCell, DataField, Observation, RobotEstimate,
     RollingLocalCostmap, TickContext, TrackEstimateStatus,
@@ -38,7 +38,7 @@ def _scan(sequence, captured_ns, points=((1.05, 0.05),)):
 def _tick(model, now_ns, observations=(), *, x=0.0, variance=0.0, frame_id="odom"):
     context = TickContext(now_ns, now_ns)
     covariance = tuple(variance if i in (0, 6, 12) else 0.0 for i in range(25))
-    estimate = RobotEstimate(context, frame_id, x, 0.0, 0.0, 0.0, 0.0, covariance)
+    estimate = RobotEstimate(context, frame_id, x, 0.0, 0.0, 0.0, 0.0, covariance, localization_quality=healthy_localization())
     return model(AdmittedFrame(context, observations, ()), estimate)
 
 

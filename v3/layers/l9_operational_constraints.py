@@ -10,6 +10,7 @@ from v3.contracts import (
     ConstraintCode,
     MotionIntent,
     RobotEstimate,
+    QualityState,
     TickContext,
     VelocityTarget,
 )
@@ -22,8 +23,8 @@ class OperationalConstraintsConfig:
     max_acceleration_mps2: float
     max_angular_acceleration_rad_s2: float
     max_curvature_rad_per_m: float
-    max_position_variance: float
-    max_yaw_variance: float
+    degraded_velocity_scale: float
+    degraded_acceleration_scale: float
 
     def __post_init__(self) -> None:
         values = (
@@ -32,9 +33,11 @@ class OperationalConstraintsConfig:
             self.max_acceleration_mps2,
             self.max_angular_acceleration_rad_s2,
             self.max_curvature_rad_per_m,
-            self.max_position_variance,
-            self.max_yaw_variance,
+            self.degraded_velocity_scale,
+            self.degraded_acceleration_scale,
         )
+        if self.degraded_velocity_scale > 1.0 or self.degraded_acceleration_scale > 1.0:
+            raise ValueError("degraded limits cannot amplify motion")
         if any(not math.isfinite(value) or value <= 0.0 for value in values):
             raise ValueError("operational limits must be finite and positive")
 
@@ -89,6 +92,11 @@ class OperationalConstraintLayer:
         if _localization_degraded(estimate, self._config, motion):
             return self._stop(motion, (ConstraintCode.LOCALIZATION_DEGRADED,))
 
+        quality = estimate.localization_quality
+        degraded = (quality.local_translation is QualityState.DEGRADED
+                    or quality.heading is QualityState.DEGRADED)
+        speed_scale = self._config.degraded_velocity_scale if degraded else 1.0
+        acceleration_scale = self._config.degraded_acceleration_scale if degraded else 1.0
         codes: list[ConstraintCode] = []
         allowed_v_mps = _clamp(motion.requested_v_mps, motion.constraints.max_v_mps)
         allowed_omega_rad_s = _clamp(
@@ -101,8 +109,8 @@ class OperationalConstraintLayer:
         ):
             codes.append(ConstraintCode.MISSION_LIMIT)
 
-        platform_v = _clamp(allowed_v_mps, self._config.max_v_mps)
-        platform_omega = _clamp(allowed_omega_rad_s, self._config.max_omega_rad_s)
+        platform_v = _clamp(allowed_v_mps, self._config.max_v_mps * speed_scale)
+        platform_omega = _clamp(allowed_omega_rad_s, self._config.max_omega_rad_s * speed_scale)
         if platform_v != allowed_v_mps or platform_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.SPEED_LIMIT)
         allowed_v_mps = platform_v
@@ -119,23 +127,26 @@ class OperationalConstraintLayer:
         limited_v = _rate_limited(
             allowed_v_mps,
             previous_v,
-            self._config.max_acceleration_mps2 * dt_s,
+            self._config.max_acceleration_mps2 * acceleration_scale * dt_s,
             transition_allowed=motion.transition_allowed,
         )
         limited_omega = _rate_limited(
             allowed_omega_rad_s,
             previous_omega,
-            self._config.max_angular_acceleration_rad_s2 * dt_s,
+            self._config.max_angular_acceleration_rad_s2 * acceleration_scale * dt_s,
             transition_allowed=motion.transition_allowed,
         )
         if limited_v != allowed_v_mps or limited_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.ACCELERATION_LIMIT)
         # A newly tightened authority envelope wins over temporal continuity.
-        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, self._config.max_v_mps))
+        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, self._config.max_v_mps * speed_scale))
         allowed_omega_rad_s = _clamp(limited_omega, min(
-            motion.constraints.max_omega_rad_s, self._config.max_omega_rad_s,
+            motion.constraints.max_omega_rad_s, self._config.max_omega_rad_s * speed_scale,
         ))
 
+        if ((abs(allowed_v_mps) > 1e-12 and quality.local_translation is QualityState.LOST)
+                or (abs(allowed_omega_rad_s) > 1e-12 and quality.heading is QualityState.LOST)):
+            return self._stop(motion, (ConstraintCode.LOCALIZATION_DEGRADED,))
         transition = motion.transition_allowed and ConstraintCode.ACCELERATION_LIMIT in codes and dt_s > 0.0
         result = ConstrainedMotion(
             context=motion.context,
@@ -196,15 +207,15 @@ def _localization_degraded(
     config: OperationalConstraintsConfig,
     motion: MotionIntent,
 ) -> bool:
-    covariance = estimate.covariance_5x5
-    # A fresh local navigation objective does not depend on global XY accuracy.
-    # Heading and context remain mandatory even for that relative motion.
+    quality = estimate.localization_quality
+    requirement = motion.localization_requirement
+    translation = requirement.local_translation or abs(motion.requested_v_mps) > 1e-12
+    heading = requirement.heading or translation or abs(motion.requested_omega_rad_s) > 1e-12
     return (
-        (motion.requires_global_position and (
-            covariance[0] > config.max_position_variance
-            or covariance[6] > config.max_position_variance
-        ))
-        or covariance[12] > config.max_yaw_variance
+        (translation and (quality.local_translation is QualityState.LOST
+                          or not quality.local_pose_continuous or quality.pose_discontinuity))
+        or (heading and quality.heading is QualityState.LOST)
+        or (requirement.global_position and quality.global_position is not QualityState.GOOD)
     )
 
 
