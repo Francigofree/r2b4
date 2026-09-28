@@ -562,6 +562,7 @@ class MotionValidity:
     valid_until_ns: int
     frame_id: str
     scope: str
+    requires_global_position: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_context, TickContext):
@@ -569,6 +570,8 @@ class MotionValidity:
         require_nonnegative(self.valid_until_ns, "MotionValidity.valid_until_ns")
         require_token(self.frame_id, "MotionValidity.frame_id")
         require_token(self.scope, "MotionValidity.scope")
+        if type(self.requires_global_position) is not bool:
+            raise ContractValidationError("motion validity requires_global_position must be bool")
         if self.valid_until_ns < self.source_context.monotonic_ns:
             raise ContractValidationError("motion validity expires before source")
 
@@ -702,6 +705,7 @@ class MotionIntent:
     constraints: MissionConstraints
     stop_reason: str | None = None
     transition_allowed: bool = False
+    requires_global_position: bool = True
 
     def __post_init__(self) -> None:
         require_finite(self.requested_v_mps, "MotionIntent.requested_v_mps")
@@ -710,6 +714,8 @@ class MotionIntent:
         _require_optional_token(self.stop_reason, "MotionIntent.stop_reason")
         if type(self.transition_allowed) is not bool:
             raise ContractValidationError("motion transition_allowed must be bool")
+        if type(self.requires_global_position) is not bool:
+            raise ContractValidationError("motion requires_global_position must be bool")
         if self.stop_reason is not None and self.transition_allowed:
             raise ContractValidationError("stopped motion cannot authorize a transition")
         if self.stop_reason is not None and (

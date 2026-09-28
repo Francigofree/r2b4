@@ -86,7 +86,7 @@ class OperationalConstraintLayer:
         if motion.stop_reason is not None:
             constraint = _stop_constraint(motion.stop_reason)
             return self._stop(motion, () if constraint is None else (constraint,))
-        if _localization_degraded(estimate, self._config):
+        if _localization_degraded(estimate, self._config, motion):
             return self._stop(motion, (ConstraintCode.LOCALIZATION_DEGRADED,))
 
         codes: list[ConstraintCode] = []
@@ -194,11 +194,16 @@ def constrain_stop(motion: MotionIntent, estimate: RobotEstimate) -> Constrained
 def _localization_degraded(
     estimate: RobotEstimate,
     config: OperationalConstraintsConfig,
+    motion: MotionIntent,
 ) -> bool:
     covariance = estimate.covariance_5x5
+    # A fresh local navigation objective does not depend on global XY accuracy.
+    # Heading and context remain mandatory even for that relative motion.
     return (
-        covariance[0] > config.max_position_variance
-        or covariance[6] > config.max_position_variance
+        (motion.requires_global_position and (
+            covariance[0] > config.max_position_variance
+            or covariance[6] > config.max_position_variance
+        ))
         or covariance[12] > config.max_yaw_variance
     )
 

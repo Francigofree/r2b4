@@ -765,7 +765,13 @@ class TrajectoryNavigator:
             if track is not None and track.usable_at(mission.context.monotonic_ns):
                 if track.prediction_valid_until_ns is not None:
                     until_ns = min(until_ns, track.prediction_valid_until_ns)
-        return MotionValidity(source, until_ns, world.frame_id, scope)
+        # Room Cruise chooses short local goals from the fresh rolling costmap.
+        # Global XY uncertainty is not a prerequisite for that relative motion;
+        # all other navigation keeps the conservative position requirement.
+        return MotionValidity(
+            source, until_ns, world.frame_id, scope,
+            requires_global_position=mission.mode is not CommandMode.EXPLORE,
+        )
 
     def _evaluate(
         self,

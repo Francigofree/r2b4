@@ -169,6 +169,9 @@ class MotionRealizer:
             horizon_ns=self._config.horizon_ns,
             constraints=objective.constraints,
             transition_allowed=objective.transition_allowed,
+            requires_global_position=(
+                objective.validity is None or objective.validity.requires_global_position
+            ),
         )
 
     def _velocity_reference(self, target: VelocityTarget, estimate: RobotEstimate) -> Waypoint:
