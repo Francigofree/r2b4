@@ -68,7 +68,7 @@ def ensure_piper_importable(dependency_dir: Path | str | None = None) -> Any:
 @dataclass(frozen=True, slots=True)
 class PiperTtsConfig:
     model_path: Path
-    voice: str = "hu_HU-anna-medium"
+    voice: str = "hu_HU-imre-medium"
     max_text_chars: int = 2000
 
     def __post_init__(self) -> None:

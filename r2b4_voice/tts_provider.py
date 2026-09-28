@@ -20,7 +20,7 @@ from .piper_tts import (
 from .resident_tts import ResidentPiperTtsClient
 
 DEFAULT_TTS_PROVIDER = "piper"
-DEFAULT_PIPER_VOICE = "hu_HU-anna-medium"
+DEFAULT_PIPER_VOICE = "hu_HU-imre-medium"
 DEFAULT_GEMINI_TTS_MODEL = "gemini-3.1-flash-tts-preview"
 DEFAULT_GEMINI_TTS_VOICE = "Kore"
 

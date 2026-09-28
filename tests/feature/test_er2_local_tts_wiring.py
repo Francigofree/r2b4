@@ -7,7 +7,7 @@ from r2b4_er2 import speech as speech_module
 
 class FakeTts:
     model = "piper-tts"
-    voice = "hu_HU-anna-medium"
+    voice = "hu_HU-imre-medium"
 
     def synthesize(self, text: str):
         return SimpleNamespace(model=self.model, voice=self.voice, text=text)
@@ -33,4 +33,4 @@ def test_er2_speech_uses_shared_default_tts_factory(monkeypatch):
 
     assert created == [None]
     assert result["model"] == "piper-tts"
-    assert result["voice"] == "hu_HU-anna-medium"
+    assert result["voice"] == "hu_HU-imre-medium"
