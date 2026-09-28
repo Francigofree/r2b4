@@ -23,18 +23,9 @@ def live(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(root))
     from v3.runtime_performance import load_runtime_affinity_config, apply_host_affinity
     from v3.affinity_diagnostics import audit_affinity
-    config = load_runtime_affinity_config(root / "conf" / "vezerles.json")
-    if not config.enabled:
-        result = {
-            "status": "NOT_APPLICABLE",
-            "mode": "SCHEDULER_MANAGED",
-            "reason": "runtime_affinity.enabled=false; R2B4 applies no CPU pinning",
-            "runtime_pid": pid,
-        }
-        print(json.dumps(result, indent=2, sort_keys=True))
-        return 0
     apply_host_affinity(root, "diagnostics")
-    result = audit_affinity(config, pid, project_root=root)
+    result = audit_affinity(load_runtime_affinity_config(root / "conf" / "vezerles.json"),
+                            pid, project_root=root)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "PASS" else 1
 

@@ -32,18 +32,6 @@ def test_camera_freshness_is_explicit_resolved_authority():
     with pytest.raises(ValueError, match='camera_maximum_frame_age_ns'):
         ConfigResolver.from_documents(hardware, physics, speed_map, control)
 
-def test_active_affinity_policy_is_scheduler_managed_but_schema_valid():
-    # scheduler-managed affinity baseline: masks remain schema-valid but are dormant
-    hardware, physics, speed_map, control = _documents()
-    resolved = ConfigResolver.from_documents(hardware, physics, speed_map, control)
-    affinity = resolved.affinity
-    assert affinity.enabled is False
-    assert affinity.control_cpus == (3,)
-    control_set = set(affinity.control_cpus)
-    for name, cpus in affinity.cpu_roles().items():
-        if name != 'control_cpus':
-            assert control_set.isdisjoint(cpus), (name, cpus)
-
 def test_affinity_masks_keep_control_exclusive_and_replay_historical_policy():
     from v3.runtime_performance import RuntimeAffinityConfig
     hardware, physics, speed_map, control = _documents()

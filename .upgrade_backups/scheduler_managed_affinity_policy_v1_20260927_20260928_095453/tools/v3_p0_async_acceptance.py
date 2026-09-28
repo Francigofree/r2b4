@@ -9,9 +9,8 @@ motion command:
     1. capture OFF (nincs)
     2. capture FULL
 
-For both sessions it requires IDLE/SAFE-LOW behavior, verifies the configured
-CPU policy when affinity is enabled (or records scheduler-managed mode when disabled),
-reuses the repository's canonical timing audit,
+For both sessions it requires IDLE/SAFE-LOW behavior, verifies the current
+process-isolation CPU layout, reuses the repository's canonical timing audit,
 and for FULL capture runs the canonical Test Hub replay.  The final machine-readable evidence is written under runtime/diag.
 """
 
@@ -256,13 +255,7 @@ def _affinity_audit(root: Path, runtime_pid: int, *, require_capture: bool = Fal
     from v3.affinity_diagnostics import audit_affinity
     config = load_runtime_affinity_config(root / "conf" / "vezerles.json")
     if not config.enabled:
-        return {
-            "status": "NOT_APPLICABLE",
-            "mode": "SCHEDULER_MANAGED",
-            "reason": "runtime_affinity.enabled=false; R2B4 applies no CPU pinning",
-            "runtime_pid": runtime_pid,
-            "capture_required": require_capture,
-        }
+        raise AcceptanceError("runtime_affinity.enabled must be true for live acceptance")
     roles = ("encoder", "imu", "lidar_owner", "lidar_matcher", "vision", "planner",
              "status", "command", "l0_encoder", "l0_imu", "l0_lidar", "l0_aux")
     result = audit_affinity(config, runtime_pid, project_root=root,

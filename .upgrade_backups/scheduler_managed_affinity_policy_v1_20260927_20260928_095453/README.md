@@ -22,35 +22,32 @@ Aktív konfigurációk:
 - `conf/speed_map.json`
 - `conf/vezerles.json`
 
-## CPU-ütemezés
+## CPU-kiosztás
 
-<!-- SCHEDULER_MANAGED_AFFINITY_POLICY_V1 -->
-A `conf/vezerles.json` `runtime_affinity` szekciója két üzemmódot támogat.
+A `conf/vezerles.json` `runtime_affinity` szekciója szerepenként CPU-listát ad.
+A `[1, 2]` maszk mindkét CPU-n engedi az ütemezést. A `control_cpus` pontosan
+egyelemű, és egyik másik szerep maszkja sem tartalmazhatja ezt a CPU-t. Üres,
+duplikált, negatív vagy nem egész CPU-azonosító indulási konfigurációs hiba.
+`strict: true` mellett a runtime a maszkok OS/cgroup szerinti elérhetőségét is
+ellenőrzi a hardverindítás előtt; az affinity alkalmazását visszaolvassa.
 
-- `enabled: true`: az R2B4 szerepenként explicit Linux CPU-affinity maszkokat
-  alkalmaz és ellenőriz. A `control_cpus` pontosan egyelemű, és egyik másik
-  szerep maszkja sem fedheti át.
-- `enabled: false`: az R2B4 **nem alkalmaz saját CPU-pinninget**. A runtime,
-  matcher, LiDAR, planner, capture, szenzor- és szolgáltatásfolyamatok az
-  örökölt host/cgroup CPU-készleten maradnak, elhelyezésüket a Linux scheduler
-  végzi.
+Alapkiosztás: control `[3]`; encoder/IMU és a hozzájuk tartozó L0 acquisition
+`[0]`; LiDAR owner/matcher/L0 `[2]`; vision és planner `[1]`; capture, status,
+command, háttérmunka, L0 aux, operator, voice, ER2 és diagnosztika `[1, 2]`.
+A matcher és a planner saját beállítást kap. A child processzek, collectorok,
+queue feederek és a szolgáltatások natív helper threadjei is követik a maszkot.
+A Piper az őt futtató voice/ER2 szolgáltatás maszkját használja.
 
-A jelenlegi production baseline `enabled: false`, tehát scheduler-managed mód.
-A konfigurációban megmaradó `*_cpus` mezők ilyenkor nem aktív elhelyezési
-parancsok; schema/replay kompatibilitási értékek. A schema ettől még szigorú:
-`control_cpus` egyetlen CPU, a többi szerep vele diszjunkt, a CPU-listák nem
-lehetnek üresek, duplikáltak, negatívak vagy nem egészek. Ez lehetővé teszi,
-hogy a policy később egyetlen `enabled` váltással ismét aktiválható legyen.
+A beállítás újraindításkor lép életbe; az effective config és a capture tárolja.
+A régi `runtime_cpu/lidar_cpu/vision_cpu/io_cpu` mezők live configként nem
+fogadhatók el; történeti capture replay dekódolásakor megőrzött régi értékekkel
+migrálódnak. `enabled: false` kikapcsolja a runtime-policy alkalmazását.
 
-`strict: true` csak bekapcsolt affinity-policy mellett kényszeríti az OS/cgroup
-maszkok alkalmazását és visszaellenőrzését. `enabled: false` mellett nincs
-R2B4-affinity alkalmazás. Ez nem jelent OS-szintű CPU-izolációt: más Linux
-folyamatok, kernel threadek és IRQ-k ütemezését az R2B4 nem szabályozza.
-
-Futó rendszer ellenőrzése: `python3 tools/v3_performance_audit.py live`.
-Scheduler-managed módban az affinity-rész `NOT_APPLICABLE` /
-`SCHEDULER_MANAGED` eredménnyel, sikeres exit kóddal tér vissza; `enabled: true`
-mellett a tényleges `/proc` affinity-layoutot auditálja.
+Futó rendszer passzív ellenőrzése: `python3 tools/v3_performance_audit.py live`.
+Ez a runtime leszármazottait és az ugyanebből a projektből futó önálló R2B4
+szolgáltatásokat is vizsgálja: a control maszkjának egyeznie kell, a többi task
+maszkjának a saját konfigurált készletén belül kell maradnia. A policy az R2B4
+folyamatait helyezi el; más Linux-folyamatok vagy IRQ-k CPU-izolációját nem adja.
 
 ## Használat
 

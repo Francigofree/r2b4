@@ -25,16 +25,6 @@ def _cpus():
     return cpus
 
 
-def test_disabled_affinity_layout_is_scheduler_noop():
-    # scheduler-managed affinity baseline: disabled policy must not narrow the task cpuset
-    if not hasattr(os, "sched_getaffinity"):
-        pytest.skip("Linux affinity inspection required")
-    before = set(os.sched_getaffinity(0))
-    config = RuntimeAffinityConfig(enabled=False)
-    assert apply_process_affinity_layout(config) == ()
-    assert set(os.sched_getaffinity(0)) == before
-
-
 def _mask_probe(connection, cpus):
     inherited = sorted(os.sched_getaffinity(0))
     stop = threading.Event()
