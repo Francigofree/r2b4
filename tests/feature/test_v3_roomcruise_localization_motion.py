@@ -26,7 +26,9 @@ def _scene(tick, position_variance=0.65, yaw_variance=0.01):
 def _chain():
     config = resolved_config().runtime.composition.live_control.control
     return (
-        config, MissionManager(config.mission), TrajectoryNavigator(config.navigation),
+        config, MissionManager(config.mission), TrajectoryNavigator(
+            config.navigation, async_config=replace(config.async_l6, enabled=False, completion_inputs=False),
+        ),
         MotionSelector(config.motion_selection), MotionRealizer(config.motion_realization),
         OperationalConstraintLayer(config.operational_constraints),
     )

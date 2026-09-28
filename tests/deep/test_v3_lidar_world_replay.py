@@ -1,4 +1,6 @@
 """Native L1-L12 replay of 50 Hz ticks with 10 Hz local map observations."""
+from dataclasses import replace
+
 from rig import ROOT, resolved_config
 from v3.capture import CaptureSink
 from v3.capture_encoding import encode_value
@@ -26,7 +28,7 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
     try:
         # Fresh encoder/heading/local scans, but no global lidar_pose correction.
         # The normal EKF process noise must cross the production XY limit.
-        for tick in range(350):
+        for tick in range(355):
             context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
 
             def sample(device, kind, sequence, measured_ns, **values):
@@ -53,24 +55,48 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
                            frame_id="ROBOT_BASE", point_count=1,
                            point_000_x_m=1.05, point_000_y_m=0.05, point_000_quality=10),
                 ))
-            samples.append(safety_sample)
+            current_safety = safety_sample
+            if tick == 350:
+                current_safety = replace(safety_sample, values=tuple(
+                    DataField(field.key, 0.1) if field.key.endswith("clearance_m") else field
+                    for field in safety_sample.values
+                ))
+            elif tick == 352:
+                current_safety = replace(safety_sample, captured_monotonic_ns=(
+                    context.monotonic_ns - config.lidar_safety.maximum_sample_age_ns - 1
+                ))
+            samples.append(current_safety)
             health = tuple(DeviceHealth(name, DeviceHealthState.OK)
                            for name in sorted(set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
+            if tick == 354:
+                health = tuple(DeviceHealth(item.device_id, DeviceHealthState.FAILED, "TEST_FAILURE")
+                               if item.device_id == "RPLIDAR_C1" else item for item in health)
             inputs = composition.close_inputs(TickInputs(
                 context, RawDeviceBatch(context, tuple(samples), health),
-                CommandRequest(context, "cruise", CommandMode.EXPLORE, (), tick),
+                CommandRequest(context, "stop" if tick == 353 else "cruise",
+                               CommandMode.STOP if tick == 353 else CommandMode.EXPLORE, (), tick),
                 LifecycleState.ACTIVE,
             ))
             result = composition.run_tick(inputs)
             assert result.trace.fault_layer is None
             layers = {row.layer: row.output for row in result.trace.layers}
             costmap = layers["L4"].local_costmap
-            if layers["L3"].covariance_5x5[0] > config.operational_constraints.max_position_variance:
+            if tick < 350 and layers["L3"].covariance_5x5[0] > config.operational_constraints.max_position_variance:
                 assert ConstraintCode.LOCALIZATION_DEGRADED not in layers["L9"].active_constraints
                 assert not layers["L8"].requires_global_position
                 assert layers["L12"].safety_decision is SafetyDecision.ALLOW
                 assert abs(layers["L12"].left_output) + abs(layers["L12"].right_output) > 0
                 uncertain_motion_ticks += 1
+            if tick in (350, 352, 353, 354):
+                final = layers["L12"]
+                assert final.left_output == final.right_output == 0.0
+                if tick == 353:
+                    assert layers["L8"].stop_reason == "COMMAND_STOP"
+                else:
+                    assert final.safety_decision is (SafetyDecision.FAULT if tick == 354 else SafetyDecision.STOP)
+            elif tick == 351:
+                assert layers["L12"].safety_decision is SafetyDecision.ALLOW
+                assert abs(layers["L12"].left_output) + abs(layers["L12"].right_output) > 0
             if previous_map is not None and tick % 5:
                 assert costmap.occupied_cells is previous_map.occupied_cells
                 cached_ticks += 1
@@ -82,13 +108,13 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
                 sink.write(ExecutionRecord(inputs, result))
     finally:
         composition.close()
-    assert cached_ticks == 280
+    assert cached_ticks == 284
     assert uncertain_motion_ticks > 50
-    assert len(writer.writes) == 350
-    path = sink.finalize("PASS", tmp_path / "capture.json",
+    assert len(writer.writes) == 355
+    path = sink.finalize("FAULT", tmp_path / "capture.json",
                          initial_state_checkpoint=encode_value(initial_checkpoint))
     replay = replay_capture(path, project_root=ROOT)
     write_replay_result(replay, tmp_path / "replay.json")
     assert replay["status"] == "MATCH", replay["diagnostics"]
     assert replay["determinism"]["repeated_trace_match"]
-    assert replay["determinism"]["executed_tick_count"] == 48
+    assert replay["determinism"]["executed_tick_count"] == 53
