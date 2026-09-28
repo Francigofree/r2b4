@@ -93,13 +93,6 @@ def command_catalog() -> dict[str, object]:
             "stream_options": ["--camera", "--tools", "--speak", "--json", "--seconds"],
             "execution": "REAL_ONLY",
         },
-        "plain_llm": {
-            "usage": 'r "PROMPT"',
-            "escape_usage": 'r -- "PROMPT"',
-            "provider": "gemini",
-            "tts": "default",
-            "runtime": "NONE",
-        },
         "voice": {
             "command": "voice",
             "aliases": ["wake"],
@@ -155,8 +148,6 @@ def print_help() -> None:
         "  r th [status|run|batch]     Test Hub; alapértelmezés: status\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
-        "  r \"KÉRDÉS\"                Sima Gemini válasz + alapértelmezett TTS\n"
-        "  r -- \"s\"                   Prompt akkor is, ha a szöveg r-parancs neve\n"
         "  r er2 \"FELADAT\"            ER2 stream; camera/tools/speak/json bekapcsolva\n"
         "  r er2 status|preview|stream ER2 részletes parancsok\n"
         "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
@@ -200,7 +191,6 @@ def _commands(argv: list[str]) -> int:
     )
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
     print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
-    print('Plain LLM: r "PROMPT"; ütköző parancsnév esetén: r -- "PROMPT"')
     print("Voice wake: r voice status|on|off|restart|check  (alias: r wake ...)")
     print("TAB help: r install telepíti a Bash completiont")
     print("\nHost / fejlesztés:")
@@ -208,14 +198,6 @@ def _commands(argv: list[str]) -> int:
         aliases = f" ({', '.join(item['aliases'])})" if item["aliases"] else ""
         print(f"  {item['usage']}{aliases}\n    {item['description']}")
     return 0
-
-
-def _plain_prompt(argv: Sequence[str], root: Path) -> int:
-    prompt = " ".join(argv).strip()
-    if not prompt:
-        raise LauncherError('Használat: r "PROMPT" vagy r -- "PROMPT"')
-    from r2b4_voice.plain_llm import run_plain_prompt
-    return run_plain_prompt(prompt, project_root=root)
 
 
 def _unknown_command(command: str) -> int:
@@ -241,11 +223,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         # listed as a user command and must run before any command normalization.
         if args and args[0] == "__complete":
             return launcher_extras.emit_completion(args[1:], root)
-
-        # Explicit escape: after `--`, even a text equal to an existing r command
-        # is treated as a plain Gemini prompt.
-        if args and args[0] == "--":
-            return _plain_prompt(args[1:], root)
 
         if not args or args[0] in {"help", "-h", "--help"}:
             if len(args) <= 1:
@@ -287,7 +264,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args[0].startswith("-"):
             known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
             if args[0] not in known:
-                return _plain_prompt(args, root)
+                return _unknown_command(args[0])
         return interface_cli.main(args, project_root=root)
     except SystemExit as exc:
         # argparse help and usage errors also behave as return codes for callers.
