@@ -1,0 +1,22 @@
+{
+  "name": "r2b4_voice_orchestration_p0_v1",
+  "repository": "Francigofree/r2b4",
+  "base_branch": "main",
+  "base_commit": "9f2df99f3a772e47ba5f84804889e9eb9e5ee86a",
+  "targets": {
+    "r2b4_voice/voice_service.py": {
+      "expected_git_blob": "401912c790ddf03436ae3bd3de0ecbc557aa8e86",
+      "operation": "source_transform"
+    },
+    "tests/feature/test_voice_orchestration_p0.py": {
+      "operation": "create"
+    }
+  },
+  "scope": [
+    "wake does not start V3",
+    "voice session independent from V3 lifecycle",
+    "robot/figyelek defaults",
+    "10 second listen-only silence timeout",
+    "existing STOP/action authority preserved"
+  ]
+}

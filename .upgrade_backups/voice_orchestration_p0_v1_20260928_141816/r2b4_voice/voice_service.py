@@ -39,7 +39,9 @@ from .conversation_interface import VoiceInterfaceBundle, build_voice_interface
 from .tts_provider import build_tts_client, diagnose_tts
 from .groq_stt import GroqWakeTranscriber, WakeTranscriptionError
 from .llm_provider import default_model_for, resolve_llm_provider
+from .runtime_control import WakeRuntimeCoordinator, WakeRuntimeOutcome
 from .safety_intents import is_stop_intent
+from .speaker import ReadyWaveSpeaker
 from .voice_output import PcmWavePlayer
 from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActivityConfig
 
@@ -89,22 +91,7 @@ class TranscriberPort(Protocol):
 
 class CoordinatorPort(Protocol):
     def robot_running(self) -> bool: ...
-
-
-class RuntimeStatusObserver:
-    """Read-only host observer; never starts/stops V3 and owns no robot authority."""
-
-    __slots__ = ("_controller",)
-
-    def __init__(self, controller: object) -> None:
-        status = getattr(controller, "status", None)
-        if not callable(status):
-            raise TypeError("controller must provide status()")
-        self._controller = controller
-
-    def robot_running(self) -> bool:
-        status = self._controller.status()
-        return isinstance(status, Mapping) and status.get("runtime_running") is True
+    def activate(self): ...
 
 
 class ConversationInterfacePort(Protocol):
@@ -132,10 +119,10 @@ class PlaybackPort(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class VoiceServiceConfig:
-    keyword: str = "robot"
-    ready_text: str = "figyelek"
-    session_silence_s: float = 10.0
+    keyword: str = "alba"
+    capture_mode: str = "alap"
     microphone_retry_s: float = 2.0
+    failure_cooldown_s: float = 1.5
     frame_wait_s: float = 1.0
     llm_timeout_s: float = 25.0
     speaker_settle_s: float = 0.45
@@ -143,11 +130,11 @@ class VoiceServiceConfig:
     def __post_init__(self) -> None:
         if not self.keyword.strip():
             raise ValueError("keyword must be non-empty")
-        if not self.ready_text.strip():
-            raise ValueError("ready_text must be non-empty")
+        if self.capture_mode not in {"alap", "full", "nincs"}:
+            raise ValueError("capture_mode must be alap, full or nincs")
         for value, name in (
-            (self.session_silence_s, "session_silence_s"),
             (self.microphone_retry_s, "microphone_retry_s"),
+            (self.failure_cooldown_s, "failure_cooldown_s"),
             (self.frame_wait_s, "frame_wait_s"),
             (self.llm_timeout_s, "llm_timeout_s"),
             (self.speaker_settle_s, "speaker_settle_s"),
@@ -165,8 +152,6 @@ class VoiceServiceSnapshot:
     frame_age_ms: float | None
     sequence_gap_count: int
     runtime_running: bool
-    session_open: bool
-    session_silence_remaining_ms: float | None
     conversation_session_id: str
     last_transcript: str | None
     last_spoken_text: str | None
@@ -204,8 +189,10 @@ class VoiceConversationService:
             raise TypeError("microphone.port must provide read_after")
         if not callable(getattr(transcriber, "transcribe", None)):
             raise TypeError("transcriber must provide transcribe")
-        if not callable(getattr(coordinator, "robot_running", None)):
-            raise TypeError("coordinator must provide robot_running")
+        if not callable(getattr(coordinator, "robot_running", None)) or not callable(
+            getattr(coordinator, "activate", None)
+        ):
+            raise TypeError("coordinator must provide robot_running and activate")
         if not callable(getattr(conversation_interface, "execute", None)):
             raise TypeError("conversation_interface must provide execute")
         if not callable(getattr(conversation, "wait_for_turn", None)):
@@ -252,8 +239,6 @@ class VoiceConversationService:
         self._last_spoken_text: str | None = None
         self._last_action_status: str | None = None
         self._last_error: str | None = None
-        self._session_open = False
-        self._session_deadline_ns: int | None = None
 
     def request_stop(self) -> None:
         self._stop_event.set()
@@ -268,7 +253,7 @@ class VoiceConversationService:
                     continue
                 if not self._ensure_microphone():
                     continue
-                if self._session_open:
+                if self._robot_running():
                     self._conversation_cycle()
                 else:
                     self._wake_cycle()
@@ -291,10 +276,6 @@ class VoiceConversationService:
 
     def snapshot(self) -> VoiceServiceSnapshot:
         health = self._microphone.health()
-        now_ns = self._monotonic_ns()
-        remaining_ms: float | None = None
-        if self._session_open and self._session_deadline_ns is not None:
-            remaining_ms = max(0.0, (self._session_deadline_ns - now_ns) / 1_000_000.0)
         return VoiceServiceSnapshot(
             state=self._state,
             pid=os.getpid(),
@@ -303,14 +284,12 @@ class VoiceConversationService:
             frame_age_ms=health.last_frame_age_ms,
             sequence_gap_count=self._builder.sequence_gap_count,
             runtime_running=self._robot_running(quiet=True),
-            session_open=self._session_open,
-            session_silence_remaining_ms=remaining_ms,
             conversation_session_id=self._conversation.session_id,
             last_transcript=self._last_transcript,
             last_spoken_text=self._last_spoken_text,
             last_action_status=self._last_action_status,
             last_error=self._last_error,
-            monotonic_ns=now_ns,
+            monotonic_ns=self._monotonic_ns(),
         )
 
     def _wake_cycle(self) -> None:
@@ -328,52 +307,42 @@ class VoiceConversationService:
             return
 
         print(f"wake: keyword={self._matcher.keyword} transcript={transcript!r}", flush=True)
-        self._open_session()
-        self._last_spoken_text = self._config.ready_text.strip()
-        self._hri_event(
-            "WAKE_SESSION_OPENED",
-            text=self._last_spoken_text,
-            runtime_running=self._robot_running(quiet=True),
-        )
-        self._set_state(VoiceServiceState.SPEAKING)
-        self._interrupt_enabled.set()
-        try:
-            speech = self._tts.synthesize(self._last_spoken_text)
-            backend = self._playback.play(speech)
+        self._set_state(VoiceServiceState.STARTING_ROBOT)
+        result = self._coordinator.activate()
+        if result.outcome is WakeRuntimeOutcome.START_FAILED:
+            self._last_error = result.error
+            print(f"wake: runtime start failed: {result.error}", file=sys.stderr, flush=True)
+            self._interruptible_sleep(self._config.failure_cooldown_s)
+            self._discard_audio_history()
+            return
+        if result.error:
+            self._last_error = result.error
+            print(f"wake: {result.error}", file=sys.stderr, flush=True)
+        else:
+            self._last_error = None
+        if result.outcome is WakeRuntimeOutcome.STARTED_READY:
             print(
-                f"wake: ready={self._last_spoken_text!r}; tts={self._tts.model}/{self._tts.voice}; player={backend}",
+                "wake: robot READY/IDLE"
+                + (f"; ack={result.acknowledgement_backend}" if result.acknowledged else "; ack=FAILED"),
                 flush=True,
             )
-            self._last_error = None
-        except Exception as exc:
-            # Ready audio is capability-local; a failed speaker must not start or fault V3.
-            self._last_error = f"ready speech {type(exc).__name__}: {exc}"
-            print(f"wake: {self._last_error}", file=sys.stderr, flush=True)
-        finally:
-            self._interrupt_enabled.clear()
-            self._settle_and_discard()
-            if self._session_open:
-                self._resume_session_timeout()
+        elif result.outcome is WakeRuntimeOutcome.ALREADY_RUNNING:
+            print("wake: runtime already running", flush=True)
+
+        # The coordinator may just have played "Kész vagyok.".  Keep capture
+        # ownership but ignore the speaker tail before conversational listening.
+        self._settle_and_discard()
         self._set_state(VoiceServiceState.CONVERSATION_LISTENING)
 
     def _conversation_cycle(self) -> None:
-        if self._session_expired():
-            self._close_session("silence-timeout")
-            return
         self._set_state(VoiceServiceState.CONVERSATION_LISTENING)
         utterance = self._read_utterance()
         if utterance is None:
-            if self._session_expired():
-                self._close_session("silence-timeout")
             return
-        # Silence timeout applies only while actively listening. Network/STT/TTS
-        # latency must not consume the user's next 10 second listen window.
-        self._pause_session_timeout()
         self._set_state(VoiceServiceState.TRANSCRIBING)
         transcript = self._transcribe(utterance)
         if transcript is None or not transcript.strip():
             self._discard_audio_history()
-            self._resume_session_timeout()
             return
         self._last_transcript = transcript.strip()
         self._last_error = None
@@ -393,7 +362,6 @@ class VoiceConversationService:
                 interaction_id=interaction_id, source="FAST_PATH", transcript=self._last_transcript
             )
             self._settle_and_discard()
-            self._resume_session_timeout()
             return
 
         self._set_state(VoiceServiceState.THINKING)
@@ -423,7 +391,6 @@ class VoiceConversationService:
             self._last_error = f"conversation {type(exc).__name__}: {exc}"
             print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
             self._settle_and_discard()
-            self._resume_session_timeout()
             return
 
         self._last_action_status = str(result.get("action_status")) if result.get("action_status") is not None else None
@@ -494,7 +461,6 @@ class VoiceConversationService:
             self._last_error = str(error)
             print(f"voice: LLM error: {error}", file=sys.stderr, flush=True)
             self._settle_and_discard()
-            self._resume_session_timeout()
             return
 
         if self._stop_interrupt_latched.is_set():
@@ -507,7 +473,6 @@ class VoiceConversationService:
             self._last_spoken_text = None
             self._last_error = None
             self._settle_and_discard()
-            self._resume_session_timeout()
             return
 
         self._last_spoken_text = spoken.strip()
@@ -534,7 +499,6 @@ class VoiceConversationService:
             # lane is the only microphone consumer allowed during THINKING/SPEAKING.
             # the configured acoustic tail is discarded before we listen again.
             self._settle_and_discard()
-            self._resume_session_timeout()
 
 
     def _queue_behavior_feedback(self, text: str, fields: Mapping[str, object]) -> None:
@@ -556,8 +520,6 @@ class VoiceConversationService:
             text, fields = self._behavior_feedback_queue.get_nowait()
         except queue.Empty:
             return False
-        if self._session_open:
-            self._pause_session_timeout()
         self._last_spoken_text = text
         self._hri_event("BEHAVIOR_FEEDBACK_SPEAKING", text=text, **fields)
         self._set_state(VoiceServiceState.SPEAKING)
@@ -574,8 +536,6 @@ class VoiceConversationService:
         finally:
             self._interrupt_enabled.clear()
             self._settle_and_discard()
-            if self._session_open:
-                self._resume_session_timeout()
         return True
 
     def _next_interaction_id(self) -> str:
@@ -739,14 +699,10 @@ class VoiceConversationService:
         health = self._microphone.health()
         if health.state is MicrophoneState.CAPTURING:
             return True
-        if self._session_open:
-            self._pause_session_timeout()
         self._set_state(VoiceServiceState.MIC_RETRY)
         if self._microphone.start():
             self._last_error = None
             self._discard_audio_history()
-            if self._session_open:
-                self._resume_session_timeout()
             return True
         health = self._microphone.health()
         self._last_error = health.last_error or f"microphone state {health.state.value}"
@@ -760,40 +716,6 @@ class VoiceConversationService:
         except Exception:
             pass
         self._interruptible_sleep(self._config.microphone_retry_s)
-
-    def _open_session(self) -> None:
-        self._session_open = True
-        self._session_deadline_ns = None
-        self._publish_status()
-
-    def _close_session(self, reason: str) -> None:
-        was_open = self._session_open
-        self._session_open = False
-        self._session_deadline_ns = None
-        if was_open:
-            self._hri_event("WAKE_SESSION_CLOSED", reason=reason)
-        self._set_state(VoiceServiceState.WAKE_LISTENING)
-        self._discard_audio_history()
-
-    def _pause_session_timeout(self) -> None:
-        if self._session_open:
-            self._session_deadline_ns = None
-            self._publish_status()
-
-    def _resume_session_timeout(self) -> None:
-        if not self._session_open:
-            return
-        self._session_deadline_ns = self._monotonic_ns() + int(
-            self._config.session_silence_s * 1_000_000_000
-        )
-        self._publish_status()
-
-    def _session_expired(self) -> bool:
-        return (
-            self._session_open
-            and self._session_deadline_ns is not None
-            and self._monotonic_ns() >= self._session_deadline_ns
-        )
 
     def _robot_running(self, *, quiet: bool = False) -> bool:
         try:
@@ -968,9 +890,8 @@ def _acquire_instance_lock(path: Path):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="r2b4-voice")
     parser.add_argument("--check", action="store_true", help="check mic/keys/LLM/TTS/speaker without network calls")
-    parser.add_argument("--keyword", default="robot")
-    parser.add_argument("--ready-text", default="figyelek")
-    parser.add_argument("--session-silence-s", type=float, default=10.0)
+    parser.add_argument("--keyword", default="alba")
+    parser.add_argument("--capture-mode", choices=("alap", "full", "nincs"), default="alap")
     parser.add_argument("--action-mode", choices=("shadow", "execute"), default=None)
     parser.add_argument("--action-watchdog-s", type=float, default=None)
     return parser
@@ -1027,7 +948,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         lock = _acquire_instance_lock(runtime / ".r2b4_wake.lock")
         controller = OperatorController(project_root=root)
-        coordinator = RuntimeStatusObserver(controller)
+        coordinator = WakeRuntimeCoordinator(
+            controller,
+            ReadyWaveSpeaker(),
+            capture_mode=args.capture_mode,
+            idle_timeout_s=3.0,
+        )
         bundle = build_voice_interface(
             root,
             api_key=llm_key,
@@ -1049,11 +975,7 @@ def main(argv: list[str] | None = None) -> int:
                 session_owner_pid=os.getpid(),
                 session_watchdog_s=action_watchdog_s,
             ),
-            config=VoiceServiceConfig(
-                keyword=args.keyword,
-                ready_text=args.ready_text,
-                session_silence_s=args.session_silence_s,
-            ),
+            config=VoiceServiceConfig(keyword=args.keyword, capture_mode=args.capture_mode),
             status_file=runtime / "wake_status.json",
             stop_event=stop_event,
         )
