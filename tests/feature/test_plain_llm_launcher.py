@@ -33,13 +33,13 @@ def test_plain_gemini_client_sends_unstructured_interaction():
 
     client = PlainGeminiClient(
         api_key="test-key",
-        config=GeminiChatConfig(model="gemini-3.5-flash-lite", thinking_level="low"),
+        config=GeminiChatConfig(model="gemini-2.5-flash", thinking_level="low"),
         urlopen=fake_urlopen,
     )
 
     assert client.complete_text("Miért kék az ég?") == "Sima válasz."
     assert seen["body"] == {
-        "model": "gemini-3.5-flash-lite",
+        "model": "gemini-2.5-flash",
         "input": "Miért kék az ég?",
         "store": False,
         "generation_config": {"thinking_level": "low"},

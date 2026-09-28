@@ -9,7 +9,7 @@ from .groq_llm import GroqChatConfig, GroqStructuredChatClient
 
 
 DEFAULT_LLM_PROVIDER = "gemini"
-DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b"
 SUPPORTED_LLM_PROVIDERS = ("gemini", "groq")
 

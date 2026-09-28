@@ -71,7 +71,7 @@ LLM:
 - provider ebben az útban: **Gemini**
 - API kulcs: `GEMINI_API_KEY`, fallback: `GOOGLE_API_KEY`
 - forrás: process environment, majd `conf/.wake.env`
-- model: `R2B4_LLM_MODEL`, alapértelmezés: `gemini-3.5-flash-lite`
+- model: `R2B4_LLM_MODEL`, alapértelmezés: `gemini-2.5-flash`
 
 TTS:
 
