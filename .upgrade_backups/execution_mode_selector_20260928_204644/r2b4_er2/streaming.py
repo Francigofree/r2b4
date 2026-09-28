@@ -408,8 +408,6 @@ def _system_instruction(config: Er2Config) -> str:
         "before requesting the next goal. left_m is a destination offset, not strafing. "
         f"Limits: |v| <= {config.max_v_mps:g} m/s, |omega| <= {config.max_omega_rad_s:g} rad/s, "
         f"Each mission is bounded by the {config.session_watchdog_s:g} s producer watchdog. "
-        "An imperative user request is an execution request: call the appropriate declared tool, "
-        "inspect its result, and do not merely narrate or promise the motion. "
         "If uncertain, call robot_stop or robot_status. "
         "Do not request direct motor, GPIO, L12, safety-limit or configuration access."
     )

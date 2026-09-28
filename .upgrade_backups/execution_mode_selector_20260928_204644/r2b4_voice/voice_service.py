@@ -31,12 +31,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
-from r2b4_orchestration.execution_mode import (
-    ExecutionMode,
-    ExecutionModeSelector,
-    ExecutionPlan,
-    RouteEvidenceJournal,
-)
 from v3.adapters.microphone import MicrophoneHealth, MicrophoneState, NativeUsbMicrophone
 from v3.hri_evidence import HriBehaviorObserver, HriEventJournal
 
@@ -114,7 +108,6 @@ class RuntimeStatusObserver:
 
 
 class ConversationInterfacePort(Protocol):
-    def read(self, resource: str) -> object: ...
     def execute(self, action: str, **parameters: object) -> object: ...
 
 
@@ -229,8 +222,6 @@ class VoiceConversationService:
         self._coordinator = coordinator
         self._conversation_interface = conversation_interface
         self._conversation = conversation
-        self._mode_selector = ExecutionModeSelector()
-        self._route_evidence = RouteEvidenceJournal(Path(__file__).resolve().parents[1])
         self._tts = tts
         self._playback = playback
         self._action_executor = action_executor
@@ -395,34 +386,14 @@ class VoiceConversationService:
             phase=self._state.value,
         )
 
-        plan = self._mode_selector.select(self._last_transcript, source="voice")
-        self._route_evidence.emit("ROUTE_SELECTED", plan, interaction_id=interaction_id)
-        self._hri_event(
-            "EXECUTION_MODE_SELECTED",
-            interaction_id=interaction_id,
-            route_id=plan.route_id,
-            execution_mode=plan.mode.value,
-            route_reason=plan.reason,
-            requires_v3=plan.requires_v3,
-            capability=plan.capability,
-        )
-
         # Deterministic STOP bypasses the LLM/action-proposal path after STT.
         # It still enters only through the canonical RobotInterface command path.
         if is_stop_intent(self._last_transcript):
-            executed = self._execute_voice_stop(
+            self._execute_voice_stop(
                 interaction_id=interaction_id, source="FAST_PATH", transcript=self._last_transcript
-            )
-            self._route_evidence.emit(
-                "ROUTE_EXECUTION_COMPLETE", plan, interaction_id=interaction_id,
-                executed=executed, action_status=self._last_action_status,
             )
             self._settle_and_discard()
             self._resume_session_timeout()
-            return
-
-        if plan.mode is not ExecutionMode.GEMINI_CHAT:
-            self._execute_selected_plan(plan, interaction_id=interaction_id)
             return
 
         self._set_state(VoiceServiceState.THINKING)
@@ -562,188 +533,6 @@ class VoiceConversationService:
             # Half-duplex remains the normal dialogue path; the separate exact STOP
             # lane is the only microphone consumer allowed during THINKING/SPEAKING.
             # the configured acoustic tail is discarded before we listen again.
-            self._settle_and_discard()
-            self._resume_session_timeout()
-
-    def _execute_selected_plan(self, plan: ExecutionPlan, *, interaction_id: str) -> None:
-        """Execute a non-chat selector result without falling back to Gemini."""
-        self._route_evidence.emit("ROUTE_EXECUTION_START", plan, interaction_id=interaction_id)
-        try:
-            if plan.mode is ExecutionMode.DIRECT_V3:
-                if self._action_executor is None:
-                    self._last_action_status = "REJECTED:NO_ACTION_EXECUTOR"
-                    self._speak_routed_response(
-                        "A parancsot most nem tudom végrehajtani.",
-                        interaction_id=interaction_id,
-                        plan=plan,
-                    )
-                    return
-                execution = self._action_executor.execute_proposal({
-                    "name": plan.action_name,
-                    "parameters": dict(plan.action_parameters),
-                })
-                self._last_action_status = execution.status
-                self._hri_event(
-                    "ACTION_EXECUTED" if execution.executed else "ACTION_REJECTED",
-                    interaction_id=interaction_id,
-                    route_id=plan.route_id,
-                    action_name=execution.action_name,
-                    action_status=execution.status,
-                    command_id=execution.command_id,
-                    mission_id=execution.mission_id,
-                )
-                if (
-                    execution.executed and execution.action_name != "v3.command.stop"
-                    and execution.command_id and execution.mission_id
-                ):
-                    self._behavior_observer.observe(
-                        interaction_id=interaction_id,
-                        turn_id=plan.route_id,
-                        session_id=self._conversation.session_id,
-                        action_name=execution.action_name,
-                        command_id=execution.command_id,
-                        mission_id=execution.mission_id,
-                    )
-                self._route_evidence.emit(
-                    "ROUTE_EXECUTION_COMPLETE",
-                    plan,
-                    interaction_id=interaction_id,
-                    action_status=execution.status,
-                    executed=execution.executed,
-                    command_id=execution.command_id,
-                    mission_id=execution.mission_id,
-                )
-                self._speak_routed_response(
-                    _action_receipt_text(
-                        status=execution.status,
-                        executed=execution.executed,
-                        action_name=execution.action_name,
-                    ),
-                    interaction_id=interaction_id,
-                    plan=plan,
-                )
-                return
-
-            if plan.mode is ExecutionMode.HOST_READ:
-                reader = getattr(self._conversation_interface, "read", None)
-                if not callable(reader):
-                    raise RuntimeError("conversation interface has no read()")
-                payload = reader(plan.capability or "operator.status")
-                from r2b4_orchestration.executor import status_text
-                text = status_text(payload)
-                self._route_evidence.emit(
-                    "ROUTE_EXECUTION_COMPLETE", plan, interaction_id=interaction_id,
-                )
-                self._speak_routed_response(text, interaction_id=interaction_id, plan=plan)
-                return
-
-            if plan.mode in {
-                ExecutionMode.OBSERVATION,
-                ExecutionMode.ER2_PREVIEW,
-                ExecutionMode.ER2_STREAM,
-            }:
-                if (
-                    plan.mode is ExecutionMode.ER2_STREAM
-                    and (self._action_executor is None or self._action_executor.mode != "execute")
-                ):
-                    self._last_action_status = "SHADOW_ACCEPTED"
-                    self._route_evidence.emit(
-                        "ROUTE_EXECUTION_COMPLETE", plan, interaction_id=interaction_id,
-                        action_status=self._last_action_status, executed=False,
-                    )
-                    self._speak_routed_response(
-                        "Értettem, de a végrehajtás teszt módban van.",
-                        interaction_id=interaction_id, plan=plan,
-                    )
-                    return
-                from r2b4_er2.executor import run_er2_task
-
-                self._set_state(VoiceServiceState.THINKING)
-                self._interrupt_enabled.set()
-                try:
-                    result = run_er2_task(
-                        plan.text,
-                        project_root=Path(__file__).resolve().parents[1],
-                        mode=(
-                            "preview"
-                            if plan.mode in {ExecutionMode.OBSERVATION, ExecutionMode.ER2_PREVIEW}
-                            else "stream"
-                        ),
-                        camera=plan.camera,
-                        tools_enabled=plan.tools,
-                    )
-                finally:
-                    self._interrupt_enabled.clear()
-                if not result.text:
-                    raise RuntimeError("ER2 returned no final text")
-                self._route_evidence.emit(
-                    "ROUTE_EXECUTION_COMPLETE",
-                    plan,
-                    interaction_id=interaction_id,
-                    er2_mode=result.mode,
-                    reconnect_count=result.reconnect_count,
-                    stopped_cleanly=result.stopped_cleanly,
-                )
-                self._speak_routed_response(result.text, interaction_id=interaction_id, plan=plan)
-                return
-
-            raise RuntimeError(f"unsupported selected execution mode: {plan.mode.value}")
-        except Exception as exc:
-            self._last_action_status = "REJECTED:ROUTE_EXECUTOR_ERROR"
-            self._last_error = f"execution route {type(exc).__name__}: {exc}"
-            self._route_evidence.emit(
-                "ROUTE_EXECUTION_ERROR",
-                plan,
-                interaction_id=interaction_id,
-                error_type=type(exc).__name__,
-                error=str(exc)[:500],
-            )
-            self._hri_event(
-                "EXECUTION_MODE_FAILED",
-                interaction_id=interaction_id,
-                route_id=plan.route_id,
-                execution_mode=plan.mode.value,
-                reason=self._last_error,
-            )
-            print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
-            self._speak_routed_response(
-                "A kérést most nem tudom végrehajtani.",
-                interaction_id=interaction_id,
-                plan=plan,
-            )
-
-    def _speak_routed_response(
-        self, text: str, *, interaction_id: str, plan: ExecutionPlan
-    ) -> None:
-        spoken = text.strip() if isinstance(text, str) else ""
-        if not spoken:
-            self._settle_and_discard()
-            self._resume_session_timeout()
-            return
-        self._last_spoken_text = spoken
-        self._hri_event(
-            "HRI_RESPONSE",
-            interaction_id=interaction_id,
-            route_id=plan.route_id,
-            text=spoken,
-            action_status=self._last_action_status,
-        )
-        self._set_state(VoiceServiceState.SPEAKING)
-        self._interrupt_enabled.set()
-        try:
-            speech = self._tts.synthesize(spoken)
-            backend = self._playback.play(speech)
-            print(
-                f"voice: alba={spoken!r}; route={plan.mode.value}; "
-                f"tts={self._tts.model}/{self._tts.voice}; player={backend}",
-                flush=True,
-            )
-            self._last_error = None
-        except Exception as exc:
-            self._last_error = f"speech {type(exc).__name__}: {exc}"
-            print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
-        finally:
-            self._interrupt_enabled.clear()
             self._settle_and_discard()
             self._resume_session_timeout()
 

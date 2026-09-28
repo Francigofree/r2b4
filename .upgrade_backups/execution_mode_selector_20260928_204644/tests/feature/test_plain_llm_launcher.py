@@ -88,7 +88,7 @@ def test_run_plain_prompt_prints_and_speaks_full_long_answer(tmp_path):
     assert len(played) == len(synthesized)
 
 
-def test_launcher_unknown_text_routes_to_execution_selector(monkeypatch, tmp_path):
+def test_launcher_unknown_text_routes_to_plain_llm(monkeypatch, tmp_path):
     from v3 import launcher_cli, runtime_performance
 
     called = {}
@@ -96,12 +96,12 @@ def test_launcher_unknown_text_routes_to_execution_selector(monkeypatch, tmp_pat
     monkeypatch.setattr(runtime_performance, "apply_host_affinity", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(launcher_cli, "_robot_catalog", lambda: [])
 
-    def fake_auto(argv, root):
+    def fake_plain(argv, root):
         called["argv"] = list(argv)
         called["root"] = root
         return 23
 
-    monkeypatch.setattr(launcher_cli, "_auto_prompt", fake_auto)
+    monkeypatch.setattr(launcher_cli, "_plain_prompt", fake_plain)
 
     assert launcher_cli.main(["Miért kék az ég?"]) == 23
     assert called == {"argv": ["Miért kék az ég?"], "root": tmp_path}
@@ -135,8 +135,8 @@ def test_launcher_known_robot_command_does_not_route_to_plain(monkeypatch, tmp_p
     monkeypatch.setattr(launcher_cli.interface_cli, "main", lambda *_args, **_kwargs: 31)
     monkeypatch.setattr(
         launcher_cli,
-        "_auto_prompt",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("auto route must not run")),
+        "_plain_prompt",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("plain path must not run")),
     )
 
     assert launcher_cli.main(["s"]) == 31
@@ -151,8 +151,8 @@ def test_launcher_near_command_typo_does_not_route_to_plain(monkeypatch, tmp_pat
     monkeypatch.setattr(launcher_cli.interface_cli, "ALIASES", {})
     monkeypatch.setattr(
         launcher_cli,
-        "_auto_prompt",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("typo must not reach auto route")),
+        "_plain_prompt",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("typo must not reach plain LLM")),
     )
 
     assert launcher_cli.main(["statuz"]) == 2
@@ -161,7 +161,7 @@ def test_launcher_near_command_typo_does_not_route_to_plain(monkeypatch, tmp_pat
     assert "r status" in captured.err
 
 
-def test_launcher_distant_single_word_uses_execution_selector(monkeypatch, tmp_path):
+def test_launcher_distant_single_word_stays_plain_llm(monkeypatch, tmp_path):
     from v3 import launcher_cli, runtime_performance
 
     called = {}
@@ -170,12 +170,12 @@ def test_launcher_distant_single_word_uses_execution_selector(monkeypatch, tmp_p
     monkeypatch.setattr(launcher_cli, "_robot_catalog", lambda: [{"name": "status"}])
     monkeypatch.setattr(launcher_cli.interface_cli, "ALIASES", {})
 
-    def fake_auto(argv, root):
+    def fake_plain(argv, root):
         called["argv"] = list(argv)
         called["root"] = root
         return 37
 
-    monkeypatch.setattr(launcher_cli, "_auto_prompt", fake_auto)
+    monkeypatch.setattr(launcher_cli, "_plain_prompt", fake_plain)
 
     assert launcher_cli.main(["hello"]) == 37
     assert called == {"argv": ["hello"], "root": tmp_path}

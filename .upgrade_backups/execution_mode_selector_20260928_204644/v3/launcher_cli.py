@@ -100,15 +100,6 @@ def command_catalog() -> dict[str, object]:
             "tts": "default",
             "runtime": "NONE",
         },
-        "execution_router": {
-            "usage": 'r "REQUEST"',
-            "dry_run": 'r route "REQUEST" --json',
-            "modes": [
-                "GEMINI_CHAT", "HOST_READ", "OBSERVATION",
-                "DIRECT_V3", "ER2_PREVIEW", "ER2_STREAM",
-            ],
-            "evidence": "runtime/execution_routes.ndjson",
-        },
         "voice": {
             "command": "voice",
             "aliases": ["wake"],
@@ -164,9 +155,8 @@ def print_help() -> None:
         "  r th [status|run|batch]     Test Hub; alapértelmezés: status\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
-        "  r \"KÉRÉS\"                 Automatikus végrehajtási mód választás\n"
-        "  r route \"KÉRÉS\" --json    Módválasztás megmutatása végrehajtás nélkül\n"
-        "  r -- \"s\"                   Kényszerített sima Gemini prompt\n"
+        "  r \"KÉRDÉS\"                Sima Gemini válasz + alapértelmezett TTS\n"
+        "  r -- \"s\"                   Prompt akkor is, ha a szöveg r-parancs neve\n"
         "  r er2 \"FELADAT\"            ER2 stream; camera/tools/speak/json bekapcsolva\n"
         "  r er2 status|preview|stream ER2 részletes parancsok\n"
         "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
@@ -210,8 +200,7 @@ def _commands(argv: list[str]) -> int:
     )
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
     print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
-    print('Auto route: r "REQUEST"; dry-run: r route "REQUEST" --json')
-    print('Plain LLM escape: r -- "PROMPT"')
+    print('Plain LLM: r "PROMPT"; ütköző parancsnév esetén: r -- "PROMPT"')
     print("Voice wake: r voice status|on|off|restart|check  (alias: r wake ...)")
     print("TAB help: r install telepíti a Bash completiont")
     print("\nHost / fejlesztés:")
@@ -229,38 +218,9 @@ def _plain_prompt(argv: Sequence[str], root: Path) -> int:
     return run_plain_prompt(prompt, project_root=root)
 
 
-def _auto_prompt(argv: Sequence[str], root: Path) -> int:
-    prompt = " ".join(argv).strip()
-    if not prompt:
-        raise LauncherError('Használat: r "KÉRÉS"')
-    from r2b4_orchestration.executor import execute_text
-    return execute_text(prompt, project_root=root, source="launcher")
-
-
-def _route(argv: Sequence[str], root: Path) -> int:
-    args = list(argv)
-    json_output = "--json" in args
-    args = [item for item in args if item != "--json"]
-    prompt = " ".join(args).strip()
-    if not prompt:
-        raise LauncherError('Használat: r route "KÉRÉS" [--json]')
-    from r2b4_orchestration.execution_mode import ExecutionModeSelector, RouteEvidenceJournal
-    plan = ExecutionModeSelector().select(prompt, source="launcher-dry-run")
-    RouteEvidenceJournal(root).emit("ROUTE_DRY_RUN", plan)
-    payload = plan.to_jsonable()
-    if json_output:
-        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
-    else:
-        print(
-            f"mode={payload['mode']} requires_v3={payload['requires_v3']} "
-            f"capability={payload['capability']} reason={payload['reason']}"
-        )
-    return 0
-
-
 def _command_names() -> set[str]:
     known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
-    known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands", "route"}
+    known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands"}
     return known
 
 
@@ -326,8 +286,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = _normalize_er2_args(args)
         if args[0] == "commands":
             return _commands(args[1:])
-        if args[0] == "route":
-            return _route(args[1:], root)
         if args[0] == "voice" or args[0] == "wake":
             return launcher_extras.voice_command(args[1:], root)
         if args[0] == "er2":
@@ -347,7 +305,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args[0] not in known:
                 if _looks_like_command_typo(args[0]):
                     return _unknown_command(args[0])
-                return _auto_prompt(args, root)
+                return _plain_prompt(args, root)
         return interface_cli.main(args, project_root=root)
     except SystemExit as exc:
         # argparse help and usage errors also behave as return codes for callers.
