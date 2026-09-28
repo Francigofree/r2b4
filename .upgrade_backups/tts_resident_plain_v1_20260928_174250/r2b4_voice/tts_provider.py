@@ -17,7 +17,6 @@ from .piper_tts import (
     ensure_piper_importable,
     piper_python_dir,
 )
-from .resident_tts import ResidentPiperTtsClient
 
 DEFAULT_TTS_PROVIDER = "piper"
 DEFAULT_PIPER_VOICE = "hu_HU-anna-medium"
@@ -32,6 +31,7 @@ def _root(project_root: Path | str | None) -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
     return Path(__file__).resolve().parents[1]
+
 
 
 def _load_project_env(root: Path) -> dict[str, str]:
@@ -107,31 +107,15 @@ def build_tts_client(
     project_env: Mapping[str, str] | None = None,
     *,
     gemini_api_key: str | None = None,
-    resident: bool = False,
 ):
-    """Build the configured TTS client.
-
-    ``resident=True`` is intended for short-lived host commands such as
-    ``r \"PROMPT\"``. It preserves the normal TTS interface but keeps the Piper
-    ONNX model in a user-local sidecar between launcher invocations. Long-lived
-    services continue to use the existing in-process client by default.
-    """
     root = _root(project_root)
     if project_env is None:
         project_env = _load_project_env(root)
     provider = resolve_tts_provider(_setting(project_env, "R2B4_TTS_PROVIDER"))
     if provider == "piper":
         voice, model_path = _piper_voice_and_model(root, project_env)
-        dependency_dir = _piper_dependency_dir(project_env)
-        config = PiperTtsConfig(model_path=model_path, voice=voice)
-        if resident:
-            return ResidentPiperTtsClient(
-                config,
-                project_root=root,
-                dependency_dir=dependency_dir,
-            )
-        ensure_piper_importable(dependency_dir)
-        return PiperTtsClient(config)
+        ensure_piper_importable(_piper_dependency_dir(project_env))
+        return PiperTtsClient(PiperTtsConfig(model_path=model_path, voice=voice))
 
     api_key = gemini_api_key or _setting(project_env, "GEMINI_API_KEY") or _setting(project_env, "GOOGLE_API_KEY")
     return GeminiTtsClient(

@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import stat
-import threading
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -23,10 +22,7 @@ from .voice_output import PcmWavePlayer
 
 
 UrlOpen = Callable[..., object]
-# Keep first-audio latency bounded. Piper still receives natural sentence-sized
-# text, while answers longer than one short paragraph begin speaking before the
-# complete answer has been synthesized.
-_TTS_CHUNK_CHARS = 320
+_TTS_CHUNK_CHARS = 1800
 
 
 def _root(project_root: Path | str | None) -> Path:
@@ -167,7 +163,7 @@ class PlainGeminiClient:
 
 
 def _speech_chunks(text: str, max_chars: int = _TTS_CHUNK_CHARS) -> tuple[str, ...]:
-    """Split answers into bounded, sentence-biased chunks for early speech."""
+    """Split long answers for the existing 2000-character TTS client limit."""
     if not isinstance(text, str) or not text.strip():
         raise ValueError("speech text must be non-empty")
     if max_chars <= 0:
@@ -193,23 +189,6 @@ def _speech_chunks(text: str, max_chars: int = _TTS_CHUNK_CHARS) -> tuple[str, .
     return tuple(chunks)
 
 
-def _start_tts_warmup(tts: Any) -> threading.Thread | None:
-    warmup = getattr(tts, "warmup", None)
-    if not callable(warmup):
-        return None
-
-    def run() -> None:
-        try:
-            warmup()
-        except Exception:
-            # synthesize() owns the authoritative retry/direct-fallback path.
-            pass
-
-    thread = threading.Thread(target=run, name="r2b4-plain-tts-warmup", daemon=True)
-    thread.start()
-    return thread
-
-
 def run_plain_prompt(
     prompt: str,
     *,
@@ -233,19 +212,6 @@ def run_plain_prompt(
             api_key=api_key,
             config=GeminiChatConfig(model=model),
         )
-    if tts is None:
-        # This launcher is intentionally short-lived, so keep Piper resident in
-        # its host-only sidecar instead of loading ONNX again for every `r` call.
-        tts = build_tts_client(
-            project_root=root,
-            project_env=project_env,
-            gemini_api_key=api_key,
-            resident=True,
-        )
-    warmup_thread = _start_tts_warmup(tts)
-
-    # TTS model startup overlaps the network LLM turn on first use. Subsequent
-    # launcher calls reuse the already resident model and this becomes a ping.
     answer = client.complete_text(prompt.strip())
     if not isinstance(answer, str) or not answer.strip():
         raise GeminiRequestError("Gemini returned empty plain-text output")
@@ -254,12 +220,15 @@ def run_plain_prompt(
     # Make the successful LLM result visible even if synthesis/playback fails.
     print(answer, file=stdout, flush=True)
 
+    if tts is None:
+        tts = build_tts_client(
+            project_root=root,
+            project_env=project_env,
+            gemini_api_key=api_key,
+        )
     if player is None:
         player = PcmWavePlayer()
 
-    # Do not wait explicitly for warmup: synthesize() joins the same sidecar via
-    # its startup lock if first-use loading is still in progress.
-    _ = warmup_thread
     for chunk in _speech_chunks(answer):
         speech = tts.synthesize(chunk)
         player.play(speech)
