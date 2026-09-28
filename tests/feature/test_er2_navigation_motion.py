@@ -12,6 +12,7 @@ import pytest
 from rig import healthy_localization, resolved_config
 from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandClient, ResidentCommandMailboxConfig
 from v3.contracts import CommandMode, CommandRequest, DataField, NavigationStatus, RobotEstimate, RollingLocalCostmap, TickContext, WorldSnapshot
+from v3.contracts import LOCAL_FRAME_ID
 from v3.layers.l5_command_mission import MissionManager
 
 
@@ -157,10 +158,10 @@ def test_navigate_motion_closed_loop_turn_translation_and_deterministic_replay()
             context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
             command = CommandRequest(context, "closed-loop", CommandMode.NAVIGATE,
                                      tuple(DataField(k, val) for k, val in dict(x_m=target_x, y_m=target_y, yaw_rad=target_yaw,
-                                                                               max_v_mps=0.2, max_omega_rad_s=0.6).items()), tick)
-            estimate = RobotEstimate(context, "odom", x, y, yaw, v, omega, (0.0,) * 25, localization_quality=healthy_localization())
-            costmap = RollingLocalCostmap("odom", tick, 0.05, 2.5, (), tick, 0)
-            world = WorldSnapshot(context, "odom", tick, (), 0, costmap)
+                                                                               max_v_mps=0.2, max_omega_rad_s=0.6).items())+(DataField("frame_id", LOCAL_FRAME_ID),), tick)
+            estimate = RobotEstimate(context, LOCAL_FRAME_ID, x, y, yaw, v, omega, (0.0,) * 25, localization_quality=healthy_localization())
+            costmap = RollingLocalCostmap(LOCAL_FRAME_ID, tick, 0.05, 2.5, (), tick, 0)
+            world = WorldSnapshot(context, LOCAL_FRAME_ID, tick, (), 0, costmap)
             frame = MissionNavigationInputs(context, command, estimate, world)
             trace = runtime.run_tick(frame)
             frames.append(frame)
@@ -199,10 +200,10 @@ def test_navigate_motion_async_terminal_heading_discards_late_rollout_and_restor
     navigation = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
     context = TickContext(0, 1_000_000_000)
     command = CommandRequest(context, "terminal-yaw", CommandMode.NAVIGATE,
-                             (DataField("x_m", 0.4), DataField("y_m", 0.0), DataField("yaw_rad", 1.0)), 0)
+                             (DataField("x_m", 0.4), DataField("y_m", 0.0), DataField("yaw_rad", 1.0), DataField("frame_id", LOCAL_FRAME_ID)), 0)
     mission = manager.evaluate(command)
-    estimate = RobotEstimate(context, "odom", 0, 0, 0, 0, 0, (0.0,) * 25, localization_quality=healthy_localization())
-    world = WorldSnapshot(context, "odom", 1, (), 0, RollingLocalCostmap("odom", 1, 0.05, 2.5, (), 1, 0))
+    estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0, 0, 0, 0, 0, (0.0,) * 25, localization_quality=healthy_localization())
+    world = WorldSnapshot(context, LOCAL_FRAME_ID, 1, (), 0, RollingLocalCostmap(LOCAL_FRAME_ID, 1, 0.05, 2.5, (), 1, 0))
     assert navigation.evaluate(mission, estimate, world).status is NavigationStatus.PENDING
     pending = navigation.pending_rollout_request
     checkpoint = navigation.checkpoint()

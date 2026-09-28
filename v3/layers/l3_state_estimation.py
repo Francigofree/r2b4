@@ -640,7 +640,12 @@ class _PoseFilter:
                         nis_max=None,
                         update_type="ZUPT",
                     )
-            if heading is not None:
+            # Rate-only operation may trust gyro rate while fused absolute yaw is untrusted.
+            # Never turn an untrusted fused yaw into an EKF heading correction.
+            if (
+                heading is not None
+                and heading_confidence >= self._config.quality.minimum_sensor_trust
+            ):
                 assert measured_yaw is not None
                 self._update_scalar(
                     self._YAW,
@@ -1144,9 +1149,27 @@ class NativeStateEstimator:
                                    and values.get("rejection_code", "NONE") == "NONE"
                                    and values.get("measurement_timing_valid", True)
                                    and not values.get("measurement_stale", False))
+        rate_heading_confidence = 0.0
         if heading is not None:
-            self._heading_trusted = _numeric_value(heading, "confidence") >= cfg.minimum_sensor_trust
-        if any(e.update_type == "YAW" and not e.accepted for e in self._local.last_update_evidence):
+            absolute_heading_confidence = _numeric_value(heading, "confidence")
+            rate_heading_confidence = _optional_numeric_value(
+                heading, "omega_confidence", absolute_heading_confidence
+            )
+            # Local heading continuity may be owned by either trusted fused yaw
+            # or trusted gyro rate. This mirrors NativeImuSource rate-only mode.
+            self._heading_trusted = (
+                max(absolute_heading_confidence, rate_heading_confidence)
+                >= cfg.minimum_sensor_trust
+            )
+        if (
+            any(
+                e.update_type == "YAW" and not e.accepted
+                for e in self._local.last_update_evidence
+            )
+            and rate_heading_confidence < cfg.minimum_sensor_trust
+        ):
+            # A rejected fused-yaw correction cannot revoke a simultaneously
+            # trusted gyro-rate authority. Freshness/covariance still fail closed.
             self._heading_trusted = False
         if any(e.update_type == "VELOCITY" and not e.accepted for e in self._local.last_update_evidence):
             self._wheel_trusted = False
