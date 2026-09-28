@@ -370,6 +370,7 @@ class WorldSnapshot:
     obstacle_tracks: tuple[ObstacleTrack, ...]
     freshness_ns: int
     local_costmap: RollingLocalCostmap | None = None
+    global_visited_cells: tuple[tuple[int, int, int], ...] = ()
 
     def __post_init__(self) -> None:
         require_token(self.frame_id, "WorldSnapshot.frame_id")

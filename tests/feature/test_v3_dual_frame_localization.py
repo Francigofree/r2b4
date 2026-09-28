@@ -169,14 +169,7 @@ def test_localization_slow_encoder_drift_is_detected_and_checkpoint_is_exact():
 def test_localization_relative_scan_registration_and_feature_poor_corridor():
     import numpy as np
     from v3.lidar_relative_odometry import RelativeLidarOdometry
-    cfg = resolved_config().sensors.lidar_port.matcher_config() if False else None
-    # Use the production resolved matcher policy, independently of map tracking.
-    resolved = resolved_config()
-    from v3.lidar_config import LidarMatcherConfig
-    import json
-    from rig import ROOT
-    from v3.config import _typed
-    cfg = _typed(LidarMatcherConfig, json.loads((ROOT/'conf/vezerles.json').read_text())['lidar_pose'], 'lidar_pose')
+    cfg = resolved_config().lidar.matcher
     odometry = RelativeLidarOdometry(cfg)
     rng = np.random.default_rng(18)
     cloud = rng.uniform(-2, 2, (180, 2))

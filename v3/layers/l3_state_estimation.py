@@ -228,6 +228,9 @@ class LocalizationQualityConfig:
     consistency_memory_s: float
     unverified_drift_per_m: float
     minimum_observability: float
+    minimum_sensor_trust: float
+    wheel_imu_slip_rad_s: float
+    relative_yaw_slip_rad: float
 
     def __post_init__(self) -> None:
         for name in self.__dataclass_fields__:
@@ -1134,15 +1137,15 @@ class NativeStateEstimator:
             self._last_lidar_ns = health.captured_monotonic_ns - int(_optional_numeric_value(health, "age_ns", 0))
         if wheel is not None:
             values = {v.key: v.value for v in wheel.values}
-            self._wheel_trusted = (_numeric_value(wheel, "trust") >= self._config.minimum_measurement_quality
+            self._wheel_trusted = (_numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust
                                    and values.get("rejection_code", "NONE") == "NONE"
                                    and values.get("measurement_timing_valid", True)
                                    and not values.get("measurement_stale", False))
         if heading is not None:
-            self._heading_trusted = _numeric_value(heading, "confidence") >= self._config.minimum_measurement_quality
+            self._heading_trusted = _numeric_value(heading, "confidence") >= cfg.minimum_sensor_trust
         if wheel is not None and heading is not None:
             wheel_yaw = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
-            self._slip_suspected = abs(wheel_yaw-_numeric_value(heading, "omega_rad_s")) > 0.7
+            self._slip_suspected = self._slip_suspected or abs(wheel_yaw-_numeric_value(heading, "omega_rad_s")) > cfg.wheel_imu_slip_rad_s
         dt = 0.0 if previous is None else max(0, now-previous.monotonic_ns)/1e9
         self._unverified_sigma_m += abs(local.v_mps)*min(dt, .25)*cfg.unverified_drift_per_m
         self._relative_check(frame)
@@ -1165,7 +1168,9 @@ class NativeStateEstimator:
         global_estimate = self._global(frame)
         if any(e.update_type == "LIDAR_POSE" and e.accepted for e in self.last_update_evidence):
             self._last_fix_ns = lidar.captured_monotonic_ns
-            self._transform_revision += 1
+            correction = next(e for e in self.last_update_evidence if e.update_type == "LIDAR_POSE" and e.accepted)
+            if math.hypot(*correction.innovation[:2]) > .05 or abs(correction.innovation[2]) > .03:
+                self._transform_revision += 1
         global_pose = Pose2D(self._config.frame_id, global_estimate.x_m, global_estimate.y_m, global_estimate.yaw_rad)
         yaw = _normalize_angle(global_pose.yaw_rad-pose.yaw_rad)
         c, s = math.cos(yaw), math.sin(yaw)
@@ -1179,7 +1184,9 @@ class NativeStateEstimator:
         local_state = QualityState.GOOD if sigma <= cfg.local_good_sigma_m else QualityState.DEGRADED
         if sigma >= cfg.local_lost_sigma_m or disagreement >= cfg.consistency_lost_m or self._slip_suspected:
             local_state = QualityState.LOST
-        elif disagreement >= cfg.consistency_good_m:
+        elif (disagreement >= cfg.consistency_good_m
+              or (abs(local.v_mps) > .001 and relative_age > cfg.relative_max_age_ns)
+              or (self._last_relative_ns is not None and self._observability < cfg.minimum_observability)):
             local_state = QualityState.DEGRADED
         if not continuous or not self._wheel_trusted or encoder_age > self._config.max_measurement_age_ns:
             local_state = QualityState.LOST
@@ -1228,8 +1235,8 @@ class NativeStateEstimator:
         self._relative_rmse_m = _numeric_value(observation, "rmse_m")
         self._last_relative_ns = end_ns
         self._unverified_sigma_m = .01 + self._relative_rmse_m
-        if abs(_normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))) > .2:
-            self._slip_suspected = True
+        self._slip_suspected = (abs(_normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))) > cfg.relative_yaw_slip_rad
+                                or math.hypot(error_x, error_y) > cfg.consistency_lost_m)
 
 
 class ShadowStateEstimator:

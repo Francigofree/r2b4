@@ -289,7 +289,10 @@
         "consistency_lost_m": 0.12,
         "consistency_memory_s": 30.0,
         "unverified_drift_per_m": 0.05,
-        "minimum_observability": 0.12
+        "minimum_observability": 0.12,
+        "minimum_sensor_trust": 0.5,
+        "wheel_imu_slip_rad_s": 0.7,
+        "relative_yaw_slip_rad": 0.2
       }
     },
     "world_model": {
@@ -338,7 +341,9 @@
       "continuity_translation_base_m": 0.25,
       "continuity_translation_rate_mps": 1.5,
       "continuity_yaw_base_rad": 0.35,
-      "continuity_yaw_rate_rad_s": 4.0
+      "continuity_yaw_rate_rad_s": 4.0,
+      "global_coverage_resolution_m": 0.5,
+      "global_coverage_max_cells": 512
     },
     "mission": {
       "default_constraints": {
@@ -402,7 +407,8 @@
       "localization_recovery_timeout_ns": 5000000000,
       "localization_recovery_omega_rad_s": 0.2,
       "localization_degraded_speed_scale": 0.4,
-      "localization_inflation_sigma": 2.0
+      "localization_inflation_sigma": 2.0,
+      "localization_observability_weight": 0.2
     },
     "async_l6": {
       "enabled": true,

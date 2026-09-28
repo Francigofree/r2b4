@@ -146,6 +146,8 @@ class WorldModelConfig:
     structural_dynamic_mask_min_speed_mps: float
     structural_dynamic_mask_max_tracks: int
     structural_max_position_variance: float
+    global_coverage_resolution_m: float
+    global_coverage_max_cells: int
     structural_max_yaw_variance: float
     continuity_translation_base_m: float
     continuity_translation_rate_mps: float
@@ -180,6 +182,7 @@ class WorldModelConfig:
             "person_track_max_speed_mps",
             "person_track_radius_m",
             "structural_max_position_variance",
+            "global_coverage_resolution_m",
             "structural_max_yaw_variance",
             "structural_dynamic_mask_margin_m",
             "structural_dynamic_mask_min_speed_mps",
@@ -201,6 +204,7 @@ class WorldModelConfig:
             "local_costmap_max_points_per_scan",
             "person_lidar_min_points",
             "pose_history_max_samples",
+            "global_coverage_max_cells",
             "scan_history_max_scans",
             "occupancy_hit_increment",
             "occupancy_free_decrement",
@@ -298,6 +302,8 @@ class WorldModelStateCheckpoint:
     cached_costmap: RollingLocalCostmap | None = None
     costmap_window: tuple[float, float, float] | None = None
     structural_active: bool = False
+    global_visited_cells: tuple[tuple[int, int, int], ...] = ()
+    last_global_visit: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,6 +329,7 @@ class ShadowWorldModel:
     """Own one bounded temporal world model and emit the unchanged WorldSnapshot."""
 
     __slots__ = (
+        "_global_visited_cells", "_last_global_visit",
         "_config",
         "_costmap_revision",
         "_cached_costmap",
@@ -344,6 +351,8 @@ class ShadowWorldModel:
     )
 
     def __init__(self, config: WorldModelConfig) -> None:
+        self._global_visited_cells = ()
+        self._last_global_visit = None
         self._config = config
         self._last_lidar_measurement_ns: int | None = None
         self._last_lidar_sequence: int | None = None
@@ -415,6 +424,7 @@ class ShadowWorldModel:
             self._cached_costmap,
             self._costmap_window,
             self._structural_active,
+            self._global_visited_cells, self._last_global_visit,
         )
 
     def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
@@ -440,8 +450,12 @@ class ShadowWorldModel:
         self._cached_costmap = checkpoint.cached_costmap
         self._costmap_window = checkpoint.costmap_window
         self._structural_active = checkpoint.structural_active
+        self._global_visited_cells = checkpoint.global_visited_cells
+        self._last_global_visit = checkpoint.last_global_visit
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
+        if frame.context == estimate.context and estimate.localization_quality.global_position is QualityState.GOOD:
+            self._update_global_coverage(estimate)
         estimate = estimate.in_local_frame()
         if frame.context != estimate.context:
             raise ValueError("L4 inputs must use the same tick context")
@@ -564,6 +578,7 @@ class ShadowWorldModel:
             obstacle_tracks=tracks,
             freshness_ns=freshness_ns,
             local_costmap=local_costmap,
+            global_visited_cells=self._global_visited_cells,
         )
 
     def _reset_spatial_state(self) -> None:
@@ -581,6 +596,19 @@ class ShadowWorldModel:
         if had_occupancy or had_structural or had_tracks:
             self._costmap_revision += 1
         self._map_revision += 1
+
+    def _update_global_coverage(self, estimate: RobotEstimate) -> None:
+        pose = estimate.global_pose
+        if pose is None:
+            return
+        size = self._config.global_coverage_resolution_m
+        key = (math.floor(pose.x_m/size), math.floor(pose.y_m/size))
+        if key == self._last_global_visit:
+            return
+        self._last_global_visit = key
+        visits = 1 + next((count for x, y, count in self._global_visited_cells if (x, y) == key), 0)
+        retained = tuple(cell for cell in self._global_visited_cells if cell[:2] != key)
+        self._global_visited_cells = (retained + ((*key, visits),))[-self._config.global_coverage_max_cells:]
 
     def _window_may_change(self, estimate: RobotEstimate) -> bool:
         if self._costmap_window is None:

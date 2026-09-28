@@ -88,6 +88,7 @@ class NavigationConfig:
     localization_recovery_omega_rad_s: float
     localization_degraded_speed_scale: float
     localization_inflation_sigma: float
+    localization_observability_weight: float
     max_world_freshness_ns: int
     obstacle_confidence_floor: float
     max_costmap_freshness_ns: int
@@ -414,6 +415,7 @@ class NavigationStateCheckpoint:
     localization_recovery_mission_id: str | None = None
     localization_generation: int = -1
     global_transform_revision: int = -1
+    localization_envelope: tuple[str, str, int] | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -531,7 +533,7 @@ class TrajectoryNavigator:
 
     __slots__ = (
         "_localization_recovery_started_ns", "_localization_recovery_mission_id",
-        "_localization_generation", "_global_transform_revision",
+        "_localization_generation", "_global_transform_revision", "_localization_envelope",
         "_completed",
         "_completion_inputs",
         "_closed_completion",
@@ -610,6 +612,7 @@ class TrajectoryNavigator:
         self._localization_recovery_started_ns = None
         self._localization_recovery_mission_id = None
         self._localization_generation = self._global_transform_revision = -1
+        self._localization_envelope = None
         self._completion_inputs = completion_inputs
         self._closed_completion: PlannerInput | None = None
         self._request_timeout_ns = request_timeout_ns
@@ -682,7 +685,7 @@ class TrajectoryNavigator:
             self._follow_person_search_target_yaw_rad,
             self._follow_person_search_budget_ns,
             self._localization_recovery_started_ns, self._localization_recovery_mission_id,
-            self._localization_generation, self._global_transform_revision,
+            self._localization_generation, self._global_transform_revision, self._localization_envelope,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -692,6 +695,7 @@ class TrajectoryNavigator:
         self._localization_recovery_mission_id = checkpoint.localization_recovery_mission_id
         self._localization_generation = checkpoint.localization_generation
         self._global_transform_revision = checkpoint.global_transform_revision
+        self._localization_envelope = checkpoint.localization_envelope
         self._abandon_pending_rollout()
         self._mission_id = checkpoint.mission_id
         self._initial_distance_m = checkpoint.initial_distance_m
@@ -798,7 +802,7 @@ class TrajectoryNavigator:
             if track is not None and track.usable_at(mission.context.monotonic_ns):
                 if track.prediction_valid_until_ns is not None:
                     until_ns = min(until_ns, track.prediction_valid_until_ns)
-        scope += f":odom{self._localization_generation}"
+        scope += f":odom{self._localization_generation}:" + ":".join(map(str, self._localization_envelope or ()))
         global_target = mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
         if global_target:
             scope += f":map{self._global_transform_revision}"
@@ -812,6 +816,10 @@ class TrajectoryNavigator:
 
     def _localization_plan(self, mission, estimate, world):
         quality = estimate.localization_quality
+        envelope = (quality.local_translation.value, quality.heading.value, math.ceil(quality.local_sigma_m/.02))
+        if envelope != self._localization_envelope:
+            self._clear_trajectory_plan()
+            self._localization_envelope = envelope
         global_target = mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
         if self._localization_generation != quality.generation:
             self._clear_trajectory_plan()
@@ -2201,6 +2209,8 @@ class TrajectoryNavigator:
             + self._config.clearance_weight * clearance_score
             + self._config.smoothness_weight * smoothness
             + self._config.novelty_weight * novelty
+            - self._config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
+            * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
         )
         return TrajectoryEvaluation(
             candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
@@ -2460,6 +2470,8 @@ class TrajectoryRolloutComputer:
             + config.clearance_weight * clearance_score
             + config.smoothness_weight * smoothness
             + config.novelty_weight * novelty
+            - config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
+            * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
         )
         return TrajectoryEvaluation(
             candidate_id=f"trajectory-{linear_index:02d}-{angular_index:02d}",
