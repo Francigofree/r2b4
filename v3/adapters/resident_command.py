@@ -215,6 +215,7 @@ class AtomicResidentCommandGateway:
         motion_keys = {"v_mps", "omega_rad_s"} | limit_keys
         expected_keys = common_keys | (
             {"x_m", "y_m"} | limit_keys | ({"yaw_rad"} if "yaw_rad" in payload else set())
+            | ({"frame_id"} if "frame_id" in payload else set())
             if mode is CommandMode.NAVIGATE
             else motion_keys
             if mode is CommandMode.TELEOP
@@ -279,12 +280,15 @@ class AtomicResidentCommandGateway:
         if not 0.0 < max_v_mps <= self._config.maximum_linear_speed_mps:
             raise ValueError("max_v_mps exceeds the resident process limit")
         if mode is CommandMode.NAVIGATE:
+            frame_id = payload.get("frame_id", "R2B4_BOOT_ROBOT_MAP")
+            if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+                raise ValueError("unsupported navigation frame")
             keys = ("x_m", "y_m", "max_v_mps", "max_omega_rad_s")
             if "yaw_rad" in payload:
                 keys += ("yaw_rad",)
             return CommandRequest(
                 context=context, command_id=command_id, mode=mode,
-                goal=tuple(DataField(key, _finite(payload[key], key)) for key in keys),
+                goal=tuple(DataField(key, _finite(payload[key], key)) for key in keys)+(DataField("frame_id", frame_id),),
                 expiry_tick=context.tick_id,
             )
         if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON):
@@ -540,10 +544,11 @@ class ResidentCommandClient:
         self,
         mode: CommandMode,
         values: Mapping[str, object],
-    ) -> dict[str, float]:
+    ) -> dict[str, float | str]:
         expected = (
             {"x_m", "y_m", "max_v_mps", "max_omega_rad_s"}
             | ({"yaw_rad"} if "yaw_rad" in values else set())
+            | ({"frame_id"} if "frame_id" in values else set())
             if mode is CommandMode.NAVIGATE
             else {"v_mps", "omega_rad_s", "max_v_mps", "max_omega_rad_s"}
             if mode is CommandMode.TELEOP
@@ -555,7 +560,11 @@ class ResidentCommandClient:
         )
         if set(values) != expected:
             raise ValueError("client command values do not match its mode")
-        normalized = {key: _finite(value, key) for key, value in values.items()}
+        normalized = {key: _finite(value, key) for key, value in values.items() if key != "frame_id"}
+        if "frame_id" in values:
+            if values["frame_id"] not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+                raise ValueError("unsupported navigation frame")
+            normalized["frame_id"] = values["frame_id"]
         if mode is CommandMode.STOP:
             return normalized
         max_omega_rad_s = normalized["max_omega_rad_s"]

@@ -248,6 +248,18 @@ class RobotEstimate:
 
     def __post_init__(self) -> None:
         require_token(self.frame_id, "RobotEstimate.frame_id")
+        if not isinstance(self.localization_quality, LocalizationQuality):
+            raise ContractValidationError("typed localization quality required")
+        poses = (self.local_pose, self.global_pose, self.map_to_odom)
+        if any(pose is not None for pose in poses):
+            if not all(isinstance(pose, Pose2D) for pose in poses):
+                raise ContractValidationError("dual-frame pose contract must be complete")
+            if self.local_pose.frame_id != "R2B4_ODOM_LOCAL" or self.global_pose.frame_id != self.map_to_odom.frame_id:
+                raise ContractValidationError("dual-frame pose frames disagree")
+        require_nonnegative(self.transform_revision, "transform_revision")
+        for value in (self.local_v_mps, self.local_omega_rad_s):
+            if value is not None:
+                require_finite(value, "local twist")
         for name in ("x_m", "y_m", "yaw_rad", "v_mps", "omega_rad_s"):
             require_finite(getattr(self, name), f"RobotEstimate.{name}")
         if len(self.covariance_5x5) != 25:
@@ -466,6 +478,8 @@ class MissionIntent:
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "MissionIntent.mission_id")
+        if self.target_frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+            raise ContractValidationError("invalid mission target frame")
         _require_optional_token(self.stop_reason, "MissionIntent.stop_reason")
         if self.lifecycle is MissionLifecycle.ACTIVE:
             if self.mode is CommandMode.NAVIGATE and (

@@ -27,7 +27,7 @@ def test_navigate_motion_mailbox_identity_validation_and_expiry(tmp_path):
         context = TickContext(tick, now)
         command = gateway.snapshot(context)
         direct = CommandRequest(context, "navigate-test", CommandMode.NAVIGATE,
-                                tuple(DataField(key, target[key]) for key in ("x_m", "y_m", "max_v_mps", "max_omega_rad_s", "yaw_rad")), tick)
+                                tuple(DataField(key, target[key]) for key in ("x_m", "y_m", "max_v_mps", "max_omega_rad_s", "yaw_rad"))+(DataField("frame_id", "R2B4_BOOT_ROBOT_MAP"),), tick)
         assert command == direct
         mission = manager.evaluate(command)
         assert mission.mission_id == "mission-navigate-test" and mission.lifecycle.value == "ACTIVE"

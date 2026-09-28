@@ -5,7 +5,7 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
-from .base import ContractValidationError, require_finite, require_nonnegative
+from .base import ContractValidationError, require_finite, require_token
 
 LOCAL_FRAME_ID = "R2B4_ODOM_LOCAL"
 GLOBAL_FRAME_ID = "R2B4_BOOT_ROBOT_MAP"
@@ -25,8 +25,7 @@ class Pose2D:
     yaw_rad: float
 
     def __post_init__(self) -> None:
-        if not self.frame_id:
-            raise ContractValidationError("pose frame is required")
+        require_token(self.frame_id, "Pose2D.frame_id")
         for name in ("x_m", "y_m", "yaw_rad"):
             require_finite(getattr(self, name), name)
 

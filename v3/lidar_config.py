@@ -110,6 +110,12 @@ class LidarMatcherConfig:
                     raise ValueError(f"{field.name} must be finite increasing range")
             elif type(value) is not bool and (not math.isfinite(value) or value < 0):
                 raise ValueError(f"{field.name} must be finite non-negative")
+        if not 16 <= self.relative_max_points <= 512 or not 1 <= self.relative_iterations <= 30:
+            raise ValueError("relative registration exceeds bounded work limits")
+        if self.relative_max_interval_ns <= 0 or self.relative_max_rmse_m <= 0:
+            raise ValueError("relative registration timing and residual bounds must be positive")
+        if self.relative_max_speed_mps <= 0 or self.relative_max_omega_rad_s <= 0:
+            raise ValueError("relative physical bounds must be positive")
         if self.min_valid_distance_m >= self.max_valid_distance_m:
             raise ValueError("LiDAR minimum range must be smaller than maximum range")
         if not 0 < self.robust_trim_fraction <= 1:

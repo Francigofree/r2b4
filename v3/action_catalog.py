@@ -34,6 +34,8 @@ class ActionParameterDescriptor:
     value_type: str = "number"
 
     def __post_init__(self) -> None:
+        if self.value_type not in ("number", "string"):
+            raise ValueError("unsupported action parameter type")
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("parameter name must be non-empty")
         if not isinstance(self.description, str) or not self.description.strip():

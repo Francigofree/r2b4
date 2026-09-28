@@ -1134,7 +1134,10 @@ class NativeStateEstimator:
         heading = _optional_observation(frame, "ekf_heading")
         health = _optional_observation(frame, "lidar_health")
         if health is not None:
-            self._last_lidar_ns = health.captured_monotonic_ns - int(_optional_numeric_value(health, "age_ns", 0))
+            health_values = {v.key: v.value for v in health.values}
+            self._last_lidar_ns = health.captured_monotonic_ns
+            if "point_count" not in health_values:
+                self._last_lidar_ns -= int(_optional_numeric_value(health, "age_ns", 0))
         if wheel is not None:
             values = {v.key: v.value for v in wheel.values}
             self._wheel_trusted = (_numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust
@@ -1143,6 +1146,10 @@ class NativeStateEstimator:
                                    and not values.get("measurement_stale", False))
         if heading is not None:
             self._heading_trusted = _numeric_value(heading, "confidence") >= cfg.minimum_sensor_trust
+        if any(e.update_type == "YAW" and not e.accepted for e in self._local.last_update_evidence):
+            self._heading_trusted = False
+        if any(e.update_type == "VELOCITY" and not e.accepted for e in self._local.last_update_evidence):
+            self._wheel_trusted = False
         if wheel is not None and heading is not None:
             wheel_yaw = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
             self._slip_suspected = self._slip_suspected or abs(wheel_yaw-_numeric_value(heading, "omega_rad_s")) > cfg.wheel_imu_slip_rad_s

@@ -369,7 +369,8 @@ class NativeControlComposition:
     def restore(self, checkpoint: NativeControlStateCheckpoint) -> None:
         if not isinstance(checkpoint, NativeControlStateCheckpoint):
             raise TypeError("checkpoint must be NativeControlStateCheckpoint")
-        if checkpoint.estimation.last_context != checkpoint.engine_last_context:
+        if (checkpoint.estimation.global_filter.last_context != checkpoint.engine_last_context
+                or checkpoint.estimation.local_filter.last_context != checkpoint.engine_last_context):
             raise ValueError("estimator checkpoint is not aligned to the engine")
         self._admission.restore(checkpoint.admission)
         self._estimator.restore(checkpoint.estimation)

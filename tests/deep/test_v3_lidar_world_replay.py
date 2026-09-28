@@ -1,5 +1,7 @@
 """Native L1-L12 replay of 50 Hz ticks with 10 Hz local map observations."""
 from dataclasses import replace
+import math
+import json
 
 from rig import ROOT, resolved_config
 from v3.capture import CaptureSink
@@ -118,3 +120,95 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
     assert replay["status"] == "MATCH", replay["diagnostics"]
     assert replay["determinism"]["repeated_trace_match"]
     assert replay["determinism"]["executed_tick_count"] == 53
+
+
+def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
+    """601 simulated seconds at 50 Hz; synthetic geometry, no hardware claims."""
+    config = resolved_config().runtime.composition.live_control.control
+    writer = OfflineMotorSink()
+    composition = NativeControlComposition(writer, config)
+    sink = CaptureSink("dual-frame-ten-minute", configuration={"production_control": config})
+    from v3.contracts import QualityState, LOCAL_FRAME_ID, GLOBAL_FRAME_ID
+    x = y = yaw = v = omega = 0.0
+    previous_scan = None
+    previous_pose = None
+    checkpoint = None
+    moving_ticks = global_lost_ticks = localization_stops = 0
+    max_local_step = max_disagreement = 0.0
+    fix_count = 0
+    try:
+        for tick in range(30_051):
+            context = TickContext(tick, 1_000_000_000+tick*20_000_000)
+            if tick:
+                x += v*.02*math.cos(yaw+omega*.01)
+                y += v*.02*math.sin(yaw+omega*.01)
+                yaw = math.atan2(math.sin(yaw+omega*.02), math.cos(yaw+omega*.02))
+            def sample(device, kind, **values):
+                return DeviceSample(device, kind, tick, context.monotonic_ns,
+                                    tuple(DataField(k, value) for k, value in values.items()))
+            half_track = config.estimation.track_width_m/2
+            samples = [
+                sample("ENCODER", "wheel_velocity", left_mps=v-omega*half_track,
+                       right_mps=v+omega*half_track, trust=1.0),
+                sample("IMU", "ekf_heading", yaw_rad=yaw, omega_rad_s=omega, confidence=1.0),
+                sample("RPLIDAR_C1", "lidar_safety_clearance", age_ns=0,
+                    **{f"{sector}_{key}": value for sector in ("front", "rear", "left", "right")
+                       for key, value in (("clearance_m", 2.0), ("observation_count", 10))}),
+            ]
+            if tick % 5 == 0:
+                samples.extend((sample("RPLIDAR_C1", "lidar_health", age_ns=0, point_count=0),
+                    sample("RPLIDAR_C1", "lidar_local_points", frame_id="ROBOT_BASE", point_count=0)))
+                if previous_scan is not None:
+                    ns, px, py, pyaw = previous_scan
+                    dx, dy = x-px, y-py
+                    samples.append(sample("RPLIDAR_C1", "lidar_relative_motion", start_ns=ns,
+                        dx_m=math.cos(pyaw)*dx+math.sin(pyaw)*dy,
+                        dy_m=-math.sin(pyaw)*dx+math.cos(pyaw)*dy,
+                        dyaw_rad=math.atan2(math.sin(yaw-pyaw), math.cos(yaw-pyaw)),
+                        rmse_m=.002, observability=.9))
+                previous_scan = (context.monotonic_ns, x, y, yaw)
+            # Verified global fixes and a deliberate large map correction.
+            if tick in (500, 15000, 30025):
+                samples.append(sample("RPLIDAR_C1", "lidar_pose", frame_id=GLOBAL_FRAME_ID,
+                    x_m=x+.8, y_m=y-.4, yaw_rad=yaw, confidence=1.0, r_scale=.05))
+            health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in sorted(set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
+            inputs = composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
+                CommandRequest(context, "cruise", CommandMode.EXPLORE, (), tick), LifecycleState.ACTIVE))
+            result = composition.run_tick(inputs)
+            assert result.trace.fault_layer is None
+            layers = {row.layer: row.output for row in result.trace.layers}
+            estimate, world, constrained = layers['L3'], layers['L4'], layers['L9']
+            quality = estimate.localization_quality
+            assert world.frame_id == LOCAL_FRAME_ID
+            assert not quality.pose_discontinuity
+            local = estimate.local_pose
+            if previous_pose is not None:
+                max_local_step = max(max_local_step, math.hypot(local.x_m-previous_pose.x_m, local.y_m-previous_pose.y_m))
+            previous_pose = local
+            max_disagreement = max(max_disagreement, quality.encoder_lidar_consistency_m or 0.)
+            if quality.global_fix_age_ns == 0:
+                fix_count += 1
+            global_lost_ticks += quality.global_position is QualityState.LOST
+            localization_stops += ConstraintCode.LOCALIZATION_DEGRADED in constrained.active_constraints
+            v, omega = constrained.allowed_v_mps, constrained.allowed_omega_rad_s
+            moving_ticks += abs(v)+abs(omega) > 1e-6
+            assert layers['L12'].safety_decision is SafetyDecision.ALLOW or tick == 0
+            if tick == 30000:
+                checkpoint = composition.checkpoint()
+            elif tick > 30000:
+                sink.write(ExecutionRecord(inputs, result))
+    finally:
+        composition.close()
+    assert moving_ticks > 29000 and global_lost_ticks > 29000
+    assert localization_stops == 0
+    assert fix_count == 3
+    assert max_local_step < .02
+    assert max_disagreement < config.estimation.quality.consistency_good_m
+    metrics = dict(simulated_seconds=601, moving_ticks=moving_ticks, global_lost_ticks=global_lost_ticks,
+                   localization_stops=localization_stops, accepted_global_fixes=fix_count,
+                   max_local_step_m=max_local_step, max_encoder_lidar_disagreement_m=max_disagreement)
+    (tmp_path/'metrics.json').write_text(json.dumps(metrics, indent=2))
+    path = sink.finalize('STOP', tmp_path/'capture.json', initial_state_checkpoint=encode_value(checkpoint))
+    replay = replay_capture(path, project_root=ROOT)
+    write_replay_result(replay, tmp_path/'replay.json')
+    assert replay['status'] == 'MATCH', replay['diagnostics']

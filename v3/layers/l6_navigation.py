@@ -773,11 +773,16 @@ class TrajectoryNavigator:
         if plan.status is NavigationStatus.ACTIVE:
             return replace(plan, motion_validity=self._guidance_validity(
                 mission, world, trajectory=bool(plan.trajectory_candidates),
+                translation=(bool(plan.trajectory_candidates)
+                    or (plan.velocity_target is not None and abs(plan.velocity_target.v_mps) > 1e-12)
+                    or bool(plan.route and math.hypot(plan.route[0].x_m-estimate.x_m,
+                               plan.route[0].y_m-estimate.y_m) > mission.constraints.goal_tolerance_m)),
             ))
         return plan
 
     def _guidance_validity(
         self, mission: MissionIntent, world: WorldSnapshot, *, trajectory: bool = False,
+        translation: bool | None = None,
     ) -> MotionValidity:
         # Cached guidance keeps its computation time. L7 alone retains the
         # selected objective; a pending request cannot refresh that objective.
@@ -809,12 +814,17 @@ class TrajectoryNavigator:
         return MotionValidity(
             source, until_ns, world.frame_id, scope,
             localization_requirement=LocalizationRequirement(
-                mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP),
+                (mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP)) if translation is None else translation,
                 mission.mode is not CommandMode.STOP, global_target,
             ),
         )
 
     def _localization_plan(self, mission, estimate, world):
+        if self._completed and self._mission_id == mission.mission_id:
+            return None
+        if (mission.mode is CommandMode.TELEOP and mission.velocity_target is not None
+                and mission.velocity_target.v_mps == mission.velocity_target.omega_rad_s == 0.0):
+            return None
         quality = estimate.localization_quality
         envelope = (quality.local_translation.value, quality.heading.value, math.ceil(quality.local_sigma_m/.02))
         if envelope != self._localization_envelope:
@@ -831,6 +841,11 @@ class TrajectoryNavigator:
         translation_needed = mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP)
         if mission.mode is CommandMode.TELEOP and mission.velocity_target is not None:
             translation_needed = abs(mission.velocity_target.v_mps) > 1e-12
+        if (mission.mode is CommandMode.NAVIGATE and mission.target_frame_id == LOCAL_FRAME_ID
+                and mission.target_pose is not None
+                and math.hypot(mission.target_pose.x_m-estimate.x_m,
+                               mission.target_pose.y_m-estimate.y_m) <= mission.constraints.goal_tolerance_m):
+            translation_needed = False
         needs_recovery = ((translation_needed and quality.local_translation is QualityState.LOST)
                           or quality.heading is QualityState.LOST
                           or (global_target and quality.global_position is not QualityState.GOOD))
@@ -847,7 +862,8 @@ class TrajectoryNavigator:
             self._localization_recovery_mission_id = mission.mission_id
         elapsed = now - self._localization_recovery_started_ns
         costmap = world.local_costmap
-        if (elapsed >= self._config.localization_recovery_timeout_ns
+        if (mission.mode is CommandMode.TELEOP
+                or elapsed >= self._config.localization_recovery_timeout_ns
                 or quality.heading is not QualityState.GOOD
                 or quality.lidar_age_ns > self._config.max_costmap_freshness_ns
                 or estimate.frame_id != world.frame_id
