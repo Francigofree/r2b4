@@ -36,4 +36,4 @@ For deep diagnostics, prefer MCAP + canonical replay + Test Hub evidence.
 
 - `./r test` — CORE after normal agent changes.
 - `./r test <feature>` — relevant scenario slice, e.g. `follow`.
-- `./r test full` — complete 80-140 case suite for shared boundaries / release acceptance.
+- `./r test full` — complete 100-200 case suite for shared boundaries / release acceptance.

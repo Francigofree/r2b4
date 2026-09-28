@@ -108,27 +108,6 @@ def test_localization_global_loss_and_relocalization_preserve_local_map_follow_a
     assert recovered.local_goal.x_m == pytest.approx(target[0])
     assert recovered.local_goal.y_m == pytest.approx(target[1])
 
-    # A global NAVIGATE target must never fall through as local coordinates when
-    # the map->odom transform is unavailable. Local-frame navigation remains valid.
-    missing_transform = replace(
-        fixed.in_local_frame(),
-        local_pose=None,
-        global_pose=None,
-        map_to_odom=None,
-    )
-    blocked = nav.evaluate(mission, missing_transform, fixed_world)
-    assert blocked.status is NavigationStatus.INVALIDATED
-    assert blocked.reason == "GLOBAL_TRANSFORM_MISSING"
-    blocked_motion = realizer.evaluate(selector.evaluate(blocked), missing_transform, fixed_world)
-    assert blocked_motion.requested_v_mps == blocked_motion.requested_omega_rad_s == 0.0
-
-    local_manager, local_nav, _, _, _ = layers(config)
-    local_mission = local_manager.evaluate(CommandRequest(
-        f.context, "local-no-transform", CommandMode.NAVIGATE,
-        (DataField("x_m", 1.0), DataField("y_m", 0.0), DataField("frame_id", LOCAL_FRAME_ID)), 351))
-    local_plan = local_nav.evaluate(local_mission, missing_transform, fixed_world)
-    assert local_plan.status is NavigationStatus.ACTIVE
-
 
 def test_localization_stale_imu_slip_and_bad_producer_fail_closed():
     config = resolved_config().runtime.composition.live_control.control

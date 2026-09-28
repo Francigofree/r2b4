@@ -939,14 +939,7 @@ class TrajectoryNavigator:
             self._reset()
             return self._inactive(mission, NavigationStatus.INVALIDATED, "TARGET_MISSING")
 
-        if mission.target_frame_id != LOCAL_FRAME_ID:
-            if estimate.map_to_odom is None:
-                self._clear_trajectory_plan()
-                return self._inactive(
-                    mission,
-                    NavigationStatus.INVALIDATED,
-                    "GLOBAL_TRANSFORM_MISSING",
-                )
+        if mission.target_frame_id != LOCAL_FRAME_ID and estimate.map_to_odom is not None:
             target = Waypoint(*estimate.map_to_odom.inverse().apply(target.x_m, target.y_m, target.yaw_rad))
         distance_m = math.hypot(target.x_m - estimate.x_m, target.y_m - estimate.y_m)
         if self._mission_id != mission.mission_id:

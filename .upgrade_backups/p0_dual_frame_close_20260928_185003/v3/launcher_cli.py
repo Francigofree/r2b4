@@ -218,26 +218,10 @@ def _plain_prompt(argv: Sequence[str], root: Path) -> int:
     return run_plain_prompt(prompt, project_root=root)
 
 
-def _command_names() -> set[str]:
+def _unknown_command(command: str) -> int:
     known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
     known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands"}
-    return known
-
-
-def _looks_like_command_typo(command: str) -> bool:
-    # Keep short/free text such as `r "hello"` on the plain-LLM path, while
-    # obvious near-misses such as `statuz` fail locally instead of reaching Gemini.
-    return bool(
-        difflib.get_close_matches(
-            command, sorted(_command_names()), n=1, cutoff=0.8
-        )
-    )
-
-
-def _unknown_command(command: str) -> int:
-    matches = difflib.get_close_matches(
-        command, sorted(_command_names()), n=3, cutoff=0.6
-    )
+    matches = difflib.get_close_matches(command, sorted(known), n=3, cutoff=0.6)
     print(f"Ismeretlen parancs: {command!r}.", file=sys.stderr)
     if matches:
         print("Erre gondoltál? " + ", ".join(f"r {match}" for match in matches), file=sys.stderr)
@@ -303,8 +287,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args[0].startswith("-"):
             known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
             if args[0] not in known:
-                if _looks_like_command_typo(args[0]):
-                    return _unknown_command(args[0])
                 return _plain_prompt(args, root)
         return interface_cli.main(args, project_root=root)
     except SystemExit as exc:

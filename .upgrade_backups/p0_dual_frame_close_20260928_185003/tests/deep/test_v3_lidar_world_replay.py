@@ -208,7 +208,7 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
                    localization_stops=localization_stops, accepted_global_fixes=fix_count,
                    max_local_step_m=max_local_step, max_encoder_lidar_disagreement_m=max_disagreement)
     (tmp_path/'metrics.json').write_text(json.dumps(metrics, indent=2))
-    path = sink.finalize('PASS', tmp_path/'capture.json', initial_state_checkpoint=encode_value(checkpoint))
+    path = sink.finalize('STOP', tmp_path/'capture.json', initial_state_checkpoint=encode_value(checkpoint))
     replay = replay_capture(path, project_root=ROOT)
     write_replay_result(replay, tmp_path/'replay.json')
     assert replay['status'] == 'MATCH', replay['diagnostics']

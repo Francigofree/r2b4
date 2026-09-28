@@ -210,30 +210,3 @@ def test_protected_config_identifiers_cannot_be_overridden():
         LatestLidarBackendConfig(20000000, matcher_transport='thread')
     with pytest.raises(ValueError, match='cannot exceed'):
         LatestLidarBackendConfig(20000000, maximum_future_skew_ns=20000001)
-
-
-def test_relative_motion_survives_when_global_pose_is_not_publishable():
-    relative = {
-        'start_ns': 830000000,
-        'dx_m': 0.02,
-        'dy_m': -0.003,
-        'dyaw_rad': 0.01,
-        'rmse_m': 0.002,
-        'observability': 0.9,
-    }
-    port = Port(
-        _result(summary=_summary(tracking_ready=False, relative_motion=relative)),
-        _status(),
-    )
-    source = NativeLidarSource(_backend(port), NativeLidarConfig('lidar', 0.3, 250000000))
-    snapshot = source.read(TickContext(7, 1000000000))
-    kinds = tuple(sample.kind for sample in snapshot.samples)
-
-    assert 'lidar_safety_clearance' in kinds
-    assert 'lidar_local_points' in kinds
-    assert 'lidar_relative_motion' in kinds
-    assert 'lidar_pose' not in kinds
-
-    sample = next(item for item in snapshot.samples if item.kind == 'lidar_relative_motion')
-    values = {field.key: field.value for field in sample.values}
-    assert values == relative
