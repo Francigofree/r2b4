@@ -28,6 +28,10 @@ Az L11 kerékenkénti feedback watchdog változatlanul önálló követelmény.
 
 ## Acceptance
 
+Validáció: `./r test` 32/32, `./r test localization` 21/21,
+`./r test roomcruise` 5/5, `./r test replay` 2/2,
+végső `./r test full` **193/193 sikeres** (75,07 s).
+
 - 60 s rate-only gyro, késleltetve érkező 10 Hz-es relatív LiDAR és végig
   `BASELINE` encoder, checkpointból azonos folytatással.
 - IMU-/encoder-kiesés, stale és hibás timing, leállt számláló, hard rejection,
@@ -43,6 +47,20 @@ Az L11 kerékenkénti feedback watchdog változatlanul önálló követelmény.
 - 601 s zárt, 50 Hz-es L1–L12 szimuláció: rate-only gyro, kvantált kumulatív
   encoder, ismétlődő sebességillesztési szünet, 10 Hz-es helyi scan, ritka globális
   korrekció; a végső szakasz natív replaye checkpointból.
+
+Mért szintetikus eredmény: 30 051 tickből 30 048 mozgással, 29 423 globális
+`LOST` tick, 1204 encoder `BASELINE` tick, **0 lokalizáció miatti stop**,
+3 elfogadott globális fix. Maximális lokális lépés 7,56 mm, maximális
+encoder/LiDAR-eltérés 7,73 mm. Az utolsó 50 tick checkpoint-replaye `MATCH`,
+ismételt trace-egyezéssel. Fizikai mozgást ez a fejlesztési kör nem indított.
+
+A meglévő `v3_20260928_210045_16471_capture.mcap` régi kimeneteihez képest
+az első eltérés a 14. tick `L3.localization_quality.yaw_sigma_rad` értéke
+(0,130275 → 0,100173). A 0–210. tick ismételt natív replaye determinisztikus,
+de a rögzített baseline-hoz `MISMATCH`. A teljes régi capture replaye a 211.
+ticknél `PLANNER_PURE_RESULT_MISMATCH` miatt megáll: a módosult L3/L4 inputból
+számolt planner-eredmény nem egyezik a régi rögzített completionnel. Ez nem
+teljes fizikai acceptance és nem régi-capture `MATCH` bizonyíték.
 
 ## Következő, méréssel megalapozandó lépések
 

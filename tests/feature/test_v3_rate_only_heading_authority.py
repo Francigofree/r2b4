@@ -164,7 +164,8 @@ def test_localization_missing_absolute_and_rate_heading_authority_still_fails_cl
     for tick in range(101):
         estimator(_frame(tick, omega_confidence=1.0))
     checkpoint = estimator.checkpoint()
-    for failure in ("relative_missing", "relative_degenerate", "imu_missing",
+    for failure in ("relative_missing", "relative_degenerate", "relative_unaligned",
+                    "relative_overlap", "imu_missing",
                     "encoder_stale", "encoder_bad_timing", "counter_stopped",
                     "counter_error", "encoder_missing", "yaw_disagreement"):
         estimator.restore(checkpoint)
@@ -190,10 +191,16 @@ def test_localization_missing_absolute_and_rate_heading_authority_still_fails_cl
                 if observation.kind == "lidar_relative_motion":
                     if failure == "relative_degenerate":
                         values["observability"] = 0.0
+                    elif failure in {"relative_unaligned", "relative_overlap"}:
+                        values["start_ns"] = (0 if failure == "relative_unaligned"
+                                              else checkpoint.last_relative_ns-100_000_000)
+                        values["observability"] = 1.0
                     elif failure == "yaw_disagreement":
                         values["dyaw_rad"] = .03
                 changed.append(replace(observation, values=tuple(DataField(k, v) for k, v in values.items())))
             estimate = estimator(replace(frame, accepted=tuple(changed)))
+            if failure in {"relative_unaligned", "relative_overlap"}:
+                assert estimate.localization_quality.observability == .9
             states.append(estimate.localization_quality.heading)
             if not failure.startswith("relative_") and (
                 estimate.localization_quality.heading is QualityState.LOST
