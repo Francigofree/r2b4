@@ -1,0 +1,356 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "behavior_status": "NOMINAL",
+  "budget": {
+    "actual_bytes": 6789,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260928_123759_36625_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; WARNING=sampled low-level observation only; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_slice": {
+    "layers": [
+      "L4",
+      "L5",
+      "L6",
+      "L7",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260928_123759_36625_capture.evidence/interesting_slice.ndjson",
+    "rows": 3,
+    "size_bytes": 11246,
+    "tick_range": [
+      2869,
+      2879
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "behavioral_trends": {
+      "commands": {
+        "observed_change_count": 15,
+        "observed_unique_count": 16
+      },
+      "domain_sample_counts": {
+        "command": 623,
+        "mission": 623,
+        "navigation": 623,
+        "pose": 623,
+        "safety": 623
+      },
+      "localization": {
+        "sample_count": 623
+      },
+      "maximum_contiguous_sample_gap_s": 0.3,
+      "missing_domains": [],
+      "missions": {
+        "lifecycle_sample_counts": {
+          "ACTIVE": 603,
+          "IDLE": 20
+        },
+        "observed_lifecycle_change_count": 2,
+        "observed_unique_count": 16
+      },
+      "motion": {
+        "blocked_sample_count": 0,
+        "longest_observed_blocked_span_s": 0.0
+      },
+      "navigation": {
+        "stagnation": {
+          "last_progress": 0.095703125,
+          "mission_id": "mission-operator-roomcruise-1790591879837616555-36625",
+          "monotonic_ns": 12306018890314,
+          "observed_span_s": 5.000894532,
+          "tick_id": 2874
+        },
+        "status_sample_counts": {
+          "ACTIVE": 599,
+          "IDLE": 23,
+          "PENDING": 1
+        }
+      },
+      "safety": {
+        "unsafe_output_sample_count": 0
+      },
+      "trend_window_s": 5.0
+    },
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 56.090231832294236,
+      "last_trace": 2.5857596874687645,
+      "max_trace": 2.5857596874687645,
+      "sample_count": 623
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 12.687602975057004,
+      "requested_motion_tick_count": 596
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.095703125,
+        "mission_id": "mission-operator-roomcruise-1790591879837616555-36625",
+        "monotonic_ns": 12306018890314,
+        "observed_span_s": 5.000894532,
+        "tick_id": 2874
+      }
+    },
+    "safety": {
+      "ALLOW": 603,
+      "FAULT": 0,
+      "STOP": 20,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 624,
+      "l2_actionable_rejection_count": 503,
+      "l2_duplicate_count": 1562,
+      "l2_rejection_count": 2065,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1562,
+        "STALE": 503
+      }
+    },
+    "ticks": {
+      "count": 623,
+      "first_monotonic_ns": 12246601719076,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 12308797030009,
+      "last_tick_id": 3007
+    },
+    "timing": {
+      "max_ms": 140.404039,
+      "p50_ms": 100.005307,
+      "p95_ms": 115.557087,
+      "p99_ms": 120.424673,
+      "sample_count": 622,
+      "scope": "CAPTURE_SAMPLE_INTERVALS_ONLY"
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 2871:2884 --layers L4,L5,L6,L7,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 2874:2874 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": null,
+    "first_divergence": null,
+    "status": "NOT_APPLICABLE"
+  },
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "behavior-navigation_progress_stagnation-2874"
+    ],
+    "kind": "NAVIGATION",
+    "layer": "L6",
+    "reason": "NAVIGATION_PROGRESS_STAGNATION",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 2874
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l5_command_mission.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l6_navigation.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l7_motion_selection.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": null
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": null
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "NAVIGATION",
+      "evidence": {
+        "last_progress": 0.095703125,
+        "mission_id": "mission-operator-roomcruise-1790591879837616555-36625",
+        "monotonic_ns": 12306018890314,
+        "observed_span_s": 5.000894532,
+        "tick_id": 2874
+      },
+      "id": "behavior-navigation_progress_stagnation-2874",
+      "layer": "L6",
+      "monotonic_ns": 12306018890314,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "HIGH",
+      "tick_id": 2874
+    },
+    {
+      "category": "LOCALIZATION",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 56.090231832294236,
+        "last_trace": 2.5857596874687645,
+        "max_trace": 2.5857596874687645,
+        "sample_count": 623
+      },
+      "id": "covariance-growth-3007",
+      "layer": "L3",
+      "monotonic_ns": 12308797030009,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 3007
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 12246601719076,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 12246718145077,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 6
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-11",
+      "layer": "L1",
+      "monotonic_ns": 12246818052382,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 11
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-16",
+      "layer": "L1",
+      "monotonic_ns": 12246918569710,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-21",
+      "layer": "L1",
+      "monotonic_ns": 12247021486350,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 21
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-26",
+      "layer": "L1",
+      "monotonic_ns": 12247118050227,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 26
+    }
+  ]
+}

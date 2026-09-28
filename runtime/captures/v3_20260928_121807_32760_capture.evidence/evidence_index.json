@@ -1,0 +1,69 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "9ff27328bab64694b417e5323f4b6c759f2886ef733ae55a6dddf5b09fdcb999",
+      "size_bytes": 11097
+    },
+    "diagnosis.json": {
+      "sha256": "5d13ab486a2f45e92d38980a488832dc2f145910339ebbac6e31dea7ea6a6902",
+      "size_bytes": 10343
+    },
+    "gui_manifest.json": {
+      "sha256": "7a2e04c5f7a0d9358512dd71d2b818b97d9f30cd199958f15200ec25e31515d2",
+      "size_bytes": 71161
+    },
+    "inspect.json": {
+      "sha256": "87becaffb2403d7df0307e93c225d699cf0e2ae99969e18f4de905197b6f5fe7",
+      "size_bytes": 12055
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "49487fe165059c33eecbf6c56e65a7cc03cf75726863dd29a5c3e3309ff046e9",
+      "size_bytes": 4095
+    },
+    "timeline.ndjson": {
+      "sha256": "2b59b3ec2db068afff516eff4e7bac41a108d50d91c47fbf2ff6dbd3b5900462",
+      "size_bytes": 252418
+    },
+    "triage.json": {
+      "sha256": "474036680ff794d60392367b8fe7988289762c4b16efb369cd06e1ec01166427",
+      "size_bytes": 71495
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260928_121807_32760_capture.mcap",
+    "sha256": "2bd0e1f2d83c6644a9d9f8c3627b8c70c117ba2b2c679819bb92ea5bdba1d0b8"
+  },
+  "behavior_status": "FAULT",
+  "created_at_utc": "2026-09-28T10:18:37Z",
+  "diagnosis_status": "FINDING",
+  "evidence_sha256": "c366774b779c0a13dfea9273bbf3c268ca75f2e1fb4d48e2861f2ae3550a548d",
+  "evidence_status": "PASS",
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "safety-fault-744"
+    ],
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L11_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 744
+  },
+  "run_id": "v3_20260928_121807_32760_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}

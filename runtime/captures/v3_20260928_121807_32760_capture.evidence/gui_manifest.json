@@ -1,0 +1,2938 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "diagnosis_json": "diagnosis.json",
+    "interesting_slice_ndjson": "interesting_slice.ndjson",
+    "replay_json": null,
+    "timeline_ndjson": "timeline.ndjson"
+  },
+  "behavior_status": "FAULT",
+  "capture": {
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 384,
+          "before": 389
+        },
+        {
+          "after": 389,
+          "before": 394
+        },
+        {
+          "after": 394,
+          "before": 399
+        },
+        {
+          "after": 399,
+          "before": 404
+        },
+        {
+          "after": 404,
+          "before": 409
+        },
+        {
+          "after": 409,
+          "before": 414
+        },
+        {
+          "after": 414,
+          "before": 419
+        },
+        {
+          "after": 419,
+          "before": 423
+        },
+        {
+          "after": 423,
+          "before": 428
+        },
+        {
+          "after": 428,
+          "before": 433
+        },
+        {
+          "after": 433,
+          "before": 438
+        },
+        {
+          "after": 438,
+          "before": 442
+        },
+        {
+          "after": 442,
+          "before": 448
+        },
+        {
+          "after": 448,
+          "before": 451
+        },
+        {
+          "after": 451,
+          "before": 456
+        },
+        {
+          "after": 456,
+          "before": 460
+        },
+        {
+          "after": 460,
+          "before": 465
+        },
+        {
+          "after": 465,
+          "before": 468
+        },
+        {
+          "after": 468,
+          "before": 474
+        },
+        {
+          "after": 474,
+          "before": 479
+        },
+        {
+          "after": 479,
+          "before": 484
+        },
+        {
+          "after": 484,
+          "before": 489
+        },
+        {
+          "after": 489,
+          "before": 493
+        },
+        {
+          "after": 493,
+          "before": 498
+        },
+        {
+          "after": 498,
+          "before": 503
+        },
+        {
+          "after": 503,
+          "before": 506
+        },
+        {
+          "after": 506,
+          "before": 511
+        },
+        {
+          "after": 511,
+          "before": 516
+        },
+        {
+          "after": 516,
+          "before": 519
+        },
+        {
+          "after": 519,
+          "before": 524
+        },
+        {
+          "after": 524,
+          "before": 529
+        },
+        {
+          "after": 529,
+          "before": 534
+        },
+        {
+          "after": 534,
+          "before": 539
+        },
+        {
+          "after": 539,
+          "before": 542
+        },
+        {
+          "after": 542,
+          "before": 547
+        },
+        {
+          "after": 547,
+          "before": 550
+        },
+        {
+          "after": 550,
+          "before": 555
+        },
+        {
+          "after": 555,
+          "before": 559
+        },
+        {
+          "after": 559,
+          "before": 562
+        },
+        {
+          "after": 562,
+          "before": 567
+        },
+        {
+          "after": 567,
+          "before": 573
+        },
+        {
+          "after": 573,
+          "before": 578
+        },
+        {
+          "after": 578,
+          "before": 582
+        },
+        {
+          "after": 582,
+          "before": 586
+        },
+        {
+          "after": 586,
+          "before": 590
+        },
+        {
+          "after": 590,
+          "before": 595
+        },
+        {
+          "after": 595,
+          "before": 601
+        },
+        {
+          "after": 601,
+          "before": 605
+        },
+        {
+          "after": 605,
+          "before": 610
+        },
+        {
+          "after": 610,
+          "before": 615
+        },
+        {
+          "after": 615,
+          "before": 618
+        },
+        {
+          "after": 618,
+          "before": 624
+        },
+        {
+          "after": 624,
+          "before": 629
+        },
+        {
+          "after": 629,
+          "before": 634
+        },
+        {
+          "after": 634,
+          "before": 638
+        },
+        {
+          "after": 638,
+          "before": 641
+        },
+        {
+          "after": 641,
+          "before": 647
+        },
+        {
+          "after": 647,
+          "before": 651
+        },
+        {
+          "after": 651,
+          "before": 656
+        },
+        {
+          "after": 656,
+          "before": 659
+        },
+        {
+          "after": 659,
+          "before": 663
+        },
+        {
+          "after": 663,
+          "before": 668
+        },
+        {
+          "after": 668,
+          "before": 673
+        },
+        {
+          "after": 673,
+          "before": 678
+        },
+        {
+          "after": 678,
+          "before": 682
+        },
+        {
+          "after": 682,
+          "before": 685
+        },
+        {
+          "after": 685,
+          "before": 689
+        },
+        {
+          "after": 689,
+          "before": 695
+        },
+        {
+          "after": 695,
+          "before": 699
+        },
+        {
+          "after": 699,
+          "before": 703
+        },
+        {
+          "after": 703,
+          "before": 707
+        },
+        {
+          "after": 707,
+          "before": 712
+        },
+        {
+          "after": 712,
+          "before": 716
+        },
+        {
+          "after": 716,
+          "before": 720
+        },
+        {
+          "after": 720,
+          "before": 724
+        },
+        {
+          "after": 724,
+          "before": 729
+        },
+        {
+          "after": 729,
+          "before": 735
+        },
+        {
+          "after": 735,
+          "before": 740
+        },
+        {
+          "after": 740,
+          "before": 743
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "367ea1656a5fefdf5da154fdaa74f720288218d50c2b9a9e37ad9092167ee7f9",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 162,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 162,
+        "first_lost_sequence": null,
+        "high_water_mark": 1,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 162,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": false,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": false,
+      "raw_evidence_requested": false,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 0,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": false,
+      "raw_transport_produced_count": 0,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": true,
+      "tick_sample_hz": 10
+    },
+    "status": "FAULT",
+    "topics": {
+      "/r2b4/checkpoint": {
+        "channel_id": 3,
+        "encoding": "json",
+        "message_count": null,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/event": {
+        "channel_id": 4,
+        "encoding": "json",
+        "message_count": 2,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/raw_lidar": {
+        "channel_id": 2,
+        "encoding": "json",
+        "message_count": null,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/runtime": {
+        "channel_id": 5,
+        "encoding": "json",
+        "message_count": 1,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/tick": {
+        "channel_id": 1,
+        "encoding": "json",
+        "message_count": 81,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      }
+    }
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "incidents": [
+    {
+      "category": "SAFETY",
+      "evidence": {
+        "signals": {
+          "L1": {
+            "io_health[0].reason": "ENCODER_COUNTER_DIAGNOSTIC",
+            "io_health[0].state": "DEGRADED",
+            "io_health[1].reason": null,
+            "io_health[1].state": "OK",
+            "io_health[2].reason": null,
+            "io_health[2].state": "OK",
+            "io_health[3].reason": null,
+            "io_health[3].state": "OK"
+          },
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 108915350,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 409003885,
+            "rejected[1].reason": "STALE"
+          },
+          "L3": {
+            "omega_rad_s": 0.7801174551131846,
+            "v_mps": -0.012117796852891133
+          },
+          "L4": {
+            "freshness_ns": 108915350,
+            "local_costmap.freshness_ns": 108915350,
+            "local_costmap.revision": 418,
+            "map_revision": 674
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "progress": 0.041015625,
+            "reason": null,
+            "route_waypoint_count": 0,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 745,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-00-08",
+            "trajectory.min_clearance_m": 0.27131205665572733,
+            "trajectory.omega_rad_s": 0.6,
+            "trajectory.progress_potential_score": 0.16367507549804672,
+            "trajectory.progress_score": 0.0,
+            "trajectory.progress_viable": true,
+            "trajectory.v_mps": 0.0
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": 0.5549706362217038,
+            "requested_v_mps": 0.0,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": 0.5549706362217038,
+            "allowed_v_mps": 0.0,
+            "requested_omega_rad_s": 0.5549706362217038,
+            "requested_v_mps": 0.0
+          }
+        }
+      },
+      "id": "safety-fault-744",
+      "layer": "L12",
+      "monotonic_ns": 11070348197770,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 744
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-384",
+      "layer": "L1",
+      "monotonic_ns": 11062429546796,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 384
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-389",
+      "layer": "L1",
+      "monotonic_ns": 11062529130567,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 389
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-394",
+      "layer": "L1",
+      "monotonic_ns": 11062628430837,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 394
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-399",
+      "layer": "L1",
+      "monotonic_ns": 11062734726467,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 399
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 290615282,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 77
+          }
+        ]
+      },
+      "id": "l2-reject-399",
+      "layer": "L2",
+      "monotonic_ns": 11062734726467,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 399
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-404",
+      "layer": "L1",
+      "monotonic_ns": 11062829758635,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 404
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-409",
+      "layer": "L1",
+      "monotonic_ns": 11062931265789,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 409
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-414",
+      "layer": "L1",
+      "monotonic_ns": 11063028923382,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 414
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-419",
+      "layer": "L1",
+      "monotonic_ns": 11063133985596,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 419
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-423",
+      "layer": "L1",
+      "monotonic_ns": 11063227354272,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 423
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-428",
+      "layer": "L1",
+      "monotonic_ns": 11063327937791,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 428
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-433",
+      "layer": "L1",
+      "monotonic_ns": 11063430074597,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 433
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-438",
+      "layer": "L1",
+      "monotonic_ns": 11063530570115,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 438
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-442",
+      "layer": "L1",
+      "monotonic_ns": 11063610381778,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 442
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 262021162,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 86
+          }
+        ]
+      },
+      "id": "l2-reject-442",
+      "layer": "L2",
+      "monotonic_ns": 11063610381778,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 442
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-448",
+      "layer": "L1",
+      "monotonic_ns": 11063727319513,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 448
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-451",
+      "layer": "L1",
+      "monotonic_ns": 11063810488549,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 451
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 262555748,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 88
+          }
+        ]
+      },
+      "id": "l2-reject-451",
+      "layer": "L2",
+      "monotonic_ns": 11063810488549,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 451
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-456",
+      "layer": "L1",
+      "monotonic_ns": 11063930085820,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 456
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 282267709,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 89
+          }
+        ]
+      },
+      "id": "l2-reject-456",
+      "layer": "L2",
+      "monotonic_ns": 11063930085820,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 456
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-460",
+      "layer": "L1",
+      "monotonic_ns": 11064027825968,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 460
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-465",
+      "layer": "L1",
+      "monotonic_ns": 11064128318264,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 465
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-468",
+      "layer": "L1",
+      "monotonic_ns": 11064210304774,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 468
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-474",
+      "layer": "L1",
+      "monotonic_ns": 11064328166015,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 474
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-479",
+      "layer": "L1",
+      "monotonic_ns": 11064429157000,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 479
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 254596000,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 150
+          }
+        ]
+      },
+      "id": "l2-reject-479",
+      "layer": "L2",
+      "monotonic_ns": 11064429157000,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 479
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-484",
+      "layer": "L1",
+      "monotonic_ns": 11064527911618,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 484
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-489",
+      "layer": "L1",
+      "monotonic_ns": 11064633440001,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 489
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-493",
+      "layer": "L1",
+      "monotonic_ns": 11064711490190,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 493
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-498",
+      "layer": "L1",
+      "monotonic_ns": 11064828485777,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 498
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-503",
+      "layer": "L1",
+      "monotonic_ns": 11064932359576,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 503
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 289616311,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 99
+          }
+        ]
+      },
+      "id": "l2-reject-503",
+      "layer": "L2",
+      "monotonic_ns": 11064932359576,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 503
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-506",
+      "layer": "L1",
+      "monotonic_ns": 11065011991367,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 506
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 369248102,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 99
+          }
+        ]
+      },
+      "id": "l2-reject-506",
+      "layer": "L2",
+      "monotonic_ns": 11065011991367,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 506
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-511",
+      "layer": "L1",
+      "monotonic_ns": 11065131192339,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 511
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 488449074,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 99
+          },
+          {
+            "age_ns": 269210339,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 160
+          }
+        ]
+      },
+      "id": "l2-reject-511",
+      "layer": "L2",
+      "monotonic_ns": 11065131192339,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 511
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-516",
+      "layer": "L1",
+      "monotonic_ns": 11065230048550,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 516
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 587305285,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 99
+          }
+        ]
+      },
+      "id": "l2-reject-516",
+      "layer": "L2",
+      "monotonic_ns": 11065230048550,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 516
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-519",
+      "layer": "L1",
+      "monotonic_ns": 11065310150826,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 519
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-524",
+      "layer": "L1",
+      "monotonic_ns": 11065430855178,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 524
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-529",
+      "layer": "L1",
+      "monotonic_ns": 11065529503277,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 529
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 285317895,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 102
+          }
+        ]
+      },
+      "id": "l2-reject-529",
+      "layer": "L2",
+      "monotonic_ns": 11065529503277,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 529
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-534",
+      "layer": "L1",
+      "monotonic_ns": 11065637908623,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 534
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 294227118,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 103
+          },
+          {
+            "age_ns": 275984623,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 166
+          }
+        ]
+      },
+      "id": "l2-reject-534",
+      "layer": "L2",
+      "monotonic_ns": 11065637908623,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 534
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-539",
+      "layer": "L1",
+      "monotonic_ns": 11065729955920,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 539
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-542",
+      "layer": "L1",
+      "monotonic_ns": 11065813216549,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 542
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-547",
+      "layer": "L1",
+      "monotonic_ns": 11065932213613,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 547
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 289414699,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 106
+          }
+        ]
+      },
+      "id": "l2-reject-547",
+      "layer": "L2",
+      "monotonic_ns": 11065932213613,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 547
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-550",
+      "layer": "L1",
+      "monotonic_ns": 11066019132339,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 550
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 277002701,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 107
+          }
+        ]
+      },
+      "id": "l2-reject-550",
+      "layer": "L2",
+      "monotonic_ns": 11066019132339,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 550
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-555",
+      "layer": "L1",
+      "monotonic_ns": 11066134042728,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 555
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-559",
+      "layer": "L1",
+      "monotonic_ns": 11066236213035,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 559
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-562",
+      "layer": "L1",
+      "monotonic_ns": 11066313920295,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 562
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-567",
+      "layer": "L1",
+      "monotonic_ns": 11066409882672,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 567
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-573",
+      "layer": "L1",
+      "monotonic_ns": 11066530050151,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 573
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 288138682,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 112
+          }
+        ]
+      },
+      "id": "l2-reject-573",
+      "layer": "L2",
+      "monotonic_ns": 11066530050151,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 573
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-578",
+      "layer": "L1",
+      "monotonic_ns": 11066627324870,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 578
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 285665351,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 113
+          }
+        ]
+      },
+      "id": "l2-reject-578",
+      "layer": "L2",
+      "monotonic_ns": 11066627324870,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 578
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-582",
+      "layer": "L1",
+      "monotonic_ns": 11066709880013,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 582
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-586",
+      "layer": "L1",
+      "monotonic_ns": 11066829371839,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 586
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-590",
+      "layer": "L1",
+      "monotonic_ns": 11066910558158,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 590
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 270330353,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 116
+          }
+        ]
+      },
+      "id": "l2-reject-590",
+      "layer": "L2",
+      "monotonic_ns": 11066910558158,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 590
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-595",
+      "layer": "L1",
+      "monotonic_ns": 11067010167911,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 595
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 369940106,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 116
+          }
+        ]
+      },
+      "id": "l2-reject-595",
+      "layer": "L2",
+      "monotonic_ns": 11067010167911,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 595
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-601",
+      "layer": "L1",
+      "monotonic_ns": 11067136379502,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 601
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-605",
+      "layer": "L1",
+      "monotonic_ns": 11067231725765,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 605
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-610",
+      "layer": "L1",
+      "monotonic_ns": 11067331561575,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 610
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 291279887,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 119
+          },
+          {
+            "age_ns": 282330575,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 192
+          }
+        ]
+      },
+      "id": "l2-reject-610",
+      "layer": "L2",
+      "monotonic_ns": 11067331561575,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 610
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-615",
+      "layer": "L1",
+      "monotonic_ns": 11067431101401,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 615
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 290394677,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 120
+          }
+        ]
+      },
+      "id": "l2-reject-615",
+      "layer": "L2",
+      "monotonic_ns": 11067431101401,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 615
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-618",
+      "layer": "L1",
+      "monotonic_ns": 11067510922453,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 618
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 370215729,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 120
+          }
+        ]
+      },
+      "id": "l2-reject-618",
+      "layer": "L2",
+      "monotonic_ns": 11067510922453,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 618
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-624",
+      "layer": "L1",
+      "monotonic_ns": 11067627532926,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 624
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 486826202,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 120
+          }
+        ]
+      },
+      "id": "l2-reject-624",
+      "layer": "L2",
+      "monotonic_ns": 11067627532926,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 624
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-629",
+      "layer": "L1",
+      "monotonic_ns": 11067729681807,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 629
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 588975083,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 120
+          }
+        ]
+      },
+      "id": "l2-reject-629",
+      "layer": "L2",
+      "monotonic_ns": 11067729681807,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 629
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-634",
+      "layer": "L1",
+      "monotonic_ns": 11067831579223,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 634
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 690872499,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 120
+          }
+        ]
+      },
+      "id": "l2-reject-634",
+      "layer": "L2",
+      "monotonic_ns": 11067831579223,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 634
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-638",
+      "layer": "L1",
+      "monotonic_ns": 11067928879757,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 638
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 284416500,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-638",
+      "layer": "L2",
+      "monotonic_ns": 11067928879757,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 638
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-641",
+      "layer": "L1",
+      "monotonic_ns": 11068010964193,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 641
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 366500936,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-641",
+      "layer": "L2",
+      "monotonic_ns": 11068010964193,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 641
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-647",
+      "layer": "L1",
+      "monotonic_ns": 11068132566588,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 647
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 488103331,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-647",
+      "layer": "L2",
+      "monotonic_ns": 11068132566588,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 647
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-651",
+      "layer": "L1",
+      "monotonic_ns": 11068227434699,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 651
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 582971442,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-651",
+      "layer": "L2",
+      "monotonic_ns": 11068227434699,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 651
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-656",
+      "layer": "L1",
+      "monotonic_ns": 11068351099218,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 656
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 706635961,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-656",
+      "layer": "L2",
+      "monotonic_ns": 11068351099218,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 656
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-659",
+      "layer": "L1",
+      "monotonic_ns": 11068427753601,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 659
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 783290344,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-659",
+      "layer": "L2",
+      "monotonic_ns": 11068427753601,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 659
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-663",
+      "layer": "L1",
+      "monotonic_ns": 11068511071879,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 663
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 866608622,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 121
+          }
+        ]
+      },
+      "id": "l2-reject-663",
+      "layer": "L2",
+      "monotonic_ns": 11068511071879,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 663
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-668",
+      "layer": "L1",
+      "monotonic_ns": 11068629938385,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 668
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 285165967,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 122
+          }
+        ]
+      },
+      "id": "l2-reject-668",
+      "layer": "L2",
+      "monotonic_ns": 11068629938385,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 668
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-673",
+      "layer": "L1",
+      "monotonic_ns": 11068729519897,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 673
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 384747479,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 122
+          }
+        ]
+      },
+      "id": "l2-reject-673",
+      "layer": "L2",
+      "monotonic_ns": 11068729519897,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 673
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-678",
+      "layer": "L1",
+      "monotonic_ns": 11068842261976,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 678
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 497489558,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 122
+          }
+        ]
+      },
+      "id": "l2-reject-678",
+      "layer": "L2",
+      "monotonic_ns": 11068842261976,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 678
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-682",
+      "layer": "L1",
+      "monotonic_ns": 11068930163320,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 682
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 285556091,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 123
+          }
+        ]
+      },
+      "id": "l2-reject-682",
+      "layer": "L2",
+      "monotonic_ns": 11068930163320,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 682
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-685",
+      "layer": "L1",
+      "monotonic_ns": 11069014989514,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 685
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 270806180,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 124
+          }
+        ]
+      },
+      "id": "l2-reject-685",
+      "layer": "L2",
+      "monotonic_ns": 11069014989514,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 685
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-689",
+      "layer": "L1",
+      "monotonic_ns": 11069111622563,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 689
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 270712754,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 125
+          },
+          {
+            "age_ns": 312587563,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 215
+          }
+        ]
+      },
+      "id": "l2-reject-689",
+      "layer": "L2",
+      "monotonic_ns": 11069111622563,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 689
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-695",
+      "layer": "L1",
+      "monotonic_ns": 11069231963116,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 695
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 291856130,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 126
+          }
+        ]
+      },
+      "id": "l2-reject-695",
+      "layer": "L2",
+      "monotonic_ns": 11069231963116,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 695
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-699",
+      "layer": "L1",
+      "monotonic_ns": 11069309961619,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 699
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 269027725,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 127
+          },
+          {
+            "age_ns": 260959619,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 217
+          }
+        ]
+      },
+      "id": "l2-reject-699",
+      "layer": "L2",
+      "monotonic_ns": 11069309961619,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 699
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-703",
+      "layer": "L1",
+      "monotonic_ns": 11069419327175,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 703
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 378393281,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 127
+          }
+        ]
+      },
+      "id": "l2-reject-703",
+      "layer": "L2",
+      "monotonic_ns": 11069419327175,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 703
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-707",
+      "layer": "L1",
+      "monotonic_ns": 11069509819054,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 707
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 468885160,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 127
+          }
+        ]
+      },
+      "id": "l2-reject-707",
+      "layer": "L2",
+      "monotonic_ns": 11069509819054,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 707
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-712",
+      "layer": "L1",
+      "monotonic_ns": 11069610149145,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 712
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 270596169,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 128
+          },
+          {
+            "age_ns": 311170145,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 220
+          }
+        ]
+      },
+      "id": "l2-reject-712",
+      "layer": "L2",
+      "monotonic_ns": 11069610149145,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 712
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-716",
+      "layer": "L1",
+      "monotonic_ns": 11069741358139,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 716
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 401805163,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 128
+          }
+        ]
+      },
+      "id": "l2-reject-716",
+      "layer": "L2",
+      "monotonic_ns": 11069741358139,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 716
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-720",
+      "layer": "L1",
+      "monotonic_ns": 11069827535286,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 720
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 487982310,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 128
+          }
+        ]
+      },
+      "id": "l2-reject-720",
+      "layer": "L2",
+      "monotonic_ns": 11069827535286,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 720
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-724",
+      "layer": "L1",
+      "monotonic_ns": 11069911801848,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 724
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 273289956,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 129
+          }
+        ]
+      },
+      "id": "l2-reject-724",
+      "layer": "L2",
+      "monotonic_ns": 11069911801848,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 724
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-729",
+      "layer": "L1",
+      "monotonic_ns": 11070011471731,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 729
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 372959839,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 129
+          }
+        ]
+      },
+      "id": "l2-reject-729",
+      "layer": "L2",
+      "monotonic_ns": 11070011471731,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 729
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-735",
+      "layer": "L1",
+      "monotonic_ns": 11070136704130,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 735
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 498192238,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 129
+          },
+          {
+            "age_ns": 275289130,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 228
+          }
+        ]
+      },
+      "id": "l2-reject-735",
+      "layer": "L2",
+      "monotonic_ns": 11070136704130,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 735
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-740",
+      "layer": "L1",
+      "monotonic_ns": 11070227649901,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 740
+    },
+    {
+      "category": "ADMISSION",
+      "evidence": {
+        "rejected": [
+          {
+            "age_ns": 288456016,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 130
+          }
+        ]
+      },
+      "id": "l2-reject-740",
+      "layer": "L2",
+      "monotonic_ns": 11070227649901,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 740
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ]
+      },
+      "id": "device-743",
+      "layer": "L1",
+      "monotonic_ns": 11070312676042,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "WARNING",
+      "tick_id": 743
+    }
+  ],
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "safety-fault-744"
+    ],
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L11_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "tick_id": 744
+  },
+  "schema": "R2B4_TEST_HUB_GUI_V2",
+  "status": "FINDING",
+  "tracks": [
+    "pose.x_m",
+    "pose.y_m",
+    "pose.yaw_rad",
+    "pose.covariance_trace",
+    "navigation_progress",
+    "requested_motion.v_mps",
+    "constrained_motion.v_mps",
+    "safety_decision",
+    "l9_constraints"
+  ]
+}
