@@ -22,6 +22,7 @@ from v3.adapters.resident_command import (
 )
 from v3.capture import CaptureSink, CaptureWindowConfig, TriggeredCaptureWorker
 from v3.capture_rate import CAPTURE_HZ_VALUES, CONTROL_CAPTURE_HZ, DEFAULT_CAPTURE_HZ, validate_capture_hz
+from v3.capture_behavior import project_behavior_record
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.adapters.native_lidar_port import (
@@ -213,13 +214,14 @@ class McapCaptureSession:
                  configuration: Mapping[str, object], metadata: Mapping[str, object] | None = None,
                  config: McapCaptureConfig | None = None, capacity: int = 256) -> None:
         self.hub = ObservationHub()
+        self.config = config or McapCaptureConfig()
         self.subscription = self.hub.subscribe_reliable(
             "capture", capacity=capacity, required=True,
-            topics=("v3.capture_record", "v3.raw_lidar"),
+            topics=("v3.capture_record",) + (("v3.raw_lidar",) if self.config.sensor_debug else ()),
         )
         self.worker = McapCaptureConsumer(capture_id, output_path,
                                          subscription=self.subscription,
-                                         configuration=configuration, metadata=metadata, config=config)
+                                         configuration=configuration, metadata=metadata, config=self.config)
         self.evidence: dict[str, object] | None = None
 
     @property
@@ -228,6 +230,13 @@ class McapCaptureSession:
 
     def start(self) -> None:
         self.worker.start()
+
+    def observe(self, record: CaptureRecord) -> None:
+        if self.hub.has_subscribers("v3.capture_record"):
+            self.hub.publish(
+                record if self.config.sensor_debug else project_behavior_record(record),
+                topic="v3.capture_record",
+            )
 
     def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:
         self.worker.trigger(reason, monotonic_ns)
@@ -242,7 +251,10 @@ class McapCaptureSession:
         # Hardware ownership has ended and the MCAP is fully fsynced/published.
         # Analysis is process-isolated behind a tiny stdlib-only handoff.
         from v3.test_hub_runtime import postprocess_capture
-        self.evidence = postprocess_capture(result.path, project_root=PROJECT_ROOT)
+        self.evidence = postprocess_capture(
+            result.path, project_root=PROJECT_ROOT,
+            replay_mode="incident" if self.config.sensor_debug else "off",
+        )
         return result.path
 
 
@@ -465,13 +477,14 @@ def run_v3_resident_process(
             hardware_kwargs["record_observer_hz"] = resolved_capture_hz
         if isinstance(capture_session, McapCaptureSession):
             hub = capture_session.hub
-            hardware_kwargs["record_observer"] = lambda record: hub.publish(record, topic="v3.capture_record")
-            hardware_kwargs["raw_lidar_observer"] = lambda scan: (
-                hub.publish(scan, topic="v3.raw_lidar") if scan is not None else None
-            )
+            hardware_kwargs["record_observer"] = capture_session.observe
+            if resolved_capture_hz == CONTROL_CAPTURE_HZ and hub.has_subscribers("v3.raw_lidar"):
+                hardware_kwargs["raw_lidar_observer"] = lambda scan: (
+                    hub.publish(scan, topic="v3.raw_lidar") if scan is not None else None
+                )
         elif capture_session is not None:
             hardware_kwargs["record_observer"] = capture_session.observe
-            if not isinstance(capture_session, ProcessMcapCaptureSession):
+            if resolved_capture_hz == CONTROL_CAPTURE_HZ and not isinstance(capture_session, ProcessMcapCaptureSession):
                 hardware_kwargs["raw_lidar_observer"] = capture_session.observe_raw_lidar
         report = run_hardware(
             counter_gpio_backend,
@@ -730,7 +743,7 @@ def main(argv: list[str] | None = None) -> int:
                     max_raw_lidar_points_per_scan=args.capture_max_raw_points,
                     max_session_records=args.capture_max_session_records,
                     mode=args.capture_mode,
-                    require_raw_lidar_transport_end=True,
+                    require_raw_lidar_transport_end=args.capture_hz == CONTROL_CAPTURE_HZ,
                     tick_sample_hz=args.capture_hz,
                 ),
                 project_root=PROJECT_ROOT,
@@ -740,7 +753,7 @@ def main(argv: list[str] | None = None) -> int:
                 strict_affinity=(
                     affinity_config.strict if affinity_config.enabled else False
                 ),
-                expect_raw_lidar_end=True,
+                expect_raw_lidar_end=args.capture_hz == CONTROL_CAPTURE_HZ,
             )
             if capture_path is not None
             else None

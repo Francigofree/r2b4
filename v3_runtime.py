@@ -380,7 +380,8 @@ def run_resident_physical_control(
                 checkpoint_started_ns = time.perf_counter_ns()
                 checkpoint_created = False
                 if (
-                    isinstance(record, ExecutionRecord)
+                    resolved_record_hz == CONTROL_CAPTURE_HZ
+                    and isinstance(record, ExecutionRecord)
                     and record.result.trace.fault_layer is None
                     and (
                         last_checkpoint_ns is None

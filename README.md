@@ -96,6 +96,14 @@ először az idő, utána a sebességértékek.
 Capture mintavétel alapértelmezése 10 Hz. Választható: `c 50`, `c 10`, `c 5`,
 `c 1`; a capture mód továbbra is `c alap`, `c full` vagy `c nincs`. Példák:
 
+Az 1/5/10 Hz-es capture kompakt rendszerállapot-napló: health, pose, mission,
+navigáció, mozgás és safety. Nem készít replay-checkpointot, és nem továbbít
+nyers szenzorpayloadot vagy teljes térkép/rollout-geometriát. A `c 50` explicit
+sensor-debug: teljes tick-input, checkpoint és közvetlen LiDAR → capture raw
+evidence; ez több CPU-t és tárhelyet igényel. A `c full` a rögzítési ablakot
+választja, önmagában nem kapcsolja be a raw adatokat. Pontos replay csak teljes
+50 Hz-es evidence-ből lehetséges.
+
 ```bash
 ./r rc 30 c 10
 ./r rc 30 c 50

@@ -347,6 +347,7 @@ class ObservationHub:
         "_lock",
         "_next_sequence",
         "_published_count",
+        "_required_failures",
         "_subscriptions",
     )
 
@@ -355,6 +356,7 @@ class ObservationHub:
         self._lock = threading.Lock()
         self._next_sequence = 0
         self._published_count = 0
+        self._required_failures: set[str] = set()
         self._subscriptions: dict[str, _SubscriptionState] = {}
 
     def subscribe(
@@ -414,6 +416,18 @@ class ObservationHub:
             required=False,
         )
 
+    def has_subscribers(self, topic: str) -> bool:
+        """Check demand before a producer builds optional observation data.
+
+        This is a hint, not a delivery reservation: consumers may unsubscribe
+        before publication. The hub never calls a payload factory itself.
+        """
+        with self._lock:
+            return not self._closed and any(
+                state.config.topics is None or topic in state.config.topics
+                for state in self._subscriptions.values()
+            )
+
     def publish(self, payload: object, *, topic: str) -> PublishReceipt:
         normalized_topic = str(topic or "").strip()
         if not normalized_topic:
@@ -442,20 +456,17 @@ class ObservationHub:
                     matched.append(name)
                 if outcome == "overrun":
                     overruns.append(name)
+                    if state.config.required:
+                        self._required_failures.add(name)
                 elif outcome == "superseded":
                     superseded.append(name)
 
-            required_failures = tuple(
-                name
-                for name, state in self._subscriptions.items()
-                if state.config.required and not state.snapshot().integrity_ok
-            )
             return PublishReceipt(
                 frame=frame,
                 matched_subscribers=tuple(matched),
                 overrun_subscribers=tuple(overruns),
                 superseded_subscribers=tuple(superseded),
-                required_integrity_ok=not required_failures,
+                required_integrity_ok=not self._required_failures,
             )
 
     def unsubscribe(self, name: str) -> None:
@@ -464,6 +475,7 @@ class ObservationHub:
             raise ValueError("subscription name must be non-empty")
         with self._lock:
             state = self._subscriptions.pop(normalized, None)
+            self._required_failures.discard(normalized)
         if state is not None:
             state.close()
 

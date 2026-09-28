@@ -19,6 +19,7 @@ from v3.engine import TickResult
 from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
 from v3.capture_ipc import CaptureCoreExpander
+from v3.capture_behavior import project_behavior_record
 from v3.hri_evidence import HRI_EVENT_TOPIC, load_hri_events_for_capture
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
@@ -37,6 +38,7 @@ _RAW_LIDAR_CAPACITY = 512
 _RAW_LIDAR_DRAIN_BATCH = 256
 _SIDECAR_READY_TIMEOUT_S = 10.0
 _SIDECAR_FINISH_TIMEOUT_S = 120.0
+_RAW_END_TIMEOUT_S = 2.0
 
 # R2B4_HRI_P0_V1
 
@@ -70,9 +72,8 @@ def _capture_sidecar_main(
             "capture-process",
             capacity=_CAPTURE_LOCAL_CAPACITY,
             required=True,
-            topics=(
-                "v3.capture_record", "v3.raw_lidar",
-                "v3.raw_lidar_transport", "v3.capture_transport", HRI_EVENT_TOPIC,
+            topics=("v3.capture_record", "v3.capture_transport", HRI_EVENT_TOPIC) + (
+                ("v3.raw_lidar", "v3.raw_lidar_transport") if config.sensor_debug else ()
             ),
         )
         consumer = McapCaptureConsumer(
@@ -91,11 +92,12 @@ def _capture_sidecar_main(
         processed = 0
         raw_end_received = not expect_raw_lidar_end
         finish_request: tuple[str, bool, int, int] | None = None
+        raw_end_deadline: float | None = None
         running = True
         while running:
             # The LiDAR producer sends full scans directly here. The control
             # interpreter never unpickles/rebuilds/re-pickles raw geometry.
-            for _ in range(_RAW_LIDAR_DRAIN_BATCH):
+            for _ in range(_RAW_LIDAR_DRAIN_BATCH if raw_lidar_queue is not None else 0):
                 try:
                     raw_message = raw_lidar_queue.get_nowait()
                 except queue.Empty:
@@ -138,6 +140,7 @@ def _capture_sidecar_main(
                     finish_request = (
                         str(command[1]), bool(command[2]), int(command[3]), int(command[4])
                     )
+                    raw_end_deadline = time.monotonic() + _RAW_END_TIMEOUT_S
                 elif kind == "abort":
                     raise RuntimeError("observer sidecar aborted by parent")
                 else:
@@ -146,6 +149,7 @@ def _capture_sidecar_main(
             if (
                 finish_request is not None
                 and processed >= finish_request[2]
+                and (raw_end_received or time.monotonic() >= raw_end_deadline)
             ):
                 if finish_request[3]:
                     hub.publish(
@@ -348,7 +352,9 @@ class ProcessMcapCaptureSession:
         self._config = config or McapCaptureConfig()
         self._transport_capacity = max(_CAPTURE_TRANSPORT_MIN_CAPACITY, capacity * 2)
         self._data_queue = context.Queue(maxsize=self._transport_capacity)
-        self._raw_lidar_queue = context.Queue(maxsize=_RAW_LIDAR_CAPACITY)
+        self._raw_lidar_queue = (
+            context.Queue(maxsize=_RAW_LIDAR_CAPACITY) if self._config.sensor_debug else None
+        )
         self._control_queue = context.Queue(maxsize=16)
         self._result_queue = context.Queue(maxsize=4)
         self._ready_event = context.Event()
@@ -356,7 +362,7 @@ class ProcessMcapCaptureSession:
         self._project_root = Path(project_root)
         self._worker_cpus = worker_cpus
         self._strict_affinity = strict_affinity
-        self._expect_raw_lidar_end = bool(expect_raw_lidar_end)
+        self._expect_raw_lidar_end = bool(expect_raw_lidar_end and self._config.sensor_debug)
         self._process = context.Process(
             target=_capture_sidecar_main,
             args=(
@@ -444,12 +450,12 @@ class ProcessMcapCaptureSession:
             return True
 
     def observe(self, record: CaptureRecord) -> None:
-        # Typed immutable handoff only. Recursive encoding/projection belongs
-        # to the already isolated capture sidecar.
-        self._enqueue("record", record)
+        # Sampled capture hands off a small immutable state summary. Full raw
+        # inputs/checkpoints/geometry cross this edge only for sensor debug.
+        self._enqueue("record", record if self._config.sensor_debug else project_behavior_record(record))
 
     def observe_raw_lidar(self, snapshot: object | None) -> None:
-        if snapshot is not None:
+        if self._config.sensor_debug and snapshot is not None:
             self._enqueue("raw_lidar", snapshot)
 
     def trigger(self, reason: str = "MANUAL", monotonic_ns: int | None = None) -> None:

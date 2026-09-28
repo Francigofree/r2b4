@@ -252,14 +252,19 @@ class McapReader:
             errors=tuple(errors),
         )
 
-    def capture_integrity(self, *, require_raw_evidence: bool = True) -> dict[str, object]:
+    def capture_integrity(self, *, require_raw_evidence: bool | None = None) -> dict[str, object]:
         """Verify the finalized capture claim against its complete message stream.
 
         Container CRC validation must precede this semantic integrity gate.
         No global fan-out sequence continuity is assumed.
+        By default verify the requested capture scope. Explicit True also
+        requires raw evidence, which a system-behavior capture does not have.
         """
         digest = hashlib.sha256()
         capture_meta = self.latest_metadata("r2b4.capture") or {}
+        raw_requested = capture_meta.get("raw_evidence_requested", "true") == "true"
+        if require_raw_evidence is None:
+            require_raw_evidence = raw_requested
         try:
             tick_sample_hz = int(capture_meta.get("tick_sample_hz", "50"))
         except (TypeError, ValueError) as exc:
@@ -333,6 +338,9 @@ class McapReader:
             raise McapReadError("capture tick_sample_hz mismatch")
         if metadata.get("tick_sample_hz", str(tick_sample_hz)) != str(tick_sample_hz):
             raise McapReadError("capture tick_sample_hz mismatch")
+        if (integrity.get("raw_evidence_requested", raw_requested) is not raw_requested
+                or metadata.get("raw_evidence_requested", str(raw_requested).lower()) != str(raw_requested).lower()):
+            raise McapReadError("capture raw_evidence_requested mismatch")
         raw_complete = (
             integrity.get("raw_evidence_complete", integrity.get("complete")) is True
             and metadata.get("raw_evidence_complete", metadata.get("complete")) == "true"

@@ -29,6 +29,7 @@ from typing import Mapping
 
 from .capture_compaction import compact_checkpoint_row, compact_tick_row
 from .capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
+from .capture_behavior import BehaviorCaptureRecord, encode_behavior_record, project_behavior_record
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .hri_evidence import HRI_EVENT_TOPIC
 from .capture_encoding import (
@@ -93,6 +94,11 @@ class McapCaptureConfig:
     require_raw_lidar_transport_end: bool = False
     tick_sample_hz: int = CONTROL_CAPTURE_HZ
 
+    @property
+    def sensor_debug(self) -> bool:
+        """Full sensor/replay evidence is requested only by 50 Hz capture."""
+        return self.tick_sample_hz == CONTROL_CAPTURE_HZ
+
     def __post_init__(self) -> None:
         for name in (
             "pre_event_ns",
@@ -127,6 +133,8 @@ class McapCaptureConfig:
         if type(self.require_raw_lidar_transport_end) is not bool:
             raise TypeError("require_raw_lidar_transport_end must be bool")
         validate_capture_hz(self.tick_sample_hz)
+        if self.require_raw_lidar_transport_end and not self.sensor_debug:
+            raise ValueError("raw LiDAR transport requires 50 Hz sensor-debug capture")
 
         if self.mode not in {"triggered", "append_only"}:
             raise ValueError("mode must be triggered or append_only")
@@ -529,6 +537,8 @@ class McapCaptureConsumer:
             return
         if not _looks_like_raw_lidar_transport_topic(item.topic):
             return
+        if not self._config.sensor_debug:
+            return
         if not isinstance(payload, Mapping):
             self._integrity_reasons.add("RAW_LIDAR_TRANSPORT_INVALID")
             return
@@ -551,13 +561,16 @@ class McapCaptureConsumer:
     def _encode_observation(self, item: ObservationFrame) -> tuple[EncodedRecord, ...]:
         payload = item.payload
         checkpoint: object | None = None
-        if item.topic == "v3.capture_record" and isinstance(payload, Mapping):
+        if isinstance(payload, BehaviorCaptureRecord):
+            row = encode_behavior_record(payload)
+        elif item.topic == "v3.capture_record" and isinstance(payload, Mapping):
             row = dict(payload)
             checkpoint = row.pop(IPC_CHECKPOINT_KEY, None)
             row.pop(IPC_TRIGGER_REASON_KEY, None)
         elif isinstance(payload, (ExecutionRecord, EdgeFaultRecord, WriterFailureRecord)):
-            row = encode_capture_record(payload)
-            if isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
+            row = (encode_capture_record(payload) if self._config.sensor_debug
+                   else encode_behavior_record(project_behavior_record(payload)))
+            if self._config.sensor_debug and isinstance(payload, ExecutionRecord) and payload.state_checkpoint_after is not None:
                 checkpoint = encode_value(payload.state_checkpoint_after)
         else:
             row = None
@@ -565,7 +578,9 @@ class McapCaptureConsumer:
         if row is not None:
             tick_id = _non_negative_int(row.get("tick_id"), "tick_id")
             monotonic_ns = _non_negative_int(row.get("monotonic_ns"), "monotonic_ns")
-            referenced = tuple(sorted(_referenced_lidar_revisions(row)))
+            referenced = tuple(sorted(_referenced_lidar_revisions(row))) if self._config.sensor_debug else ()
+            if not self._config.sensor_debug:
+                checkpoint = None
             if len(referenced) > self._config.max_referenced_revisions_per_tick:
                 raise CaptureEncodingError("tick exceeds referenced LiDAR revision bound")
             stored_row = compact_tick_row(row)
@@ -605,6 +620,8 @@ class McapCaptureConsumer:
             return tuple(records)
 
         if _looks_like_raw_lidar_topic(item.topic):
+            if not self._config.sensor_debug:
+                return ()
             row = encode_raw_lidar_snapshot(
                 payload,
                 self._config.max_raw_lidar_points_per_scan,
@@ -647,6 +664,8 @@ class McapCaptureConsumer:
             )
 
         if _looks_like_checkpoint_topic(item.topic):
+            if not self._config.sensor_debug:
+                return ()
             checkpoint = encode_value(payload)
             return (
                 EncodedRecord(
@@ -869,6 +888,8 @@ class McapCaptureConsumer:
                 "message_encoding": "json",
                 "compression": "none",
                 "tick_sample_hz": str(self._config.tick_sample_hz),
+                "observation_scope": "sensor_debug" if self._config.sensor_debug else "system_behavior",
+                "raw_evidence_requested": str(self._config.sensor_debug).lower(),
             },
         )
         self._writer = writer
@@ -1097,8 +1118,8 @@ class McapCaptureConsumer:
         sample_complete = not replay_integrity_reasons
         sampled_tick_stream = self._config.tick_sample_hz != CONTROL_CAPTURE_HZ
         replay_complete = sample_complete and not sampled_tick_stream
-        raw_evidence_complete = not raw_integrity_reasons
-        complete = sample_complete and raw_evidence_complete
+        raw_evidence_complete = self._config.sensor_debug and not raw_integrity_reasons
+        complete = sample_complete and (not self._config.sensor_debug or raw_evidence_complete)
         if sampled_tick_stream:
             integrity_warnings.append("TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE")
         if self._fault_observed and status == "PASS":
@@ -1112,6 +1133,7 @@ class McapCaptureConsumer:
         )
         integrity = {
             "complete": complete,
+            "raw_evidence_requested": self._config.sensor_debug,
             "sample_complete": sample_complete,
             "tick_sample_hz": self._config.tick_sample_hz,
             "replay_complete": replay_complete,
@@ -1200,6 +1222,7 @@ class McapCaptureConsumer:
                 "trigger_monotonic_ns": str(self._trigger_ns or 0),
                 "complete": "true" if complete else "false",
                 "sample_complete": "true" if sample_complete else "false",
+                "raw_evidence_requested": str(self._config.sensor_debug).lower(),
                 "tick_sample_hz": str(self._config.tick_sample_hz),
                 "replay_complete": "true" if replay_complete else "false",
                 "raw_evidence_complete": "true" if raw_evidence_complete else "false",
@@ -1356,6 +1379,8 @@ def _looks_like_checkpoint_topic(topic: str) -> bool:
 
 
 def _payload_triggers_capture(payload: object) -> bool:
+    if isinstance(payload, BehaviorCaptureRecord):
+        return payload.trigger_reason is not None
     if isinstance(payload, Mapping):
         reason = payload.get(IPC_TRIGGER_REASON_KEY)
         return isinstance(reason, str) and bool(reason.strip())
@@ -1370,6 +1395,8 @@ def _payload_triggers_capture(payload: object) -> bool:
 
 
 def _payload_trigger_reason(payload: object) -> str:
+    if isinstance(payload, BehaviorCaptureRecord):
+        return payload.trigger_reason or "CAPTURE_TRIGGER"
     if isinstance(payload, Mapping):
         reason = payload.get(IPC_TRIGGER_REASON_KEY)
         if isinstance(reason, str) and reason.strip():

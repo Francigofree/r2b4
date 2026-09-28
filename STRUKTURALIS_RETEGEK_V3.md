@@ -297,6 +297,10 @@ Normál shutdown: production publikáció vége → required backlog feldolgozha
 
 Capture csak indokolt replay/diagnosztikai evidence-et tartson; nincs „mindent logoljunk” követelmény. A persisted capture szemantikájának egy canonical encoding/értelmezése legyen; container/bridge ne hozzon létre versengő encoder/decoder authorityt.
 
+A normál capture elsődlegesen system-behavior recorder: a mintavett rendszerállapot, command/mission, navigáció, mozgás, safety és health bizonyítéka. Drága observation-adat csak aktív fogyasztói igényre készülhet, még a payload-felépítés és IPC előtt ellenőrzött igény alapján. Az 1/5/10 Hz-es napló nem tartalmaz raw szenzorpayloadot, teljes térkép/rollout-geometriát vagy replay-checkpointot. A teljes input/checkpoint és a producer → capture raw szenzorút az explicit 50 Hz-es sensor-debug (`c 50`) scope része. A robot működéséhez szükséges szenzorfeldolgozás ettől független production feladat.
+
+A capture metadata külön jelöli a kért scope-ot. A szándékosan nem kért raw evidence nem adatvesztés, de nem nevezhető teljes raw evidence-nek; a mintavett behavior-log nem exact-replay evidence. Integrity alapértelmezésben a kért scope-ra vonatkozik, explicit raw/replay-kéréshez a megfelelő evidence tényleges jelenléte szükséges.
+
 ### 11.2 Canonical replay
 
 Replayhez kell a futtatandó lezárt `TickInputs`, tényleges config és minden olyan determinisztikus state/input, amely nélkül a scope nem reprodukálható. Ebbe explicit beletartozik az adott live tick input-closure pontján láthatóvá tett aszinkron completion eredmény, annak hiánya, capability/recovery állapota, valamint completion/transport hibája abban a typed formában, ahogy az a lezárt `TickInputs` részévé vált. A completion **láthatósága, capability/recovery állapota és hibaállapota replay-input**. Ugyanez igaz az explicit engedélyezett delayed `MissionExecutionFeedback` értékre, ha az adott tickben L5 inputja volt.

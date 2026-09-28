@@ -78,6 +78,14 @@ def replay_mcap(
     except McapReadError as exc:
         raise McapReplayBridgeError("MCAP preflight failed: " + str(exc)) from exc
 
+    final_integrity = final.get("integrity") if isinstance(final, Mapping) else None
+    if not isinstance(final_integrity, Mapping):
+        raise McapReplayBridgeError("MCAP capture lacks final integrity")
+    replay_eligible = bool(final_integrity.get("replay_complete", final_integrity.get("complete")))
+    original_complete = bool(final_integrity.get("complete"))
+    if not replay_eligible:
+        raise McapReplayBridgeError("CAPTURE_INCOMPLETE: replay core is incomplete")
+
     if authority_sha256 is None:
         authority_sha256 = reader.sha256()
     requested = window or ReplayWindow()
@@ -140,14 +148,6 @@ def replay_mcap(
         raise McapReplayBridgeError("CAPTURE_INCOMPLETE: no initial state checkpoint or tick-zero prefix")
     if checkpoint_payload is not None and checkpoint_payload.get("tick_id") != first_tick_id - 1:
         raise McapReplayBridgeError("CAPTURE_INCOMPLETE: checkpoint does not precede first replay tick")
-    final_integrity = final.get("integrity") if isinstance(final, Mapping) else None
-    if not isinstance(final_integrity, Mapping):
-        raise McapReplayBridgeError("MCAP capture lacks final integrity")
-    replay_eligible = bool(final_integrity.get("replay_complete", final_integrity.get("complete")))
-    original_complete = bool(final_integrity.get("complete"))
-    if not replay_eligible:
-        raise McapReplayBridgeError("CAPTURE_INCOMPLETE: replay core is incomplete")
-
     configuration = runtime.get("configuration")
     metadata = runtime.get("metadata")
     if not isinstance(configuration, Mapping):
