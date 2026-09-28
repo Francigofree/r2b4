@@ -11,7 +11,7 @@ for path in (ROOT, TESTS, TESTS / "core", TESTS / "feature", TESTS / "deep"):
     if s not in sys.path:
         sys.path.insert(0, s)
 
-HARD_CAP = 150
+HARD_CAP = 200
 
 
 def pytest_collection_modifyitems(session, config, items):

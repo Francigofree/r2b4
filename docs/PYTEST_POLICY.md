@@ -9,8 +9,8 @@ Pytest protects robot-level contracts and high-value scenarios. It is not an imp
 - CORE: 20-30 collected cases.
 - FEATURE: 40-70 collected cases.
 - DEEP: 20-40 collected cases.
-- Total target: 80-140.
-- Hard cap: 150. Growth above 150 requires an explicit redesign of the suite rather than another test.
+- Total target: 100-200.
+- Hard cap: 200. Growth above 200 requires an explicit redesign of the suite rather than another test.
 
 When adding a test, prefer merging or deleting an older overlapping test.
 

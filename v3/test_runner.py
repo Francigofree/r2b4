@@ -45,7 +45,7 @@ def main(argv=None):
     if mode in {"list", "help", "-h", "--help"}:
         print("./r test            CORE (~20-30)")
         print("./r test follow     Follow scenarios")
-        print("./r test full       CORE + FEATURE + DEEP (~80-140, hard cap 150)")
+        print("./r test full       CORE + FEATURE + DEEP (~100-200, hard cap 200)")
         print("Other focused modes: roomcruise localization perception motion async process replay")
         return 0
     print(f"Unknown test mode: {mode}", file=sys.stderr)

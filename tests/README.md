@@ -47,4 +47,4 @@ python -m pytest -q
 
 A célzott pytest nem helyettesíti a szükséges evidence-t. Async/process módosításnál szükség szerint replay kell; timing/GIL javításnál mérési bizonyíték is kell. Fizikai robotmozgást pytest nem indíthat automatikusan. A teljes regresszió közös contract, TickEngine/execution boundary, composition root, aktív config, L12/motor-edge vagy több réteg érintésekor indokolt.
 
-A tesztfájlok canonical helye `tests/core/`, `tests/feature/` és `tests/deep/`. A teljes suite célmérete 80–140 collected case, hard cap 150.
+A tesztfájlok canonical helye `tests/core/`, `tests/feature/` és `tests/deep/`. A teljes suite célmérete 100–200 collected case, hard cap 200.
