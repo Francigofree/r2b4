@@ -1,0 +1,356 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "capture_metadata": {
+    "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+    "capture_id": "v3_20260928_171313_8625_capture",
+    "clock_epoch": "linux_monotonic_boot",
+    "compression": "none",
+    "container": "MCAP v0",
+    "message_encoding": "json",
+    "observation_scope": "system_behavior",
+    "raw_evidence_requested": "false",
+    "tick_sample_hz": "10"
+  },
+  "capture_path": "/home/alba/project_r2b4/runtime/captures/v3_20260928_171313_8625_capture.mcap",
+  "final_event": {
+    "capture_hz": 10,
+    "capture_id": "v3_20260928_171313_8625_capture",
+    "capture_mode": "append_only",
+    "captured_checkpoint_count": 0,
+    "captured_event_count_before_final": 0,
+    "captured_raw_lidar_count": 0,
+    "captured_tick_count": 39,
+    "event_type": "capture_finalized",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 0,
+          "before": 6
+        },
+        {
+          "after": 6,
+          "before": 11
+        },
+        {
+          "after": 11,
+          "before": 16
+        },
+        {
+          "after": 16,
+          "before": 21
+        },
+        {
+          "after": 21,
+          "before": 26
+        },
+        {
+          "after": 26,
+          "before": 31
+        },
+        {
+          "after": 31,
+          "before": 36
+        },
+        {
+          "after": 36,
+          "before": 41
+        },
+        {
+          "after": 41,
+          "before": 46
+        },
+        {
+          "after": 46,
+          "before": 51
+        },
+        {
+          "after": 51,
+          "before": 56
+        },
+        {
+          "after": 56,
+          "before": 61
+        },
+        {
+          "after": 61,
+          "before": 66
+        },
+        {
+          "after": 66,
+          "before": 71
+        },
+        {
+          "after": 71,
+          "before": 76
+        },
+        {
+          "after": 76,
+          "before": 81
+        },
+        {
+          "after": 81,
+          "before": 86
+        },
+        {
+          "after": 86,
+          "before": 91
+        },
+        {
+          "after": 91,
+          "before": 96
+        },
+        {
+          "after": 96,
+          "before": 101
+        },
+        {
+          "after": 101,
+          "before": 106
+        },
+        {
+          "after": 106,
+          "before": 111
+        },
+        {
+          "after": 111,
+          "before": 116
+        },
+        {
+          "after": 116,
+          "before": 121
+        },
+        {
+          "after": 121,
+          "before": 126
+        },
+        {
+          "after": 126,
+          "before": 131
+        },
+        {
+          "after": 131,
+          "before": 136
+        },
+        {
+          "after": 136,
+          "before": 141
+        },
+        {
+          "after": 141,
+          "before": 146
+        },
+        {
+          "after": 146,
+          "before": 151
+        },
+        {
+          "after": 151,
+          "before": 156
+        },
+        {
+          "after": 156,
+          "before": 161
+        },
+        {
+          "after": 161,
+          "before": 166
+        },
+        {
+          "after": 166,
+          "before": 171
+        },
+        {
+          "after": 171,
+          "before": 176
+        },
+        {
+          "after": 176,
+          "before": 181
+        },
+        {
+          "after": 181,
+          "before": 186
+        },
+        {
+          "after": 186,
+          "before": 188
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "4bbabf1969780fb697d462eea20b4f82bb1d4ea5ae4a67eec5a15868f224f7f3",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 39,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 39,
+        "first_lost_sequence": null,
+        "high_water_mark": 1,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 39,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": false,
+      "raw_evidence_requested": false,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 0,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": false,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": false,
+      "raw_transport_produced_count": 0,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 10
+    },
+    "metrics": {
+      "bytes_before_finalization": 1061,
+      "elapsed_ns": 14970084630,
+      "process_cpu_ns": 268742148,
+      "process_max_rss_bytes": 63881216,
+      "runtime_tick_timing": {
+        "completion_latency_max_ns": 58331578,
+        "completion_latency_sum_ns": 267912530,
+        "period_count": 38,
+        "period_max_ns": 117526125,
+        "period_sum_ns": 3749983313,
+        "tick_count": 39
+      },
+      "subscription_high_water_mark": 1,
+      "write_duration_ns": 1285787
+    },
+    "status": "PASS",
+    "trigger_monotonic_ns": null,
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "final_metadata": {
+    "capture_id": "v3_20260928_171313_8625_capture",
+    "checkpoint_count": "0",
+    "complete": "true",
+    "integrity_reasons": "[]",
+    "message_stream_sha256": "4bbabf1969780fb697d462eea20b4f82bb1d4ea5ae4a67eec5a15868f224f7f3",
+    "raw_evidence_complete": "false",
+    "raw_evidence_requested": "false",
+    "raw_lidar_count": "0",
+    "replay_complete": "false",
+    "sample_complete": "true",
+    "status": "PASS",
+    "tick_count": "39",
+    "tick_sample_hz": "10",
+    "trigger_monotonic_ns": "0",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "integrity_error": null,
+  "runtime": {
+    "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+    "capture_id": "v3_20260928_171313_8625_capture",
+    "clock_epoch": "linux_monotonic_boot"
+  },
+  "schema": "R2B4_TEST_HUB_V2",
+  "status": "PASS",
+  "structure": {
+    "channel_count": 5,
+    "chunk_count": 1,
+    "chunk_crc_ok": true,
+    "data_crc_ok": true,
+    "errors": [],
+    "file_size": 285922,
+    "library": "R2B4 McapCaptureConsumer stdlib/1",
+    "message_count": 41,
+    "message_end_time": 5185396375917,
+    "message_start_time": 5181646392604,
+    "metadata_count": 2,
+    "profile": "r2b4-v3",
+    "summary_crc_ok": true,
+    "valid": true
+  },
+  "topics": {
+    "/r2b4/checkpoint": {
+      "channel_id": 3,
+      "encoding": "json",
+      "message_count": null,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/event": {
+      "channel_id": 4,
+      "encoding": "json",
+      "message_count": 1,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/raw_lidar": {
+      "channel_id": 2,
+      "encoding": "json",
+      "message_count": null,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/runtime": {
+      "channel_id": 5,
+      "encoding": "json",
+      "message_count": 1,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    },
+    "/r2b4/tick": {
+      "channel_id": 1,
+      "encoding": "json",
+      "message_count": 39,
+      "metadata": {
+        "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+        "clock_epoch": "linux_monotonic_boot"
+      }
+    }
+  }
+}
