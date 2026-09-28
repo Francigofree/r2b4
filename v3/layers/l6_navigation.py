@@ -1848,6 +1848,11 @@ class TrajectoryNavigator:
             raise RuntimeError("ASYNC_L6_SOURCE_CONTEXT_MISMATCH")
         if event.error is not None:
             if event.error == "ASYNC_L6_DEADLINE_MISSED":
+                # Failure of the replacement does not revoke an independently
+                # valid previous trajectory. Its original expiry still applies.
+                self._abandon_pending_rollout()
+                if self._trajectory_candidates and not self._cached_plan_stale(context):
+                    return _RolloutDisposition.NONE
                 self._clear_trajectory_plan()
                 return _RolloutDisposition.HOLD
             raise RuntimeError(f"ASYNC_L6_WORKER_FAILED:{event.error}")

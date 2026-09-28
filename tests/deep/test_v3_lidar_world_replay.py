@@ -123,7 +123,7 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
 
 
 def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
-    """601 simulated seconds at 50 Hz; synthetic geometry, no hardware claims."""
+    """601 s, rate-only gyro, 10 Hz scans and quantized cumulative encoders."""
     config = resolved_config().runtime.composition.live_control.control
     writer = OfflineMotorSink()
     composition = NativeControlComposition(writer, config)
@@ -136,6 +136,8 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
     moving_ticks = global_lost_ticks = localization_stops = 0
     max_local_step = max_disagreement = 0.0
     fix_count = 0
+    left_distance = right_distance = 0.0
+    baseline_ticks = 0
     try:
         for tick in range(30_051):
             context = TickContext(tick, 1_000_000_000+tick*20_000_000)
@@ -143,14 +145,24 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
                 x += v*.02*math.cos(yaw+omega*.01)
                 y += v*.02*math.sin(yaw+omega*.01)
                 yaw = math.atan2(math.sin(yaw+omega*.02), math.cos(yaw+omega*.02))
+                left_distance += (v-omega*config.estimation.track_width_m/2)*.02
+                right_distance += (v+omega*config.estimation.track_width_m/2)*.02
             def sample(device, kind, **values):
                 return DeviceSample(device, kind, tick, context.monotonic_ns,
                                     tuple(DataField(k, value) for k, value in values.items()))
             half_track = config.estimation.track_width_m/2
+            baseline = tick % 100 < 4  # Brief per-wheel velocity fitting gaps.
+            baseline_ticks += baseline
             samples = [
-                sample("ENCODER", "wheel_velocity", left_mps=v-omega*half_track,
-                       right_mps=v+omega*half_track, trust=1.0),
-                sample("IMU", "ekf_heading", yaw_rad=yaw, omega_rad_s=omega, confidence=1.0),
+                sample("ENCODER", "wheel_velocity", left_mps=0.0 if baseline else v-omega*half_track,
+                       right_mps=v+omega*half_track, trust=0.0 if baseline else 1.0,
+                       rejection_code="BASELINE" if baseline else "NONE",
+                       raw_left_distance_m=round(left_distance/.001)*.001,
+                       raw_right_distance_m=round(right_distance/.001)*.001,
+                       left_counter_running=True, right_counter_running=True,
+                       measurement_stale=False, measurement_timing_valid=True),
+                sample("IMU", "ekf_heading", yaw_rad=0.0, omega_rad_s=omega,
+                       confidence=0.0, omega_confidence=1.0),
                 sample("RPLIDAR_C1", "lidar_safety_clearance", age_ns=0,
                     **{f"{sector}_{key}": value for sector in ("front", "rear", "left", "right")
                        for key, value in (("clearance_m", 2.0), ("observation_count", 10))}),
@@ -181,6 +193,10 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
             quality = estimate.localization_quality
             assert world.frame_id == LOCAL_FRAME_ID
             assert not quality.pose_discontinuity
+            assert quality.heading is QualityState.GOOD
+            if tick >= 5:  # First relative scan interval has now arrived.
+                assert quality.local_translation is QualityState.GOOD
+            assert quality.local_translation is not QualityState.LOST
             local = estimate.local_pose
             if previous_pose is not None:
                 max_local_step = max(max_local_step, math.hypot(local.x_m-previous_pose.x_m, local.y_m-previous_pose.y_m))
@@ -192,7 +208,7 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
             localization_stops += ConstraintCode.LOCALIZATION_DEGRADED in constrained.active_constraints
             v, omega = constrained.allowed_v_mps, constrained.allowed_omega_rad_s
             moving_ticks += abs(v)+abs(omega) > 1e-6
-            assert layers['L12'].safety_decision is SafetyDecision.ALLOW or tick == 0
+            assert layers['L12'].safety_decision is SafetyDecision.ALLOW or tick < 7
             if tick == 30000:
                 checkpoint = composition.checkpoint()
             elif tick > 30000:
@@ -204,9 +220,11 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
     assert fix_count == 3
     assert max_local_step < .02
     assert max_disagreement < config.estimation.quality.consistency_good_m
+    assert baseline_ticks > 1000
     metrics = dict(simulated_seconds=601, moving_ticks=moving_ticks, global_lost_ticks=global_lost_ticks,
                    localization_stops=localization_stops, accepted_global_fixes=fix_count,
-                   max_local_step_m=max_local_step, max_encoder_lidar_disagreement_m=max_disagreement)
+                   max_local_step_m=max_local_step, max_encoder_lidar_disagreement_m=max_disagreement,
+                   encoder_baseline_ticks=baseline_ticks, rate_only_gyro=True)
     (tmp_path/'metrics.json').write_text(json.dumps(metrics, indent=2))
     path = sink.finalize('PASS', tmp_path/'capture.json', initial_state_checkpoint=encode_value(checkpoint))
     replay = replay_capture(path, project_root=ROOT)

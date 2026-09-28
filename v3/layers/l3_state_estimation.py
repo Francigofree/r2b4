@@ -553,6 +553,7 @@ class _PoseFilter:
                 encoder_rejection_code == "NONE"
                 and encoder_timing_valid
                 and not encoder_stale
+                and encoder_trust >= self._config.quality.minimum_sensor_trust
             )
             wheel_distance_delta = _optional_wheel_distance_delta(wheel)
             if self._encoder_totals(wheel) is not None:
@@ -572,9 +573,8 @@ class _PoseFilter:
                     right_mps,
                     measured_omega,
                 )
-            wheel_omega = (
-                right_mps - left_mps
-            ) / self._config.track_width_m
+            if velocity_feedback_valid:
+                wheel_omega = (right_mps - left_mps) / self._config.track_width_m
             measured_velocity = 0.5 * (left_mps + right_mps)
             still = (
                 velocity_feedback_valid
@@ -586,7 +586,6 @@ class _PoseFilter:
             # Bootstrap guard above proves both values exist here.
             assert measured_yaw is not None
             assert measured_velocity is not None
-            assert wheel_omega is not None
             assert measured_omega is not None
             self._state[self._YAW] = measured_yaw
             if velocity_feedback_valid:
@@ -1052,6 +1051,7 @@ class NativeEstimatorStateCheckpoint:
     transform_revision: int
     relative_sequence: int
     slip_suspected: bool
+    consistency_yaw_rad: float = 0.0
 
 
 class NativeStateEstimator:
@@ -1069,6 +1069,7 @@ class NativeStateEstimator:
         self._history: list[LocalPoseSample] = []
         self._last_lidar_ns = self._last_fix_ns = self._last_relative_ns = None
         self._consistency_x_m = self._consistency_y_m = 0.0
+        self._consistency_yaw_rad = 0.0
         self._relative_rmse_m = None
         self._observability = 0.0
         self._unverified_sigma_m = 0.01
@@ -1088,7 +1089,7 @@ class NativeStateEstimator:
             self._consistency_x_m, self._consistency_y_m, self._relative_rmse_m,
             self._observability, self._unverified_sigma_m, self._wheel_trusted,
             self._heading_trusted, self._generation, self._transform_revision,
-            self._relative_sequence, self._slip_suspected,
+            self._relative_sequence, self._slip_suspected, self._consistency_yaw_rad,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1121,6 +1122,7 @@ class NativeStateEstimator:
         now = frame.context.monotonic_ns
         cfg = self._config.quality
         previous = self._local._last_context
+        previous_pose = self._history[-1].pose if self._history else None
         continuous = previous is None or (
             frame.context.tick_id == previous.tick_id+1
             and 0 < now-previous.monotonic_ns <= self._config.max_dt_ns)
@@ -1128,6 +1130,8 @@ class NativeStateEstimator:
             self._generation += 1
             self._history.clear()
             self._unverified_sigma_m = cfg.local_lost_sigma_m
+            self._last_relative_ns = None
+            self._consistency_yaw_rad = 0.0
         # Consumer freshness is evaluated here, even when L2 admits no new event.
         fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= self._config.max_measurement_age_ns)
         frame = replace(frame, accepted=fresh)
@@ -1144,11 +1148,25 @@ class NativeStateEstimator:
             if "point_count" not in health_values:
                 self._last_lidar_ns -= int(_optional_numeric_value(health, "age_ns", 0))
         if wheel is not None:
-            values = {v.key: v.value for v in wheel.values}
-            self._wheel_trusted = (_numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust
-                                   and values.get("rejection_code", "NONE") == "NONE"
-                                   and values.get("measurement_timing_valid", True)
-                                   and not values.get("measurement_stale", False))
+            wheel_values = {v.key: v.value for v in wheel.values}
+            # BASELINE rejects the fitted velocity, not the signed cumulative
+            # displacement. Only explicit running counter evidence can provide
+            # odometry authority in that case; legacy velocity-only captures
+            # retain their trust gate.
+            rejection = wheel_values.get("rejection_code", "NONE")
+            counter_odometry = (
+                rejection in {"NONE", "BASELINE"}
+                and wheel_values.get("left_counter_running") is True
+                and wheel_values.get("right_counter_running") is True
+                and self._local._encoder_totals(wheel) is not None
+            )
+            self._wheel_trusted = (
+                (counter_odometry or (rejection == "NONE"
+                 and _numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust))
+                and wheel_values.get("measurement_timing_valid", True)
+                and not wheel_values.get("measurement_stale", False)
+                and wheel.source_device_id not in frame.degraded_sources
+            )
         rate_heading_confidence = 0.0
         if heading is not None:
             absolute_heading_confidence = _numeric_value(heading, "confidence")
@@ -1173,11 +1191,18 @@ class NativeStateEstimator:
             self._heading_trusted = False
         if any(e.update_type == "VELOCITY" and not e.accepted for e in self._local.last_update_evidence):
             self._wheel_trusted = False
-        if wheel is not None and heading is not None:
+        if (wheel is not None and heading is not None
+                and wheel_values.get("rejection_code", "NONE") == "NONE"
+                and self._wheel_trusted
+                and _numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust
+                and rate_heading_confidence >= cfg.minimum_sensor_trust):
             wheel_yaw = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
             self._slip_suspected = self._slip_suspected or abs(wheel_yaw-_numeric_value(heading, "omega_rad_s")) > cfg.wheel_imu_slip_rad_s
-        dt = 0.0 if previous is None else max(0, now-previous.monotonic_ns)/1e9
-        self._unverified_sigma_m += abs(local.v_mps)*min(dt, .25)*cfg.unverified_drift_per_m
+        # Count displacement even when BASELINE supplies no qualified velocity.
+        if continuous and previous_pose is not None:
+            self._unverified_sigma_m += math.hypot(
+                pose.x_m-previous_pose.x_m, pose.y_m-previous_pose.y_m,
+            ) * cfg.unverified_drift_per_m
         self._relative_check(frame)
 
         # Project delayed global measurements to this tick using only the local
@@ -1220,11 +1245,38 @@ class NativeStateEstimator:
             local_state = QualityState.DEGRADED
         if not continuous or not self._wheel_trusted or encoder_age > self._config.max_measurement_age_ns:
             local_state = QualityState.LOST
-        yaw_sigma = math.sqrt(local.covariance_5x5[12])
+        yaw_variance = local.covariance_5x5[12]
+        relative_heading = False
+        if self._last_relative_ns is not None:
+            # Relative registration validates heading over local scan intervals,
+            # not absolute yaw in the boot/map frame. Retain the filter's full
+            # covariance; expose the independently observed local uncertainty.
+            # Once scans stop validating it, uncertainty grows from measurement
+            # time and eventually revokes heading authority even with fresh gyro.
+            unverified_s = relative_age / 1e9
+            relative_variance = (
+                self._config.yaw_measurement_variance / max(cfg.minimum_observability, self._observability)
+                + self._consistency_yaw_rad**2
+                + self._config.process_noise[2] * unverified_s / self._config.process_noise_reference_dt_s
+                + self._config.omega_measurement_variance * unverified_s**2
+                + self._config.process_noise[4] / self._config.process_noise_reference_dt_s * unverified_s**3 / 3
+            )
+            relative_heading = relative_variance < yaw_variance
+            yaw_variance = min(yaw_variance, relative_variance)
+        yaw_sigma = math.sqrt(yaw_variance)
         heading_state = QualityState.GOOD
-        if yaw_sigma**2 > cfg.max_yaw_variance*.5 or imu_age > self._config.max_measurement_age_ns//2:
+        if (yaw_sigma**2 > cfg.max_yaw_variance*.5
+                or imu_age > self._config.max_measurement_age_ns//2
+                or abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad*.5):
             heading_state = QualityState.DEGRADED
-        if not self._heading_trusted or imu_age > self._config.max_measurement_age_ns or yaw_sigma**2 > cfg.max_yaw_variance:
+        if relative_heading and (
+            relative_age > cfg.relative_max_age_ns or self._observability < cfg.minimum_observability
+        ):
+            heading_state = QualityState.DEGRADED
+        if (not continuous or not self._heading_trusted
+                or imu_age > self._config.max_measurement_age_ns
+                or yaw_sigma**2 > cfg.max_yaw_variance
+                or abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad):
             heading_state = QualityState.LOST
         global_sigma = math.sqrt(max(global_estimate.covariance_5x5[0], global_estimate.covariance_5x5[6]))
         global_state = QualityState.GOOD
@@ -1250,22 +1302,28 @@ class NativeStateEstimator:
         start_ns = int(_numeric_value(observation, "start_ns"))
         end_ns = observation.captured_monotonic_ns
         a, b = self._pose_at(start_ns), self._pose_at(end_ns)
+        if a is None or b is None or start_ns >= end_ns:
+            return
+        # Neither a rejected interval nor an overlapping registration may
+        # improve the uncertainty of the last accepted relative measurement.
+        if self._last_relative_ns is not None and start_ns < self._last_relative_ns:
+            return
         self._observability = _numeric_value(observation, "observability")
-        if a is None or b is None or start_ns >= end_ns or self._observability < cfg.minimum_observability:
+        if self._observability < cfg.minimum_observability:
             return
         dx, dy, yaw = a.inverse().apply(b.x_m, b.y_m, b.yaw_rad)
         error_x = dx-_numeric_value(observation, "dx_m")
         error_y = dy-_numeric_value(observation, "dy_m")
+        error_yaw = _normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))
         # Non-overlapping scan intervals accumulate systematic slow encoder drift.
-        if self._last_relative_ns is not None and start_ns < self._last_relative_ns:
-            return
         decay = math.exp(-(end_ns-start_ns)/1e9/cfg.consistency_memory_s)
         self._consistency_x_m = decay*self._consistency_x_m + math.cos(a.yaw_rad)*error_x-math.sin(a.yaw_rad)*error_y
         self._consistency_y_m = decay*self._consistency_y_m + math.sin(a.yaw_rad)*error_x+math.cos(a.yaw_rad)*error_y
+        self._consistency_yaw_rad = decay*self._consistency_yaw_rad + error_yaw
         self._relative_rmse_m = _numeric_value(observation, "rmse_m")
         self._last_relative_ns = end_ns
         self._unverified_sigma_m = .01 + self._relative_rmse_m
-        self._slip_suspected = (abs(_normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))) > cfg.relative_yaw_slip_rad
+        self._slip_suspected = (abs(error_yaw) > cfg.relative_yaw_slip_rad
                                 or math.hypot(error_x, error_y) > cfg.consistency_lost_m)
 
 

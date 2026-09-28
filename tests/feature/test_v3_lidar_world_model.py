@@ -8,7 +8,7 @@ import pytest
 from rig import resolved_config, healthy_localization
 from v3.contracts import (
     AdmittedFrame, CostmapCell, DataField, Observation, RobotEstimate,
-    RollingLocalCostmap, TickContext, TrackEstimateStatus,
+    RollingLocalCostmap, TickContext, TrackEstimateStatus, QualityState,
 )
 from v3.layers.l4_structural_memory import StructuralMemoryGrid
 from v3.layers.l4_temporal_occupancy import TemporalOccupancyGrid
@@ -35,10 +35,11 @@ def _scan(sequence, captured_ns, points=((1.05, 0.05),)):
     )
 
 
-def _tick(model, now_ns, observations=(), *, x=0.0, variance=0.0, frame_id="odom"):
+def _tick(model, now_ns, observations=(), *, x=0.0, variance=0.0, frame_id="odom", quality=None):
     context = TickContext(now_ns, now_ns)
     covariance = tuple(variance if i in (0, 6, 12) else 0.0 for i in range(25))
-    estimate = RobotEstimate(context, frame_id, x, 0.0, 0.0, 0.0, 0.0, covariance, localization_quality=healthy_localization())
+    estimate = RobotEstimate(context, frame_id, x, 0.0, 0.0, 0.0, 0.0, covariance,
+                            localization_quality=quality or healthy_localization(global_position=QualityState.LOST))
     return model(AdmittedFrame(context, observations, ()), estimate)
 
 
@@ -100,12 +101,13 @@ def test_lidar_multirate_cache_keeps_50hz_projection_freshness_and_lineage(monke
         previous = result
 
 
-def test_lidar_memory_quality_and_expiry_invalidate_cache_without_new_scans():
+def test_lidar_localization_memory_quality_and_expiry_invalidate_cache_without_new_scans():
     config = _config()
     model = ShadowWorldModel(config)
     last_ns, sequence, initial = _confirmed_wall(model, config)
     temporal_expiry = last_ns + config.local_costmap_max_cell_age_ns + 1
     remembered = _tick(model, temporal_expiry)
+    assert remembered.local_costmap.occupied_cells  # Learned with no global fix.
     assert remembered.local_costmap.occupied_cells == initial.local_costmap.occupied_cells
     assert remembered.local_costmap.revision > initial.local_costmap.revision
     degraded = _tick(model, temporal_expiry + 20_000_000, variance=1.0)
@@ -113,6 +115,25 @@ def test_lidar_memory_quality_and_expiry_invalidate_cache_without_new_scans():
     assert degraded.local_costmap.revision > remembered.local_costmap.revision
     recovered = _tick(model, temporal_expiry + 40_000_000)
     assert recovered.local_costmap.occupied_cells == remembered.local_costmap.occupied_cells
+    for index, quality in enumerate((
+        healthy_localization(global_position=QualityState.GOOD),
+        healthy_localization(global_position=QualityState.DEGRADED),
+        healthy_localization(global_position=QualityState.LOST),
+    )):
+        result = _tick(model, temporal_expiry + (3 + index)*20_000_000, quality=quality)
+        assert result.local_costmap.occupied_cells is recovered.local_costmap.occupied_cells
+        assert result.local_costmap.revision == recovered.local_costmap.revision
+    checkpoint = model.checkpoint()
+    for index, quality in enumerate((
+        healthy_localization(heading=QualityState.DEGRADED),
+        healthy_localization(local_translation=QualityState.LOST),
+        healthy_localization(local_pose_continuous=False),
+    )):
+        result = _tick(model, temporal_expiry + (6 + index)*20_000_000, quality=quality)
+        assert not result.local_costmap.occupied_cells
+    # LOST requires a new trustworthy scan before recall; expiry below checks
+    # the independently retained, valid-localization branch.
+    model.restore(checkpoint)
     boundary = last_ns + config.structural_max_age_ns
     valid = _tick(model, boundary)
     assert valid.local_costmap.occupied_cells

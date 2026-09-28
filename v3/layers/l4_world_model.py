@@ -652,8 +652,10 @@ class ShadowWorldModel:
 
     def _structural_quality_ok(self, estimate: RobotEstimate) -> bool:
         covariance = estimate.covariance_5x5
-        return (estimate.localization_quality.global_position is QualityState.GOOD
-                and estimate.localization_quality.local_translation is QualityState.GOOD
+        quality = estimate.localization_quality
+        return (quality.local_translation is QualityState.GOOD
+                and quality.heading is QualityState.GOOD
+                and quality.local_pose_continuous and not quality.pose_discontinuity
                 and self._structural_variance_ok(covariance[0], covariance[6], covariance[12]))
 
     def _structural_pose_quality_ok(self, pose: PoseSample) -> bool:

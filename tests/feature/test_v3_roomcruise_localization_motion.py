@@ -138,3 +138,53 @@ def test_roomcruise_localization_pending_keeps_original_dependency_and_expiry():
     stopped = realizer.evaluate(restored.evaluate(tightened), estimate, world)
     assert stopped.stop_reason == "PLANNER_PENDING_NO_VALID_OBJECTIVE"
     assert limiter.evaluate(stopped, estimate).allowed_v_mps == 0.0
+
+    # Exercise production L6 completion inputs as well as L7 retention. A
+    # timed-out replacement keeps the old trajectory only until its own expiry.
+    from v3.contracts import LOCAL_FRAME_ID, ObstacleTrack
+    from v3.contracts.planner import PlannerInput
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+    for mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON, CommandMode.NAVIGATE):
+        async_config = replace(config.async_l6, request_timeout_ns=100_000_000)
+        navigator = TrajectoryNavigator(config.navigation, async_config=async_config)
+        selector = MotionSelector(config.motion_selection)
+        computer = TrajectoryRolloutComputer(config.navigation)
+        manager = MissionManager(config.mission)
+        first_request = replacement = initial_validity = checkpoint = None
+        restored = None
+        for tick in range(21):
+            estimate, world = _scene(tick)
+            estimate = replace(estimate, frame_id=LOCAL_FRAME_ID)
+            world = replace(world, frame_id=LOCAL_FRAME_ID,
+                            local_costmap=replace(world.local_costmap, frame_id=LOCAL_FRAME_ID),
+                            obstacle_tracks=(ObstacleTrack("person-1", 1.8, 0.0, .2, 0.0, 0.0, 1.0),))
+            goal = (DataField("x_m", 1.0), DataField("y_m", 0.0), DataField("frame_id", LOCAL_FRAME_ID)) if mode is CommandMode.NAVIGATE else ()
+            mission = manager.evaluate(CommandRequest(estimate.context, "continuity", mode, goal, tick))
+            completion = None
+            if tick == 1:
+                completion = PlannerInput(estimate.context, first_request.context, computer.compute(first_request))
+            elif tick == 11:
+                assert replacement is not None
+                completion = PlannerInput(estimate.context, replacement.context, error="ASYNC_L6_DEADLINE_MISSED")
+            plan = navigator.evaluate(mission, estimate, world, completion)
+            if restored is not None:
+                assert restored.evaluate(mission, estimate, world, completion) == plan
+            motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
+            if tick == 0:
+                first_request = navigator.pending_rollout_request
+                assert first_request is not None
+            elif tick <= 17:
+                assert plan.status is NavigationStatus.ACTIVE
+                assert abs(motion.requested_v_mps) + abs(motion.requested_omega_rad_s) > 0
+                if initial_validity is None:
+                    initial_validity = plan.motion_validity
+                assert plan.motion_validity == initial_validity
+            else:
+                assert motion.requested_v_mps == motion.requested_omega_rad_s == 0
+            if tick == 5:
+                replacement = navigator.pending_rollout_request
+                assert replacement is not None
+            if tick == 10:
+                checkpoint = navigator.checkpoint()
+                restored = TrajectoryNavigator(config.navigation, async_config=async_config)
+                restored.restore(checkpoint)

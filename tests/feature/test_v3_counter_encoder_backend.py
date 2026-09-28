@@ -92,7 +92,7 @@ def test_initial_two_by_one_edge_fill_is_untrusted_without_becoming_stale():
     left_edges = (SignedPulseEdge(1010000000, 1), SignedPulseEdge(1020000000, 2))
     right_edges = (SignedPulseEdge(1015000000, 1), SignedPulseEdge(1025000000, 2))
     backend, _, _ = _backend((_snapshot(0), _snapshot(2, edge_history=left_edges), _snapshot(2, edge_history=left_edges)), (_snapshot(0), _snapshot(1, edge_history=right_edges[:1]), _snapshot(2, edge_history=right_edges)))
-    backend.read(TickContext(0, 1000000000))
+    baseline = backend.read(TickContext(0, 1000000000))
     filling = backend.read(TickContext(1, 1030000000))
     ready = backend.read(TickContext(2, 1040000000))
     _assert_rejected(filling)
@@ -107,6 +107,41 @@ def test_initial_two_by_one_edge_fill_is_untrusted_without_becoming_stale():
     assert ready.diagnostics is not None
     assert ready.diagnostics.left_estimation_timebase == 'GPIO_EDGE_HISTORY'
     assert ready.diagnostics.right_estimation_timebase == 'GPIO_EDGE_HISTORY'
+
+    # Feed the native adapter's exact observations to L3. Velocity fitting is
+    # still untrusted, while signed cumulative displacement remains usable.
+    from rig import resolved_config
+    from v3.contracts import AdmittedFrame, DataField, Observation, QualityState
+    from v3.layers.l3_state_estimation import NativeStateEstimator
+    class Readings:
+        def __init__(self):
+            self.readings = iter((baseline, filling, ready))
+        def read(self, context):
+            return next(self.readings)
+    source = NativeEncoderSource(Readings(), NativeEncoderConfig("ENCODER", .5))
+    estimator = NativeStateEstimator(resolved_config().runtime.composition.live_control.control.estimation)
+    for tick, ns in enumerate((1000000000, 1030000000, 1040000000)):
+        context = TickContext(tick, ns)
+        sample = source.read(context).samples[0]
+        wheel = Observation(sample.kind, sample.device_id, sample.sequence, sample.captured_monotonic_ns, sample.values)
+        heading = Observation("ekf_heading", "IMU", tick, ns, (
+            DataField("yaw_rad", 0.0), DataField("omega_rad_s", 0.0), DataField("confidence", 1.0)))
+        estimate = estimator(AdmittedFrame(context, (wheel, heading), ()))
+        assert estimate.localization_quality.local_translation is not QualityState.LOST
+    assert estimate.local_pose.x_m == pytest.approx(.003)
+    for step in range(1, 201):
+        context = TickContext(2+step, 1040000000+step*20_000_000)
+        values = {v.key: v.value for v in sample.values}
+        values.update(left_mps=0.0, right_mps=0.0, trust=0.0, rejection_code="BASELINE",
+                      raw_left_distance_m=.002+step*.02, raw_right_distance_m=.004+step*.02)
+        wheel = Observation("wheel_velocity", "ENCODER", context.tick_id, context.monotonic_ns,
+                            tuple(DataField(k, v) for k, v in values.items()))
+        heading = Observation("ekf_heading", "IMU", context.tick_id, context.monotonic_ns, heading.values)
+        estimate = estimator(AdmittedFrame(context, (wheel, heading), ()))
+    # No relative scan validates these four metres. Missing velocity feedback
+    # must not also hide accumulated displacement uncertainty.
+    assert estimate.local_pose.x_m == pytest.approx(4.003)
+    assert estimate.localization_quality.local_translation is QualityState.LOST
 
 def test_processing_gap_without_dual_wheel_edge_proof_remains_stale():
     edges = tuple((SignedPulseEdge(timestamp_ns, pulse_count) for pulse_count, timestamp_ns in enumerate((1250000000, 1260000000, 1270000000, 1280000000, 1290000000), start=1)))
