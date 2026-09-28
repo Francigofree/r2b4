@@ -1,0 +1,565 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "fa91030b2bce4105e345c34a2c80a7eadafa556017defdf8004be0d48ba031d1",
+      "size_bytes": 24060
+    },
+    "diagnosis.json": {
+      "sha256": "b49dde174427c468321e570b1074fabf19b20395b05dc63e1735a5aace864343",
+      "size_bytes": 131279
+    },
+    "gui_manifest.json": {
+      "sha256": "35e707657bac83164aa52d4f649c37ad0e9f9ccacb8dcd2627f5972e55b679d1",
+      "size_bytes": 75784
+    },
+    "inspect.json": {
+      "sha256": "f011bbaf5ebfcb1c99f24fed90e06486280a874990685b32cba6d3ea3252f48f",
+      "size_bytes": 6194
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "eb6f727dfcbfd1fafbdf0253748a79497346e8dc233f7964b9abf6b27b11f1b3",
+      "size_bytes": 49111
+    },
+    "replay_result.json": {
+      "sha256": "51ebb2a83410e72079aa6d1c28212c43b0e0b4eff2e5699d4a6574dee9e058b7",
+      "size_bytes": 264013
+    },
+    "timeline.ndjson": {
+      "sha256": "b5e7e2cac1548801abefef2d0f46e74fd2629cb9042dd687dd4dd2fc629a9b16",
+      "size_bytes": 987733
+    },
+    "triage.json": {
+      "sha256": "1aea6aa438dd525a7bfe60b78b5e9f6436dfaeb1e8b94cf2d34fc1e2624818da",
+      "size_bytes": 60348
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260928_210045_16471_capture.mcap",
+    "sha256": "3b11b8000674a169bc27326bf95d44bada377ad0b7cc073a578189797ef57fb2"
+  },
+  "behavior_status": "DEGRADED",
+  "created_at_utc": "2026-09-28T19:01:12Z",
+  "diagnosis_status": "FINDING",
+  "evidence_sha256": "52db0eede4b53eda554c3c1d0ea06f83e26a8775f455c1945c02a23620e34883",
+  "evidence_status": "PASS",
+  "root_cause": {
+    "confidence": "PROVEN",
+    "evidence_ids": [
+      "device-57",
+      "motion-blocked-l9-57"
+    ],
+    "kind": "MOTION_BLOCKED",
+    "layer": "L9",
+    "reason": "MOTION_REQUEST_CONSTRAINED_TO_ZERO",
+    "replayer_physical_root_cause": {
+      "cause": "PERSON_DETECTOR_NO_RESULT",
+      "evidence": {
+        "device_health": [
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "WHEEL_ENCODERS",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "BNO055_IMU",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "RPLIDAR_C1",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "CAMERA_FRONT",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ],
+        "ekf_updates": [
+          {
+            "__type__": "EkfUpdateEvidence",
+            "accepted": true,
+            "innovation": [
+              0.0
+            ],
+            "nis": 0.0,
+            "threshold": 18.0,
+            "update_type": "VELOCITY"
+          },
+          {
+            "__type__": "EkfUpdateEvidence",
+            "accepted": true,
+            "innovation": [
+              0.0
+            ],
+            "nis": 0.0,
+            "threshold": null,
+            "update_type": "ZUPT"
+          }
+        ],
+        "input_reference": "ticks[7].inputs",
+        "record_type": "closed_input_tick",
+        "sensor_samples": [
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 10891042316881,
+            "device_id": "WHEEL_ENCODERS",
+            "kind": "wheel_velocity",
+            "sequence": 126,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "left_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "trust",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_stale",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "rejection_code",
+                "value": "NONE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_left_pulse_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_right_pulse_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pulse_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pulse_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "sample_interval_ns",
+                "value": 19941165
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_left_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_right_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "instantaneous_left_mps",
+                "value": 0.0
+              },
+              {
+                "__omitted_items__": 36
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_a_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_a_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_level",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_level",
+                "value": null
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 10890970591267,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_health",
+            "sequence": 11,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 82118078
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 384
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 10890928168813
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 10891013013721
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 10890970591267
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 10890970591267,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_safety_clearance",
+            "sequence": 11,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 82118078
+              },
+              {
+                "__type__": "DataField",
+                "key": "front_clearance_m",
+                "value": 1.063
+              },
+              {
+                "__type__": "DataField",
+                "key": "rear_clearance_m",
+                "value": 0.647
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_clearance_m",
+                "value": 0.62525
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_clearance_m",
+                "value": 0.80175
+              },
+              {
+                "__type__": "DataField",
+                "key": "front_observation_count",
+                "value": 88
+              },
+              {
+                "__type__": "DataField",
+                "key": "rear_observation_count",
+                "value": 99
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_observation_count",
+                "value": 99
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_observation_count",
+                "value": 98
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 10890970591267,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_local_points",
+            "sequence": 11,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "frame_id",
+                "value": "ROBOT_BASE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 96
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_000_x_m",
+                "value": 2.434243615164968
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_000_y_m",
+                "value": -0.4662834674622171
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_000_quality",
+                "value": 16
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_001_x_m",
+                "value": 2.414844462133759
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_001_y_m",
+                "value": -0.5009144499831452
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_001_quality",
+                "value": 15
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_002_x_m",
+                "value": 2.3185642257570738
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_002_y_m",
+                "value": -0.5922068313009404
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_002_quality",
+                "value": 9
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_003_x_m",
+                "value": 2.1318540948427493
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_003_y_m",
+                "value": -0.7210744540629649
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_003_quality",
+                "value": 8
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_004_x_m",
+                "value": 2.034555320974061
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_004_y_m",
+                "value": -0.8304160980473192
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_004_quality",
+                "value": 9
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_005_x_m",
+                "value": 1.9328159432000123
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_005_y_m",
+                "value": -0.9290332500572012
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_005_quality",
+                "value": 15
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_006_x_m",
+                "value": 1.8416536016837175
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_006_y_m",
+                "value": -1.0287381889506153
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_006_quality",
+                "value": 23
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_007_x_m",
+                "value": 1.7365672244548778
+              },
+              {
+                "__omitted_items__": 258
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_093_y_m",
+                "value": 0.5797459718167465
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_093_quality",
+                "value": 26
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_094_x_m",
+                "value": 2.4106952196199254
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_094_y_m",
+                "value": 0.44679594962537345
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_094_quality",
+                "value": 26
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_095_x_m",
+                "value": 2.4319342035075637
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_095_y_m",
+                "value": 0.41446957645891613
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_095_quality",
+                "value": 14
+              }
+            ]
+          }
+        ]
+      },
+      "reason": "EDGE_HEALTH_AND_TICK_EVIDENCE_AGREE",
+      "status": "INDICATED"
+    },
+    "tick_id": 57
+  },
+  "run_id": "v3_20260928_210045_16471_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}
