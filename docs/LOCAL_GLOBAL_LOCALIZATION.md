@@ -80,3 +80,87 @@ teljes fizikai acceptance és nem régi-capture `MATCH` bizonyíték.
    slip-küszöbök és L11 feedback-tolerancia megfelelőségét, valamint a valós
    stop–start gyakoriság és control timing javulását. A szintetikus teszt nem
    bizonyít abszolút térképi pontosságot vagy közös szenzorbias elleni védelmet.
+
+## 2026-09-29: a 08:40 és 08:42 Room Cruise megszakításai
+
+A vizsgálat authorityja a `v3_20260929_084011_9120_capture.mcap` és
+`v3_20260929_084207_9850_capture.mcap`, illetve az aktuális production source.
+A meglévő capture/evidence fájlok változatlanok maradtak. A `DEVICE_HEALTH_NON_OK`
+incidentek optional kamera/person-detector állapotai nem magyarázzák a
+megtorpanást: az aktív szakaszokban L12 `ALLOW` mellett L6/L8 kért nullát.
+
+| Rögzített tény | 08:40 | 08:42 |
+| --- | ---: | ---: |
+| Aktív tick | 453 | 846 |
+| Mozgást kérő tick | 236 | 228 |
+| `PLANNER_STALE_HOLD` | 18 | 112 |
+| `LOCALIZATION_HOLD` | 185 | 464 |
+| Átlagos control frekvencia | 44,36 Hz | 41,83 Hz |
+| Legnagyobb tick-kezdésköz | 97,38 ms | 243,89 ms |
+
+### Gyökérokok és az elvégzett javítás
+
+1. **L6 számítási költség és a terv élettartama.** Az első planner-megállás
+   a 119., illetve 82. tick. A 08:42-es induló kérés a 67. tickből a 78.-ra,
+   228,6 ms alatt érkezik meg. A következő eredmény további 173,0 ms múlva,
+   a 84. tickben látható; közben a régi terv eredeti 350 ms-os érvényessége lejár.
+   A profilban a rollout ismételt rectangle/disc clearance-számítása dominál.
+   A módosított L6 a pálya addigi minimumát használja a következő térbeli
+   keresés felső korlátjaként. Távolabbi akadály nem csökkentheti ezt a minimumot.
+   A direct és worker algoritmus is ezt használja; a pontszám, collision,
+   escape-szemantika és a teljes result változatlan. A 14 capture-checkpointból
+   származó kérésen a régi és az optimalizált számítás eredménye pontosan egyezik.
+   Ezen a fejlesztői gépen az átlagos pure-compute idő 41,70 → 18,87 ms,
+   illetve 41,95 → 14,55 ms volt. Ez nem a roboton mért process-latencia.
+
+2. **A relatív LiDAR-regisztráció felületi mintavételezési hibája.** A régi
+   point-to-point illesztés a fordulatonként változó sugárfázist és pontszámot
+   részben elmozdulásként értelmezte. L3 a sok kicsi eltérést helyesen összegezte,
+   de a hibás evidence miatt a 286., illetve 323. tickben átlépte a 12 cm-es
+   consistency-határt. Ezután L4 nem integrált új geometriát, és a costmap
+   lejárata a recovery forgást is leállította. A javítás a LiDAR workerben
+   felületi normálisokra illesztő SE(2) regisztráció. Sarkok/szórt pontok nem
+   kapnak megbízható normálist; a trim, fizikai sebességkorlát és measurement
+   identity megmarad. Az observability a transzláció mellett a forgási rangot
+   is ellenőrzi: párhuzamos folyosó és körfal nem adhat hamis teljes authorityt.
+   Encoder/gyro prior nem kerül az ettől független ellenőrző mérésbe.
+
+3. **L3 időben eltérő sebességek összehasonlítása.** A 08:42-es 539. tickben
+   a bal oldali régebbi −0,259 m/s-os fit és a jobb oldali +0,123 m/s-os fit
+   a friss 0,343 rad/s gyro mellett slipet jelzett. A bal keréknél közben nem
+   volt új impulzus. Kumulatív encoder esetén az új ellenőrzés a két kerék
+   elmozdulását és a gyro által vezetett helyi heading változását ugyanazon
+   mérési intervallumban hasonlítja össze. A szükséges anchor és pose history
+   már checkpointolt L3-state; új state/transport nem kell. A velocity-only
+   régi inputok meglévő ellenőrzése megmarad. Valódi eltérés továbbra is `LOST`.
+
+A javítás nem növeli a planner-, world-, sensor- vagy safety-lejáratokat.
+A meglévő L7 ownership, L8 realizáció, L9 gyorsuláskorlát, L10–L11 és az
+egyetlen L12 writer változatlan. Nincs új processz, scheduler vagy authority.
+
+### Ellenőrzés és a bizonyítás határa
+
+A raw scanpárokból az új regisztrációt **az eredeti intervallumokon** újraszámolva,
+az eredeti L2 admissiont és closure-időket megtartva, a production L3/L4-en
+végzett offline kísérletben egyik futás aktív szakaszában sincs helyi translation
+vagy heading `LOST`. A maximális helyi sigma 0,1304 → 0,1053 m és
+0,1313 → 0,0881 m; a 08:42-es maximális yaw sigma 0,3188 → 0,2173 rad.
+A 08:42-es futásban egy valóban megöregedett costmap-tick megmarad.
+Ez megváltoztatott inputú kísérlet, nem az eredeti felvétel exact replaye,
+és nem a más mozgásból következő fizikai szenzoradatok előrejelzése.
+
+A regressziós esetek valódi, újramintavételezett sugárgeometriát használnak
+azonos landmarkpontok eltolása helyett. Lefedik az egyenes/íves mozgást,
+felhalmozódó mérési hibát, hiányos/degenerált regisztrációt, időben eltérő
+kerékfiteket és valódi slipet, valamint a direct/process eredményegyezést és
+stale inputot. Egy új 601 tickes natív L1–L12 szimulációban a regisztráció,
+120 ms késleltetett planner completion, ritka 40 ms tick-köz és a helyi
+akadálytérkép együtt fut; az indulás után folyamatos haladást és íves fordulást,
+majd 50 tickes checkpoint-replay egyezést követel.
+
+A tick-kezdésköz nem azonos az L0–L12 futásidejével. A capture completion-latency
+az observation/capture kézbesítés mérése; nem planner- vagy motorlatencia.
+A felvételek nem adnak elegendő per-phase evidence-et a fizikai I/O,
+GIL/serializáció, process transport és CPU/scheduler contention számszerű
+szétválasztásához. Az ezek közötti oksági megoszlás és a roboton elérhető
+új timing/motorfolytonosság külön, engedélyezett live mérésre marad.
