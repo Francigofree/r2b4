@@ -1,93 +1,71 @@
-from __future__ import annotations
-
+"""Canonical motion preserves its envelope, curvature and finite transitions."""
+from dataclasses import replace
 import math
 
-from v3.contracts import ConstrainedMotion, ConstraintCode, TickContext
-from v3.layers.l10_chassis_control import (
-    ChassisControlConfig,
-    DifferentialDriveKinematics,
+from rig import resolved_config, healthy_localization
+from v3.contracts import (
+    ConstrainedMotion, ConstraintCode, LocalizationRequirement, MissionConstraints,
+    MotionIntent, RobotEstimate, TickContext,
 )
+from v3.layers.l10_chassis_control import DifferentialDriveKinematics
+from v3.layers.l9_operational_constraints import OperationalConstraintLayer
 
 
-TRACK_WIDTH_M = 0.3557
-MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS = 0.15
+def test_kinematics_preserves_the_authorized_twist_including_live_regressions():
+    config = resolved_config().runtime.composition.live_control.control
+    kinematics = DifferentialDriveKinematics(config.chassis_control)
+    # Tick 88 lost its curvature; 590--592 amplified tiny alternating turns to
+    # full opposite wheel commands. L10 may not change any authorized twist.
+    for v, omega in ((.119999, -.014936), (0, .00342), (0, -.01491),
+                     (0, .00739), (0, 0), (.075, -.15/.3557), (.15, .2)):
+        context = TickContext(1, 1_000_000_000)
+        motion = ConstrainedMotion(context, v, omega, v, omega, ())
+        wheels = kinematics(motion)
+        assert math.isclose((wheels.left_mps + wheels.right_mps)/2, v, abs_tol=1e-12)
+        assert math.isclose((wheels.right_mps - wheels.left_mps)/config.chassis_control.track_width_m,
+                            omega, abs_tol=1e-12)
 
 
-def _motion(
-    v_mps: float,
-    omega_rad_s: float,
-    *,
-    constraints: tuple[ConstraintCode, ...] = (),
-) -> ConstrainedMotion:
-    context = TickContext(1, 1_000_000_000)
-    return ConstrainedMotion(
-        context=context,
-        requested_v_mps=v_mps,
-        requested_omega_rad_s=omega_rad_s,
-        allowed_v_mps=v_mps,
-        allowed_omega_rad_s=omega_rad_s,
-        active_constraints=constraints,
-    )
+def test_motion_chain_keeps_wheel_acceleration_bounded_through_arcs_and_reversal():
+    config = resolved_config().runtime.composition.live_control.control
+    limiter = OperationalConstraintLayer(config.operational_constraints)
+    kinematics = DifferentialDriveKinematics(config.chassis_control)
+    limits = MissionConstraints(.3, 1.2, .08, .1, .3)
+    previous = None
+    for tick in range(240):
+        context = TickContext(tick, 1_000_000_000 + tick*20_000_000)
+        estimate = RobotEstimate(context, 'odom', 0, 0, 0, 0, 0, (0.,)*25,
+                                 localization_quality=healthy_localization())
+        v, omega = ((.25, .4) if tick < 80 else (-.25, -.4) if tick < 160 else (0., 0.))
+        motion = MotionIntent(context, v, omega, 100_000_000, limits,
+                              transition_allowed=True,
+                              localization_requirement=LocalizationRequirement(True, True, False))
+        allowed = limiter.evaluate(motion, estimate)
+        wheels = kinematics(allowed)
+        if previous is not None:
+            for side in ('left_mps', 'right_mps'):
+                assert abs(getattr(wheels, side)-getattr(previous, side)) <= .6*.02 + 1e-10
+        assert abs(allowed.allowed_v_mps) <= limits.max_v_mps
+        assert abs(allowed.allowed_omega_rad_s) <= limits.max_omega_rad_s
+        if tick in (79, 159):
+            assert min(abs(wheels.left_mps), abs(wheels.right_mps)) >= .15-1e-12
+        previous = wheels
+    assert wheels.left_mps == wheels.right_mps == 0
 
 
-def _kinematics() -> DifferentialDriveKinematics:
-    return DifferentialDriveKinematics(
-        ChassisControlConfig(
-            track_width_m=TRACK_WIDTH_M,
-            minimum_continuous_wheel_speed_mps=MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS,
-        )
-    )
-
-
-def test_stable_nonzero_wheel_speed_is_floored() -> None:
-    wheels = _kinematics()(_motion(0.09, 0.0))
-    assert wheels.left_mps == MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS
-    assert wheels.right_mps == MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS
-
-
-def test_acceleration_transition_may_pass_below_floor() -> None:
-    wheels = _kinematics()(
-        _motion(
-            0.12,
-            0.0,
-            constraints=(ConstraintCode.ACCELERATION_LIMIT,),
-        )
-    )
-    assert wheels.left_mps == 0.12
-    assert wheels.right_mps == 0.12
-
-
-def test_stop_remains_exact_zero() -> None:
-    wheels = _kinematics()(_motion(0.0, 0.0))
-    assert wheels.left_mps == 0.0
-    assert wheels.right_mps == 0.0
-
-
-def test_deliberately_stationary_wheel_remains_zero() -> None:
-    # left=0.15, right=0.0 exactly in differential-drive kinematics.
-    wheels = _kinematics()(
-        _motion(
-            MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS / 2.0,
-            -MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS / TRACK_WIDTH_M,
-        )
-    )
-    assert math.isclose(
-        wheels.left_mps,
-        MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS,
-        rel_tol=0.0,
-        abs_tol=1e-12,
-    )
-    assert wheels.right_mps == 0.0
-
-
-def test_stable_pure_rotation_uses_wheel_floor() -> None:
-    wheels = _kinematics()(_motion(0.0, 0.2))
-    assert wheels.left_mps == -MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS
-    assert wheels.right_mps == MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS
-
-
-def test_only_subfloor_inner_wheel_is_raised() -> None:
-    wheels = _kinematics()(_motion(0.15, 0.2))
-    raw_outer = 0.15 + 0.2 * TRACK_WIDTH_M / 2.0
-    assert wheels.left_mps == MINIMUM_CONTINUOUS_WHEEL_SPEED_MPS
-    assert math.isclose(wheels.right_mps, raw_outer, rel_tol=0.0, abs_tol=1e-12)
+def test_unrealizable_steady_motion_is_not_amplified_and_stop_is_exact():
+    config = resolved_config().runtime.composition.live_control.control
+    kinematics = DifferentialDriveKinematics(config.chassis_control)
+    for v, omega in ((.09, 0), (0, .2), (0, .6)):
+        limiter = OperationalConstraintLayer(config.operational_constraints)
+        for tick in range(20):
+            context = TickContext(tick, 1_000_000_000 + tick*20_000_000)
+            estimate = RobotEstimate(context, 'odom', 0, 0, 0, 0, 0, (0.,)*25,
+                                     localization_quality=healthy_localization())
+            motion = MotionIntent(context, v, omega, 100_000_000,
+                                  MissionConstraints(.3, .6, .08, .1, .3),
+                                  localization_requirement=LocalizationRequirement(True, True, False))
+            wheels = kinematics(limiter.evaluate(motion, estimate))
+            assert wheels.left_mps == wheels.right_mps == 0
+        stop = replace(motion, requested_v_mps=0., requested_omega_rad_s=0., stop_reason='OPERATOR_STOP')
+        assert kinematics(limiter.evaluate(stop, estimate)).left_mps == 0

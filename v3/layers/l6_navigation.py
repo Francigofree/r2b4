@@ -10,6 +10,7 @@ from typing import Protocol
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult
 from v3.contracts.async_runtime import source_is_stale
+from v3.wheel_motion import WheelMotionLimits
 
 from v3.contracts import (
     CommandMode,
@@ -151,6 +152,7 @@ class NavigationConfig:
     local_goal_novelty_weight: float
     local_goal_clearance_weight: float
     local_goal_forward_weight: float
+    wheel_limits: WheelMotionLimits = WheelMotionLimits()
 
     def __post_init__(self) -> None:
         if self.localization_recovery_timeout_ns <= 0 or not 0 < self.localization_degraded_speed_scale <= 1:
@@ -770,7 +772,7 @@ class TrajectoryNavigator:
             self._localization_recovery_started_ns = None
             self._localization_recovery_mission_id = None
         plan = self._evaluate(mission, estimate, world, planner_input)
-        if plan.status is NavigationStatus.ACTIVE:
+        if plan.status is NavigationStatus.ACTIVE and plan.motion_validity is None:
             return replace(plan, motion_validity=self._guidance_validity(
                 mission, world, trajectory=bool(plan.trajectory_candidates),
                 translation=(bool(plan.trajectory_candidates)
@@ -817,7 +819,7 @@ class TrajectoryNavigator:
             source, until_ns, world.frame_id, scope,
             localization_requirement=LocalizationRequirement(
                 (mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP)) if translation is None else translation,
-                mission.mode is not CommandMode.STOP, global_target,
+                mission.mode is not CommandMode.STOP, global_target and not trajectory,
             ),
         )
 
@@ -839,9 +841,11 @@ class TrajectoryNavigator:
             self._clear_trajectory_plan()
             self._coverage.clear()
             self._localization_generation = quality.generation
-        if global_target and self._global_transform_revision != estimate.transform_revision:
+        if (global_target and quality.global_position is QualityState.GOOD
+                and self._global_transform_revision != estimate.transform_revision):
             self._clear_trajectory_plan()
-        self._global_transform_revision = estimate.transform_revision
+        if not global_target or quality.global_position is QualityState.GOOD:
+            self._global_transform_revision = estimate.transform_revision
         translation_needed = mission.mode not in (CommandMode.FACE_PERSON, CommandMode.STOP)
         if mission.mode is CommandMode.TELEOP and mission.velocity_target is not None:
             translation_needed = abs(mission.velocity_target.v_mps) > 1e-12
@@ -852,7 +856,8 @@ class TrajectoryNavigator:
             translation_needed = False
         needs_recovery = ((translation_needed and quality.local_translation is QualityState.LOST)
                           or quality.heading is QualityState.LOST
-                          or (global_target and quality.global_position is not QualityState.GOOD))
+                          or (global_target and quality.global_position is not QualityState.GOOD
+                              and (self._mission_id != mission.mission_id or self._local_goal is None)))
         if not needs_recovery:
             if self._localization_recovery_started_ns is not None:
                 self._clear_trajectory_plan()
@@ -924,6 +929,14 @@ class TrajectoryNavigator:
             else:
                 self._clear_trajectory_plan()
             return self._inactive(mission, NavigationStatus.INVALIDATED, "WORLD_STALE")
+
+        if (mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
+                and estimate.localization_quality.global_position is not QualityState.GOOD):
+            # The committed odometry-frame segment survives map uncertainty.
+            # Do not transform a new global goal or falsely complete the mission
+            # at this intermediate waypoint. Only fresh local proof can move.
+            continuation = self._local_continuation(mission, estimate, world)
+            return continuation or self._inactive(mission, NavigationStatus.IDLE, "LOCAL_GUIDANCE_UNAVAILABLE")
 
         if mission.mode is CommandMode.TELEOP:
             self._reset()
@@ -1024,11 +1037,15 @@ class TrajectoryNavigator:
                 mission.constraints.max_omega_rad_s,
             )
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
-            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD")
+            return (self._local_continuation(mission, estimate, world)
+                    or self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD"))
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
             if self._completion_inputs and self._pending_rollout_request is not None:
+                continuation = self._local_continuation(mission, estimate, world)
+                if continuation is not None:
+                    return continuation
                 return self._inactive(
                     mission, NavigationStatus.PENDING, "PLANNER_PENDING",
                     motion_validity=self._guidance_validity(mission, world),
@@ -1571,11 +1588,15 @@ class TrajectoryNavigator:
             )
 
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
-            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD")
+            return (self._local_continuation(mission, estimate, world, max_v_mps=follow_max_v_mps)
+                    or self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD"))
         local_goal = self._local_goal
         candidates = self._trajectory_candidates
         if local_goal is None or not candidates:
             if self._completion_inputs and self._pending_rollout_request is not None:
+                continuation = self._local_continuation(mission, estimate, world, max_v_mps=follow_max_v_mps)
+                if continuation is not None:
+                    return continuation
                 return self._inactive(
                     replace(mission, constraints=replace(mission.constraints, max_v_mps=follow_max_v_mps)),
                     NavigationStatus.PENDING, "PLANNER_PENDING",
@@ -1684,11 +1705,15 @@ class TrajectoryNavigator:
                 goal_selected_ns=goal_selected_ns,
             )
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
-            return self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD")
+            return (self._local_continuation(mission, estimate, world)
+                    or self._inactive(mission, NavigationStatus.IDLE, "PLANNER_STALE_HOLD"))
         goal = self._local_goal
         candidates = self._trajectory_candidates
         if goal is None or not candidates:
             if self._completion_inputs and self._pending_rollout_request is not None:
+                continuation = self._local_continuation(mission, estimate, world)
+                if continuation is not None:
+                    return continuation
                 return self._inactive(
                     mission, NavigationStatus.PENDING, "PLANNER_PENDING",
                     motion_validity=self._guidance_validity(mission, world),
@@ -1767,7 +1792,9 @@ class TrajectoryNavigator:
         goal_selected_ns: int | None = None,
     ) -> None:
         if estimate.localization_quality.local_translation is QualityState.DEGRADED or estimate.localization_quality.heading is QualityState.DEGRADED:
-            max_v_mps *= self._config.localization_degraded_speed_scale
+            max_v_mps = self._config.wheel_limits.degraded_linear_cap(
+                max_v_mps, max_omega_rad_s, self._config.localization_degraded_speed_scale,
+            )
             max_omega_rad_s *= self._config.localization_degraded_speed_scale
         backend = self._rollout_backend
         # Every new mission gets one synchronous seed. This avoids an ACTIVE
@@ -2169,6 +2196,7 @@ class TrajectoryNavigator:
         max_omega_rad_s: float,
         start_clearance_m: float,
     ) -> TrajectoryEvaluation:
+        v_mps, omega_rad_s = self._config.wheel_limits.constrain(v_mps, omega_rad_s)
         step_ns = self._config.rollout_horizon_ns // self._config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
@@ -2429,6 +2457,7 @@ class TrajectoryRolloutComputer:
         coverage: dict[tuple[int, int], int],
     ) -> TrajectoryEvaluation:
         config = self._config
+        v_mps, omega_rad_s = config.wheel_limits.constrain(v_mps, omega_rad_s)
         step_ns = config.rollout_horizon_ns // config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad

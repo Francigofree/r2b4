@@ -307,6 +307,7 @@ class WorldModelStateCheckpoint:
     last_global_visit: tuple[int, int] | None = None
     robot_relative_geometry: RobotRelativeGeometry | None = None
     last_robot_relative_values: tuple[DataField, ...] | None = None
+    pending_local_scan: Observation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,6 +346,7 @@ class ShadowWorldModel:
         "_last_local_values",
         "_robot_relative_geometry",
         "_last_robot_relative_values",
+        "_pending_local_scan",
         "_map_revision",
         "_occupancy",
         "_pose_history",
@@ -367,6 +369,7 @@ class ShadowWorldModel:
         self._last_local_values: tuple[DataField, ...] | None = None
         self._robot_relative_geometry: RobotRelativeGeometry | None = None
         self._last_robot_relative_values: tuple[DataField, ...] | None = None
+        self._pending_local_scan: Observation | None = None
         self._costmap_revision = 0
         self._cached_costmap: RollingLocalCostmap | None = None
         self._costmap_window: tuple[float, float, float] | None = None
@@ -433,6 +436,7 @@ class ShadowWorldModel:
             self._structural_active,
             self._global_visited_cells, self._last_global_visit,
             self._robot_relative_geometry, self._last_robot_relative_values,
+            self._pending_local_scan,
         )
 
     def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
@@ -462,6 +466,7 @@ class ShadowWorldModel:
         self._last_global_visit = checkpoint.last_global_visit
         self._robot_relative_geometry = checkpoint.robot_relative_geometry
         self._last_robot_relative_values = checkpoint.last_robot_relative_values
+        self._pending_local_scan = checkpoint.pending_local_scan
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
         if frame.context == estimate.context and estimate.localization_quality.global_position is QualityState.GOOD:
@@ -601,6 +606,7 @@ class ShadowWorldModel:
         )
 
     def _reset_spatial_state(self) -> None:
+        self._pending_local_scan = None
         self._scan_history.clear()
         had_occupancy = self._occupancy.clear()
         had_structural = self._structural_memory.clear()
@@ -882,16 +888,21 @@ class ShadowWorldModel:
         self._last_robot_relative_values = observation.values
 
     def _update_local_scan(self, frame: AdmittedFrame, estimate: RobotEstimate) -> bool:
+        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
+        if len(local) > 1:
+            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
+        if local:
+            self._pending_local_scan = local[0]
         if (estimate.localization_quality.local_translation is QualityState.LOST
                 or estimate.localization_quality.heading is QualityState.LOST):
             self._structural_recall_ready = False
             return False
-        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
-        if len(local) > 1:
-            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
-        if not local:
+        observation = self._pending_local_scan
+        if observation is None:
             return False
-        observation = local[0]
+        # Retry only an already admitted immutable scan. Its original sequence
+        # and time remain authoritative; downstream freshness is not renewed.
+        self._pending_local_scan = None
         values = _values(observation)
         if values.get("frame_id") != "ROBOT_BASE":
             raise ValueError("lidar local points must use the ROBOT_BASE frame")
@@ -924,6 +935,8 @@ class ShadowWorldModel:
 
         pose = self._pose_history.lookup(observation.captured_monotonic_ns, estimate.frame_id)
         if pose is None:
+            if not local:
+                return False
             raise ValueError("L4 cannot align local perception to pose history")
         yaw_cos = math.cos(pose.yaw_rad)
         yaw_sin = math.sin(pose.yaw_rad)

@@ -832,8 +832,13 @@ class ConstrainedMotion:
     active_constraints: tuple[ConstraintCode, ...]
     previous_velocity: VelocityTarget | None = None
     previous_context: TickContext | None = None
+    velocity_transition_until_ns: int | None = None
 
     def __post_init__(self) -> None:
+        if self.velocity_transition_until_ns is not None:
+            require_nonnegative(self.velocity_transition_until_ns, "velocity_transition_until_ns")
+            if self.velocity_transition_until_ns < self.context.monotonic_ns:
+                raise ContractValidationError("wheel transition already expired")
         for name in (
             "requested_v_mps",
             "requested_omega_rad_s",
@@ -879,10 +884,15 @@ class WheelVelocitySetpoint:
     context: TickContext
     left_mps: float
     right_mps: float
+    velocity_transition_until_ns: int | None = None
 
     def __post_init__(self) -> None:
         require_finite(self.left_mps, "WheelVelocitySetpoint.left_mps")
         require_finite(self.right_mps, "WheelVelocitySetpoint.right_mps")
+        if self.velocity_transition_until_ns is not None:
+            require_nonnegative(self.velocity_transition_until_ns, "velocity_transition_until_ns")
+            if self.velocity_transition_until_ns < self.context.monotonic_ns:
+                raise ContractValidationError("wheel transition already expired")
 
 
 @dataclass(frozen=True, slots=True)

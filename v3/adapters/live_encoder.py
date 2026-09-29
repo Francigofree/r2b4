@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from v3.wheel_motion import velocity_quality
+
 import math
 from dataclasses import dataclass
 from enum import Enum
@@ -42,6 +44,7 @@ class NativeEncoderConfig:
 
     device_id: str
     minimum_trust: float
+    minimum_reliable_speed_mps: float = 0.15
 
     def __post_init__(self) -> None:
         if not isinstance(self.device_id, str) or not self.device_id.strip():
@@ -49,6 +52,8 @@ class NativeEncoderConfig:
         trust = _finite(self.minimum_trust, "minimum_trust")
         if not 0.0 <= trust <= 1.0:
             raise ValueError("minimum_trust must be within [0, 1]")
+        if _finite(self.minimum_reliable_speed_mps, "minimum_reliable_speed_mps") <= 0:
+            raise ValueError("minimum reliable speed must be positive")
 
 
 class EncoderRejectionCode(str, Enum):
@@ -431,6 +436,8 @@ class NativeEncoderSource:
                 DataField("trust", reading.trust),
                 DataField("measurement_stale", reading.stale),
                 DataField("measurement_timing_valid", reading.timing_valid),
+                DataField("left_velocity_quality", velocity_quality(reading.left_mps, self._config.minimum_reliable_speed_mps)),
+                DataField("right_velocity_quality", velocity_quality(reading.right_mps, self._config.minimum_reliable_speed_mps)),
             ) + self._diagnostic_fields(reading.diagnostics),
         )
         return LiveDeviceSnapshot(context, health, (sample,))

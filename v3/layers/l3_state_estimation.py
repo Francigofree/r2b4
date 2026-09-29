@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from v3.wheel_motion import velocity_quality
+
 import math
 from dataclasses import dataclass, replace
 
@@ -270,8 +272,10 @@ class NativeStateEstimatorConfig:
     # process_noise variances are calibrated for this prediction interval.
     process_noise_reference_dt_s: float
     quality: LocalizationQualityConfig
+    minimum_reliable_wheel_speed_mps: float = 0.15
 
     def __post_init__(self) -> None:
+        _finite_positive(self.minimum_reliable_wheel_speed_mps, "minimum_reliable_wheel_speed_mps")
         if not isinstance(self.frame_id, str) or not self.frame_id:
             raise ValueError("frame_id must be non-empty")
         _finite_positive(self.track_width_m, "track_width_m")
@@ -513,6 +517,7 @@ class _PoseFilter:
         right_mps = 0.0
         encoder_trust = 0.0
         velocity_feedback_valid = False
+        speed_quality = 1.0
         wheel_distance_delta: tuple[float, float] | None = None
         measured_velocity: float | None = None
         wheel_omega: float | None = None
@@ -555,6 +560,15 @@ class _PoseFilter:
                 and not encoder_stale
                 and encoder_trust >= self._config.quality.minimum_sensor_trust
             )
+            speed_quality = min(velocity_quality(left_mps, self._config.minimum_reliable_wheel_speed_mps),
+                                velocity_quality(right_mps, self._config.minimum_reliable_wheel_speed_mps))
+            # A confirmed standstill is different from a poor moving-wheel fit.
+            # Counter evidence prevents a fitted zero from hiding displacement.
+            standstill = (left_mps == right_mps == 0.0 and
+                ("left_pulse_delta" not in wheel_values or
+                 wheel_values.get("left_pulse_delta") == wheel_values.get("right_pulse_delta") == 0))
+            if standstill:
+                speed_quality = 1.0
             wheel_distance_delta = _optional_wheel_distance_delta(wheel)
             if self._encoder_totals(wheel) is not None:
                 wheel_distance_delta = None
@@ -566,18 +580,19 @@ class _PoseFilter:
             # Preserve the established R2B4 cross-check exactly when a fresh,
             # trusted gyro-rate observation exists on the same tick.  When IMU
             # has no fresh event, wheel yaw-rate is the bounded fallback.
-            if heading is not None and omega_confidence > 0.0:
+            if heading is not None and omega_confidence > 0.0 and speed_quality >= 1.0:
                 assert measured_omega is not None
                 left_mps, right_mps = self._cross_check_wheels(
                     left_mps,
                     right_mps,
                     measured_omega,
                 )
-            if velocity_feedback_valid:
+            if velocity_feedback_valid and speed_quality >= 1.0:
                 wheel_omega = (right_mps - left_mps) / self._config.track_width_m
             measured_velocity = 0.5 * (left_mps + right_mps)
             still = (
                 velocity_feedback_valid
+                and standstill
                 and abs(left_mps) < self._config.still_velocity_threshold_mps
                 and abs(right_mps) < self._config.still_velocity_threshold_mps
             )
@@ -627,7 +642,7 @@ class _PoseFilter:
                     self._VELOCITY,
                     measured_velocity,
                     self._config.velocity_measurement_variance
-                    / max(quality_floor, encoder_trust),
+                    / max(quality_floor, encoder_trust * speed_quality),
                     nis_max=self._config.velocity_nis_max,
                     update_type="VELOCITY",
                 )
@@ -1052,6 +1067,8 @@ class NativeEstimatorStateCheckpoint:
     relative_sequence: int
     slip_suspected: bool
     consistency_yaw_rad: float = 0.0
+    relative_translation_error_m: float = 0.0
+    local_translation_state: QualityState = QualityState.GOOD
 
 
 class NativeStateEstimator:
@@ -1077,6 +1094,8 @@ class NativeStateEstimator:
         self._generation = self._transform_revision = 0
         self._relative_sequence = -1
         self._slip_suspected = False
+        self._relative_translation_error_m = 0.0
+        self._local_translation_state = QualityState.GOOD
 
     @property
     def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
@@ -1090,6 +1109,7 @@ class NativeStateEstimator:
             self._observability, self._unverified_sigma_m, self._wheel_trusted,
             self._heading_trusted, self._generation, self._transform_revision,
             self._relative_sequence, self._slip_suspected, self._consistency_yaw_rad,
+            self._relative_translation_error_m, self._local_translation_state,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1190,7 +1210,8 @@ class NativeStateEstimator:
             # A rejected fused-yaw correction cannot revoke a simultaneously
             # trusted gyro-rate authority. Freshness/covariance still fail closed.
             self._heading_trusted = False
-        if any(e.update_type == "VELOCITY" and not e.accepted for e in self._local.last_update_evidence):
+        if (any(e.update_type == "VELOCITY" and not e.accepted for e in self._local.last_update_evidence)
+                and not (wheel is not None and counter_odometry)):
             self._wheel_trusted = False
         if (wheel is not None and heading is not None
                 and wheel_values.get("rejection_code", "NONE") == "NONE"
@@ -1237,9 +1258,13 @@ class NativeStateEstimator:
         encoder_age, imu_age = age(self._local._last_wheel_ns), age(self._local._last_heading_ns)
         lidar_age, fix_age, relative_age = age(self._last_lidar_ns), age(self._last_fix_ns), age(self._last_relative_ns)
         disagreement = math.hypot(self._consistency_x_m, self._consistency_y_m)
-        sigma = max(self._unverified_sigma_m, disagreement, self._relative_rmse_m or 0.0)
+        # A 30-second accumulated position bias is not uncertainty of the
+        # current scan interval. Keep it diagnostic/degrading; local loss needs
+        # missing evidence, unverified displacement or a bad local interval.
+        sigma = max(self._unverified_sigma_m, self._relative_translation_error_m,
+                    self._relative_rmse_m or 0.0)
         local_state = QualityState.GOOD if sigma <= cfg.local_good_sigma_m else QualityState.DEGRADED
-        if sigma >= cfg.local_lost_sigma_m or disagreement >= cfg.consistency_lost_m or self._slip_suspected:
+        if sigma >= cfg.local_lost_sigma_m or self._slip_suspected:
             local_state = QualityState.LOST
         elif (disagreement >= cfg.consistency_good_m
               or (abs(local.v_mps) > .001 and relative_age > cfg.relative_max_age_ns)
@@ -1247,6 +1272,18 @@ class NativeStateEstimator:
             local_state = QualityState.DEGRADED
         if not continuous or not self._wheel_trusted or encoder_age > self._config.max_measurement_age_ns:
             local_state = QualityState.LOST
+        if local_state is not QualityState.LOST:
+            if self._local_translation_state is QualityState.LOST:
+                # Recovery needs an independently measured fresh interval,
+                # not a tick oscillating around the old cumulative threshold.
+                if (self._last_relative_ns is None or relative_age > cfg.relative_max_age_ns
+                        or sigma >= cfg.local_good_sigma_m):
+                    local_state = QualityState.LOST
+            elif self._local_translation_state is QualityState.DEGRADED and (
+                sigma > .8 * cfg.local_good_sigma_m or disagreement > .8 * cfg.consistency_good_m
+            ):
+                local_state = QualityState.DEGRADED
+        self._local_translation_state = local_state
         yaw_variance = local.covariance_5x5[12]
         relative_heading = False
         if self._last_relative_ns is not None:
@@ -1344,6 +1381,7 @@ class NativeStateEstimator:
         error_x = dx-_numeric_value(observation, "dx_m")
         error_y = dy-_numeric_value(observation, "dy_m")
         error_yaw = _normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))
+        self._relative_translation_error_m = math.hypot(error_x, error_y)
         # Non-overlapping scan intervals accumulate systematic slow encoder drift.
         decay = math.exp(-(end_ns-start_ns)/1e9/cfg.consistency_memory_s)
         self._consistency_x_m = decay*self._consistency_x_m + math.cos(a.yaw_rad)*error_x-math.sin(a.yaw_rad)*error_y

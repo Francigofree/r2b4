@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from v3.wheel_motion import WheelMotionLimits
 
 from v3.contracts import (
     MotionIntent,
@@ -31,6 +32,7 @@ class MotionRealizationConfig:
     angular_velocity_gain: float
     max_tracking_correction_rad_s: float
     max_control_gap_ns: int
+    wheel_limits: WheelMotionLimits = WheelMotionLimits()
 
     def __post_init__(self) -> None:
         positive = (
@@ -164,6 +166,10 @@ class MotionRealizer:
             else:
                 requested_v_mps *= max(0.0, math.cos(heading_error))
 
+        requested_v_mps, requested_omega_rad_s = self._config.wheel_limits.constrain(
+            math.copysign(min(abs(requested_v_mps), objective.constraints.max_v_mps), requested_v_mps),
+            _clamp(requested_omega_rad_s, objective.constraints.max_omega_rad_s),
+        )
         return MotionIntent(
             context=objective.context,
             requested_v_mps=requested_v_mps,
@@ -235,8 +241,14 @@ class MotionRealizer:
         )
         # Spatial tracking does not integrate distance against wall time: a
         # speed/acceleration limit cannot leave a runaway position reference.
+        linear = v_mps * max(0.0, math.cos(heading_error))
+        if abs(v_mps) >= self._config.wheel_limits.minimum_mps:
+            if abs(heading_error) >= self._config.heading_stop_threshold_rad:
+                linear = 0.0
+            else:
+                linear = math.copysign(max(self._config.wheel_limits.minimum_mps, abs(linear)), v_mps)
         return (
-            v_mps * max(0.0, math.cos(heading_error)),
+            linear,
             _clamp(omega_rad_s + correction, self._config.max_requested_omega_rad_s),
         )
 

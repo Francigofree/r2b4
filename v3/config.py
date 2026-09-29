@@ -6,7 +6,7 @@ No component receives paths or permission to reopen these documents.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 import hashlib
 import json
@@ -228,8 +228,10 @@ class ConfigResolver:
         local = _keys(c["local_perception"], {"min_range_m", "max_range_m", "max_points"}, "local_perception")
         layers = dict(c["layers"])
         for section, derived_names in {
-            "estimation": {"frame_id", "track_width_m"},
-            "navigation": {"footprint_length_m", "footprint_width_m"},
+            "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps"},
+            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits"},
+            "motion_realization": {"wheel_limits"},
+            "operational_constraints": {"wheel_limits"},
             "world_model": {
                 "local_costmap_max_points_per_scan",
                 "person_camera_horizontal_fov_rad",
@@ -255,8 +257,15 @@ class ConfigResolver:
         if world_tracking_enabled and camera_geometry is None:
             raise ValueError("person tracking requires enabled camera geometry")
 
-        layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID}
+        resolved_speed_map = WheelSpeedMap.from_mapping(speed_map)
+        minimum_speed = resolved_speed_map.minimum_continuous_speed_mps
+        wheel_limits = dict(track_width_m=p["nyomtav_szelesseg_m"], minimum_mps=minimum_speed,
+                            maximum_mps=min(curve.points[-1].speed_mps for curve in resolved_speed_map.curves))
+        layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID,
+                                "minimum_reliable_wheel_speed_mps":minimum_speed}
         layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"]}
+        for section in ("navigation", "motion_realization", "operational_constraints"):
+            layers[section] = {**layers[section], "wheel_limits":wheel_limits}
         layers["world_model"] = {
             **layers["world_model"],
             "local_costmap_max_points_per_scan": local["max_points"],
@@ -278,7 +287,6 @@ class ConfigResolver:
         hints = get_type_hints(NativeControlCompositionConfig)
         _keys(layers, {f.name for f in fields(NativeControlCompositionConfig)} - derived, "layers")
         typed_layers = {name: _typed(hints[name], value, f"layers.{name}") for name, value in layers.items()}
-        resolved_speed_map = WheelSpeedMap.from_mapping(speed_map)
         resolved_control = NativeControlCompositionConfig(**typed_layers,
             speed_map=resolved_speed_map,
             chassis_control=ChassisControlConfig(
@@ -303,6 +311,8 @@ class ConfigResolver:
         if set(motor_output.pins) & set(encoder.counter_gpio.pins):
             raise ValueError("motor and encoder GPIO pins must be unique")
         sensors = _sensor_hardware_config(h, encoder, policy, navigation, p, c["imu"], resolved_control.lidar_safety.minimum_clearance_m)
+        sensors = replace(sensors, inputs=replace(sensors.inputs,
+            encoder_source=replace(sensors.inputs.encoder_source, minimum_reliable_speed_mps=minimum_speed)))
         pose = _typed(LidarMatcherConfig,c["lidar_pose"],"lidar_pose")
         _keys(c["lidar_driver"], {f.name for f in fields(RplidarC1Config)} - {"port", "baudrate", "minimum_distance_m", "maximum_distance_m"}, "lidar_driver")
         driver = _typed(RplidarC1Config, {**c["lidar_driver"], **h["lidar"], "minimum_distance_m":pose.min_valid_distance_m, "maximum_distance_m":pose.max_valid_distance_m}, "lidar_driver")

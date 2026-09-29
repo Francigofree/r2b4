@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from v3.contracts import ConstraintCode, ConstrainedMotion, WheelVelocitySetpoint
+from v3.contracts import ConstrainedMotion, WheelVelocitySetpoint
 
 
 _WHEEL_ZERO_EPSILON_MPS = 1e-12
@@ -38,13 +38,8 @@ class ChassisControlConfig:
 class DifferentialDriveKinematics:
     """Convert the L9 body twist to one physical wheel-speed setpoint.
 
-    L9 remains the sole acceleration/deceleration owner.  While L9 reports an
-    active acceleration limit, sub-floor wheel speeds are therefore legitimate
-    transition setpoints.  Once the transition is complete, every non-zero
-    wheel target is raised to the configured continuously realizable floor.
-
-    Exact zero is preserved.  That keeps STOP exact and also preserves
-    deliberate one-wheel-stationary pivots.
+    Feasibility is established before L9's rate limits. L10 must preserve the
+    authorized twist, including finite sub-floor acceleration and braking.
     """
 
     __slots__ = ("_half_track_m", "_minimum_continuous_wheel_speed_mps")
@@ -65,27 +60,11 @@ class DifferentialDriveKinematics:
             + motion.allowed_omega_rad_s * self._half_track_m
         )
 
-        acceleration_transition = (
-            ConstraintCode.ACCELERATION_LIMIT in motion.active_constraints
-        )
-        if not acceleration_transition:
-            left_mps = self._apply_continuous_floor(left_mps)
-            right_mps = self._apply_continuous_floor(right_mps)
-
         return WheelVelocitySetpoint(
             motion.context,
             left_mps=float(left_mps),
             right_mps=float(right_mps),
-        )
-
-    def _apply_continuous_floor(self, wheel_mps: float) -> float:
-        if abs(wheel_mps) <= _WHEEL_ZERO_EPSILON_MPS:
-            return 0.0
-        if abs(wheel_mps) >= self._minimum_continuous_wheel_speed_mps:
-            return float(wheel_mps)
-        return math.copysign(
-            self._minimum_continuous_wheel_speed_mps,
-            wheel_mps,
+            velocity_transition_until_ns=motion.velocity_transition_until_ns,
         )
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from v3.wheel_motion import WheelMotionLimits
 
 from v3.contracts import (
     ConstrainedMotion,
@@ -25,6 +26,7 @@ class OperationalConstraintsConfig:
     max_curvature_rad_per_m: float
     degraded_velocity_scale: float
     degraded_acceleration_scale: float
+    wheel_limits: WheelMotionLimits = WheelMotionLimits()
 
     def __post_init__(self) -> None:
         values = (
@@ -47,12 +49,13 @@ class OperationalConstraintsStateCheckpoint:
     last_context: TickContext | None
     last_v_mps: float
     last_omega_rad_s: float
+    velocity_transition_started_ns: int | None = None
 
 
 class OperationalConstraintLayer:
     """Own previous allowed velocity for deterministic acceleration limiting."""
 
-    __slots__ = ("_config", "_last_context", "_last_omega_rad_s", "_last_v_mps")
+    __slots__ = ("_config", "_last_context", "_last_omega_rad_s", "_last_v_mps", "_velocity_transition_started_ns")
 
     def __init__(
         self,
@@ -62,12 +65,14 @@ class OperationalConstraintLayer:
         self._last_context: TickContext | None = None
         self._last_v_mps = 0.0
         self._last_omega_rad_s = 0.0
+        self._velocity_transition_started_ns = None
 
     def checkpoint(self) -> OperationalConstraintsStateCheckpoint:
         return OperationalConstraintsStateCheckpoint(
             self._last_context,
             self._last_v_mps,
             self._last_omega_rad_s,
+            self._velocity_transition_started_ns,
         )
 
     def restore(self, checkpoint: OperationalConstraintsStateCheckpoint) -> None:
@@ -78,6 +83,7 @@ class OperationalConstraintLayer:
         self._last_context = checkpoint.last_context
         self._last_v_mps = checkpoint.last_v_mps
         self._last_omega_rad_s = checkpoint.last_omega_rad_s
+        self._velocity_transition_started_ns = checkpoint.velocity_transition_started_ns
 
     def evaluate(
         self,
@@ -109,7 +115,10 @@ class OperationalConstraintLayer:
         ):
             codes.append(ConstraintCode.MISSION_LIMIT)
 
-        platform_v = _clamp(allowed_v_mps, self._config.max_v_mps * speed_scale)
+        linear_cap = (self._config.wheel_limits.degraded_linear_cap(
+            self._config.max_v_mps, self._config.max_omega_rad_s, speed_scale,
+        ) if degraded else self._config.max_v_mps)
+        platform_v = _clamp(allowed_v_mps, linear_cap)
         platform_omega = _clamp(allowed_omega_rad_s, self._config.max_omega_rad_s * speed_scale)
         if platform_v != allowed_v_mps or platform_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.SPEED_LIMIT)
@@ -122,6 +131,11 @@ class OperationalConstraintLayer:
             if curved_omega != allowed_omega_rad_s:
                 codes.append(ConstraintCode.CURVATURE_LIMIT)
                 allowed_omega_rad_s = curved_omega
+
+        feasible_v, feasible_omega = self._config.wheel_limits.constrain(allowed_v_mps, allowed_omega_rad_s)
+        if (feasible_v, feasible_omega) != (allowed_v_mps, allowed_omega_rad_s):
+            codes.append(ConstraintCode.SPEED_LIMIT)
+        allowed_v_mps, allowed_omega_rad_s = feasible_v, feasible_omega
 
         previous_v, previous_omega, dt_s = self._previous_motion(estimate)
         limited_v = _rate_limited(
@@ -136,10 +150,20 @@ class OperationalConstraintLayer:
             self._config.max_angular_acceleration_rad_s2 * acceleration_scale * dt_s,
             transition_allowed=motion.transition_allowed,
         )
+        # A body-axis ramp alone can double a wheel's acceleration on an arc.
+        # Couple the two deltas before kinematics, preserving both directions.
+        wheel_delta = max(abs(w) for w in self._config.wheel_limits.wheels(
+            limited_v - previous_v, limited_omega - previous_omega,
+        ))
+        wheel_budget = self._config.max_acceleration_mps2 * acceleration_scale * dt_s
+        if motion.transition_allowed and wheel_delta > wheel_budget > 0:
+            fraction = wheel_budget / wheel_delta
+            limited_v = previous_v + fraction * (limited_v - previous_v)
+            limited_omega = previous_omega + fraction * (limited_omega - previous_omega)
         if limited_v != allowed_v_mps or limited_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.ACCELERATION_LIMIT)
         # A newly tightened authority envelope wins over temporal continuity.
-        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, self._config.max_v_mps * speed_scale))
+        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, linear_cap))
         allowed_omega_rad_s = _clamp(limited_omega, min(
             motion.constraints.max_omega_rad_s, self._config.max_omega_rad_s * speed_scale,
         ))
@@ -148,6 +172,20 @@ class OperationalConstraintLayer:
                 or (abs(allowed_omega_rad_s) > 1e-12 and quality.heading is QualityState.LOST)):
             return self._stop(motion, (ConstraintCode.LOCALIZATION_DEGRADED,))
         transition = motion.transition_allowed and ConstraintCode.ACCELERATION_LIMIT in codes and dt_s > 0.0
+        subfloor = any(1e-12 < abs(w) < self._config.wheel_limits.minimum_mps - 1e-12
+                       for w in self._config.wheel_limits.wheels(allowed_v_mps, allowed_omega_rad_s))
+        transition_until = None
+        if subfloor:
+            if self._velocity_transition_started_ns is None:
+                self._velocity_transition_started_ns = motion.context.monotonic_ns
+            # One bounded episode, not a deadline renewed by each angular edit.
+            duration_ns = math.ceil(2 * self._config.wheel_limits.minimum_mps /
+                (self._config.max_acceleration_mps2 * self._config.degraded_acceleration_scale) * 1e9)
+            transition_until = self._velocity_transition_started_ns + duration_ns
+            if motion.context.monotonic_ns >= transition_until:
+                return self._stop(motion, (ConstraintCode.SPEED_LIMIT,))
+        else:
+            self._velocity_transition_started_ns = None
         result = ConstrainedMotion(
             context=motion.context,
             requested_v_mps=motion.requested_v_mps,
@@ -157,6 +195,7 @@ class OperationalConstraintLayer:
             active_constraints=tuple(dict.fromkeys(codes)),
             previous_velocity=VelocityTarget(previous_v, previous_omega) if transition else None,
             previous_context=self._last_context if transition else None,
+            velocity_transition_until_ns=transition_until,
         )
         self._remember(motion.context, allowed_v_mps, allowed_omega_rad_s)
         return result
@@ -175,6 +214,7 @@ class OperationalConstraintLayer:
         motion: MotionIntent,
         codes: tuple[ConstraintCode, ...],
     ) -> ConstrainedMotion:
+        self._velocity_transition_started_ns = None
         self._remember(motion.context, 0.0, 0.0)
         return ConstrainedMotion(
             context=motion.context,
