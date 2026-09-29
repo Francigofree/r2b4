@@ -2146,6 +2146,8 @@ class TrajectoryNavigator:
                         linear_index,
                         angular_index,
                         start_clearance_m,
+                        goal,
+                        reverse_limit_mps,
                         world,
                         self._config,
                         scene,
@@ -2402,6 +2404,8 @@ class TrajectoryRolloutComputer:
                             linear_index,
                             angular_index,
                             start_clearance_m,
+                            goal,
+                            reverse_limit_mps,
                             world,
                             config,
                             scene,
@@ -2582,20 +2586,111 @@ def _trajectory_progress_potential(
     return _clamp_signed(distance_progress_score + heading_progress)
 
 
+def _escape_unlock_potential(
+    pivot_end: TrajectoryPose,
+    goal: Waypoint,
+    start_clearance_m: float,
+    probe_speed_mps: float,
+    world: WorldSnapshot,
+    config: NavigationConfig,
+    scene: _LocalPlanningScene,
+) -> float:
+    """Prove that a safe pivot opens one bounded translational next step.
+
+    This is deliberately a two-stage local proof, not a second planner.  It is
+    evaluated only after the normal rollout family has no viable trajectory.
+    The probe reuses the production footprint model, rollout horizon/step count
+    and the already-bounded escape speed.  Forward probes also preserve the
+    stronger local-escape trigger used by ordinary forward trajectories.
+    """
+
+    if probe_speed_mps <= _MOTION_EPSILON:
+        return 0.0
+
+    start_distance_m = math.hypot(goal.x_m - pivot_end.x_m, goal.y_m - pivot_end.y_m)
+    step_ns = config.rollout_horizon_ns // config.rollout_step_count
+    best_potential = 0.0
+
+    for direction in (1.0, -1.0):
+        probe_v_mps = direction * probe_speed_mps
+        x_m, y_m, yaw_rad = pivot_end.x_m, pivot_end.y_m, pivot_end.yaw_rad
+        min_clearance_m = _footprint_clearance(
+            x_m, y_m, yaw_rad, world, config, scene,
+        )
+        blocked = min_clearance_m <= config.footprint_safety_margin_m
+        previous_offset_ns = 0
+
+        for step in range(1, config.rollout_step_count + 1):
+            offset_ns = (
+                config.rollout_horizon_ns
+                if step == config.rollout_step_count
+                else step_ns * step
+            )
+            dt_s = (offset_ns - previous_offset_ns) / 1e9
+            previous_offset_ns = offset_ns
+            x_m, y_m, yaw_rad = _integrate_constant_twist(
+                x_m, y_m, yaw_rad, probe_v_mps, 0.0, dt_s,
+            )
+            clearance_m = _footprint_clearance(
+                x_m,
+                y_m,
+                yaw_rad,
+                world,
+                config,
+                scene,
+                clearance_limit_m=min_clearance_m,
+            )
+            min_clearance_m = min(min_clearance_m, clearance_m)
+            if clearance_m <= config.footprint_safety_margin_m:
+                blocked = True
+                break
+
+        if (
+            not blocked
+            and probe_v_mps > _MOTION_EPSILON
+            and min_clearance_m <= config.local_escape_trigger_clearance_m
+        ):
+            blocked = True
+        if blocked:
+            continue
+
+        final_clearance_m = _footprint_clearance(
+            x_m, y_m, yaw_rad, world, config, scene,
+        )
+        clearance_progress = _clamp_signed(
+            (final_clearance_m - start_clearance_m) / config.clearance_score_cap_m
+        )
+        final_distance_m = math.hypot(goal.x_m - x_m, goal.y_m - y_m)
+        goal_progress = _clamp_signed(
+            (start_distance_m - final_distance_m) / max(start_distance_m, 1e-9)
+        )
+        best_potential = max(
+            best_potential,
+            clearance_progress,
+            goal_progress,
+        )
+
+    return _clamp_signed(best_potential)
+
+
 def _as_escape_candidate(
     candidate: TrajectoryEvaluation,
     linear_index: int,
     angular_index: int,
     start_clearance_m: float,
+    goal: Waypoint,
+    probe_speed_mps: float,
     world: WorldSnapshot,
     config: NavigationConfig,
     scene: _LocalPlanningScene,
 ) -> TrajectoryEvaluation:
-    """Make recovery viability and quality depend on predicted clearance gain.
+    """Score immediate recovery or a bounded pivot-then-translate escape proof.
 
     Minimum path clearance includes the starting footprint, so it cannot express
-    improvement. Keep it for collision safety and score the final clearance gain
-    separately. A pivot earns no unconditional bonus for remaining in place.
+    improvement.  Reverse recovery keeps its existing immediate-clearance rule.
+    A pure pivot gets no unconditional bonus: it becomes viable only when the
+    pivot itself improves clearance or its final pose has a collision-free next
+    translational step with enough goal/clearance gain.
     """
 
     moving = (
@@ -2609,13 +2704,32 @@ def _as_escape_candidate(
     clearance_progress = _clamp_signed(
         (final_clearance_m - start_clearance_m) / config.clearance_score_cap_m
     )
+
+    unlock_potential = 0.0
+    if (
+        not candidate.collision
+        and abs(candidate.v_mps) <= _MOTION_EPSILON
+        and abs(candidate.omega_rad_s) > _MOTION_EPSILON
+        and clearance_progress + 1e-12 < config.progress_viability_floor
+    ):
+        unlock_potential = _escape_unlock_potential(
+            end,
+            goal,
+            start_clearance_m,
+            probe_speed_mps,
+            world,
+            config,
+            scene,
+        )
+
+    escape_potential = max(clearance_progress, unlock_potential)
     viable = (
         moving
-        and clearance_progress > _MOTION_EPSILON
-        and clearance_progress + 1e-12 >= config.progress_viability_floor
+        and escape_potential > _MOTION_EPSILON
+        and escape_potential + 1e-12 >= config.progress_viability_floor
     )
     escape_score = (
-        config.progress_weight * clearance_progress
+        config.progress_weight * escape_potential
         + config.clearance_weight * candidate.min_clearance_m / config.clearance_score_cap_m
         + config.smoothness_weight * candidate.smoothness_score
         + config.novelty_weight * candidate.novelty_score
@@ -2624,7 +2738,7 @@ def _as_escape_candidate(
         candidate,
         candidate_id=f"escape-{linear_index:02d}-{angular_index:02d}",
         total_score=escape_score,
-        progress_potential_score=clearance_progress,
+        progress_potential_score=escape_potential,
         progress_viable=viable,
     )
 

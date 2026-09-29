@@ -597,8 +597,9 @@ class TrajectoryEvaluation:
     novelty_score: float
     total_score: float
     # L6 viability is orthogonal to weighted quality: goal distance/alignment
-    # for normal navigation, clearance gain for recovery. Defaults allow decoding
-    # older captures/manual constructors without these fields.
+    # for normal navigation; immediate clearance gain or bounded two-stage
+    # escape-unlock potential for recovery. Defaults allow decoding older
+    # captures/manual constructors without these fields.
     progress_potential_score: float = 0.0
     progress_viable: bool = True
 
