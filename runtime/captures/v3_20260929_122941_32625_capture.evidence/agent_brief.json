@@ -1,0 +1,335 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "behavior_status": "DEGRADED",
+  "budget": {
+    "actual_bytes": 6566,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "FAIL",
+    "integrity_complete": false,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260929_122941_32625_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "PROVEN only for direct capture/replay evidence; upstream hypotheses stay INDICATED/NOT_PROVEN",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; WARNING=sampled low-level observation only; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_slice": {
+    "layers": [
+      "L2",
+      "L3",
+      "L5",
+      "L6",
+      "L8",
+      "L9",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260929_122941_32625_capture.evidence/interesting_slice.ndjson",
+    "rows": 60,
+    "size_bytes": 512480,
+    "tick_range": [
+      null,
+      null
+    ],
+    "truncated": true
+  },
+  "evidence_status": "FAIL",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 21.58375544910269,
+      "last_trace": 0.41426798675367565,
+      "max_trace": 0.8632799879539196,
+      "sample_count": 971
+    },
+    "motion": {
+      "behavior_status": "DEGRADED",
+      "constrained_to_zero_tick_count": 1,
+      "estimated_path_length_m": 2.5222439707191002,
+      "requested_motion_tick_count": 422
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 17431959666122,
+        "progress_span": 0.0,
+        "tick_id": 970,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 838,
+      "FAULT": 0,
+      "STOP": 133,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 975,
+      "l2_actionable_rejection_count": 534,
+      "l2_duplicate_count": 2723,
+      "l2_rejection_count": 3257,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 2723,
+        "STALE": 534
+      }
+    },
+    "ticks": {
+      "count": 971,
+      "first_monotonic_ns": 17408919437783,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 17431959666122,
+      "last_tick_id": 970
+    },
+    "timing": {
+      "max_ms": 129.643426,
+      "p50_ms": 20.608428,
+      "p95_ms": 42.13023,
+      "p99_ms": 64.346498,
+      "sample_count": 970
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "replay": {
+    "bridge": {
+      "authority_capture": "/home/alba/project_r2b4/runtime/captures/v3_20260929_122941_32625_capture.mcap",
+      "authority_check_delegated": false,
+      "authority_sha256": "3ee818b17f52e170db23dca41ae228606f04c41d3b2f6ba8e659b42c88eeab69",
+      "capture_integrity_check_delegated": false,
+      "checkpoint_used": false,
+      "materialized_bytes": 483452,
+      "materialized_tick_count": 11,
+      "preflight": "PASS",
+      "replay_eligible": true,
+      "structure_check_delegated": false,
+      "temporary_json_persisted": false
+    },
+    "first_divergence": null,
+    "status": "MATCH"
+  },
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": "e3933e67be43dd2f476800d6fc1dba157f7b9a2ebe449080a1ee70c559c047ef"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": "f9594172f7b73c27888c2c1ebb075452a79e0546232bc8c301b2df1db9954c75"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": "0844e3891e2eccf48434f79d5dfa89804e3a20b910f6c6bc862ff628d956b947"
+    }
+  ],
+  "status": "FAIL",
+  "top_incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "core_capacity_eviction_count": 0,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "RAW_LIDAR_TRANSPORT_END_MISSING"
+          ],
+          "integrity_warnings": [],
+          "message_stream_sha256": "480d70ea27308168c0fce2003d5dde5c2aa3590253638e09088c398e58626134",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_capacity_eviction_count": 0,
+          "raw_evidence_complete": false,
+          "raw_evidence_requested": true,
+          "raw_integrity_reasons": [
+            "RAW_LIDAR_TRANSPORT_END_MISSING"
+          ],
+          "raw_lidar_duplicate_count": 0,
+          "raw_lidar_expected_scan_count": 249,
+          "raw_lidar_gap_missing_revisions": [],
+          "raw_lidar_loss_fraction": 0.0,
+          "raw_lidar_loss_missing_revisions": [],
+          "raw_lidar_loss_tolerance_fraction": 0.05,
+          "raw_lidar_loss_within_tolerance": false,
+          "raw_lidar_max_consecutive_missing": 0,
+          "raw_lidar_max_consecutive_missing_allowed": 2
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "RAW_LIDAR_TRANSPORT_END_MISSING",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-0",
+      "layer": "L1",
+      "monotonic_ns": 17408919437783,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 0
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-1",
+      "layer": "L1",
+      "monotonic_ns": 17408936894215,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 1
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-2",
+      "layer": "L1",
+      "monotonic_ns": 17408956901620,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 2
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-3",
+      "layer": "L1",
+      "monotonic_ns": 17408977364806,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 3
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-4",
+      "layer": "L1",
+      "monotonic_ns": 17409000428597,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 4
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-5",
+      "layer": "L1",
+      "monotonic_ns": 17409016916024,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 5
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ]
+      },
+      "id": "device-6",
+      "layer": "L1",
+      "monotonic_ns": 17409037381339,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 6
+    }
+  ]
+}
