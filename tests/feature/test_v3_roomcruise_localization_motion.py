@@ -4,7 +4,7 @@ from dataclasses import replace
 from rig import resolved_config, healthy_localization
 from v3.contracts import (
     CommandMode, CommandRequest, ConstraintCode, DataField, MotionIntent,
-    LocalizationRequirement, QualityState,
+    LocalizationRequirement, QualityState, RobotRelativeGeometry,
     NavigationStatus, RobotEstimate, RollingLocalCostmap, TickContext, WorldSnapshot,
 )
 from v3.layers.l5_command_mission import MissionManager
@@ -21,8 +21,13 @@ def _scene(tick, position_variance=0.65, yaw_variance=0.01):
     estimate = RobotEstimate(context, "odom", 0, 0, 0, 0, 0, covariance, localization_quality=healthy_localization(
         global_position=QualityState.LOST if position_variance > .25 else QualityState.GOOD,
         heading=QualityState.LOST if yaw_variance > .2 else QualityState.GOOD))
-    world = WorldSnapshot(context, "odom", 1, (), 0,
-                          RollingLocalCostmap("odom", 1, 0.1, 2.5, (), 1, 0))
+    world = WorldSnapshot(
+        context, "odom", 1, (), 0,
+        RollingLocalCostmap("odom", 1, 0.1, 2.5, (), 1, 0),
+        robot_relative_geometry=RobotRelativeGeometry(
+            "ROBOT_BASE", 1, context.monotonic_ns, 100, 0
+        ),
+    )
     return estimate, world
 
 
@@ -67,6 +72,63 @@ def test_roomcruise_localization_motion_requires_independent_local_quality():
     allowed = limiter.evaluate(denied, estimate)
     assert allowed.active_constraints == (ConstraintCode.LOCALIZATION_DEGRADED,)
     assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
+
+
+
+def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_costmap():
+    config, manager, navigator, selector, realizer, limiter = _chain()
+    estimate, world = _scene(0)
+    estimate = replace(
+        estimate,
+        localization_quality=replace(
+            estimate.localization_quality,
+            local_translation=QualityState.LOST,
+            heading=QualityState.GOOD,
+            local_sigma_m=0.19,
+            lidar_age_ns=0,
+        ),
+    )
+    mission = manager.evaluate(
+        CommandRequest(estimate.context, "recovery-geometry", CommandMode.EXPLORE, (), 0)
+    )
+
+    # P0: stale or absent pose-aligned costmap must not deadlock rotation-only recovery.
+    for broken_world in (
+        replace(world, local_costmap=None),
+        replace(
+            world,
+            local_costmap=replace(
+                world.local_costmap,
+                freshness_ns=config.navigation.max_costmap_freshness_ns + 1,
+            ),
+        ),
+    ):
+        plan = navigator.evaluate(mission, estimate, broken_world)
+        assert plan.status is NavigationStatus.ACTIVE
+        assert plan.reason == "LOCALIZATION_REACQUIRE"
+        assert plan.velocity_target.v_mps == 0.0
+        assert plan.velocity_target.omega_rad_s != 0.0
+
+    # P1: recovery now depends on fresh pose-independent ROBOT_BASE geometry.
+    for geometry in (
+        None,
+        replace(
+            world.robot_relative_geometry,
+            freshness_ns=config.navigation.max_costmap_freshness_ns + 1,
+        ),
+        replace(world.robot_relative_geometry, point_count=0),
+    ):
+        _, case_manager, case_navigator, _, _, _ = _chain()
+        case_mission = case_manager.evaluate(
+            CommandRequest(estimate.context, "recovery-geometry", CommandMode.EXPLORE, (), 0)
+        )
+        held = case_navigator.evaluate(
+            case_mission,
+            estimate,
+            replace(world, robot_relative_geometry=geometry),
+        )
+        assert held.status is NavigationStatus.IDLE
+        assert held.reason == "LOCALIZATION_HOLD"
 
 
 def test_roomcruise_localization_motion_keeps_freshness_heading_and_stop_gates():

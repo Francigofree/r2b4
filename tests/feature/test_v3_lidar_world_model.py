@@ -207,3 +207,44 @@ def test_lidar_duplicate_measurement_and_cached_costmap_remain_immutable():
         replace(first.local_costmap, occupied_cells=(CostmapCell(1, 1, 1),) * 2)
     with pytest.raises(ValueError, match="immutable tuple"):
         replace(first.local_costmap, occupied_cells=list(first.local_costmap.occupied_cells))
+
+
+def test_lidar_robot_relative_geometry_updates_while_pose_aligned_map_is_frozen_on_lost():
+    config = _config()
+    model = ShadowWorldModel(config)
+    start = 1_000_000_000
+    good = _tick(model, start, _scan(1, start, ((1.0, 0.2),)))
+    assert good.robot_relative_geometry is not None
+    assert good.robot_relative_geometry.source_sequence == 1
+    assert good.robot_relative_geometry.point_count == 1
+    assert good.robot_relative_geometry.freshness_ns == 0
+    assert good.local_costmap is not None
+    assert good.local_costmap.source_sequence == 1
+
+    lost_quality = replace(
+        healthy_localization(global_position=QualityState.LOST),
+        local_translation=QualityState.LOST,
+        heading=QualityState.GOOD,
+        local_sigma_m=0.19,
+    )
+    now = start + 20_000_000
+    lost = _tick(model, now, _scan(2, now, ((0.8, -0.3),)), quality=lost_quality)
+    assert lost.robot_relative_geometry is not None
+    assert lost.robot_relative_geometry.source_sequence == 2
+    assert lost.robot_relative_geometry.freshness_ns == 0
+    # The pose-aligned map deliberately did not consume scan 2.
+    assert lost.local_costmap is not None
+    assert lost.local_costmap.source_sequence == 1
+    assert lost.local_costmap.freshness_ns == 20_000_000
+
+    later = _tick(model, now + 20_000_000, quality=lost_quality)
+    assert later.robot_relative_geometry is not None
+    assert later.robot_relative_geometry.source_sequence == 2
+    assert later.robot_relative_geometry.freshness_ns == 20_000_000
+    assert later.local_costmap.source_sequence == 1
+    assert later.local_costmap.freshness_ns == 40_000_000
+
+    restored = ShadowWorldModel(config)
+    restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+    assert _tick(restored, now + 20_000_000, quality=lost_quality) == later
+

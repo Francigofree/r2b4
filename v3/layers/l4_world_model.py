@@ -25,6 +25,7 @@ from v3.contracts import (
     ObstacleTrack,
     Observation,
     RobotEstimate,
+    RobotRelativeGeometry,
     QualityState,
     RollingLocalCostmap,
     WorldSnapshot,
@@ -304,6 +305,8 @@ class WorldModelStateCheckpoint:
     structural_active: bool = False
     global_visited_cells: tuple[tuple[int, int, int], ...] = ()
     last_global_visit: tuple[int, int] | None = None
+    robot_relative_geometry: RobotRelativeGeometry | None = None
+    last_robot_relative_values: tuple[DataField, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,6 +343,8 @@ class ShadowWorldModel:
         "_last_local_measurement_ns",
         "_last_local_sequence",
         "_last_local_values",
+        "_robot_relative_geometry",
+        "_last_robot_relative_values",
         "_map_revision",
         "_occupancy",
         "_pose_history",
@@ -360,6 +365,8 @@ class ShadowWorldModel:
         self._last_local_measurement_ns: int | None = None
         self._last_local_sequence: int | None = None
         self._last_local_values: tuple[DataField, ...] | None = None
+        self._robot_relative_geometry: RobotRelativeGeometry | None = None
+        self._last_robot_relative_values: tuple[DataField, ...] | None = None
         self._costmap_revision = 0
         self._cached_costmap: RollingLocalCostmap | None = None
         self._costmap_window: tuple[float, float, float] | None = None
@@ -425,6 +432,7 @@ class ShadowWorldModel:
             self._costmap_window,
             self._structural_active,
             self._global_visited_cells, self._last_global_visit,
+            self._robot_relative_geometry, self._last_robot_relative_values,
         )
 
     def restore(self, checkpoint: WorldModelStateCheckpoint) -> None:
@@ -452,6 +460,8 @@ class ShadowWorldModel:
         self._structural_active = checkpoint.structural_active
         self._global_visited_cells = checkpoint.global_visited_cells
         self._last_global_visit = checkpoint.last_global_visit
+        self._robot_relative_geometry = checkpoint.robot_relative_geometry
+        self._last_robot_relative_values = checkpoint.last_robot_relative_values
 
     def __call__(self, frame: AdmittedFrame, estimate: RobotEstimate) -> WorldSnapshot:
         if frame.context == estimate.context and estimate.localization_quality.global_position is QualityState.GOOD:
@@ -478,6 +488,9 @@ class ShadowWorldModel:
         )
 
         self._update_lidar_health(frame)
+        # Pose-independent scan lineage must continue through localization loss.
+        # Only the pose-aligned occupancy path below is allowed to freeze.
+        self._update_robot_relative_geometry(frame)
 
         changed_tracks = False
         for observation in frame.accepted:
@@ -571,6 +584,11 @@ class ShadowWorldModel:
             local_costmap = self._cached_costmap.with_freshness_ns(
                 max(0, now_ns - self._last_local_measurement_ns)
             )
+        robot_relative_geometry = self._robot_relative_geometry
+        if robot_relative_geometry is not None:
+            robot_relative_geometry = robot_relative_geometry.with_freshness_ns(
+                max(0, now_ns - robot_relative_geometry.captured_monotonic_ns)
+            )
         return WorldSnapshot(
             frame.context,
             frame_id=estimate.frame_id,
@@ -579,6 +597,7 @@ class ShadowWorldModel:
             freshness_ns=freshness_ns,
             local_costmap=local_costmap,
             global_visited_cells=self._global_visited_cells,
+            robot_relative_geometry=robot_relative_geometry,
         )
 
     def _reset_spatial_state(self) -> None:
@@ -805,6 +824,62 @@ class ShadowWorldModel:
             self._map_revision += 1
             self._last_lidar_sequence = observation.source_sequence
             self._last_lidar_measurement_ns = measurement_ns
+
+    def _update_robot_relative_geometry(self, frame: AdmittedFrame) -> None:
+        """Track fresh ROBOT_BASE geometry independently of localization quality.
+
+        This intentionally does not integrate, transform or persist obstacle
+        geometry.  It only carries scan lineage/freshness so recovery can keep
+        observing while pose-aligned mapping remains fail-closed.
+        """
+        local = tuple(item for item in frame.accepted if item.kind == "lidar_local_points")
+        if len(local) > 1:
+            raise ValueError("L4 accepts at most one lidar_local_points observation per tick")
+        if not local:
+            return
+        observation = local[0]
+        values = _values(observation)
+        if values.get("frame_id") != "ROBOT_BASE":
+            raise ValueError("lidar local points must use the ROBOT_BASE frame")
+        point_count = _integer(values, "point_count")
+        if point_count > self._config.local_costmap_max_points_per_scan:
+            raise ValueError("lidar local point_count exceeds the configured bound")
+        expected_keys = {"frame_id", "point_count"}
+        expected_keys.update(
+            f"point_{index:03d}_{suffix}"
+            for index in range(point_count)
+            for suffix in ("x_m", "y_m", "quality")
+        )
+        if set(values) != expected_keys:
+            raise ValueError("lidar local point fields do not match point_count")
+
+        previous = self._robot_relative_geometry
+        if previous is not None:
+            if observation.source_sequence < previous.source_sequence:
+                raise ValueError("L4 robot-relative perception sequence must not move backwards")
+            if observation.captured_monotonic_ns < previous.captured_monotonic_ns:
+                raise ValueError("L4 robot-relative perception time must not move backwards")
+            if observation.source_sequence == previous.source_sequence:
+                if (
+                    observation.captured_monotonic_ns != previous.captured_monotonic_ns
+                    or observation.values != self._last_robot_relative_values
+                ):
+                    raise ValueError("L4 robot-relative perception sequence was rewritten")
+                return
+
+        for index in range(point_count):
+            _number(values, f"point_{index:03d}_x_m")
+            _number(values, f"point_{index:03d}_y_m")
+            _integer(values, f"point_{index:03d}_quality")
+
+        self._robot_relative_geometry = RobotRelativeGeometry(
+            frame_id="ROBOT_BASE",
+            source_sequence=observation.source_sequence,
+            captured_monotonic_ns=observation.captured_monotonic_ns,
+            point_count=point_count,
+            freshness_ns=0,
+        )
+        self._last_robot_relative_values = observation.values
 
     def _update_local_scan(self, frame: AdmittedFrame, estimate: RobotEstimate) -> bool:
         if (estimate.localization_quality.local_translation is QualityState.LOST

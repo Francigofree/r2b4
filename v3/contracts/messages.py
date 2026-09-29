@@ -375,6 +375,58 @@ class RollingLocalCostmap:
 
 
 @dataclass(frozen=True, slots=True)
+class RobotRelativeGeometry:
+    """Fresh pose-independent LiDAR geometry lineage in the robot base frame.
+
+    The raw point cloud stays at the L2/L4 perception edge.  This compact token
+    only proves that current ROBOT_BASE geometry exists; it carries no map,
+    planning or final-safety authority.
+    """
+
+    frame_id: str
+    source_sequence: int
+    captured_monotonic_ns: int
+    point_count: int
+    freshness_ns: int
+
+    def __post_init__(self) -> None:
+        if self.frame_id != "ROBOT_BASE":
+            raise ContractValidationError(
+                "RobotRelativeGeometry must use the ROBOT_BASE frame"
+            )
+        require_nonnegative(self.source_sequence, "RobotRelativeGeometry.source_sequence")
+        require_nonnegative(
+            self.captured_monotonic_ns,
+            "RobotRelativeGeometry.captured_monotonic_ns",
+        )
+        if (
+            not isinstance(self.point_count, int)
+            or isinstance(self.point_count, bool)
+            or self.point_count < 0
+        ):
+            raise ContractValidationError(
+                "RobotRelativeGeometry.point_count must be a non-negative integer"
+            )
+        require_nonnegative(self.freshness_ns, "RobotRelativeGeometry.freshness_ns")
+
+    def with_freshness_ns(self, freshness_ns: int) -> RobotRelativeGeometry:
+        """Refresh age while reusing immutable scan lineage."""
+        require_nonnegative(freshness_ns, "RobotRelativeGeometry.freshness_ns")
+        if freshness_ns == self.freshness_ns:
+            return self
+        result = object.__new__(RobotRelativeGeometry)
+        for name in (
+            "frame_id",
+            "source_sequence",
+            "captured_monotonic_ns",
+            "point_count",
+        ):
+            object.__setattr__(result, name, getattr(self, name))
+        object.__setattr__(result, "freshness_ns", freshness_ns)
+        return result
+
+
+@dataclass(frozen=True, slots=True)
 class WorldSnapshot:
     context: TickContext
     frame_id: str
@@ -383,6 +435,7 @@ class WorldSnapshot:
     freshness_ns: int
     local_costmap: RollingLocalCostmap | None = None
     global_visited_cells: tuple[tuple[int, int, int], ...] = ()
+    robot_relative_geometry: RobotRelativeGeometry | None = None
 
     def __post_init__(self) -> None:
         require_token(self.frame_id, "WorldSnapshot.frame_id")
@@ -399,6 +452,13 @@ class WorldSnapshot:
                 raise ContractValidationError(
                     "WorldSnapshot and local costmap must use the same frame"
                 )
+        if (
+            self.robot_relative_geometry is not None
+            and not isinstance(self.robot_relative_geometry, RobotRelativeGeometry)
+        ):
+            raise ContractValidationError(
+                "WorldSnapshot.robot_relative_geometry must be RobotRelativeGeometry or None"
+            )
 
 
 @dataclass(frozen=True, slots=True)

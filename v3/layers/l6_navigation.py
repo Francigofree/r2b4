@@ -865,14 +865,20 @@ class TrajectoryNavigator:
             self._localization_recovery_started_ns = now
             self._localization_recovery_mission_id = mission.mission_id
         elapsed = now - self._localization_recovery_started_ns
-        costmap = world.local_costmap
+        geometry = world.robot_relative_geometry
+        # Recovery must not depend on the pose-aligned costmap: L4 intentionally
+        # freezes that map when local translation is LOST.  Instead require a
+        # fresh ROBOT_BASE scan token.  Translation remains zero and L12 still
+        # independently owns directional raw-LiDAR collision safety.
         if (mission.mode is CommandMode.TELEOP
                 or elapsed >= self._config.localization_recovery_timeout_ns
                 or quality.heading is not QualityState.GOOD
                 or quality.lidar_age_ns > self._config.max_costmap_freshness_ns
                 or estimate.frame_id != world.frame_id
                 or world.freshness_ns > self._config.max_world_freshness_ns
-                or costmap is None or costmap.freshness_ns > self._config.max_costmap_freshness_ns):
+                or geometry is None
+                or geometry.point_count <= 0
+                or geometry.freshness_ns > self._config.max_costmap_freshness_ns):
             return self._inactive(mission, NavigationStatus.IDLE, "LOCALIZATION_HOLD")
         # No translation; L12 independently verifies the raw side clearances.
         return NavigationPlan(

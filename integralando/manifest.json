@@ -1,0 +1,20 @@
+{
+  "schema": "R2B4_UPGRADE_MANIFEST_V1",
+  "name": "localization_recovery_deadlock_P0_P1",
+  "repository": "Francigofree/r2b4",
+  "base_commit": "f065405f5092ff3ee2b3c23ce768ee05371a119b",
+  "base_blobs": {
+    "v3/contracts/messages.py": "7ea79d9bfa75fa2d4c3a1c15e7c3b8635c3b1c6b",
+    "v3/contracts/__init__.py": "fd36d490ad441930baa8512d08970bb35b918cd5",
+    "v3/layers/l4_world_model.py": "74127000adff984c6a6548a606fe78a9aa0342da",
+    "v3/layers/l6_navigation.py": "d6b4a78fcdc6a361b309138078ff392bf4b27a76",
+    "tests/feature/test_v3_lidar_world_model.py": "68d5d0f58b0f514eceb4f684d810d1ef537c8b83",
+    "tests/feature/test_v3_roomcruise_localization_motion.py": "1b7b2cbd3d65c0ec5872dbe715ead5f92ae73815"
+  },
+  "safety_invariants": [
+    "localization recovery remains translation-free",
+    "normal navigation still requires a fresh pose-aligned costmap",
+    "L12 remains final raw-LiDAR directional collision authority",
+    "LOST localization does not authorize structural map learning"
+  ]
+}
