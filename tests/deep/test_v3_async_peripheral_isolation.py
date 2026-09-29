@@ -113,3 +113,38 @@ def test_liveness_snapshot_reports_measurement_publication_and_overruns():
         assert item.read_in_flight is False
     finally:
         reader.close()
+
+
+def test_async_command_ingress_preserves_revision_timing_and_real_expiry(tmp_path):
+    from v3.adapters.resident_command import (
+        AtomicResidentCommandGateway, AsyncResidentCommandGateway,
+        ResidentCommandClient, ResidentCommandMailboxConfig,
+    )
+    from v3.contracts import CommandMode
+    config = ResidentCommandMailboxConfig(tmp_path / 'command.json')
+    client = ResidentCommandClient(config)
+    direct = AtomicResidentCommandGateway(config)
+    edge = AsyncResidentCommandGateway(config, reader_poll_s=.002, reader_stop_timeout_s=.5)
+    edge.start()
+    try:
+        for revision in range(3):
+            client.publish_explore('same-mission', max_v_mps=.3, max_omega_rad_s=.6, ttl_ns=200_000_000)
+            context = TickContext(revision, time.monotonic_ns())
+            expected = direct.snapshot(context)
+            _wait_until(lambda: edge.snapshot(context) == expected
+                        and edge.timing_evidence.revision == client.last_revision)
+            evidence = edge.timing_evidence
+            assert evidence.revision == client.last_revision
+            assert evidence.issued_monotonic_ns <= evidence.reader_received_ns <= evidence.observed_monotonic_ns
+            assert evidence.ttl_remaining_ns == evidence.expires_monotonic_ns-evidence.observed_monotonic_ns
+            assert evidence.ttl_remaining_ns > 0
+        # No producer: cached bytes never acquire a new lifetime on a read.
+        deadline = evidence.expires_monotonic_ns
+        _wait_until(lambda: time.monotonic_ns() > deadline)
+        command = edge.snapshot(TickContext(3, time.monotonic_ns()))
+        assert command.mode is CommandMode.STOP
+        assert '.expired.' in command.command_id
+        assert edge.timing_evidence.ttl_remaining_ns < 0
+        assert edge.timing_evidence.reader_received_ns == evidence.reader_received_ns
+    finally:
+        edge.close()

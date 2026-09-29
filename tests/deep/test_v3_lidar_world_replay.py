@@ -151,6 +151,8 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
     safety_sample = None
     try:
         # Fresh encoder/heading/local scans, but no global lidar_pose correction.
+        # Use control-grade moving-wheel feedback: an indefinitely stationary
+        # encoder under motion demand must now fault instead of closing PI.
         # The normal EKF process noise must cross the production XY limit.
         for tick in range(355):
             context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
@@ -161,7 +163,7 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
 
             samples = [
                 sample("ENCODER", "wheel_velocity", tick, context.monotonic_ns,
-                       left_mps=0.0, right_mps=0.0, trust=1.0),
+                       left_mps=.19, right_mps=.19, trust=1.0),
                 sample("IMU", "ekf_heading", tick, context.monotonic_ns,
                        yaw_rad=0.0, omega_rad_s=0.0, confidence=1.0),
             ]

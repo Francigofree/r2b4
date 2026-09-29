@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from v3.contracts import DataField, RobotEstimate
+from v3.contracts import DataField, QualityState, RobotEstimate
 
 
 def _wrap_angle(value: float) -> float:
@@ -27,6 +27,7 @@ class PoseSample:
     position_variance_x: float = 0.0
     position_variance_y: float = 0.0
     yaw_variance: float = 0.0
+    local_geometry_usable: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,10 @@ class PoseHistory:
             estimate.covariance_5x5[0],
             estimate.covariance_5x5[6],
             estimate.covariance_5x5[12],
+            (estimate.localization_quality.local_translation is not QualityState.LOST
+             and estimate.localization_quality.heading is not QualityState.LOST
+             and estimate.localization_quality.local_pose_continuous
+             and not estimate.localization_quality.pose_discontinuity),
         )
         frame_changed = bool(self._samples and self._samples[-1].frame_id != sample.frame_id)
         if frame_changed:
@@ -119,6 +124,7 @@ class PoseHistory:
                 max(before.position_variance_x, after.position_variance_x),
                 max(before.position_variance_y, after.position_variance_y),
                 max(before.yaw_variance, after.yaw_variance),
+                before.local_geometry_usable and after.local_geometry_usable,
             )
         return None
 

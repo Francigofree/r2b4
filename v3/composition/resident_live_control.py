@@ -163,17 +163,20 @@ class ResidentLiveControlComposition:
         self._timing_observer = observer
         self._control.set_timing_observer(observer)
 
-    def _phase_started(self) -> int | None:
-        return time.perf_counter_ns() if self._timing_observer is not None else None
+    def _phase_started(self) -> tuple[int, int] | None:
+        return (time.perf_counter_ns(), time.thread_time_ns()) if self._timing_observer is not None else None
 
-    def _finish_phase(self, name: str, started_ns: int | None) -> None:
+    def _finish_phase(self, name: str, started_ns: tuple[int, int] | None) -> None:
         if started_ns is None:
             return
         observer = self._timing_observer
         if observer is None:
             return
         try:
-            observer(name, max(0, time.perf_counter_ns() - started_ns))
+            wall_ns = time.perf_counter_ns() - started_ns[0]
+            cpu_ns = time.thread_time_ns() - started_ns[1]
+            observer(name, max(0, wall_ns))
+            observer(name + "_CPU", max(0, cpu_ns))
         except Exception:
             # Diagnostics are fail-passive: control/safety must remain untouched.
             self._timing_observer = None
@@ -441,7 +444,15 @@ class ResidentLiveControlComposition:
                 self._reset_preflight()
             else:
                 self._reset_preflight()
-        record = ExecutionRecord(inputs, result, self._control.tick_evidence)
+        evidence = self._control.tick_evidence
+        # Optional adapter diagnostics are passive and cannot fail a control tick.
+        try:
+            ingress = getattr(self._command_gateway, "timing_evidence", None)
+            if ingress is not None:
+                evidence += (ingress,)
+        except Exception:
+            pass
+        record = ExecutionRecord(inputs, result, evidence)
         self._finish_phase("POST_CONTROL", phase_started_ns)
         return result, record
 

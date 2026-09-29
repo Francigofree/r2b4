@@ -22,6 +22,18 @@ from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_aff
 RESIDENT_COMMAND_SCHEMA = "R2B4_V3_RESIDENT_COMMAND_V2"
 
 
+@dataclass(frozen=True, slots=True)
+class CommandIngressTiming:
+    """Passive scalar evidence; never an input to command/lifecycle authority."""
+
+    revision: int
+    issued_monotonic_ns: int
+    reader_received_ns: int
+    observed_monotonic_ns: int
+    expires_monotonic_ns: int
+    ttl_remaining_ns: int
+
+
 def _positive_int(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise ValueError(f"{name} must be a positive integer")
@@ -94,6 +106,8 @@ class AtomicResidentCommandGateway:
         "_last_revision",
         "_monotonic_ns",
         "_requires_new_revision",
+        "_reader_received_ns",
+        "_timing_evidence",
     )
 
     def __init__(
@@ -111,6 +125,12 @@ class AtomicResidentCommandGateway:
         self._last_revision: int | None = None
         self._last_digest: str | None = None
         self._requires_new_revision = False
+        self._reader_received_ns = 0
+        self._timing_evidence: CommandIngressTiming | None = None
+
+    @property
+    def timing_evidence(self) -> CommandIngressTiming | None:
+        return self._timing_evidence
 
     @property
     def last_revision(self) -> int | None:
@@ -163,6 +183,7 @@ class AtomicResidentCommandGateway:
     def snapshot(self, context: TickContext) -> CommandRequest:
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
+        self._timing_evidence = None
         raw = self._read_trusted_bytes()
         if raw is None:
             if self._last_revision is not None:
@@ -253,6 +274,11 @@ class AtomicResidentCommandGateway:
             self._last_digest = digest
             self._requires_new_revision = False
 
+        self._timing_evidence = CommandIngressTiming(
+            revision, issued_ns, self._reader_received_ns or observed_ns,
+            observed_ns, expires_ns, expires_ns-observed_ns,
+        )
+
         if observed_ns > expires_ns:
             return self._stop(context, f"expired.{revision}")
         if mode is CommandMode.STOP:
@@ -341,7 +367,7 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
         self._reader_stop_timeout_s = reader_stop_timeout_s
         self._worker_cpus = worker_cpus
         self._strict_affinity = strict_affinity
-        self._mailbox: bytes | None = None
+        self._mailbox: tuple[bytes | None, int] = (None, 0)
         self._read_error: Exception | None = None
         self._stop_reader = threading.Event()
         self._reader: threading.Thread | None = None
@@ -360,7 +386,9 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
     def _acquire(self) -> None:
         try:
             while not self._stop_reader.is_set():
-                self._mailbox = super()._read_trusted_bytes()
+                raw = super()._read_trusted_bytes()
+                if raw != self._mailbox[0]:
+                    self._mailbox = (raw, self._monotonic_ns())
                 self._stop_reader.wait(self._reader_poll_s)
         except Exception as exc:
             self._read_error = exc
@@ -370,7 +398,8 @@ class AsyncResidentCommandGateway(AtomicResidentCommandGateway):
             raise ValueError("asynchronous command mailbox read failed") from self._read_error
         if self._reader is None or self._stop_reader.is_set():
             return None
-        return self._mailbox
+        raw, self._reader_received_ns = self._mailbox
+        return raw
 
     def close(self) -> None:
         self._stop_reader.set()

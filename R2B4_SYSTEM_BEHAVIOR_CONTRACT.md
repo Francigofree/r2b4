@@ -145,6 +145,15 @@ Nem szabad V3-at indítani pusztán azért, mert egy kérés:
 
 A döntő kérdés nem az, hogy „a jelenlegi kódban melyik processz birtokolja ezt”, hanem az, hogy **a capability helyes rendszerszemantikája szerint szükséges-e hozzá V3**.
 
+A mozgás kívánt működése folyamatos, sima haladás, menet közbeni sebesség-, irány-
+és pályakorrekcióval. A replanning, globális lokalizáció és háttérmunka önmagában
+nem tördelheti a fizikai mozgást. Friss robot-relative geometria és használható
+lokális odometria/heading mellett a globális pozíció bizonytalansága óvatosabb,
+legalább 0,15 m/s-os realizálható tartós haladást vagy háttérkorrekciót indokol.
+Valós lokális evidence-vesztés, akadály, célhoz érkezés, explicit STOP és safety
+korlát továbbra is indokolhat megállást. A 0–0,15 m/s közötti indulás/fékezés
+véges átmenet; a kis sebességű encoder-fit nem megbízható sebesség-authority.
+
 A jelenlegi implementációs coupling nem válhat automatikusan rendszerszintű követelménnyé.
 
 ---

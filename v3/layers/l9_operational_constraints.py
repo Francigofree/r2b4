@@ -156,16 +156,17 @@ class OperationalConstraintLayer:
             limited_v - previous_v, limited_omega - previous_omega,
         ))
         wheel_budget = self._config.max_acceleration_mps2 * acceleration_scale * dt_s
-        if motion.transition_allowed and wheel_delta > wheel_budget > 0:
+        if (motion.transition_allowed or previous_v == previous_omega == 0.0) and wheel_delta > wheel_budget > 0:
             fraction = wheel_budget / wheel_delta
             limited_v = previous_v + fraction * (limited_v - previous_v)
             limited_omega = previous_omega + fraction * (limited_omega - previous_omega)
         if limited_v != allowed_v_mps or limited_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.ACCELERATION_LIMIT)
-        # A newly tightened authority envelope wins over temporal continuity.
-        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, linear_cap))
+        # Soft localization quality changes the target of the ramp. Only the
+        # explicit mission/platform envelope is an immediate hard limit.
+        allowed_v_mps = _clamp(limited_v, min(motion.constraints.max_v_mps, self._config.max_v_mps))
         allowed_omega_rad_s = _clamp(limited_omega, min(
-            motion.constraints.max_omega_rad_s, self._config.max_omega_rad_s * speed_scale,
+            motion.constraints.max_omega_rad_s, self._config.max_omega_rad_s,
         ))
 
         if ((abs(allowed_v_mps) > 1e-12 and quality.local_translation is QualityState.LOST)

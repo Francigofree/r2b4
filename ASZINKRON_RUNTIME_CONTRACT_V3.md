@@ -209,8 +209,11 @@ fogadható el. Worker restart nem írhatja át a source identityt.
 Végtelen queue és sorban kiszámolt elavult state nem megengedett.
 
 Friss előző eredmény pending replacement alatt használható. A kiválasztott motion objective időbeli ownershipje L7-é: a typed pending nem törli az érvényes objective-et, de nem újítja meg annak source-időhöz kötött lejáratát. L6 továbbra is a guidance és a planner-completion elfogadásának ownere. Stale előző
-eredménnyel kizárólag zero-motion HOLD/STOP megengedett; a mission identity
-megőrizhető, a friss replacement elfogadása után resume következhet. Ez azonos
+eredmény önmagában nem adhat pozitív motion-authorityt. L6 friss, lezárt lokális
+odometria és geometria alapján egyetlen bounded manővert újra igazolhat, saját
+source-contexttel, geometry revisionnel és measurement idővel. A régi terv csak
+javaslat, lejárata nem hosszabbodik meg. Friss igazolás hiányában HOLD/STOP kell;
+a mission identity megőrizhető, friss replacement után resume következhet. Ez azonos
 jelentésű EXPLORE, FOLLOW és NAVIGATE módban. A raw szenzorintegritás (például
 quadrature rejection vagy bus error), a timing validity, a frissesség és a
 szemantikai mérés elfogadása külön tény; egy integrity counter nem önálló
@@ -221,3 +224,9 @@ measurement- vagy safety-authority.
 A capability edge kis scalar evidence-et tarthat: generation, request/revision,
 pending age, accepted/superseded/stale/error/late-rejected számláló. Ez passzív
 diagnosztika; nem timing authority.
+
+A command ingress kiadás/revision, reader receipt, closure előtti megfigyelés és
+TTL-maradék scalar diagnosztikája passzív capture-evidence. A runtime fázisok
+wall-ideje mellett a control szál CPU-ideje külön mérhető; a különbség önmagában
+nem különíti el a GIL-várakozást, device I/O-t és scheduler preemptiont. A mérés
+nem lehet control-input és hibája nem befolyásolhatja a safety döntést.

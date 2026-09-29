@@ -237,6 +237,7 @@ class WheelActuatorStateCheckpoint:
     right_velocity_feedback_ready: bool = False
     left_feedback_gain: float = 0.0
     right_feedback_gain: float = 0.0
+    feedback_transition_until_ns: int | None = None
 
 
 class _PIState:
@@ -302,6 +303,7 @@ class WheelActuatorController:
         "_left_uncertain_since_ns",
         "_right_uncertain_since_ns",
         "_feedback_uncertain_since_ns",
+        "_feedback_transition_until_ns",
         "_last_feedback",
         "_left_velocity_feedback_ready", "_right_velocity_feedback_ready",
     )
@@ -316,6 +318,7 @@ class WheelActuatorController:
         self._left_uncertain_since_ns: int | None = None
         self._right_uncertain_since_ns: int | None = None
         self._feedback_uncertain_since_ns: int | None = None
+        self._feedback_transition_until_ns: int | None = None
         self._last_feedback: Observation | None = None
         self._left_velocity_feedback_ready = self._right_velocity_feedback_ready = False
 
@@ -327,6 +330,7 @@ class WheelActuatorController:
         self._left_uncertain_since_ns = None
         self._right_uncertain_since_ns = None
         self._feedback_uncertain_since_ns = None
+        self._feedback_transition_until_ns = None
         self._last_feedback = None
         self._left_velocity_feedback_ready = self._right_velocity_feedback_ready = False
 
@@ -344,6 +348,7 @@ class WheelActuatorController:
             self._last_feedback,
             self._left_velocity_feedback_ready, self._right_velocity_feedback_ready,
             self._left_pi._feedback_gain, self._right_pi._feedback_gain,
+            self._feedback_transition_until_ns,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
@@ -366,6 +371,7 @@ class WheelActuatorController:
             (checkpoint.left_uncertain_since_ns, "left_uncertain_since_ns"),
             (checkpoint.right_uncertain_since_ns, "right_uncertain_since_ns"),
             (checkpoint.feedback_uncertain_since_ns, "feedback_uncertain_since_ns"),
+            (checkpoint.feedback_transition_until_ns, "feedback_transition_until_ns"),
         ):
             if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{name} must be non-negative integer or None")
@@ -382,6 +388,7 @@ class WheelActuatorController:
         self._left_uncertain_since_ns = checkpoint.left_uncertain_since_ns
         self._right_uncertain_since_ns = checkpoint.right_uncertain_since_ns
         self._feedback_uncertain_since_ns = checkpoint.feedback_uncertain_since_ns
+        self._feedback_transition_until_ns = checkpoint.feedback_transition_until_ns
         self._left_velocity_feedback_ready = checkpoint.left_velocity_feedback_ready
         self._right_velocity_feedback_ready = checkpoint.right_velocity_feedback_ready
         self._left_pi._feedback_gain = checkpoint.left_feedback_gain
@@ -478,11 +485,16 @@ class WheelActuatorController:
 
         uncertain = left_uncertain or right_uncertain
         if uncertain:
+            # The measured wheel follows the command with delay. Keep the
+            # original finite L9 deadline until feedback catches up; never
+            # renew it when targets or planner proposals change.
+            if self._feedback_transition_until_ns is None and not missing_edge_feedback:
+                self._feedback_transition_until_ns = wheels.velocity_transition_until_ns
             self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
                 "feedback",
                 self._feedback_uncertain_since_ns,
                 wheels.context.monotonic_ns,
-                transition_until_ns=(wheels.velocity_transition_until_ns
+                transition_until_ns=(self._feedback_transition_until_ns
                                      if not missing_edge_feedback else None),
             )
             self._transient_stale_ticks += 1
@@ -491,10 +503,9 @@ class WheelActuatorController:
             self._last_context = wheels.context
             if any(field.key == "measurement_stale" and field.value is True for field in feedback.values):
                 return ActuatorRequest(wheels.context, 0.0, 0.0)
-            # Preserve the last fully closed-loop context.  Recovery therefore
-            # re-anchors PI time through the existing tick-gap rule instead of
-            # integrating the whole uncertainty interval.  The current targets
-            # still get bounded speed-map feed-forward only.
+            # Advance the time anchor without integrating uncertain feedback.
+            # PI re-entry blends over fresh control intervals, never the whole
+            # uncertainty episode. Targets retain bounded calibrated feed-forward.
             left_output, left_saturated = self._feedforward_output(
                 "left", wheels.left_mps
             )
@@ -510,6 +521,7 @@ class WheelActuatorController:
 
         self._transient_stale_ticks = 0
         self._feedback_uncertain_since_ns = None
+        self._feedback_transition_until_ns = None
         assert left_measured is not None or not required_left
         assert right_measured is not None or not required_right
         left_output, left_saturated = self._wheel_output(

@@ -380,6 +380,7 @@ class TickEngine:
         timing_started_ns = (
             time.perf_counter_ns() if self._timing_observer is not None else None
         )
+        cpu_started_ns = time.thread_time_ns() if timing_started_ns is not None else None
         try:
             try:
                 final = self._layers.final_safety.finalize(
@@ -413,9 +414,10 @@ class TickEngine:
             )
         finally:
             if timing_started_ns is not None:
-                self._observe_timing(
-                    "L12", time.perf_counter_ns() - timing_started_ns
-                )
+                wall_ns = time.perf_counter_ns() - timing_started_ns
+                cpu_ns = time.thread_time_ns() - cpu_started_ns
+                self._observe_timing("L12", wall_ns)
+                self._observe_timing("L12" + "_CPU", cpu_ns)
 
     def _tick_order_fault(self, context: TickContext) -> str | None:
         previous = self._last_context
@@ -443,6 +445,7 @@ class TickEngine:
         timing_started_ns = (
             time.perf_counter_ns() if self._timing_observer is not None else None
         )
+        cpu_started_ns = time.thread_time_ns() if timing_started_ns is not None else None
         try:
             value = function(*args)
             if not isinstance(value, expected_type):
@@ -456,9 +459,10 @@ class TickEngine:
             return value
         finally:
             if timing_started_ns is not None:
-                self._observe_timing(
-                    name, time.perf_counter_ns() - timing_started_ns
-                )
+                wall_ns = time.perf_counter_ns() - timing_started_ns
+                cpu_ns = time.thread_time_ns() - cpu_started_ns
+                self._observe_timing(name, wall_ns)
+                self._observe_timing(name + "_CPU", cpu_ns)
 
 
 __all__ = [

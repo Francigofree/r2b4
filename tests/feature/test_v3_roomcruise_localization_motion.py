@@ -66,11 +66,11 @@ def test_roomcruise_localization_motion_requires_independent_local_quality():
                              (DataField("x_m", 1.0), DataField("y_m", 0.0)), 6)
     plan = navigator.evaluate(manager.evaluate(command), estimate, world)
     motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
-    assert plan.reason == "LOCALIZATION_REACQUIRE"
+    assert plan.reason == "LOCALIZATION_HOLD"
     assert motion.requested_v_mps == 0
     denied = replace(motion, localization_requirement=LocalizationRequirement())
     allowed = limiter.evaluate(denied, estimate)
-    assert allowed.active_constraints == (ConstraintCode.LOCALIZATION_DEGRADED,)
+    assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
     assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
 
 
@@ -92,7 +92,10 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         CommandRequest(estimate.context, "recovery-geometry", CommandMode.EXPLORE, (), 0)
     )
 
-    # P0: stale or absent pose-aligned costmap must not deadlock rotation-only recovery.
+    # Production recovery cap cannot realize the physical wheel minimum.
+    held = navigator.evaluate(mission, estimate, world)
+    assert held.reason == "LOCALIZATION_HOLD"
+    # Neither an absent nor a stale map permits exceeding that recovery cap.
     for broken_world in (
         replace(world, local_costmap=None),
         replace(
@@ -104,10 +107,11 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         ),
     ):
         plan = navigator.evaluate(mission, estimate, broken_world)
-        assert plan.status is NavigationStatus.ACTIVE
-        assert plan.reason == "LOCALIZATION_REACQUIRE"
-        assert plan.velocity_target.v_mps == 0.0
-        assert plan.velocity_target.omega_rad_s != 0.0
+        assert plan.status is NavigationStatus.IDLE
+        assert plan.reason == "LOCALIZATION_HOLD"
+        motion = realizer.evaluate(selector.evaluate(plan), estimate, broken_world)
+        allowed = limiter.evaluate(motion, estimate)
+        assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
 
     # P1: recovery now depends on fresh pose-independent ROBOT_BASE geometry.
     for geometry in (
@@ -202,8 +206,8 @@ def test_roomcruise_localization_pending_keeps_original_dependency_and_expiry():
     assert limiter.evaluate(stopped, estimate).allowed_v_mps == 0.0
 
     # Exercise production L6 completion inputs as well as L7 retention. A
-    # timed-out replacement keeps the old trajectory only until its own expiry.
-    from v3.contracts import LOCAL_FRAME_ID, ObstacleTrack
+    # timed-out replacement can be bridged only by a new, measured local proof.
+    from v3.contracts import LOCAL_FRAME_ID, ObstacleTrack, CostmapCell
     from v3.contracts.planner import PlannerInput
     from v3.layers.l6_navigation import TrajectoryRolloutComputer
     for mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON, CommandMode.NAVIGATE):
@@ -214,7 +218,7 @@ def test_roomcruise_localization_pending_keeps_original_dependency_and_expiry():
         manager = MissionManager(config.mission)
         first_request = replacement = initial_validity = checkpoint = None
         restored = None
-        for tick in range(21):
+        for tick in range(24):
             estimate, world = _scene(tick)
             estimate = replace(estimate, frame_id=LOCAL_FRAME_ID)
             world = replace(world, frame_id=LOCAL_FRAME_ID,
@@ -228,19 +232,32 @@ def test_roomcruise_localization_pending_keeps_original_dependency_and_expiry():
             elif tick == 11:
                 assert replacement is not None
                 completion = PlannerInput(estimate.context, replacement.context, error="ASYNC_L6_DEADLINE_MISSED")
+            if tick == 22:
+                world = replace(world, local_costmap=replace(world.local_costmap,
+                    revision=2, occupied_cells=(CostmapCell(0, 0, 1),)))
+            if tick == 23:
+                world = replace(world, local_costmap=replace(world.local_costmap,
+                    freshness_ns=config.navigation.max_costmap_freshness_ns+1))
             plan = navigator.evaluate(mission, estimate, world, completion)
             if restored is not None:
                 assert restored.evaluate(mission, estimate, world, completion) == plan
-            motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
+            objective = selector.evaluate(plan)
+            motion = realizer.evaluate(objective, estimate, world)
             if tick == 0:
                 first_request = navigator.pending_rollout_request
                 assert first_request is not None
-            elif tick <= 17:
+            elif tick < 22:
                 assert plan.status is NavigationStatus.ACTIVE
                 assert abs(motion.requested_v_mps) + abs(motion.requested_omega_rad_s) > 0
                 if initial_validity is None:
                     initial_validity = plan.motion_validity
-                assert plan.motion_validity == initial_validity
+                if plan.reason == "LOCAL_GUIDANCE_REVALIDATED":
+                    assert plan.motion_validity.source_context == estimate.context
+                    assert plan.motion_validity.geometry_revision == world.local_costmap.revision
+                    assert plan.motion_validity.geometry_captured_ns == estimate.context.monotonic_ns
+                    assert objective.transition_allowed
+                else:
+                    assert plan.motion_validity == initial_validity
             else:
                 assert motion.requested_v_mps == motion.requested_omega_rad_s == 0
             if tick == 5:
@@ -298,7 +315,8 @@ def test_roomcruise_soft_localization_changes_replan_without_zero_motion_gap():
             )
         plan = navigator.evaluate(mission, estimate, world, completion)
         if tick == 0:
-            assert plan.status is NavigationStatus.PENDING
+            assert plan.status is NavigationStatus.ACTIVE
+            assert plan.reason == "LOCAL_GUIDANCE_REVALIDATED"
             first_request = navigator.pending_rollout_request
             assert first_request is not None
             continue
@@ -337,7 +355,39 @@ def test_roomcruise_soft_localization_changes_replan_without_zero_motion_gap():
         CommandRequest(estimate.context, "soft-localization-continuity", CommandMode.EXPLORE, (), 8)
     )
     plan = navigator.evaluate(mission, estimate, world)
-    assert plan.reason == "LOCALIZATION_REACQUIRE"
+    assert plan.reason == "LOCALIZATION_HOLD"
     motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
 
+
+
+def test_global_navigation_motion_continues_only_inside_committed_local_generation():
+    from v3.contracts import GLOBAL_FRAME_ID, LOCAL_FRAME_ID, Pose2D
+    config, manager, navigator, selector, realizer, limiter = _chain()
+    committed_goal = None
+    for tick in range(3):
+        estimate, world = _scene(tick, position_variance=.01)
+        world = replace(world, frame_id=LOCAL_FRAME_ID,
+                        local_costmap=replace(world.local_costmap, frame_id=LOCAL_FRAME_ID))
+        estimate = replace(estimate, frame_id=LOCAL_FRAME_ID,
+            local_pose=Pose2D(LOCAL_FRAME_ID, 0., 0., 0.),
+            global_pose=Pose2D(GLOBAL_FRAME_ID, 0., 0., 0.),
+            map_to_odom=Pose2D(GLOBAL_FRAME_ID, 0., 0., 0.),
+            localization_quality=replace(estimate.localization_quality,
+                global_position=QualityState.GOOD if tick == 0 else QualityState.LOST,
+                generation=1 if tick == 2 else 0))
+        mission = manager.evaluate(CommandRequest(estimate.context, "committed", CommandMode.NAVIGATE,
+            (DataField("x_m", 3.0), DataField("y_m", 0.0)), tick))
+        plan = navigator.evaluate(mission, estimate, world)
+        if tick == 0:
+            assert plan.status is NavigationStatus.ACTIVE
+            committed_goal = plan.local_goal
+        elif tick == 1:
+            assert plan.reason == "LOCAL_GUIDANCE_REVALIDATED"
+            assert plan.local_goal == committed_goal
+            assert not plan.motion_validity.localization_requirement.global_position
+            motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
+            assert motion.requested_v_mps >= .15
+        else:
+            assert plan.reason == "LOCALIZATION_HOLD"
+            assert plan.local_goal is None

@@ -1,0 +1,63 @@
+"""Finite low-speed transitions preserve counter evidence and fail closed."""
+from dataclasses import replace
+
+import pytest
+
+from rig import resolved_config
+from v3.contracts import AdmittedFrame, DataField, Observation, TickContext, WheelVelocitySetpoint
+from v3.layers.l11_actuator_control import WheelActuatorController
+
+
+def _feedback(tick, speed, **extra):
+    context = TickContext(tick, 1_000_000_000 + tick*20_000_000)
+    values = dict(left_mps=speed, right_mps=speed, trust=1.0,
+                  measurement_timing_valid=True, measurement_stale=False,
+                  left_estimation_timebase="GPIO_EDGE_HISTORY",
+                  right_estimation_timebase="GPIO_EDGE_HISTORY", **extra)
+    return AdmittedFrame(context, (Observation("wheel_velocity", "ENCODER", tick,
+        context.monotonic_ns, tuple(DataField(k, v) for k, v in values.items())),), ())
+
+
+def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
+    config = resolved_config().runtime.composition.live_control.control
+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+    restored = None
+    for tick, speed in enumerate((.0, .08, .12, .13, .14, .15, .19, .14, .131, .129, -.12, -.15, -.19)):
+        frame = _feedback(tick, speed)
+        reference = -.19 if speed < 0 else .19
+        wheels = WheelVelocitySetpoint(frame.context, reference, reference,
+                                       velocity_transition_until_ns=1_800_000_000)
+        output = controller(wheels, frame)
+        if restored is not None:
+            assert restored(wheels, frame) == output
+        if tick < 5 or tick in (9, 10):
+            assert output.left_normalized == pytest.approx(config.speed_map.lookup("left", reference)[0])
+            assert output.right_normalized == pytest.approx(config.speed_map.lookup("right", reference)[0])
+        if tick == 6:
+            restored = WheelActuatorController(config.speed_map, config.wheel_pi)
+            restored.restore(controller.checkpoint())
+    # Healthy pulse timing does not authorize indefinite operation below the
+    # reliable velocity band. Alternating wheel demands cannot renew the budget.
+    for missing in (False, True):
+        controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+        deadline = 1_800_000_000
+        fault_tick = None
+        for tick in range(50):
+            frame = _feedback(tick, .08)
+            if missing:
+                obs = frame.accepted[0]
+                frame = replace(frame, accepted=(replace(obs, values=tuple(
+                    DataField(v.key, "TICK_SNAPSHOT") if v.key.endswith("estimation_timebase") else v
+                    for v in obs.values)),))
+            sign = -1 if tick % 2 else 1
+            wheels = WheelVelocitySetpoint(frame.context, sign*.19, .19,
+                velocity_transition_until_ns=deadline if frame.context.monotonic_ns <= deadline else None)
+            try:
+                controller(wheels, frame)
+            except ValueError as exc:
+                assert "feedback remained uncertain too long" in str(exc)
+                fault_tick = tick
+                break
+        assert fault_tick is not None
+        elapsed = fault_tick * 20_000_000
+        assert elapsed < 800_000_000 if missing else elapsed == 800_000_000

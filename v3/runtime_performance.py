@@ -281,6 +281,8 @@ CONTROL_PHASE_ORDER = (
     "ASYNC_L6_DISPATCH",
     "CAPTURE_CHECKPOINT",
     "CAPTURE_TAP",
+    *(name + "_CPU" for name in ("L0_READ", "COMMAND_SNAPSHOT", "PIPELINE_TOTAL",
+                                 *(f"L{i}" for i in range(1, 13)), "POST_CONTROL")),
 )
 
 
@@ -390,13 +392,14 @@ class RuntimeTimingEvidence:
             payload["control_phase_timing"] = {
                 "schema": "R2B4_RUNTIME_PHASE_TIMING_V1",
                 "clock": "time.perf_counter_ns",
+                "cpu_clock": "time.thread_time_ns",
                 "scope": "NORMAL_TICKS_ONLY",
                 "causal_claim": False,
                 "pipeline_total_overlaps_layers": True,
                 "note": (
-                    "Elapsed wall-clock code-region timing. Scheduler preemption may "
-                    "contribute; values are not process CPU time and do not by "
-                    "themselves prove root cause."
+                    "Code-region elapsed wall time; *_CPU uses time.thread_time_ns. "
+                    "Wall minus thread CPU includes blocking, GIL waits and scheduler "
+                    "preemption; it does not distinguish these causes."
                 ),
                 "phases": {item.name: item.as_dict() for item in self.control_phases},
             }

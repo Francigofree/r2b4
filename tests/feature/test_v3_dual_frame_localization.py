@@ -99,8 +99,8 @@ def test_localization_global_loss_and_relocalization_preserve_local_map_follow_a
     mission = manager.evaluate(CommandRequest(f.context, "global", CommandMode.NAVIGATE,
         (DataField("x_m", 1.0), DataField("y_m", 0.0)), 351))
     recovery = nav.evaluate(mission, baseline, baseline_world)
-    assert recovery.reason == "LOCALIZATION_REACQUIRE"
-    assert recovery.velocity_target.v_mps == 0
+    assert recovery.reason == "LOCALIZATION_HOLD"
+    assert recovery.velocity_target is None
     recovered = nav.evaluate(mission, fixed, fixed_world)
     assert recovered.mission_id == recovery.mission_id
     assert recovered.status is NavigationStatus.ACTIVE
@@ -281,3 +281,26 @@ def test_localization_relative_scan_registration_and_feature_poor_corridor():
     assert unobservable_yaw is None or unobservable_yaw['observability'] < .12
     # No surface support is unavailable evidence, never an invented zero delta.
     assert RelativeLidarOdometry(cfg).process([], 1_000_000_000) is None
+
+
+def test_localization_counter_displacement_is_not_double_counted_by_velocity_updates():
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+    restored = None
+    for tick in range(100):
+        f = frame(tick)
+        ns = f.context.monotonic_ns
+        velocity = .31 if tick % 2 else .08
+        wheel = observation("wheel_velocity", tick, ns, left_mps=velocity, right_mps=velocity,
+            trust=1.0, raw_left_distance_m=tick*.004, raw_right_distance_m=tick*.004,
+            left_counter_running=True, right_counter_running=True)
+        f = replace(f, accepted=tuple(wheel if o.kind == "wheel_velocity" else o for o in f.accepted))
+        estimate = estimator(f)
+        # Tick 1 formerly reported .006 m although the counters measured .004 m.
+        assert estimate.local_pose.x_m == pytest.approx(tick*.004, abs=1e-10)
+        assert estimate.local_pose.y_m == pytest.approx(0.0, abs=1e-10)
+        if restored is not None:
+            assert restored(f) == estimate
+        if tick == 30:
+            restored = NativeStateEstimator(config)
+            restored.restore(estimator.checkpoint())

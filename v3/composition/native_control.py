@@ -183,6 +183,15 @@ class NativeControlCompositionConfig:
                 raise TypeError(f"{name} must be {expected_type.__name__}")
         if self.estimation.track_width_m != self.chassis_control.track_width_m:
             raise ValueError("L3 and L10 must use the same injected track width")
+        limits = self.navigation.wheel_limits
+        if (limits != self.motion_realization.wheel_limits
+                or limits != self.operational_constraints.wheel_limits
+                or limits.track_width_m != self.chassis_control.track_width_m
+                or limits.minimum_mps != self.speed_map.minimum_continuous_speed_mps
+                or limits.minimum_mps != self.chassis_control.minimum_continuous_wheel_speed_mps
+                or limits.minimum_mps != self.estimation.minimum_reliable_wheel_speed_mps
+                or limits.maximum_mps != min(curve.points[-1].speed_mps for curve in self.speed_map.curves)):
+            raise ValueError("motion layers must share calibrated wheel limits and geometry")
         if self.lidar_safety is not None and not isinstance(
             self.lidar_safety,
             LidarSafetyConfig,

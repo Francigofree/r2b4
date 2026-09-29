@@ -661,6 +661,8 @@ class MotionValidity:
     frame_id: str
     scope: str
     localization_requirement: LocalizationRequirement = LocalizationRequirement()
+    geometry_revision: int | None = None
+    geometry_captured_ns: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_context, TickContext):
@@ -672,6 +674,13 @@ class MotionValidity:
             raise ContractValidationError("motion validity localization_requirement must be typed")
         if self.valid_until_ns < self.source_context.monotonic_ns:
             raise ContractValidationError("motion validity expires before source")
+        if (self.geometry_revision is None) != (self.geometry_captured_ns is None):
+            raise ContractValidationError("local guidance requires complete geometry lineage")
+        if self.geometry_revision is not None:
+            require_nonnegative(self.geometry_revision, "geometry_revision")
+            require_nonnegative(self.geometry_captured_ns, "geometry_captured_ns")
+            if self.geometry_captured_ns > self.source_context.monotonic_ns:
+                raise ContractValidationError("local guidance geometry cannot be from the future")
 
     def usable_at(self, context: TickContext) -> bool:
         return (self.source_context.tick_id <= context.tick_id

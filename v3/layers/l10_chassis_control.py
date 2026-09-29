@@ -8,9 +8,6 @@ from dataclasses import dataclass
 from v3.contracts import ConstrainedMotion, WheelVelocitySetpoint
 
 
-_WHEEL_ZERO_EPSILON_MPS = 1e-12
-
-
 @dataclass(frozen=True, slots=True)
 class ChassisControlConfig:
     """Immutable geometry and wheel realizability injected into L10."""
@@ -42,13 +39,10 @@ class DifferentialDriveKinematics:
     authorized twist, including finite sub-floor acceleration and braking.
     """
 
-    __slots__ = ("_half_track_m", "_minimum_continuous_wheel_speed_mps")
+    __slots__ = ("_half_track_m",)
 
     def __init__(self, config: ChassisControlConfig) -> None:
         self._half_track_m = 0.5 * float(config.track_width_m)
-        self._minimum_continuous_wheel_speed_mps = float(
-            config.minimum_continuous_wheel_speed_mps
-        )
 
     def __call__(self, motion: ConstrainedMotion) -> WheelVelocitySetpoint:
         left_mps = (

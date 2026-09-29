@@ -865,6 +865,12 @@ class _PoseFilter:
             previous[row][state_index] / innovation_covariance
             for row in range(self._SIZE)
         ]
+        if self._config.frame_id == LOCAL_FRAME_ID and self._encoder_anchor is not None:
+            # Signed counter displacement owns local XY. A velocity/yaw scalar
+            # correction must not add a second displacement through covariance
+            # coupling after prediction; encoder reconciliation removes only
+            # provisional motion, not that extra Kalman position correction.
+            gain[self._X] = gain[self._Y] = 0.0
         for row in range(self._SIZE):
             self._state[row] += gain[row] * innovation
         self._state[self._YAW] = _normalize_angle(self._state[self._YAW])
@@ -872,6 +878,8 @@ class _PoseFilter:
             [
                 previous[row][column]
                 - gain[row] * previous[state_index][column]
+                - gain[column] * previous[row][state_index]
+                + gain[row] * innovation_covariance * gain[column]
                 for column in range(self._SIZE)
             ]
             for row in range(self._SIZE)
@@ -1069,6 +1077,7 @@ class NativeEstimatorStateCheckpoint:
     consistency_yaw_rad: float = 0.0
     relative_translation_error_m: float = 0.0
     local_translation_state: QualityState = QualityState.GOOD
+    local_loss_relative_ns: int | None = None
 
 
 class NativeStateEstimator:
@@ -1096,6 +1105,7 @@ class NativeStateEstimator:
         self._slip_suspected = False
         self._relative_translation_error_m = 0.0
         self._local_translation_state = QualityState.GOOD
+        self._local_loss_relative_ns = None
 
     @property
     def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
@@ -1110,6 +1120,7 @@ class NativeStateEstimator:
             self._heading_trusted, self._generation, self._transform_revision,
             self._relative_sequence, self._slip_suspected, self._consistency_yaw_rad,
             self._relative_translation_error_m, self._local_translation_state,
+            self._local_loss_relative_ns,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1276,13 +1287,18 @@ class NativeStateEstimator:
             if self._local_translation_state is QualityState.LOST:
                 # Recovery needs an independently measured fresh interval,
                 # not a tick oscillating around the old cumulative threshold.
-                if (self._last_relative_ns is None or relative_age > cfg.relative_max_age_ns
+                if (self._last_relative_ns is None
+                        or (self._local_loss_relative_ns is not None
+                            and self._last_relative_ns <= self._local_loss_relative_ns)
+                        or relative_age > cfg.relative_max_age_ns
                         or sigma >= cfg.local_good_sigma_m):
                     local_state = QualityState.LOST
             elif self._local_translation_state is QualityState.DEGRADED and (
                 sigma > .8 * cfg.local_good_sigma_m or disagreement > .8 * cfg.consistency_good_m
             ):
                 local_state = QualityState.DEGRADED
+        if local_state is QualityState.LOST and self._local_translation_state is not QualityState.LOST:
+            self._local_loss_relative_ns = self._last_relative_ns
         self._local_translation_state = local_state
         yaw_variance = local.covariance_5x5[12]
         relative_heading = False

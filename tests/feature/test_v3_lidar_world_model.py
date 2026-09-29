@@ -248,3 +248,23 @@ def test_lidar_robot_relative_geometry_updates_while_pose_aligned_map_is_frozen_
     restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
     assert _tick(restored, now + 20_000_000, quality=lost_quality) == later
 
+
+
+def test_lidar_localization_recovery_retains_scan_time_and_requires_valid_measurement_pose():
+    config = _config()
+    for measured_during_loss in (False, True):
+        model = ShadowWorldModel(config)
+        start = 1_000_000_000
+        _tick(model, start, _scan(1, start))
+        lost_ns = start+20_000_000
+        captured_ns = lost_ns if measured_during_loss else start
+        lost = _tick(model, lost_ns, _scan(2, captured_ns),
+            quality=healthy_localization(local_translation=QualityState.LOST))
+        assert lost.local_costmap.source_sequence == 1
+        restored = ShadowWorldModel(config)
+        restored.restore(pickle.loads(pickle.dumps(model.checkpoint())))
+        recovered = _tick(model, start+40_000_000)
+        assert _tick(restored, start+40_000_000) == recovered
+        assert recovered.local_costmap.source_sequence == (1 if measured_during_loss else 2)
+        assert recovered.local_costmap.freshness_ns == 40_000_000
+        assert recovered.robot_relative_geometry.captured_monotonic_ns == captured_ns

@@ -938,6 +938,8 @@ class ShadowWorldModel:
             if not local:
                 return False
             raise ValueError("L4 cannot align local perception to pose history")
+        if not pose.local_geometry_usable:
+            return False
         yaw_cos = math.cos(pose.yaw_rad)
         yaw_sin = math.sin(pose.yaw_rad)
         endpoints: list[tuple[float, float]] = []
