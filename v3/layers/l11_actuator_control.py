@@ -115,6 +115,10 @@ class WheelSpeedMap:
     schema: str
     map_state: str
     curves: tuple[WheelSpeedCurve, ...]
+    # V2 captures predate this explicit metadata.  The compatibility default
+    # preserves their historical 0.15 m/s continuous-speed boundary while new
+    # live configuration carries the value explicitly.
+    minimum_continuous_speed_mps: float = 0.15
 
     def __post_init__(self) -> None:
         if self.schema != WHEEL_SPEED_MAP_SCHEMA:
@@ -124,6 +128,12 @@ class WheelSpeedMap:
         names = tuple(curve.name for curve in self.curves)
         if len(names) != len(set(names)) or set(names) != set(WHEEL_CURVE_NAMES):
             raise ValueError("wheel speed map must contain each required curve once")
+        minimum = _finite_float(
+            self.minimum_continuous_speed_mps,
+            "minimum_continuous_speed_mps",
+        )
+        if minimum <= 0.0:
+            raise ValueError("minimum_continuous_speed_mps must be positive")
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, object]) -> "WheelSpeedMap":
@@ -168,6 +178,10 @@ class WheelSpeedMap:
             schema=str(raw.get("schema", "")),
             map_state=str(raw.get("map_state", "")).strip().upper(),
             curves=tuple(curves),
+            minimum_continuous_speed_mps=_finite_float(
+                raw.get("minimum_continuous_speed_mps", 0.15),
+                "minimum_continuous_speed_mps",
+            ),
         )
 
     def lookup(self, side: str, target_mps: float) -> tuple[float, float]:

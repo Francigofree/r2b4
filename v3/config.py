@@ -278,9 +278,13 @@ class ConfigResolver:
         hints = get_type_hints(NativeControlCompositionConfig)
         _keys(layers, {f.name for f in fields(NativeControlCompositionConfig)} - derived, "layers")
         typed_layers = {name: _typed(hints[name], value, f"layers.{name}") for name, value in layers.items()}
+        resolved_speed_map = WheelSpeedMap.from_mapping(speed_map)
         resolved_control = NativeControlCompositionConfig(**typed_layers,
-            speed_map=WheelSpeedMap.from_mapping(speed_map),
-            chassis_control=ChassisControlConfig(_typed(float,p["nyomtav_szelesseg_m"],"track_width_m")),
+            speed_map=resolved_speed_map,
+            chassis_control=ChassisControlConfig(
+                _typed(float,p["nyomtav_szelesseg_m"],"track_width_m"),
+                resolved_speed_map.minimum_continuous_speed_mps,
+            ),
             critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS)
         if (
             resolved_control.motion_selection.reversal_min_omega_rad_s
