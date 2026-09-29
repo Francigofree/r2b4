@@ -807,7 +807,9 @@ class TrajectoryNavigator:
             if track is not None and track.usable_at(mission.context.monotonic_ns):
                 if track.prediction_valid_until_ns is not None:
                     until_ns = min(until_ns, track.prediction_valid_until_ns)
-        scope += f":odom{self._localization_generation}:" + ":".join(map(str, self._localization_envelope or ()))
+        # Motion authority follows odometry lineage, not soft localization quality.
+        # GOOD/DEGRADED and sigma changes are handled as dynamic motion evidence.
+        scope += f":odom{self._localization_generation}"
         global_target = mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
         if global_target:
             scope += f":map{self._global_transform_revision}"
@@ -828,7 +830,9 @@ class TrajectoryNavigator:
         quality = estimate.localization_quality
         envelope = (quality.local_translation.value, quality.heading.value, math.ceil(quality.local_sigma_m/.02))
         if envelope != self._localization_envelope:
-            self._clear_trajectory_plan()
+            # Soft localization changes may trigger the normal periodic replan, but
+            # must not revoke a still-valid cached trajectory. LOST and lineage
+            # changes remain hard invalidation gates below; L9 gates discontinuity.
             self._localization_envelope = envelope
         global_target = mission.mode is CommandMode.NAVIGATE and mission.target_frame_id != LOCAL_FRAME_ID
         if self._localization_generation != quality.generation:

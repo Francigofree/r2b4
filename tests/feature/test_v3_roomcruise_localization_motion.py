@@ -188,3 +188,94 @@ def test_roomcruise_localization_pending_keeps_original_dependency_and_expiry():
                 checkpoint = navigator.checkpoint()
                 restored = TrajectoryNavigator(config.navigation, async_config=async_config)
                 restored.restore(checkpoint)
+
+
+def test_roomcruise_soft_localization_changes_replan_without_zero_motion_gap():
+    """Soft quality changes replan in background without revoking local motion."""
+    from v3.contracts.planner import PlannerInput
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+
+    config = resolved_config().runtime.composition.live_control.control
+    navigator = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
+    selector = MotionSelector(config.motion_selection)
+    realizer = MotionRealizer(config.motion_realization)
+    limiter = OperationalConstraintLayer(config.operational_constraints)
+    manager = MissionManager(config.mission)
+    computer = TrajectoryRolloutComputer(config.navigation)
+
+    first_request = None
+    authority_scope = None
+    for tick in range(8):
+        estimate, world = _scene(tick)
+        if tick < 5:
+            sigma_m, local_state = 0.03984, QualityState.GOOD
+        elif tick < 7:
+            # Reproduces the live-capture 2 cm bucket crossing: 1.992 -> 2.0045.
+            sigma_m, local_state = 0.04009, QualityState.GOOD
+        else:
+            sigma_m, local_state = 0.061, QualityState.DEGRADED
+        estimate = replace(
+            estimate,
+            localization_quality=replace(
+                estimate.localization_quality,
+                local_sigma_m=sigma_m,
+                local_translation=local_state,
+                heading=QualityState.GOOD,
+            ),
+        )
+        mission = manager.evaluate(
+            CommandRequest(estimate.context, "soft-localization-continuity", CommandMode.EXPLORE, (), tick)
+        )
+        completion = None
+        if tick == 1:
+            assert first_request is not None
+            completion = PlannerInput(
+                estimate.context,
+                first_request.context,
+                computer.compute(first_request),
+            )
+        plan = navigator.evaluate(mission, estimate, world, completion)
+        if tick == 0:
+            assert plan.status is NavigationStatus.PENDING
+            first_request = navigator.pending_rollout_request
+            assert first_request is not None
+            continue
+
+        objective = selector.evaluate(plan)
+        motion = realizer.evaluate(objective, estimate, world)
+        allowed = limiter.evaluate(motion, estimate)
+        assert plan.status is NavigationStatus.ACTIVE
+        assert motion.stop_reason is None
+        assert abs(motion.requested_v_mps) + abs(motion.requested_omega_rad_s) > 0
+        if tick >= 2:
+            assert abs(allowed.allowed_v_mps) + abs(allowed.allowed_omega_rad_s) > 0
+        if authority_scope is None:
+            assert plan.motion_validity is not None
+            authority_scope = plan.motion_validity.scope
+        assert plan.motion_validity is not None
+        assert plan.motion_validity.scope == authority_scope
+        if tick == 5:
+            # A replacement rollout is scheduled at the normal 100 ms cadence,
+            # while the accepted trajectory remains ACTIVE.
+            assert navigator.pending_rollout_request is not None
+
+    # A true local-translation LOST state still revokes translation and enters
+    # bounded localization recovery; this P0 does not weaken fail-closed gates.
+    estimate, world = _scene(8)
+    estimate = replace(
+        estimate,
+        localization_quality=replace(
+            estimate.localization_quality,
+            local_sigma_m=0.19,
+            local_translation=QualityState.LOST,
+            heading=QualityState.GOOD,
+        ),
+    )
+    mission = manager.evaluate(
+        CommandRequest(estimate.context, "soft-localization-continuity", CommandMode.EXPLORE, (), 8)
+    )
+    plan = navigator.evaluate(mission, estimate, world)
+    assert plan.reason == "LOCALIZATION_REACQUIRE"
+    motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
+    assert motion.requested_v_mps == 0.0
+
