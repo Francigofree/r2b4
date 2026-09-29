@@ -54,15 +54,20 @@ class RelativeLidarOdometry:
             selected = (distances < cfg.robust_inlier_distance_m) & surfaces[indices]
             if np.count_nonzero(selected) < cfg.min_filtered_points:
                 return None
-            # Trim dynamic objects and unmatched scan edges.
-            cutoff = float(np.quantile(np.abs(residuals[selected]), cfg.robust_trim_fraction))
-            selected &= np.abs(residuals) <= cutoff
-            if np.count_nonzero(selected) < cfg.min_filtered_points:
-                return None
             a, n = transformed[selected], matched_normals[selected]
             jacobian = np.column_stack((n[:, 0], n[:, 1],
                                        -a[:, 1]*n[:, 0]+a[:, 0]*n[:, 1]))
-            step, _, rank, _ = np.linalg.lstsq(jacobian, -residuals[selected], rcond=None)
+            # A fixed retained fraction selects returns that already agree
+            # with the initial (zero-motion) transform. With scan noise larger
+            # than the inter-scan motion, that repeatedly biases travel toward
+            # zero. Keep the geometric inliers and bound outlier influence with
+            # Huber weights derived from their normal-residual noise instead.
+            residual = residuals[selected]
+            noise = max(1e-6, 1.4826*float(np.median(np.abs(residual-np.median(residual)))))
+            weights = np.sqrt(np.minimum(1.0, 1.5*noise/np.maximum(np.abs(residual), 1e-12)))
+            step, _, rank, _ = np.linalg.lstsq(
+                jacobian*weights[:, None], -residual*weights, rcond=None,
+            )
             if rank < 3:
                 return None
             c, s = math.cos(step[2]), math.sin(step[2])

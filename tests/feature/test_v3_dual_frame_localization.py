@@ -250,6 +250,25 @@ def test_localization_relative_scan_registration_and_feature_poor_corridor():
         previous = pose
     assert np.linalg.norm(error[:2]) < .01
     assert abs(error[2]) < .01
+    # Real returns are noisy. Fixed-fraction residual trimming used to lose
+    # >10 cm per metre here, eventually revoking otherwise valid local motion.
+    # Keep a moving foreground patch as well: robustness must not depend on
+    # discarding a fixed fraction of the static wall measurements.
+    odometry = RelativeLidarOdometry(cfg)
+    rng = np.random.default_rng(77)
+    travel = np.zeros(3)
+    for index in range(101):
+        noisy = room_lidar_scan(index*.01, count=336+index%11, phase=(index*.37)%1)
+        for beam, point in enumerate(noisy):
+            point['dist'] += float(rng.normal(0, 15))
+            if 30 <= beam < 40:
+                point['dist'] -= 500+index*2
+        result = odometry.process(noisy, 20_000_000_000+index*100_000_000)
+        if index:
+            assert result is not None
+            travel += (result['dx_m'], result['dy_m'], result['dyaw_rad'])
+    assert np.linalg.norm(travel[:2]-[1., 0.]) < .03
+    assert abs(travel[2]) < .01
     corridor = np.array([(x, y) for x in np.linspace(-4, 4, 90) for y in (-1., 1.)])
     odometry = RelativeLidarOdometry(cfg)
     odometry.process(raw(corridor), 1_000_000_000)

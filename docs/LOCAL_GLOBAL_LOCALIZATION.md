@@ -164,3 +164,79 @@ A felvételek nem adnak elegendő per-phase evidence-et a fizikai I/O,
 GIL/serializáció, process transport és CPU/scheduler contention számszerű
 szétválasztásához. Az ezek közötti oksági megoszlás és a roboton elérhető
 új timing/motorfolytonosság külön, engedélyezett live mérésre marad.
+
+## 2026-09-29: a 09:29-es futás fennmaradó darabossága
+
+Evidence: `v3_20260929_092919_16279_capture.mcap`, teljes/integritáshelyes
+capture, 903 tick. A 798 aktív tickből 620 kér mozgást. A planner korábbi
+problémája jelentősen csökkent: egyetlen `PLANNER_STALE_HOLD` maradt (177. tick).
+A fő megszakító ok 128 `LOCALIZATION_HOLD`, további 36 reacquire és
+11 stale-costmap tick. Az aktív szakaszban L12 végig `ALLOW`.
+
+Az első helyi lokalizációvesztés a 398. tick: az encoder–LiDAR konzisztencia
+0,119838-ról 0,120347 m-re nő, heading `GOOD`, slip nincs. L6 reacquire-t kér,
+L4 közben nem integrál új pontokat; a megöregedő helyi geometria ezután HOLD-hoz
+vezet. Megállás közben az eltérés csökken, majd az újrainduláskor ismét nő.
+Ez konkrét lokalizációs stop–start ciklus; a 25,04 ms átlagos és 129,80 ms
+maximális tick-kezdésköz önmagában nem bizonyít housekeeping/GIL gyökérokot.
+
+### Igazolt regisztrációs hiba és javítása
+
+A point-to-plane regisztráció minden iterációban a normálirányú residualok
+rögzített hányadát tartotta meg. Ha a scanenkénti elmozdulás összemérhető a
+mérési zajjal, ez a kezdeti nulla elmozdulással eleve jobban egyező pontokat
+válogatja ki, és lefelé torzítja a megtett utat. Ismert, 1 méteres szintetikus
+úton 10 mm zajjal 0,916 m, 20 mm zajjal 0,857 m adódott.
+
+`RelativeLidarOdometry` most a geometriai inlierek normálirányú hibájából
+becsült MAD zajskálával Huber-súlyozott illesztést végez. Nem dobja el minden
+iterációban a pontok előre rögzített hányadát; a zavaró pontok befolyása
+korlátozott. A pont-/iterációszám, geometriai távolságkapu, rank,
+megfigyelhetőség, RMSE, sebesség- és frissességkorlát változatlan.
+A számítás továbbra is a LiDAR workerben történik, encoder/pose prior nélkül.
+
+A regressziós eset 15 mm zajt, változó sugármintavételt és mozgó előtérfoltot
+tartalmaz: az ismert 1 m út régen 0,9040 m, javítva 1,0059 m;
+a halmozott yaw-hiba 0,01764 → 0,00369 rad. A meglévő direct/process és teljes
+L1–L12 Room Cruise/checkpoint-replay teszt is kapott zajos scaneket.
+
+### Eredmény és fennmaradó kérdések
+
+A capture 156 nyers scanpárját az eredeti intervallumokban újraszámolva,
+az eredeti L2 admissiont és measurement/closure-időket megtartva:
+
+| Production L3/L4 offline eredmény, aktív tickek | Rögzített input | Új relatív input |
+| --- | ---: | ---: |
+| Lokális translation `LOST` | 164 | 20 |
+| Heading `LOST` | 0 | 0 |
+| Maximális lokális sigma | 0,13432 m | 0,12149 m |
+
+Az új input mellett 16 tickben továbbra is a konzisztenciahatár lép át
+(532–534, 706–711, 828–834), négy tickben kerék–gyro slipjelzés marad
+(630–633). A mérések közti maradék eltérés fizikai okát ez a capture nem
+választja szét: kalibrációt vagy valódi csúszást nem szabad automatikusan
+kijavítottnak tekinteni. A védelmi küszöbök változatlanok.
+
+Folytonos L10 cél mellett L11 PWM-csökkenés is látszik: a 360. tickben
+a cél bal/jobb 0,0706/0,1694 m/s, az encoder 0,1589/0,3306 m/s, a kimenet
+0,0082/0,0314. A PI túlfutást mér és visszavesz; ebből önmagában nem
+következik hibás PI-algoritmus. A tényleges keréksebesség/PWM kapcsolat,
+kalibráció és terhelés élő bizonyítása hiányzik; L11-et nem hangoltuk át
+evidence nélküli minimum-PWM vagy integrátor-reset bevezetésével.
+
+Az offline, azonos 156 scanpáros számítás átlagos ideje 6,41 → 5,89 ms
+(maximum 7,75 → 6,76 ms) egy azonos gépen végzett összevetésben. Ez pure
+compute mérés, nem teljes live worker-/control-latencia.
+
+A teljes eredeti capture natív replaye **903/903 tick `MATCH`**, ismételt
+trace-egyezéssel. Ez az eredetileg rögzített relatív inputot játssza vissza;
+a fenti újraszámolási kísérlet külön bizonyíték, nem exact replay és nem
+új fizikai futás. Új robotmozgás nem indult. A teljesen folyamatos élő
+mozgás így még nincs igazolva, és a maradék 20 localization `LOST` tick
+miatt a javítás nem tekinthető a teljes jelenség lezárásának.
+
+Validáció: `./r test` 32/32, `./r test localization` 22/22,
+`./r test roomcruise` 6/6, `./r test process` 6/6,
+`./r test replay` 3/3; `./r test full` **195/195 sikeres** (76,99 s).
+A zajos teljes láncban indulás után folyamatos haladás és íves fordulás,
+majd az utolsó 50 tick checkpoint-replaye is megfelelt.

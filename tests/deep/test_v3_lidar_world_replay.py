@@ -23,6 +23,7 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
     from v3.lidar_relative_odometry import RelativeLidarOdometry
     from v3.layers.l6_navigation import TrajectoryRolloutComputer
     from v3.contracts import QualityState
+    import random
 
     resolved = resolved_config()
     config = resolved.runtime.composition.live_control.control
@@ -54,6 +55,7 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
     writer = OfflineMotorSink()
     composition = NativeControlComposition(writer, config, trajectory_rollout_backend=backend)
     registration = RelativeLidarOdometry(resolved.lidar.matcher)
+    noise = random.Random(77)
     sink = CaptureSink("cruise-resampled-surfaces", configuration={"production_control": config})
     x = y = yaw = v = omega = left_distance = right_distance = 0.0
     now = 1_000_000_000
@@ -90,6 +92,8 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
             ]
             if tick % 5 == 0:
                 scan = room_lidar_scan(x+1.6, y+.8, yaw, count=317+tick%31, phase=(tick*.37)%1)
+                for point in scan:
+                    point['dist'] += noise.gauss(0, 15)
                 relative = registration.process(scan, now)
                 # Bounded local geometry from the same raycast measurement.
                 points = scan[::4]
