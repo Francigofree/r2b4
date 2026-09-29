@@ -31,3 +31,19 @@ def healthy_localization(**changes):
         global_fix_age_ns=0, relative_age_ns=0, local_pose_continuous=True,
         observability=1.0,
     ), **changes)
+
+
+def room_lidar_scan(x_m=0.0, y_m=0.0, yaw_rad=0.0, *, count=360, phase=0.0):
+    """Raycast a room; successive scans sample surfaces, not fixed landmarks."""
+    import math
+    scan = []
+    for index in range(count):
+        bearing = (index + phase) * 2 * math.pi / count
+        dx, dy = math.cos(bearing + yaw_rad), math.sin(bearing + yaw_rad)
+        distances = []
+        if abs(dx) > 1e-12:
+            distances.append(((3.0 if dx > 0 else -2.5) - x_m) / dx)
+        if abs(dy) > 1e-12:
+            distances.append(((2.0 if dy > 0 else -2.0) - y_m) / dy)
+        scan.append({"angle_rad": -bearing, "dist": min(distances) * 1000})
+    return scan

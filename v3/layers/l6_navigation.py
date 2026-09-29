@@ -2192,6 +2192,7 @@ class TrajectoryNavigator:
                     world,
                     self._config,
                     scene,
+                    clearance_limit_m=min_clearance,
                 )
                 min_clearance = min(min_clearance, clearance)
                 collision = collision or clearance <= self._config.footprint_safety_margin_m
@@ -2451,6 +2452,7 @@ class TrajectoryRolloutComputer:
                     world,
                     config,
                     scene,
+                    clearance_limit_m=min_clearance,
                 )
                 min_clearance = min(min_clearance, clearance)
                 collision = (
@@ -2826,6 +2828,8 @@ def _footprint_clearance(
     world: WorldSnapshot,
     config: NavigationConfig,
     scene: _LocalPlanningScene | None = None,
+    *,
+    clearance_limit_m: float | None = None,
 ) -> float:
     if scene is None:
         scene = _scene_from_world(world, config)
@@ -2834,14 +2838,21 @@ def _footprint_clearance(
     half_width = 0.5 * config.footprint_width_m + (scene.uncertainty_m if scene else 0.0)
     yaw_cos = math.cos(yaw_rad)
     yaw_sin = math.sin(yaw_rad)
-    minimum = config.clearance_score_cap_m
+    # A rollout only needs its minimum clearance. Later poses cannot increase
+    # it, so search only for obstacles that can lower the existing minimum.
+    # This preserves the exact score/collision decision while bounding the
+    # repeated narrow-phase work by the nearby geometry instead of the whole
+    # scoring radius. Callers needing an independent clearance omit the limit.
+    minimum = min(config.clearance_score_cap_m, clearance_limit_m) if clearance_limit_m is not None else config.clearance_score_cap_m
+    if minimum <= 0.0:
+        return 0.0
 
     # Static costmap: broad-phase buckets first, then the unchanged exact
     # rotated-rectangle/disc clearance. The AABB reach is conservative, so
     # cells that could reduce the capped result cannot be omitted.
     static_index = scene.static_index
     if static_index is not None and static_index.buckets:
-        padding_m = static_index.cell_radius_m + config.clearance_score_cap_m
+        padding_m = static_index.cell_radius_m + minimum
         extent_x_m = (
             abs(yaw_cos) * half_length
             + abs(yaw_sin) * half_width

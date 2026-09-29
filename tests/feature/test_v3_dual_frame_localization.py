@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from rig import resolved_config
+from rig import resolved_config, room_lidar_scan
 from v3.contracts import (
     AdmittedFrame, CommandMode, CommandRequest, ConstraintCode, DataField,
     LocalizationRequirement, MotionIntent, Observation, QualityState, TickContext,
@@ -162,6 +162,33 @@ def test_localization_stale_imu_slip_and_bad_producer_fail_closed():
                           localization_requirement=no_requirements)
     assert limiter.evaluate(motion, slipped).allowed_v_mps == 0
 
+    # Physical wheel fits end at different edges. An old reverse fit paired
+    # with a fresh forward fit is not simultaneous wheel/gyro slip evidence.
+    # Reproduce the live 08:42 tick 539 velocities with consistent cumulative
+    # displacement, then inject a real differential displacement mismatch.
+    estimator = NativeStateEstimator(config.estimation)
+    checkpoint = None
+    for tick in range(4):
+        f = frame(tick)
+        wheel = observation("wheel_velocity", tick, f.context.monotonic_ns,
+            left_mps=-.259 if tick else 0.0, right_mps=.123 if tick else 0.0,
+            trust=1.0, raw_left_distance_m=.002*tick,
+            raw_right_distance_m=.002*tick + (.02 if tick == 3 else 0.0),
+            left_counter_running=True, right_counter_running=True)
+        f = replace(f, accepted=tuple(wheel if o.kind == "wheel_velocity" else o for o in f.accepted))
+        estimate = estimator(f)
+        if tick == 2:
+            checkpoint = estimator.checkpoint()
+        if tick < 3:
+            assert not estimate.localization_quality.slip_suspected
+            assert estimate.localization_quality.local_translation is not QualityState.LOST
+        else:
+            assert estimate.localization_quality.slip_suspected
+            assert estimate.localization_quality.local_translation is QualityState.LOST
+            restored = NativeStateEstimator(config.estimation)
+            restored.restore(checkpoint)
+            assert restored(f) == estimate
+
 
 def test_localization_slow_encoder_drift_is_detected_and_checkpoint_is_exact():
     config = resolved_config().runtime.composition.live_control.control
@@ -192,17 +219,46 @@ def test_localization_relative_scan_registration_and_feature_poor_corridor():
     from v3.lidar_relative_odometry import RelativeLidarOdometry
     cfg = resolved_config().lidar.matcher
     odometry = RelativeLidarOdometry(cfg)
-    rng = np.random.default_rng(18)
-    cloud = rng.uniform(-2, 2, (180, 2))
     def raw(points):
         return [{"angle_rad": -math.atan2(y, x), "dist": math.hypot(x, y)*1000} for x, y in points]
-    assert odometry.process(raw(cloud), 1_000_000_000) is None
-    result = odometry.process(raw(cloud-np.array([.025, -.012])), 1_100_000_000)
+    assert odometry.process(room_lidar_scan(), 1_000_000_000) is None
+    result = odometry.process(room_lidar_scan(.025, -.012, .015, count=317, phase=.4), 1_100_000_000)
     assert result is not None
     assert result['dx_m'] == pytest.approx(.025, abs=.004)
     assert result['dy_m'] == pytest.approx(-.012, abs=.004)
+    assert result['dyaw_rad'] == pytest.approx(.015, abs=.002)
+    # Changing beam phase/count used to accumulate false drift even with exact
+    # wheel/gyro motion. Keep independent translation AND yaw evidence while
+    # moving along an arc; identical translated point clouds miss this defect.
+    odometry = RelativeLidarOdometry(cfg)
+    previous = None
+    error = np.zeros(3)
+    for index in range(81):
+        yaw = index * .006
+        pose = (.7 * math.sin(yaw), .7 * (1-math.cos(yaw)), yaw)
+        result = odometry.process(room_lidar_scan(*pose, count=317+index%31,
+                                                  phase=(index*.37)%1),
+                                  2_000_000_000+index*100_000_000)
+        if previous is not None:
+            assert result is not None
+            dx, dy = pose[0]-previous[0], pose[1]-previous[1]
+            c, s = math.cos(previous[2]), math.sin(previous[2])
+            error += np.array((c*dx+s*dy-result['dx_m'],
+                               -s*dx+c*dy-result['dy_m'], .006-result['dyaw_rad']))
+            assert result['observability'] > .12
+            assert result['start_ns'] == 2_000_000_000+(index-1)*100_000_000
+        previous = pose
+    assert np.linalg.norm(error[:2]) < .01
+    assert abs(error[2]) < .01
     corridor = np.array([(x, y) for x in np.linspace(-4, 4, 90) for y in (-1., 1.)])
     odometry = RelativeLidarOdometry(cfg)
     odometry.process(raw(corridor), 1_000_000_000)
     poor = odometry.process(raw(corridor), 1_100_000_000)
-    assert poor is not None and poor['observability'] < .12
+    assert poor is None or poor['observability'] < .12
+    circle = np.array([(2*math.cos(a), 2*math.sin(a)) for a in np.linspace(0, 2*math.pi, 180, endpoint=False)])
+    odometry = RelativeLidarOdometry(cfg)
+    odometry.process(raw(circle), 1_000_000_000)
+    unobservable_yaw = odometry.process(raw(circle), 1_100_000_000)
+    assert unobservable_yaw is None or unobservable_yaw['observability'] < .12
+    # No surface support is unavailable evidence, never an invented zero delta.
+    assert RelativeLidarOdometry(cfg).process([], 1_000_000_000) is None

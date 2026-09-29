@@ -17,6 +17,124 @@ from v3.execution import ExecutionRecord
 from v3.replay import replay_capture, write_replay_result
 
 
+def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_path):
+    """Actual registration + delayed closure + the complete non-actuating chain."""
+    from rig import room_lidar_scan
+    from v3.lidar_relative_odometry import RelativeLidarOdometry
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+    from v3.contracts import QualityState
+
+    resolved = resolved_config()
+    config = resolved.runtime.composition.live_control.control
+
+    class DelayedPlanner:
+        now_ns = 0
+        next_id = 0
+
+        def __init__(self):
+            self.computer = TrajectoryRolloutComputer(config.navigation)
+            self.results = {}
+
+        def submit(self, request):
+            self.next_id += 1
+            self.results[self.next_id] = (self.now_ns+120_000_000, self.computer.compute(request))
+            return self.next_id
+
+        def take(self, request_id):
+            ready, result = self.results[request_id]
+            return self.results.pop(request_id)[1] if self.now_ns >= ready else None
+
+        def abandon(self, request_id):
+            self.results.pop(request_id, None)
+
+        def close(self):
+            self.results.clear()
+
+    backend = DelayedPlanner()
+    writer = OfflineMotorSink()
+    composition = NativeControlComposition(writer, config, trajectory_rollout_backend=backend)
+    registration = RelativeLidarOdometry(resolved.lidar.matcher)
+    sink = CaptureSink("cruise-resampled-surfaces", configuration={"production_control": config})
+    x = y = yaw = v = omega = left_distance = right_distance = 0.0
+    now = 1_000_000_000
+    moving = turning = 0
+    checkpoint = None
+    try:
+        for tick in range(601):
+            dt_ns = 40_000_000 if tick and tick % 37 == 0 else 20_000_000
+            if tick:
+                dt = dt_ns / 1e9
+                x += v*dt*math.cos(yaw+omega*dt/2)
+                y += v*dt*math.sin(yaw+omega*dt/2)
+                yaw += omega*dt
+                left_distance += (v-omega*config.estimation.track_width_m/2)*dt
+                right_distance += (v+omega*config.estimation.track_width_m/2)*dt
+                now += dt_ns
+            context = TickContext(tick, now)
+
+            def sample(device, kind, **values):
+                return DeviceSample(device, kind, tick, now,
+                                    tuple(DataField(k, value) for k, value in values.items()))
+
+            half_track = config.estimation.track_width_m/2
+            samples = [
+                sample("ENCODER", "wheel_velocity", left_mps=v-omega*half_track,
+                       right_mps=v+omega*half_track, trust=1.0,
+                       raw_left_distance_m=left_distance, raw_right_distance_m=right_distance,
+                       left_counter_running=True, right_counter_running=True),
+                sample("IMU", "ekf_heading", yaw_rad=0.0, omega_rad_s=omega,
+                       confidence=0.0, omega_confidence=1.0),
+                sample("RPLIDAR_C1", "lidar_safety_clearance", age_ns=0,
+                    **{f"{sector}_{key}": value for sector in ("front", "rear", "left", "right")
+                       for key, value in (("clearance_m", 2.0), ("observation_count", 10))}),
+            ]
+            if tick % 5 == 0:
+                scan = room_lidar_scan(x+1.6, y+.8, yaw, count=317+tick%31, phase=(tick*.37)%1)
+                relative = registration.process(scan, now)
+                # Bounded local geometry from the same raycast measurement.
+                points = scan[::4]
+                fields = dict(frame_id="ROBOT_BASE", point_count=len(points))
+                for i, point in enumerate(points):
+                    angle, distance = -point['angle_rad'], point['dist']/1000
+                    fields.update({f"point_{i:03d}_x_m": distance*math.cos(angle),
+                                   f"point_{i:03d}_y_m": distance*math.sin(angle),
+                                   f"point_{i:03d}_quality": 20})
+                samples.extend((sample("RPLIDAR_C1", "lidar_health", age_ns=0, point_count=len(points)),
+                                sample("RPLIDAR_C1", "lidar_local_points", **fields)))
+                if relative is not None:
+                    samples.append(sample("RPLIDAR_C1", "lidar_relative_motion", **relative))
+            health = tuple(DeviceHealth(name, DeviceHealthState.OK)
+                           for name in sorted(set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
+            backend.now_ns = now
+            inputs = composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
+                CommandRequest(context, "cruise", CommandMode.EXPLORE, (), tick), LifecycleState.ACTIVE))
+            result = composition.run_tick(inputs)
+            assert result.trace.fault_layer is None
+            layers = {row.layer: row.output for row in result.trace.layers}
+            q = layers['L3'].localization_quality
+            assert q.local_translation is not QualityState.LOST
+            assert q.heading is not QualityState.LOST
+            v, omega = layers['L9'].allowed_v_mps, layers['L9'].allowed_omega_rad_s
+            moving += abs(v)+abs(omega) > 1e-6
+            turning += v > .02 and abs(omega) > .1
+            if tick > 12:
+                assert abs(v)+abs(omega) > 1e-6, (tick, layers['L6'].reason, layers['L8'].stop_reason)
+                assert result.final_actuation.safety_decision is SafetyDecision.ALLOW
+            composition.dispatch_pending_planner_request(now)
+            if tick == 550:
+                checkpoint = composition.checkpoint()
+            elif tick > 550:
+                sink.write(ExecutionRecord(inputs, result))
+    finally:
+        composition.close()
+    assert moving > 585 and turning > 50
+    assert len(writer.writes) == 601
+    path = sink.finalize('PASS', tmp_path/'capture.json', initial_state_checkpoint=encode_value(checkpoint))
+    replay = replay_capture(path, project_root=ROOT)
+    write_replay_result(replay, tmp_path/'replay.json')
+    assert replay['status'] == 'MATCH', replay['diagnostics']
+
+
 def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_path):
     config = resolved_config().runtime.composition.live_control.control
     writer = OfflineMotorSink()

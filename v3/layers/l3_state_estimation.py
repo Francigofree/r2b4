@@ -1122,6 +1122,7 @@ class NativeStateEstimator:
         now = frame.context.monotonic_ns
         cfg = self._config.quality
         previous = self._local._last_context
+        previous_encoder = self._local._encoder_anchor
         previous_pose = self._history[-1].pose if self._history else None
         continuous = previous is None or (
             frame.context.tick_id == previous.tick_id+1
@@ -1196,8 +1197,9 @@ class NativeStateEstimator:
                 and self._wheel_trusted
                 and _numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust
                 and rate_heading_confidence >= cfg.minimum_sensor_trust):
-            wheel_yaw = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
-            self._slip_suspected = self._slip_suspected or abs(wheel_yaw-_numeric_value(heading, "omega_rad_s")) > cfg.wheel_imu_slip_rad_s
+            self._slip_suspected = self._slip_suspected or self._wheel_gyro_slip(
+                wheel, heading, previous_encoder,
+            )
         # Count displacement even when BASELINE supplies no qualified velocity.
         if continuous and previous_pose is not None:
             self._unverified_sigma_m += math.hypot(
@@ -1292,6 +1294,33 @@ class NativeStateEstimator:
                        map_to_odom=transform, localization_quality=quality,
                        transform_revision=self._transform_revision,
                        local_v_mps=local.v_mps, local_omega_rad_s=local.omega_rad_s)
+
+    def _wheel_gyro_slip(
+        self, wheel: Observation, heading: Observation,
+        previous: EncoderAnchor | None,
+    ) -> bool:
+        totals = self._local._encoder_totals(wheel)
+        limit = self._config.quality.wheel_imu_slip_rad_s
+        if totals is None:
+            # Legacy velocity-only sources have no displacement interval.
+            wheel_rate = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
+            return abs(wheel_rate-_numeric_value(heading, "omega_rad_s")) > limit
+        # Each wheel's fitted velocity may end at a different physical edge,
+        # before the current gyro sample (especially while braking/reversing).
+        # Compare signed wheel displacement and gyro-owned local heading over
+        # the SAME measurement interval instead. Acquisition is not a new edge.
+        if previous is None or previous.source_id != wheel.source_device_id:
+            return False
+        end_ns = wheel.captured_monotonic_ns
+        span_ns = end_ns-previous.captured_ns
+        if not 0 < span_ns <= self._config.max_measurement_age_ns:
+            return False
+        start, end = self._pose_at(previous.captured_ns), self._pose_at(end_ns)
+        if start is None or end is None:
+            return False
+        wheel_yaw = ((totals[1]-previous.right_m)-(totals[0]-previous.left_m))/self._config.track_width_m
+        gyro_yaw = _normalize_angle(end.yaw_rad-start.yaw_rad)
+        return abs(wheel_yaw-gyro_yaw) > limit*span_ns/1e9
 
     def _relative_check(self, frame: AdmittedFrame) -> None:
         observation = _optional_observation(frame, "lidar_relative_motion")

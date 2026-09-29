@@ -1,11 +1,8 @@
 """Real matcher process transport without serial devices or motor access."""
-import math
 import multiprocessing
 import time
 
-import numpy as np
-
-from rig import resolved_config
+from rig import resolved_config, room_lidar_scan
 from v3.contracts.lidar import MATCHER_CONTRACT_ID
 from v3.lidar_matcher_process import matcher_process_main
 from v3.lidar_relative_odometry import RelativeLidarOdometry
@@ -18,15 +15,14 @@ def test_localization_relative_process_equivalence_and_stale_input():
     stop, ready = context.Event(), context.Event()
     process = context.Process(target=matcher_process_main, args=(incoming, outgoing, stop, ready))
     direct = RelativeLidarOdometry(cfg)
-    cloud = np.random.default_rng(19).uniform(-2, 2, (180, 2))
     process.start()
     try:
         assert ready.wait(10)
         for revision in (1, 2):
             if revision == 2:
                 time.sleep(.1)
-            points = cloud-np.array([.02*(revision-1), 0.])
-            scan = [{"angle_rad": -math.atan2(y, x), "dist": math.hypot(x, y)*1000} for x, y in points]
+            scan = room_lidar_scan(.02*(revision-1), yaw_rad=.01*(revision-1),
+                                   count=350+revision, phase=.3*revision)
             end_ns = time.monotonic_ns()
             measurement_ns = end_ns-10_000_000
             packet = dict(kind="scan", matcher_contract_id=MATCHER_CONTRACT_ID,
