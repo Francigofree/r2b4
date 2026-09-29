@@ -30,7 +30,7 @@ class GroqWakeSttConfig:
     # accuracy is the production default.
     model: str = "whisper-large-v3"
     language: str = "hu"
-    prompt: str = "Az ébresztőszó neve: Alba."
+    prompt: str = "Az ébresztőszó: robot."
     timeout_s: float = 12.0
 
     # Conservative host-side preprocessing before upload. The microphone HAL

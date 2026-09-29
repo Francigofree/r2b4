@@ -26,7 +26,7 @@ class PcmWavePlayer:
 
     Playback is deliberately synchronous.  The voice supervisor does not feed
     microphone frames while this method is running, then discards the capture
-    tail after playback so Alba cannot transcribe its own speaker output.
+    tail after playback so robot cannot transcribe its own speaker output.
     """
 
     def __init__(

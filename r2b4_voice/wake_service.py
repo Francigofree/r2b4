@@ -1,7 +1,7 @@
 """Always-on Linux wake service for the R2B4 robot.
 
 The service is host-side orchestration.  It is the single microphone owner while
-running, listens for the spoken wake token "Alba", and requests robot startup
+running, listens for the spoken wake token "robot", and requests robot startup
 through the public OperatorController lifecycle API.  It never writes commands,
 motors or V3 layer state directly.
 """

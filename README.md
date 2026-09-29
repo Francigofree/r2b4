@@ -1,6 +1,6 @@
 # R2B4 V3
 
-Az R2B4 az Alba Raspberry Pi 5 alapú, beltéri differenciálhajtású robot natív,
+Az R2B4 Raspberry Pi 5 alapú, beltéri differenciálhajtású robot natív,
 determinisztikus V3 vezérlő- és diagnosztikai rendszere.
 
 A production control canonical útja az L1–L12 pipeline. Az L12 az egyetlen normál

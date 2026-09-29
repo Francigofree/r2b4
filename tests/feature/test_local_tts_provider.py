@@ -10,7 +10,7 @@ from r2b4_voice.tts_provider import DEFAULT_PIPER_VOICE, resolve_tts_provider
 
 class FakeVoice:
     def synthesize(self, text: str):
-        assert text == "Szia Alba."
+        assert text == "Szia robot."
         return iter(
             (
                 SimpleNamespace(
@@ -38,7 +38,7 @@ def test_piper_client_returns_existing_pcm_contract(tmp_path):
         voice_loader=lambda _path: FakeVoice(),
     )
 
-    speech = client.synthesize("  Szia Alba.  ")
+    speech = client.synthesize("  Szia robot.  ")
 
     assert speech.pcm == b"\x01\x00\x02\x00\x03\x00"
     assert speech.sample_rate_hz == 22050
