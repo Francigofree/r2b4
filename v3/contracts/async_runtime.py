@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from .base import TickContext
+from .temporal import source_is_stale
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,11 +41,6 @@ class CompletionTiming:
     def deadline_missed(self, timeout_ns: int) -> bool:
         if type(timeout_ns) is not int or timeout_ns <= 0:
             raise ValueError("timeout_ns must be positive")
-        return self.worker_completed_ns - self.submit_ns > timeout_ns
-
-
-def source_is_stale(observed_ns: int, source_ns: int, max_age_ns: int) -> bool:
-    """Freshness never derives from receipt or input-closure publication time."""
-    return observed_ns - source_ns > max_age_ns
+        return source_is_stale(self.worker_completed_ns, self.submit_ns, timeout_ns)
 
 

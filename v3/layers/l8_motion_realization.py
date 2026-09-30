@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from v3.wheel_motion import WheelMotionLimits
+from v3.contracts.temporal import ControlContinuityState, classify_control_continuity
 
 from v3.contracts import (
     MotionIntent,
@@ -184,11 +185,12 @@ class MotionRealizer:
 
     def _velocity_reference(self, target: VelocityTarget, estimate: RobotEstimate) -> Waypoint:
         state = self._state
-        previous = state.last_context
-        elapsed_ns = 0 if previous is None else estimate.context.monotonic_ns - previous.monotonic_ns
+        continuity = classify_control_continuity(
+            state.last_context, estimate.context, self._config.max_control_gap_ns,
+        )
+        elapsed_ns = 0 if continuity.elapsed_ns is None else continuity.elapsed_ns
         if (
-            previous is None or estimate.context.tick_id != previous.tick_id + 1
-            or not 0 < elapsed_ns <= self._config.max_control_gap_ns
+            continuity.state is not ControlContinuityState.CONTINUOUS
             or state.frame_id != estimate.frame_id or state.velocity_target != target
         ):
             reference = Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad)

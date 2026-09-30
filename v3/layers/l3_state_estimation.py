@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 
 from v3.contracts import (AdmittedFrame, Observation, RobotEstimate, TickContext, DataField,
                           LocalizationQuality, QualityState, Pose2D, LOCAL_FRAME_ID)
+from v3.contracts.temporal import source_age_ns, source_is_stale
 
 
 _ZERO_COVARIANCE = (0.0,) * 25
@@ -273,6 +274,7 @@ class NativeStateEstimatorConfig:
     process_noise_reference_dt_s: float
     quality: LocalizationQualityConfig
     minimum_reliable_wheel_speed_mps: float = 0.15
+    stationary_prediction_hold_ns: int = 50_000_000
 
     def __post_init__(self) -> None:
         _finite_positive(self.minimum_reliable_wheel_speed_mps, "minimum_reliable_wheel_speed_mps")
@@ -281,6 +283,15 @@ class NativeStateEstimatorConfig:
         _finite_positive(self.track_width_m, "track_width_m")
         if type(self.max_measurement_age_ns) is not int or self.max_measurement_age_ns <= 0:
             raise ValueError("max_measurement_age_ns must be positive integer")
+        if (
+            type(self.stationary_prediction_hold_ns) is not int
+            or self.stationary_prediction_hold_ns <= 0
+            or self.stationary_prediction_hold_ns > self.max_measurement_age_ns
+        ):
+            raise ValueError(
+                "stationary_prediction_hold_ns must be positive and no greater "
+                "than max_measurement_age_ns"
+            )
         if (
             not isinstance(self.max_dt_ns, int)
             or isinstance(self.max_dt_ns, bool)
@@ -387,6 +398,7 @@ class PoseFilterStateCheckpoint:
     last_heading_ns: int | None = None
     encoder_anchor: EncoderAnchor | None = None
     odometry_predictions: tuple[OdometryPrediction, ...] = ()
+    stationary_until_ns: int | None = None
 
     def __post_init__(self) -> None:
         if len(self.state) != 5 or any(not math.isfinite(value) for value in self.state):
@@ -402,6 +414,13 @@ class PoseFilterStateCheckpoint:
             raise TypeError("last_context must be TickContext or None")
         if not math.isfinite(self.last_omega):
             raise ValueError("last_omega must be finite")
+        if self.stationary_until_ns is not None and (
+            type(self.stationary_until_ns) is not int
+            or self.stationary_until_ns < 0
+        ):
+            raise ValueError(
+                "stationary_until_ns must be non-negative integer or None"
+            )
 
 
 class _PoseFilter:
@@ -432,6 +451,7 @@ class _PoseFilter:
         "_last_heading_ns",
         "_encoder_anchor",
         "_odometry_predictions",
+        "_stationary_until_ns",
         "_state",
     )
 
@@ -453,6 +473,7 @@ class _PoseFilter:
         self._last_heading_ns: int | None = None
         self._encoder_anchor: EncoderAnchor | None = None
         self._odometry_predictions: list[OdometryPrediction] = []
+        self._stationary_until_ns: int | None = None
         self._last_update_evidence: list[EkfUpdateEvidence] = []
 
     @property
@@ -469,6 +490,7 @@ class _PoseFilter:
             self._last_heading_ns,
             self._encoder_anchor,
             tuple(self._odometry_predictions),
+            self._stationary_until_ns,
         )
 
     def restore(self, checkpoint: PoseFilterStateCheckpoint) -> None:
@@ -483,6 +505,7 @@ class _PoseFilter:
         self._last_heading_ns = checkpoint.last_heading_ns if checkpoint.last_heading_ns is not None else legacy_ns
         self._encoder_anchor = checkpoint.encoder_anchor
         self._odometry_predictions = list(checkpoint.odometry_predictions)
+        self._stationary_until_ns = checkpoint.stationary_until_ns
         self._last_update_evidence = []
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
@@ -597,6 +620,15 @@ class _PoseFilter:
                 and abs(right_mps) < self._config.still_velocity_threshold_mps
             )
 
+        stationary_prediction = self._stationary_prediction_active(
+            frame,
+            wheel,
+            heading,
+            still=still,
+            measured_omega=measured_omega,
+            omega_confidence=omega_confidence,
+        )
+
         if self._last_context is None:
             # Bootstrap guard above proves both values exist here.
             assert measured_yaw is not None
@@ -625,7 +657,12 @@ class _PoseFilter:
 
             if dt_s > 0.0:
                 before_x, before_y, before_yaw = self._state[:3]
-                self._predict(prediction_omega, dt_s, wheel_distance_delta)
+                self._predict(
+                    prediction_omega,
+                    dt_s,
+                    wheel_distance_delta,
+                    stationary=stationary_prediction,
+                )
                 if self._encoder_anchor is not None:
                     self._odometry_predictions.append(OdometryPrediction(
                         self._last_context.monotonic_ns, frame.context.monotonic_ns,
@@ -771,6 +808,60 @@ class _PoseFilter:
             return left_mps, left_mps
         return right_mps, right_mps
 
+    def _stationary_prediction_active(
+        self,
+        frame: AdmittedFrame,
+        wheel: Observation | None,
+        heading: Observation | None,
+        *,
+        still: bool,
+        measured_omega: float | None,
+        omega_confidence: float,
+    ) -> bool:
+        """Return whether zero-motion prediction is backed by fresh evidence.
+
+        Joint trusted encoder standstill plus trusted low gyro-rate refreshes a
+        short hold. This bridges normal asynchronous producer gaps without
+        allowing stale zero-motion evidence to suppress process noise forever.
+        Fresh contradictory wheel/rate evidence clears the hold immediately.
+        """
+
+        minimum_trust = self._config.quality.minimum_sensor_trust
+        rate_trusted = (
+            heading is not None
+            and measured_omega is not None
+            and omega_confidence >= minimum_trust
+        )
+        rate_stationary = (
+            rate_trusted
+            and abs(measured_omega)
+            < self._config.stationary_bias_omega_max_rad_s
+        )
+
+        if (wheel is not None and not still) or (
+            heading is not None and not rate_stationary
+        ):
+            self._stationary_until_ns = None
+
+        if (
+            wheel is not None
+            and heading is not None
+            and still
+            and rate_stationary
+        ):
+            evidence_ns = min(
+                wheel.captured_monotonic_ns,
+                heading.captured_monotonic_ns,
+            )
+            self._stationary_until_ns = (
+                evidence_ns + self._config.stationary_prediction_hold_ns
+            )
+
+        return (
+            self._stationary_until_ns is not None
+            and frame.context.monotonic_ns <= self._stationary_until_ns
+        )
+
     def _adapt_stationary_bias(
         self,
         measured_omega: float,
@@ -783,24 +874,52 @@ class _PoseFilter:
             or abs(measured_omega) >= self._config.stationary_bias_omega_max_rad_s
         ):
             return
+
+        # Preserve the established low-pass state update, and propagate its
+        # uncertainty with the same linear blend:
+        #   b' = (1-a) b + a z
+        #   Pbb' = (1-a)^2 Pbb + a^2 R
+        alpha = min(1.0, self._config.stationary_bias_gain * dt_s)
         residual = measured_omega - self._state[self._GYRO_BIAS]
-        self._state[self._GYRO_BIAS] += (
-            self._config.stationary_bias_gain * residual * dt_s
+        self._state[self._GYRO_BIAS] += alpha * residual
+
+        scale = 1.0 - alpha
+        for index in range(self._SIZE):
+            if index == self._GYRO_BIAS:
+                continue
+            value = self._covariance[index][self._GYRO_BIAS] * scale
+            self._covariance[index][self._GYRO_BIAS] = value
+            self._covariance[self._GYRO_BIAS][index] = value
+        self._covariance[self._GYRO_BIAS][self._GYRO_BIAS] = (
+            scale * scale
+            * self._covariance[self._GYRO_BIAS][self._GYRO_BIAS]
+            + alpha * alpha * self._config.omega_measurement_variance
         )
+        self._stabilize_covariance()
 
     def _predict(
         self,
         measured_omega: float,
         dt_s: float,
         wheel_distance_delta: tuple[float, float] | None,
+        *,
+        stationary: bool = False,
     ) -> None:
         x_m, y_m, yaw_rad, velocity_mps, gyro_bias = self._state
-        omega_rad_s = measured_omega - gyro_bias
-        distance_m = (
-            velocity_mps * dt_s
-            if wheel_distance_delta is None
-            else 0.5 * (wheel_distance_delta[0] + wheel_distance_delta[1])
-        )
+
+        if stationary:
+            # Trusted zero-motion evidence owns this short prediction interval.
+            # Do not inject a fictitious chassis displacement or turn.
+            omega_rad_s = 0.0
+            distance_m = 0.0
+        else:
+            omega_rad_s = measured_omega - gyro_bias
+            distance_m = (
+                velocity_mps * dt_s
+                if wheel_distance_delta is None
+                else 0.5 * (wheel_distance_delta[0] + wheel_distance_delta[1])
+            )
+
         self._state = [
             x_m + distance_m * math.cos(yaw_rad),
             y_m + distance_m * math.sin(yaw_rad),
@@ -810,30 +929,40 @@ class _PoseFilter:
         ]
 
         transition = _identity(self._SIZE)
-        transition[self._X][self._YAW] = (
-            -distance_m * math.sin(yaw_rad)
-        )
-        transition[self._X][self._VELOCITY] = (
-            math.cos(yaw_rad) * dt_s
-            if wheel_distance_delta is None
-            else 0.0
-        )
-        transition[self._Y][self._YAW] = (
-            distance_m * math.cos(yaw_rad)
-        )
-        transition[self._Y][self._VELOCITY] = (
-            math.sin(yaw_rad) * dt_s
-            if wheel_distance_delta is None
-            else 0.0
-        )
-        transition[self._YAW][self._GYRO_BIAS] = -dt_s
+        if not stationary:
+            transition[self._X][self._YAW] = (
+                -distance_m * math.sin(yaw_rad)
+            )
+            transition[self._X][self._VELOCITY] = (
+                math.cos(yaw_rad) * dt_s
+                if wheel_distance_delta is None
+                else 0.0
+            )
+            transition[self._Y][self._YAW] = (
+                distance_m * math.cos(yaw_rad)
+            )
+            transition[self._Y][self._VELOCITY] = (
+                math.sin(yaw_rad) * dt_s
+                if wheel_distance_delta is None
+                else 0.0
+            )
+            transition[self._YAW][self._GYRO_BIAS] = -dt_s
+
         predicted = _matmul(
             _matmul(transition, self._covariance),
             _transpose(transition),
         )
         noise_scale = dt_s / self._config.process_noise_reference_dt_s
-        for index, noise in enumerate(self._config.process_noise):
-            predicted[index][index] += float(noise) * noise_scale
+        if stationary:
+            # Gyro bias remains stochastic even while the chassis is still.
+            # The stationary bias adaptation supplies its measurement-side
+            # contraction; motion-state process noise is held.
+            predicted[self._GYRO_BIAS][self._GYRO_BIAS] += (
+                float(self._config.process_noise[self._GYRO_BIAS]) * noise_scale
+            )
+        else:
+            for index, noise in enumerate(self._config.process_noise):
+                predicted[index][index] += float(noise) * noise_scale
         self._covariance = predicted
         self._stabilize_covariance()
 
@@ -1265,9 +1394,11 @@ class NativeStateEstimator:
         c, s = math.cos(yaw), math.sin(yaw)
         transform = Pose2D(self._config.frame_id, global_pose.x_m-c*pose.x_m+s*pose.y_m,
                            global_pose.y_m-s*pose.x_m-c*pose.y_m, yaw)
-        age = lambda ns: 2**63-1 if ns is None else max(0, now-ns)
-        encoder_age, imu_age = age(self._local._last_wheel_ns), age(self._local._last_heading_ns)
-        lidar_age, fix_age, relative_age = age(self._last_lidar_ns), age(self._last_fix_ns), age(self._last_relative_ns)
+        encoder_age = source_age_ns(now, self._local._last_wheel_ns)
+        imu_age = source_age_ns(now, self._local._last_heading_ns)
+        lidar_age = source_age_ns(now, self._last_lidar_ns)
+        fix_age = source_age_ns(now, self._last_fix_ns)
+        relative_age = source_age_ns(now, self._last_relative_ns)
         disagreement = math.hypot(self._consistency_x_m, self._consistency_y_m)
         # A 30-second accumulated position bias is not uncertainty of the
         # current scan interval. Keep it diagnostic/degrading; local loss needs
@@ -1278,10 +1409,10 @@ class NativeStateEstimator:
         if sigma >= cfg.local_lost_sigma_m or self._slip_suspected:
             local_state = QualityState.LOST
         elif (disagreement >= cfg.consistency_good_m
-              or (abs(local.v_mps) > .001 and relative_age > cfg.relative_max_age_ns)
+              or (abs(local.v_mps) > .001 and source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns))
               or (self._last_relative_ns is not None and self._observability < cfg.minimum_observability)):
             local_state = QualityState.DEGRADED
-        if not continuous or not self._wheel_trusted or encoder_age > self._config.max_measurement_age_ns:
+        if not continuous or not self._wheel_trusted or source_is_stale(now, self._local._last_wheel_ns, self._config.max_measurement_age_ns):
             local_state = QualityState.LOST
         if local_state is not QualityState.LOST:
             if self._local_translation_state is QualityState.LOST:
@@ -1290,7 +1421,7 @@ class NativeStateEstimator:
                 if (self._last_relative_ns is None
                         or (self._local_loss_relative_ns is not None
                             and self._last_relative_ns <= self._local_loss_relative_ns)
-                        or relative_age > cfg.relative_max_age_ns
+                        or source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns)
                         or sigma >= cfg.local_good_sigma_m):
                     local_state = QualityState.LOST
             elif self._local_translation_state is QualityState.DEGRADED and (
@@ -1321,23 +1452,23 @@ class NativeStateEstimator:
         yaw_sigma = math.sqrt(yaw_variance)
         heading_state = QualityState.GOOD
         if (yaw_sigma**2 > cfg.max_yaw_variance*.5
-                or imu_age > self._config.max_measurement_age_ns//2
+                or source_is_stale(now, self._local._last_heading_ns, self._config.max_measurement_age_ns//2)
                 or abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad*.5):
             heading_state = QualityState.DEGRADED
         if relative_heading and (
-            relative_age > cfg.relative_max_age_ns or self._observability < cfg.minimum_observability
+            source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns) or self._observability < cfg.minimum_observability
         ):
             heading_state = QualityState.DEGRADED
         if (not continuous or not self._heading_trusted
-                or imu_age > self._config.max_measurement_age_ns
+                or source_is_stale(now, self._local._last_heading_ns, self._config.max_measurement_age_ns)
                 or yaw_sigma**2 > cfg.max_yaw_variance
                 or abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad):
             heading_state = QualityState.LOST
         global_sigma = math.sqrt(max(global_estimate.covariance_5x5[0], global_estimate.covariance_5x5[6]))
         global_state = QualityState.GOOD
-        if global_sigma**2 > cfg.max_position_variance or fix_age > cfg.global_fix_max_age_ns:
+        if global_sigma**2 > cfg.max_position_variance or source_is_stale(now, self._last_fix_ns, cfg.global_fix_max_age_ns):
             global_state = QualityState.DEGRADED
-        if global_sigma**2 > cfg.max_position_variance*4 or fix_age > cfg.global_fix_max_age_ns*3:
+        if global_sigma**2 > cfg.max_position_variance*4 or source_is_stale(now, self._last_fix_ns, cfg.global_fix_max_age_ns*3):
             global_state = QualityState.LOST
         quality = LocalizationQuality(local_state, heading_state, global_state, sigma, global_sigma,
             yaw_sigma, encoder_age, imu_age, lidar_age, fix_age, continuous, not continuous,

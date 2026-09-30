@@ -15,6 +15,12 @@ from v3.contracts import (
     TickContext,
     WheelVelocitySetpoint,
 )
+from v3.contracts.temporal import (
+    ControlContinuityState,
+    bounded_deadline_ns,
+    classify_control_continuity,
+    deadline_reached,
+)
 
 
 WHEEL_FEEDBACK_KIND = "wheel_velocity"
@@ -594,33 +600,29 @@ class WheelActuatorController:
             return now_ns
         if now_ns < started_ns:
             raise ValueError("L11 feedback uncertainty time must be monotonic")
-        deadline = started_ns + self._config.max_feedback_uncertainty_ns
-        if transition_until_ns is not None:
-            deadline = max(deadline, transition_until_ns)
-        if now_ns >= deadline:
+        deadline = bounded_deadline_ns(
+            started_ns,
+            self._config.max_feedback_uncertainty_ns,
+            extension_until_ns=transition_until_ns,
+        )
+        if deadline_reached(now_ns, deadline):
             if side == "feedback":
                 raise ValueError("L11 feedback remained uncertain too long")
             raise ValueError(f"L11 {side} wheel feedback remained uncertain too long")
         return started_ns
 
     def _control_dt_s(self, context: TickContext) -> float:
-        previous = self._last_context
-        if previous is None:
+        continuity = classify_control_continuity(
+            self._last_context, context, self._config.max_control_gap_ns,
+        )
+        if continuity.state is ControlContinuityState.FIRST:
             return 0.0
-        if (
-            context.tick_id <= previous.tick_id
-            or context.monotonic_ns <= previous.monotonic_ns
-        ):
+        if continuity.state is ControlContinuityState.NON_MONOTONIC:
             raise ValueError("L11 tick order must increase monotonically")
-        if (
-            context.tick_id != previous.tick_id + 1
-            or context.monotonic_ns - previous.monotonic_ns
-            > self._config.max_control_gap_ns
-        ):
+        if continuity.state is not ControlContinuityState.CONTINUOUS:
             return 0.0
-        return float(
-            context.monotonic_ns - previous.monotonic_ns
-        ) / 1_000_000_000.0
+        assert continuity.elapsed_ns is not None
+        return float(continuity.elapsed_ns) / 1_000_000_000.0
 
     def _stale_hold(self, context: TickContext) -> ActuatorRequest:
         self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(

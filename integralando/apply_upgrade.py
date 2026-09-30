@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the R2B4 P0 L11 reversal-reacquisition fix.
-
-Base repository commit: 3df5545081f842f2440dac44b2740c519b3aba73
-
-The upgrade intentionally changes only L11 classification/watchdog handling and
-adds one focused regression test. Encoder estimation thresholds and safety
-configuration are not relaxed.
-"""
+"""Apply the R2B4 stationary EKF covariance fix."""
 
 from __future__ import annotations
 
@@ -15,231 +8,83 @@ import subprocess
 import sys
 from pathlib import Path
 
-BASE_COMMIT = "3df5545081f842f2440dac44b2740c519b3aba73"
-TARGET = Path("v3/layers/l11_actuator_control.py")
-TEST_TARGET = Path("tests/feature/test_v3_l11_reversal_reacquisition.py")
+BASE_COMMIT = '09c514e7149b469a7ca768cce79919faa60af598'
+L3 = Path("v3/layers/l3_state_estimation.py")
+CONTROL = Path("conf/vezerles.json")
+TEST = Path("tests/feature/test_v3_stationary_covariance.py")
+TEST_SOURCE = '"""Regression tests for stationary EKF covariance handling."""\n\nfrom v3.contracts import AdmittedFrame, DataField, Observation, TickContext\nfrom v3.layers.l3_state_estimation import NativeStateEstimator\nfrom rig import resolved_config\n\n\ndef _observation(kind: str, tick: int, ns: int, **values) -> Observation:\n    source = "IMU" if kind == "ekf_heading" else "ENCODER"\n    return Observation(\n        kind,\n        source,\n        tick,\n        ns,\n        tuple(DataField(key, value) for key, value in values.items()),\n    )\n\n\ndef _frame(\n    tick: int,\n    *,\n    speed_mps: float = 0.0,\n    omega_rad_s: float = 0.001,\n    include_wheel: bool = True,\n    include_imu: bool = True,\n) -> AdmittedFrame:\n    context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)\n    observations = []\n    distance_m = speed_mps * tick * 0.02\n\n    if include_wheel:\n        moving = abs(speed_mps) > 1e-12\n        observations.append(\n            _observation(\n                "wheel_velocity",\n                tick,\n                context.monotonic_ns,\n                left_mps=speed_mps,\n                right_mps=speed_mps,\n                trust=1.0,\n                measurement_stale=False,\n                measurement_timing_valid=True,\n                rejection_code="NONE",\n                left_pulse_delta=4 if moving else 0,\n                right_pulse_delta=4 if moving else 0,\n                left_counter_running=True,\n                right_counter_running=True,\n                raw_left_distance_m=distance_m,\n                raw_right_distance_m=distance_m,\n            )\n        )\n\n    if include_imu:\n        observations.append(\n            _observation(\n                "ekf_heading",\n                tick,\n                context.monotonic_ns,\n                yaw_rad=0.0,\n                omega_rad_s=omega_rad_s,\n                confidence=0.0,\n                omega_confidence=1.0,\n            )\n        )\n\n    return AdmittedFrame(context, tuple(observations), ())\n\n\ndef _trace(estimate) -> float:\n    covariance = estimate.covariance_5x5\n    return sum(covariance[index] for index in (0, 6, 12, 18, 24))\n\n\ndef test_stationary_rate_only_covariance_stays_bounded_for_twenty_seconds():\n    config = resolved_config().runtime.composition.live_control.control\n    estimator = NativeStateEstimator(config.estimation)\n\n    first = estimator(_frame(0))\n    last = first\n    for tick in range(1, 1000):\n        last = estimator(_frame(tick))\n\n    assert last.x_m == first.x_m == 0.0\n    assert last.y_m == first.y_m == 0.0\n    assert abs(last.local_pose.x_m) < 1e-12\n    assert abs(last.local_pose.y_m) < 1e-12\n\n    initial_trace = _trace(first)\n    final_trace = _trace(last)\n    assert final_trace <= initial_trace * 1.10\n    assert last.covariance_5x5[0] <= first.covariance_5x5[0] * 1.01\n    assert last.covariance_5x5[6] <= first.covariance_5x5[6] * 1.01\n    assert last.covariance_5x5[12] <= first.covariance_5x5[12] * 1.01\n\n\ndef test_stationary_prediction_hold_expires_without_fresh_evidence():\n    config = resolved_config().runtime.composition.live_control.control\n    estimator = NativeStateEstimator(config.estimation)\n\n    first = estimator(_frame(0))\n    tick1 = estimator(AdmittedFrame(TickContext(1, 1_020_000_000), (), ()))\n    tick2 = estimator(AdmittedFrame(TickContext(2, 1_040_000_000), (), ()))\n    tick3 = estimator(AdmittedFrame(TickContext(3, 1_060_000_000), (), ()))\n\n    assert tick1.covariance_5x5[0] == first.covariance_5x5[0]\n    assert tick2.covariance_5x5[0] == first.covariance_5x5[0]\n    assert tick3.covariance_5x5[0] > tick2.covariance_5x5[0]\n\n\ndef test_fresh_motion_evidence_revokes_stationary_prediction_immediately():\n    config = resolved_config().runtime.composition.live_control.control\n    estimator = NativeStateEstimator(config.estimation)\n\n    stationary = estimator(_frame(0))\n    moving = estimator(_frame(1, speed_mps=0.2))\n\n    assert moving.covariance_5x5[0] > stationary.covariance_5x5[0]\n'
+REPLACEMENTS = [('config field', '    quality: LocalizationQualityConfig\n    minimum_reliable_wheel_speed_mps: float = 0.15\n', '    quality: LocalizationQualityConfig\n    minimum_reliable_wheel_speed_mps: float = 0.15\n    stationary_prediction_hold_ns: int = 50_000_000\n'), ('config validation', '        if type(self.max_measurement_age_ns) is not int or self.max_measurement_age_ns <= 0:\n            raise ValueError("max_measurement_age_ns must be positive integer")\n', '        if type(self.max_measurement_age_ns) is not int or self.max_measurement_age_ns <= 0:\n            raise ValueError("max_measurement_age_ns must be positive integer")\n        if (\n            type(self.stationary_prediction_hold_ns) is not int\n            or self.stationary_prediction_hold_ns <= 0\n            or self.stationary_prediction_hold_ns > self.max_measurement_age_ns\n        ):\n            raise ValueError(\n                "stationary_prediction_hold_ns must be positive and no greater "\n                "than max_measurement_age_ns"\n            )\n'), ('checkpoint field', '    encoder_anchor: EncoderAnchor | None = None\n    odometry_predictions: tuple[OdometryPrediction, ...] = ()\n\n    def __post_init__(self) -> None:\n', '    encoder_anchor: EncoderAnchor | None = None\n    odometry_predictions: tuple[OdometryPrediction, ...] = ()\n    stationary_until_ns: int | None = None\n\n    def __post_init__(self) -> None:\n'), ('checkpoint validation', '        if not math.isfinite(self.last_omega):\n            raise ValueError("last_omega must be finite")\n\n\nclass _PoseFilter:\n', '        if not math.isfinite(self.last_omega):\n            raise ValueError("last_omega must be finite")\n        if self.stationary_until_ns is not None and (\n            type(self.stationary_until_ns) is not int\n            or self.stationary_until_ns < 0\n        ):\n            raise ValueError(\n                "stationary_until_ns must be non-negative integer or None"\n            )\n\n\nclass _PoseFilter:\n'), ('slot', '        "_encoder_anchor",\n        "_odometry_predictions",\n        "_state",\n', '        "_encoder_anchor",\n        "_odometry_predictions",\n        "_stationary_until_ns",\n        "_state",\n'), ('init', '        self._encoder_anchor: EncoderAnchor | None = None\n        self._odometry_predictions: list[OdometryPrediction] = []\n        self._last_update_evidence: list[EkfUpdateEvidence] = []\n', '        self._encoder_anchor: EncoderAnchor | None = None\n        self._odometry_predictions: list[OdometryPrediction] = []\n        self._stationary_until_ns: int | None = None\n        self._last_update_evidence: list[EkfUpdateEvidence] = []\n'), ('checkpoint write', '            self._encoder_anchor,\n            tuple(self._odometry_predictions),\n        )\n', '            self._encoder_anchor,\n            tuple(self._odometry_predictions),\n            self._stationary_until_ns,\n        )\n'), ('checkpoint restore', '        self._encoder_anchor = checkpoint.encoder_anchor\n        self._odometry_predictions = list(checkpoint.odometry_predictions)\n        self._last_update_evidence = []\n', '        self._encoder_anchor = checkpoint.encoder_anchor\n        self._odometry_predictions = list(checkpoint.odometry_predictions)\n        self._stationary_until_ns = checkpoint.stationary_until_ns\n        self._last_update_evidence = []\n'), ('stationary authority call', '            still = (\n                velocity_feedback_valid\n                and standstill\n                and abs(left_mps) < self._config.still_velocity_threshold_mps\n                and abs(right_mps) < self._config.still_velocity_threshold_mps\n            )\n\n        if self._last_context is None:\n', '            still = (\n                velocity_feedback_valid\n                and standstill\n                and abs(left_mps) < self._config.still_velocity_threshold_mps\n                and abs(right_mps) < self._config.still_velocity_threshold_mps\n            )\n\n        stationary_prediction = self._stationary_prediction_active(\n            frame,\n            wheel,\n            heading,\n            still=still,\n            measured_omega=measured_omega,\n            omega_confidence=omega_confidence,\n        )\n\n        if self._last_context is None:\n'), ('predict call', '                self._predict(prediction_omega, dt_s, wheel_distance_delta)\n', '                self._predict(\n                    prediction_omega,\n                    dt_s,\n                    wheel_distance_delta,\n                    stationary=stationary_prediction,\n                )\n')]
+HELPER_ANCHOR = '    def _adapt_stationary_bias(\n        self,\n        measured_omega: float,\n        dt_s: float,\n        still: bool,\n    ) -> None:\n'
+HELPER_INSERT = '    def _stationary_prediction_active(\n        self,\n        frame: AdmittedFrame,\n        wheel: Observation | None,\n        heading: Observation | None,\n        *,\n        still: bool,\n        measured_omega: float | None,\n        omega_confidence: float,\n    ) -> bool:\n        """Return whether zero-motion prediction is backed by fresh evidence.\n\n        Joint trusted encoder standstill plus trusted low gyro-rate refreshes a\n        short hold. This bridges normal asynchronous producer gaps without\n        allowing stale zero-motion evidence to suppress process noise forever.\n        Fresh contradictory wheel/rate evidence clears the hold immediately.\n        """\n\n        minimum_trust = self._config.quality.minimum_sensor_trust\n        rate_trusted = (\n            heading is not None\n            and measured_omega is not None\n            and omega_confidence >= minimum_trust\n        )\n        rate_stationary = (\n            rate_trusted\n            and abs(measured_omega)\n            < self._config.stationary_bias_omega_max_rad_s\n        )\n\n        if (wheel is not None and not still) or (\n            heading is not None and not rate_stationary\n        ):\n            self._stationary_until_ns = None\n\n        if (\n            wheel is not None\n            and heading is not None\n            and still\n            and rate_stationary\n        ):\n            evidence_ns = min(\n                wheel.captured_monotonic_ns,\n                heading.captured_monotonic_ns,\n            )\n            self._stationary_until_ns = (\n                evidence_ns + self._config.stationary_prediction_hold_ns\n            )\n\n        return (\n            self._stationary_until_ns is not None\n            and frame.context.monotonic_ns <= self._stationary_until_ns\n        )\n\n'
+OLD_ADAPT = '    def _adapt_stationary_bias(\n        self,\n        measured_omega: float,\n        dt_s: float,\n        still: bool,\n    ) -> None:\n        if (\n            not still\n            or self._config.stationary_bias_gain == 0.0\n            or abs(measured_omega) >= self._config.stationary_bias_omega_max_rad_s\n        ):\n            return\n        residual = measured_omega - self._state[self._GYRO_BIAS]\n        self._state[self._GYRO_BIAS] += (\n            self._config.stationary_bias_gain * residual * dt_s\n        )\n'
+NEW_ADAPT = "    def _adapt_stationary_bias(\n        self,\n        measured_omega: float,\n        dt_s: float,\n        still: bool,\n    ) -> None:\n        if (\n            not still\n            or self._config.stationary_bias_gain == 0.0\n            or abs(measured_omega) >= self._config.stationary_bias_omega_max_rad_s\n        ):\n            return\n\n        # Preserve the established low-pass state update, and propagate its\n        # uncertainty with the same linear blend:\n        #   b' = (1-a) b + a z\n        #   Pbb' = (1-a)^2 Pbb + a^2 R\n        alpha = min(1.0, self._config.stationary_bias_gain * dt_s)\n        residual = measured_omega - self._state[self._GYRO_BIAS]\n        self._state[self._GYRO_BIAS] += alpha * residual\n\n        scale = 1.0 - alpha\n        for index in range(self._SIZE):\n            if index == self._GYRO_BIAS:\n                continue\n            value = self._covariance[index][self._GYRO_BIAS] * scale\n            self._covariance[index][self._GYRO_BIAS] = value\n            self._covariance[self._GYRO_BIAS][index] = value\n        self._covariance[self._GYRO_BIAS][self._GYRO_BIAS] = (\n            scale * scale\n            * self._covariance[self._GYRO_BIAS][self._GYRO_BIAS]\n            + alpha * alpha * self._config.omega_measurement_variance\n        )\n        self._stabilize_covariance()\n"
+OLD_PREDICT = '    def _predict(\n        self,\n        measured_omega: float,\n        dt_s: float,\n        wheel_distance_delta: tuple[float, float] | None,\n    ) -> None:\n        x_m, y_m, yaw_rad, velocity_mps, gyro_bias = self._state\n        omega_rad_s = measured_omega - gyro_bias\n        distance_m = (\n            velocity_mps * dt_s\n            if wheel_distance_delta is None\n            else 0.5 * (wheel_distance_delta[0] + wheel_distance_delta[1])\n        )\n        self._state = [\n            x_m + distance_m * math.cos(yaw_rad),\n            y_m + distance_m * math.sin(yaw_rad),\n            _normalize_angle(yaw_rad + omega_rad_s * dt_s),\n            velocity_mps,\n            gyro_bias,\n        ]\n\n        transition = _identity(self._SIZE)\n        transition[self._X][self._YAW] = (\n            -distance_m * math.sin(yaw_rad)\n        )\n        transition[self._X][self._VELOCITY] = (\n            math.cos(yaw_rad) * dt_s\n            if wheel_distance_delta is None\n            else 0.0\n        )\n        transition[self._Y][self._YAW] = (\n            distance_m * math.cos(yaw_rad)\n        )\n        transition[self._Y][self._VELOCITY] = (\n            math.sin(yaw_rad) * dt_s\n            if wheel_distance_delta is None\n            else 0.0\n        )\n        transition[self._YAW][self._GYRO_BIAS] = -dt_s\n        predicted = _matmul(\n            _matmul(transition, self._covariance),\n            _transpose(transition),\n        )\n        noise_scale = dt_s / self._config.process_noise_reference_dt_s\n        for index, noise in enumerate(self._config.process_noise):\n            predicted[index][index] += float(noise) * noise_scale\n        self._covariance = predicted\n        self._stabilize_covariance()\n'
+NEW_PREDICT = '    def _predict(\n        self,\n        measured_omega: float,\n        dt_s: float,\n        wheel_distance_delta: tuple[float, float] | None,\n        *,\n        stationary: bool = False,\n    ) -> None:\n        x_m, y_m, yaw_rad, velocity_mps, gyro_bias = self._state\n\n        if stationary:\n            # Trusted zero-motion evidence owns this short prediction interval.\n            # Do not inject a fictitious chassis displacement or turn.\n            omega_rad_s = 0.0\n            distance_m = 0.0\n        else:\n            omega_rad_s = measured_omega - gyro_bias\n            distance_m = (\n                velocity_mps * dt_s\n                if wheel_distance_delta is None\n                else 0.5 * (wheel_distance_delta[0] + wheel_distance_delta[1])\n            )\n\n        self._state = [\n            x_m + distance_m * math.cos(yaw_rad),\n            y_m + distance_m * math.sin(yaw_rad),\n            _normalize_angle(yaw_rad + omega_rad_s * dt_s),\n            velocity_mps,\n            gyro_bias,\n        ]\n\n        transition = _identity(self._SIZE)\n        if not stationary:\n            transition[self._X][self._YAW] = (\n                -distance_m * math.sin(yaw_rad)\n            )\n            transition[self._X][self._VELOCITY] = (\n                math.cos(yaw_rad) * dt_s\n                if wheel_distance_delta is None\n                else 0.0\n            )\n            transition[self._Y][self._YAW] = (\n                distance_m * math.cos(yaw_rad)\n            )\n            transition[self._Y][self._VELOCITY] = (\n                math.sin(yaw_rad) * dt_s\n                if wheel_distance_delta is None\n                else 0.0\n            )\n            transition[self._YAW][self._GYRO_BIAS] = -dt_s\n\n        predicted = _matmul(\n            _matmul(transition, self._covariance),\n            _transpose(transition),\n        )\n        noise_scale = dt_s / self._config.process_noise_reference_dt_s\n        if stationary:\n            # Gyro bias remains stochastic even while the chassis is still.\n            # The stationary bias adaptation supplies its measurement-side\n            # contraction; motion-state process noise is held.\n            predicted[self._GYRO_BIAS][self._GYRO_BIAS] += (\n                float(self._config.process_noise[self._GYRO_BIAS]) * noise_scale\n            )\n        else:\n            for index, noise in enumerate(self._config.process_noise):\n                predicted[index][index] += float(noise) * noise_scale\n        self._covariance = predicted\n        self._stabilize_covariance()\n'
+CONFIG_OLD = '      "process_noise_reference_dt_s": 0.02,\n      "quality": {'
+CONFIG_NEW = '      "process_noise_reference_dt_s": 0.02,\n      "stationary_prediction_hold_ns": 50000000,\n      "quality": {'
 
-TEST_SOURCE = '"""Regression tests for bounded L11 encoder reversal reacquisition."""\n\nimport pytest\n\nfrom rig import resolved_config\nfrom v3.contracts import (\n    AdmittedFrame,\n    DataField,\n    Observation,\n    TickContext,\n    WheelVelocitySetpoint,\n)\nfrom v3.layers.l11_actuator_control import WheelActuatorController\n\n\ndef _feedback(\n    tick: int,\n    *,\n    left_trust: float,\n    right_trust: float = 1.0,\n    left_timebase: str | None = "GPIO_EDGE_HISTORY",\n    right_timebase: str | None = "GPIO_EDGE_HISTORY",\n    left_mps: float = 0.0,\n    right_mps: float = -0.1738342952215519,\n) -> AdmittedFrame:\n    context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)\n    values = {\n        "left_mps": left_mps,\n        "right_mps": right_mps,\n        "trust": min(left_trust, right_trust),\n        "measurement_timing_valid": True,\n        "measurement_stale": False,\n        "rejection_code": "BASELINE",\n        "left_measurement_trust": left_trust,\n        "right_measurement_trust": right_trust,\n        "left_estimation_timebase": left_timebase,\n        "right_estimation_timebase": right_timebase,\n        "left_counter_running": True,\n        "right_counter_running": True,\n        "left_read_error_delta": 0,\n        "right_read_error_delta": 0,\n        "left_invalid_alert_delta": 0,\n        "right_invalid_alert_delta": 0,\n    }\n    observation = Observation(\n        "wheel_velocity",\n        "ENCODER",\n        tick,\n        context.monotonic_ns,\n        tuple(DataField(key, value) for key, value in values.items()),\n    )\n    return AdmittedFrame(context, (observation,), ())\n\n\ndef test_partial_gpio_reversal_fit_uses_original_transition_deadline():\n    """Captured-style partial edge fits stay feed-forward until L9\'s finite deadline."""\n\n    config = resolved_config().runtime.composition.live_control.control\n    controller = WheelActuatorController(config.speed_map, config.wheel_pi)\n    transition_until_ns = 1_800_000_000\n    reference = -0.054229311\n\n    # 0.23795515 is the left-wheel trust captured at the 22:11 L11 fault.\n    # The current production estimator intentionally publishes zero until the\n    # reversal-bounded edge fit reaches full trust; L11 must not confuse this\n    # live edge reacquisition with a silent encoder.\n    for tick in range(40):\n        frame = _feedback(tick, left_trust=0.23795515)\n        wheels = WheelVelocitySetpoint(\n            frame.context,\n            reference,\n            reference,\n            velocity_transition_until_ns=transition_until_ns,\n        )\n        output = controller(wheels, frame)\n        assert output.left_normalized == pytest.approx(\n            config.speed_map.lookup("left", reference)[0]\n        )\n        assert output.right_normalized == pytest.approx(\n            config.speed_map.lookup("right", reference)[0]\n        )\n\n    # The grace is finite. At the original L9 transition deadline unresolved\n    # uncertainty still fails closed.\n    frame = _feedback(40, left_trust=0.23795515)\n    wheels = WheelVelocitySetpoint(\n        frame.context,\n        reference,\n        reference,\n        velocity_transition_until_ns=transition_until_ns,\n    )\n    with pytest.raises(ValueError, match="feedback remained uncertain too long"):\n        controller(wheels, frame)\n\n\ndef test_reversal_grace_disappears_when_edge_evidence_disappears():\n    """One earlier partial fit cannot mask a later silent encoder."""\n\n    config = resolved_config().runtime.composition.live_control.control\n    controller = WheelActuatorController(config.speed_map, config.wheel_pi)\n    transition_until_ns = 1_800_000_000\n    reference = -0.054229311\n    fault_tick = None\n\n    for tick in range(30):\n        live_edge_reacquisition = tick < 5\n        frame = _feedback(\n            tick,\n            left_trust=0.23795515 if live_edge_reacquisition else 0.0,\n            left_timebase="GPIO_EDGE_HISTORY" if live_edge_reacquisition else None,\n        )\n        wheels = WheelVelocitySetpoint(\n            frame.context,\n            reference,\n            reference,\n            velocity_transition_until_ns=transition_until_ns,\n        )\n        try:\n            controller(wheels, frame)\n        except ValueError as exc:\n            assert "feedback remained uncertain too long" in str(exc)\n            fault_tick = tick\n            break\n\n    assert fault_tick == 13  # 260 ms from the original uncertainty start.\n'
-
-OLD_CLASSIFICATION = """\
-        missing_edge_feedback = ((required_left and left_measured is None)
-                                 or (required_right and right_measured is None))
-        for side, measured, required in ((\"left\", left_measured, required_left),
-                                         (\"right\", right_measured, required_right)):
-"""
-
-NEW_CLASSIFICATION = """\
-        missing_edge_feedback = ((required_left and left_measured is None)
-                                 or (required_right and right_measured is None))
-        feedback_values = {field.key: field.value for field in feedback.values}
-        bounded_edge_reacquisition = (
-            missing_edge_feedback
-            and self._missing_feedback_is_bounded_edge_reacquisition(
-                feedback_values,
-                required_left=required_left,
-                required_right=required_right,
-                left_measured=left_measured,
-                right_measured=right_measured,
-            )
-        )
-        for side, measured, required in ((\"left\", left_measured, required_left),
-                                         (\"right\", right_measured, required_right)):
-"""
-
-OLD_WATCHDOG = """\
-        uncertain = left_uncertain or right_uncertain
-        if uncertain:
-            # The measured wheel follows the command with delay. Keep the
-            # original finite L9 deadline until feedback catches up; never
-            # renew it when targets or planner proposals change.
-            if self._feedback_transition_until_ns is None and not missing_edge_feedback:
-                self._feedback_transition_until_ns = wheels.velocity_transition_until_ns
-            self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
-                \"feedback\",
-                self._feedback_uncertain_since_ns,
-                wheels.context.monotonic_ns,
-                transition_until_ns=(self._feedback_transition_until_ns
-                                     if not missing_edge_feedback else None),
-            )
-"""
-
-NEW_WATCHDOG = """\
-        uncertain = left_uncertain or right_uncertain
-        transition_feedback_bounded = (
-            not missing_edge_feedback or bounded_edge_reacquisition
-        )
-        if uncertain:
-            # The measured wheel follows the command with delay. Keep the
-            # original finite L9 deadline until feedback catches up; never
-            # renew it when targets or planner proposals change. A partial,
-            # clean GPIO edge fit is live reversal evidence, not a silent
-            # encoder; it receives the same finite transition budget.
-            if (
-                self._feedback_transition_until_ns is None
-                and transition_feedback_bounded
-            ):
-                self._feedback_transition_until_ns = wheels.velocity_transition_until_ns
-            self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
-                \"feedback\",
-                self._feedback_uncertain_since_ns,
-                wheels.context.monotonic_ns,
-                transition_until_ns=(
-                    self._feedback_transition_until_ns
-                    if transition_feedback_bounded
-                    else None
-                ),
-            )
-"""
-
-OLD_HELPER_ANCHOR = """\
-    @staticmethod
-    def _required_feedback_value(
-        values: Mapping[str, object],
-        side: str,
-        *,
-        required: bool,
-    ) -> float | None:
-"""
-
-NEW_HELPER_ANCHOR = """\
-    @classmethod
-    def _missing_feedback_is_bounded_edge_reacquisition(
-        cls,
-        values: Mapping[str, object],
-        *,
-        required_left: bool,
-        required_right: bool,
-        left_measured: float | None,
-        right_measured: float | None,
-    ) -> bool:
-        \"\"\"Recognize live, partial reversal fits without blessing silence.
-
-        NativeCounterEncoderBackend deliberately withholds a control-grade
-        velocity while a new-direction GPIO edge fit is still below full trust.
-        That is bounded reacquisition evidence when the counter diagnostics are
-        clean. It is distinct from trust==0/TICK_SNAPSHOT/no-edge feedback.
-        \"\"\"
-
-        missing_sides = tuple(
-            side
-            for side, required, measured in (
-                (\"left\", required_left, left_measured),
-                (\"right\", required_right, right_measured),
-            )
-            if required and measured is None
-        )
-        if not missing_sides:
-            return False
-        if (
-            values.get(\"measurement_stale\") is not False
-            or values.get(\"measurement_timing_valid\") is not True
-            or values.get(\"rejection_code\") != \"BASELINE\"
-            or not cls._counter_diagnostics_are_clean(values)
-        ):
-            return False
-
-        for side in missing_sides:
-            trust = cls._per_wheel_trust(values, side)
-            if not 0.0 < trust < 1.0:
-                return False
-            if values.get(f\"{side}_estimation_timebase\") != \"GPIO_EDGE_HISTORY\":
-                return False
-        return True
-
-    @staticmethod
-    def _required_feedback_value(
-        values: Mapping[str, object],
-        side: str,
-        *,
-        required: bool,
-    ) -> float | None:
-"""
-
-
-def _replace_once(text: str, old: str, new: str, name: str) -> str:
+def replace_once(text: str, old: str, new: str, name: str) -> str:
     count = text.count(old)
     if count != 1:
-        raise RuntimeError(
-            f"upgrade anchor {name} expected exactly once, found {count}"
-        )
+        raise RuntimeError(f"anchor {name!r} expected once, found {count}")
     return text.replace(old, new, 1)
 
-
-def _git_head(root: Path) -> str | None:
+def git_head(repo: Path) -> str | None:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ["git", "rev-parse", "HEAD"], cwd=repo, text=True
         ).strip()
     except Exception:
         return None
 
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("repo", nargs="?", default=".")
-    parser.add_argument(
-        "--allow-head-mismatch",
-        action="store_true",
-        help="allow a different HEAD if all exact source anchors still match",
-    )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--allow-head-mismatch", action="store_true")
     args = parser.parse_args()
-
-    root = Path(args.repo).resolve()
-    target = root / TARGET
-    test_target = root / TEST_TARGET
-
-    if not target.is_file():
-        print(f"ERROR: missing {target}", file=sys.stderr)
+    repo = Path(args.repo).resolve()
+    l3_path = repo / L3
+    control_path = repo / CONTROL
+    if not l3_path.is_file() or not control_path.is_file():
+        print("ERROR: run against an R2B4 repository root", file=sys.stderr)
         return 2
-
-    head = _git_head(root)
-    if (
-        head is not None
-        and head != BASE_COMMIT
-        and not args.allow_head_mismatch
-    ):
+    head = git_head(repo)
+    if head is not None and head != BASE_COMMIT and not args.allow_head_mismatch:
         print(
-            f"ERROR: package base is {BASE_COMMIT}, repo HEAD is {head}\\n"
-            "Re-run with --allow-head-mismatch only if you intentionally want "
-            "exact-anchor application to a newer tree.",
+            f"ERROR: package base is {BASE_COMMIT}, repository HEAD is {head}\n"
+            "Use --allow-head-mismatch only for intentional exact-anchor application.",
             file=sys.stderr,
         )
         return 3
-
-    original = target.read_text(encoding="utf-8")
-    if "_missing_feedback_is_bounded_edge_reacquisition" in original:
-        print("L11 fix already appears to be applied.")
-        patched = original
-    else:
-        patched = _replace_once(
-            original, OLD_CLASSIFICATION, NEW_CLASSIFICATION, "classification"
-        )
-        patched = _replace_once(
-            patched, OLD_WATCHDOG, NEW_WATCHDOG, "watchdog"
-        )
-        patched = _replace_once(
-            patched, OLD_HELPER_ANCHOR, NEW_HELPER_ANCHOR, "helper"
-        )
-
+    l3 = l3_path.read_text(encoding="utf-8")
+    already = "_stationary_prediction_active" in l3
+    if not already:
+        for name, old, new in REPLACEMENTS:
+            l3 = replace_once(l3, old, new, name)
+        l3 = replace_once(l3, HELPER_ANCHOR, HELPER_INSERT + HELPER_ANCHOR, "helper insert")
+        l3 = replace_once(l3, OLD_ADAPT, NEW_ADAPT, "bias covariance")
+        l3 = replace_once(l3, OLD_PREDICT, NEW_PREDICT, "stationary prediction")
+    control = control_path.read_text(encoding="utf-8")
+    if '"stationary_prediction_hold_ns": 50000000' not in control:
+        control = replace_once(control, CONFIG_OLD, CONFIG_NEW, "control config")
     if args.dry_run:
-        print("PASS: all upgrade anchors matched; no files written.")
+        print("PASS: all exact upgrade anchors matched; no files written.")
         return 0
-
-    target.write_text(patched, encoding="utf-8")
-    test_target.parent.mkdir(parents=True, exist_ok=True)
-    test_target.write_text(TEST_SOURCE, encoding="utf-8")
-
+    l3_path.write_text(l3, encoding="utf-8")
+    control_path.write_text(control, encoding="utf-8")
+    test_path = repo / TEST
+    test_path.parent.mkdir(parents=True, exist_ok=True)
+    test_path.write_text(TEST_SOURCE, encoding="utf-8")
     subprocess.run(
-        [sys.executable, "-m", "py_compile", str(target), str(test_target)],
-        cwd=root,
-        check=True,
+        [sys.executable, "-m", "py_compile", str(l3_path), str(test_path)],
+        cwd=repo, check=True,
     )
-    print("Applied P0 L11 reversal-reacquisition fix.")
-    print(f"Changed: {TARGET}")
-    print(f"Added:   {TEST_TARGET}")
+    print("Applied stationary EKF covariance fix.")
+    print(f"Changed: {L3}")
+    print(f"Changed: {CONTROL}")
+    print(f"Added:   {TEST}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

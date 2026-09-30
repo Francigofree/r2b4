@@ -1,21 +1,24 @@
 {
-  "name": "r2b4_p0_l11_reversal_fix_20260929",
+  "name": "r2b4_p1_ekf_stationary_covariance_fix_20260930",
   "base_repo": "Francigofree/r2b4",
-  "base_commit": "3df5545081f842f2440dac44b2740c519b3aba73",
-  "severity": "P0",
-  "root_cause": "L11 conflates a partial, live GPIO edge-history reversal fit with missing encoder feedback and therefore ignores L9's finite velocity transition deadline.",
+  "base_commit": "09c514e7149b469a7ca768cce79919faa60af598",
+  "severity": "P1",
+  "root_cause": "The EKF applies the full moving process-noise model every control tick even when trusted encoder and gyro evidence jointly prove standstill; stationary gyro-bias state adaptation also lacked the matching covariance transform.",
   "changed_files": [
-    "v3/layers/l11_actuator_control.py"
+    "v3/layers/l3_state_estimation.py",
+    "conf/vezerles.json"
   ],
   "added_files": [
-    "tests/feature/test_v3_l11_reversal_reacquisition.py"
+    "tests/feature/test_v3_stationary_covariance.py"
   ],
-  "config_changes": [],
-  "encoder_backend_changes": [],
+  "config_changes": {
+    "layers.estimation.stationary_prediction_hold_ns": 50000000
+  },
   "safety_invariants": [
-    "trust==0/no-edge feedback keeps the original 250 ms fail-closed watchdog",
-    "partial trust is not promoted to PI control",
-    "transition grace is finite and owned by the original L9 deadline",
-    "grace disappears when current live edge-reacquisition evidence disappears"
+    "moving-mode process noise is unchanged",
+    "fresh non-stationary wheel or gyro-rate evidence revokes stationary mode immediately",
+    "stationary authority expires 50 ms after the last joint evidence",
+    "gyro-bias process noise remains active during stationary prediction",
+    "existing ZUPT, NIS, LiDAR and localization fail-closed gates remain active"
   ]
 }

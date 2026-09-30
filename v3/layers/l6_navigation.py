@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Protocol
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest, TrajectoryRolloutResult
-from v3.contracts.async_runtime import source_is_stale
+from v3.contracts.temporal import source_is_stale
 from v3.wheel_motion import WheelMotionLimits
 
 from v3.contracts import (

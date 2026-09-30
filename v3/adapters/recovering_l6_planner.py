@@ -19,8 +19,8 @@ from v3.async_capability import (
     CapabilityState,
     TransportSemantics,
     WorkerIdentity,
-    source_is_stale,
 )
+from v3.contracts.temporal import source_is_stale
 from v3.contracts.planner import PlannerCompletion, TrajectoryRolloutRequest
 from v3.config_types import PlannerProcessConfig
 from v3.layers.l6_navigation import NavigationConfig

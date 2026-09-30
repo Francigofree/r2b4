@@ -1,236 +1,26 @@
-diff --git a/v3/layers/l11_actuator_control.py b/v3/layers/l11_actuator_control.py
---- a/v3/layers/l11_actuator_control.py
-+++ b/v3/layers/l11_actuator_control.py
-@@ -10,6 +10,17 @@
-         # confidence-scaled proportional feedback and freeze the integral.
-         missing_edge_feedback = ((required_left and left_measured is None)
-                                  or (required_right and right_measured is None))
-+        feedback_values = {field.key: field.value for field in feedback.values}
-+        bounded_edge_reacquisition = (
-+            missing_edge_feedback
-+            and self._missing_feedback_is_bounded_edge_reacquisition(
-+                feedback_values,
-+                required_left=required_left,
-+                required_right=required_right,
-+                left_measured=left_measured,
-+                right_measured=right_measured,
-+            )
-+        )
-         for side, measured, required in (("left", left_measured, required_left),
-                                          ("right", right_measured, required_right)):
-             quality = 0.0 if measured is None else velocity_quality(measured, self._speed_map.minimum_continuous_speed_mps)
-@@ -35,18 +46,29 @@
-         )
- 
-         uncertain = left_uncertain or right_uncertain
-+        transition_feedback_bounded = (
-+            not missing_edge_feedback or bounded_edge_reacquisition
-+        )
-         if uncertain:
-             # The measured wheel follows the command with delay. Keep the
-             # original finite L9 deadline until feedback catches up; never
--            # renew it when targets or planner proposals change.
--            if self._feedback_transition_until_ns is None and not missing_edge_feedback:
-+            # renew it when targets or planner proposals change. A partial,
-+            # clean GPIO edge fit is live reversal evidence, not a silent
-+            # encoder; it receives the same finite transition budget.
-+            if (
-+                self._feedback_transition_until_ns is None
-+                and transition_feedback_bounded
-+            ):
-                 self._feedback_transition_until_ns = wheels.velocity_transition_until_ns
-             self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
-                 "feedback",
-                 self._feedback_uncertain_since_ns,
-                 wheels.context.monotonic_ns,
--                transition_until_ns=(self._feedback_transition_until_ns
--                                     if not missing_edge_feedback else None),
-+                transition_until_ns=(
-+                    self._feedback_transition_until_ns
-+                    if transition_feedback_bounded
-+                    else None
-+                ),
-             )
-             self._transient_stale_ticks += 1
-             self._left_pi.reset()
-@@ -75,6 +97,50 @@
-         # both global and per-wheel trust explicitly.
-         return 1.0
- 
-+    @classmethod
-+    def _missing_feedback_is_bounded_edge_reacquisition(
-+        cls,
-+        values: Mapping[str, object],
-+        *,
-+        required_left: bool,
-+        required_right: bool,
-+        left_measured: float | None,
-+        right_measured: float | None,
-+    ) -> bool:
-+        """Recognize live, partial reversal fits without blessing silence.
-+
-+        NativeCounterEncoderBackend deliberately withholds a control-grade
-+        velocity while a new-direction GPIO edge fit is still below full trust.
-+        That is bounded reacquisition evidence when the counter diagnostics are
-+        clean. It is distinct from trust==0/TICK_SNAPSHOT/no-edge feedback.
-+        """
-+
-+        missing_sides = tuple(
-+            side
-+            for side, required, measured in (
-+                ("left", required_left, left_measured),
-+                ("right", required_right, right_measured),
-+            )
-+            if required and measured is None
-+        )
-+        if not missing_sides:
-+            return False
-+        if (
-+            values.get("measurement_stale") is not False
-+            or values.get("measurement_timing_valid") is not True
-+            or values.get("rejection_code") != "BASELINE"
-+            or not cls._counter_diagnostics_are_clean(values)
-+        ):
-+            return False
-+
-+        for side in missing_sides:
-+            trust = cls._per_wheel_trust(values, side)
-+            if not 0.0 < trust < 1.0:
-+                return False
-+            if values.get(f"{side}_estimation_timebase") != "GPIO_EDGE_HISTORY":
-+                return False
-+        return True
-+
-     @staticmethod
-     def _required_feedback_value(
-         values: Mapping[str, object],
-diff --git a/tests/feature/test_v3_l11_reversal_reacquisition.py b/tests/feature/test_v3_l11_reversal_reacquisition.py
-new file mode 100644
---- /dev/null
-+++ b/tests/feature/test_v3_l11_reversal_reacquisition.py
-@@ -0,0 +1,125 @@
-+"""Regression tests for bounded L11 encoder reversal reacquisition."""
-+
-+import pytest
-+
-+from rig import resolved_config
-+from v3.contracts import (
-+    AdmittedFrame,
-+    DataField,
-+    Observation,
-+    TickContext,
-+    WheelVelocitySetpoint,
-+)
-+from v3.layers.l11_actuator_control import WheelActuatorController
-+
-+
-+def _feedback(
-+    tick: int,
-+    *,
-+    left_trust: float,
-+    right_trust: float = 1.0,
-+    left_timebase: str | None = "GPIO_EDGE_HISTORY",
-+    right_timebase: str | None = "GPIO_EDGE_HISTORY",
-+    left_mps: float = 0.0,
-+    right_mps: float = -0.1738342952215519,
-+) -> AdmittedFrame:
-+    context = TickContext(tick, 1_000_000_000 + tick * 20_000_000)
-+    values = {
-+        "left_mps": left_mps,
-+        "right_mps": right_mps,
-+        "trust": min(left_trust, right_trust),
-+        "measurement_timing_valid": True,
-+        "measurement_stale": False,
-+        "rejection_code": "BASELINE",
-+        "left_measurement_trust": left_trust,
-+        "right_measurement_trust": right_trust,
-+        "left_estimation_timebase": left_timebase,
-+        "right_estimation_timebase": right_timebase,
-+        "left_counter_running": True,
-+        "right_counter_running": True,
-+        "left_read_error_delta": 0,
-+        "right_read_error_delta": 0,
-+        "left_invalid_alert_delta": 0,
-+        "right_invalid_alert_delta": 0,
-+    }
-+    observation = Observation(
-+        "wheel_velocity",
-+        "ENCODER",
-+        tick,
-+        context.monotonic_ns,
-+        tuple(DataField(key, value) for key, value in values.items()),
-+    )
-+    return AdmittedFrame(context, (observation,), ())
-+
-+
-+def test_partial_gpio_reversal_fit_uses_original_transition_deadline():
-+    """Captured-style partial edge fits stay feed-forward until L9's finite deadline."""
-+
-+    config = resolved_config().runtime.composition.live_control.control
-+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
-+    transition_until_ns = 1_800_000_000
-+    reference = -0.054229311
-+
-+    # 0.23795515 is the left-wheel trust captured at the 22:11 L11 fault.
-+    # The current production estimator intentionally publishes zero until the
-+    # reversal-bounded edge fit reaches full trust; L11 must not confuse this
-+    # live edge reacquisition with a silent encoder.
-+    for tick in range(40):
-+        frame = _feedback(tick, left_trust=0.23795515)
-+        wheels = WheelVelocitySetpoint(
-+            frame.context,
-+            reference,
-+            reference,
-+            velocity_transition_until_ns=transition_until_ns,
-+        )
-+        output = controller(wheels, frame)
-+        assert output.left_normalized == pytest.approx(
-+            config.speed_map.lookup("left", reference)[0]
-+        )
-+        assert output.right_normalized == pytest.approx(
-+            config.speed_map.lookup("right", reference)[0]
-+        )
-+
-+    # The grace is finite. At the original L9 transition deadline unresolved
-+    # uncertainty still fails closed.
-+    frame = _feedback(40, left_trust=0.23795515)
-+    wheels = WheelVelocitySetpoint(
-+        frame.context,
-+        reference,
-+        reference,
-+        velocity_transition_until_ns=transition_until_ns,
-+    )
-+    with pytest.raises(ValueError, match="feedback remained uncertain too long"):
-+        controller(wheels, frame)
-+
-+
-+def test_reversal_grace_disappears_when_edge_evidence_disappears():
-+    """One earlier partial fit cannot mask a later silent encoder."""
-+
-+    config = resolved_config().runtime.composition.live_control.control
-+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
-+    transition_until_ns = 1_800_000_000
-+    reference = -0.054229311
-+    fault_tick = None
-+
-+    for tick in range(30):
-+        live_edge_reacquisition = tick < 5
-+        frame = _feedback(
-+            tick,
-+            left_trust=0.23795515 if live_edge_reacquisition else 0.0,
-+            left_timebase="GPIO_EDGE_HISTORY" if live_edge_reacquisition else None,
-+        )
-+        wheels = WheelVelocitySetpoint(
-+            frame.context,
-+            reference,
-+            reference,
-+            velocity_transition_until_ns=transition_until_ns,
-+        )
-+        try:
-+            controller(wheels, frame)
-+        except ValueError as exc:
-+            assert "feedback remained uncertain too long" in str(exc)
-+            fault_tick = tick
-+            break
-+
-+    assert fault_tick == 13  # 260 ms from the original uncertainty start.
+diff --git a/conf/vezerles.json b/conf/vezerles.json
+--- a/conf/vezerles.json
++++ b/conf/vezerles.json
+@@
+       "minimum_measurement_quality": 0.05,
+       "covariance_min_diagonal": 1e-08,
+       "process_noise_reference_dt_s": 0.02,
++      "stationary_prediction_hold_ns": 50000000,
+       "quality": {
+
+diff --git a/v3/layers/l3_state_estimation.py b/v3/layers/l3_state_estimation.py
+--- a/v3/layers/l3_state_estimation.py
++++ b/v3/layers/l3_state_estimation.py
+@@
+     quality: LocalizationQualityConfig
+     minimum_reliable_wheel_speed_mps: float = 0.15
++    stationary_prediction_hold_ns: int = 50_000_000
+
+# The complete executable change is applied by apply_upgrade.py using exact
+# pinned-HEAD anchors. It adds:
+# - checkpointed 50 ms stationary-evidence authority;
+# - immediate revocation on fresh motion evidence;
+# - zero-motion X/Y/YAW/V prediction while stationary;
+# - gyro-bias-only process noise while stationary;
+# - covariance-consistent stationary gyro-bias adaptation;
+# - tests/feature/test_v3_stationary_covariance.py.

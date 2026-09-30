@@ -1,0 +1,62 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "19e6ae9f9efd3f287fd4b94c0719ee6c9c93ea49af1d5845caef237355998851",
+      "size_bytes": 9341
+    },
+    "diagnosis.json": {
+      "sha256": "859d4ec2d43b3de2ef6545d129f49c115e30b0dd2d802af2e388c03a6a3c462e",
+      "size_bytes": 116108
+    },
+    "gui_manifest.json": {
+      "sha256": "12cfd2ee1bc9f3a6acd07af46817f8bdf35f57dec65983384a877a95daf69c12",
+      "size_bytes": 61680
+    },
+    "inspect.json": {
+      "sha256": "96993fc35014fa7749cb2705012f8f59ba14c742b62eb857b2260fae2f234599",
+      "size_bytes": 6392
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "017341236216f3ded80de1d8bb6ae8349062b0a96896d7c0e6e3c0a127220a56",
+      "size_bytes": 520326
+    },
+    "replay_result.json": {
+      "sha256": "6987cf717064bd70589210afc32defb123b0244710b857dd4f2db4bd83bd4c49",
+      "size_bytes": 263523
+    },
+    "timeline.ndjson": {
+      "sha256": "ddad8a7cfa183460eb08db2b9d01c8eea83d77fba1ee11895d888b326b43a892",
+      "size_bytes": 2519912
+    },
+    "triage.json": {
+      "sha256": "c815e97140dbf87015834906b20ee53e81256783a263da3110f6d9043af4097b",
+      "size_bytes": 61054
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_102335_8358_capture.mcap",
+    "sha256": "179bb27995801ded5221778d076c426d660a3543d9b6baad7aeeb072a5c84ca7"
+  },
+  "behavior_status": "NOMINAL",
+  "created_at_utc": "2026-09-30T08:24:26Z",
+  "diagnosis_status": "FAIL",
+  "evidence_sha256": "19809fdad5869bab46e9acbae7218083aab145e8ea5e24ec49561ea0ed6141d7",
+  "evidence_status": "FAIL",
+  "root_cause": {
+    "confidence": "EVIDENCE_BLOCKED",
+    "kind": "CAPTURE_INCOMPLETE",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete"
+  },
+  "run_id": "v3_20260930_102335_8358_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FAIL"
+}

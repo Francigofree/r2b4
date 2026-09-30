@@ -107,6 +107,35 @@ def _read(path: Path) -> dict:
     return value
 
 
+def _validate_temporal_invariants(*, tick_ns, control, sensor_policy, lidar) -> None:
+    """Fail before hardware opens when temporal authorities conflict."""
+    if tick_ns > min(
+        control.admission.max_sample_age_ns,
+        control.estimation.max_dt_ns,
+        control.wheel_pi.max_control_gap_ns,
+        control.motion_realization.max_control_gap_ns,
+    ):
+        raise ValueError("control period exceeds freshness/control gap")
+    if control.async_l6.request_timeout_ns >= control.async_l6.transport_timeout_ns:
+        raise ValueError("planner deadline exceeds transport watchdog")
+    if lidar.maximum_result_age_ns != sensor_policy.lidar_maximum_result_age_ns:
+        raise ValueError("LiDAR transport/source freshness limits conflict")
+    if (
+        sensor_policy.encoder_maximum_estimation_window_ns
+        > control.wheel_pi.max_feedback_uncertainty_ns
+    ):
+        raise ValueError(
+            "encoder estimation window exceeds actuator feedback uncertainty budget"
+        )
+    if control.wheel_pi.max_feedback_age_ns > control.admission.max_sample_age_ns:
+        raise ValueError("actuator feedback age exceeds admission freshness")
+    if (
+        control.navigation.max_world_freshness_ns
+        != control.motion_realization.max_world_freshness_ns
+    ):
+        raise ValueError("navigation/motion world freshness mismatch")
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeEdgeConfig:
     command_ingress: CommandIngressPolicy
@@ -327,19 +356,16 @@ class ConfigResolver:
             maximum_result_age_ns=round(_typed(float,lr["matcher_max_result_age_s"],"matcher result age")*1e9),
             matcher_start_method=lr["matcher_process_start_method"], input_queue_capacity=lr["latest_scan_queue_size"], result_queue_capacity=lr["latest_result_queue_size"])
         tick_ns = _typed(int,runtime["tick_period_ns"],"runtime.tick_period_ns")
-        if tick_ns > min(resolved_control.admission.max_sample_age_ns, resolved_control.estimation.max_dt_ns,
-                         resolved_control.wheel_pi.max_control_gap_ns, resolved_control.motion_realization.max_control_gap_ns):
-            raise ValueError("control period exceeds freshness/control gap")
+        _validate_temporal_invariants(
+            tick_ns=tick_ns,
+            control=resolved_control,
+            sensor_policy=policy,
+            lidar=lidar,
+        )
         if p["nyomtav_szelesseg_m"] > p["footprint_width_m"]:
             raise ValueError("track width exceeds physical footprint width")
         if local["max_range_m"] > pose.max_valid_distance_m or local["min_range_m"] < pose.min_valid_distance_m:
             raise ValueError("local perception range exceeds LiDAR measurement range")
-        if resolved_control.async_l6.request_timeout_ns > resolved_control.async_l6.transport_timeout_ns:
-            raise ValueError("planner deadline exceeds transport watchdog")
-        if lidar.maximum_result_age_ns != policy.lidar_maximum_result_age_ns:
-            raise ValueError("LiDAR transport/source freshness limits conflict")
-        if policy.encoder_maximum_estimation_window_ns > resolved_control.wheel_pi.max_feedback_uncertainty_ns:
-            raise ValueError("encoder estimation window exceeds actuator feedback uncertainty budget")
         physical = ResidentPhysicalRuntimeConfig(ResidentPhysicalControlConfig(
             ResidentLiveControlConfig(resolved_control, runtime["max_preflight_age_ns"],runtime["required_lidar_preflight_revisions"]), motor_output),
             sensors,tick_ns)

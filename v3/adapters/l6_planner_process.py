@@ -17,6 +17,7 @@ from v3.async_capability import (
     request_result_snapshot,
 )
 from v3.contracts.planner import PlannerCompletion
+from v3.contracts.temporal import source_is_stale
 from v3.layers.l6_navigation import (
     NavigationConfig,
     TrajectoryRolloutComputer,
@@ -323,7 +324,7 @@ class ProcessTrajectoryRolloutBackend:
                 # Superseding requests must not reset a hung worker's watchdog.
                 running = self._running
                 if (visible_ns is not None and running is not None
-                        and visible_ns - running.submit_ns > transport_timeout_ns):
+                        and source_is_stale(visible_ns, running.submit_ns, transport_timeout_ns)):
                     self._collector_error = "ASYNC_L6_TRANSPORT_TIMEOUT"
                     self._error_count += 1
                     raise RuntimeError(self._collector_error)

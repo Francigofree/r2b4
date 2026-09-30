@@ -7,7 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from v3.contracts.async_runtime import CompletionTiming, WorkerIdentity, source_is_stale
+from v3.contracts.async_runtime import CompletionTiming, WorkerIdentity
+from v3.contracts.temporal import source_age_ns, source_is_stale
 
 
 class TransportSemantics(str, Enum):
@@ -93,7 +94,7 @@ class CapabilitySnapshot:
     def age_ns(self) -> int | None:
         if self.source_monotonic_ns is None:
             return None
-        return max(0, self.observed_monotonic_ns - self.source_monotonic_ns)
+        return source_age_ns(self.observed_monotonic_ns, self.source_monotonic_ns)
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
@@ -194,9 +195,10 @@ def request_result_snapshot(
     if pending_identity is not None:
         request_id = pending_identity.request_id
         source_ns = pending_identity.source_context.monotonic_ns
-        pending_age = max(0, observed_monotonic_ns - (
-            source_ns if pending_submit_ns is None else pending_submit_ns
-        ))
+        pending_age = source_age_ns(
+            observed_monotonic_ns,
+            source_ns if pending_submit_ns is None else pending_submit_ns,
+        )
     return CapabilitySnapshot(
         name=name,
         semantics=TransportSemantics.REQUEST_RESULT,
