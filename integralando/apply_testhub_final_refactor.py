@@ -2,7 +2,7 @@
 """Transactional R2B4 Test Hub final refactor.
 
 Source authority: Francigofree/r2b4
-Expected HEAD: 3ee4e9caf26bf191f6c966d7264d6c8b51e90aed
+Expected HEAD: aa882aa3a2202b665ae0be54858336e8cc1099c0
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-EXPECTED_HEAD = "3ee4e9caf26bf191f6c966d7264d6c8b51e90aed"
+EXPECTED_HEAD = "aa882aa3a2202b665ae0be54858336e8cc1099c0"
 PACKAGE_DIR = Path(__file__).resolve().parent
 PAYLOAD_DIR = PACKAGE_DIR / "files"
 
