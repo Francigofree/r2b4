@@ -1,0 +1,81 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "e9aea760c321b4845b9e84b56881302ef4bd403facbf2043c4f0ed39a9e48a13",
+      "size_bytes": 56163
+    },
+    "diagnosis.json": {
+      "sha256": "f834adf3b0210a9247be9aecee7f8585ff64fe90f22a3466e3b8115eda31e20b",
+      "size_bytes": 129084
+    },
+    "gui_manifest.json": {
+      "sha256": "82d74583b29497eb8aa6b8cf0495257bee78fb709eabb4f734b182682ebf130f",
+      "size_bytes": 72205
+    },
+    "inspect.json": {
+      "sha256": "4ebc040a034c7e3e62668c74e4918b8a33600d6acd22b32a72cb33011ef7665a",
+      "size_bytes": 6201
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "d07abd1aec6bcf5163b2e8e8bd6fcd0e66ea9892f14a6d4c6aaf50c444a3e881",
+      "size_bytes": 129373
+    },
+    "replay_result.json": {
+      "sha256": "4cff77cdf277de0ffa4d68c1553661126b3fd665d6544faba8e71676049b79d6",
+      "size_bytes": 289810
+    },
+    "timeline.ndjson": {
+      "sha256": "16e0afd7f9ba654409da0fdc5c700b228f696252babfc84f1d2b1310f8d0dbb4",
+      "size_bytes": 987579
+    },
+    "triage.json": {
+      "sha256": "cc964f9a4ce74f2fe2f4d3f630e5108f741314768901696e95814db203028687",
+      "size_bytes": 71464
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_203738_34408_capture.mcap",
+    "sha256": "49f8453164ca904c524f5b04e672e23ca945473c3f6027c94b08e9cd36bc8f11"
+  },
+  "behavior_status": "NOMINAL",
+  "created_at_utc": "2026-09-30T18:38:09Z",
+  "diagnosis_status": "FINDING",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_sha256": "91ef15786776a69ef5443b773a203055ca75be5f9565c83e3eaeab13f6666597",
+  "evidence_status": "PASS",
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "POLICY_VERDICT",
+    "evidence_ids": [
+      "fault-layer-305"
+    ],
+    "evidence_strength": "DIRECT",
+    "kind": "PRODUCTION_FAULT",
+    "layer": "L11",
+    "reason": "L11_ERROR",
+    "selection_basis": "DIRECT_CAPTURE_OR_PRODUCTION_EVIDENCE",
+    "tick_id": 305
+  },
+  "run_id": "v3_20260930_203738_34408_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}

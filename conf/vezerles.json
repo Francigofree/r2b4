@@ -375,8 +375,8 @@
       "planning_bucket_size_m": 0.3,
       "local_escape_trigger_clearance_m": 0.12,
       "local_escape_reverse_max_v_mps": 0.15,
-      "local_goal_novelty_weight": 0.35,
-      "local_goal_clearance_weight": 0.45,
+      "local_goal_novelty_weight": 0.45,
+      "local_goal_clearance_weight": 0.1,
       "local_goal_forward_weight": 0.2,
       "minimum_planning_speed_mps": 0.15,
       "localization_recovery_timeout_ns": 5000000000,
@@ -392,9 +392,9 @@
       "speed_clearance_barrier_power": 2.0,
       "speed_clearance_penalty_weight": 0.18,
       "explore_local_goal_min_distance_m": 0.45,
-      "explore_local_goal_max_distance_m": 0.9,
+      "explore_local_goal_max_distance_m": 0.75,
       "explore_local_goal_distance_samples": 4,
-      "explore_local_goal_distance_weight": 0.15
+      "explore_local_goal_distance_weight": 0.05
     },
     "async_l6": {
       "enabled": true,
@@ -441,7 +441,7 @@
       "movement_epsilon": 1e-06
     },
     "motion_selection": {
-      "continuity_score_band": 0.02,
+      "continuity_score_band": 0.008,
       "reversal_min_omega_rad_s": 0.05,
       "continuity_clearance_drop_tolerance_m": 0.04
     }
