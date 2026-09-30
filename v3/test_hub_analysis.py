@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
+from .device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from .mcap_reader import EVENT_TOPIC, McapReader, TICK_TOPIC
 from .test_hub_profiles import BEHAVIORAL, capture_analysis_profile
 
@@ -134,6 +135,9 @@ def analyze_capture(
     tick_deltas: list[int] = []
     safety_counts = {"ALLOW": 0, "STOP": 0, "FAULT": 0, "UNKNOWN": 0}
     device_non_ok_count = 0
+    critical_device_non_ok_count = 0
+    optional_device_non_ok_count = 0
+    previous_critical_device_signature: tuple[tuple[str, str, str], ...] = ()
     l2_rejection_count = 0
     l2_rejection_reasons: dict[str, int] = {}
     path_length_m = 0.0
@@ -221,20 +225,56 @@ def analyze_capture(
             non_ok = row.get("device_non_ok")
             if isinstance(non_ok, list) and non_ok:
                 device_non_ok_count += len(non_ok)
-                append_incident(
-                    incidents,
-                    Incident(
-                        f"device-{tick_id}",
-                        "HIGH",
-                        "DEVICE_HEALTH",
-                        tick_id,
-                        monotonic_ns,
-                        "L1",
-                        "DEVICE_HEALTH_NON_OK",
-                        {"devices": non_ok[:8]},
-                    ),
-                    max_incidents,
+                critical_non_ok = [
+                    item
+                    for item in non_ok
+                    if isinstance(item, Mapping)
+                    and str(item.get("device_id") or "") in PRODUCTION_CRITICAL_DEVICE_IDS
+                ]
+                optional_non_ok = [
+                    item
+                    for item in non_ok
+                    if isinstance(item, Mapping)
+                    and str(item.get("device_id") or "") not in PRODUCTION_CRITICAL_DEVICE_IDS
+                ]
+                critical_device_non_ok_count += len(critical_non_ok)
+                optional_device_non_ok_count += len(optional_non_ok)
+                signature = tuple(
+                    sorted(
+                        (
+                            str(item.get("device_id") or ""),
+                            str(item.get("state") or ""),
+                            str(item.get("reason") or ""),
+                        )
+                        for item in critical_non_ok
+                    )
                 )
+                # Production safety/activation owns the critical-device policy.
+                # Optional camera/person-detector health remains observable, but
+                # must not consume the actionable incident budget.  Identical
+                # persistent critical states form one episode instead of one
+                # HIGH incident per control tick.
+                if critical_non_ok and signature != previous_critical_device_signature:
+                    append_incident(
+                        incidents,
+                        Incident(
+                            f"device-{tick_id}",
+                            "HIGH",
+                            "DEVICE_HEALTH",
+                            tick_id,
+                            monotonic_ns,
+                            "L1",
+                            "DEVICE_HEALTH_NON_OK",
+                            {
+                                "devices": critical_non_ok[:8],
+                                "policy": "PRODUCTION_CRITICAL_DEVICE_IDS",
+                            },
+                        ),
+                        max_incidents,
+                    )
+                previous_critical_device_signature = signature
+            else:
+                previous_critical_device_signature = ()
 
             rejected = row.get("l2_rejected")
             if isinstance(rejected, list) and rejected:
@@ -503,6 +543,10 @@ def analyze_capture(
         "safety": safety_counts,
         "sensors": {
             "device_non_ok_count": device_non_ok_count,
+            "critical_device_non_ok_count": critical_device_non_ok_count,
+            "optional_device_non_ok_count": optional_device_non_ok_count,
+            "production_critical_device_ids": sorted(PRODUCTION_CRITICAL_DEVICE_IDS),
+            "device_health_incident_policy": "PRODUCTION_CRITICAL_ONLY_EPISODE_EDGE",
             "l2_rejection_count": l2_rejection_count,
             "l2_rejection_reasons": dict(sorted(l2_rejection_reasons.items())),
             "l2_duplicate_count": l2_rejection_reasons.get("DUPLICATE", 0),

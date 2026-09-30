@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .pytest_profiles import pytest_profile_names
 from .test_hub_analysis import analyze_capture
+from .test_hub_diagnostic_coverage import write_diagnostic_coverage
 from .test_hub_motion_quality import (
     compare_motion_quality_sources,
     write_motion_quality,
@@ -129,6 +130,23 @@ def run_default(
     behavioral = isinstance(profile, Mapping) and profile.get("name") == BEHAVIORAL
 
     reader = McapReader(capture)
+    diagnostic_coverage_path = destination / "diagnostic_schema_coverage.json"
+    try:
+        diagnostic_coverage = write_diagnostic_coverage(reader, diagnostic_coverage_path)
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        # Coverage is derived-only observability.  Failure must be explicit but
+        # must never rewrite canonical replay/robot status.
+        diagnostic_coverage = {
+            "schema": "R2B4_TEST_HUB_DIAGNOSTIC_COVERAGE_V1",
+            "policy": "DESCRIPTIVE_SCHEMA_COVERAGE_ONLY_NO_ROBOT_AUTHORITY",
+            "status": "ERROR",
+            "error": str(exc),
+            "schema_drift_detected": None,
+            "root_cause_inferred": False,
+            "sources": {},
+        }
+        _write_json(diagnostic_coverage_path, diagnostic_coverage)
+
     behavior = build_behavior_evidence(reader, destination, triage=triage)
     hri = build_hri_evidence(
         reader, destination,
@@ -321,6 +339,14 @@ def run_default(
         "replay_sweep": "replay_sweep.json" if sweep is not None else None,
         "pytest_result": "pytest_result.json" if pytest_payload is not None else None,
         "data_coverage": view.get("data_coverage"),
+        "diagnostic_schema_coverage": {
+            "status": diagnostic_coverage.get("status"),
+            "summary": diagnostic_coverage_path.name,
+            "registered_contract_count": diagnostic_coverage.get("registered_contract_count"),
+            "observed_source_count": diagnostic_coverage.get("observed_source_count"),
+            "schema_drift_detected": diagnostic_coverage.get("schema_drift_detected"),
+            "root_cause_inferred": False,
+        },
         "phases": view.get("phases"),
         "incident_groups": incident_groups,
         "incident_slices": exact_slices,
@@ -383,6 +409,8 @@ def run_default(
         "pytest_status": pytest_payload.get("status") if pytest_payload else "OFF",
         "motion_quality_status": motion_quality.get("status"),
         "localization_quality_status": localization_quality.get("status"),
+        "diagnostic_coverage_status": diagnostic_coverage.get("status"),
+        "diagnostic_schema_drift_detected": diagnostic_coverage.get("schema_drift_detected"),
         "task_evidence_episode_count": task_evidence.get("episode_count"),
         "motion_tuning_segment_count": motion_tuning.get("segment_count"),
         "hri_event_count": hri.get("event_count"),
