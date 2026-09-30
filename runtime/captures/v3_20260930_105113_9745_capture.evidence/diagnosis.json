@@ -1,0 +1,4518 @@
+{
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "behavior_status": "DEGRADED",
+  "capture_integrity": {
+    "capacity_eviction_count": 0,
+    "captured_tick_sequence_gaps": [],
+    "complete": true,
+    "core_capacity_eviction_count": 0,
+    "digest_scope": "all MCAP messages before capture_finalized event",
+    "ingress_drop_count": 0,
+    "integrity_reasons": [],
+    "integrity_warnings": [],
+    "message_stream_sha256": "3e5b3ae031bea3784a6fe49144c56d48428085f2fdd5c697ec99528011c6e75b",
+    "observation_subscription": {
+      "__type__": "SubscriptionSnapshot",
+      "accepted_count": 1135,
+      "capacity": 4096,
+      "closed": true,
+      "consumed_count": 1135,
+      "first_lost_sequence": null,
+      "high_water_mark": 540,
+      "last_lost_sequence": null,
+      "lost_count": 0,
+      "matched_count": 1135,
+      "mode": "RELIABLE",
+      "name": "capture-process",
+      "queued": 0,
+      "required": true,
+      "superseded_count": 0
+    },
+    "post_window_complete": true,
+    "pre_window_complete": true,
+    "raw_capacity_eviction_count": 0,
+    "raw_evidence_complete": true,
+    "raw_evidence_requested": true,
+    "raw_integrity_reasons": [],
+    "raw_lidar_duplicate_count": 0,
+    "raw_lidar_expected_scan_count": 245,
+    "raw_lidar_gap_missing_revisions": [],
+    "raw_lidar_loss_fraction": 0.0,
+    "raw_lidar_loss_missing_revisions": [],
+    "raw_lidar_loss_tolerance_fraction": 0.05,
+    "raw_lidar_loss_within_tolerance": false,
+    "raw_lidar_max_consecutive_missing": 0,
+    "raw_lidar_max_consecutive_missing_allowed": 2,
+    "raw_lidar_missing_count": 0,
+    "raw_lidar_missing_revisions": [],
+    "raw_lidar_out_of_order_count": 0,
+    "raw_lidar_revision_gaps": [],
+    "raw_lidar_truncated_count": 0,
+    "raw_transport_end": true,
+    "raw_transport_produced_count": 245,
+    "raw_transport_superseded_count": 0,
+    "replay_complete": true,
+    "replay_integrity_reasons": [],
+    "sample_complete": true,
+    "session_start_short_pre_window": false,
+    "terminal_short_post_window": false,
+    "tick_sample_hz": 50
+  },
+  "capture_status": "PASS",
+  "diagnosis_status": "FINDING",
+  "evidence_status": "PASS",
+  "first_divergence": null,
+  "first_live_incident": {
+    "device_id": "CAMERA_FRONT",
+    "evidence": {
+      "device_health": [
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "WHEEL_ENCODERS",
+          "reason": null,
+          "state": "OK"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "BNO055_IMU",
+          "reason": null,
+          "state": "OK"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "RPLIDAR_C1",
+          "reason": null,
+          "state": "OK"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "CAMERA_FRONT",
+          "reason": "CAMERA_NO_FRAME",
+          "state": "UNKNOWN"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "PERSON_DETECTOR_FRONT",
+          "reason": "PERSON_DETECTOR_NO_RESULT",
+          "state": "UNKNOWN"
+        }
+      ],
+      "input_reference": "ticks[0].inputs",
+      "record_type": "closed_input_tick",
+      "sensor_samples": [
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988664805134,
+          "device_id": "WHEEL_ENCODERS",
+          "kind": "wheel_velocity",
+          "sequence": 118,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "left_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "trust",
+              "value": 1.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "measurement_stale",
+              "value": false
+            },
+            {
+              "__type__": "DataField",
+              "key": "measurement_timing_valid",
+              "value": true
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_velocity_quality",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_velocity_quality",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "rejection_code",
+              "value": "NONE"
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_left_pulse_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_right_pulse_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "sample_interval_ns",
+              "value": 20001543
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_counter_running",
+              "value": true
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_counter_running",
+              "value": true
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_read_errors",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_read_errors",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_read_error_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_read_error_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_invalid_alerts",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_invalid_alerts",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_invalid_alert_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_invalid_alert_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "computed_left_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "computed_right_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_left_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_right_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_left_distance_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_right_distance_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_distance_delta_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_distance_delta_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_window_ns",
+              "value": 160000000
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_window_ns",
+              "value": 160000000
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_timebase",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_timebase",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_start_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_end_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_start_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_end_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_edge_history_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_edge_history_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_left_interval_ns",
+              "value": 20001543
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_right_interval_ns",
+              "value": 20001543
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_velocity_uncertainty_mps",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_velocity_uncertainty_mps",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_measurement_trust",
+              "value": 1.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_measurement_trust",
+              "value": 1.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "maximum_abs_velocity_mps",
+              "value": 1.5
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_quadrature_rejections",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_quadrature_rejections",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_quadrature_rejection_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_quadrature_rejection_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_direction_change_candidates",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_direction_change_candidates",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_direction_changes_confirmed",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_direction_changes_confirmed",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_confirmed_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_confirmed_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_pending_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_pending_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_pending_direction_edges",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_pending_direction_edges",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_last_a_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_last_a_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_last_b_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_last_b_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_last_b_level",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_last_b_level",
+              "value": null
+            }
+          ]
+        },
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988618975157,
+          "device_id": "RPLIDAR_C1",
+          "kind": "lidar_health",
+          "sequence": 9,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "age_ns",
+              "value": 55383738
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_count",
+              "value": 355
+            },
+            {
+              "__type__": "DataField",
+              "key": "scan_start_monotonic_ns",
+              "value": 3988578822748
+            },
+            {
+              "__type__": "DataField",
+              "key": "scan_end_monotonic_ns",
+              "value": 3988659127566
+            },
+            {
+              "__type__": "DataField",
+              "key": "measurement_monotonic_ns",
+              "value": 3988618975157
+            }
+          ]
+        },
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988618975157,
+          "device_id": "RPLIDAR_C1",
+          "kind": "lidar_safety_clearance",
+          "sequence": 9,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "age_ns",
+              "value": 55383738
+            },
+            {
+              "__type__": "DataField",
+              "key": "front_clearance_m",
+              "value": 1.40775
+            },
+            {
+              "__type__": "DataField",
+              "key": "rear_clearance_m",
+              "value": 0.8445
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_clearance_m",
+              "value": 0.80025
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_clearance_m",
+              "value": 0.9235
+            },
+            {
+              "__type__": "DataField",
+              "key": "front_observation_count",
+              "value": 84
+            },
+            {
+              "__type__": "DataField",
+              "key": "rear_observation_count",
+              "value": 82
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_observation_count",
+              "value": 100
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_observation_count",
+              "value": 89
+            }
+          ]
+        },
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988618975157,
+          "device_id": "RPLIDAR_C1",
+          "kind": "lidar_local_points",
+          "sequence": 9,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "frame_id",
+              "value": "ROBOT_BASE"
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_count",
+              "value": 96
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_000_x_m",
+              "value": 2.3034644220855647
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_000_y_m",
+              "value": -0.9416389468294193
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_000_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_001_x_m",
+              "value": 2.263225414062624
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_001_y_m",
+              "value": -0.9672446886083503
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_001_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_002_x_m",
+              "value": 2.0999450102026804
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_002_y_m",
+              "value": -1.0164250853480865
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_002_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_003_x_m",
+              "value": 1.9488928448362193
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_003_y_m",
+              "value": -1.0956252743735824
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_003_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_004_x_m",
+              "value": 1.8546846295393717
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_004_y_m",
+              "value": -1.1603426164070694
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_004_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_005_x_m",
+              "value": 1.8456580680452792
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_005_y_m",
+              "value": -1.195009564128826
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_005_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_006_x_m",
+              "value": 1.7667156597916598
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_006_y_m",
+              "value": -1.3533536224678748
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_006_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_007_x_m",
+              "value": 1.7065532838797695
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_007_y_m",
+              "value": -1.3927610892680677
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_007_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_008_x_m",
+              "value": 1.6494177875768683
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_008_y_m",
+              "value": -1.4338170078587538
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_008_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_009_x_m",
+              "value": 1.0019232755649425
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_009_y_m",
+              "value": -0.988893225975998
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_009_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_010_x_m",
+              "value": 0.9244878024871603
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_010_y_m",
+              "value": -1.0329624221395768
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_010_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_011_x_m",
+              "value": 0.9068375928221286
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_011_y_m",
+              "value": -1.0431973172629265
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_011_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_012_x_m",
+              "value": 0.5761077549139013
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_012_y_m",
+              "value": -0.7275189720743125
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_012_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_013_x_m",
+              "value": 0.5145339879577427
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_013_y_m",
+              "value": -0.7668813632083528
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_013_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_014_x_m",
+              "value": 0.5032318700457105
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_014_y_m",
+              "value": -0.7758351934981405
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_014_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_015_x_m",
+              "value": 0.4659224273747635
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_015_y_m",
+              "value": -0.7979300042417307
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_015_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_016_x_m",
+              "value": 0.4532179635989329
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_016_y_m",
+              "value": -0.8046401229563663
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_016_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_017_x_m",
+              "value": 0.40343318861222816
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_017_y_m",
+              "value": -0.8334972479415697
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_017_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_018_x_m",
+              "value": 0.378246929713342
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_018_y_m",
+              "value": -0.84768940223553
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_018_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_019_x_m",
+              "value": 0.35370408843579737
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_019_y_m",
+              "value": -0.8638956347984411
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_019_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_020_x_m",
+              "value": 0.30198593641201205
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_020_y_m",
+              "value": -0.8920188096163445
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_020_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_021_x_m",
+              "value": 0.2762958006447968
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_021_y_m",
+              "value": -0.9081498736695671
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_021_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_022_x_m",
+              "value": 0.2357533163985182
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_022_y_m",
+              "value": -0.9282809037716441
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_022_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_023_x_m",
+              "value": 0.18118683663502433
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_023_y_m",
+              "value": -0.9600522539061054
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_023_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_024_x_m",
+              "value": 0.15381183707410717
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_024_y_m",
+              "value": -0.9815213542128813
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_024_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_025_x_m",
+              "value": 0.12484067538491359
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_025_y_m",
+              "value": -0.9987277185346558
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_025_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_026_x_m",
+              "value": 0.05362955589560902
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_026_y_m",
+              "value": -1.0451249306826622
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_026_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_027_x_m",
+              "value": 0.03593080133277122
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_027_y_m",
+              "value": -1.053637527812855
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_027_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_028_x_m",
+              "value": -0.013271668656005988
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_028_y_m",
+              "value": -1.0814185650390347
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_028_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_029_x_m",
+              "value": -0.08326088873453102
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_029_y_m",
+              "value": -1.120410582959272
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_029_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_030_x_m",
+              "value": -0.12070302355254099
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_030_y_m",
+              "value": -1.1454077189391012
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_030_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_031_x_m",
+              "value": -0.15976178556651652
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_031_y_m",
+              "value": -1.1691347962799663
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_031_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_032_x_m",
+              "value": -0.24460131786458045
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_032_y_m",
+              "value": -1.2209904822720405
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_032_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_033_x_m",
+              "value": -0.2899210428282333
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_033_y_m",
+              "value": -1.2464773770210953
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_033_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_034_x_m",
+              "value": -0.3622937690224797
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_034_y_m",
+              "value": -1.2859390440170506
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_034_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_035_x_m",
+              "value": -0.4688918339722143
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_035_y_m",
+              "value": -1.3403508675097626
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_035_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_036_x_m",
+              "value": -0.5922414262757514
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_036_y_m",
+              "value": -1.4704651153641368
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_036_quality",
+              "value": 6
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_037_x_m",
+              "value": -0.6228668730379711
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_037_y_m",
+              "value": -1.4808372997976178
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_037_quality",
+              "value": 3
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_038_x_m",
+              "value": -2.134438725652247
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_038_y_m",
+              "value": -0.6265553259178408
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_038_quality",
+              "value": 22
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_039_x_m",
+              "value": -1.0321722734734569
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_039_y_m",
+              "value": -0.012667295395434475
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_039_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_040_x_m",
+              "value": -1.0182454185362468
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_040_y_m",
+              "value": 0.0030545261406253925
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_040_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_041_x_m",
+              "value": -1.037166249808468
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_041_y_m",
+              "value": 0.03480276940472183
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_041_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_042_x_m",
+              "value": -1.0641863735319066
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_042_y_m",
+              "value": 0.0840452996247206
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_042_quality",
+              "value": 28
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_043_x_m",
+              "value": -1.5618241178982466
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_043_y_m",
+              "value": 0.24387699205001698
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_043_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_044_x_m",
+              "value": -1.0315349114523638
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_044_y_m",
+              "value": 0.24616250009894655
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_044_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_045_x_m",
+              "value": -1.030078041377203
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_045_y_m",
+              "value": 0.2625037688729536
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_045_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_046_x_m",
+              "value": -1.0278795102164469
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_046_y_m",
+              "value": 0.2787269496787086
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_046_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_047_x_m",
+              "value": -1.0278879838682304
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_047_y_m",
+              "value": 0.36494089263784174
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_047_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_048_x_m",
+              "value": -1.0354866894149723
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_048_y_m",
+              "value": 0.4039796604340624
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_048_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_049_x_m",
+              "value": -1.0100635628059789
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_049_y_m",
+              "value": 0.4487194687014288
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_049_quality",
+              "value": 29
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_050_x_m",
+              "value": -1.3224531945237168
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_050_y_m",
+              "value": 0.7396621599041119
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_050_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_051_x_m",
+              "value": -1.3012700071229961
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_051_y_m",
+              "value": 0.7541302066368366
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_051_quality",
+              "value": 43
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_052_x_m",
+              "value": -1.2412978709076863
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_052_y_m",
+              "value": 0.7865175431483047
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_052_quality",
+              "value": 43
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_053_x_m",
+              "value": -0.6983141691028455
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_053_y_m",
+              "value": 0.4749079607989347
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_053_quality",
+              "value": 15
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_054_x_m",
+              "value": -0.9691503702693458
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_054_y_m",
+              "value": 0.8475870514624384
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_054_quality",
+              "value": 43
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_055_x_m",
+              "value": -0.9586929150192168
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_055_y_m",
+              "value": 0.8646322308889235
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_055_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_056_x_m",
+              "value": -0.9633793778411717
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_056_y_m",
+              "value": 0.8954232166134386
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_056_quality",
+              "value": 22
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_057_x_m",
+              "value": -0.8912172127719119
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_057_y_m",
+              "value": 0.9892543301189358
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_057_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_058_x_m",
+              "value": -0.8552909905560541
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_058_y_m",
+              "value": 1.0064084081393816
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_058_quality",
+              "value": 25
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_059_x_m",
+              "value": -0.8040619123320903
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_059_y_m",
+              "value": 1.0402172867419874
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_059_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_060_x_m",
+              "value": -0.752277589052445
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_060_y_m",
+              "value": 1.0706309723753749
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_060_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_061_x_m",
+              "value": -0.4481592588981413
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_061_y_m",
+              "value": 0.6807189424893865
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_061_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_062_x_m",
+              "value": -0.4293766552723272
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_062_y_m",
+              "value": 0.6968342255566593
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_062_quality",
+              "value": 45
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_063_x_m",
+              "value": -0.4099042474924365
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_063_y_m",
+              "value": 0.7122159576895616
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_063_quality",
+              "value": 51
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_064_x_m",
+              "value": -0.3564844183146458
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_064_y_m",
+              "value": 0.7437280564822526
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_064_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_065_x_m",
+              "value": -0.33462096909037553
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_065_y_m",
+              "value": 0.7560055353931068
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_065_quality",
+              "value": 31
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_066_x_m",
+              "value": -0.3128324033550854
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_066_y_m",
+              "value": 0.7682487470937269
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_066_quality",
+              "value": 28
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_067_x_m",
+              "value": -0.25687045792782764
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_067_y_m",
+              "value": 0.7987105657520427
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_067_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_068_x_m",
+              "value": -0.21006959864567631
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_068_y_m",
+              "value": 0.7721857459347747
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_068_quality",
+              "value": 24
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_069_x_m",
+              "value": -0.19975711257907255
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_069_y_m",
+              "value": 0.7785314113599217
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_069_quality",
+              "value": 23
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_070_x_m",
+              "value": -0.15636039146314742
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_070_y_m",
+              "value": 0.8103017897558238
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_070_quality",
+              "value": 16
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_071_x_m",
+              "value": -0.12013939731825879
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_071_y_m",
+              "value": 0.8222697399345336
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_071_quality",
+              "value": 22
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_072_x_m",
+              "value": -0.1086687619406162
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_072_y_m",
+              "value": 0.8306721150239086
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_072_quality",
+              "value": 19
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_073_x_m",
+              "value": -0.04795214825887383
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_073_y_m",
+              "value": 0.873935440394403
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_073_quality",
+              "value": 15
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_074_x_m",
+              "value": -0.0220843293196431
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_074_y_m",
+              "value": 0.8897259591573697
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_074_quality",
+              "value": 11
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_075_x_m",
+              "value": 0.004968709579493337
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_075_y_m",
+              "value": 0.9109864499130131
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_075_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_076_x_m",
+              "value": 0.061866086067353096
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_076_y_m",
+              "value": 0.9399662692856093
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_076_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_077_x_m",
+              "value": 0.10853701411180601
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_077_y_m",
+              "value": 0.9714555916601096
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_077_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_078_x_m",
+              "value": 0.14078109584828402
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_078_y_m",
+              "value": 0.9880205883744306
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_078_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_079_x_m",
+              "value": 0.2107785536624487
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_079_y_m",
+              "value": 1.0316886164516725
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_079_quality",
+              "value": 6
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_080_x_m",
+              "value": 0.24672641805166576
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_080_y_m",
+              "value": 1.0555482341586266
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_080_quality",
+              "value": 8
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_081_x_m",
+              "value": 0.30620123671683613
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_081_y_m",
+              "value": 1.093695051251984
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_081_quality",
+              "value": 4
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_082_x_m",
+              "value": 0.39835288445002376
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_082_y_m",
+              "value": 1.145724216140318
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_082_quality",
+              "value": 4
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_083_x_m",
+              "value": 0.5266915370836056
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_083_y_m",
+              "value": 1.2647118346740136
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_083_quality",
+              "value": 18
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_084_x_m",
+              "value": 0.5573492389302691
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_084_y_m",
+              "value": 1.2837297518807647
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_084_quality",
+              "value": 18
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_085_x_m",
+              "value": 0.8113689327306122
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_085_y_m",
+              "value": 1.4350026846663344
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_085_quality",
+              "value": 33
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_086_x_m",
+              "value": 0.8254692706015346
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_086_y_m",
+              "value": 1.4110308450889972
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_086_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_087_x_m",
+              "value": 0.8679089814662483
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_087_y_m",
+              "value": 1.3420644777320572
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_087_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_088_x_m",
+              "value": 0.9339882328452722
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_088_y_m",
+              "value": 1.2310416497448677
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_088_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_089_x_m",
+              "value": 0.9468000295215143
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_089_y_m",
+              "value": 1.209807326229288
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_089_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_090_x_m",
+              "value": 0.9834947820919987
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_090_y_m",
+              "value": 1.1464502883238383
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_090_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_091_x_m",
+              "value": 1.032036870354264
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_091_y_m",
+              "value": 1.0663751207850718
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_091_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_092_x_m",
+              "value": 1.0528576576507085
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_092_y_m",
+              "value": 1.0557328036611648
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_092_quality",
+              "value": 32
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_093_x_m",
+              "value": 2.335440910844329
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_093_y_m",
+              "value": 0.5647329585340405
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_093_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_094_x_m",
+              "value": 2.390753005286786
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_094_y_m",
+              "value": 0.4647153082395746
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_094_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_095_x_m",
+              "value": 2.461450285052046
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_095_y_m",
+              "value": 0.3302040947916916
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_095_quality",
+              "value": 32
+            }
+          ]
+        }
+      ]
+    },
+    "layer": "L0",
+    "reason": "CAMERA_NO_FRAME",
+    "tick_id": 0
+  },
+  "incident_count": 128,
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 40.837011509108116,
+      "last_trace": 0.16140134727378913,
+      "max_trace": 0.8609728333691546,
+      "sample_count": 887
+    },
+    "motion": {
+      "behavior_status": "DEGRADED",
+      "constrained_to_zero_tick_count": 2,
+      "estimated_path_length_m": 3.3673295865846034,
+      "requested_motion_tick_count": 546
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 4011184663208,
+        "progress_span": 0.0,
+        "tick_id": 886,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 655,
+      "FAULT": 0,
+      "STOP": 232,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "device_non_ok_count": 891,
+      "l2_actionable_rejection_count": 408,
+      "l2_duplicate_count": 2396,
+      "l2_rejection_count": 2804,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 2396,
+        "STALE": 408
+      }
+    },
+    "ticks": {
+      "count": 887,
+      "first_monotonic_ns": 3988678564867,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 4011184663208,
+      "last_tick_id": 886
+    },
+    "timing": {
+      "max_ms": 115.417577,
+      "p50_ms": 20.718766,
+      "p95_ms": 46.960673,
+      "p99_ms": 61.196129,
+      "sample_count": 886
+    }
+  },
+  "physical_root_cause": {
+    "cause": "CAMERA_NO_FRAME",
+    "evidence": {
+      "device_health": [
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "WHEEL_ENCODERS",
+          "reason": null,
+          "state": "OK"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "BNO055_IMU",
+          "reason": null,
+          "state": "OK"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "RPLIDAR_C1",
+          "reason": null,
+          "state": "OK"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "CAMERA_FRONT",
+          "reason": "CAMERA_NO_FRAME",
+          "state": "UNKNOWN"
+        },
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "PERSON_DETECTOR_FRONT",
+          "reason": "PERSON_DETECTOR_NO_RESULT",
+          "state": "UNKNOWN"
+        }
+      ],
+      "input_reference": "ticks[0].inputs",
+      "record_type": "closed_input_tick",
+      "sensor_samples": [
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988664805134,
+          "device_id": "WHEEL_ENCODERS",
+          "kind": "wheel_velocity",
+          "sequence": 118,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "left_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "trust",
+              "value": 1.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "measurement_stale",
+              "value": false
+            },
+            {
+              "__type__": "DataField",
+              "key": "measurement_timing_valid",
+              "value": true
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_velocity_quality",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_velocity_quality",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "rejection_code",
+              "value": "NONE"
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_left_pulse_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_right_pulse_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "sample_interval_ns",
+              "value": 20001543
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_counter_running",
+              "value": true
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_counter_running",
+              "value": true
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_read_errors",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_read_errors",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_read_error_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_read_error_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_invalid_alerts",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_invalid_alerts",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_invalid_alert_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_invalid_alert_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "computed_left_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "computed_right_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_left_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_right_mps",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_left_distance_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "raw_right_distance_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_distance_delta_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_distance_delta_m",
+              "value": 0.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_pulse_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_window_ns",
+              "value": 160000000
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_window_ns",
+              "value": 160000000
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_timebase",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_timebase",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_start_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_estimation_end_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_start_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_estimation_end_edge_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_edge_history_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_edge_history_count",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_left_interval_ns",
+              "value": 20001543
+            },
+            {
+              "__type__": "DataField",
+              "key": "instantaneous_right_interval_ns",
+              "value": 20001543
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_velocity_uncertainty_mps",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_velocity_uncertainty_mps",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_measurement_trust",
+              "value": 1.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_measurement_trust",
+              "value": 1.0
+            },
+            {
+              "__type__": "DataField",
+              "key": "maximum_abs_velocity_mps",
+              "value": 1.5
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_quadrature_rejections",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_quadrature_rejections",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_quadrature_rejection_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_quadrature_rejection_delta",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_direction_change_candidates",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_direction_change_candidates",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_direction_changes_confirmed",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_direction_changes_confirmed",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_confirmed_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_confirmed_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_pending_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_pending_direction",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_pending_direction_edges",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_pending_direction_edges",
+              "value": 0
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_last_a_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_last_a_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_last_b_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_last_b_timestamp_ns",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_last_b_level",
+              "value": null
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_last_b_level",
+              "value": null
+            }
+          ]
+        },
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988618975157,
+          "device_id": "RPLIDAR_C1",
+          "kind": "lidar_health",
+          "sequence": 9,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "age_ns",
+              "value": 55383738
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_count",
+              "value": 355
+            },
+            {
+              "__type__": "DataField",
+              "key": "scan_start_monotonic_ns",
+              "value": 3988578822748
+            },
+            {
+              "__type__": "DataField",
+              "key": "scan_end_monotonic_ns",
+              "value": 3988659127566
+            },
+            {
+              "__type__": "DataField",
+              "key": "measurement_monotonic_ns",
+              "value": 3988618975157
+            }
+          ]
+        },
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988618975157,
+          "device_id": "RPLIDAR_C1",
+          "kind": "lidar_safety_clearance",
+          "sequence": 9,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "age_ns",
+              "value": 55383738
+            },
+            {
+              "__type__": "DataField",
+              "key": "front_clearance_m",
+              "value": 1.40775
+            },
+            {
+              "__type__": "DataField",
+              "key": "rear_clearance_m",
+              "value": 0.8445
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_clearance_m",
+              "value": 0.80025
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_clearance_m",
+              "value": 0.9235
+            },
+            {
+              "__type__": "DataField",
+              "key": "front_observation_count",
+              "value": 84
+            },
+            {
+              "__type__": "DataField",
+              "key": "rear_observation_count",
+              "value": 82
+            },
+            {
+              "__type__": "DataField",
+              "key": "left_observation_count",
+              "value": 100
+            },
+            {
+              "__type__": "DataField",
+              "key": "right_observation_count",
+              "value": 89
+            }
+          ]
+        },
+        {
+          "__type__": "DeviceSample",
+          "captured_monotonic_ns": 3988618975157,
+          "device_id": "RPLIDAR_C1",
+          "kind": "lidar_local_points",
+          "sequence": 9,
+          "values": [
+            {
+              "__type__": "DataField",
+              "key": "frame_id",
+              "value": "ROBOT_BASE"
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_count",
+              "value": 96
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_000_x_m",
+              "value": 2.3034644220855647
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_000_y_m",
+              "value": -0.9416389468294193
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_000_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_001_x_m",
+              "value": 2.263225414062624
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_001_y_m",
+              "value": -0.9672446886083503
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_001_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_002_x_m",
+              "value": 2.0999450102026804
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_002_y_m",
+              "value": -1.0164250853480865
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_002_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_003_x_m",
+              "value": 1.9488928448362193
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_003_y_m",
+              "value": -1.0956252743735824
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_003_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_004_x_m",
+              "value": 1.8546846295393717
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_004_y_m",
+              "value": -1.1603426164070694
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_004_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_005_x_m",
+              "value": 1.8456580680452792
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_005_y_m",
+              "value": -1.195009564128826
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_005_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_006_x_m",
+              "value": 1.7667156597916598
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_006_y_m",
+              "value": -1.3533536224678748
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_006_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_007_x_m",
+              "value": 1.7065532838797695
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_007_y_m",
+              "value": -1.3927610892680677
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_007_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_008_x_m",
+              "value": 1.6494177875768683
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_008_y_m",
+              "value": -1.4338170078587538
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_008_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_009_x_m",
+              "value": 1.0019232755649425
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_009_y_m",
+              "value": -0.988893225975998
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_009_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_010_x_m",
+              "value": 0.9244878024871603
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_010_y_m",
+              "value": -1.0329624221395768
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_010_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_011_x_m",
+              "value": 0.9068375928221286
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_011_y_m",
+              "value": -1.0431973172629265
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_011_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_012_x_m",
+              "value": 0.5761077549139013
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_012_y_m",
+              "value": -0.7275189720743125
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_012_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_013_x_m",
+              "value": 0.5145339879577427
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_013_y_m",
+              "value": -0.7668813632083528
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_013_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_014_x_m",
+              "value": 0.5032318700457105
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_014_y_m",
+              "value": -0.7758351934981405
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_014_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_015_x_m",
+              "value": 0.4659224273747635
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_015_y_m",
+              "value": -0.7979300042417307
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_015_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_016_x_m",
+              "value": 0.4532179635989329
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_016_y_m",
+              "value": -0.8046401229563663
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_016_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_017_x_m",
+              "value": 0.40343318861222816
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_017_y_m",
+              "value": -0.8334972479415697
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_017_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_018_x_m",
+              "value": 0.378246929713342
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_018_y_m",
+              "value": -0.84768940223553
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_018_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_019_x_m",
+              "value": 0.35370408843579737
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_019_y_m",
+              "value": -0.8638956347984411
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_019_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_020_x_m",
+              "value": 0.30198593641201205
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_020_y_m",
+              "value": -0.8920188096163445
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_020_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_021_x_m",
+              "value": 0.2762958006447968
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_021_y_m",
+              "value": -0.9081498736695671
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_021_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_022_x_m",
+              "value": 0.2357533163985182
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_022_y_m",
+              "value": -0.9282809037716441
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_022_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_023_x_m",
+              "value": 0.18118683663502433
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_023_y_m",
+              "value": -0.9600522539061054
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_023_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_024_x_m",
+              "value": 0.15381183707410717
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_024_y_m",
+              "value": -0.9815213542128813
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_024_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_025_x_m",
+              "value": 0.12484067538491359
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_025_y_m",
+              "value": -0.9987277185346558
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_025_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_026_x_m",
+              "value": 0.05362955589560902
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_026_y_m",
+              "value": -1.0451249306826622
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_026_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_027_x_m",
+              "value": 0.03593080133277122
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_027_y_m",
+              "value": -1.053637527812855
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_027_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_028_x_m",
+              "value": -0.013271668656005988
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_028_y_m",
+              "value": -1.0814185650390347
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_028_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_029_x_m",
+              "value": -0.08326088873453102
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_029_y_m",
+              "value": -1.120410582959272
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_029_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_030_x_m",
+              "value": -0.12070302355254099
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_030_y_m",
+              "value": -1.1454077189391012
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_030_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_031_x_m",
+              "value": -0.15976178556651652
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_031_y_m",
+              "value": -1.1691347962799663
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_031_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_032_x_m",
+              "value": -0.24460131786458045
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_032_y_m",
+              "value": -1.2209904822720405
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_032_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_033_x_m",
+              "value": -0.2899210428282333
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_033_y_m",
+              "value": -1.2464773770210953
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_033_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_034_x_m",
+              "value": -0.3622937690224797
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_034_y_m",
+              "value": -1.2859390440170506
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_034_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_035_x_m",
+              "value": -0.4688918339722143
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_035_y_m",
+              "value": -1.3403508675097626
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_035_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_036_x_m",
+              "value": -0.5922414262757514
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_036_y_m",
+              "value": -1.4704651153641368
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_036_quality",
+              "value": 6
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_037_x_m",
+              "value": -0.6228668730379711
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_037_y_m",
+              "value": -1.4808372997976178
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_037_quality",
+              "value": 3
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_038_x_m",
+              "value": -2.134438725652247
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_038_y_m",
+              "value": -0.6265553259178408
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_038_quality",
+              "value": 22
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_039_x_m",
+              "value": -1.0321722734734569
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_039_y_m",
+              "value": -0.012667295395434475
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_039_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_040_x_m",
+              "value": -1.0182454185362468
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_040_y_m",
+              "value": 0.0030545261406253925
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_040_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_041_x_m",
+              "value": -1.037166249808468
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_041_y_m",
+              "value": 0.03480276940472183
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_041_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_042_x_m",
+              "value": -1.0641863735319066
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_042_y_m",
+              "value": 0.0840452996247206
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_042_quality",
+              "value": 28
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_043_x_m",
+              "value": -1.5618241178982466
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_043_y_m",
+              "value": 0.24387699205001698
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_043_quality",
+              "value": 37
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_044_x_m",
+              "value": -1.0315349114523638
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_044_y_m",
+              "value": 0.24616250009894655
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_044_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_045_x_m",
+              "value": -1.030078041377203
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_045_y_m",
+              "value": 0.2625037688729536
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_045_quality",
+              "value": 41
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_046_x_m",
+              "value": -1.0278795102164469
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_046_y_m",
+              "value": 0.2787269496787086
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_046_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_047_x_m",
+              "value": -1.0278879838682304
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_047_y_m",
+              "value": 0.36494089263784174
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_047_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_048_x_m",
+              "value": -1.0354866894149723
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_048_y_m",
+              "value": 0.4039796604340624
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_048_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_049_x_m",
+              "value": -1.0100635628059789
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_049_y_m",
+              "value": 0.4487194687014288
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_049_quality",
+              "value": 29
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_050_x_m",
+              "value": -1.3224531945237168
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_050_y_m",
+              "value": 0.7396621599041119
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_050_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_051_x_m",
+              "value": -1.3012700071229961
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_051_y_m",
+              "value": 0.7541302066368366
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_051_quality",
+              "value": 43
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_052_x_m",
+              "value": -1.2412978709076863
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_052_y_m",
+              "value": 0.7865175431483047
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_052_quality",
+              "value": 43
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_053_x_m",
+              "value": -0.6983141691028455
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_053_y_m",
+              "value": 0.4749079607989347
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_053_quality",
+              "value": 15
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_054_x_m",
+              "value": -0.9691503702693458
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_054_y_m",
+              "value": 0.8475870514624384
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_054_quality",
+              "value": 43
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_055_x_m",
+              "value": -0.9586929150192168
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_055_y_m",
+              "value": 0.8646322308889235
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_055_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_056_x_m",
+              "value": -0.9633793778411717
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_056_y_m",
+              "value": 0.8954232166134386
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_056_quality",
+              "value": 22
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_057_x_m",
+              "value": -0.8912172127719119
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_057_y_m",
+              "value": 0.9892543301189358
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_057_quality",
+              "value": 40
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_058_x_m",
+              "value": -0.8552909905560541
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_058_y_m",
+              "value": 1.0064084081393816
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_058_quality",
+              "value": 25
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_059_x_m",
+              "value": -0.8040619123320903
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_059_y_m",
+              "value": 1.0402172867419874
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_059_quality",
+              "value": 39
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_060_x_m",
+              "value": -0.752277589052445
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_060_y_m",
+              "value": 1.0706309723753749
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_060_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_061_x_m",
+              "value": -0.4481592588981413
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_061_y_m",
+              "value": 0.6807189424893865
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_061_quality",
+              "value": 42
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_062_x_m",
+              "value": -0.4293766552723272
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_062_y_m",
+              "value": 0.6968342255566593
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_062_quality",
+              "value": 45
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_063_x_m",
+              "value": -0.4099042474924365
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_063_y_m",
+              "value": 0.7122159576895616
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_063_quality",
+              "value": 51
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_064_x_m",
+              "value": -0.3564844183146458
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_064_y_m",
+              "value": 0.7437280564822526
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_064_quality",
+              "value": 38
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_065_x_m",
+              "value": -0.33462096909037553
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_065_y_m",
+              "value": 0.7560055353931068
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_065_quality",
+              "value": 31
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_066_x_m",
+              "value": -0.3128324033550854
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_066_y_m",
+              "value": 0.7682487470937269
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_066_quality",
+              "value": 28
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_067_x_m",
+              "value": -0.25687045792782764
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_067_y_m",
+              "value": 0.7987105657520427
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_067_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_068_x_m",
+              "value": -0.21006959864567631
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_068_y_m",
+              "value": 0.7721857459347747
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_068_quality",
+              "value": 24
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_069_x_m",
+              "value": -0.19975711257907255
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_069_y_m",
+              "value": 0.7785314113599217
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_069_quality",
+              "value": 23
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_070_x_m",
+              "value": -0.15636039146314742
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_070_y_m",
+              "value": 0.8103017897558238
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_070_quality",
+              "value": 16
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_071_x_m",
+              "value": -0.12013939731825879
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_071_y_m",
+              "value": 0.8222697399345336
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_071_quality",
+              "value": 22
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_072_x_m",
+              "value": -0.1086687619406162
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_072_y_m",
+              "value": 0.8306721150239086
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_072_quality",
+              "value": 19
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_073_x_m",
+              "value": -0.04795214825887383
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_073_y_m",
+              "value": 0.873935440394403
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_073_quality",
+              "value": 15
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_074_x_m",
+              "value": -0.0220843293196431
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_074_y_m",
+              "value": 0.8897259591573697
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_074_quality",
+              "value": 11
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_075_x_m",
+              "value": 0.004968709579493337
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_075_y_m",
+              "value": 0.9109864499130131
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_075_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_076_x_m",
+              "value": 0.061866086067353096
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_076_y_m",
+              "value": 0.9399662692856093
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_076_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_077_x_m",
+              "value": 0.10853701411180601
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_077_y_m",
+              "value": 0.9714555916601096
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_077_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_078_x_m",
+              "value": 0.14078109584828402
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_078_y_m",
+              "value": 0.9880205883744306
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_078_quality",
+              "value": 7
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_079_x_m",
+              "value": 0.2107785536624487
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_079_y_m",
+              "value": 1.0316886164516725
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_079_quality",
+              "value": 6
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_080_x_m",
+              "value": 0.24672641805166576
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_080_y_m",
+              "value": 1.0555482341586266
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_080_quality",
+              "value": 8
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_081_x_m",
+              "value": 0.30620123671683613
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_081_y_m",
+              "value": 1.093695051251984
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_081_quality",
+              "value": 4
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_082_x_m",
+              "value": 0.39835288445002376
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_082_y_m",
+              "value": 1.145724216140318
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_082_quality",
+              "value": 4
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_083_x_m",
+              "value": 0.5266915370836056
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_083_y_m",
+              "value": 1.2647118346740136
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_083_quality",
+              "value": 18
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_084_x_m",
+              "value": 0.5573492389302691
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_084_y_m",
+              "value": 1.2837297518807647
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_084_quality",
+              "value": 18
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_085_x_m",
+              "value": 0.8113689327306122
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_085_y_m",
+              "value": 1.4350026846663344
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_085_quality",
+              "value": 33
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_086_x_m",
+              "value": 0.8254692706015346
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_086_y_m",
+              "value": 1.4110308450889972
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_086_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_087_x_m",
+              "value": 0.8679089814662483
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_087_y_m",
+              "value": 1.3420644777320572
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_087_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_088_x_m",
+              "value": 0.9339882328452722
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_088_y_m",
+              "value": 1.2310416497448677
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_088_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_089_x_m",
+              "value": 0.9468000295215143
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_089_y_m",
+              "value": 1.209807326229288
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_089_quality",
+              "value": 36
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_090_x_m",
+              "value": 0.9834947820919987
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_090_y_m",
+              "value": 1.1464502883238383
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_090_quality",
+              "value": 35
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_091_x_m",
+              "value": 1.032036870354264
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_091_y_m",
+              "value": 1.0663751207850718
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_091_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_092_x_m",
+              "value": 1.0528576576507085
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_092_y_m",
+              "value": 1.0557328036611648
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_092_quality",
+              "value": 32
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_093_x_m",
+              "value": 2.335440910844329
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_093_y_m",
+              "value": 0.5647329585340405
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_093_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_094_x_m",
+              "value": 2.390753005286786
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_094_y_m",
+              "value": 0.4647153082395746
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_094_quality",
+              "value": 34
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_095_x_m",
+              "value": 2.461450285052046
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_095_y_m",
+              "value": 0.3302040947916916
+            },
+            {
+              "__type__": "DataField",
+              "key": "point_095_quality",
+              "value": 32
+            }
+          ]
+        }
+      ]
+    },
+    "reason": "EDGE_HEALTH_AND_TICK_EVIDENCE_AGREE",
+    "status": "INDICATED"
+  },
+  "replay_error": null,
+  "replay_mode_requested": "incident",
+  "replay_requested": true,
+  "replay_status": "MATCH",
+  "root_cause": {
+    "confidence": "INDICATED",
+    "evidence_ids": [
+      "device-0"
+    ],
+    "kind": "DEVICE_HEALTH",
+    "layer": "L1",
+    "reason": "DEVICE_HEALTH_NON_OK",
+    "replayer_physical_root_cause": {
+      "cause": "CAMERA_NO_FRAME",
+      "evidence": {
+        "device_health": [
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "WHEEL_ENCODERS",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "BNO055_IMU",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "RPLIDAR_C1",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "CAMERA_FRONT",
+            "reason": "CAMERA_NO_FRAME",
+            "state": "UNKNOWN"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_DETECTOR_NO_RESULT",
+            "state": "UNKNOWN"
+          }
+        ],
+        "input_reference": "ticks[0].inputs",
+        "record_type": "closed_input_tick",
+        "sensor_samples": [
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 3988664805134,
+            "device_id": "WHEEL_ENCODERS",
+            "kind": "wheel_velocity",
+            "sequence": 118,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "left_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_mps",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "trust",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_stale",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_velocity_quality",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_velocity_quality",
+                "value": 0.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "rejection_code",
+                "value": "NONE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_left_pulse_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_right_pulse_count",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pulse_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pulse_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "sample_interval_ns",
+                "value": 20001543
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_left_mps",
+                "value": 0.0
+              },
+              {
+                "__omitted_items__": 38
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_a_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_a_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_timestamp_ns",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_level",
+                "value": null
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_level",
+                "value": null
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 3988618975157,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_health",
+            "sequence": 9,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 55383738
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 355
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 3988578822748
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 3988659127566
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 3988618975157
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 3988618975157,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_safety_clearance",
+            "sequence": 9,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 55383738
+              },
+              {
+                "__type__": "DataField",
+                "key": "front_clearance_m",
+                "value": 1.40775
+              },
+              {
+                "__type__": "DataField",
+                "key": "rear_clearance_m",
+                "value": 0.8445
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_clearance_m",
+                "value": 0.80025
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_clearance_m",
+                "value": 0.9235
+              },
+              {
+                "__type__": "DataField",
+                "key": "front_observation_count",
+                "value": 84
+              },
+              {
+                "__type__": "DataField",
+                "key": "rear_observation_count",
+                "value": 82
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_observation_count",
+                "value": 100
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_observation_count",
+                "value": 89
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 3988618975157,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_local_points",
+            "sequence": 9,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "frame_id",
+                "value": "ROBOT_BASE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 96
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_000_x_m",
+                "value": 2.3034644220855647
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_000_y_m",
+                "value": -0.9416389468294193
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_000_quality",
+                "value": 35
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_001_x_m",
+                "value": 2.263225414062624
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_001_y_m",
+                "value": -0.9672446886083503
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_001_quality",
+                "value": 34
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_002_x_m",
+                "value": 2.0999450102026804
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_002_y_m",
+                "value": -1.0164250853480865
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_002_quality",
+                "value": 34
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_003_x_m",
+                "value": 1.9488928448362193
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_003_y_m",
+                "value": -1.0956252743735824
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_003_quality",
+                "value": 38
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_004_x_m",
+                "value": 1.8546846295393717
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_004_y_m",
+                "value": -1.1603426164070694
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_004_quality",
+                "value": 38
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_005_x_m",
+                "value": 1.8456580680452792
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_005_y_m",
+                "value": -1.195009564128826
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_005_quality",
+                "value": 37
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_006_x_m",
+                "value": 1.7667156597916598
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_006_y_m",
+                "value": -1.3533536224678748
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_006_quality",
+                "value": 41
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_007_x_m",
+                "value": 1.7065532838797695
+              },
+              {
+                "__omitted_items__": 258
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_093_y_m",
+                "value": 0.5647329585340405
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_093_quality",
+                "value": 34
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_094_x_m",
+                "value": 2.390753005286786
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_094_y_m",
+                "value": 0.4647153082395746
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_094_quality",
+                "value": 34
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_095_x_m",
+                "value": 2.461450285052046
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_095_y_m",
+                "value": 0.3302040947916916
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_095_quality",
+                "value": 32
+              }
+            ]
+          }
+        ]
+      },
+      "reason": "EDGE_HEALTH_AND_TICK_EVIDENCE_AGREE",
+      "status": "INDICATED"
+    },
+    "tick_id": 0
+  },
+  "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
+  "status": "FINDING",
+  "structure_valid": true
+}
