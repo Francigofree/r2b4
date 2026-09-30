@@ -1,0 +1,83 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "2918a9d51aed1c93a4c331087c3382fa6a14a9bd9df7a37712a6bb37f88a3768",
+      "size_bytes": 15330
+    },
+    "diagnosis.json": {
+      "sha256": "1e1f43699f876380adff2a184063e602b7ad929ac8eef788c624a35269cab6d7",
+      "size_bytes": 9436
+    },
+    "gui_manifest.json": {
+      "sha256": "274a06c3f01bc805c87b13023308a32c6faac17254051a7a995dcf31198ef319",
+      "size_bytes": 18226
+    },
+    "inspect.json": {
+      "sha256": "a85765e7ec40dd3b0147a657b77342e89481ffe842416cd678f31ff17804727b",
+      "size_bytes": 10117
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "9ec18abec517cf8a887569a0e21ce60063ef51940e40acdfcfc7b437cf33bc76",
+      "size_bytes": 3489
+    },
+    "timeline.ndjson": {
+      "sha256": "c65e1050a6f58382d7dd6ffa7845571aca0b0887aebff4fd3493c9958c62afd4",
+      "size_bytes": 187873
+    },
+    "triage.json": {
+      "sha256": "7bea4be5a1f3c7c7d3d0c58f404d6a135b0b1d7cb3244d1b06a1dd7c462622f6",
+      "size_bytes": 18711
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_161700_6825_capture.mcap",
+    "sha256": "7c581478ca45be0d6c0e4dc7a16347f5b27f21d88aec04284eeae150f05ab4ad"
+  },
+  "behavior_status": "FAULT",
+  "created_at_utc": "2026-09-30T14:17:19Z",
+  "diagnosis_status": "FINDING",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_sha256": "852b1a11c9925cedc3851bb7b9bbb9d38af1cfc40e992849dbaec587a468e52b",
+  "evidence_status": "PASS",
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "POLICY_VERDICT",
+    "evidence_ids": [
+      "safety-fault-251"
+    ],
+    "evidence_strength": "DIRECT",
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L11_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "selection_basis": "DIRECT_CAPTURE_OR_PRODUCTION_EVIDENCE",
+    "tick_id": 251
+  },
+  "run_id": "v3_20260930_161700_6825_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}
