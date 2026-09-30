@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from v3.wheel_motion import velocity_quality
+from v3.wheel_motion import velocity_quality, validate_velocity_quality_band
 
 from v3.contracts import (
     ActuatorRequest,
@@ -213,8 +213,11 @@ class WheelPiConfig:
     max_control_gap_ns: int
     max_feedback_uncertainty_ns: int
     max_feedback_age_ns: int
+    minimum_reliable_speed_mps: float = 0.15
+    velocity_unreliable_below_mps: float = 0.13
 
     def __post_init__(self) -> None:
+        validate_velocity_quality_band(self.velocity_unreliable_below_mps, self.minimum_reliable_speed_mps)
         for name in ("kp", "ki", "integrator_limit", "max_normalized_output"):
             value = _finite_float(getattr(self, name), name)
             if value < 0.0:
@@ -276,10 +279,14 @@ class _PIState:
         limit = float(self._config.integrator_limit)
         candidate = max(-limit, min(limit, self._integral + (
             error * dt_s * self._feedback_gain if quality >= 1.0 else 0.0)))
-        raw = feedforward + proportional + self._config.ki * candidate
+        # Confidence gates the whole correction, including previously learned
+        # integral bias. Keeping that bias at full strength in the weak-fit
+        # band made the later PI reset an abrupt jump back to feed-forward.
+        integral_gain = self._config.ki * self._feedback_gain
+        raw = feedforward + proportional + integral_gain * candidate
         if not ((raw > upper and error > 0.0) or (raw < lower and error < 0.0)):
             self._integral = candidate
-        return float(proportional), float(self._config.ki * self._integral)
+        return float(proportional), float(integral_gain * self._integral)
 
 
 class WheelActuatorController:
@@ -458,8 +465,8 @@ class WheelActuatorController:
         )
 
         # Counter integrity/timebase above is independent of velocity-fit
-        # reliability. Enter PI at 0.15, leave below 0.13; in between keep only
-        # confidence-scaled proportional feedback and freeze the integral.
+        # reliability. Enter/leave PI at the encoder's configured confidence
+        # boundaries; in between scale the correction and freeze the integral.
         missing_edge_feedback = ((required_left and left_measured is None)
                                  or (required_right and right_measured is None))
         feedback_values = {field.key: field.value for field in feedback.values}
@@ -475,7 +482,8 @@ class WheelActuatorController:
         )
         for side, measured, required in (("left", left_measured, required_left),
                                          ("right", right_measured, required_right)):
-            quality = 0.0 if measured is None else velocity_quality(measured, self._speed_map.minimum_continuous_speed_mps)
+            quality = 0.0 if measured is None else velocity_quality(
+                measured, self._config.minimum_reliable_speed_mps, self._config.velocity_unreliable_below_mps)
             ready = getattr(self, f"_{side}_velocity_feedback_ready")
             if not required or quality <= 0.0:
                 ready = False
@@ -843,7 +851,8 @@ class WheelActuatorController:
             feedforward,
             lower,
             upper,
-            velocity_quality(measured_mps, self._speed_map.minimum_continuous_speed_mps),
+            velocity_quality(measured_mps, self._config.minimum_reliable_speed_mps,
+                             self._config.velocity_unreliable_below_mps),
         )
         raw_unclamped = feedforward + proportional + integral
         raw = max(lower, min(upper, raw_unclamped))

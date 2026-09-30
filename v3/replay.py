@@ -771,6 +771,21 @@ def _migrate_legacy_resolved_config_snapshot(value: object) -> object:
             and "reversal_min_omega_rad_s" not in migrated
         ):
             migrated["reversal_min_omega_rad_s"] = 0.05
+        kind = migrated.get("__type__")
+        if kind in ("NativeEncoderConfig", "NativeStateEstimatorConfig"):
+            upper_key = ("minimum_reliable_speed_mps" if kind == "NativeEncoderConfig"
+                         else "minimum_reliable_wheel_speed_mps")
+            lower_key = ("velocity_unreliable_below_mps" if kind == "NativeEncoderConfig"
+                         else "wheel_velocity_unreliable_below_mps")
+            migrated.setdefault(lower_key, migrated.get(upper_key, 0.15) * (13.0 / 15.0))
+        if kind == "NativeControlCompositionConfig":
+            # Historical L11 confidence and planner sampling used the physical
+            # speed-map floor. Preserve that captured policy only on replay;
+            # new live configs resolve these independent authorities explicitly.
+            minimum = migrated["speed_map"].get("minimum_continuous_speed_mps", 0.15)
+            migrated["wheel_pi"].setdefault("minimum_reliable_speed_mps", minimum)
+            migrated["wheel_pi"].setdefault("velocity_unreliable_below_mps", minimum * (13.0 / 15.0))
+            migrated["navigation"].setdefault("minimum_planning_speed_mps", minimum)
         if migrated.get("__type__") == "RuntimeAffinityConfig" and "runtime_cpu" in migrated:
             # Scheduling is not replay state. Preserve the historical role masks
             # after verifying the captured snapshot hash, without live defaults.

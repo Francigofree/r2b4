@@ -935,9 +935,11 @@ class ShadowWorldModel:
 
         pose = self._pose_history.lookup(observation.captured_monotonic_ns, estimate.frame_id)
         if pose is None:
-            if not local:
-                return False
-            raise ValueError("L4 cannot align local perception to pose history")
+            # An admitted scan may predate the bounded pose history (startup,
+            # frame reset or delayed delivery). Only pose-aligned mapping is
+            # unavailable; the fresh robot-relative evidence remains valid.
+            # Keep the prior map's measurement time, or publish no map at all.
+            return False
         if not pose.local_geometry_usable:
             return False
         yaw_cos = math.cos(pose.yaw_rad)

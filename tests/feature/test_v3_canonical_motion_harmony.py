@@ -2,7 +2,7 @@
 
 Source-first intent:
 - exercise the real L5 -> L10 canonical motion chain;
-- keep replanning asynchronous, with deterministic one-tick-late completions;
+- keep replanning asynchronous, with deterministic delayed completions;
 - require motion continuity while a valid accepted trajectory exists;
 - derive acceleration bounds from the production config instead of hardcoding
   subjective "smoothness" numbers;
@@ -16,6 +16,7 @@ robot. Physical jerk/traction quality still requires live capture evidence.
 from __future__ import annotations
 
 from dataclasses import replace
+import math
 
 import pytest
 
@@ -24,6 +25,7 @@ from v3.contracts import (
     CommandMode,
     CommandRequest,
     ConstraintCode,
+    DataField,
     LOCAL_FRAME_ID,
     NavigationStatus,
     ObstacleTrack,
@@ -120,31 +122,45 @@ def test_roomcruise_follow_canonical_motion_harmony_survives_background_replans(
     moving_samples = 0
     moving_while_replanning_samples = 0
     acceleration_limited_samples = 0
+    x = y = yaw = 0.0
+    goals = set()
 
-    # Long enough to cover startup, several normal L6 refresh periods and
+    # Cover startup, multiple moving exploration goals and
     # GOOD -> bucket-crossing -> DEGRADED -> GOOD local-quality changes.
-    for tick in range(36):
+    for tick in range(250 if mode is CommandMode.EXPLORE else 36):
         sigma_m, local_state = _soft_quality(tick)
         estimate, world = _scene(
             tick,
             local_sigma_m=sigma_m,
             local_state=local_state,
         )
+        if mode is CommandMode.EXPLORE:
+            # Move through intermediate goals with changing local quality.
+            # A stationary robot never exercised the live near-goal deadlock.
+            if previous_allowed is not None:
+                v = previous_allowed.allowed_v_mps
+                omega = previous_allowed.allowed_omega_rad_s
+                x += v * .02 * math.cos(yaw + omega * .01)
+                y += v * .02 * math.sin(yaw + omega * .01)
+                yaw += omega * .02
+                estimate = replace(estimate, x_m=x, y_m=y, yaw_rad=yaw,
+                                   v_mps=v, omega_rad_s=omega)
+            world = replace(world, obstacle_tracks=())
         mission = manager.evaluate(
             CommandRequest(
                 estimate.context,
                 f"motion-harmony-{mode.value}",
                 mode,
-                (),
+                (DataField("max_v_mps", .3), DataField("max_omega_rad_s", .6)),
                 tick,
             )
         )
 
-        # Model the production async boundary deterministically: the worker
-        # finishes the previous request one control tick later. Replanning is
-        # therefore present, but never blocks the control chain in this test.
+        # Complete after 160 ms for moving exploration, 20 ms for Follow.
+        # Replanning never blocks this deterministic control chain.
         completion = None
-        if pending_request is not None:
+        if (pending_request is not None and
+                tick - pending_request.context.tick_id >= (8 if mode is CommandMode.EXPLORE else 1)):
             completion = PlannerInput(
                 estimate.context,
                 pending_request.context,
@@ -153,6 +169,8 @@ def test_roomcruise_follow_canonical_motion_harmony_survives_background_replans(
 
         plan = navigator.evaluate(mission, estimate, world, completion)
         pending_request = navigator.pending_rollout_request
+        if plan.local_goal is not None:
+            goals.add((plan.local_goal.x_m, plan.local_goal.y_m))
 
         # Initial async fill has no accepted trajectory yet. From the next tick
         # onward there must be valid retained/current guidance.
@@ -245,3 +263,6 @@ def test_roomcruise_follow_canonical_motion_harmony_survives_background_replans(
     assert acceleration_limited_samples > 0, (
         "scenario did not exercise the L9 acceleration-transition path"
     )
+    if mode is CommandMode.EXPLORE:
+        assert x > .6, "scenario must travel beyond the first intermediate goal"
+        assert len(goals) >= 3, "scenario must exercise rolling goal replacement"

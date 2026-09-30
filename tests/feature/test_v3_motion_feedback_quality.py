@@ -85,3 +85,28 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
         if tick == 3:
             restored = WheelActuatorController(config.speed_map, config.wheel_pi)
             restored.restore(controller.checkpoint())
+
+    # Learned overspeed correction must fade with confidence before the fit
+    # becomes unusable. Otherwise crossing 0.13 erases a full-strength integral
+    # and steps the wheel back to the (higher) feed-forward output.
+    for sign in (1, -1):
+        controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+        for tick in range(20):
+            frame = _feedback(tick, sign * .23)
+            wheels = WheelVelocitySetpoint(frame.context, sign * .15, sign * .15)
+            output = controller(wheels, frame)
+        feedforward = config.speed_map.lookup("left", sign * .15)[0]
+        strong_correction = abs(output.left_normalized - feedforward)
+        assert strong_correction > .01
+        for tick, speed in enumerate((.14, .131, .129), 20):
+            frame = _feedback(tick, sign * speed)
+            wheels = replace(wheels, context=frame.context)
+            output = controller(wheels, frame)
+            correction = abs(output.left_normalized - feedforward)
+            if speed == .131:
+                assert correction < strong_correction * .1
+                restored = WheelActuatorController(config.speed_map, config.wheel_pi)
+                restored.restore(controller.checkpoint())
+            if speed == .129:
+                assert output == restored(wheels, frame)
+                assert correction == pytest.approx(0.0)

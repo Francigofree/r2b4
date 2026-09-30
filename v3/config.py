@@ -167,6 +167,10 @@ class ResolvedRobotConfig:
             raise ValueError("resolved production config requires canonical safety inputs")
         if control.world_model.local_costmap_max_points_per_scan != sensors.inputs.lidar_source.local_perception_max_points:
             raise ValueError("world-model and LiDAR point budget mismatch")
+        encoder = sensors.inputs.encoder_source
+        if (encoder.minimum_reliable_speed_mps != control.estimation.minimum_reliable_wheel_speed_mps
+                or encoder.velocity_unreliable_below_mps != control.estimation.wheel_velocity_unreliable_below_mps):
+            raise ValueError("encoder source and control velocity quality thresholds mismatch")
         if control.lidar_safety.minimum_clearance_m != sensors.lidar_danger_zone_m or self.lidar.danger_zone_m != sensors.lidar_danger_zone_m:
             raise ValueError("LiDAR safety clearance mismatch")
         if control.lidar_safety.maximum_sample_age_ns != sensors.inputs.lidar_source.maximum_measurement_age_ns:
@@ -257,7 +261,8 @@ class ConfigResolver:
         local = _keys(c["local_perception"], {"min_range_m", "max_range_m", "max_points"}, "local_perception")
         layers = dict(c["layers"])
         for section, derived_names in {
-            "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps"},
+            "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
+            "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
             "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits"},
             "motion_realization": {"wheel_limits"},
             "operational_constraints": {"wheel_limits"},
@@ -291,7 +296,11 @@ class ConfigResolver:
         wheel_limits = dict(track_width_m=p["nyomtav_szelesseg_m"], minimum_mps=minimum_speed,
                             maximum_mps=min(curve.points[-1].speed_mps for curve in resolved_speed_map.curves))
         layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID,
-                                "minimum_reliable_wheel_speed_mps":minimum_speed}
+                                "minimum_reliable_wheel_speed_mps":policy.encoder_minimum_reliable_speed_mps,
+                                "wheel_velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
+        layers["wheel_pi"] = {**layers["wheel_pi"],
+                              "minimum_reliable_speed_mps":policy.encoder_minimum_reliable_speed_mps,
+                              "velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
         layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"]}
         for section in ("navigation", "motion_realization", "operational_constraints"):
             layers[section] = {**layers[section], "wheel_limits":wheel_limits}
@@ -340,8 +349,6 @@ class ConfigResolver:
         if set(motor_output.pins) & set(encoder.counter_gpio.pins):
             raise ValueError("motor and encoder GPIO pins must be unique")
         sensors = _sensor_hardware_config(h, encoder, policy, navigation, p, c["imu"], resolved_control.lidar_safety.minimum_clearance_m)
-        sensors = replace(sensors, inputs=replace(sensors.inputs,
-            encoder_source=replace(sensors.inputs.encoder_source, minimum_reliable_speed_mps=minimum_speed)))
         pose = _typed(LidarMatcherConfig,c["lidar_pose"],"lidar_pose")
         _keys(c["lidar_driver"], {f.name for f in fields(RplidarC1Config)} - {"port", "baudrate", "minimum_distance_m", "maximum_distance_m"}, "lidar_driver")
         driver = _typed(RplidarC1Config, {**c["lidar_driver"], **h["lidar"], "minimum_distance_m":pose.min_valid_distance_m, "maximum_distance_m":pose.max_valid_distance_m}, "lidar_driver")

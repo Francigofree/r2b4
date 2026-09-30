@@ -25,13 +25,15 @@ class WheelMotionLimits:
         turn = omega * self.track_width_m * 0.5
         return v - turn, v + turn
 
-    def linear_sample(self, index: int, count: int, maximum: float) -> float:
+    def linear_sample(self, index: int, count: int, maximum: float,
+                      minimum_planning_mps: float = 0.0) -> float:
         """Keep the zero candidate and spend the other samples above the floor."""
-        if index == 0 or maximum < self.minimum_mps:
+        minimum = max(self.minimum_mps, minimum_planning_mps)
+        if index == 0 or maximum < minimum:
             return 0.0
         if count == 2:
             return maximum
-        return self.minimum_mps + (maximum-self.minimum_mps) * (index-1) / (count-2)
+        return minimum + (maximum-minimum) * (index-1) / (count-2)
 
     def constrain(self, v: float, omega: float) -> tuple[float, float]:
         """Reduce a steady target to its feasible envelope; never amplify it.
@@ -57,14 +59,24 @@ class WheelMotionLimits:
         return min(v, max(v * scale, self.minimum_mps + omega * scale * self.track_width_m / 2))
 
 
-def velocity_quality(speed_mps: float, minimum_mps: float = 0.15) -> float:
+def velocity_quality(speed_mps: float, minimum_mps: float = 0.15,
+                     unreliable_below_mps: float = 0.13) -> float:
     """Physical velocity-estimation confidence, separate from counter integrity.
 
-    0.13--0.15 m/s is a transition band for the production 0.15 m/s boundary.
+    The estimator's measured confidence band is independent of actuator
+    feasibility and planner sampling policy.
     A zero reading needs independent standstill evidence; it is not special
     permission to close a moving wheel's speed loop.
     """
-    lower = minimum_mps * (13.0 / 15.0)
     if abs(speed_mps) >= minimum_mps - 1e-12:
         return 1.0
-    return min(1.0, max(0.0, (abs(speed_mps) - lower) / (minimum_mps - lower)))
+    return min(1.0, max(0.0, (abs(speed_mps) - unreliable_below_mps)
+                       / (minimum_mps - unreliable_below_mps)))
+
+
+def validate_velocity_quality_band(unreliable_below_mps: float, reliable_mps: float) -> None:
+    if any(isinstance(value, bool) or not isinstance(value, (int, float))
+           or not math.isfinite(value) for value in (unreliable_below_mps, reliable_mps)):
+        raise ValueError("encoder velocity quality thresholds must be finite numbers")
+    if not 0.0 <= unreliable_below_mps < reliable_mps:
+        raise ValueError("encoder velocity quality band must satisfy 0 <= lower < reliable")

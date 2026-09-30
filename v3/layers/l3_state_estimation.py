@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from v3.wheel_motion import velocity_quality
+from v3.wheel_motion import velocity_quality, validate_velocity_quality_band
 
 import math
 from dataclasses import dataclass, replace
@@ -275,9 +275,10 @@ class NativeStateEstimatorConfig:
     quality: LocalizationQualityConfig
     minimum_reliable_wheel_speed_mps: float = 0.15
     stationary_prediction_hold_ns: int = 50_000_000
+    wheel_velocity_unreliable_below_mps: float = 0.13
 
     def __post_init__(self) -> None:
-        _finite_positive(self.minimum_reliable_wheel_speed_mps, "minimum_reliable_wheel_speed_mps")
+        validate_velocity_quality_band(self.wheel_velocity_unreliable_below_mps, self.minimum_reliable_wheel_speed_mps)
         if not isinstance(self.frame_id, str) or not self.frame_id:
             raise ValueError("frame_id must be non-empty")
         _finite_positive(self.track_width_m, "track_width_m")
@@ -596,8 +597,10 @@ class _PoseFilter:
             )
             if velocity_feedback_valid:
                 velocity_feedback_valid = self._new_velocity_evidence(wheel, wheel_values)
-            speed_quality = min(velocity_quality(left_mps, self._config.minimum_reliable_wheel_speed_mps),
-                                velocity_quality(right_mps, self._config.minimum_reliable_wheel_speed_mps))
+            speed_quality = min(velocity_quality(left_mps, self._config.minimum_reliable_wheel_speed_mps,
+                                                self._config.wheel_velocity_unreliable_below_mps),
+                                velocity_quality(right_mps, self._config.minimum_reliable_wheel_speed_mps,
+                                                 self._config.wheel_velocity_unreliable_below_mps))
             # A confirmed standstill is different from a poor moving-wheel fit.
             # Counter evidence prevents a fitted zero from hiding displacement.
             standstill = (left_mps == right_mps == 0.0 and

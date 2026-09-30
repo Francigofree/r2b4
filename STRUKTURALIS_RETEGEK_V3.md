@@ -259,6 +259,8 @@ L6 egy korábbi tervet csak javaslatként használhat új lokális igazoláshoz.
 
 L6/L8/L9 ugyanabból a kalibrált keréktartományból és nyomtávból állít elő realizálható tartós célokat. L9 birtokolja a body- és kerékgyorsulási korlátokat és a véges, 0–minimum közötti átmenetet; L10 pontos differenciálkinematika, kerékenkénti felfelé clamp nélkül. A production folyamatos kerékminimum 0,15 m/s. Ha a kért pivot vagy ív a mission capen belül nem realizálható, a rendszer nem emelhet sebességet a cap fölé.
 
+A fizikai tartós kerékminimum a kalibráció része; L6 transzlációs mintavételezésének minimuma külön planner-policy. Az encoder velocity-fit bizonytalan és megbízható sávhatárai külön szenzorpolicyból származnak, L3 és L11 azonos szemantikával fogyasztja őket. Egyik minimum módosítása sem kalibrálhatja át implicit módon a másik fogalmat. A planner-policy nem írhatja felül a fizikai realizálhatóságot vagy a mission capet, és nem korlátozhat térképet nem igénylő közvetlen mozgást.
+
 Az encoder pulse-integritása és a velocity estimate megbízhatósága külön evidence. 0,13–0,15 m/s a bizonytalan sáv; alatta a fit nem control-grade. Az ép signed displacement lokális odometria marad, velocity/yaw scalar korrekció nem adhat hozzá második X/Y elmozdulást. L11 csak bizonyított, véges L9 átmenetben használhat hosszabb bounded feed-forward időt, és annak eredeti lejáratát legfeljebb a mérés felzárkózásáig őrizheti. Hiányzó/stale/hibás encoderre ez nem alkalmazható. Az összegzett pozícióeltérés DEGRADED evidence; LOST-hoz aktuális intervalhiba, slip, freshness/integrity vagy folytonosságvesztés szükséges, recoveryhez új relatív mérés kell.
 
 ## 9. Konfiguráció, command, host/operator és külső I/O

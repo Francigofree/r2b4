@@ -86,6 +86,8 @@ class NativeSensorPolicyConfig:
     encoder_minimum_estimation_window_ns: int = 40_000_000
     encoder_maximum_estimation_window_ns: int = 160_000_000
     camera_maximum_frame_age_ns: int = 250_000_000
+    encoder_minimum_reliable_speed_mps: float = 0.15
+    encoder_velocity_unreliable_below_mps: float = 0.13
 
     def __post_init__(self) -> None:
         # Construct the downstream immutable contracts now, before any file or
@@ -103,7 +105,9 @@ class NativeSensorPolicyConfig:
                 self.encoder_maximum_estimation_window_ns
             ),
         )
-        NativeEncoderConfig("validation-encoder", self.encoder_minimum_trust)
+        NativeEncoderConfig("validation-encoder", self.encoder_minimum_trust,
+                            self.encoder_minimum_reliable_speed_mps,
+                            self.encoder_velocity_unreliable_below_mps)
         Bno055ImuBackendConfig(
             self.imu_maximum_sample_age_ns,
             self.imu_heading_clockwise_positive,
@@ -344,6 +348,8 @@ def _sensor_hardware_config(
         encoder_source=NativeEncoderConfig(
             "WHEEL_ENCODERS",
             policy.encoder_minimum_trust,
+            policy.encoder_minimum_reliable_speed_mps,
+            policy.encoder_velocity_unreliable_below_mps,
         ),
         imu_backend=Bno055ImuBackendConfig(
             policy.imu_maximum_sample_age_ns,
@@ -489,5 +495,4 @@ def _encoder_runtime_config(
         left_step_distance_m=base_step_distance_m * left_multiplier,
         right_step_distance_m=base_step_distance_m * right_multiplier,
     )
-
 

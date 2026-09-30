@@ -153,6 +153,7 @@ class NavigationConfig:
     local_goal_clearance_weight: float
     local_goal_forward_weight: float
     wheel_limits: WheelMotionLimits = WheelMotionLimits()
+    minimum_planning_speed_mps: float = 0.15
 
     def __post_init__(self) -> None:
         if self.localization_recovery_timeout_ns <= 0 or not 0 < self.localization_degraded_speed_scale <= 1:
@@ -181,6 +182,7 @@ class NavigationConfig:
             "footprint_length_m",
             "footprint_width_m",
             "clearance_score_cap_m",
+            "minimum_planning_speed_mps",
         ):
             value = getattr(self, name)
             if (
@@ -190,6 +192,8 @@ class NavigationConfig:
                 or value <= 0.0
             ):
                 raise ValueError(f"{name} must be positive")
+        if self.minimum_planning_speed_mps > self.wheel_limits.maximum_mps:
+            raise ValueError("planner minimum exceeds calibrated maximum")
         if (
             not isinstance(self.footprint_safety_margin_m, (int, float))
             or isinstance(self.footprint_safety_margin_m, bool)
@@ -999,6 +1003,18 @@ class TrajectoryNavigator:
             self._progress = 1.0
             return self._complete_plan(mission)
 
+        if distance_m <= mission.constraints.goal_tolerance_m:
+            # Terminal yaw alignment uses heading and direct L12 safety, not
+            # pose-aligned occupancy. An unavailable derived map must not
+            # revoke this rotation-only guidance.
+            self._clear_trajectory_plan()
+            return NavigationPlan(
+                context=mission.context, mission_id=mission.mission_id,
+                route=(target,), velocity_target=None, constraints=mission.constraints,
+                corridor_radius_m=mission.constraints.corridor_radius_m,
+                progress=self._progress, status=NavigationStatus.ACTIVE,
+            )
+
         costmap = world.local_costmap
         if costmap is None:
             self._clear_trajectory_plan()
@@ -1014,17 +1030,6 @@ class TrajectoryNavigator:
                 NavigationStatus.INVALIDATED,
                 "LOCAL_COSTMAP_STALE",
             )
-        if distance_m <= mission.constraints.goal_tolerance_m:
-            # Rollouts optimize travel toward x/y, not terminal yaw. Use the
-            # existing waypoint realization for the final in-place alignment.
-            self._clear_trajectory_plan()
-            return NavigationPlan(
-                context=mission.context, mission_id=mission.mission_id,
-                route=(target,), velocity_target=None, constraints=mission.constraints,
-                corridor_radius_m=mission.constraints.corridor_radius_m,
-                progress=self._progress, status=NavigationStatus.ACTIVE,
-            )
-
         disposition = self._accept_pending_rollout(mission.context)
         if self._replan_due(
             mission.context.monotonic_ns,
@@ -1705,10 +1710,20 @@ class TrajectoryNavigator:
             if (
                 goal is None
                 or math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
-                <= self._config.local_goal_tolerance_m
+                <= (self._config.local_goal_tolerance_m
+                    + mission.constraints.max_v_mps * self._config.rollout_horizon_ns / 1e9)
+                or (self._trajectory_candidates and not any(
+                    not candidate.collision and candidate.progress_viable
+                    for candidate in self._trajectory_candidates
+                ))
                 or mission.context.monotonic_ns - self._goal_selected_ns
                 >= self._config.local_goal_max_age_ns
             ):
+                # EXPLORE waypoints guide continuous travel, not arrival stops.
+                # Replace them one rollout before arrival: near the old goal,
+                # the wheel floor and heading score can reject every forward
+                # arc while the mission cap also makes an in-place turn
+                # infeasible. Waiting for goal age would strand the robot.
                 scene = self._build_planning_scene(world)
                 goal = self._choose_local_goal(estimate, costmap, scene)
                 goal_selected_ns = mission.context.monotonic_ns
@@ -1777,7 +1792,11 @@ class TrajectoryNavigator:
                 or costmap.freshness_ns > self._config.max_costmap_freshness_ns):
             return None
         goal = self._local_goal
-        if goal is None and self._pending_rollout_request is not None:
+        if (self._pending_rollout_request is not None
+                and (goal is None or mission.mode is CommandMode.EXPLORE)):
+            # A rolling exploration goal is already selected by L6. Prove the
+            # bounded continuation toward it against current geometry while
+            # its full rollout is pending; NAVIGATE keeps its committed goal.
             goal = self._pending_rollout_request.goal
         if goal is None:
             return None
@@ -1791,7 +1810,7 @@ class TrajectoryNavigator:
             v_cap = self._config.wheel_limits.degraded_linear_cap(
                 v_cap, omega_cap, self._config.localization_degraded_speed_scale)
             omega_cap *= self._config.localization_degraded_speed_scale
-        if v_cap < self._config.wheel_limits.minimum_mps:
+        if v_cap < max(self._config.wheel_limits.minimum_mps, self._config.minimum_planning_speed_mps):
             return None
         proposals = tuple(c for c in self._trajectory_candidates
                           if not c.collision and c.progress_viable and c.v_mps > 0)
@@ -2204,7 +2223,8 @@ class TrajectoryNavigator:
         evaluations: list[TrajectoryEvaluation] = []
         for linear_index in range(self._config.rollout_linear_samples):
             v_mps = self._config.wheel_limits.linear_sample(
-                linear_index, self._config.rollout_linear_samples, max_v_mps)
+                linear_index, self._config.rollout_linear_samples, max_v_mps,
+                self._config.minimum_planning_speed_mps)
             for angular_index in range(self._config.rollout_angular_samples):
                 angular_ratio = (
                     2.0 * angular_index / (self._config.rollout_angular_samples - 1) - 1.0
@@ -2238,7 +2258,8 @@ class TrajectoryNavigator:
         reverse_limit_mps = min(self._config.local_escape_reverse_max_v_mps, max_v_mps)
         for linear_index in range(self._config.rollout_linear_samples):
             v_mps = -self._config.wheel_limits.linear_sample(
-                linear_index, self._config.rollout_linear_samples, reverse_limit_mps)
+                linear_index, self._config.rollout_linear_samples, reverse_limit_mps,
+                self._config.minimum_planning_speed_mps)
             for angular_index in range(self._config.rollout_angular_samples):
                 # Reverse recovery is straight at every angular index. Reuse its
                 # immutable geometry while preserving the bounded family and IDs.
@@ -2457,7 +2478,8 @@ class TrajectoryRolloutComputer:
         evaluations: list[TrajectoryEvaluation] = []
         for linear_index in range(config.rollout_linear_samples):
             v_mps = config.wheel_limits.linear_sample(
-                linear_index, config.rollout_linear_samples, request.max_v_mps)
+                linear_index, config.rollout_linear_samples, request.max_v_mps,
+                config.minimum_planning_speed_mps)
             for angular_index in range(config.rollout_angular_samples):
                 angular_ratio = (
                     2.0 * angular_index / (config.rollout_angular_samples - 1) - 1.0
@@ -2490,7 +2512,8 @@ class TrajectoryRolloutComputer:
             )
             for linear_index in range(config.rollout_linear_samples):
                 v_mps = -config.wheel_limits.linear_sample(
-                    linear_index, config.rollout_linear_samples, reverse_limit_mps)
+                    linear_index, config.rollout_linear_samples, reverse_limit_mps,
+                    config.minimum_planning_speed_mps)
                 for angular_index in range(config.rollout_angular_samples):
                     if linear_index > 0 and angular_index > 0:
                         evaluations.append(replace(

@@ -189,9 +189,11 @@ class NativeControlCompositionConfig:
                 or limits.track_width_m != self.chassis_control.track_width_m
                 or limits.minimum_mps != self.speed_map.minimum_continuous_speed_mps
                 or limits.minimum_mps != self.chassis_control.minimum_continuous_wheel_speed_mps
-                or limits.minimum_mps != self.estimation.minimum_reliable_wheel_speed_mps
                 or limits.maximum_mps != min(curve.points[-1].speed_mps for curve in self.speed_map.curves)):
             raise ValueError("motion layers must share calibrated wheel limits and geometry")
+        if (self.wheel_pi.minimum_reliable_speed_mps != self.estimation.minimum_reliable_wheel_speed_mps
+                or self.wheel_pi.velocity_unreliable_below_mps != self.estimation.wheel_velocity_unreliable_below_mps):
+            raise ValueError("L3 and L11 must share encoder velocity quality thresholds")
         if self.lidar_safety is not None and not isinstance(
             self.lidar_safety,
             LidarSafetyConfig,

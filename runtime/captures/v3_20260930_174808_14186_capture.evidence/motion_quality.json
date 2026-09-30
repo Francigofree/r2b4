@@ -1,0 +1,294 @@
+{
+  "actuator": {
+    "sample_count": 398,
+    "saturation_count": 0,
+    "saturation_ratio": 0.0,
+    "straight_right_minus_left_output": {
+      "count": 322,
+      "mae": 0.012670318825994868,
+      "max": 0.07046118666032927,
+      "max_abs": 0.07046118666032927,
+      "mean": -0.0004849891799282185,
+      "min": -0.06357655803269968,
+      "p50_abs": 0.009732424884222685,
+      "p95_abs": 0.033081831761664245,
+      "p99_abs": 0.05858349067952715,
+      "rms": 0.017142478965646916
+    }
+  },
+  "behavior_episode_tagging": true,
+  "claim_policy": {
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "causal_claim": false,
+    "finding_class": "HEURISTIC_FINDING",
+    "root_cause_inferred": false
+  },
+  "findings": [
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "LEFT_WHEEL_TRACKING_ERROR_HIGH",
+      "evidence": {
+        "mae_mps": 0.04377351411484006
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "RIGHT_WHEEL_TRACKING_ERROR_HIGH",
+      "evidence": {
+        "mae_mps": 0.0450590664000878
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    }
+  ],
+  "motion_segment_count": 1,
+  "path": {
+    "curvature_error_1_per_m": {
+      "count": 317,
+      "mae": 0.6806974483166368,
+      "max": 1.8703533475967857,
+      "max_abs": 2.0697807323657305,
+      "mean": 0.027362844342745316,
+      "min": -2.0697807323657305,
+      "p50_abs": 0.6195614337635922,
+      "p95_abs": 1.5058833907864217,
+      "p99_abs": 1.7751781503886663,
+      "rms": 0.8152204936498656
+    },
+    "stop_go_motion_segments": 1
+  },
+  "planner": {
+    "best_vs_second_score_margin": {
+      "count": 0
+    },
+    "candidate_collision_ratio": {
+      "count": 0
+    },
+    "replan_count": 0,
+    "replans_per_s": 0.0,
+    "selected_candidate_changes": 0,
+    "selected_changes_per_s": 0.0,
+    "selected_delta_omega_rad_s": {
+      "count": 0
+    },
+    "selected_delta_v_mps": {
+      "count": 0
+    },
+    "selected_min_clearance_m": {
+      "count": 0
+    },
+    "selected_progress_score": {
+      "count": 0
+    },
+    "selected_smoothness_score": {
+      "count": 0
+    },
+    "selected_total_score": {
+      "count": 0
+    }
+  },
+  "response": {
+    "angular": {
+      "delay_s": {
+        "count": 0
+      },
+      "overshoot": {
+        "count": 0
+      },
+      "settling_s": {
+        "count": 0
+      },
+      "step_count": 0
+    },
+    "linear": {
+      "delay_s": {
+        "count": 1,
+        "max": 0.280238092,
+        "mean": 0.280238092,
+        "min": 0.280238092,
+        "p50": 0.280238092,
+        "p95": 0.280238092,
+        "p99": 0.280238092
+      },
+      "overshoot": {
+        "count": 1,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      },
+      "settling_s": {
+        "count": 1,
+        "max": 0.480872788,
+        "mean": 0.480872788,
+        "min": 0.480872788,
+        "p50": 0.480872788,
+        "p95": 0.480872788,
+        "p99": 0.480872788
+      },
+      "step_count": 1
+    }
+  },
+  "schema": "R2B4_TEST_HUB_MOTION_QUALITY_V1",
+  "smoothness": {
+    "angular_acceleration_rad_s2": {
+      "count": 325,
+      "mae": 5.387850853768048,
+      "max": 30.007476525947954,
+      "max_abs": 30.007476525947954,
+      "mean": 0.03394046762888029,
+      "min": -18.790208249291346,
+      "p50_abs": 4.297039723582996,
+      "p95_abs": 13.513254817864809,
+      "p99_abs": 18.296258345466782,
+      "rms": 7.031760805933707
+    },
+    "angular_jerk_rad_s3": {
+      "count": 324,
+      "mae": 332.83302456006015,
+      "max": 2499.372116608181,
+      "max_abs": 2499.372116608181,
+      "mean": 2.659862847157118,
+      "min": -1783.2811137870258,
+      "p50_abs": 258.5082654905939,
+      "p95_abs": 891.5180445140013,
+      "p99_abs": 1284.7683141151974,
+      "rms": 454.87509484028897
+    },
+    "linear_acceleration_mps2": {
+      "count": 325,
+      "mae": 0.5549879411663697,
+      "max": 3.747526893239572,
+      "max_abs": 3.747526893239572,
+      "mean": 0.022577543053646894,
+      "min": -2.6501513585420566,
+      "p50_abs": 0.38740795986389875,
+      "p95_abs": 1.646548994074837,
+      "p99_abs": 2.2469388255625153,
+      "rms": 0.7876648753629211
+    },
+    "linear_jerk_mps3": {
+      "count": 324,
+      "mae": 40.318899347642144,
+      "max": 190.71735822682936,
+      "max_abs": 190.71735822682936,
+      "mean": 1.6388275916428998,
+      "min": -185.3867462974573,
+      "p50_abs": 27.711220844757875,
+      "p95_abs": 110.81501181118384,
+      "p99_abs": 174.39077451986614,
+      "rms": 54.984789926141104
+    },
+    "oscillation": {
+      "angular_error_sign_flips": 97,
+      "left_wheel_error_sign_flips": 17,
+      "linear_error_sign_flips": 1,
+      "right_wheel_error_sign_flips": 29
+    }
+  },
+  "status": "WARN",
+  "thresholds": {
+    "actuator_saturation_warn_ratio": 0.1,
+    "body_angular_warn_mae_rad_s": 0.2,
+    "body_linear_warn_mae_mps": 0.05,
+    "motion_omega_epsilon_rad_s": 0.06,
+    "motion_v_epsilon_mps": 0.025,
+    "straight_wheel_bias_warn_mps": 0.025,
+    "wheel_tracking_warn_mae_mps": 0.04
+  },
+  "tick_count": 398,
+  "tracking": {
+    "allowed_to_actual_angular": {
+      "count": 398,
+      "mae": 0.10969479918203158,
+      "max": 0.5105065976871529,
+      "max_abs": 0.5105065976871529,
+      "mean": 0.004328426289533576,
+      "min": -0.42324455212981343,
+      "p50_abs": 0.08944812416470939,
+      "p95_abs": 0.2841443824318256,
+      "p99_abs": 0.3775188143017288,
+      "rms": 0.14679952534026122
+    },
+    "allowed_to_actual_linear": {
+      "count": 398,
+      "mae": 0.044768338560553456,
+      "max": 0.23554354688137358,
+      "max_abs": 0.23554354688137358,
+      "mean": 0.04137734300570716,
+      "min": -0.12240199926283551,
+      "p50_abs": 0.04178743928861893,
+      "p95_abs": 0.10590275711097735,
+      "p99_abs": 0.17295726005243586,
+      "rms": 0.057815341434070286
+    },
+    "requested_to_actual_angular": {
+      "count": 398,
+      "mae": 0.10969479918203158,
+      "max": 0.5105065976871529,
+      "max_abs": 0.5105065976871529,
+      "mean": 0.004328426289533576,
+      "min": -0.42324455212981343,
+      "p50_abs": 0.08944812416470939,
+      "p95_abs": 0.2841443824318256,
+      "p99_abs": 0.3775188143017288,
+      "rms": 0.14679952534026122
+    },
+    "requested_to_actual_linear": {
+      "count": 398,
+      "mae": 0.04663381832437256,
+      "max": 0.23554354688137358,
+      "max_abs": 0.23554354688137358,
+      "mean": 0.039511863241888115,
+      "min": -0.15,
+      "p50_abs": 0.04292183249809274,
+      "p95_abs": 0.11857054069709098,
+      "p99_abs": 0.17295726005243586,
+      "rms": 0.06083097217809986
+    }
+  },
+  "wheel_tracking": {
+    "left": {
+      "count": 398,
+      "mae": 0.04377351411484006,
+      "max": 0.22085119669825015,
+      "max_abs": 0.22085119669825015,
+      "mean": 0.03895291474900696,
+      "min": -0.08196944626170746,
+      "p50_abs": 0.03498870638576128,
+      "p95_abs": 0.12305518463337603,
+      "p99_abs": 0.17696682864936358,
+      "rms": 0.05994599042292079
+    },
+    "right": {
+      "count": 398,
+      "mae": 0.0450590664000878,
+      "max": 0.2613503249346236,
+      "max_abs": 0.2613503249346236,
+      "mean": 0.03971452789006977,
+      "min": -0.08500625406147613,
+      "p50_abs": 0.03482999647238992,
+      "p95_abs": 0.12250582113683484,
+      "p99_abs": 0.16199986354333784,
+      "rms": 0.061138655047535816
+    },
+    "straight_right_minus_left_measured_mps": {
+      "count": 322,
+      "mae": 0.04141788947311049,
+      "max": 0.1452652543421895,
+      "max_abs": 0.20587853031527617,
+      "mean": 0.0008804567994852838,
+      "min": -0.20587853031527617,
+      "p50_abs": 0.038455711264602746,
+      "p95_abs": 0.09566650560644839,
+      "p99_abs": 0.12066545905172134,
+      "rms": 0.05149160014589877
+    }
+  }
+}
