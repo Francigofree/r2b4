@@ -1019,6 +1019,41 @@ class _PoseFilter:
         )
         return True
 
+    def _prepare_relocalization_prior(
+        self,
+        position_variance: float,
+        yaw_variance: float,
+    ) -> None:
+        """Reset only the lost global pose prior before absolute relocalization.
+
+        Local odometry is owned by the independent LOCAL_FRAME_ID filter and is
+        never touched here.  Once the global map anchor is LOST, the old
+        map-pose correlations are no longer valid evidence for velocity or gyro
+        bias.  Re-establish a conservative pose-only prior, then let the normal
+        lidar NIS gate and Kalman update decide whether to accept the fix.
+        """
+
+        if self._config.frame_id == LOCAL_FRAME_ID:
+            raise ValueError("local odometry cannot receive a global relocalization prior")
+        position = _finite_positive(position_variance, "relocalization position variance")
+        yaw = _finite_positive(yaw_variance, "relocalization yaw variance")
+
+        for index, floor in (
+            (self._X, position),
+            (self._Y, position),
+            (self._YAW, yaw),
+        ):
+            for other in range(self._SIZE):
+                if other == index:
+                    continue
+                self._covariance[index][other] = 0.0
+                self._covariance[other][index] = 0.0
+            self._covariance[index][index] = max(
+                self._covariance[index][index],
+                floor,
+            )
+        self._stabilize_covariance()
+
     def _update_lidar(self, observation: Observation) -> bool:
         frame_id = _field_value(observation, "frame_id")
         if frame_id != self._config.frame_id:
@@ -1383,6 +1418,27 @@ class NativeStateEstimator:
                 values.update(x_m=x, y_m=y, yaw_rad=yaw)
                 projected = replace(lidar, values=tuple(DataField(k, v) for k, v in values.items()))
                 frame = replace(frame, accepted=tuple(projected if o is lidar else o for o in frame.accepted))
+
+        # Physical standstill and global map-anchor certainty are independent.
+        # The stationary motion model may correctly keep odometry covariance
+        # tight while the absolute map anchor is LOST because no accepted global
+        # fix has existed for several fix-age windows.  Before evaluating a new
+        # absolute fix, restore an explicit LOST global pose prior instead of
+        # relying on artificial process-noise growth to make NIS permissive.
+        relocalization_lidar = _optional_observation(frame, "lidar_pose")
+        if (
+            relocalization_lidar is not None
+            and source_is_stale(
+                now,
+                self._last_fix_ns,
+                cfg.global_fix_max_age_ns * 3,
+            )
+        ):
+            self._global._prepare_relocalization_prior(
+                cfg.max_position_variance * 4.0,
+                cfg.max_yaw_variance,
+            )
+
         global_estimate = self._global(frame)
         if any(e.update_type == "LIDAR_POSE" and e.accepted for e in self.last_update_evidence):
             self._last_fix_ns = lidar.captured_monotonic_ns
