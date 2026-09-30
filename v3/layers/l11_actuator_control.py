@@ -286,8 +286,9 @@ class WheelActuatorController:
     """Own PI state and gate it with per-wheel encoder evidence quality.
 
     Missing/partial velocity evidence is *not* treated as measured zero.  Any
-    commanded wheel lacking control-grade feedback makes the whole actuator
-    stage use bounded speed-map feed-forward while encoder evidence reacquires.
+    commanded wheel lacking control-grade feedback uses bounded speed-map
+    feed-forward while encoder evidence reacquires. The other wheel retains
+    its independently qualified PI feedback.
     Per-wheel timestamps remain diagnostic; one global monotonic uncertainty
     episode is the watchdog authority so alternating wheel targets cannot reset
     the safety budget. Continuous uncertainty beyond the configured bound raises
@@ -526,43 +527,29 @@ class WheelActuatorController:
                 ),
             )
             self._transient_stale_ticks += 1
-            self._left_pi.reset()
-            self._right_pi.reset()
-            self._last_context = wheels.context
             if any(field.key == "measurement_stale" and field.value is True for field in feedback.values):
+                self._left_pi.reset()
+                self._right_pi.reset()
+                self._last_context = wheels.context
                 return ActuatorRequest(wheels.context, 0.0, 0.0)
-            # Advance the time anchor without integrating uncertain feedback.
-            # PI re-entry blends over fresh control intervals, never the whole
-            # uncertainty episode. Targets retain bounded calibrated feed-forward.
-            left_output, left_saturated = self._feedforward_output(
-                "left", wheels.left_mps
-            )
-            right_output, right_saturated = self._feedforward_output(
-                "right", wheels.right_mps
-            )
-            return ActuatorRequest(
-                wheels.context,
-                left_normalized=left_output,
-                right_normalized=right_output,
-                saturated=left_saturated or right_saturated,
-            )
+        else:
+            self._transient_stale_ticks = 0
+            self._feedback_uncertain_since_ns = None
+            self._feedback_transition_until_ns = None
 
-        self._transient_stale_ticks = 0
-        self._feedback_uncertain_since_ns = None
-        self._feedback_transition_until_ns = None
-        assert left_measured is not None or not required_left
-        assert right_measured is not None or not required_right
-        left_output, left_saturated = self._wheel_output(
+        # Only the uncertain wheel loses PI state. Both wheels share the same
+        # finite watchdog above; alternating uncertainty cannot renew it.
+        left_output, left_saturated = self._controlled_wheel_output(
             side="left",
             reference_mps=wheels.left_mps,
-            measured_mps=0.0 if left_measured is None else left_measured,
+            measured_mps=left_measured,
             dt_s=dt_s,
             pi=self._left_pi,
         )
-        right_output, right_saturated = self._wheel_output(
+        right_output, right_saturated = self._controlled_wheel_output(
             side="right",
             reference_mps=wheels.right_mps,
-            measured_mps=0.0 if right_measured is None else right_measured,
+            measured_mps=right_measured,
             dt_s=dt_s,
             pi=self._right_pi,
         )

@@ -61,3 +61,27 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
         assert fault_tick is not None
         elapsed = fault_tick * 20_000_000
         assert elapsed < 800_000_000 if missing else elapsed == 800_000_000
+
+    # A weak left fit must not discard valid right-wheel correction. In the
+    # capture the right wheel was already overspeeding when the left lost PI.
+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+    healthy = WheelActuatorController(config.speed_map, config.wheel_pi)
+    restored = None
+    for tick in range(7):
+        good = _feedback(tick, .27)
+        wheel = good.accepted[0]
+        frame = replace(good, accepted=(replace(wheel, values=tuple(
+            DataField(v.key, .08) if v.key == "left_mps" and tick else v
+            for v in wheel.values)),))
+        wheels = WheelVelocitySetpoint(frame.context, .19, .19)
+        expected = healthy(wheels, good)
+        output = controller(wheels, frame)
+        assert output.right_normalized == expected.right_normalized
+        if tick:
+            assert output.left_normalized == pytest.approx(config.speed_map.lookup("left", .19)[0])
+            assert output.right_normalized < config.speed_map.lookup("right", .19)[0]
+        if restored is not None:
+            assert restored(wheels, frame) == output
+        if tick == 3:
+            restored = WheelActuatorController(config.speed_map, config.wheel_pi)
+            restored.restore(controller.checkpoint())

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import math
-import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 from v3.contracts import TickContext
 
@@ -165,11 +164,21 @@ class CounterEncoderBackendConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class _CounterPair:
+class SignedPulseCounterPairSnapshot:
+    """A paired counter acquisition, closed at the source's measurement time."""
+
     left: SignedPulseCounterSnapshot
     right: SignedPulseCounterSnapshot
     left_running: bool
     right_running: bool
+    captured_monotonic_ns: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.left, SignedPulseCounterSnapshot) or not isinstance(self.right, SignedPulseCounterSnapshot):
+            raise TypeError("paired counters must be SignedPulseCounterSnapshot values")
+        if type(self.left_running) is not bool or type(self.right_running) is not bool:
+            raise TypeError("paired counter running flags must be bool")
+        _nonnegative_int(self.captured_monotonic_ns, "captured_monotonic_ns")
 
     @property
     def running(self) -> bool:
@@ -218,6 +227,7 @@ class NativeCounterEncoderBackend:
         "_previous",
         "_previous_monotonic_ns",
         "_right",
+        "_pair_snapshot",
     )
 
     def __init__(
@@ -225,6 +235,8 @@ class NativeCounterEncoderBackend:
         left: SignedPulseCounter,
         right: SignedPulseCounter,
         config: CounterEncoderBackendConfig,
+        *,
+        snapshot_pair: Callable[[TickContext], SignedPulseCounterPairSnapshot] | None = None,
     ) -> None:
         if not isinstance(config, CounterEncoderBackendConfig):
             raise TypeError("config must be CounterEncoderBackendConfig")
@@ -235,10 +247,13 @@ class NativeCounterEncoderBackend:
         self._left = left
         self._right = right
         self._config = config
+        if snapshot_pair is not None and not callable(snapshot_pair):
+            raise TypeError("snapshot_pair must be callable or None")
+        self._pair_snapshot = snapshot_pair
         self._left_after_ns = 0
         self._right_after_ns = 0
         self._stationary_since_ns = 0
-        self._previous: _CounterPair | None = None
+        self._previous: SignedPulseCounterPairSnapshot | None = None
         self._previous_monotonic_ns: int | None = None
 
     @staticmethod
@@ -257,27 +272,29 @@ class NativeCounterEncoderBackend:
             )
         return value
 
-    def _snapshot_pair(self) -> _CounterPair:
+    def _snapshot_pair(self, context: TickContext) -> SignedPulseCounterPairSnapshot:
+        if self._pair_snapshot is not None:
+            pair = self._pair_snapshot(context)
+            if not isinstance(pair, SignedPulseCounterPairSnapshot):
+                raise TypeError("snapshot_pair returned an invalid counter pair")
+            if pair.captured_monotonic_ns < context.monotonic_ns:
+                raise ValueError("counter acquisition predates its source read")
+            return pair
+        # Injected/offline counters use the supplied clock exclusively. Live
+        # GPIO owners provide the atomic pair port above, with their own clock.
         left = self._snapshot(self._left, "left")
         right = self._snapshot(self._right, "right")
         left_running = self._running(self._left, "left")
         right_running = self._running(self._right, "right")
-        return _CounterPair(left, right, left_running, right_running)
-
-    def _measurement_reference_ns(self, context_ns: int) -> int:
-        """Return live read-close time without contaminating replay clocks."""
-
-        read_closed_ns = time.monotonic_ns()
-        read_latency_ns = read_closed_ns - context_ns
-        if 0 <= read_latency_ns <= self._config.maximum_sample_interval_ns:
-            return read_closed_ns
-        return context_ns
+        return SignedPulseCounterPairSnapshot(
+            left, right, left_running, right_running, context.monotonic_ns,
+        )
 
     @staticmethod
     def _edge_diagnostics(
         config: CounterEncoderBackendConfig,
-        current: _CounterPair,
-        previous: _CounterPair | None,
+        current: SignedPulseCounterPairSnapshot,
+        previous: SignedPulseCounterPairSnapshot | None,
         *,
         sample_interval_ns: int | None,
         computed_left_mps: float | None,
@@ -671,8 +688,8 @@ class NativeCounterEncoderBackend:
 
     @staticmethod
     def _diagnostic_rejection_code(
-        previous: _CounterPair,
-        current: _CounterPair,
+        previous: SignedPulseCounterPairSnapshot,
+        current: SignedPulseCounterPairSnapshot,
     ) -> EncoderRejectionCode:
         read_error_changed = (
             current.left.read_errors != previous.left.read_errors
@@ -728,8 +745,11 @@ class NativeCounterEncoderBackend:
 
         if not isinstance(context, TickContext):
             raise TypeError("context must be TickContext")
-        current = self._snapshot_pair()
-        measurement_now_ns = self._measurement_reference_ns(context.monotonic_ns)
+        current = self._snapshot_pair(context)
+        # Sequence belongs to the producer, time to the atomic acquisition.
+        # IPC receipt and the later V3 tick may change neither.
+        context = TickContext(context.tick_id, current.captured_monotonic_ns)
+        measurement_now_ns = context.monotonic_ns
         previous = self._previous
         previous_monotonic_ns = self._previous_monotonic_ns
 
@@ -939,6 +959,7 @@ class NativeCounterEncoderBackend:
 
 
 __all__ = [
+    "SignedPulseCounterPairSnapshot",
     "CounterEncoderBackendConfig",
     "NativeCounterEncoderBackend",
     "SignedPulseEdge",

@@ -7,7 +7,7 @@ NativeEncoderSource; no GPIO callback executes in the control interpreter.
 from __future__ import annotations
 
 import multiprocessing as mp
-import queue
+import pickle
 import time
 from typing import Any
 
@@ -21,30 +21,58 @@ from .gpio_counter import GpioCounterPairConfig, NativeGpioSignedCounterPair
 from .live_encoder import EncoderVelocityReading, NativeEncoderConfig, NativeEncoderSource
 
 _START_METHOD = "spawn"
+_MAILBOX_BYTES = 16_384  # Scalar reading/diagnostics only; never raw edge history.
 
 
-def _put_latest(target: Any, payload: object) -> None:
-    try:
-        target.put_nowait(payload)
-        return
-    except queue.Full:
-        pass
-    try:
-        target.get_nowait()
-    except queue.Empty:
-        pass
-    try:
-        target.put_nowait(payload)
-    except queue.Full:
-        pass
+class _EncoderMailbox:
+    """One complete, bounded encoder value; neither peer waits for a lock.
+
+    A paused/dead writer cannot strand a reader inside a partial pipe frame.
+    Serialization happens before publication and reconstruction after release.
+    If a peer dies holding the lock, freshness/liveness revokes the cached value.
+    """
+
+    def __init__(self, context: Any) -> None:
+        self._buffer = context.RawArray("B", _MAILBOX_BYTES)
+        self._size = context.RawValue("I", 0)
+        self._revision = context.RawValue("Q", 0)
+        self._lock = context.Lock()
+
+    def publish(self, payload: object) -> bool:
+        encoded = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(encoded) > _MAILBOX_BYTES:
+            raise ValueError("encoder result exceeds scalar mailbox bound")
+        if not self._lock.acquire(False):
+            return False
+        try:
+            memoryview(self._buffer).cast("B")[:len(encoded)] = encoded
+            self._size.value = len(encoded)
+            self._revision.value += 1
+        finally:
+            self._lock.release()
+        return True
+
+    def latest(self, after_revision: int) -> tuple[int, object | None]:
+        if not self._lock.acquire(False):
+            return after_revision, None
+        try:
+            revision = self._revision.value
+            if revision <= after_revision:
+                return after_revision, None
+            size = self._size.value
+            if not 0 < size <= _MAILBOX_BYTES:
+                raise ValueError("invalid encoder mailbox size")
+            encoded = memoryview(self._buffer).cast("B")[:size].tobytes()
+        finally:
+            self._lock.release()
+        return revision, pickle.loads(encoded)
 
 
 def _encoder_process_main(
     counter_config: GpioCounterPairConfig,
     backend_config: CounterEncoderBackendConfig,
-    result_queue: Any,
-    ready_event: Any,
-    stop_event: Any,
+    mailbox: _EncoderMailbox,
+    stop_flag: Any,
     worker_cpus: int | CpuSet | None,
     strict_affinity: bool,
     process_config: EncoderProcessConfig,
@@ -59,26 +87,27 @@ def _encoder_process_main(
             )
         import lgpio
 
-        counter_pair = NativeGpioSignedCounterPair(lgpio, counter_config)
+        counter_pair = NativeGpioSignedCounterPair(
+            lgpio, counter_config, monotonic_ns=time.monotonic_ns,
+        )
         backend = NativeCounterEncoderBackend(
             counter_pair.left_counter,
             counter_pair.right_counter,
             backend_config,
+            snapshot_pair=counter_pair.snapshot_pair,
         )
         sequence = 0
         next_deadline_ns = time.monotonic_ns()
-        while not stop_event.is_set():
+        while not stop_flag.value:
             now_ns = time.monotonic_ns()
             if now_ns < next_deadline_ns:
-                stop_event.wait((next_deadline_ns - now_ns) / 1_000_000_000.0)
+                time.sleep((next_deadline_ns - now_ns) / 1_000_000_000.0)
                 continue
             context = TickContext(sequence, now_ns)
             reading = backend.read(context)
             if not isinstance(reading, EncoderVelocityReading):
                 raise TypeError("encoder backend returned invalid reading")
-            _put_latest(result_queue, ("reading", reading))
-            if sequence == 0:
-                ready_event.set()
+            mailbox.publish(("reading", reading))
             sequence += 1
             next_deadline_ns += process_config.sample_period_ns
             completed_ns = time.monotonic_ns()
@@ -86,14 +115,13 @@ def _encoder_process_main(
                 missed = (completed_ns - next_deadline_ns) // process_config.sample_period_ns + 1
                 next_deadline_ns += missed * process_config.sample_period_ns
     except BaseException as exc:
-        _put_latest(result_queue, ("error", type(exc).__name__, str(exc)))
-        ready_event.set()
+        mailbox.publish(("error", type(exc).__name__, str(exc)[:256]))
     finally:
         if counter_pair is not None:
             try:
                 counter_pair.close()
             except BaseException as exc:
-                _put_latest(result_queue, ("error", type(exc).__name__, str(exc)))
+                mailbox.publish(("error", type(exc).__name__, str(exc)[:256]))
 
 
 class ProcessEncoderBackend:
@@ -107,9 +135,9 @@ class ProcessEncoderBackend:
         "_fatal_error",
         "_latest",
         "_process",
-        "_queue",
-        "_ready_event",
-        "_stop_event",
+        "_mailbox",
+        "_transport_revision",
+        "_stop_flag",
     )
 
     def __init__(
@@ -137,17 +165,18 @@ class ProcessEncoderBackend:
             raise ValueError("ready_timeout_s must be positive")
 
         context = mp.get_context(_START_METHOD)
-        self._queue = context.Queue(maxsize=process_config.queue_capacity)
-        self._ready_event = context.Event()
-        self._stop_event = context.Event()
+        # queue_capacity remains decodable in historical runtime configs. This
+        # latest-state edge now has one fixed scalar slot and no feeder thread.
+        self._mailbox = _EncoderMailbox(context)
+        self._transport_revision = 0
+        self._stop_flag = context.RawValue("b", False)
         self._process = context.Process(
             target=_encoder_process_main,
             args=(
                 counter_config,
                 backend_config,
-                self._queue,
-                self._ready_event,
-                self._stop_event,
+                self._mailbox,
+                self._stop_flag,
                 worker_cpus,
                 strict_affinity,
                 process_config,
@@ -160,23 +189,23 @@ class ProcessEncoderBackend:
         self._closed = False
         with temporary_current_affinity(worker_cpus, role="worker-start", strict=strict_affinity):
             self._process.start()
-        if not self._ready_event.wait(float(ready_timeout_s)):
-            self.stop()
-            raise RuntimeError("process-isolated encoder did not become ready")
         try:
-            first = self._queue.get(timeout=float(ready_timeout_s))
-        except queue.Empty:
-            first = None
-        if first is not None:
-            self._apply_message(first)
-        self._drain()
-        if self._fatal_error:
-            error = self._fatal_error
+            deadline = time.monotonic() + ready_timeout_s
+            while True:
+                self._drain()
+                if self._fatal_error:
+                    raise RuntimeError(f"process-isolated encoder startup failed: {self._fatal_error}")
+                if not self._process.is_alive():
+                    raise RuntimeError("process-isolated encoder exited during startup")
+                if self._latest is not None:
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    raise RuntimeError("process-isolated encoder did not become ready")
+                time.sleep(min(0.005, remaining))
+        except BaseException:
             self.stop()
-            raise RuntimeError(f"process-isolated encoder startup failed: {error}")
-        if self._latest is None or not self._process.is_alive():
-            self.stop()
-            raise RuntimeError("process-isolated encoder exited during startup")
+            raise
 
     @property
     def pid(self) -> int | None:
@@ -199,12 +228,10 @@ class ProcessEncoderBackend:
             self._fatal_error = "ENCODER_TRANSPORT_INVALID"
 
     def _drain(self) -> None:
-        for _ in range(self._process_config.queue_capacity):
-            try:
-                message = self._queue.get_nowait()
-            except queue.Empty:
-                break
+        revision, message = self._mailbox.latest(self._transport_revision)
+        if message is not None:
             self._apply_message(message)
+            self._transport_revision = revision
 
     def read(self, context: TickContext) -> EncoderVelocityReading:
         if not isinstance(context, TickContext):
@@ -224,17 +251,18 @@ class ProcessEncoderBackend:
         if self._closed:
             return
         self._closed = True
-        self._stop_event.set()
+        # No shared Condition/Event mutex: even a suspended or crashed owner
+        # must reach the bounded join/terminate path.
+        self._stop_flag.value = True
         self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
             self._process.terminate()
             self._process.join(timeout=self._process_config.stop_timeout_s)
         if self._process.is_alive():
+            self._process.kill()
+            self._process.join(timeout=self._process_config.stop_timeout_s)
+        if self._process.is_alive():
             raise RuntimeError("process-isolated encoder did not stop")
-        try:
-            self._queue.close()
-        except (OSError, ValueError):
-            pass
 
 
 class ProcessEncoderSource(NativeEncoderSource):

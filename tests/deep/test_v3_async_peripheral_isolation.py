@@ -148,3 +148,93 @@ def test_async_command_ingress_preserves_revision_timing_and_real_expiry(tmp_pat
         assert edge.timing_evidence.reader_received_ns == evidence.reader_received_ns
     finally:
         edge.close()
+
+
+def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path, monkeypatch):
+    """Real spawn/IPC with fake GPIO: never open a device or a motor edge."""
+    import os
+    import signal
+    from dataclasses import replace
+    from rig import resolved_config
+    from v3.adapters.counter_encoder import NativeCounterEncoderBackend, SignedPulseCounterSnapshot
+    from v3.adapters.live_encoder import NativeEncoderSource
+    from v3.adapters.process_encoder_backend import ProcessEncoderBackend
+
+    # spawn imports this fake module ahead of any installed hardware driver.
+    (tmp_path / 'lgpio.py').write_text(
+        'from test_v3_encoder_ab_direction_robustness import FakeGpio\n'
+        'import os\n'
+        '_gpio = FakeGpio()\n'
+        'RISING_EDGE = 1\nBOTH_EDGES = 3\nSET_PULL_UP = 32\n'
+        'def gpiochip_open(chip):\n'
+        '    if os.environ.get("R2B4_TEST_ENCODER_FAIL"): raise OSError("injected GPIO error")\n'
+        '    return _gpio.gpiochip_open(chip)\n'
+        'def __getattr__(name):\n    return getattr(_gpio, name)\n'
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    config = resolved_config()
+    inputs = config.runtime.sensor_inputs.inputs
+    process_config = replace(config.edges.encoder_process, stop_timeout_s=.1)
+    edge = ProcessEncoderBackend(inputs.encoder_counter, inputs.encoder_backend,
+                                 process_config=process_config)
+    source = NativeEncoderSource(edge, inputs.encoder_source)
+    class Counter:
+        running = True
+        def snapshot(self):
+            return SignedPulseCounterSnapshot(0)
+    direct = NativeCounterEncoderBackend(Counter(), Counter(), inputs.encoder_backend)
+    try:
+        initial = edge.read(TickContext(0, time.monotonic_ns()))
+        direct.read(TickContext(initial.sequence, initial.captured_monotonic_ns))
+        _wait_until(lambda: edge.read(TickContext(0, time.monotonic_ns())).captured_monotonic_ns
+                    - initial.captured_monotonic_ns > inputs.encoder_backend.maximum_estimation_window_ns)
+        os.kill(edge.pid, signal.SIGSTOP)
+        # Consume already completed transport values, then read the held state.
+        time.sleep(.03)
+        observed_ns = time.monotonic_ns()
+        reading = edge.read(TickContext(1, observed_ns))
+        expected = direct.read(TickContext(reading.sequence, reading.captured_monotonic_ns))
+        assert (reading.left_mps, reading.right_mps, reading.trust, reading.stale,
+                reading.timing_valid) == (expected.left_mps, expected.right_mps,
+                expected.trust, expected.stale, expected.timing_valid)
+        assert reading.diagnostics.raw_left_distance_m == expected.diagnostics.raw_left_distance_m
+        assert reading.diagnostics.raw_right_distance_m == expected.diagnostics.raw_right_distance_m
+        samples = []
+        started_ns = time.monotonic_ns()
+        for tick in range(50):
+            context = TickContext(tick, time.monotonic_ns())
+            samples.append(source.read(context).samples[0])
+        assert time.monotonic_ns() - started_ns < 100_000_000
+        assert all(s.sequence == reading.sequence and s.captured_monotonic_ns == reading.captured_monotonic_ns
+                   for s in samples)
+        assert all(isinstance(f.value, (str, int, float, bool, type(None))) for f in samples[-1].values)
+        # Parent polling never renews the source measurement's lifetime.
+        expired_ns = reading.captured_monotonic_ns + 250_000_001
+        assert source.capability_snapshot(expired_ns).state.value == 'STALE'
+        os.kill(edge.pid, signal.SIGKILL)
+        def failed():
+            try:
+                source.read(TickContext(100, time.monotonic_ns()))
+            except RuntimeError as exc:
+                assert 'ENCODER_PROCESS_EXITED' in str(exc)
+                return True
+            return False
+        _wait_until(failed)
+    finally:
+        started_ns = time.monotonic_ns()
+        edge.stop()
+        assert time.monotonic_ns() - started_ns < 5_000_000_000
+    # A stopped process cannot handle SIGTERM. Shutdown must still be bounded,
+    # without requiring it to release an Event/Condition mutex first.
+    edge = ProcessEncoderBackend(inputs.encoder_counter, inputs.encoder_backend,
+                                 process_config=process_config)
+    os.kill(edge.pid, signal.SIGSTOP)
+    started_ns = time.monotonic_ns()
+    edge.stop()
+    assert time.monotonic_ns() - started_ns < 1_000_000_000
+    with pytest.raises(ProcessLookupError):
+        os.kill(edge.pid, 0)
+    monkeypatch.setenv('R2B4_TEST_ENCODER_FAIL', '1')
+    with pytest.raises(RuntimeError, match='startup failed|exited during startup'):
+        ProcessEncoderBackend(inputs.encoder_counter, inputs.encoder_backend,
+                              process_config=process_config)

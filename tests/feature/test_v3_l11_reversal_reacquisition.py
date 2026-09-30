@@ -76,9 +76,12 @@ def test_partial_gpio_reversal_fit_uses_original_transition_deadline():
         assert output.left_normalized == pytest.approx(
             config.speed_map.lookup("left", reference)[0]
         )
-        assert output.right_normalized == pytest.approx(
-            config.speed_map.lookup("right", reference)[0]
-        )
+        # The right fit is qualified and faster than the target: it must keep
+        # braking its own overspeed while the left remains feed-forward.
+        right_feedforward = config.speed_map.lookup("right", reference)[0]
+        assert right_feedforward <= output.right_normalized <= 0.0
+        if tick:
+            assert output.right_normalized > right_feedforward
 
     # The grace is finite. At the original L9 transition deadline unresolved
     # uncertainty still fails closed.

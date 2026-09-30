@@ -1,5 +1,5 @@
 import pytest
-from v3.adapters.counter_encoder import CounterEncoderBackendConfig, NativeCounterEncoderBackend, SignedPulseCounterSnapshot, SignedPulseEdge
+from v3.adapters.counter_encoder import CounterEncoderBackendConfig, NativeCounterEncoderBackend, SignedPulseCounterPairSnapshot, SignedPulseCounterSnapshot, SignedPulseEdge
 from v3.adapters.live_encoder import NativeEncoderConfig, NativeEncoderSource
 from v3.adapters.live_encoder import EncoderRejectionCode
 from v3.contracts import DeviceHealthState, TickContext
@@ -62,6 +62,26 @@ def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     assert left.calls == 2
     assert right.calls == 2
     assert not hasattr(backend, 'set_last_pwm')
+
+    # The callback owner closes after source-read start. Edges in that interval
+    # are valid, and both sample time and diagnostic interval must use closure.
+    pairs = iter((
+        SignedPulseCounterPairSnapshot(_snapshot(0), _snapshot(0), True, True, 1_010_000_000),
+        SignedPulseCounterPairSnapshot(
+            _timed(20, end_ns=1_110_000_000), _timed(10, end_ns=1_110_000_000),
+            True, True, 1_120_000_000),
+    ))
+    backend = NativeCounterEncoderBackend(
+        Counter(()), Counter(()), _config(), snapshot_pair=lambda context: next(pairs),
+    )
+    first = backend.read(TickContext(7, 1_000_000_000))
+    second = backend.read(TickContext(8, 1_100_000_000))
+    assert (first.sequence, first.captured_monotonic_ns) == (7, 1_010_000_000)
+    assert (second.sequence, second.captured_monotonic_ns) == (8, 1_120_000_000)
+    assert second.timing_valid and not second.stale
+    assert second.diagnostics.sample_interval_ns == 110_000_000
+    assert second.diagnostics.raw_left_distance_m == pytest.approx(.020)
+    assert second.diagnostics.raw_right_distance_m == pytest.approx(.020)
 
 def test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch():
     initial_edges = tuple((SignedPulseEdge(timestamp_ns, pulse_count) for pulse_count, timestamp_ns in enumerate(range(910000000, 1000000001, 10000000), start=1)))

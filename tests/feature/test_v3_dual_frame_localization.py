@@ -304,3 +304,31 @@ def test_localization_counter_displacement_is_not_double_counted_by_velocity_upd
         if tick == 30:
             restored = NativeStateEstimator(config)
             restored.restore(estimator.checkpoint())
+
+    # A latest-state encoder publishes new counter snapshots while the same
+    # physical velocity fit is held. Reapplying it used to shrink covariance
+    # and add duplicate VELOCITY corrections (live ticks 613/614 and 693/694).
+    estimator = NativeStateEstimator(config)
+    restored = None
+    for tick in range(12):
+        f = frame(tick, speed=.2)
+        edge_ns = 1_000_000_000 + (tick // 3) * 60_000_000
+        distance = (tick // 3) * .012
+        wheel = observation("wheel_velocity", tick, f.context.monotonic_ns,
+            left_mps=.2, right_mps=.2, trust=1.0,
+            raw_left_distance_m=distance, raw_right_distance_m=distance,
+            left_estimation_timebase="GPIO_EDGE_HISTORY",
+            right_estimation_timebase="GPIO_EDGE_HISTORY",
+            left_estimation_end_edge_timestamp_ns=edge_ns,
+            right_estimation_end_edge_timestamp_ns=edge_ns)
+        f = replace(f, accepted=tuple(wheel if o.kind == "wheel_velocity" else o for o in f.accepted))
+        estimate = estimator(f)
+        velocity_updates = [e for e in estimator.last_update_evidence if e.update_type == "VELOCITY"]
+        assert len(velocity_updates) == int(tick > 0 and tick % 3 == 0)
+        assert estimate.local_pose.x_m == pytest.approx(distance, abs=1e-10)
+        if restored is not None:
+            assert restored(f) == estimate
+            assert restored.last_update_evidence == estimator.last_update_evidence
+        if tick == 3:
+            restored = NativeStateEstimator(config)
+            restored.restore(estimator.checkpoint())

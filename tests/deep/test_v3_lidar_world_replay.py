@@ -163,7 +163,11 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
 
             samples = [
                 sample("ENCODER", "wheel_velocity", tick, context.monotonic_ns,
-                       left_mps=.19, right_mps=.19, trust=1.0),
+                       left_mps=.19, right_mps=.19, trust=1.0,
+                       left_estimation_timebase="GPIO_EDGE_HISTORY",
+                       right_estimation_timebase="GPIO_EDGE_HISTORY",
+                       left_estimation_end_edge_timestamp_ns=context.monotonic_ns-(tick % 3)*20_000_000,
+                       right_estimation_end_edge_timestamp_ns=context.monotonic_ns-(tick % 3)*20_000_000),
                 sample("IMU", "ekf_heading", tick, context.monotonic_ns,
                        yaw_rad=0.0, omega_rad_s=0.0, confidence=1.0),
             ]
@@ -227,7 +231,8 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
                 assert costmap.occupied_cells is previous_map.occupied_cells
                 cached_ticks += 1
             previous_map = costmap
-            # Start mid-period, so the first replay tick must reuse the cache.
+            # Start mid-period: replay must reuse the map cache AND remember
+            # that the velocity fit at tick 300 has already been consumed.
             if tick == 301:
                 initial_checkpoint = composition.checkpoint()
             elif tick > 301:

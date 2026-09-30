@@ -399,6 +399,7 @@ class PoseFilterStateCheckpoint:
     encoder_anchor: EncoderAnchor | None = None
     odometry_predictions: tuple[OdometryPrediction, ...] = ()
     stationary_until_ns: int | None = None
+    last_velocity_evidence_ns: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
         if len(self.state) != 5 or any(not math.isfinite(value) for value in self.state):
@@ -421,6 +422,12 @@ class PoseFilterStateCheckpoint:
             raise ValueError(
                 "stationary_until_ns must be non-negative integer or None"
             )
+        if self.last_velocity_evidence_ns is not None and (
+            not isinstance(self.last_velocity_evidence_ns, tuple)
+            or len(self.last_velocity_evidence_ns) != 2
+            or any(type(ns) is not int or ns < 0 for ns in self.last_velocity_evidence_ns)
+        ):
+            raise ValueError("last_velocity_evidence_ns must be two non-negative times or None")
 
 
 class _PoseFilter:
@@ -452,6 +459,7 @@ class _PoseFilter:
         "_encoder_anchor",
         "_odometry_predictions",
         "_stationary_until_ns",
+        "_last_velocity_evidence_ns",
         "_state",
     )
 
@@ -474,6 +482,7 @@ class _PoseFilter:
         self._encoder_anchor: EncoderAnchor | None = None
         self._odometry_predictions: list[OdometryPrediction] = []
         self._stationary_until_ns: int | None = None
+        self._last_velocity_evidence_ns: tuple[int, int] | None = None
         self._last_update_evidence: list[EkfUpdateEvidence] = []
 
     @property
@@ -491,6 +500,7 @@ class _PoseFilter:
             self._encoder_anchor,
             tuple(self._odometry_predictions),
             self._stationary_until_ns,
+            self._last_velocity_evidence_ns,
         )
 
     def restore(self, checkpoint: PoseFilterStateCheckpoint) -> None:
@@ -506,6 +516,7 @@ class _PoseFilter:
         self._encoder_anchor = checkpoint.encoder_anchor
         self._odometry_predictions = list(checkpoint.odometry_predictions)
         self._stationary_until_ns = checkpoint.stationary_until_ns
+        self._last_velocity_evidence_ns = checkpoint.last_velocity_evidence_ns
         self._last_update_evidence = []
 
     def __call__(self, frame: AdmittedFrame) -> RobotEstimate:
@@ -583,6 +594,8 @@ class _PoseFilter:
                 and not encoder_stale
                 and encoder_trust >= self._config.quality.minimum_sensor_trust
             )
+            if velocity_feedback_valid:
+                velocity_feedback_valid = self._new_velocity_evidence(wheel, wheel_values)
             speed_quality = min(velocity_quality(left_mps, self._config.minimum_reliable_wheel_speed_mps),
                                 velocity_quality(right_mps, self._config.minimum_reliable_wheel_speed_mps))
             # A confirmed standstill is different from a poor moving-wheel fit.
@@ -603,7 +616,7 @@ class _PoseFilter:
             # Preserve the established R2B4 cross-check exactly when a fresh,
             # trusted gyro-rate observation exists on the same tick.  When IMU
             # has no fresh event, wheel yaw-rate is the bounded fallback.
-            if heading is not None and omega_confidence > 0.0 and speed_quality >= 1.0:
+            if velocity_feedback_valid and heading is not None and omega_confidence > 0.0 and speed_quality >= 1.0:
                 assert measured_omega is not None
                 left_mps, right_mps = self._cross_check_wheels(
                     left_mps,
@@ -730,6 +743,31 @@ class _PoseFilter:
         # No fresh IMU rate means deliberately conservative omega uncertainty;
         # the state/omega value itself remains continuous through _last_omega.
         return self._estimate(frame, omega_confidence if heading is not None else 0.0)
+
+    def _new_velocity_evidence(self, wheel: Observation, values: dict[str, object]) -> bool:
+        """A source poll is a new count snapshot, not necessarily a new fit.
+
+        Both physical wheel windows must advance before the combined velocity
+        correction is independent again. Count reconciliation and freshness of
+        the acquisition continue on every admitted snapshot. A stationary
+        snapshot has its own observation time, without inventing a GPIO edge.
+        """
+        if "left_estimation_timebase" not in values and "right_estimation_timebase" not in values:
+            return True  # Historical velocity-only sources.
+        evidence = []
+        for side in ("left", "right"):
+            if values.get(f"{side}_estimation_timebase") == "GPIO_EDGE_HISTORY":
+                measured_ns = values.get(f"{side}_estimation_end_edge_timestamp_ns")
+                if type(measured_ns) is not int or not 0 <= measured_ns <= wheel.captured_monotonic_ns:
+                    raise ValueError("L3 encoder velocity edge time is invalid")
+            else:
+                measured_ns = wheel.captured_monotonic_ns
+            evidence.append(measured_ns)
+        previous = self._last_velocity_evidence_ns
+        if previous is not None and any(now <= old for now, old in zip(evidence, previous)):
+            return False
+        self._last_velocity_evidence_ns = (evidence[0], evidence[1])
+        return True
 
     @staticmethod
     def _encoder_totals(wheel: Observation) -> tuple[float, float] | None:

@@ -7,7 +7,9 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
-from .counter_encoder import SignedPulseCounterSnapshot, SignedPulseEdge
+from v3.contracts import TickContext
+
+from .counter_encoder import SignedPulseCounterPairSnapshot, SignedPulseCounterSnapshot, SignedPulseEdge
 
 
 def _nonnegative_int(value: object, name: str) -> int:
@@ -247,6 +249,7 @@ class NativeGpioSignedCounterPair:
         "_handle",
         "_left_counter",
         "_lock",
+        "_clock",
         "_right_counter",
         "_running",
         "_states",
@@ -256,14 +259,19 @@ class NativeGpioSignedCounterPair:
         self,
         backend: GpioCounterBackend,
         config: GpioCounterPairConfig,
+        *,
+        monotonic_ns: Callable[[], int] | None = None,
     ) -> None:
         if not isinstance(config, GpioCounterPairConfig):
             raise TypeError("config must be GpioCounterPairConfig")
         self._validate_backend(backend)
+        if monotonic_ns is not None and not callable(monotonic_ns):
+            raise TypeError("monotonic_ns must be callable or None")
 
         self._backend = backend
         self._config = config
         self._lock = threading.Lock()
+        self._clock = monotonic_ns
         self._states = {
             side: _CounterState(
                 edge_history=deque(maxlen=config.edge_history_capacity),
@@ -687,23 +695,40 @@ class NativeGpioSignedCounterPair:
 
     def _snapshot(self, side: str) -> SignedPulseCounterSnapshot:
         with self._lock:
-            state = self._states[side]
-            assert state.edge_history is not None
-            return SignedPulseCounterSnapshot(
-                pulse_count=state.pulse_count,
-                read_errors=state.read_errors,
-                invalid_alerts=state.invalid_alerts,
-                edge_history=tuple(state.edge_history),
-                quadrature_rejections=state.quadrature_rejections,
-                direction_change_candidates=state.direction_change_candidates,
-                direction_changes_confirmed=state.direction_changes_confirmed,
-                confirmed_direction=state.confirmed_direction,
-                pending_direction=state.pending_direction,
-                pending_direction_edges=len(state.pending_a_timestamps or ()),
-                last_a_timestamp_ns=state.last_a_timestamp_ns,
-                last_b_timestamp_ns=state.last_b_timestamp_ns,
-                last_b_level=state.last_b_level,
+            return self._snapshot_locked(side)
+
+    def snapshot_pair(self, context: TickContext) -> SignedPulseCounterPairSnapshot:
+        """Close both counts, health and time under the callback owner's lock.
+
+        The production process injects its monotonic clock. Offline callers
+        retain explicit TickContext time; no host-clock heuristic is used.
+        """
+        with self._lock:
+            left = self._snapshot_locked("left")
+            right = self._snapshot_locked("right")
+            captured_ns = context.monotonic_ns if self._clock is None else self._clock()
+            return SignedPulseCounterPairSnapshot(
+                left, right, self._running, self._running, captured_ns,
             )
+
+    def _snapshot_locked(self, side: str) -> SignedPulseCounterSnapshot:
+        state = self._states[side]
+        assert state.edge_history is not None
+        return SignedPulseCounterSnapshot(
+            pulse_count=state.pulse_count,
+            read_errors=state.read_errors,
+            invalid_alerts=state.invalid_alerts,
+            edge_history=tuple(state.edge_history),
+            quadrature_rejections=state.quadrature_rejections,
+            direction_change_candidates=state.direction_change_candidates,
+            direction_changes_confirmed=state.direction_changes_confirmed,
+            confirmed_direction=state.confirmed_direction,
+            pending_direction=state.pending_direction,
+            pending_direction_edges=len(state.pending_a_timestamps or ()),
+            last_a_timestamp_ns=state.last_a_timestamp_ns,
+            last_b_timestamp_ns=state.last_b_timestamp_ns,
+            last_b_level=state.last_b_level,
+        )
 
     def diagnostic_events(self, side: str) -> tuple[QuadratureAlertEvent, ...]:
         """Return the bounded raw A/B decision trace without motor authority."""

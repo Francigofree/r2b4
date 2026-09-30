@@ -61,6 +61,7 @@ class NativeGpioEncoderSource(NativeEncoderSource):
                 counter_pair.left_counter,
                 counter_pair.right_counter,
                 backend_config,
+                snapshot_pair=counter_pair.snapshot_pair,
             )
             super().__init__(velocity_backend, source_config)
         except Exception:
