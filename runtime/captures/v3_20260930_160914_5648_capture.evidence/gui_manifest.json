@@ -1,0 +1,440 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "diagnosis_json": "diagnosis.json",
+    "interesting_slice_ndjson": "interesting_slice.ndjson",
+    "replay_json": "replay_result.json",
+    "timeline_ndjson": "timeline.ndjson"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "capture": {
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": false,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [
+        "RAW_LIDAR_TRANSPORT_END_MISSING"
+      ],
+      "integrity_warnings": [],
+      "message_stream_sha256": "d50ad418613bbaeeae160344e929d3c38f5610847fe4fe73cdb370590643e703",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 504,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 504,
+        "first_lost_sequence": null,
+        "high_water_mark": 8,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 504,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": false,
+      "raw_evidence_requested": true,
+      "raw_integrity_reasons": [
+        "RAW_LIDAR_TRANSPORT_END_MISSING"
+      ],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 97,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": true,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": false,
+      "raw_transport_produced_count": 0,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": true,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 50
+    },
+    "status": "FAIL",
+    "topics": {
+      "/r2b4/checkpoint": {
+        "channel_id": 3,
+        "encoding": "json",
+        "message_count": 9,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/event": {
+        "channel_id": 4,
+        "encoding": "json",
+        "message_count": 8,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/raw_lidar": {
+        "channel_id": 2,
+        "encoding": "json",
+        "message_count": 97,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/runtime": {
+        "channel_id": 5,
+        "encoding": "json",
+        "message_count": 1,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/tick": {
+        "channel_id": 1,
+        "encoding": "json",
+        "message_count": 400,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      }
+    }
+  },
+  "diagnosis_status": "FAIL",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_status": "FAIL",
+  "incidents": [
+    {
+      "category": "CAPTURE_INTEGRITY",
+      "causal_claim": false,
+      "claim_class": "FACT",
+      "evidence": {
+        "integrity": {
+          "capacity_eviction_count": 0,
+          "captured_tick_sequence_gaps": [],
+          "complete": false,
+          "core_capacity_eviction_count": 0,
+          "digest_scope": "all MCAP messages before capture_finalized event",
+          "ingress_drop_count": 0,
+          "integrity_reasons": [
+            "RAW_LIDAR_TRANSPORT_END_MISSING"
+          ],
+          "integrity_warnings": [],
+          "message_stream_sha256": "d50ad418613bbaeeae160344e929d3c38f5610847fe4fe73cdb370590643e703",
+          "post_window_complete": true,
+          "pre_window_complete": true,
+          "raw_capacity_eviction_count": 0,
+          "raw_evidence_complete": false,
+          "raw_evidence_requested": true,
+          "raw_integrity_reasons": [
+            "RAW_LIDAR_TRANSPORT_END_MISSING"
+          ],
+          "raw_lidar_duplicate_count": 0,
+          "raw_lidar_expected_scan_count": 97,
+          "raw_lidar_gap_missing_revisions": [],
+          "raw_lidar_loss_fraction": 0.0,
+          "raw_lidar_loss_missing_revisions": [],
+          "raw_lidar_loss_tolerance_fraction": 0.05,
+          "raw_lidar_loss_within_tolerance": true,
+          "raw_lidar_max_consecutive_missing": 0,
+          "raw_lidar_max_consecutive_missing_allowed": 2
+        }
+      },
+      "id": "capture-integrity",
+      "layer": "Capture",
+      "monotonic_ns": null,
+      "reason": "RAW_LIDAR_TRANSPORT_END_MISSING",
+      "severity": "CRITICAL",
+      "tick_id": null
+    },
+    {
+      "category": "LOCALIZATION",
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 21.65737776040372,
+        "last_trace": 0.0272085451219067,
+        "max_trace": 0.3181357047721295,
+        "sample_count": 400
+      },
+      "id": "covariance-growth-16",
+      "layer": "L3",
+      "monotonic_ns": 7872224225452,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 16
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 256410861,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 34
+          }
+        ]
+      },
+      "id": "l2-reject-172",
+      "layer": "L2",
+      "monotonic_ns": 7875360596642,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 172
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 255761590,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 59
+          }
+        ]
+      },
+      "id": "l2-reject-297",
+      "layer": "L2",
+      "monotonic_ns": 7877860628103,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 297
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 256715557,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 66
+          }
+        ]
+      },
+      "id": "l2-reject-337",
+      "layer": "L2",
+      "monotonic_ns": 7878660822573,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 337
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 255299383,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 73
+          }
+        ]
+      },
+      "id": "l2-reject-368",
+      "layer": "L2",
+      "monotonic_ns": 7879360625357,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 368
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 336149583,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 73
+          },
+          {
+            "age_ns": 254789557,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 117
+          }
+        ]
+      },
+      "id": "l2-reject-372",
+      "layer": "L2",
+      "monotonic_ns": 7879441475557,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 372
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 358535601,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 73
+          }
+        ]
+      },
+      "id": "l2-reject-373",
+      "layer": "L2",
+      "monotonic_ns": 7879463861575,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 373
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 395757843,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 73
+          },
+          {
+            "age_ns": 251905817,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 118
+          }
+        ]
+      },
+      "id": "l2-reject-375",
+      "layer": "L2",
+      "monotonic_ns": 7879501083817,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 375
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 416898726,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 73
+          }
+        ]
+      },
+      "id": "l2-reject-376",
+      "layer": "L2",
+      "monotonic_ns": 7879522224700,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 376
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 256266213,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 75
+          }
+        ]
+      },
+      "id": "l2-reject-387",
+      "layer": "L2",
+      "monotonic_ns": 7879761991950,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 387
+    }
+  ],
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "FACT",
+    "evidence_ids": [
+      "capture-integrity"
+    ],
+    "evidence_strength": "DIRECT",
+    "kind": "CAPTURE_INCOMPLETE",
+    "layer": "Capture",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete",
+    "selection_basis": "EVIDENCE_VALIDITY_GATE",
+    "tick_id": null
+  },
+  "schema": "R2B4_TEST_HUB_GUI_V2",
+  "status": "FAIL",
+  "tracks": [
+    "pose.x_m",
+    "pose.y_m",
+    "pose.yaw_rad",
+    "pose.covariance_trace",
+    "navigation_progress",
+    "requested_motion.v_mps",
+    "constrained_motion.v_mps",
+    "safety_decision",
+    "l9_constraints"
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "16fcb547406646b17e369d40067a40cf235e7c4158fd0ccf21bf6096589185bc",
+      "size_bytes": 10812
+    },
+    "diagnosis.json": {
+      "sha256": "7cba6ae5a7c6e8ce7c20722bb5804e6435f128dcb836289ec6d5c66119ea04ad",
+      "size_bytes": 5104
+    },
+    "gui_manifest.json": {
+      "sha256": "262fd319afb2e694aceed33781679065bbd96cbfba944c9b58924ee434150971",
+      "size_bytes": 12554
+    },
+    "inspect.json": {
+      "sha256": "a2dd2c39359bd82394f8259699c383b31a2d17ded1d7d70d9d0a9f41d0e0ea9e",
+      "size_bytes": 6367
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "fb7d5ba2d4cff79faa36243dd31cbfa236a2fdf247a87a8c9f8f4fbb0b4f5437",
+      "size_bytes": 520518
+    },
+    "replay_result.json": {
+      "sha256": "927a755556fc835d01704284569a1a7e2d15f98408d7ac9840e20ac329e68020",
+      "size_bytes": 33031
+    },
+    "timeline.ndjson": {
+      "sha256": "2331461ca060da2ab42fe2346dfc485fdc6139a91a281b94e2d9ab8e3503e614",
+      "size_bytes": 1071351
+    },
+    "triage.json": {
+      "sha256": "6d92b755eb9f191b0c3e9440802899a066f81feac16d1e9109c3b1488f288471",
+      "size_bytes": 11820
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_160914_5648_capture.mcap",
+    "sha256": "d5b5a2aa3ae434ee1c6a208c9d06d927faa0bdba247af81a8372c41e4c207032"
+  },
+  "behavior_status": "NO_MOTION_REQUEST",
+  "created_at_utc": "2026-09-30T14:09:41Z",
+  "diagnosis_status": "FAIL",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_sha256": "1fd831585563a1bbf17f0455f115b735459ad6d94806efa327b4fd085659beb8",
+  "evidence_status": "FAIL",
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "FACT",
+    "evidence_ids": [
+      "capture-integrity"
+    ],
+    "evidence_strength": "DIRECT",
+    "kind": "CAPTURE_INCOMPLETE",
+    "layer": "Capture",
+    "reason": "CAPTURE_INCOMPLETE: required evidence is incomplete",
+    "selection_basis": "EVIDENCE_VALIDITY_GATE",
+    "tick_id": null
+  },
+  "run_id": "v3_20260930_160914_5648_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FAIL"
+}
