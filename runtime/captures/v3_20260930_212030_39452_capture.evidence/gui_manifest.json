@@ -1,0 +1,2206 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": false,
+    "limitations": [
+      "Counts refer to captured samples, not all control ticks or time occupancy.",
+      "Transitions are observed at samples; intervening states may be missing.",
+      "Path length is a sampled pose estimate, not physical ground truth.",
+      "No exact replay, control jitter, jerk or raw-sensor continuity verdict."
+    ],
+    "low_level_severity_cap": "WARNING",
+    "name": "BEHAVIORAL_HIGH_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 10
+  },
+  "artifacts": {
+    "diagnosis_json": "diagnosis.json",
+    "interesting_slice_ndjson": "interesting_slice.ndjson",
+    "replay_json": null,
+    "timeline_ndjson": "timeline.ndjson"
+  },
+  "behavior_status": "FAULT",
+  "capture": {
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [
+        {
+          "after": 0,
+          "before": 6
+        },
+        {
+          "after": 6,
+          "before": 11
+        },
+        {
+          "after": 11,
+          "before": 16
+        },
+        {
+          "after": 16,
+          "before": 21
+        },
+        {
+          "after": 21,
+          "before": 26
+        },
+        {
+          "after": 26,
+          "before": 30
+        },
+        {
+          "after": 30,
+          "before": 36
+        },
+        {
+          "after": 36,
+          "before": 40
+        },
+        {
+          "after": 40,
+          "before": 45
+        },
+        {
+          "after": 45,
+          "before": 50
+        },
+        {
+          "after": 50,
+          "before": 54
+        },
+        {
+          "after": 54,
+          "before": 59
+        },
+        {
+          "after": 59,
+          "before": 63
+        },
+        {
+          "after": 63,
+          "before": 68
+        },
+        {
+          "after": 68,
+          "before": 73
+        },
+        {
+          "after": 73,
+          "before": 78
+        },
+        {
+          "after": 78,
+          "before": 83
+        },
+        {
+          "after": 83,
+          "before": 87
+        },
+        {
+          "after": 87,
+          "before": 93
+        },
+        {
+          "after": 93,
+          "before": 98
+        },
+        {
+          "after": 98,
+          "before": 103
+        },
+        {
+          "after": 103,
+          "before": 108
+        },
+        {
+          "after": 108,
+          "before": 112
+        },
+        {
+          "after": 112,
+          "before": 117
+        },
+        {
+          "after": 117,
+          "before": 122
+        },
+        {
+          "after": 122,
+          "before": 127
+        },
+        {
+          "after": 127,
+          "before": 130
+        },
+        {
+          "after": 130,
+          "before": 134
+        },
+        {
+          "after": 134,
+          "before": 139
+        },
+        {
+          "after": 139,
+          "before": 144
+        },
+        {
+          "after": 144,
+          "before": 149
+        },
+        {
+          "after": 149,
+          "before": 154
+        },
+        {
+          "after": 154,
+          "before": 158
+        },
+        {
+          "after": 158,
+          "before": 163
+        },
+        {
+          "after": 163,
+          "before": 168
+        },
+        {
+          "after": 168,
+          "before": 173
+        },
+        {
+          "after": 173,
+          "before": 178
+        },
+        {
+          "after": 178,
+          "before": 182
+        },
+        {
+          "after": 182,
+          "before": 187
+        },
+        {
+          "after": 187,
+          "before": 192
+        },
+        {
+          "after": 192,
+          "before": 197
+        },
+        {
+          "after": 197,
+          "before": 202
+        },
+        {
+          "after": 202,
+          "before": 206
+        },
+        {
+          "after": 206,
+          "before": 211
+        },
+        {
+          "after": 211,
+          "before": 215
+        },
+        {
+          "after": 215,
+          "before": 219
+        },
+        {
+          "after": 219,
+          "before": 224
+        },
+        {
+          "after": 224,
+          "before": 229
+        },
+        {
+          "after": 229,
+          "before": 234
+        },
+        {
+          "after": 234,
+          "before": 239
+        },
+        {
+          "after": 239,
+          "before": 244
+        },
+        {
+          "after": 244,
+          "before": 248
+        },
+        {
+          "after": 248,
+          "before": 253
+        },
+        {
+          "after": 253,
+          "before": 258
+        },
+        {
+          "after": 258,
+          "before": 262
+        },
+        {
+          "after": 262,
+          "before": 265
+        },
+        {
+          "after": 265,
+          "before": 271
+        },
+        {
+          "after": 271,
+          "before": 276
+        },
+        {
+          "after": 276,
+          "before": 280
+        },
+        {
+          "after": 280,
+          "before": 284
+        },
+        {
+          "after": 284,
+          "before": 288
+        },
+        {
+          "after": 288,
+          "before": 294
+        },
+        {
+          "after": 294,
+          "before": 298
+        },
+        {
+          "after": 298,
+          "before": 303
+        },
+        {
+          "after": 303,
+          "before": 306
+        },
+        {
+          "after": 306,
+          "before": 311
+        },
+        {
+          "after": 311,
+          "before": 315
+        },
+        {
+          "after": 315,
+          "before": 319
+        },
+        {
+          "after": 319,
+          "before": 324
+        },
+        {
+          "after": 324,
+          "before": 330
+        },
+        {
+          "after": 330,
+          "before": 334
+        },
+        {
+          "after": 334,
+          "before": 339
+        },
+        {
+          "after": 339,
+          "before": 343
+        },
+        {
+          "after": 343,
+          "before": 349
+        },
+        {
+          "after": 349,
+          "before": 354
+        },
+        {
+          "after": 354,
+          "before": 359
+        },
+        {
+          "after": 359,
+          "before": 363
+        },
+        {
+          "after": 363,
+          "before": 368
+        },
+        {
+          "after": 368,
+          "before": 373
+        },
+        {
+          "after": 373,
+          "before": 377
+        },
+        {
+          "after": 377,
+          "before": 382
+        },
+        {
+          "after": 382,
+          "before": 387
+        },
+        {
+          "after": 387,
+          "before": 389
+        },
+        {
+          "after": 389,
+          "before": 393
+        },
+        {
+          "after": 393,
+          "before": 398
+        },
+        {
+          "after": 398,
+          "before": 402
+        },
+        {
+          "after": 402,
+          "before": 408
+        },
+        {
+          "after": 408,
+          "before": 413
+        },
+        {
+          "after": 413,
+          "before": 418
+        },
+        {
+          "after": 418,
+          "before": 423
+        },
+        {
+          "after": 423,
+          "before": 428
+        },
+        {
+          "after": 428,
+          "before": 433
+        },
+        {
+          "after": 433,
+          "before": 438
+        },
+        {
+          "after": 438,
+          "before": 442
+        },
+        {
+          "after": 442,
+          "before": 448
+        },
+        {
+          "after": 448,
+          "before": 452
+        },
+        {
+          "after": 452,
+          "before": 457
+        },
+        {
+          "after": 457,
+          "before": 463
+        },
+        {
+          "after": 463,
+          "before": 468
+        },
+        {
+          "after": 468,
+          "before": 472
+        },
+        {
+          "after": 472,
+          "before": 475
+        },
+        {
+          "after": 475,
+          "before": 479
+        },
+        {
+          "after": 479,
+          "before": 485
+        },
+        {
+          "after": 485,
+          "before": 489
+        },
+        {
+          "after": 489,
+          "before": 495
+        },
+        {
+          "after": 495,
+          "before": 499
+        },
+        {
+          "after": 499,
+          "before": 505
+        },
+        {
+          "after": 505,
+          "before": 510
+        },
+        {
+          "after": 510,
+          "before": 514
+        },
+        {
+          "after": 514,
+          "before": 518
+        },
+        {
+          "after": 518,
+          "before": 522
+        },
+        {
+          "after": 522,
+          "before": 526
+        },
+        {
+          "after": 526,
+          "before": 531
+        },
+        {
+          "after": 531,
+          "before": 535
+        },
+        {
+          "after": 535,
+          "before": 539
+        },
+        {
+          "after": 539,
+          "before": 544
+        },
+        {
+          "after": 544,
+          "before": 549
+        },
+        {
+          "after": 549,
+          "before": 554
+        },
+        {
+          "after": 554,
+          "before": 559
+        },
+        {
+          "after": 559,
+          "before": 563
+        },
+        {
+          "after": 563,
+          "before": 567
+        },
+        {
+          "after": 567,
+          "before": 573
+        },
+        {
+          "after": 573,
+          "before": 577
+        },
+        {
+          "after": 577,
+          "before": 583
+        },
+        {
+          "after": 583,
+          "before": 587
+        },
+        {
+          "after": 587,
+          "before": 591
+        },
+        {
+          "after": 591,
+          "before": 596
+        },
+        {
+          "after": 596,
+          "before": 601
+        },
+        {
+          "after": 601,
+          "before": 606
+        },
+        {
+          "after": 606,
+          "before": 610
+        },
+        {
+          "after": 610,
+          "before": 615
+        },
+        {
+          "after": 615,
+          "before": 620
+        },
+        {
+          "after": 620,
+          "before": 626
+        },
+        {
+          "after": 626,
+          "before": 631
+        },
+        {
+          "after": 631,
+          "before": 635
+        },
+        {
+          "after": 635,
+          "before": 639
+        },
+        {
+          "after": 639,
+          "before": 644
+        },
+        {
+          "after": 644,
+          "before": 648
+        },
+        {
+          "after": 648,
+          "before": 654
+        },
+        {
+          "after": 654,
+          "before": 658
+        },
+        {
+          "after": 658,
+          "before": 663
+        },
+        {
+          "after": 663,
+          "before": 668
+        },
+        {
+          "after": 668,
+          "before": 672
+        },
+        {
+          "after": 672,
+          "before": 677
+        },
+        {
+          "after": 677,
+          "before": 682
+        },
+        {
+          "after": 682,
+          "before": 687
+        },
+        {
+          "after": 687,
+          "before": 692
+        },
+        {
+          "after": 692,
+          "before": 696
+        },
+        {
+          "after": 696,
+          "before": 701
+        },
+        {
+          "after": 701,
+          "before": 706
+        },
+        {
+          "after": 706,
+          "before": 710
+        },
+        {
+          "after": 710,
+          "before": 716
+        },
+        {
+          "after": 716,
+          "before": 721
+        },
+        {
+          "after": 721,
+          "before": 726
+        },
+        {
+          "after": 726,
+          "before": 729
+        },
+        {
+          "after": 729,
+          "before": 734
+        },
+        {
+          "after": 734,
+          "before": 739
+        },
+        {
+          "after": 739,
+          "before": 743
+        },
+        {
+          "after": 743,
+          "before": 748
+        },
+        {
+          "after": 748,
+          "before": 753
+        },
+        {
+          "after": 753,
+          "before": 758
+        },
+        {
+          "after": 758,
+          "before": 762
+        },
+        {
+          "after": 762,
+          "before": 767
+        },
+        {
+          "after": 767,
+          "before": 771
+        },
+        {
+          "after": 771,
+          "before": 777
+        },
+        {
+          "after": 777,
+          "before": 781
+        },
+        {
+          "after": 781,
+          "before": 785
+        },
+        {
+          "after": 785,
+          "before": 791
+        },
+        {
+          "after": 791,
+          "before": 795
+        },
+        {
+          "after": 795,
+          "before": 800
+        },
+        {
+          "after": 800,
+          "before": 806
+        },
+        {
+          "after": 806,
+          "before": 810
+        },
+        {
+          "after": 810,
+          "before": 815
+        },
+        {
+          "after": 815,
+          "before": 821
+        },
+        {
+          "after": 821,
+          "before": 826
+        },
+        {
+          "after": 826,
+          "before": 831
+        },
+        {
+          "after": 831,
+          "before": 836
+        },
+        {
+          "after": 836,
+          "before": 841
+        },
+        {
+          "after": 841,
+          "before": 846
+        },
+        {
+          "after": 846,
+          "before": 851
+        },
+        {
+          "after": 851,
+          "before": 855
+        },
+        {
+          "after": 855,
+          "before": 861
+        },
+        {
+          "after": 861,
+          "before": 865
+        },
+        {
+          "after": 865,
+          "before": 871
+        },
+        {
+          "after": 871,
+          "before": 876
+        },
+        {
+          "after": 876,
+          "before": 880
+        },
+        {
+          "after": 880,
+          "before": 886
+        },
+        {
+          "after": 886,
+          "before": 891
+        },
+        {
+          "after": 891,
+          "before": 896
+        },
+        {
+          "after": 896,
+          "before": 901
+        },
+        {
+          "after": 901,
+          "before": 905
+        },
+        {
+          "after": 905,
+          "before": 910
+        },
+        {
+          "after": 910,
+          "before": 916
+        },
+        {
+          "after": 916,
+          "before": 920
+        },
+        {
+          "after": 920,
+          "before": 924
+        },
+        {
+          "after": 924,
+          "before": 926
+        },
+        {
+          "after": 926,
+          "before": 931
+        },
+        {
+          "after": 931,
+          "before": 936
+        },
+        {
+          "after": 936,
+          "before": 941
+        },
+        {
+          "after": 941,
+          "before": 946
+        },
+        {
+          "after": 946,
+          "before": 951
+        },
+        {
+          "after": 951,
+          "before": 956
+        },
+        {
+          "after": 956,
+          "before": 961
+        },
+        {
+          "after": 961,
+          "before": 966
+        },
+        {
+          "after": 966,
+          "before": 970
+        },
+        {
+          "after": 970,
+          "before": 975
+        },
+        {
+          "after": 975,
+          "before": 981
+        },
+        {
+          "after": 981,
+          "before": 985
+        },
+        {
+          "after": 985,
+          "before": 990
+        },
+        {
+          "after": 990,
+          "before": 993
+        },
+        {
+          "after": 993,
+          "before": 997
+        },
+        {
+          "after": 997,
+          "before": 1002
+        },
+        {
+          "after": 1002,
+          "before": 1007
+        },
+        {
+          "after": 1007,
+          "before": 1011
+        },
+        {
+          "after": 1011,
+          "before": 1016
+        },
+        {
+          "after": 1016,
+          "before": 1020
+        },
+        {
+          "after": 1020,
+          "before": 1026
+        },
+        {
+          "after": 1026,
+          "before": 1030
+        },
+        {
+          "after": 1030,
+          "before": 1036
+        },
+        {
+          "after": 1036,
+          "before": 1040
+        },
+        {
+          "after": 1040,
+          "before": 1045
+        },
+        {
+          "after": 1045,
+          "before": 1051
+        },
+        {
+          "after": 1051,
+          "before": 1056
+        },
+        {
+          "after": 1056,
+          "before": 1061
+        },
+        {
+          "after": 1061,
+          "before": 1066
+        },
+        {
+          "after": 1066,
+          "before": 1070
+        },
+        {
+          "after": 1070,
+          "before": 1075
+        },
+        {
+          "after": 1075,
+          "before": 1080
+        },
+        {
+          "after": 1080,
+          "before": 1085
+        },
+        {
+          "after": 1085,
+          "before": 1089
+        },
+        {
+          "after": 1089,
+          "before": 1095
+        },
+        {
+          "after": 1095,
+          "before": 1100
+        },
+        {
+          "after": 1100,
+          "before": 1104
+        },
+        {
+          "after": 1104,
+          "before": 1110
+        },
+        {
+          "after": 1110,
+          "before": 1115
+        },
+        {
+          "after": 1115,
+          "before": 1120
+        },
+        {
+          "after": 1120,
+          "before": 1125
+        },
+        {
+          "after": 1125,
+          "before": 1129
+        },
+        {
+          "after": 1129,
+          "before": 1134
+        },
+        {
+          "after": 1134,
+          "before": 1140
+        },
+        {
+          "after": 1140,
+          "before": 1145
+        },
+        {
+          "after": 1145,
+          "before": 1150
+        },
+        {
+          "after": 1150,
+          "before": 1155
+        },
+        {
+          "after": 1155,
+          "before": 1159
+        },
+        {
+          "after": 1159,
+          "before": 1164
+        },
+        {
+          "after": 1164,
+          "before": 1169
+        },
+        {
+          "after": 1169,
+          "before": 1174
+        },
+        {
+          "after": 1174,
+          "before": 1178
+        },
+        {
+          "after": 1178,
+          "before": 1183
+        },
+        {
+          "after": 1183,
+          "before": 1188
+        },
+        {
+          "after": 1188,
+          "before": 1192
+        },
+        {
+          "after": 1192,
+          "before": 1198
+        },
+        {
+          "after": 1198,
+          "before": 1203
+        },
+        {
+          "after": 1203,
+          "before": 1208
+        },
+        {
+          "after": 1208,
+          "before": 1213
+        },
+        {
+          "after": 1213,
+          "before": 1217
+        },
+        {
+          "after": 1217,
+          "before": 1223
+        },
+        {
+          "after": 1223,
+          "before": 1228
+        },
+        {
+          "after": 1228,
+          "before": 1233
+        },
+        {
+          "after": 1233,
+          "before": 1237
+        },
+        {
+          "after": 1237,
+          "before": 1242
+        },
+        {
+          "after": 1242,
+          "before": 1247
+        },
+        {
+          "after": 1247,
+          "before": 1251
+        },
+        {
+          "after": 1251,
+          "before": 1255
+        },
+        {
+          "after": 1255,
+          "before": 1260
+        },
+        {
+          "after": 1260,
+          "before": 1265
+        },
+        {
+          "after": 1265,
+          "before": 1270
+        },
+        {
+          "after": 1270,
+          "before": 1274
+        },
+        {
+          "after": 1274,
+          "before": 1280
+        },
+        {
+          "after": 1280,
+          "before": 1285
+        },
+        {
+          "after": 1285,
+          "before": 1290
+        },
+        {
+          "after": 1290,
+          "before": 1295
+        },
+        {
+          "after": 1295,
+          "before": 1300
+        },
+        {
+          "after": 1300,
+          "before": 1305
+        },
+        {
+          "after": 1305,
+          "before": 1310
+        },
+        {
+          "after": 1310,
+          "before": 1315
+        },
+        {
+          "after": 1315,
+          "before": 1319
+        },
+        {
+          "after": 1319,
+          "before": 1325
+        },
+        {
+          "after": 1325,
+          "before": 1328
+        },
+        {
+          "after": 1328,
+          "before": 1333
+        },
+        {
+          "after": 1333,
+          "before": 1338
+        },
+        {
+          "after": 1338,
+          "before": 1343
+        },
+        {
+          "after": 1343,
+          "before": 1348
+        },
+        {
+          "after": 1348,
+          "before": 1352
+        },
+        {
+          "after": 1352,
+          "before": 1358
+        },
+        {
+          "after": 1358,
+          "before": 1363
+        },
+        {
+          "after": 1363,
+          "before": 1368
+        },
+        {
+          "after": 1368,
+          "before": 1373
+        },
+        {
+          "after": 1373,
+          "before": 1378
+        },
+        {
+          "after": 1378,
+          "before": 1383
+        },
+        {
+          "after": 1383,
+          "before": 1387
+        },
+        {
+          "after": 1387,
+          "before": 1392
+        },
+        {
+          "after": 1392,
+          "before": 1397
+        },
+        {
+          "after": 1397,
+          "before": 1402
+        },
+        {
+          "after": 1402,
+          "before": 1407
+        },
+        {
+          "after": 1407,
+          "before": 1412
+        },
+        {
+          "after": 1412,
+          "before": 1417
+        },
+        {
+          "after": 1417,
+          "before": 1421
+        },
+        {
+          "after": 1421,
+          "before": 1426
+        },
+        {
+          "after": 1426,
+          "before": 1432
+        },
+        {
+          "after": 1432,
+          "before": 1437
+        },
+        {
+          "after": 1437,
+          "before": 1442
+        },
+        {
+          "after": 1442,
+          "before": 1447
+        },
+        {
+          "after": 1447,
+          "before": 1452
+        },
+        {
+          "after": 1452,
+          "before": 1457
+        },
+        {
+          "after": 1457,
+          "before": 1462
+        },
+        {
+          "after": 1462,
+          "before": 1466
+        },
+        {
+          "after": 1466,
+          "before": 1472
+        },
+        {
+          "after": 1472,
+          "before": 1477
+        },
+        {
+          "after": 1477,
+          "before": 1481
+        },
+        {
+          "after": 1481,
+          "before": 1486
+        },
+        {
+          "after": 1486,
+          "before": 1491
+        },
+        {
+          "after": 1491,
+          "before": 1496
+        },
+        {
+          "after": 1496,
+          "before": 1501
+        },
+        {
+          "after": 1501,
+          "before": 1504
+        }
+      ],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [
+        "TICK_STREAM_SAMPLED_NOT_REPLAY_COMPLETE"
+      ],
+      "message_stream_sha256": "8b3f222659fd45486711d837c6d21da7e922f98789bf9b2a12bb98a1f0cb32f2",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 317,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 317,
+        "first_lost_sequence": null,
+        "high_water_mark": 1,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 317,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": false,
+      "raw_evidence_requested": false,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 0,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": true,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": false,
+      "raw_transport_produced_count": 0,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": false,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 10
+    },
+    "status": "FAULT",
+    "topics": {
+      "/r2b4/checkpoint": {
+        "channel_id": 3,
+        "encoding": "json",
+        "message_count": null,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/event": {
+        "channel_id": 4,
+        "encoding": "json",
+        "message_count": 1,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/raw_lidar": {
+        "channel_id": 2,
+        "encoding": "json",
+        "message_count": null,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/runtime": {
+        "channel_id": 5,
+        "encoding": "json",
+        "message_count": 1,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      },
+      "/r2b4/tick": {
+        "channel_id": 1,
+        "encoding": "json",
+        "message_count": 317,
+        "metadata": {
+          "capture_format_version": "R2B4_MCAP_CAPTURE_V1",
+          "clock_epoch": "linux_monotonic_boot"
+        }
+      }
+    }
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_status": "PASS",
+  "incidents": [
+    {
+      "category": "SAFETY",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "signals": {
+          "L1": {
+            "io_health[0].reason": null,
+            "io_health[0].state": "OK",
+            "io_health[1].reason": null,
+            "io_health[1].state": "OK",
+            "io_health[2].reason": null,
+            "io_health[2].state": "OK",
+            "io_health[3].reason": null,
+            "io_health[3].state": "OK"
+          },
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 165324505,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 184571301,
+            "rejected[1].reason": "DUPLICATE"
+          },
+          "L3": {
+            "local_omega_rad_s": -0.29675428387123737,
+            "local_v_mps": 0.18902356298153297,
+            "localization_quality.encoder_age_ns": 4848361,
+            "localization_quality.global_fix_age_ns": 165324505,
+            "localization_quality.imu_age_ns": 14149767,
+            "localization_quality.lidar_age_ns": 165324505,
+            "localization_quality.relative_age_ns": 165324505,
+            "omega_rad_s": -0.29243836155628766,
+            "transform_revision": 6,
+            "v_mps": 0.18901052052419803
+          },
+          "L4": {
+            "freshness_ns": 165324505,
+            "local_costmap.freshness_ns": 165324505,
+            "local_costmap.revision": 594,
+            "map_revision": 937,
+            "robot_relative_geometry.freshness_ns": 165324505,
+            "robot_relative_geometry.point_count": 96
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "motion_validity.geometry_revision": null,
+            "progress": 0.037109375,
+            "reason": null,
+            "route_waypoint_count": 0,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 1506,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-05-00",
+            "trajectory.min_clearance_m": 0.21515177759855766,
+            "trajectory.omega_rad_s": -0.24,
+            "trajectory.progress_potential_score": 0.17473248994049692,
+            "trajectory.progress_score": 0.18935622595720247,
+            "trajectory.progress_viable": true,
+            "trajectory.v_mps": 0.192684
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": -0.20220057873038608,
+            "requested_v_mps": 0.19266742369702963,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": -0.20220057873038608,
+            "allowed_v_mps": 0.19266742369702963,
+            "requested_omega_rad_s": -0.20220057873038608,
+            "requested_v_mps": 0.19266742369702963
+          }
+        }
+      },
+      "id": "safety-fault-1505",
+      "layer": "L12",
+      "monotonic_ns": 26582920890301,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 1505
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 275827370,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 1
+          }
+        ]
+      },
+      "id": "l2-reject-16",
+      "layer": "L2",
+      "monotonic_ns": 26551662913272,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 16
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 280995242,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 11
+          }
+        ]
+      },
+      "id": "l2-reject-63",
+      "layer": "L2",
+      "monotonic_ns": 26552667606964,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 63
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 272457416,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 15
+          }
+        ]
+      },
+      "id": "l2-reject-83",
+      "layer": "L2",
+      "monotonic_ns": 26553061041889,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 83
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 271951448,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 37
+          }
+        ]
+      },
+      "id": "l2-reject-93",
+      "layer": "L2",
+      "monotonic_ns": 26553261675448,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 93
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 280838613,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 32
+          }
+        ]
+      },
+      "id": "l2-reject-173",
+      "layer": "L2",
+      "monotonic_ns": 26554960582737,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 173
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 282068425,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 44
+          }
+        ]
+      },
+      "id": "l2-reject-234",
+      "layer": "L2",
+      "monotonic_ns": 26556264995002,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 234
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 283501905,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 55
+          }
+        ]
+      },
+      "id": "l2-reject-294",
+      "layer": "L2",
+      "monotonic_ns": 26557560954514,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 294
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 287614503,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 64
+          }
+        ]
+      },
+      "id": "l2-reject-339",
+      "layer": "L2",
+      "monotonic_ns": 26558565548225,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 339
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 284248206,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 72
+          }
+        ]
+      },
+      "id": "l2-reject-387",
+      "layer": "L2",
+      "monotonic_ns": 26559563638954,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 387
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 268819173,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 82
+          }
+        ]
+      },
+      "id": "l2-reject-442",
+      "layer": "L2",
+      "monotonic_ns": 26560745792684,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 442
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 265602080,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 88
+          }
+        ]
+      },
+      "id": "l2-reject-479",
+      "layer": "L2",
+      "monotonic_ns": 26561544150804,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 479
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 264426454,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 92
+          }
+        ]
+      },
+      "id": "l2-reject-499",
+      "layer": "L2",
+      "monotonic_ns": 26561943162539,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 499
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 275776370,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 100
+          }
+        ]
+      },
+      "id": "l2-reject-544",
+      "layer": "L2",
+      "monotonic_ns": 26562946623762,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 544
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 293802493,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 103
+          }
+        ]
+      },
+      "id": "l2-reject-559",
+      "layer": "L2",
+      "monotonic_ns": 26563264144696,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 559
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 267462609,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 112
+          }
+        ]
+      },
+      "id": "l2-reject-610",
+      "layer": "L2",
+      "monotonic_ns": 26564343422243,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 610
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 271710560,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 136
+          }
+        ]
+      },
+      "id": "l2-reject-729",
+      "layer": "L2",
+      "monotonic_ns": 26566844594564,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 729
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 291089856,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 149
+          }
+        ]
+      },
+      "id": "l2-reject-791",
+      "layer": "L2",
+      "monotonic_ns": 26568162135775,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 791
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 291448877,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 158
+          }
+        ]
+      },
+      "id": "l2-reject-846",
+      "layer": "L2",
+      "monotonic_ns": 26569260647970,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 846
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 283242608,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 163
+          }
+        ]
+      },
+      "id": "l2-reject-880",
+      "layer": "L2",
+      "monotonic_ns": 26569951390843,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 880
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 291184459,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 173
+          }
+        ]
+      },
+      "id": "l2-reject-926",
+      "layer": "L2",
+      "monotonic_ns": 26570961240585,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 926
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 296940565,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 185
+          }
+        ]
+      },
+      "id": "l2-reject-993",
+      "layer": "L2",
+      "monotonic_ns": 26572362847334,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 993
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 297955201,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 197
+          }
+        ]
+      },
+      "id": "l2-reject-1061",
+      "layer": "L2",
+      "monotonic_ns": 26573761122380,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1061
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 298946254,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 236
+          }
+        ]
+      },
+      "id": "l2-reject-1260",
+      "layer": "L2",
+      "monotonic_ns": 26577860470396,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1260
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 308559235,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 249
+          }
+        ]
+      },
+      "id": "l2-reject-1333",
+      "layer": "L2",
+      "monotonic_ns": 26579364107177,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1333
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 287313621,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 267
+          }
+        ]
+      },
+      "id": "l2-reject-1421",
+      "layer": "L2",
+      "monotonic_ns": 26581143536022,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1421
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 307033032,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 280
+          }
+        ]
+      },
+      "id": "l2-reject-1496",
+      "layer": "L2",
+      "monotonic_ns": 26582663412100,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "WARNING",
+      "tick_id": 1496
+    },
+    {
+      "category": "PRODUCTION_FAULT",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "signals": {
+          "L1": {
+            "io_health[0].reason": null,
+            "io_health[0].state": "OK",
+            "io_health[1].reason": null,
+            "io_health[1].state": "OK",
+            "io_health[2].reason": null,
+            "io_health[2].state": "OK",
+            "io_health[3].reason": null,
+            "io_health[3].state": "OK"
+          },
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 165324505,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 184571301,
+            "rejected[1].reason": "DUPLICATE"
+          },
+          "L3": {
+            "local_omega_rad_s": -0.29675428387123737,
+            "local_v_mps": 0.18902356298153297,
+            "localization_quality.encoder_age_ns": 4848361,
+            "localization_quality.global_fix_age_ns": 165324505,
+            "localization_quality.imu_age_ns": 14149767,
+            "localization_quality.lidar_age_ns": 165324505,
+            "localization_quality.relative_age_ns": 165324505,
+            "omega_rad_s": -0.29243836155628766,
+            "transform_revision": 6,
+            "v_mps": 0.18901052052419803
+          },
+          "L4": {
+            "freshness_ns": 165324505,
+            "local_costmap.freshness_ns": 165324505,
+            "local_costmap.revision": 594,
+            "map_revision": 937,
+            "robot_relative_geometry.freshness_ns": 165324505,
+            "robot_relative_geometry.point_count": 96
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "lifecycle": "ACTIVE",
+            "mode": "EXPLORE",
+            "stop_reason": null
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "motion_validity.geometry_revision": null,
+            "progress": 0.037109375,
+            "reason": null,
+            "route_waypoint_count": 0,
+            "status": "ACTIVE"
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "expiry_tick": 1506,
+            "selection_reason": "BEST_TRAJECTORY:trajectory-05-00",
+            "trajectory.min_clearance_m": 0.21515177759855766,
+            "trajectory.omega_rad_s": -0.24,
+            "trajectory.progress_potential_score": 0.17473248994049692,
+            "trajectory.progress_score": 0.18935622595720247,
+            "trajectory.progress_viable": true,
+            "trajectory.v_mps": 0.192684
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.3,
+            "requested_omega_rad_s": -0.20220057873038608,
+            "requested_v_mps": 0.19266742369702963,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": -0.20220057873038608,
+            "allowed_v_mps": 0.19266742369702963,
+            "requested_omega_rad_s": -0.20220057873038608,
+            "requested_v_mps": 0.19266742369702963
+          }
+        }
+      },
+      "id": "fault-layer-1505",
+      "layer": "L11",
+      "monotonic_ns": 26582920890301,
+      "reason": "L11_ERROR",
+      "severity": "WARNING",
+      "tick_id": 1505
+    }
+  ],
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "POLICY_VERDICT",
+    "evidence_ids": [
+      "safety-fault-1505"
+    ],
+    "evidence_strength": "DIRECT",
+    "kind": "SAFETY",
+    "layer": "L12",
+    "reason": "L11_ERROR",
+    "scope": "CAPTURED_SAMPLES_ONLY",
+    "selection_basis": "DIRECT_CAPTURE_OR_PRODUCTION_EVIDENCE",
+    "tick_id": 1505
+  },
+  "schema": "R2B4_TEST_HUB_GUI_V2",
+  "status": "FINDING",
+  "tracks": [
+    "pose.x_m",
+    "pose.y_m",
+    "pose.yaw_rad",
+    "pose.covariance_trace",
+    "navigation_progress",
+    "requested_motion.v_mps",
+    "constrained_motion.v_mps",
+    "safety_decision",
+    "l9_constraints"
+  ]
+}
