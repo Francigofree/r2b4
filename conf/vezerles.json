@@ -131,7 +131,8 @@
       3
     ],
     "runtime_background_cpus": [
-      0
+      1,
+      2
     ],
     "encoder_cpus": [
       0
@@ -140,78 +141,57 @@
       0
     ],
     "lidar_owner_cpus": [
-      0,
-      1,
-      2,
-      3
+      2
     ],
     "lidar_matcher_cpus": [
-      0,
-      1,
-      2,
-      3
+      2
     ],
     "vision_cpus": [
-      0,
-      1,
-      2,
-      3
+      1
     ],
     "planner_cpus": [
-      0,
-      1,
-      2,
-      3
+      1
     ],
     "capture_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "status_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "command_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "l0_encoder_cpus": [
-      0,
-      1,
-      2,
-      3
+      0
     ],
     "l0_imu_cpus": [
-      0,
-      1,
-      2,
-      3
+      0
     ],
     "l0_lidar_cpus": [
-      0,
-      1,
-      2,
-      3
+      2
     ],
     "l0_aux_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "operator_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "voice_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "er2_cpus": [
-      0,
-      1
+      1,
+      2
     ],
     "diagnostics_cpus": [
-      0,
-      1
+      1,
+      2
     ]
   },
   "lidar_driver": {
@@ -398,6 +378,7 @@
       "local_goal_novelty_weight": 0.65,
       "local_goal_clearance_weight": 0.25,
       "local_goal_forward_weight": 0.1,
+      "minimum_planning_speed_mps": 0.15,
       "localization_recovery_timeout_ns": 5000000000,
       "localization_recovery_omega_rad_s": 0.2,
       "localization_degraded_speed_scale": 0.4,
@@ -457,6 +438,8 @@
     "encoder_maximum_sample_interval_ns": 100000000,
     "encoder_maximum_abs_velocity_mps": 1.5,
     "encoder_minimum_trust": 0.5,
+    "encoder_minimum_reliable_speed_mps": 0.15,
+    "encoder_velocity_unreliable_below_mps": 0.13,
     "imu_maximum_sample_age_ns": 100000000,
     "imu_minimum_confidence": 0.5,
     "imu_minimum_calibration": 2,
