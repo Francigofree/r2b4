@@ -1,0 +1,1972 @@
+{
+  "actionable_incident_count": 74,
+  "analysis_handoff": {
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "behavior_status": "NOMINAL",
+  "capture": {
+    "capture_id": "v3_20260930_172050_10613_capture",
+    "integrity": {
+      "capacity_eviction_count": 0,
+      "captured_tick_sequence_gaps": [],
+      "complete": true,
+      "core_capacity_eviction_count": 0,
+      "digest_scope": "all MCAP messages before capture_finalized event",
+      "ingress_drop_count": 0,
+      "integrity_reasons": [],
+      "integrity_warnings": [],
+      "message_stream_sha256": "7cffcfc41d4caf166e0b779859967aa1e4d5352afe6427b70349a83e1e4994a1",
+      "observation_subscription": {
+        "__type__": "SubscriptionSnapshot",
+        "accepted_count": 619,
+        "capacity": 4096,
+        "closed": true,
+        "consumed_count": 619,
+        "first_lost_sequence": null,
+        "high_water_mark": 45,
+        "last_lost_sequence": null,
+        "lost_count": 0,
+        "matched_count": 619,
+        "mode": "RELIABLE",
+        "name": "capture-process",
+        "queued": 0,
+        "required": true,
+        "superseded_count": 0
+      },
+      "post_window_complete": true,
+      "pre_window_complete": true,
+      "raw_capacity_eviction_count": 0,
+      "raw_evidence_complete": true,
+      "raw_evidence_requested": true,
+      "raw_integrity_reasons": [],
+      "raw_lidar_duplicate_count": 0,
+      "raw_lidar_expected_scan_count": 124,
+      "raw_lidar_gap_missing_revisions": [],
+      "raw_lidar_loss_fraction": 0.0,
+      "raw_lidar_loss_missing_revisions": [],
+      "raw_lidar_loss_tolerance_fraction": 0.05,
+      "raw_lidar_loss_within_tolerance": true,
+      "raw_lidar_max_consecutive_missing": 0,
+      "raw_lidar_max_consecutive_missing_allowed": 2,
+      "raw_lidar_missing_count": 0,
+      "raw_lidar_missing_revisions": [],
+      "raw_lidar_out_of_order_count": 0,
+      "raw_lidar_revision_gaps": [],
+      "raw_lidar_truncated_count": 0,
+      "raw_transport_end": true,
+      "raw_transport_produced_count": 124,
+      "raw_transport_superseded_count": 0,
+      "replay_complete": true,
+      "replay_integrity_reasons": [],
+      "sample_complete": true,
+      "session_start_short_pre_window": false,
+      "terminal_short_post_window": false,
+      "tick_sample_hz": 50
+    },
+    "status": "FAULT",
+    "trigger_reason": "APPEND_ONLY"
+  },
+  "incident_count": 74,
+  "incidents": [
+    {
+      "category": "PRODUCTION_FAULT",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 161784121,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 261729547,
+            "rejected[1].reason": "STALE",
+            "rejected[2].age_ns": 271458419,
+            "rejected[2].reason": "STALE"
+          },
+          "L3": {
+            "local_omega_rad_s": 0.15596436741338815,
+            "local_v_mps": 0.13830835720816495,
+            "localization_quality.encoder_age_ns": 24045437,
+            "localization_quality.global_fix_age_ns": 1661507866,
+            "localization_quality.imu_age_ns": 21503848,
+            "localization_quality.lidar_age_ns": 161784121,
+            "localization_quality.relative_age_ns": 261729547,
+            "omega_rad_s": 0.15640756758587424,
+            "transform_revision": 2,
+            "v_mps": 0.13830835720816495
+          },
+          "L4": {
+            "freshness_ns": 161784121,
+            "local_costmap.freshness_ns": 161784121,
+            "local_costmap.revision": 204,
+            "map_revision": 338,
+            "obstacle_tracks[0].confidence": 0.60546875,
+            "obstacle_tracks[0].estimate_status": "PREDICTED",
+            "robot_relative_geometry.freshness_ns": 161784121,
+            "robot_relative_geometry.point_count": 96
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "lifecycle": "ACTIVE",
+            "mode": "TELEOP",
+            "stop_reason": null,
+            "velocity_target.omega_rad_s": 0.0,
+            "velocity_target.v_mps": 0.15
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "motion_validity.geometry_revision": null,
+            "progress": 0.0,
+            "reason": null,
+            "status": "ACTIVE",
+            "velocity_target.omega_rad_s": 0.0,
+            "velocity_target.v_mps": 0.15
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "expiry_tick": 490,
+            "selection_reason": "DIRECT_VELOCITY",
+            "validity.geometry_revision": null,
+            "velocity_target.omega_rad_s": 0.0,
+            "velocity_target.v_mps": 0.15
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "requested_omega_rad_s": 0.0,
+            "requested_v_mps": 0.15,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": 0.0,
+            "allowed_v_mps": 0.15,
+            "requested_omega_rad_s": 0.0,
+            "requested_v_mps": 0.15
+          }
+        }
+      },
+      "id": "fault-layer-489",
+      "layer": "L11",
+      "monotonic_ns": 12178788916419,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 489
+    },
+    {
+      "category": "SAFETY",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "signals": {
+          "L12": {
+            "latch_state": "FAULT",
+            "left_output": 0.0,
+            "reason": "L11_ERROR",
+            "right_output": 0.0,
+            "safety_decision": "FAULT"
+          },
+          "L2": {
+            "rejected[0].age_ns": 161784121,
+            "rejected[0].reason": "DUPLICATE",
+            "rejected[1].age_ns": 261729547,
+            "rejected[1].reason": "STALE",
+            "rejected[2].age_ns": 271458419,
+            "rejected[2].reason": "STALE"
+          },
+          "L3": {
+            "local_omega_rad_s": 0.15596436741338815,
+            "local_v_mps": 0.13830835720816495,
+            "localization_quality.encoder_age_ns": 24045437,
+            "localization_quality.global_fix_age_ns": 1661507866,
+            "localization_quality.imu_age_ns": 21503848,
+            "localization_quality.lidar_age_ns": 161784121,
+            "localization_quality.relative_age_ns": 261729547,
+            "omega_rad_s": 0.15640756758587424,
+            "transform_revision": 2,
+            "v_mps": 0.13830835720816495
+          },
+          "L4": {
+            "freshness_ns": 161784121,
+            "local_costmap.freshness_ns": 161784121,
+            "local_costmap.revision": 204,
+            "map_revision": 338,
+            "obstacle_tracks[0].confidence": 0.60546875,
+            "obstacle_tracks[0].estimate_status": "PREDICTED",
+            "robot_relative_geometry.freshness_ns": 161784121,
+            "robot_relative_geometry.point_count": 96
+          },
+          "L5": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "lifecycle": "ACTIVE",
+            "mode": "TELEOP",
+            "stop_reason": null,
+            "velocity_target.omega_rad_s": 0.0,
+            "velocity_target.v_mps": 0.15
+          },
+          "L6": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "motion_validity.geometry_revision": null,
+            "progress": 0.0,
+            "reason": null,
+            "status": "ACTIVE",
+            "velocity_target.omega_rad_s": 0.0,
+            "velocity_target.v_mps": 0.15
+          },
+          "L7": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "expiry_tick": 490,
+            "selection_reason": "DIRECT_VELOCITY",
+            "validity.geometry_revision": null,
+            "velocity_target.omega_rad_s": 0.0,
+            "velocity_target.v_mps": 0.15
+          },
+          "L8": {
+            "constraints.max_omega_rad_s": 0.6,
+            "constraints.max_v_mps": 0.15,
+            "requested_omega_rad_s": 0.0,
+            "requested_v_mps": 0.15,
+            "stop_reason": null
+          },
+          "L9": {
+            "active_constraints": [],
+            "allowed_omega_rad_s": 0.0,
+            "allowed_v_mps": 0.15,
+            "requested_omega_rad_s": 0.0,
+            "requested_v_mps": 0.15
+          }
+        }
+      },
+      "id": "safety-fault-489",
+      "layer": "L12",
+      "monotonic_ns": 12178788916419,
+      "reason": "L11_ERROR",
+      "severity": "CRITICAL",
+      "tick_id": 489
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 270580848,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 10
+          }
+        ]
+      },
+      "id": "l2-reject-54",
+      "layer": "L2",
+      "monotonic_ns": 12169390802859,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 54
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 265402226,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 11
+          }
+        ]
+      },
+      "id": "l2-reject-59",
+      "layer": "L2",
+      "monotonic_ns": 12169487339608,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 59
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 365647829,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 11
+          },
+          {
+            "age_ns": 256566211,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 18
+          }
+        ]
+      },
+      "id": "l2-reject-64",
+      "layer": "L2",
+      "monotonic_ns": 12169587585211,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 64
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 405844934,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 11
+          }
+        ]
+      },
+      "id": "l2-reject-66",
+      "layer": "L2",
+      "monotonic_ns": 12169627782316,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 66
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 252637428,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 13
+          }
+        ]
+      },
+      "id": "l2-reject-78",
+      "layer": "L2",
+      "monotonic_ns": 12169889107415,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 78
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 267890063,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 14
+          }
+        ]
+      },
+      "id": "l2-reject-84",
+      "layer": "L2",
+      "monotonic_ns": 12170007447254,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 84
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 267170773,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 17
+          }
+        ]
+      },
+      "id": "l2-reject-99",
+      "layer": "L2",
+      "monotonic_ns": 12170309682537,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 99
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260965634,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 30
+          }
+        ]
+      },
+      "id": "l2-reject-110",
+      "layer": "L2",
+      "monotonic_ns": 12170529378634,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 110
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 258187260,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 31
+          }
+        ]
+      },
+      "id": "l2-reject-113",
+      "layer": "L2",
+      "monotonic_ns": 12170589083260,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 113
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 267187902,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 20
+          }
+        ]
+      },
+      "id": "l2-reject-114",
+      "layer": "L2",
+      "monotonic_ns": 12170608820357,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 114
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 310116930,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 20
+          },
+          {
+            "age_ns": 258355385,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 32
+          }
+        ]
+      },
+      "id": "l2-reject-116",
+      "layer": "L2",
+      "monotonic_ns": 12170651749385,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 116
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 327749681,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 20
+          }
+        ]
+      },
+      "id": "l2-reject-117",
+      "layer": "L2",
+      "monotonic_ns": 12170669382136,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 117
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 250795483,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 21
+          }
+        ]
+      },
+      "id": "l2-reject-127",
+      "layer": "L2",
+      "monotonic_ns": 12170887428668,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 127
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 252936487,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 22
+          }
+        ]
+      },
+      "id": "l2-reject-132",
+      "layer": "L2",
+      "monotonic_ns": 12170988474203,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 132
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254488680,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 23
+          }
+        ]
+      },
+      "id": "l2-reject-137",
+      "layer": "L2",
+      "monotonic_ns": 12171089548644,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 137
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 262085012,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 24
+          }
+        ]
+      },
+      "id": "l2-reject-142",
+      "layer": "L2",
+      "monotonic_ns": 12171195679042,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 142
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254938202,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 25
+          }
+        ]
+      },
+      "id": "l2-reject-147",
+      "layer": "L2",
+      "monotonic_ns": 12171287537541,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 147
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260160649,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 27
+          }
+        ]
+      },
+      "id": "l2-reject-157",
+      "layer": "L2",
+      "monotonic_ns": 12171491202026,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 157
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 256208561,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 28
+          }
+        ]
+      },
+      "id": "l2-reject-161",
+      "layer": "L2",
+      "monotonic_ns": 12171587762423,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 161
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 255215953,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 29
+          }
+        ]
+      },
+      "id": "l2-reject-166",
+      "layer": "L2",
+      "monotonic_ns": 12171687401801,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 166
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 415315943,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 29
+          },
+          {
+            "age_ns": 266743791,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 51
+          }
+        ]
+      },
+      "id": "l2-reject-174",
+      "layer": "L2",
+      "monotonic_ns": 12171847501791,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 174
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 435525709,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 29
+          }
+        ]
+      },
+      "id": "l2-reject-175",
+      "layer": "L2",
+      "monotonic_ns": 12171867711557,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 175
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257167020,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 30
+          }
+        ]
+      },
+      "id": "l2-reject-180",
+      "layer": "L2",
+      "monotonic_ns": 12171988668652,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 180
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 269102185,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 58
+          }
+        ]
+      },
+      "id": "l2-reject-197",
+      "layer": "L2",
+      "monotonic_ns": 12172349796185,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 197
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254684385,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 34
+          }
+        ]
+      },
+      "id": "l2-reject-199",
+      "layer": "L2",
+      "monotonic_ns": 12172387805537,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 199
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 259180833,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 60
+          }
+        ]
+      },
+      "id": "l2-reject-206",
+      "layer": "L2",
+      "monotonic_ns": 12172527356833,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 206
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 252813902,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 36
+          }
+        ]
+      },
+      "id": "l2-reject-209",
+      "layer": "L2",
+      "monotonic_ns": 12172587379220,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 209
+    },
+    {
+      "category": "LOCALIZATION",
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "evidence": {
+        "first_trace": 0.0461,
+        "growth_ratio": 17.79392783714585,
+        "last_trace": 0.3158889586022634,
+        "max_trace": 0.6474631963029476,
+        "sample_count": 490
+      },
+      "id": "covariance-growth-213",
+      "layer": "L3",
+      "monotonic_ns": 12172667437465,
+      "reason": "COVARIANCE_GROWTH",
+      "severity": "MEDIUM",
+      "tick_id": 213
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254712086,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 62
+          }
+        ]
+      },
+      "id": "l2-reject-215",
+      "layer": "L2",
+      "monotonic_ns": 12172710371086,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 215
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260320091,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 66
+          }
+        ]
+      },
+      "id": "l2-reject-231",
+      "layer": "L2",
+      "monotonic_ns": 12173028449091,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 231
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 253742686,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 41
+          },
+          {
+            "age_ns": 257742478,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 67
+          }
+        ]
+      },
+      "id": "l2-reject-233",
+      "layer": "L2",
+      "monotonic_ns": 12173088351478,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 233
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 293509325,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 41
+          }
+        ]
+      },
+      "id": "l2-reject-235",
+      "layer": "L2",
+      "monotonic_ns": 12173128118117,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 235
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257196909,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 42
+          }
+        ]
+      },
+      "id": "l2-reject-243",
+      "layer": "L2",
+      "monotonic_ns": 12173290623695,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 243
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260002657,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 75
+          }
+        ]
+      },
+      "id": "l2-reject-262",
+      "layer": "L2",
+      "monotonic_ns": 12173715540657,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 262
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257720125,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 47
+          }
+        ]
+      },
+      "id": "l2-reject-266",
+      "layer": "L2",
+      "monotonic_ns": 12173788436879,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 266
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257855283,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 48
+          }
+        ]
+      },
+      "id": "l2-reject-270",
+      "layer": "L2",
+      "monotonic_ns": 12173887898515,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 270
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 258017200,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 49
+          }
+        ]
+      },
+      "id": "l2-reject-275",
+      "layer": "L2",
+      "monotonic_ns": 12173989559608,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 275
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 256484627,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 50
+          }
+        ]
+      },
+      "id": "l2-reject-279",
+      "layer": "L2",
+      "monotonic_ns": 12174088502649,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 279
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 252125769,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 51
+          }
+        ]
+      },
+      "id": "l2-reject-293",
+      "layer": "L2",
+      "monotonic_ns": 12174383370111,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 293
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 262744008,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 87
+          }
+        ]
+      },
+      "id": "l2-reject-300",
+      "layer": "L2",
+      "monotonic_ns": 12174530692008,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 300
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257262951,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 88
+          }
+        ]
+      },
+      "id": "l2-reject-303",
+      "layer": "L2",
+      "monotonic_ns": 12174587703951,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 303
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254403688,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 89
+          }
+        ]
+      },
+      "id": "l2-reject-306",
+      "layer": "L2",
+      "monotonic_ns": 12174647333688,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 306
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 256944342,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 54
+          }
+        ]
+      },
+      "id": "l2-reject-308",
+      "layer": "L2",
+      "monotonic_ns": 12174687938944,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 308
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 281816209,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 54
+          },
+          {
+            "age_ns": 257389811,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 90
+          }
+        ]
+      },
+      "id": "l2-reject-309",
+      "layer": "L2",
+      "monotonic_ns": 12174712810811,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 309
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 273027551,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 90
+          }
+        ]
+      },
+      "id": "l2-reject-310",
+      "layer": "L2",
+      "monotonic_ns": 12174728448551,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 310
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 253498563,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 56
+          }
+        ]
+      },
+      "id": "l2-reject-318",
+      "layer": "L2",
+      "monotonic_ns": 12174887828888,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 318
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 280305794,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 56
+          },
+          {
+            "age_ns": 271723119,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 92
+          }
+        ]
+      },
+      "id": "l2-reject-319",
+      "layer": "L2",
+      "monotonic_ns": 12174914636119,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 319
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 262259540,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 93
+          }
+        ]
+      },
+      "id": "l2-reject-322",
+      "layer": "L2",
+      "monotonic_ns": 12174967659540,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 322
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 251227143,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 57
+          }
+        ]
+      },
+      "id": "l2-reject-323",
+      "layer": "L2",
+      "monotonic_ns": 12174987322173,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 323
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254022427,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 58
+          },
+          {
+            "age_ns": 259765532,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 95
+          }
+        ]
+      },
+      "id": "l2-reject-328",
+      "layer": "L2",
+      "monotonic_ns": 12175090156532,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 328
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 311285854,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 58
+          }
+        ]
+      },
+      "id": "l2-reject-331",
+      "layer": "L2",
+      "monotonic_ns": 12175147419959,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 331
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 373290309,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 58
+          },
+          {
+            "age_ns": 254053414,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 96
+          }
+        ]
+      },
+      "id": "l2-reject-334",
+      "layer": "L2",
+      "monotonic_ns": 12175209424414,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 334
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 411775200,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 58
+          }
+        ]
+      },
+      "id": "l2-reject-335",
+      "layer": "L2",
+      "monotonic_ns": 12175247909305,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 335
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 255158499,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 63
+          }
+        ]
+      },
+      "id": "l2-reject-361",
+      "layer": "L2",
+      "monotonic_ns": 12175788089736,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 361
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 254960848,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 110
+          }
+        ]
+      },
+      "id": "l2-reject-382",
+      "layer": "L2",
+      "monotonic_ns": 12176210216848,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 382
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 252739589,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 111
+          }
+        ]
+      },
+      "id": "l2-reject-385",
+      "layer": "L2",
+      "monotonic_ns": 12176270500589,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 385
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 258746141,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 68
+          }
+        ]
+      },
+      "id": "l2-reject-386",
+      "layer": "L2",
+      "monotonic_ns": 12176287584226,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 386
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257088382,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 115
+          }
+        ]
+      },
+      "id": "l2-reject-400",
+      "layer": "L2",
+      "monotonic_ns": 12176587295382,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 400
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260708532,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 70
+          }
+        ]
+      },
+      "id": "l2-reject-405",
+      "layer": "L2",
+      "monotonic_ns": 12176687618487,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 405
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260768680,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 71
+          }
+        ]
+      },
+      "id": "l2-reject-410",
+      "layer": "L2",
+      "monotonic_ns": 12176787762090,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 410
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 271405492,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 77
+          }
+        ]
+      },
+      "id": "l2-reject-438",
+      "layer": "L2",
+      "monotonic_ns": 12177398814045,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 438
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 267728045,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 78
+          }
+        ]
+      },
+      "id": "l2-reject-447",
+      "layer": "L2",
+      "monotonic_ns": 12177695832650,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 447
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 263771929,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 79
+          }
+        ]
+      },
+      "id": "l2-reject-451",
+      "layer": "L2",
+      "monotonic_ns": 12177793164236,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 451
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257637560,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 80
+          }
+        ]
+      },
+      "id": "l2-reject-454",
+      "layer": "L2",
+      "monotonic_ns": 12177887334916,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 454
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 261352869,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 81
+          }
+        ]
+      },
+      "id": "l2-reject-459",
+      "layer": "L2",
+      "monotonic_ns": 12177989723495,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 459
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 258149229,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 83
+          }
+        ]
+      },
+      "id": "l2-reject-467",
+      "layer": "L2",
+      "monotonic_ns": 12178187494075,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 467
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 260027990,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 87
+          }
+        ]
+      },
+      "id": "l2-reject-482",
+      "layer": "L2",
+      "monotonic_ns": 12178588959122,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 482
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 381392199,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 87
+          },
+          {
+            "age_ns": 255359331,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 148
+          }
+        ]
+      },
+      "id": "l2-reject-486",
+      "layer": "L2",
+      "monotonic_ns": 12178710323331,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 486
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 418770954,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 87
+          }
+        ]
+      },
+      "id": "l2-reject-487",
+      "layer": "L2",
+      "monotonic_ns": 12178747702086,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 487
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 250872188,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 149
+          }
+        ]
+      },
+      "id": "l2-reject-488",
+      "layer": "L2",
+      "monotonic_ns": 12178768330188,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 488
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 261729547,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 88
+          },
+          {
+            "age_ns": 271458419,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 149
+          }
+        ]
+      },
+      "id": "l2-reject-489",
+      "layer": "L2",
+      "monotonic_ns": 12178788916419,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 489
+    },
+    {
+      "category": "NAVIGATION",
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "evidence": {
+        "last_progress": 0.0,
+        "monotonic_ns": 12178788916419,
+        "progress_span": 0.0,
+        "tick_id": 489,
+        "window_tick_count": 50
+      },
+      "id": "navigation-stagnation",
+      "layer": "L6",
+      "monotonic_ns": 12178788916419,
+      "reason": "NAVIGATION_PROGRESS_STAGNATION",
+      "severity": "MEDIUM",
+      "tick_id": 489
+    }
+  ],
+  "localization": {
+    "first_trace": 0.0461,
+    "growth_ratio": 17.79392783714585,
+    "last_trace": 0.3158889586022634,
+    "max_trace": 0.6474631963029476,
+    "sample_count": 490
+  },
+  "motion": {
+    "behavior_status": "NOMINAL",
+    "constrained_to_zero_tick_count": 0,
+    "estimated_path_length_m": 1.8035964917707943,
+    "requested_motion_tick_count": 444
+  },
+  "navigation": {
+    "stagnation": {
+      "last_progress": 0.0,
+      "monotonic_ns": 12178788916419,
+      "progress_span": 0.0,
+      "tick_id": 489,
+      "window_tick_count": 50
+    }
+  },
+  "priority_evidence_candidate": {
+    "causal_claim": false,
+    "claim_class": "POLICY_VERDICT",
+    "evidence_ids": [
+      "fault-layer-489"
+    ],
+    "evidence_strength": "DIRECT",
+    "kind": "PRODUCTION_FAULT",
+    "layer": "L11",
+    "reason": "L11_ERROR",
+    "selection_basis": "DIRECT_CAPTURE_OR_PRODUCTION_EVIDENCE",
+    "tick_id": 489
+  },
+  "safety": {
+    "ALLOW": 443,
+    "FAULT": 1,
+    "STOP": 46,
+    "UNKNOWN": 0
+  },
+  "schema": "R2B4_TEST_HUB_TRIAGE_V2",
+  "sensors": {
+    "critical_device_non_ok_count": 0,
+    "device_health_incident_policy": "PRODUCTION_CRITICAL_ONLY_EPISODE_EDGE",
+    "device_non_ok_count": 494,
+    "l2_actionable_rejection_count": 176,
+    "l2_duplicate_count": 1427,
+    "l2_rejection_count": 1603,
+    "l2_rejection_reasons": {
+      "DUPLICATE": 1427,
+      "STALE": 176
+    },
+    "optional_device_non_ok_count": 494,
+    "production_critical_device_ids": [
+      "BNO055_IMU",
+      "RPLIDAR_C1",
+      "WHEEL_ENCODERS"
+    ]
+  },
+  "ticks": {
+    "count": 490,
+    "first_monotonic_ns": 12168249840218,
+    "first_tick_id": 0,
+    "last_monotonic_ns": 12178788916419,
+    "last_tick_id": 489
+  },
+  "timing": {
+    "max_ms": 62.56805,
+    "p50_ms": 20.123581,
+    "p95_ms": 36.114378,
+    "p99_ms": 41.661021,
+    "sample_count": 489
+  }
+}

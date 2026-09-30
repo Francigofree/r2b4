@@ -1,0 +1,81 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "artifacts": {
+    "agent_brief.json": {
+      "sha256": "bcdf491a6ad71ecd7857f2400b8ac8356aec3bb1d9eeedaefb96311623a9133a",
+      "size_bytes": 37000
+    },
+    "diagnosis.json": {
+      "sha256": "b7836ec82f08137cbf00355cf16172335f37c2ce426c7ba12614f5bbc0b0801d",
+      "size_bytes": 42933
+    },
+    "gui_manifest.json": {
+      "sha256": "b0d0bcf9538657ca1c873f1da48eef1120f6d6139a799a5dad5de00b02e91598",
+      "size_bytes": 83158
+    },
+    "inspect.json": {
+      "sha256": "5061a66ec2fc480ecf76401bce990e2a1b04e2e7f259704f3f181cb7f436855e",
+      "size_bytes": 6211
+    },
+    "interesting_slice.ndjson": {
+      "sha256": "32397a250e35e18d42237c061c15fae8dc197314b1960b0a06b603e9083af0f3",
+      "size_bytes": 27217
+    },
+    "replay_result.json": {
+      "sha256": "e8b5c58c12b86d2475f4126175df364c7417a2ea5cbb66b40bd89646fb5ccba6",
+      "size_bytes": 111113
+    },
+    "timeline.ndjson": {
+      "sha256": "531b1663e10007601738357c1307749f100aa379366e4d9f7f46da793a0c5419",
+      "size_bytes": 2378545
+    },
+    "triage.json": {
+      "sha256": "90bb0f91353cac26b82c859e735ed26368733b00ae6b5cebdb5b2a9419d39747",
+      "size_bytes": 82571
+    }
+  },
+  "authority_capture": {
+    "container": "MCAP",
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_172628_11426_capture.mcap",
+    "sha256": "ca86860002b242f44ef14e1b3cf9f5948fd4101375b2381b2704b6a0f01dd9f5"
+  },
+  "behavior_status": "NOMINAL",
+  "created_at_utc": "2026-09-30T15:27:24Z",
+  "diagnosis_status": "FINDING",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_sha256": "5d1c0b187f8f6919aea378c9c625c56cee01b43c8d72d0609d4bc4cf8d6c7010",
+  "evidence_status": "PASS",
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "HEURISTIC_FINDING",
+    "evidence_ids": [
+      "device-205"
+    ],
+    "evidence_strength": "HEURISTIC",
+    "kind": "DEVICE_HEALTH",
+    "layer": "L1",
+    "reason": "DEVICE_HEALTH_NON_OK",
+    "selection_basis": "SEVERITY_TIME_ORDER",
+    "tick_id": 205
+  },
+  "run_id": "v3_20260930_172628_11426_capture.evidence",
+  "schema": "R2B4_EVIDENCE_INDEX_V2",
+  "status": "FINDING"
+}

@@ -1,0 +1,483 @@
+{
+  "anomaly_events": {
+    "count": 0,
+    "file": "localization_events.ndjson"
+  },
+  "behavior_episode_tagging": true,
+  "claim_policy": {
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "causal_claim": false,
+    "finding_class": "HEURISTIC_FINDING",
+    "root_cause_inferred": false
+  },
+  "configuration": {
+    "track_width_m": 0.3557,
+    "track_width_source": "capture_runtime_configuration"
+  },
+  "cross_sensor": {
+    "encoder_minus_ekf_omega_rad_s": {
+      "count": 490,
+      "mae": 0.1176669760805336,
+      "max": 0.493422687254779,
+      "max_abs": 0.5672983125288971,
+      "mean": -0.00042879259071532615,
+      "min": -0.5672983125288971,
+      "p50_abs": 0.09205611504984358,
+      "p95_abs": 0.3290673725651764,
+      "p99_abs": 0.4214832790094486,
+      "rms": 0.16312426071182343
+    },
+    "encoder_minus_imu_omega_rad_s": {
+      "count": 490,
+      "mae": 0.12554245595702365,
+      "max": 0.4945237611518554,
+      "max_abs": 0.5675925205861403,
+      "mean": -3.8604067898904176e-05,
+      "min": -0.5675925205861403,
+      "p50_abs": 0.09974525023258292,
+      "p95_abs": 0.34957651932594735,
+      "p99_abs": 0.42859261916799274,
+      "rms": 0.1699490091007388
+    },
+    "encoder_vs_ekf_accumulated_yaw_rad": -0.01772330958223947,
+    "encoder_vs_imu_accumulated_yaw_rad": -0.027259921832415407,
+    "imu_minus_ekf_omega_rad_s": {
+      "count": 490,
+      "mae": 0.008231131489979518,
+      "max": 0.35063568491885866,
+      "max_abs": 0.4274137689619901,
+      "mean": -0.0003901885228164179,
+      "min": -0.4274137689619901,
+      "p50_abs": 0.00029420805724322124,
+      "p95_abs": 0.001188765977183831,
+      "p99_abs": 0.3071324162530668,
+      "rms": 0.04765733475281786
+    },
+    "wheel_mean_minus_ekf_v_mps": {
+      "count": 490,
+      "mae": 0.004031047618187101,
+      "max": 0.05452941433323277,
+      "max_abs": 0.05452941433323277,
+      "mean": -0.000445790389951176,
+      "min": -0.04765279280957324,
+      "p50_abs": 0.0022918359953590373,
+      "p95_abs": 0.012585879323609907,
+      "p99_abs": 0.04281161733518941,
+      "rms": 0.008074188201468676
+    }
+  },
+  "ekf": {
+    "covariance": {
+      "gyro_bias_variance": {
+        "count": 490,
+        "max": 0.12398657181794084,
+        "mean": 0.021503535481411082,
+        "min": 0.0061,
+        "p10": 0.006643077576394734,
+        "p50": 0.008574246721299295,
+        "p95": 0.12297550969464935,
+        "p99": 0.1236770239160537
+      },
+      "trace": {
+        "count": 490,
+        "max": 0.6474631963029476,
+        "mean": 0.22576409378966897,
+        "min": 0.03638674958270488,
+        "p10": 0.09847541919922982,
+        "p50": 0.1943029048895746,
+        "p95": 0.4847636394232574,
+        "p99": 0.544467636094795
+      },
+      "trace_growth_ratio": 6.852255067294217,
+      "velocity_variance": {
+        "count": 490,
+        "max": 0.046987763900240814,
+        "mean": 0.006712381838440105,
+        "min": 4.552352048558423e-05,
+        "p10": 0.0022734931915639935,
+        "p50": 0.0026498667304661726,
+        "p95": 0.023052549100165597,
+        "p99": 0.03648851341659662
+      },
+      "x_variance": {
+        "count": 490,
+        "max": 0.2061301461267816,
+        "mean": 0.07826052834702282,
+        "min": 0.01,
+        "p10": 0.03125351080560081,
+        "p50": 0.06670437809998354,
+        "p95": 0.1810222413666147,
+        "p99": 0.2010700118057146
+      },
+      "y_variance": {
+        "count": 490,
+        "max": 0.22118877351427782,
+        "mean": 0.07989987500136178,
+        "min": 0.01,
+        "p10": 0.03129981003719557,
+        "p50": 0.06710838619967849,
+        "p95": 0.19129939748656724,
+        "p99": 0.21510915634931332
+      },
+      "yaw_variance": {
+        "count": 490,
+        "max": 0.11435422553001341,
+        "mean": 0.039387773121433066,
+        "min": 0.008879444045152222,
+        "p10": 0.012902272777185985,
+        "p50": 0.031173815699873552,
+        "p95": 0.09742896908553048,
+        "p99": 0.11085747289749333
+      }
+    },
+    "lidar_correction_sign_flips": 0,
+    "lidar_innovation_x_m": {
+      "count": 16,
+      "mae": 0.017359404130163167,
+      "max": 0.0,
+      "max_abs": 0.031033710853732743,
+      "mean": -0.017359404130163167,
+      "min": -0.031033710853732743,
+      "p50_abs": 0.021291513919316662,
+      "p95_abs": 0.030262510978129237,
+      "p99_abs": 0.030879470878612043,
+      "rms": 0.020352343256867793
+    },
+    "lidar_innovation_y_m": {
+      "count": 16,
+      "mae": 0.0042294606120518285,
+      "max": 0.005150228239268417,
+      "max_abs": 0.014787348099643827,
+      "mean": -0.0026635811911640394,
+      "min": -0.014787348099643827,
+      "p50_abs": 0.0029542812089498353,
+      "p95_abs": 0.009915382189701769,
+      "p99_abs": 0.013812954917655412,
+      "rms": 0.005734169119742856
+    },
+    "lidar_innovation_yaw_rad": {
+      "count": 16,
+      "mae": 0.015537863604088906,
+      "max": 0.04505289473604879,
+      "max_abs": 0.04505289473604879,
+      "mean": -0.00014020003468404388,
+      "min": -0.030160288523069845,
+      "p50_abs": 0.014999159992779426,
+      "p95_abs": 0.03388344007631458,
+      "p99_abs": 0.04281900380410194,
+      "rms": 0.018925866619799937
+    },
+    "updates": {
+      "LIDAR_POSE": {
+        "accepted_count": 16,
+        "count": 16,
+        "innovation": {
+          "count": 48,
+          "mae": 0.012375576115434633,
+          "max": 0.04505289473604879,
+          "max_abs": 0.04505289473604879,
+          "mean": -0.006721061785337083,
+          "min": -0.031033710853732743,
+          "p50_abs": 0.010660775096303143,
+          "p95_abs": 0.030106093063520224,
+          "p99_abs": 0.038463878311360264,
+          "rms": 0.016383802965628805
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 16,
+          "max": 0.02804688745048759,
+          "mean": 0.00688932618167689,
+          "min": 1.2890268048917511e-05,
+          "p10": 0.0017417159844791501,
+          "p50": 0.005411395367579378,
+          "p95": 0.01726613840198945,
+          "p99": 0.025890737640787958
+        },
+        "nis_over_threshold_ratio": {
+          "count": 16,
+          "max": 0.0008013396414425026,
+          "mean": 0.00019683789090505397,
+          "min": 3.682933728262146e-07,
+          "p10": 4.9763313842261435e-05,
+          "p50": 0.00015461129621655367,
+          "p95": 0.0004933182400568415,
+          "p99": 0.0007397353611653702
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "VELOCITY": {
+        "accepted_count": 373,
+        "count": 373,
+        "innovation": {
+          "count": 373,
+          "mae": 0.01567291990612321,
+          "max": 0.10433311549739953,
+          "max_abs": 0.10433311549739953,
+          "mean": -0.00031802590871782933,
+          "min": -0.06414200543587453,
+          "p50_abs": 0.011666893903677006,
+          "p95_abs": 0.04165077572261576,
+          "p99_abs": 0.0643761738148501,
+          "rms": 0.02190912262883748
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 373,
+          "max": 0.1879546843891929,
+          "mean": 0.019466604294574835,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.006131599676509293,
+          "p95": 0.08277917316014312,
+          "p99": 0.14545488343357585
+        },
+        "nis_over_threshold_ratio": {
+          "count": 373,
+          "max": 0.010441926910510718,
+          "mean": 0.0010814780163652682,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0003406444264727385,
+          "p95": 0.004598842953341284,
+          "p99": 0.00808082685742088
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      },
+      "ZUPT": {
+        "accepted_count": 41,
+        "count": 41,
+        "innovation": {
+          "count": 41,
+          "mae": 0.0,
+          "max": 0.0,
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p50_abs": 0.0,
+          "p95_abs": 0.0,
+          "p99_abs": 0.0,
+          "rms": 0.0
+        },
+        "max_consecutive_rejections": 0,
+        "nis": {
+          "count": 41,
+          "max": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "p10": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0
+        },
+        "nis_over_threshold_ratio": {
+          "count": 0
+        },
+        "rejected_count": 0,
+        "rejection_ratio": 0.0
+      }
+    }
+  },
+  "encoder": {
+    "left_velocity_minus_raw_distance_m": 0.15904070722342634,
+    "raw_distance_delta_sample_count": 490,
+    "raw_left_distance_sum_m": 1.6258950288409655,
+    "raw_right_distance_sum_m": 1.628472745890258,
+    "right_velocity_minus_raw_distance_m": 0.13124629560498602,
+    "straight_left_distance_m": 1.6246061703163195,
+    "straight_right_distance_m": 1.6258950288409657,
+    "velocity_integrated_left_m": 1.7849357360643918,
+    "velocity_integrated_right_m": 1.759719041495244
+  },
+  "findings": [
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "ENCODER_LEFT_DISTANCE_VELOCITY_MISMATCH",
+      "evidence": {
+        "difference_m": 0.15904070722342634,
+        "raw_distance_m": 1.6258950288409655
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "ENCODER_RIGHT_DISTANCE_VELOCITY_MISMATCH",
+      "evidence": {
+        "difference_m": 0.13124629560498602,
+        "raw_distance_m": 1.628472745890258
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "ENCODER_IMU_OMEGA_DIVERGENCE",
+      "evidence": {
+        "mae_rad_s": 0.12554245595702365
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "LIDAR_MATCHER_TIMEOUT_FREQUENT",
+      "evidence": {
+        "ratio": 0.4309623430962343
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "LIDAR_MATCHER_DEGENERATE_FREQUENT",
+      "evidence": {
+        "ratio": 0.42887029288702927
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "LIDAR_LOW_OBSERVABILITY",
+      "evidence": {
+        "observability_p10": 0.0
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    },
+    {
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "code": "EKF_COVARIANCE_GROWTH",
+      "evidence": {
+        "first": 0.0461,
+        "growth_ratio": 6.852255067294217,
+        "last": 0.3158889586022634,
+        "max": 0.6474631963029476
+      },
+      "selection_basis": "DECLARED_THRESHOLD_RULE",
+      "severity": "WARN"
+    }
+  ],
+  "imu": {
+    "integrated_omega_vs_heading_delta_rad": 0.01188575429671515,
+    "stationary_omega_rad_s": {
+      "count": 47,
+      "mae": 0.0010444124513263946,
+      "max": 0.003272492347489368,
+      "max_abs": 0.003272492347489368,
+      "mean": 0.0005338108084557125,
+      "min": -0.002181661564992912,
+      "p50_abs": 0.001090830782496456,
+      "p95_abs": 0.0029452431127404265,
+      "p99_abs": 0.003272492347489368,
+      "rms": 0.0014142363692963508
+    }
+  },
+  "lidar_matcher": {
+    "ambiguity_margin": {
+      "count": 478,
+      "max": 1.0,
+      "mean": 1.0,
+      "min": 1.0,
+      "p10": 1.0,
+      "p50": 1.0,
+      "p95": 1.0,
+      "p99": 1.0
+    },
+    "confidence": {
+      "count": 478,
+      "max": 0.9281687076108024,
+      "mean": 0.42291006960923183,
+      "min": 0.0,
+      "p10": 0.0,
+      "p50": 0.5923359856685182,
+      "p95": 0.8932380104147223,
+      "p99": 0.9044402848128196
+    },
+    "degenerate_count": 205,
+    "degenerate_ratio": 0.42887029288702927,
+    "inlier_ratio": {
+      "count": 478,
+      "max": 1.0,
+      "mean": 0.8556691807971789,
+      "min": 0.6458333333333334,
+      "p10": 0.75,
+      "p50": 0.8541666666666666,
+      "p95": 0.9791666666666665,
+      "p99": 1.0
+    },
+    "observability": {
+      "count": 478,
+      "max": 0.9370478712982933,
+      "mean": 0.6089383211430484,
+      "min": 0.0,
+      "p10": 0.0,
+      "p50": 0.8821172464977839,
+      "p95": 0.9294808549525525,
+      "p99": 0.9368931078603336
+    },
+    "queue_delay_ms": {
+      "count": 478,
+      "max": 100.975608,
+      "mean": 13.367297725941446,
+      "min": 4.168987,
+      "p10": 6.059331,
+      "p50": 10.642802,
+      "p95": 27.276604,
+      "p99": 100.626661
+    },
+    "robust_rmse_m": {
+      "count": 478,
+      "max": 0.10974161578592509,
+      "mean": 0.0562751142510723,
+      "min": 0.01774040814187042,
+      "p10": 0.02795987534950357,
+      "p50": 0.05483262998198476,
+      "p95": 0.10109662219695188,
+      "p99": 0.10974161578592509
+    },
+    "runtime_ms": {
+      "count": 478,
+      "max": 106.93197600085114,
+      "mean": 72.96471053358569,
+      "min": 40.9672949990636,
+      "p10": 56.542405000072904,
+      "p50": 74.10171050014469,
+      "p95": 97.05515899986494,
+      "p99": 106.93197600085114
+    },
+    "sample_count": 478,
+    "timeout_count": 206,
+    "timeout_ratio": 0.4309623430962343,
+    "tracking_not_ready_count": 384
+  },
+  "limitations": [
+    "Onboard consistency diagnostics cannot prove absolute world-frame accuracy when all onboard sources share the same bias.",
+    "Track-width dependent encoder yaw metrics are omitted if the capture runtime configuration does not expose track width."
+  ],
+  "schema": "R2B4_TEST_HUB_LOCALIZATION_QUALITY_V1",
+  "status": "WARN",
+  "thresholds": {
+    "ekf_covariance_growth_warn_ratio": 5.0,
+    "ekf_nis_p95_warn_fraction_of_gate": 0.8,
+    "ekf_rejection_warn_ratio": 0.1,
+    "encoder_distance_velocity_mismatch_ratio": 0.05,
+    "encoder_imu_omega_warn_mae_rad_s": 0.12,
+    "encoder_straight_distance_bias_ratio": 0.04,
+    "imu_rate_yaw_warn_rad": 0.15,
+    "imu_stationary_rate_warn_rad_s": 0.03,
+    "lidar_degenerate_warn_ratio": 0.15,
+    "lidar_timeout_warn_ratio": 0.05
+  },
+  "tick_count": 490
+}

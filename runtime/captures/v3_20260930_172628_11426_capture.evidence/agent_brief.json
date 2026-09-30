@@ -1,0 +1,1255 @@
+{
+  "analysis_handoff": {
+    "allowed_claim_classes": [
+      "FACT",
+      "POLICY_VERDICT",
+      "HEURISTIC_FINDING"
+    ],
+    "causal_analysis_owner": "ANALYZER_LLM",
+    "root_cause_inferred": false,
+    "test_hub_role": "EVIDENCE_COMPILER"
+  },
+  "analysis_profile": {
+    "exact_replay_applicable": true,
+    "limitations": [],
+    "low_level_severity_cap": null,
+    "name": "FORENSIC_LOW_LEVEL",
+    "selection_source": "r2b4.capture.tick_sample_hz",
+    "tick_sample_hz": 50
+  },
+  "behavior_status": "NOMINAL",
+  "budget": {
+    "actual_bytes": 20110,
+    "max_bytes": 49152,
+    "truncated": false
+  },
+  "capture": {
+    "capture_status": "PASS",
+    "integrity_complete": true,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_172628_11426_capture.mcap"
+  },
+  "contract": {
+    "agent_output_is_derived": true,
+    "claim_policy": "Test Hub emits FACT/POLICY_VERDICT/HEURISTIC_FINDING evidence only; causal/root-cause synthesis belongs to the analyzer LLM",
+    "mcap_is_authority": true,
+    "status_semantics": "PASS=no actionable finding; FINDING=evidence valid but behaviour/problem found; WARNING=sampled low-level observation only; FAIL=evidence/replay gate failed"
+  },
+  "diagnosis_status": "FINDING",
+  "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
+  "evidence_slice": {
+    "layers": [
+      "L1",
+      "L2",
+      "L12"
+    ],
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_172628_11426_capture.evidence/interesting_slice.ndjson",
+    "rows": 11,
+    "size_bytes": 27217,
+    "tick_range": [
+      200,
+      210
+    ],
+    "truncated": false
+  },
+  "evidence_status": "PASS",
+  "metrics": {
+    "localization": {
+      "first_trace": 0.0461,
+      "growth_ratio": 32.592698840403074,
+      "last_trace": 0.2774130146225355,
+      "max_trace": 1.1869001253557427,
+      "sample_count": 796
+    },
+    "motion": {
+      "behavior_status": "NOMINAL",
+      "constrained_to_zero_tick_count": 0,
+      "estimated_path_length_m": 2.6989380990172314,
+      "requested_motion_tick_count": 324
+    },
+    "navigation": {
+      "stagnation": {
+        "last_progress": 0.0,
+        "monotonic_ns": 12530910743890,
+        "progress_span": 0.0,
+        "tick_id": 795,
+        "window_tick_count": 50
+      }
+    },
+    "safety": {
+      "ALLOW": 562,
+      "FAULT": 0,
+      "STOP": 234,
+      "UNKNOWN": 0
+    },
+    "sensors": {
+      "critical_device_non_ok_count": 2,
+      "device_health_incident_policy": "PRODUCTION_CRITICAL_ONLY_EPISODE_EDGE",
+      "device_non_ok_count": 798,
+      "l2_actionable_rejection_count": 795,
+      "l2_duplicate_count": 1644,
+      "l2_rejection_count": 2439,
+      "l2_rejection_reasons": {
+        "DUPLICATE": 1644,
+        "STALE": 795
+      },
+      "optional_device_non_ok_count": 796,
+      "production_critical_device_ids": [
+        "BNO055_IMU",
+        "RPLIDAR_C1",
+        "WHEEL_ENCODERS"
+      ]
+    },
+    "ticks": {
+      "count": 796,
+      "first_monotonic_ns": 12507533314999,
+      "first_tick_id": 0,
+      "last_monotonic_ns": 12530910743890,
+      "last_tick_id": 795
+    },
+    "timing": {
+      "max_ms": 126.817061,
+      "p50_ms": 22.88455,
+      "p95_ms": 60.664908,
+      "p99_ms": 79.972213,
+      "sample_count": 795
+    }
+  },
+  "next_queries": [
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 202:215 --layers L1,L2,L12",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --ticks 205:205 --include-inputs --full",
+    "python3 -m v3.test_hub_v2 query <capture.mcap> --topic /r2b4/raw_lidar --full --max-bytes 2097152"
+  ],
+  "physical_evidence": {
+    "causal_claim": false,
+    "claim_class": "HEURISTIC_FINDING",
+    "evidence": {
+      "critical_device_health": [
+        {
+          "__type__": "DeviceHealth",
+          "device_id": "RPLIDAR_C1",
+          "reason": "LIDAR_STALE",
+          "state": "DEGRADED"
+        }
+      ],
+      "tick_evidence": {
+        "device_health": [
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "WHEEL_ENCODERS",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "BNO055_IMU",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "CAMERA_FRONT",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ],
+        "ekf_updates": [
+          {
+            "__type__": "EkfUpdateEvidence",
+            "accepted": true,
+            "innovation": [
+              -0.02860401276839733
+            ],
+            "nis": 0.008091043800898584,
+            "threshold": 18.0,
+            "update_type": "VELOCITY"
+          },
+          {
+            "__type__": "CommandIngressTiming",
+            "expires_monotonic_ns": 12514048037925,
+            "issued_monotonic_ns": 12513848037925,
+            "observed_monotonic_ns": 12513933369010,
+            "reader_received_ns": 12513890422410,
+            "revision": 50,
+            "ttl_remaining_ns": 114668915
+          }
+        ],
+        "input_reference": "ticks[205].inputs",
+        "record_type": "closed_input_tick",
+        "sensor_samples": [
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513930473915,
+            "device_id": "WHEEL_ENCODERS",
+            "kind": "wheel_velocity",
+            "sequence": 459,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "left_mps",
+                "value": 0.1349590230615902
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_mps",
+                "value": 0.2639069334654559
+              },
+              {
+                "__type__": "DataField",
+                "key": "trust",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_stale",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_velocity_quality",
+                "value": 0.24795115307950932
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_velocity_quality",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "rejection_code",
+                "value": "NONE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_left_pulse_count",
+                "value": 1841
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_right_pulse_count",
+                "value": 1834
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pulse_delta",
+                "value": 4
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pulse_delta",
+                "value": 8
+              },
+              {
+                "__type__": "DataField",
+                "key": "sample_interval_ns",
+                "value": 20880610
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_left_mps",
+                "value": 0.1349590230615902
+              },
+              {
+                "__omitted_items__": 38
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_a_timestamp_ns",
+                "value": 12513924058722
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_a_timestamp_ns",
+                "value": 12513925942457
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_timestamp_ns",
+                "value": 12513927606561
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_timestamp_ns",
+                "value": 12513927602376
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_level",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_level",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513644333022,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_health",
+            "sequence": 77,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 282454719
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 451
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 12513594022611
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 12513694643433
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 12513644333022
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513544002766,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_localization_health",
+            "sequence": 32,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 382784975
+              },
+              {
+                "__type__": "DataField",
+                "key": "confidence",
+                "value": 0.750656717423901
+              },
+              {
+                "__type__": "DataField",
+                "key": "timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "stale",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "usable",
+                "value": false
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513544002766,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_matcher_diagnostics",
+            "sequence": 32,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "candidate_id",
+                "value": 32
+              },
+              {
+                "__type__": "DataField",
+                "key": "source_raw_scan_id",
+                "value": 76
+              },
+              {
+                "__type__": "DataField",
+                "key": "source_raw_scan_timestamp_ns",
+                "value": 12513594022611
+              },
+              {
+                "__type__": "DataField",
+                "key": "source_scan_revision",
+                "value": 76
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 12513493982922
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 12513594022611
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 12513544002766
+              },
+              {
+                "__type__": "DataField",
+                "key": "pose_reference_monotonic_ns",
+                "value": 12513544002766
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_pose_alignment_delta_ns",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_reason",
+                "value": ""
+              },
+              {
+                "__type__": "DataField",
+                "key": "tracking_ready",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_timed_out",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_degenerate",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "degeneracy_reasons",
+                "value": ""
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_runtime_ms",
+                "value": 64.93957100065018
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_queue_delay_ms",
+                "value": 20.876851
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_input_age_ns",
+                "value": 70896696
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_confidence",
+                "value": 0.750656717423901
+              },
+              {
+                "__type__": "DataField",
+                "key": "inlier_ratio",
+                "value": 0.875
+              },
+              {
+                "__type__": "DataField",
+                "key": "robust_rmse_m",
+                "value": 0.06269639146021083
+              },
+              {
+                "__type__": "DataField",
+                "key": "sector_coverage",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "observability_score",
+                "value": 0.9118726806163827
+              },
+              {
+                "__type__": "DataField",
+                "key": "ambiguity_margin",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "seed_pose_x_m",
+                "value": -1.04753211245085
+              },
+              {
+                "__type__": "DataField",
+                "key": "seed_pose_y_m",
+                "value": 0.27547801018976115
+              },
+              {
+                "__type__": "DataField",
+                "key": "seed_pose_yaw_rad",
+                "value": 2.8908732930509413
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "evidence_strength": "INDICATOR",
+    "observation": "LIDAR_STALE",
+    "reason": "CRITICAL_DEVICE_HEALTH_COOBSERVED"
+  },
+  "priority_evidence": {
+    "causal_claim": false,
+    "claim_class": "HEURISTIC_FINDING",
+    "evidence_ids": [
+      "device-205"
+    ],
+    "evidence_strength": "HEURISTIC",
+    "kind": "DEVICE_HEALTH",
+    "layer": "L1",
+    "reason": "DEVICE_HEALTH_NON_OK",
+    "selection_basis": "SEVERITY_TIME_ORDER",
+    "tick_id": 205
+  },
+  "replay": {
+    "bridge": {
+      "authority_capture": "/home/alba/project_r2b4/runtime/captures/v3_20260930_172628_11426_capture.mcap",
+      "authority_check_delegated": false,
+      "authority_sha256": "ca86860002b242f44ef14e1b3cf9f5948fd4101375b2381b2704b6a0f01dd9f5",
+      "capture_integrity_check_delegated": false,
+      "checkpoint_used": true,
+      "materialized_bytes": 3530816,
+      "materialized_tick_count": 37,
+      "preflight": "PASS",
+      "replay_eligible": true,
+      "structure_check_delegated": false,
+      "temporary_json_persisted": false
+    },
+    "first_divergence": null,
+    "first_live_observation": {
+      "device_id": "RPLIDAR_C1",
+      "evidence": {
+        "device_health": [
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "WHEEL_ENCODERS",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "BNO055_IMU",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "CAMERA_FRONT",
+            "reason": null,
+            "state": "OK"
+          },
+          {
+            "__type__": "DeviceHealth",
+            "device_id": "PERSON_DETECTOR_FRONT",
+            "reason": "PERSON_GEOMETRY_DEGRADED",
+            "state": "DEGRADED"
+          }
+        ],
+        "ekf_updates": [
+          {
+            "__type__": "EkfUpdateEvidence",
+            "accepted": true,
+            "innovation": [
+              -0.02860401276839733
+            ],
+            "nis": 0.008091043800898584,
+            "threshold": 18.0,
+            "update_type": "VELOCITY"
+          },
+          {
+            "__type__": "CommandIngressTiming",
+            "expires_monotonic_ns": 12514048037925,
+            "issued_monotonic_ns": 12513848037925,
+            "observed_monotonic_ns": 12513933369010,
+            "reader_received_ns": 12513890422410,
+            "revision": 50,
+            "ttl_remaining_ns": 114668915
+          }
+        ],
+        "input_reference": "ticks[205].inputs",
+        "record_type": "closed_input_tick",
+        "sensor_samples": [
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513930473915,
+            "device_id": "WHEEL_ENCODERS",
+            "kind": "wheel_velocity",
+            "sequence": 459,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "left_mps",
+                "value": 0.1349590230615902
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_mps",
+                "value": 0.2639069334654559
+              },
+              {
+                "__type__": "DataField",
+                "key": "trust",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_stale",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_velocity_quality",
+                "value": 0.24795115307950932
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_velocity_quality",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "rejection_code",
+                "value": "NONE"
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_left_pulse_count",
+                "value": 1841
+              },
+              {
+                "__type__": "DataField",
+                "key": "raw_right_pulse_count",
+                "value": 1834
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pulse_delta",
+                "value": 4
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pulse_delta",
+                "value": 8
+              },
+              {
+                "__type__": "DataField",
+                "key": "sample_interval_ns",
+                "value": 20880610
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_counter_running",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_errors",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_read_error_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alerts",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_invalid_alert_delta",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "computed_left_mps",
+                "value": 0.1349590230615902
+              },
+              {
+                "__omitted_items__": 38
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_pending_direction_edges",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_a_timestamp_ns",
+                "value": 12513924058722
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_a_timestamp_ns",
+                "value": 12513925942457
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_timestamp_ns",
+                "value": 12513927606561
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_timestamp_ns",
+                "value": 12513927602376
+              },
+              {
+                "__type__": "DataField",
+                "key": "left_last_b_level",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "right_last_b_level",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513644333022,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_health",
+            "sequence": 77,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 282454719
+              },
+              {
+                "__type__": "DataField",
+                "key": "point_count",
+                "value": 451
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 12513594022611
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 12513694643433
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 12513644333022
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513544002766,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_localization_health",
+            "sequence": 32,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "age_ns",
+                "value": 382784975
+              },
+              {
+                "__type__": "DataField",
+                "key": "confidence",
+                "value": 0.750656717423901
+              },
+              {
+                "__type__": "DataField",
+                "key": "timing_valid",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "stale",
+                "value": true
+              },
+              {
+                "__type__": "DataField",
+                "key": "usable",
+                "value": false
+              }
+            ]
+          },
+          {
+            "__type__": "DeviceSample",
+            "captured_monotonic_ns": 12513544002766,
+            "device_id": "RPLIDAR_C1",
+            "kind": "lidar_matcher_diagnostics",
+            "sequence": 32,
+            "values": [
+              {
+                "__type__": "DataField",
+                "key": "candidate_id",
+                "value": 32
+              },
+              {
+                "__type__": "DataField",
+                "key": "source_raw_scan_id",
+                "value": 76
+              },
+              {
+                "__type__": "DataField",
+                "key": "source_raw_scan_timestamp_ns",
+                "value": 12513594022611
+              },
+              {
+                "__type__": "DataField",
+                "key": "source_scan_revision",
+                "value": 76
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_start_monotonic_ns",
+                "value": 12513493982922
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_end_monotonic_ns",
+                "value": 12513594022611
+              },
+              {
+                "__type__": "DataField",
+                "key": "measurement_monotonic_ns",
+                "value": 12513544002766
+              },
+              {
+                "__type__": "DataField",
+                "key": "pose_reference_monotonic_ns",
+                "value": 12513544002766
+              },
+              {
+                "__type__": "DataField",
+                "key": "scan_pose_alignment_delta_ns",
+                "value": 0
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_reason",
+                "value": ""
+              },
+              {
+                "__type__": "DataField",
+                "key": "tracking_ready",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_timed_out",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_degenerate",
+                "value": false
+              },
+              {
+                "__type__": "DataField",
+                "key": "degeneracy_reasons",
+                "value": ""
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_runtime_ms",
+                "value": 64.93957100065018
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_queue_delay_ms",
+                "value": 20.876851
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_input_age_ns",
+                "value": 70896696
+              },
+              {
+                "__type__": "DataField",
+                "key": "matcher_confidence",
+                "value": 0.750656717423901
+              },
+              {
+                "__type__": "DataField",
+                "key": "inlier_ratio",
+                "value": 0.875
+              },
+              {
+                "__type__": "DataField",
+                "key": "robust_rmse_m",
+                "value": 0.06269639146021083
+              },
+              {
+                "__type__": "DataField",
+                "key": "sector_coverage",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "observability_score",
+                "value": 0.9118726806163827
+              },
+              {
+                "__type__": "DataField",
+                "key": "ambiguity_margin",
+                "value": 1.0
+              },
+              {
+                "__type__": "DataField",
+                "key": "seed_pose_x_m",
+                "value": -1.04753211245085
+              },
+              {
+                "__type__": "DataField",
+                "key": "seed_pose_y_m",
+                "value": 0.27547801018976115
+              },
+              {
+                "__type__": "DataField",
+                "key": "seed_pose_yaw_rad",
+                "value": 2.8908732930509413
+              }
+            ]
+          }
+        ]
+      },
+      "layer": "L0",
+      "reason": "LIDAR_STALE",
+      "tick_id": 205
+    },
+    "status": "MATCH"
+  },
+  "schema": "R2B4_AGENT_BRIEF_V2",
+  "source_files": [
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l1_acquisition.py",
+      "sha256": "0555eaddf51ed8fe2c2e182688be2b6bf0819ce52b0c2a2988eb1cb0c17887b5"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/layers/l2_admission.py",
+      "sha256": "b59a6fd252dd9350234c925ba8c90dbf0bec5caa3bad416f55868582090d9e00"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/engine.py",
+      "sha256": "118f550dfe91e87b72a61f05af7b7164ee5f5d200a2ee376bbe550d4f9cdce0f"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "v3/execution.py",
+      "sha256": "f9594172f7b73c27888c2c1ebb075452a79e0546232bc8c301b2df1db9954c75"
+    },
+    {
+      "capture_baseline_match": null,
+      "path": "STRUKTURALIS_RETEGEK_V3.md",
+      "sha256": "a7553df8caaf88ced569516d33b72f8c318ab912780181671e6f0d3b0489f9a9"
+    }
+  ],
+  "status": "FINDING",
+  "top_incidents": [
+    {
+      "category": "DEVICE_HEALTH",
+      "causal_claim": false,
+      "claim_class": "FACT",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ],
+        "policy": "PRODUCTION_CRITICAL_DEVICE_IDS"
+      },
+      "id": "device-205",
+      "layer": "L1",
+      "monotonic_ns": 12513933299342,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 205
+    },
+    {
+      "category": "DEVICE_HEALTH",
+      "causal_claim": false,
+      "claim_class": "FACT",
+      "evidence": {
+        "devices": [
+          {
+            "device_id": "RPLIDAR_C1",
+            "reason": "LIDAR_STALE",
+            "state": "DEGRADED"
+          }
+        ],
+        "policy": "PRODUCTION_CRITICAL_DEVICE_IDS"
+      },
+      "id": "device-610",
+      "layer": "L1",
+      "monotonic_ns": 12526179034311,
+      "reason": "DEVICE_HEALTH_NON_OK",
+      "severity": "HIGH",
+      "tick_id": 610
+    },
+    {
+      "category": "TIMING",
+      "causal_claim": false,
+      "claim_class": "HEURISTIC_FINDING",
+      "evidence": {
+        "delta_ms": 122.382829,
+        "median_ms": 22.88455
+      },
+      "id": "timing-gap-203",
+      "layer": "Runtime",
+      "monotonic_ns": null,
+      "reason": "TICK_INTERVAL_OUTLIER",
+      "severity": "HIGH",
+      "tick_id": null
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 265127484,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 4
+          }
+        ]
+      },
+      "id": "l2-reject-16",
+      "layer": "L2",
+      "monotonic_ns": 12507889518484,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 16
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 251671134,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 3
+          }
+        ]
+      },
+      "id": "l2-reject-21",
+      "layer": "L2",
+      "monotonic_ns": 12507990523755,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 21
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 257565369,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 6
+          }
+        ]
+      },
+      "id": "l2-reject-25",
+      "layer": "L2",
+      "monotonic_ns": 12508069429369,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 25
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 266629888,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 4
+          },
+          {
+            "age_ns": 298050712,
+            "reason": "STALE",
+            "source_device_id": "PERSON_DETECTOR_FRONT",
+            "source_sequence": 6
+          }
+        ]
+      },
+      "id": "l2-reject-27",
+      "layer": "L2",
+      "monotonic_ns": 12508109914712,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 27
+    },
+    {
+      "category": "ADMISSION",
+      "causal_claim": false,
+      "claim_class": "POLICY_VERDICT",
+      "evidence": {
+        "episode_edge": "START",
+        "rejected": [
+          {
+            "age_ns": 306128112,
+            "reason": "STALE",
+            "source_device_id": "RPLIDAR_C1",
+            "source_sequence": 4
+          }
+        ]
+      },
+      "id": "l2-reject-28",
+      "layer": "L2",
+      "monotonic_ns": 12508149412936,
+      "reason": "OBSERVATION_REJECTED:STALE",
+      "severity": "MEDIUM",
+      "tick_id": 28
+    }
+  ]
+}
