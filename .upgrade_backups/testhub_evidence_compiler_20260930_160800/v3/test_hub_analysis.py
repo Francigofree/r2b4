@@ -66,23 +66,10 @@ class Incident:
     evidence: Mapping[str, object]
 
     def as_dict(self) -> dict[str, object]:
-        if self.category in {"TIMING", "LOCALIZATION", "NAVIGATION"}:
-            claim_class = "HEURISTIC_FINDING"
-        elif self.category in {
-            "ADMISSION",
-            "PRODUCTION_FAULT",
-            "SAFETY",
-            "MOTION_BLOCKED",
-        }:
-            claim_class = "POLICY_VERDICT"
-        else:
-            claim_class = "FACT"
         return {
             "id": self.incident_id,
             "severity": self.severity,
             "category": self.category,
-            "claim_class": claim_class,
-            "causal_claim": False,
             "tick_id": self.tick_id,
             "monotonic_ns": self.monotonic_ns,
             "layer": self.layer,
@@ -153,7 +140,6 @@ def analyze_capture(
     previous_critical_device_signature: tuple[tuple[str, str, str], ...] = ()
     l2_rejection_count = 0
     l2_rejection_reasons: dict[str, int] = {}
-    previous_l2_actionable_signature: tuple[tuple[str, str], ...] = ()
     path_length_m = 0.0
     previous_pose: tuple[float, float] | None = None
     covariance_trace_values: list[tuple[int, int, float]] = []
@@ -315,40 +301,20 @@ def analyze_capture(
                         else "MEDIUM"
                     )
                     reason_text = "OBSERVATION_REJECTED:" + ",".join(ordered_reasons)
-                    actionable_signature = tuple(
-                        sorted(
-                            (
-                                str(item.get("source_device_id") or ""),
-                                str(item.get("reason") or "UNKNOWN"),
-                            )
-                            for item in actionable
-                        )
+                    append_incident(
+                        incidents,
+                        Incident(
+                            f"l2-reject-{tick_id}",
+                            severity,
+                            "ADMISSION",
+                            tick_id,
+                            monotonic_ns,
+                            "L2",
+                            reason_text,
+                            {"rejected": actionable[:8]},
+                        ),
+                        max_incidents,
                     )
-                    # Repeated identical admission states are one evidence episode,
-                    # not one actionable incident per 50 Hz control tick. Device
-                    # identity is part of the signature so independent sources do
-                    # not get conflated into the same episode.
-                    if actionable_signature != previous_l2_actionable_signature:
-                        append_incident(
-                            incidents,
-                            Incident(
-                                f"l2-reject-{tick_id}",
-                                severity,
-                                "ADMISSION",
-                                tick_id,
-                                monotonic_ns,
-                                "L2",
-                                reason_text,
-                                {
-                                    "rejected": actionable[:8],
-                                    "episode_edge": "START",
-                                },
-                            ),
-                            max_incidents,
-                        )
-                    previous_l2_actionable_signature = actionable_signature
-                else:
-                    previous_l2_actionable_signature = ()
 
             record_type = row.get("record_type")
             fault_layer = row.get("fault_layer")
@@ -533,11 +499,9 @@ def analyze_capture(
         )
 
     incidents.sort(key=_incident_sort_key)
-    priority = _priority_evidence_candidate(
-        [item for item in incidents if item.severity != "WARNING"]
-    )
+    root = _root_cause_candidate([item for item in incidents if item.severity != "WARNING"])
     if behavioral:
-        priority["scope"] = "CAPTURED_SAMPLES_ONLY"
+        root["scope"] = "CAPTURED_SAMPLES_ONLY"
     behavior_status = _behavior_status(active_motion_rows, trends.blocked_samples if trends is not None else constrained_zero_rows)
     if behavioral and (safety_counts["FAULT"] or trends.unsafe_output_samples or trends.lifecycle_counts["FAULT"]):
         behavior_status = "FAULT"
@@ -598,12 +562,7 @@ def analyze_capture(
         "actionable_incident_count": sum(item.severity != "WARNING" for item in incidents),
         **({"warning_count": sum(item.severity == "WARNING" for item in incidents)} if behavioral else {}),
         "incidents": [item.as_dict() for item in incidents],
-        "priority_evidence_candidate": priority,
-        "analysis_handoff": {
-            "root_cause_inferred": False,
-            "causal_analysis_owner": "ANALYZER_LLM",
-            "test_hub_role": "EVIDENCE_COMPILER",
-        },
+        "root_cause_candidate": root,
     }
 
 
@@ -924,18 +883,12 @@ def _constraint_reason(value: object) -> str:
     return "MOTION_REQUEST_CONSTRAINED_TO_ZERO"
 
 
-
-def _priority_evidence_candidate(
+def _root_cause_candidate(
     incidents: Sequence[Incident],
 ) -> dict[str, object]:
-    """Select the most useful evidence slice without inferring causality."""
-
     if not incidents:
         return {
-            "claim_class": "FACT",
-            "causal_claim": False,
-            "evidence_strength": "NONE",
-            "selection_basis": "NO_NON_NOMINAL_EVIDENCE",
+            "confidence": "NOT_PROVEN",
             "reason": "NO_NON_NOMINAL_EVIDENCE_FOUND",
             "tick_id": None,
             "layer": None,
@@ -948,6 +901,8 @@ def _priority_evidence_candidate(
         None,
     )
 
+    # A later fault must not displace an earlier proven motion block.
+    # These categories are direct integrity/production evidence.
     direct_categories = {
         "CAPTURE_INTEGRITY",
         "TICK_SEQUENCE",
@@ -957,8 +912,7 @@ def _priority_evidence_candidate(
     }
     direct = next(
         (
-            item
-            for item in incidents
+            item for item in incidents
             if item.category in direct_categories
             and not (
                 item.category in {"SAFETY", "PRODUCTION_FAULT"}
@@ -972,14 +926,7 @@ def _priority_evidence_candidate(
     )
     if direct is not None:
         return {
-            "claim_class": (
-                "POLICY_VERDICT"
-                if direct.category in {"PRODUCTION_FAULT", "SAFETY"}
-                else "FACT"
-            ),
-            "causal_claim": False,
-            "evidence_strength": "DIRECT",
-            "selection_basis": "DIRECT_CAPTURE_OR_PRODUCTION_EVIDENCE",
+            "confidence": "PROVEN",
             "reason": direct.reason,
             "tick_id": direct.tick_id,
             "layer": direct.layer,
@@ -987,6 +934,9 @@ def _priority_evidence_candidate(
             "evidence_ids": [direct.incident_id],
         }
 
+    # A requested motion that L9/L12 turns into exact zero is direct evidence
+    # for the immediate reason the robot did not move. Upstream hypotheses
+    # (matcher, EKF, sensor timing) remain separate and must be proven later.
     if blocked is not None:
         same_tick = [
             item
@@ -995,10 +945,7 @@ def _priority_evidence_candidate(
             and item.category != "ADMISSION"
         ]
         return {
-            "claim_class": "POLICY_VERDICT",
-            "causal_claim": False,
-            "evidence_strength": "DIRECT",
-            "selection_basis": "DIRECT_MOTION_BLOCK_OBSERVATION",
+            "confidence": "PROVEN",
             "reason": blocked.reason,
             "tick_id": blocked.tick_id,
             "layer": blocked.layer,
@@ -1009,12 +956,11 @@ def _priority_evidence_candidate(
             or [blocked.incident_id],
         }
 
+    # Remaining observations are indications, not causal proof. Do not infer
+    # causality merely because a lower layer appeared earlier in the tick.
     first = incidents[0]
     return {
-        "claim_class": "HEURISTIC_FINDING",
-        "causal_claim": False,
-        "evidence_strength": "HEURISTIC",
-        "selection_basis": "SEVERITY_TIME_ORDER",
+        "confidence": "INDICATED",
         "reason": first.reason,
         "tick_id": first.tick_id,
         "layer": first.layer,

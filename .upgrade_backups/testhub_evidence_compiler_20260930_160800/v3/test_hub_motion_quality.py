@@ -447,12 +447,6 @@ def analyze_motion_quality_ticks(
         return ({
             "schema": MOTION_QUALITY_SCHEMA,
             "status": "INSUFFICIENT_DATA",
-            "claim_policy": {
-                "finding_class": "HEURISTIC_FINDING",
-                "causal_claim": False,
-                "root_cause_inferred": False,
-                "causal_analysis_owner": "ANALYZER_LLM",
-            },
             "tick_count": len(rows),
             "findings": [],
         }, [])
@@ -544,14 +538,7 @@ def analyze_motion_quality_ticks(
     findings: list[dict[str, object]] = []
 
     def add(code: str, severity: str, evidence: Mapping[str, object]) -> None:
-        findings.append({
-            "code": code,
-            "severity": severity,
-            "claim_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "selection_basis": "DECLARED_THRESHOLD_RULE",
-            "evidence": dict(evidence),
-        })
+        findings.append({"code": code, "severity": severity, "evidence": dict(evidence)})
 
     if int(left_tracking.get("count", 0)) >= 20 and float(left_tracking.get("mae", 0.0)) > 0.04:
         add("LEFT_WHEEL_TRACKING_ERROR_HIGH", "WARN", {"mae_mps": left_tracking.get("mae")})
@@ -582,12 +569,6 @@ def analyze_motion_quality_ticks(
     summary = {
         "schema": MOTION_QUALITY_SCHEMA,
         "status": status,
-        "claim_policy": {
-            "finding_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "root_cause_inferred": False,
-            "causal_analysis_owner": "ANALYZER_LLM",
-        },
         "tick_count": len(rows),
         "motion_segment_count": len(segment_rows),
         "behavior_episode_tagging": bool(behavior_episodes),

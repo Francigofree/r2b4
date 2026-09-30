@@ -290,18 +290,7 @@ def analyze_localization_quality_ticks(
     config = runtime_configuration or {}
     track_width = _find_numeric_key(config, {"track_width_m", "nyomtav_szelesseg_m"})
     if len(rows) < 2:
-        return ({
-            "schema": LOCALIZATION_QUALITY_SCHEMA,
-            "status": "INSUFFICIENT_DATA",
-            "claim_policy": {
-                "finding_class": "HEURISTIC_FINDING",
-                "causal_claim": False,
-                "root_cause_inferred": False,
-                "causal_analysis_owner": "ANALYZER_LLM",
-            },
-            "tick_count": len(rows),
-            "findings": [],
-        }, [])
+        return ({"schema": LOCALIZATION_QUALITY_SCHEMA, "status": "INSUFFICIENT_DATA", "tick_count": len(rows), "findings": []}, [])
 
     encoder_imu_omega_error: list[float] = []
     encoder_ekf_omega_error: list[float] = []
@@ -463,14 +452,7 @@ def analyze_localization_quality_ticks(
 
     findings: list[dict[str, object]] = []
     def add(code: str, severity: str, evidence: Mapping[str, object]) -> None:
-        findings.append({
-            "code": code,
-            "severity": severity,
-            "claim_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "selection_basis": "DECLARED_THRESHOLD_RULE",
-            "evidence": dict(evidence),
-        })
+        findings.append({"code": code, "severity": severity, "evidence": dict(evidence)})
 
     raw_left_abs = abs(raw_left_delta_sum); raw_right_abs = abs(raw_right_delta_sum)
     if raw_delta_count >= 20 and raw_left_abs >= 0.30 and raw_vs_velocity_left is not None and abs(raw_vs_velocity_left) / max(raw_left_abs, 0.01) > 0.05:
@@ -531,12 +513,6 @@ def analyze_localization_quality_ticks(
     summary = {
         "schema": LOCALIZATION_QUALITY_SCHEMA,
         "status": status,
-        "claim_policy": {
-            "finding_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "root_cause_inferred": False,
-            "causal_analysis_owner": "ANALYZER_LLM",
-        },
         "tick_count": len(rows),
         "behavior_episode_tagging": bool(behavior_episodes),
         "configuration": {"track_width_m": track_width, "track_width_source": "capture_runtime_configuration" if track_width is not None else "unavailable"},

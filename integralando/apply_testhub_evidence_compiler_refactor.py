@@ -4,7 +4,7 @@ R2B4 TestHub evidence-compiler refactor.
 
 Source authority:
   Francigofree/r2b4
-  expected HEAD: 24ec18d3a2bd1c3a8d4c73a0f95e290ca48738e3
+  expected HEAD: 3f2dfbb4c9bbcfd07d114f9386847139f9c88f9b
 
 Goal:
   TestHub compiles, validates and prioritizes evidence, but does not infer root
@@ -29,7 +29,7 @@ import textwrap
 import time
 from pathlib import Path
 
-EXPECTED_HEAD = "24ec18d3a2bd1c3a8d4c73a0f95e290ca48738e3"
+EXPECTED_HEAD = "3f2dfbb4c9bbcfd07d114f9386847139f9c88f9b"
 
 TARGETS = (
     "v3/test_hub_analysis.py",
@@ -46,13 +46,31 @@ NEW_TEST = "tests/deep/test_v3_test_hub_evidence_compiler_contract.py"
 
 
 def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    result = subprocess.run(
         args,
-        check=check,
+        check=False,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    if check and result.returncode != 0:
+        print(
+            f"COMMAND FAILED ({result.returncode}): {' '.join(args)}",
+            file=sys.stderr,
+        )
+        if result.stdout:
+            print("--- stdout ---", file=sys.stderr)
+            print(result.stdout, file=sys.stderr, end="" if result.stdout.endswith("\n") else "\n")
+        if result.stderr:
+            print("--- stderr ---", file=sys.stderr)
+            print(result.stderr, file=sys.stderr, end="" if result.stderr.endswith("\n") else "\n")
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            args,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+    return result
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -1293,6 +1311,8 @@ def test_generation_is_a_counter_not_a_ratio() -> None:
 
 
 def test_quality_findings_are_declared_noncausal() -> None:
+    # Empty input intentionally exercises INSUFFICIENT_DATA. Claim semantics
+    # are part of the evidence contract even when no threshold can be evaluated.
     motion, _segments = analyze_motion_quality_ticks([])
     localization, _events = analyze_localization_quality_ticks([])
     for payload in (motion, localization):
@@ -1371,6 +1391,22 @@ def patch_motion_quality(text: str) -> str:
 ''',
         "motion-quality:finding-class",
     )
+    text = replace_once(
+        text,
+        r'''            "schema": MOTION_QUALITY_SCHEMA,
+            "status": "INSUFFICIENT_DATA",
+''',
+        r'''            "schema": MOTION_QUALITY_SCHEMA,
+            "status": "INSUFFICIENT_DATA",
+            "claim_policy": {
+                "finding_class": "HEURISTIC_FINDING",
+                "causal_claim": False,
+                "root_cause_inferred": False,
+                "causal_analysis_owner": "ANALYZER_LLM",
+            },
+''',
+        "motion-quality:insufficient-data-claim-policy",
+    )
     return replace_once(
         text,
         r'''        "schema": MOTION_QUALITY_SCHEMA,
@@ -1388,7 +1424,6 @@ def patch_motion_quality(text: str) -> str:
         "motion-quality:claim-policy",
     )
 
-
 def patch_localization_quality(text: str) -> str:
     text = replace_once(
         text,
@@ -1404,6 +1439,25 @@ def patch_localization_quality(text: str) -> str:
         })
 ''',
         "localization-quality:finding-class",
+    )
+    text = replace_once(
+        text,
+        r'''        return ({"schema": LOCALIZATION_QUALITY_SCHEMA, "status": "INSUFFICIENT_DATA", "tick_count": len(rows), "findings": []}, [])
+''',
+        r'''        return ({
+            "schema": LOCALIZATION_QUALITY_SCHEMA,
+            "status": "INSUFFICIENT_DATA",
+            "claim_policy": {
+                "finding_class": "HEURISTIC_FINDING",
+                "causal_claim": False,
+                "root_cause_inferred": False,
+                "causal_analysis_owner": "ANALYZER_LLM",
+            },
+            "tick_count": len(rows),
+            "findings": [],
+        }, [])
+''',
+        "localization-quality:insufficient-data-claim-policy",
     )
     return replace_once(
         text,
@@ -1421,6 +1475,7 @@ def patch_localization_quality(text: str) -> str:
 ''',
         "localization-quality:claim-policy",
     )
+
 
 
 PATCHERS = {

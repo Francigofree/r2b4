@@ -1,45 +1,34 @@
-# R2B4 TestHub evidence-compiler refactor
+# R2B4 TestHub evidence-compiler refactor — corrected v2
 
-Source-first target: `Francigofree/r2b4` at HEAD
-`24ec18d3a2bd1c3a8d4c73a0f95e290ca48738e3`.
+Source-first target: `Francigofree/r2b4` HEAD
+`3f2dfbb4c9bbcfd07d114f9386847139f9c88f9b`.
 
-## Goal
+## v1 failure root cause
 
-The TestHub remains a high-information evidence compiler, not an automatic
-root-cause expert. Exported TestHub artifacts distinguish facts, production
-policy verdicts and heuristic findings, while causal/root-cause synthesis is
-explicitly handed to the analyzer LLM.
+The v1 patch added `claim_policy` only to the normal motion/localization quality
+summary path. The regression test intentionally used empty input, which executes
+the `INSUFFICIENT_DATA` early-return paths. Those paths did not contain
+`claim_policy`, so pytest failed and the transactional installer rolled all
+source changes back.
 
-## Changes
+The installer also captured pytest stdout/stderr without printing them on a
+failed subprocess, hiding the useful assertion output.
 
-- `root_cause_candidate` -> non-causal `priority_evidence_candidate`.
-- `root_cause` / `physical_root_cause` removed from new TestHub/replay outputs.
-- Replay exposes `first_live_observation` and `physical_evidence`.
-- Optional device health cannot become a physical explanation merely because it
-  is the first non-OK health row.
-- Repeated identical L2 admission rejection states are edge-collapsed by
-  `(source_device_id, reason)` instead of consuming the incident budget at 50 Hz.
-- Every diagnosis includes `analysis_handoff.root_cause_inferred=false` and
-  `causal_analysis_owner=ANALYZER_LLM`.
-- Triage incidents carry `claim_class` + `causal_claim=false`; motion/localization
-  threshold findings are explicitly `HEURISTIC_FINDING`, never causal conclusions.
-- `generation` is classified as a COUNTER, not `QUALITY/ratio`.
-- zero raw-LiDAR loss now reports `raw_lidar_loss_within_tolerance=true`.
-- focused regression tests protect the evidence-compiler boundary.
+## v2 fixes
+
+- `claim_policy` is present in normal AND `INSUFFICIENT_DATA` motion-quality output.
+- `claim_policy` is present in normal AND `INSUFFICIENT_DATA` localization-quality output.
+- the empty-input regression test remains and now checks the intended contract.
+- failed compile/pytest commands print complete stdout/stderr before rollback.
+- installer is bound to the current repository HEAD.
 
 ## Apply
 
-From the R2B4 repository root:
+Replace the old script under `integralando/`, then from the repo root run:
 
 ```bash
-python3 apply_testhub_evidence_compiler_refactor.py --check-only
-python3 apply_testhub_evidence_compiler_refactor.py
+python3 integralando/apply_testhub_evidence_compiler_refactor.py --check-only
+python3 integralando/apply_testhub_evidence_compiler_refactor.py
 ```
 
-The script refuses a different HEAD or dirty target files by default. It creates
-a backup under `.upgrade_backups/`, compiles `v3`, runs the focused regression
-test, and also runs `tests/deep/test_v3_lidar_world_replay.py` when present.
-On validation failure it restores the original files.
-
-After applying, generate a **new** live capture. Existing `.evidence` directories
-are historical derived artifacts and are not rewritten by this upgrade.
+Do not use `--allow-head-mismatch` if HEAD has moved again.

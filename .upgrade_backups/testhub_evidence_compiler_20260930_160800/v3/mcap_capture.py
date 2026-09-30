@@ -1080,12 +1080,9 @@ class McapCaptureConsumer:
         )
         raw_lidar_max_consecutive_missing = _max_consecutive_revision_run(loss_missing_raw)
         raw_lidar_loss_within_tolerance = bool(
-            not raw_lidar_missing_count
-            or (
-                raw_lidar_loss_fraction <= float(self._config.max_raw_lidar_missing_fraction)
-                and raw_lidar_max_consecutive_missing
-                <= self._config.max_consecutive_raw_lidar_missing
-            )
+            raw_lidar_missing_count
+            and raw_lidar_loss_fraction <= float(self._config.max_raw_lidar_missing_fraction)
+            and raw_lidar_max_consecutive_missing <= self._config.max_consecutive_raw_lidar_missing
         )
         integrity_warnings: list[str] = []
 

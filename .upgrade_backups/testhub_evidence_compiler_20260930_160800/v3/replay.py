@@ -341,10 +341,10 @@ def replay_capture(
 
     root = Path(project_root).resolve() if project_root is not None else Path.cwd()
     source_first = _source_first_evidence(root, capture_source_manifest_path)
-    first_live_observation = _first_live_observation(selected_ticks)
-    physical_evidence = _physical_evidence(
+    first_live_incident = _first_live_incident(selected_ticks)
+    physical_root_cause = _physical_root_cause(
         general_payload,
-        first_live_observation,
+        first_live_incident,
         divergence,
     )
     result: dict[str, object] = {
@@ -383,18 +383,13 @@ def replay_capture(
         "diagnostics": {
             "layers": layer_rows,
             "first_divergence": divergence,
-            "first_live_observation": first_live_observation,
-            "physical_evidence": physical_evidence,
+            "first_live_incident": first_live_incident,
+            "physical_root_cause": physical_root_cause,
         },
         "source_first": source_first,
         "first_divergence": divergence,
-        "first_live_observation": first_live_observation,
-        "physical_evidence": physical_evidence,
-        "analysis_handoff": {
-            "root_cause_inferred": False,
-            "causal_analysis_owner": "ANALYZER_LLM",
-            "replay_role": "DETERMINISM_AND_DIRECT_EVIDENCE_ONLY",
-        },
+        "first_live_incident": first_live_incident,
+        "physical_root_cause": physical_root_cause,
     }
     result["result_sha256"] = _payload_sha256(result)
     return result
@@ -1321,12 +1316,9 @@ def _tick_evidence(tick: Mapping[str, object]) -> dict[str, object]:
     return evidence
 
 
-
-def _first_live_observation(
+def _first_live_incident(
     ticks: Sequence[Mapping[str, object]],
 ) -> dict[str, object] | None:
-    """Return the first direct production-relevant observation in scope."""
-
     for tick in ticks:
         expected = _mapping(tick.get("expected"), "tick.expected")
         edge = tick.get("edge_fault")
@@ -1354,10 +1346,7 @@ def _first_live_observation(
                     (
                         row
                         for row in health
-                        if isinstance(row, Mapping)
-                        and row.get("state") != "OK"
-                        and str(row.get("device_id") or "")
-                        in PRODUCTION_CRITICAL_DEVICE_IDS
+                        if isinstance(row, Mapping) and row.get("state") != "OK"
                     ),
                     None,
                 )
@@ -1383,29 +1372,19 @@ def _first_live_observation(
     return None
 
 
-
-def _physical_evidence(
+def _physical_root_cause(
     payload: Mapping[str, object],
-    observation: Mapping[str, object] | None,
+    incident: Mapping[str, object] | None,
     divergence: Mapping[str, object] | None,
 ) -> dict[str, object]:
-    """Describe physical-edge evidence without turning it into a causal verdict."""
-
-    reason = (
-        str(observation.get("reason") or "")
-        if observation is not None
-        else ""
-    )
+    reason = str(incident.get("reason") or "") if incident is not None else ""
     if reason == "MOTOR_WRITER_FAILURE":
         return {
-            "claim_class": "POLICY_VERDICT",
-            "causal_claim": False,
-            "evidence_strength": "DIRECT",
-            "observation": "MOTOR_WRITER_FAILURE",
+            "status": "PROVEN",
+            "cause": "MOTOR_WRITER_FAILURE",
             "reason": "THE_CANONICAL_L12_WRITE_RAISED",
-            "evidence": observation.get("evidence"),
+            "evidence": incident.get("evidence"),
         }
-
     raw = payload.get("raw_lidar_evidence")
     missing = raw.get("missing_revisions") if isinstance(raw, Mapping) else ()
     if (
@@ -1414,66 +1393,42 @@ def _physical_evidence(
         and missing
     ):
         return {
-            "claim_class": "FACT",
-            "causal_claim": False,
-            "evidence_strength": "DIRECT",
-            "observation": "RAW_LIDAR_EVIDENCE_INCOMPLETE",
+            "status": "NOT_PROVEN",
+            "cause": None,
             "reason": "REFERENCED_RAW_LIDAR_MISSING",
             "evidence": {"missing_raw_lidar_revisions": list(missing)},
         }
-
-    if observation is None:
+    if incident is None:
         return {
-            "claim_class": "FACT",
-            "causal_claim": False,
-            "evidence_strength": "NONE",
-            "observation": None,
-            "reason": "NO_PRODUCTION_RELEVANT_LIVE_OBSERVATION_IN_SCOPE",
+            "status": "NOT_PROVEN",
+            "cause": None,
+            "reason": "NO_LIVE_INCIDENT_IN_SCOPE",
             "evidence": None,
         }
-
-    evidence = observation.get("evidence")
-    device_health = (
-        evidence.get("device_health")
-        if isinstance(evidence, Mapping)
-        else None
-    )
-    critical_degraded = (
-        [
-            dict(row)
-            for row in device_health
-            if isinstance(row, Mapping)
-            and row.get("state") != "OK"
-            and str(row.get("device_id") or "")
-            in PRODUCTION_CRITICAL_DEVICE_IDS
-        ]
-        if isinstance(device_health, Sequence)
+    evidence = incident.get("evidence")
+    device_health = evidence.get("device_health") if isinstance(evidence, Mapping) else None
+    has_degraded_health = bool(
+        isinstance(device_health, Sequence)
         and not isinstance(device_health, (str, bytes))
-        else []
+        and any(
+            isinstance(row, Mapping) and row.get("state") != "OK"
+            for row in device_health
+        )
     )
-
-    if critical_degraded:
+    if has_degraded_health:
         return {
-            "claim_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "evidence_strength": "INDICATOR",
-            "observation": reason or "CRITICAL_DEVICE_HEALTH_DEGRADATION",
-            "reason": "CRITICAL_DEVICE_HEALTH_COOBSERVED",
-            "evidence": {
-                "critical_device_health": critical_degraded,
-                "tick_evidence": evidence,
-            },
+            "status": "INDICATED",
+            "cause": reason or "DEVICE_HEALTH_DEGRADATION",
+            "reason": "EDGE_HEALTH_AND_TICK_EVIDENCE_AGREE",
+            "evidence": evidence,
         }
-
     return {
-        "claim_class": "FACT",
-        "causal_claim": False,
-        "evidence_strength": "INSUFFICIENT",
-        "observation": None,
+        "status": "NOT_PROVEN",
+        "cause": None,
         "reason": (
-            "REPLAY_DIVERGENCE_IS_NOT_PHYSICAL_CAUSAL_PROOF"
+            "REPLAY_DIVERGENCE_IS_NOT_PHYSICAL_PROOF"
             if divergence is not None
-            else "NO_DIRECT_PHYSICAL_EDGE_EXPLANATION"
+            else "INSUFFICIENT_PHYSICAL_EDGE_EVIDENCE"
         ),
         "evidence": evidence,
     }

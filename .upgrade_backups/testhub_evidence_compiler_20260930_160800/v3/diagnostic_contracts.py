@@ -111,15 +111,13 @@ def infer_field_contract(name: str, *, origin: str = "OBSERVED_GENERIC") -> Diag
         role = "MEASUREMENT"
         unit = "m"
         checks = checks + ("FINITE_RANGE", "CHANGE_RATE")
-    elif any(token in low for token in ("count", "errors", "rejections", "revision", "generation", "candidate_id", "sequence")):
-        # Counter semantics must win before substring-based quality inference:
-        # "generation" contains "ratio" but is a generation counter.
-        role = "COUNTER"
-        checks = checks + ("NONNEGATIVE", "MONOTONICITY_OBSERVATION")
     elif any(token in low for token in ("trust", "confidence", "observability", "coverage", "ratio", "margin")):
         role = "QUALITY"
         unit = "ratio"
         checks = checks + ("FINITE_RANGE", "UNIT_INTERVAL_CANDIDATE")
+    elif any(token in low for token in ("count", "errors", "rejections", "revision", "generation", "candidate_id", "sequence")):
+        role = "COUNTER"
+        checks = checks + ("NONNEGATIVE", "MONOTONICITY_OBSERVATION")
     elif any(token in low for token in ("stale", "valid", "ready", "timed_out", "degenerate", "continuous", "discontinuity", "suspected", "usable", "running")):
         role = "STATE"
         checks = checks + ("STATE_DISTRIBUTION", "TRANSITION_COUNT")

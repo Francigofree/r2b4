@@ -194,20 +194,20 @@ def diagnose_run(
         diagnosis, destination / "diagnosis.json"
     )
 
-    priority = diagnosis.get("priority_evidence")
-    priority_tick = (
-        priority.get("tick_id") if isinstance(priority, Mapping) else None
+    root = diagnosis.get("root_cause")
+    root_tick = (
+        root.get("tick_id") if isinstance(root, Mapping) else None
     )
-    priority_layer = (
-        priority.get("layer") if isinstance(priority, Mapping) else None
+    root_layer = (
+        root.get("layer") if isinstance(root, Mapping) else None
     )
     slice_path = destination / "interesting_slice.ndjson"
     slice_info = write_interesting_slice(
         reader,
         slice_path,
-        around_tick=priority_tick if isinstance(priority_tick, int) else None,
+        around_tick=root_tick if isinstance(root_tick, int) else None,
         root_layer=(
-            str(priority_layer) if isinstance(priority_layer, str) else None
+            str(root_layer) if isinstance(root_layer, str) else None
         ),
         max_bytes=slice_max_bytes,
     )
@@ -261,8 +261,7 @@ def diagnose_run(
         "capture_status": diagnosis.get("capture_status"),
         "capture_integrity": diagnosis.get("capture_integrity"),
         "replay_status": diagnosis.get("replay_status"),
-        "priority_evidence": diagnosis.get("priority_evidence"),
-        "analysis_handoff": diagnosis.get("analysis_handoff"),
+        "root_cause": diagnosis.get("root_cause"),
         "incident_count": triage.get("incident_count"),
         "output_dir": str(destination.resolve()),
         "agent_brief": str(agent_path.resolve()),
@@ -397,7 +396,7 @@ def write_interesting_slice(
                             "raw lidar point arrays omitted by default; "
                             "use query --topic /r2b4/raw_lidar --full"
                         ),
-                        "priority_tick": around_tick,
+                        "root_tick": around_tick,
                         "layers": list(layers),
                     },
                     separators=(",", ":"),
@@ -603,7 +602,6 @@ def verify_evidence(index_path: str | Path) -> dict[str, object]:
     }
 
 
-
 def _build_diagnosis(
     inspect: Mapping[str, object],
     triage: Mapping[str, object],
@@ -612,84 +610,62 @@ def _build_diagnosis(
     *,
     replay_requested: bool = True,
 ) -> dict[str, object]:
-    """Compile validated evidence without making an automatic causal judgment."""
+    """Build diagnosis without conflating evidence validity with behaviour."""
 
     profile = inspect.get("analysis_profile") or triage.get("analysis_profile")
     behavioral = isinstance(profile, Mapping) and profile.get("name") == BEHAVIORAL
-    priority = (
-        dict(triage.get("priority_evidence_candidate") or {})
-        if isinstance(triage.get("priority_evidence_candidate"), Mapping)
+    root = (
+        dict(triage.get("root_cause_candidate") or {})
+        if isinstance(triage.get("root_cause_candidate"), Mapping)
         else {}
     )
-    if not priority and isinstance(triage.get("root_cause_candidate"), Mapping):
-        legacy = dict(triage["root_cause_candidate"])
-        priority = {
-            "claim_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "evidence_strength": str(legacy.get("confidence") or "LEGACY"),
-            "selection_basis": "LEGACY_TRIAGE_PRIORITY",
-            "reason": legacy.get("reason"),
-            "tick_id": legacy.get("tick_id"),
-            "layer": legacy.get("layer"),
-            "kind": legacy.get("kind"),
-            "evidence_ids": legacy.get("evidence_ids", []),
-        }
-
-    replay_status = replay.get("status") if isinstance(replay, Mapping) else None
+    replay_status = (
+        replay.get("status") if isinstance(replay, Mapping) else None
+    )
     first_divergence = (
         replay.get("first_divergence")
         if isinstance(replay, Mapping)
         else None
     )
-    first_live_observation = (
-        replay.get("first_live_observation")
+    first_live_incident = (
+        replay.get("first_live_incident")
         if isinstance(replay, Mapping)
         else None
     )
-    if (
-        first_live_observation is None
-        and isinstance(replay, Mapping)
-        and isinstance(replay.get("first_live_incident"), Mapping)
-    ):
-        first_live_observation = replay.get("first_live_incident")
-
-    physical_evidence = (
-        replay.get("physical_evidence")
+    physical_root = (
+        replay.get("physical_root_cause")
         if isinstance(replay, Mapping)
         else None
     )
-    if (
-        physical_evidence is None
-        and isinstance(replay, Mapping)
-        and isinstance(replay.get("physical_root_cause"), Mapping)
-    ):
-        legacy_physical = replay["physical_root_cause"]
-        physical_evidence = {
-            "claim_class": "HEURISTIC_FINDING",
-            "causal_claim": False,
-            "evidence_strength": str(legacy_physical.get("status") or "LEGACY"),
-            "observation": legacy_physical.get("cause"),
-            "reason": legacy_physical.get("reason"),
-            "evidence": _prune_large(legacy_physical.get("evidence")),
-            "source": "LEGACY_REPLAY_COMPATIBILITY",
-        }
 
     if (
         isinstance(first_divergence, Mapping)
-        and first_divergence.get("reason") != "CAPTURE_INCOMPLETE"
+        and first_divergence.get("reason")
+        != "CAPTURE_INCOMPLETE"
         and replay_status == "MISMATCH"
         and not inspect.get("integrity_error")
     ):
-        priority = {
-            "claim_class": "POLICY_VERDICT",
-            "causal_claim": False,
-            "evidence_strength": "DIRECT",
-            "selection_basis": "REPLAY_DIVERGENCE",
-            "reason": first_divergence.get("reason") or "REPLAY_DIVERGENCE",
+        root = {
+            "confidence": "PROVEN",
+            "reason": (
+                first_divergence.get("reason")
+                or "REPLAY_DIVERGENCE"
+            ),
             "tick_id": first_divergence.get("tick_id"),
             "layer": first_divergence.get("layer"),
             "kind": "SOFTWARE_REPLAY_DIVERGENCE",
             "evidence": _prune_large(first_divergence),
+        }
+    elif (
+        isinstance(physical_root, Mapping)
+        and physical_root.get("status")
+        in {"PROVEN", "INDICATED"}
+    ):
+        root = {
+            **root,
+            "replayer_physical_root_cause": _prune_large(
+                physical_root
+            ),
         }
 
     final_event = inspect.get("final_event")
@@ -707,25 +683,25 @@ def _build_diagnosis(
         isinstance(integrity, Mapping)
         and integrity.get("complete") is True
     )
-    capture_complete = capture_complete and not inspect.get("integrity_error")
+    capture_complete = (
+        capture_complete and not inspect.get("integrity_error")
+    )
 
     if (
         not capture_complete
         or (
             isinstance(first_divergence, Mapping)
-            and first_divergence.get("reason") == "CAPTURE_INCOMPLETE"
+            and first_divergence.get("reason")
+            == "CAPTURE_INCOMPLETE"
         )
     ):
-        priority = {
-            "claim_class": "FACT",
-            "causal_claim": False,
-            "evidence_strength": "DIRECT",
-            "selection_basis": "EVIDENCE_VALIDITY_GATE",
+        root = {
             "kind": "CAPTURE_INCOMPLETE",
-            "reason": inspect.get("integrity_error") or "CAPTURE_INCOMPLETE",
-            "tick_id": None,
-            "layer": "Capture",
-            "evidence_ids": ["capture-integrity"],
+            "confidence": "EVIDENCE_BLOCKED",
+            "reason": (
+                inspect.get("integrity_error")
+                or "CAPTURE_INCOMPLETE"
+            ),
         }
 
     replay_gate_ok = (
@@ -733,7 +709,9 @@ def _build_diagnosis(
         or replay_status == "MATCH"
     )
     if replay_requested and replay_status is None:
-        replay_status = "ERROR" if replay_error else "NOT_RUN"
+        replay_status = (
+            "ERROR" if replay_error else "NOT_RUN"
+        )
 
     evidence_status = (
         "PASS"
@@ -755,6 +733,7 @@ def _build_diagnosis(
     return {
         "schema": "R2B4_TEST_HUB_DIAGNOSIS_V2",
         **({"analysis_profile": profile} if profile is not None else {}),
+        # Deliberately no longer an unqualified infrastructure-only PASS.
         "status": diagnosis_status,
         "diagnosis_status": diagnosis_status,
         "evidence_status": evidence_status,
@@ -766,36 +745,14 @@ def _build_diagnosis(
         ),
         "capture_integrity": integrity,
         "structure_valid": structure_ok,
-        "replay_status": (
-            "NOT_APPLICABLE"
-            if behavioral and not replay_requested
-            else replay_status
-        ),
-        **(
-            {
-                "replay_skip_reason": "SAMPLED_TICK_STREAM",
-                "warning_count": triage.get("warning_count", 0),
-            }
-            if behavioral
-            else {}
-        ),
+        "replay_status": "NOT_APPLICABLE" if behavioral and not replay_requested else replay_status,
+        **({"replay_skip_reason": "SAMPLED_TICK_STREAM", "warning_count": triage.get("warning_count", 0)} if behavioral else {}),
         "replay_error": replay_error,
         "replay_requested": replay_requested,
-        "evidence_compiler_policy": "NO_AUTOMATIC_ROOT_CAUSE_V1",
-        "priority_evidence": priority,
+        "root_cause": root,
         "first_divergence": first_divergence,
-        "first_live_observation": first_live_observation,
-        "physical_evidence": physical_evidence,
-        "analysis_handoff": {
-            "root_cause_inferred": False,
-            "causal_analysis_owner": "ANALYZER_LLM",
-            "test_hub_role": "EVIDENCE_COMPILER",
-            "allowed_claim_classes": [
-                "FACT",
-                "POLICY_VERDICT",
-                "HEURISTIC_FINDING",
-            ],
-        },
+        "first_live_incident": first_live_incident,
+        "physical_root_cause": physical_root,
         "metrics": {
             "ticks": triage.get("ticks"),
             "timing": triage.get("timing"),
@@ -804,11 +761,7 @@ def _build_diagnosis(
             "sensors": triage.get("sensors"),
             "localization": triage.get("localization"),
             "navigation": triage.get("navigation"),
-            **(
-                {"behavioral_trends": triage.get("behavioral_trends")}
-                if behavioral
-                else {}
-            ),
+            **({"behavioral_trends": triage.get("behavioral_trends")} if behavioral else {}),
         },
         "incident_count": triage.get("incident_count"),
     }
@@ -862,47 +815,50 @@ def _has_actionable_finding(
     return False
 
 
-
 def _incident_replay_window(
     triage: Mapping[str, object],
 ) -> ReplayWindow:
-    priority = triage.get("priority_evidence_candidate")
-    if not isinstance(priority, Mapping):
-        priority = triage.get("root_cause_candidate")
+    root = triage.get("root_cause_candidate")
     tick_id = (
-        priority.get("tick_id")
-        if isinstance(priority, Mapping)
+        root.get("tick_id")
+        if isinstance(root, Mapping)
         else None
     )
-    first_tick = _nested_int(triage, "ticks", "first_tick_id")
-    last_tick = _nested_int(triage, "ticks", "last_tick_id")
+    first_tick = _nested_int(
+        triage, "ticks", "first_tick_id"
+    )
+    last_tick = _nested_int(
+        triage, "ticks", "last_tick_id"
+    )
 
     if not isinstance(tick_id, int):
         return ReplayWindow(
             requested_start_tick_id=first_tick,
             requested_end_tick_id=(
                 min(last_tick, first_tick + 10)
-                if first_tick is not None and last_tick is not None
+                if first_tick is not None
+                and last_tick is not None
                 else None
             ),
         )
 
     layer = (
-        priority.get("layer")
-        if isinstance(priority, Mapping)
+        root.get("layer")
+        if isinstance(root, Mapping)
         else None
     )
     kind = (
-        priority.get("kind")
-        if isinstance(priority, Mapping)
+        root.get("kind")
+        if isinstance(root, Mapping)
         else None
     )
     reason = (
-        str(priority.get("reason") or "")
-        if isinstance(priority, Mapping)
+        str(root.get("reason") or "")
+        if isinstance(root, Mapping)
         else ""
     )
 
+    # Stateful localization failure needs history, not only +/-3 ticks.
     if (
         kind == "MOTION_BLOCKED"
         and (
@@ -931,7 +887,6 @@ def _incident_replay_window(
     )
 
 
-
 def _build_agent_brief(
     capture_path: str | Path,
     inspect: Mapping[str, object],
@@ -942,9 +897,9 @@ def _build_agent_brief(
     *,
     max_bytes: int,
 ) -> dict[str, object]:
-    priority = (
-        diagnosis.get("priority_evidence")
-        if isinstance(diagnosis.get("priority_evidence"), Mapping)
+    root = (
+        diagnosis.get("root_cause")
+        if isinstance(diagnosis.get("root_cause"), Mapping)
         else {}
     )
     incidents = (
@@ -952,19 +907,17 @@ def _build_agent_brief(
         if isinstance(triage.get("incidents"), list)
         else []
     )
-    priority_layer = (
-        priority.get("layer")
-        if isinstance(priority, Mapping)
-        else None
+    root_layer = (
+        root.get("layer") if isinstance(root, Mapping) else None
     )
     source_files = _source_hints(
-        str(priority_layer)
-        if isinstance(priority_layer, str)
+        str(root_layer)
+        if isinstance(root_layer, str)
         else None,
         replay,
         reason=(
-            str(priority.get("reason") or "")
-            if isinstance(priority, Mapping)
+            str(root.get("reason") or "")
+            if isinstance(root, Mapping)
             else ""
         ),
     )
@@ -972,31 +925,34 @@ def _build_agent_brief(
         "schema": AGENT_BRIEF_SCHEMA,
         "status": diagnosis.get("status"),
         "analysis_profile": diagnosis.get("analysis_profile"),
-        "diagnosis_status": diagnosis.get("diagnosis_status"),
-        "evidence_status": diagnosis.get("evidence_status"),
-        "behavior_status": diagnosis.get("behavior_status"),
+        "diagnosis_status": diagnosis.get(
+            "diagnosis_status"
+        ),
+        "evidence_status": diagnosis.get(
+            "evidence_status"
+        ),
+        "behavior_status": diagnosis.get(
+            "behavior_status"
+        ),
         "capture": {
             "path": str(Path(capture_path).resolve()),
             "capture_status": diagnosis.get("capture_status"),
             "integrity_complete": (
-                diagnosis.get("capture_integrity", {}).get("complete")
-                if isinstance(diagnosis.get("capture_integrity"), Mapping)
+                diagnosis.get(
+                    "capture_integrity", {}
+                ).get("complete")
+                if isinstance(
+                    diagnosis.get("capture_integrity"),
+                    Mapping,
+                )
                 else None
             ),
         },
-        "evidence_compiler_policy": diagnosis.get("evidence_compiler_policy"),
-        "priority_evidence": priority,
-        "physical_evidence": _prune_large(
-            diagnosis.get("physical_evidence")
-        ),
-        "analysis_handoff": diagnosis.get("analysis_handoff"),
+        "root_cause": root,
         "replay": {
             "status": diagnosis.get("replay_status"),
             "first_divergence": _prune_large(
                 diagnosis.get("first_divergence")
-            ),
-            "first_live_observation": _prune_large(
-                diagnosis.get("first_live_observation")
             ),
             "bridge": (
                 replay.get("mcap_bridge")
@@ -1010,11 +966,11 @@ def _build_agent_brief(
         "metrics": diagnosis.get("metrics"),
         "source_files": source_files,
         "evidence_slice": dict(slice_info),
-        "next_queries": _suggest_queries(priority),
+        "next_queries": _suggest_queries(root),
         "contract": {
             "claim_policy": (
-                "Test Hub emits FACT/POLICY_VERDICT/HEURISTIC_FINDING "
-                "evidence only; causal/root-cause synthesis belongs to the analyzer LLM"
+                "PROVEN only for direct capture/replay evidence; "
+                "upstream hypotheses stay INDICATED/NOT_PROVEN"
             ),
             "status_semantics": (
                 "PASS=no actionable finding; "
@@ -1029,7 +985,6 @@ def _build_agent_brief(
     return _fit_json_budget(brief, max_bytes)
 
 
-
 def _build_gui_manifest(
     inspect: Mapping[str, object],
     triage: Mapping[str, object],
@@ -1041,17 +996,23 @@ def _build_gui_manifest(
         "schema": GUI_MANIFEST_SCHEMA,
         "status": diagnosis.get("status"),
         "analysis_profile": diagnosis.get("analysis_profile"),
-        "diagnosis_status": diagnosis.get("diagnosis_status"),
-        "evidence_status": diagnosis.get("evidence_status"),
-        "behavior_status": diagnosis.get("behavior_status"),
+        "diagnosis_status": diagnosis.get(
+            "diagnosis_status"
+        ),
+        "evidence_status": diagnosis.get(
+            "evidence_status"
+        ),
+        "behavior_status": diagnosis.get(
+            "behavior_status"
+        ),
         "capture": {
             "status": diagnosis.get("capture_status"),
-            "integrity": diagnosis.get("capture_integrity"),
+            "integrity": diagnosis.get(
+                "capture_integrity"
+            ),
             "topics": inspect.get("topics"),
         },
-        "evidence_compiler_policy": diagnosis.get("evidence_compiler_policy"),
-        "priority_evidence": diagnosis.get("priority_evidence"),
-        "analysis_handoff": diagnosis.get("analysis_handoff"),
+        "root_cause": diagnosis.get("root_cause"),
         "incidents": triage.get("incidents"),
         "tracks": [
             "pose.x_m",
@@ -1068,14 +1029,9 @@ def _build_gui_manifest(
             "timeline_ndjson": timeline_path.name,
             "interesting_slice_ndjson": slice_path.name,
             "diagnosis_json": "diagnosis.json",
-            "replay_json": (
-                "replay_result.json"
-                if diagnosis.get("replay_status") != "NOT_APPLICABLE"
-                else None
-            ),
+            "replay_json": "replay_result.json" if diagnosis.get("replay_status") != "NOT_APPLICABLE" else None,
         },
     }
-
 
 
 def _build_evidence_index(
@@ -1099,17 +1055,21 @@ def _build_evidence_index(
         ),
         "status": diagnosis.get("status"),
         "analysis_profile": diagnosis.get("analysis_profile"),
-        "diagnosis_status": diagnosis.get("diagnosis_status"),
-        "evidence_status": diagnosis.get("evidence_status"),
-        "behavior_status": diagnosis.get("behavior_status"),
+        "diagnosis_status": diagnosis.get(
+            "diagnosis_status"
+        ),
+        "evidence_status": diagnosis.get(
+            "evidence_status"
+        ),
+        "behavior_status": diagnosis.get(
+            "behavior_status"
+        ),
         "authority_capture": {
             "path": str(reader.path.resolve()),
             "sha256": reader.sha256(),
             "container": "MCAP",
         },
-        "evidence_compiler_policy": diagnosis.get("evidence_compiler_policy"),
-        "priority_evidence": diagnosis.get("priority_evidence"),
-        "analysis_handoff": diagnosis.get("analysis_handoff"),
+        "root_cause": diagnosis.get("root_cause"),
         "artifacts": artifacts,
     }
     payload["evidence_sha256"] = _payload_sha256(
