@@ -342,8 +342,8 @@
       "local_goal_heading_samples": 32,
       "rollout_linear_samples": 6,
       "rollout_angular_samples": 9,
-      "rollout_horizon_ns": 800000000,
-      "rollout_step_count": 8,
+      "rollout_horizon_ns": 1000000000,
+      "rollout_step_count": 10,
       "footprint_safety_margin_m": 0.05,
       "clearance_score_cap_m": 1.0,
       "progress_weight": 0.42,
@@ -383,7 +383,18 @@
       "localization_recovery_omega_rad_s": 0.2,
       "localization_degraded_speed_scale": 0.4,
       "localization_inflation_sigma": 2.0,
-      "localization_observability_weight": 0.2
+      "localization_observability_weight": 0.2,
+      "speed_clearance_enabled": true,
+      "speed_clearance_low_speed_mps": 0.2,
+      "speed_clearance_high_speed_mps": 0.4,
+      "speed_clearance_low_m": 0.18,
+      "speed_clearance_high_m": 0.3,
+      "speed_clearance_barrier_power": 2.0,
+      "speed_clearance_penalty_weight": 0.18,
+      "explore_local_goal_min_distance_m": 0.45,
+      "explore_local_goal_max_distance_m": 0.9,
+      "explore_local_goal_distance_samples": 4,
+      "explore_local_goal_distance_weight": 0.15
     },
     "async_l6": {
       "enabled": true,
@@ -430,8 +441,9 @@
       "movement_epsilon": 1e-06
     },
     "motion_selection": {
-      "continuity_score_band": 0.005,
-      "reversal_min_omega_rad_s": 0.05
+      "continuity_score_band": 0.02,
+      "reversal_min_omega_rad_s": 0.05,
+      "continuity_clearance_drop_tolerance_m": 0.04
     }
   },
   "sensor_policy": {

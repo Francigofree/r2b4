@@ -771,7 +771,27 @@ def _migrate_legacy_resolved_config_snapshot(value: object) -> object:
             and "reversal_min_omega_rad_s" not in migrated
         ):
             migrated["reversal_min_omega_rad_s"] = 0.05
+        if migrated.get("__type__") == "MotionSelectionConfig":
+            # Historical L7 had no clearance guard. Preserve that behavior for
+            # immutable old captures instead of applying the new live tuning.
+            migrated.setdefault("continuity_clearance_drop_tolerance_m", 1_000_000.0)
         kind = migrated.get("__type__")
+        if kind == "NavigationConfig":
+            # These fields did not exist in historical resolved snapshots.
+            # Disable the new soft envelope and collapse adaptive EXPLORE goals
+            # to the captured legacy local_goal_distance_m.
+            legacy_goal_distance = migrated.get("local_goal_distance_m", 0.6)
+            migrated.setdefault("speed_clearance_enabled", False)
+            migrated.setdefault("speed_clearance_low_speed_mps", 0.20)
+            migrated.setdefault("speed_clearance_high_speed_mps", 0.40)
+            migrated.setdefault("speed_clearance_low_m", 0.18)
+            migrated.setdefault("speed_clearance_high_m", 0.30)
+            migrated.setdefault("speed_clearance_barrier_power", 2.0)
+            migrated.setdefault("speed_clearance_penalty_weight", 0.0)
+            migrated.setdefault("explore_local_goal_min_distance_m", legacy_goal_distance)
+            migrated.setdefault("explore_local_goal_max_distance_m", legacy_goal_distance)
+            migrated.setdefault("explore_local_goal_distance_samples", 1)
+            migrated.setdefault("explore_local_goal_distance_weight", 0.0)
         if kind in ("NativeEncoderConfig", "NativeStateEstimatorConfig"):
             upper_key = ("minimum_reliable_speed_mps" if kind == "NativeEncoderConfig"
                          else "minimum_reliable_wheel_speed_mps")

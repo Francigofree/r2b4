@@ -39,6 +39,69 @@ _POINT_CLEARANCE_EPSILON_M = 1e-9
 _MOTION_EPSILON = 1e-9
 
 
+def _speed_clearance_ratio(v_mps: float, config: "NavigationConfig") -> float:
+    """Normalize forward speed inside the configured soft-clearance envelope."""
+    speed = abs(v_mps)
+    low = config.speed_clearance_low_speed_mps
+    high = config.speed_clearance_high_speed_mps
+    if speed <= low:
+        return 0.0
+    if speed >= high:
+        return 1.0
+    return (speed - low) / (high - low)
+
+
+def _speed_clearance_target_m(v_mps: float, config: "NavigationConfig") -> float:
+    ratio = _speed_clearance_ratio(v_mps, config)
+    return (
+        config.speed_clearance_low_m
+        + ratio * (config.speed_clearance_high_m - config.speed_clearance_low_m)
+    )
+
+
+def _trajectory_clearance_score(
+    min_clearance_m: float,
+    v_mps: float,
+    config: "NavigationConfig",
+) -> float:
+    """Soft barrier: full credit once speed-appropriate clearance is reached.
+
+    L12 remains the hard safety owner. This score only makes L6 prefer a slower
+    or wider trajectory before the hard gate needs to intervene.
+    """
+    bounded = min(config.clearance_score_cap_m, max(0.0, min_clearance_m))
+    legacy = bounded / config.clearance_score_cap_m
+    if not config.speed_clearance_enabled or v_mps <= _MOTION_EPSILON:
+        return legacy
+    target = min(config.clearance_score_cap_m, _speed_clearance_target_m(v_mps, config))
+    floor = max(config.footprint_safety_margin_m, config.local_escape_trigger_clearance_m)
+    if target <= floor + _POINT_CLEARANCE_EPSILON_M:
+        return legacy
+    ratio = min(1.0, max(0.0, (bounded - floor) / (target - floor)))
+    return ratio ** config.speed_clearance_barrier_power
+
+
+def _trajectory_clearance_penalty(
+    clearance_score: float,
+    v_mps: float,
+    config: "NavigationConfig",
+) -> float:
+    if not config.speed_clearance_enabled or v_mps <= _MOTION_EPSILON:
+        return 0.0
+    return _speed_clearance_ratio(v_mps, config) * (1.0 - clearance_score)
+
+
+def _explore_goal_distances(config: "NavigationConfig") -> tuple[float, ...]:
+    """Far-to-near EXPLORE goal candidates; one sample preserves legacy behavior."""
+    count = config.explore_local_goal_distance_samples
+    maximum = config.explore_local_goal_max_distance_m
+    minimum = config.explore_local_goal_min_distance_m
+    if count == 1 or maximum - minimum <= _POINT_CLEARANCE_EPSILON_M:
+        return (maximum,)
+    step = (maximum - minimum) / (count - 1)
+    return tuple(maximum - index * step for index in range(count))
+
+
 class _RolloutDisposition(str, Enum):
     NONE = "NONE"
     ACCEPTED = "ACCEPTED"
@@ -154,6 +217,19 @@ class NavigationConfig:
     local_goal_forward_weight: float
     wheel_limits: WheelMotionLimits = WheelMotionLimits()
     minimum_planning_speed_mps: float = 0.15
+    # Soft navigation envelope. L12 remains the independent hard safety gate.
+    speed_clearance_enabled: bool = False
+    speed_clearance_low_speed_mps: float = 0.20
+    speed_clearance_high_speed_mps: float = 0.40
+    speed_clearance_low_m: float = 0.18
+    speed_clearance_high_m: float = 0.30
+    speed_clearance_barrier_power: float = 2.0
+    speed_clearance_penalty_weight: float = 0.0
+    # EXPLORE-only adaptive waypoint range; NAVIGATE/FOLLOW keep local_goal_distance_m.
+    explore_local_goal_min_distance_m: float = 0.60
+    explore_local_goal_max_distance_m: float = 0.60
+    explore_local_goal_distance_samples: int = 1
+    explore_local_goal_distance_weight: float = 0.0
 
     def __post_init__(self) -> None:
         if self.localization_recovery_timeout_ns <= 0 or not 0 < self.localization_degraded_speed_scale <= 1:
@@ -194,6 +270,55 @@ class NavigationConfig:
                 raise ValueError(f"{name} must be positive")
         if self.minimum_planning_speed_mps > self.wheel_limits.maximum_mps:
             raise ValueError("planner minimum exceeds calibrated maximum")
+        if type(self.speed_clearance_enabled) is not bool:
+            raise ValueError("speed_clearance_enabled must be boolean")
+        for name in (
+            "speed_clearance_low_speed_mps",
+            "speed_clearance_high_speed_mps",
+            "speed_clearance_low_m",
+            "speed_clearance_high_m",
+            "speed_clearance_barrier_power",
+            "explore_local_goal_min_distance_m",
+            "explore_local_goal_max_distance_m",
+        ):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value <= 0.0
+            ):
+                raise ValueError(f"{name} must be finite and positive")
+        if self.speed_clearance_high_speed_mps <= self.speed_clearance_low_speed_mps:
+            raise ValueError("speed-clearance high speed must exceed low speed")
+        if self.speed_clearance_high_m < self.speed_clearance_low_m:
+            raise ValueError("speed-clearance high-speed clearance must not shrink")
+        if self.speed_clearance_enabled and self.speed_clearance_low_m <= self.local_escape_trigger_clearance_m:
+            raise ValueError("soft speed-clearance envelope must stay above the forward escape trigger")
+        if self.speed_clearance_barrier_power < 1.0:
+            raise ValueError("speed-clearance barrier power must be >= 1")
+        if (
+            isinstance(self.speed_clearance_penalty_weight, bool)
+            or not isinstance(self.speed_clearance_penalty_weight, (int, float))
+            or not math.isfinite(self.speed_clearance_penalty_weight)
+            or self.speed_clearance_penalty_weight < 0.0
+        ):
+            raise ValueError("speed_clearance_penalty_weight must be finite and non-negative")
+        if self.explore_local_goal_min_distance_m > self.explore_local_goal_max_distance_m:
+            raise ValueError("EXPLORE local-goal minimum distance exceeds maximum")
+        if (
+            not isinstance(self.explore_local_goal_distance_samples, int)
+            or isinstance(self.explore_local_goal_distance_samples, bool)
+            or self.explore_local_goal_distance_samples <= 0
+        ):
+            raise ValueError("explore_local_goal_distance_samples must be a positive integer")
+        if (
+            isinstance(self.explore_local_goal_distance_weight, bool)
+            or not isinstance(self.explore_local_goal_distance_weight, (int, float))
+            or not math.isfinite(self.explore_local_goal_distance_weight)
+            or self.explore_local_goal_distance_weight < 0.0
+        ):
+            raise ValueError("explore_local_goal_distance_weight must be finite and non-negative")
         if (
             not isinstance(self.footprint_safety_margin_m, (int, float))
             or isinstance(self.footprint_safety_margin_m, bool)
@@ -237,6 +362,22 @@ class NavigationConfig:
             raise ValueError("trajectory score weights must be finite and non-negative")
         if sum(weights) <= 0.0:
             raise ValueError("at least one trajectory score weight must be positive")
+        local_goal_weights = (
+            self.local_goal_novelty_weight,
+            self.local_goal_clearance_weight,
+            self.local_goal_forward_weight,
+            self.explore_local_goal_distance_weight,
+        )
+        if any(
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value < 0.0
+            or not math.isfinite(value)
+            for value in local_goal_weights
+        ):
+            raise ValueError("EXPLORE local-goal weights must be finite and non-negative")
+        if sum(local_goal_weights) <= 0.0:
+            raise ValueError("at least one EXPLORE local-goal weight must be positive")
         if (
             not isinstance(self.progress_viability_floor, (int, float))
             or isinstance(self.progress_viability_floor, bool)
@@ -2162,7 +2303,7 @@ class TrajectoryNavigator:
         costmap: RollingLocalCostmap,
         scene: _LocalPlanningScene,
     ) -> Waypoint:
-        options: list[tuple[float, int, Waypoint]] = []
+        options: list[tuple[float, float, int, int, Waypoint]] = []
         footprint_radius = 0.5 * math.hypot(
             self._config.footprint_length_m,
             self._config.footprint_width_m,
@@ -2171,36 +2312,61 @@ class TrajectoryNavigator:
             self._config.clearance_score_cap_m,
             footprint_radius + self._config.footprint_safety_margin_m,
         ) + _POINT_CLEARANCE_EPSILON_M
+        distances = _explore_goal_distances(self._config)
+        distance_span = max(
+            self._config.explore_local_goal_max_distance_m
+            - self._config.explore_local_goal_min_distance_m,
+            _POINT_CLEARANCE_EPSILON_M,
+        )
         for index in range(self._config.local_goal_heading_samples):
             offset = _alternating_heading_offset(
                 index,
                 self._config.local_goal_heading_samples,
             )
             heading = _wrapped_angle(estimate.yaw_rad + offset)
-            goal = Waypoint(
-                estimate.x_m + self._config.local_goal_distance_m * math.cos(heading),
-                estimate.y_m + self._config.local_goal_distance_m * math.sin(heading),
-            )
-            clearance = _planning_scene_point_clearance(
-                goal.x_m,
-                goal.y_m,
-                scene,
-                costmap.radius_m,
-                relevant_clearance_m,
-            )
-            if clearance <= footprint_radius + self._config.footprint_safety_margin_m:
-                continue
-            visits = self._coverage.get(self._coverage_key(goal.x_m, goal.y_m), (0, 0))[0]
-            novelty = 1.0 / (1.0 + visits)
-            clearance_score = min(1.0, clearance / self._config.clearance_score_cap_m)
-            forward_preference = 0.5 * (math.cos(offset) + 1.0)
-            score = (self._config.local_goal_novelty_weight * novelty
-                     + self._config.local_goal_clearance_weight * clearance_score
-                     + self._config.local_goal_forward_weight * forward_preference)
-            options.append((score, index, goal))
+            for distance_index, distance_m in enumerate(distances):
+                goal = Waypoint(
+                    estimate.x_m + distance_m * math.cos(heading),
+                    estimate.y_m + distance_m * math.sin(heading),
+                )
+                clearance = _planning_scene_point_clearance(
+                    goal.x_m,
+                    goal.y_m,
+                    scene,
+                    costmap.radius_m,
+                    relevant_clearance_m,
+                )
+                if clearance <= footprint_radius + self._config.footprint_safety_margin_m:
+                    continue
+                visits = self._coverage.get(
+                    self._coverage_key(goal.x_m, goal.y_m), (0, 0)
+                )[0]
+                novelty = 1.0 / (1.0 + visits)
+                clearance_score = min(
+                    1.0, clearance / self._config.clearance_score_cap_m
+                )
+                forward_preference = 0.5 * (math.cos(offset) + 1.0)
+                distance_score = (
+                    1.0
+                    if len(distances) == 1
+                    else (distance_m - self._config.explore_local_goal_min_distance_m)
+                    / distance_span
+                )
+                score = (
+                    self._config.local_goal_novelty_weight * novelty
+                    + self._config.local_goal_clearance_weight * clearance_score
+                    + self._config.local_goal_forward_weight * forward_preference
+                    + self._config.explore_local_goal_distance_weight * distance_score
+                )
+                options.append((score, distance_m, index, distance_index, goal))
         if not options:
             return Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad)
-        return max(options, key=lambda item: (item[0], -item[1]))[2]
+        # Equal-quality options prefer the longer smooth segment, then the
+        # canonical alternating heading order.
+        return max(
+            options,
+            key=lambda item: (item[0], item[1], -item[2], -item[3]),
+        )[4]
 
     def _trajectory_rollout(
         self,
@@ -2397,12 +2563,18 @@ class TrajectoryNavigator:
             self._config.clearance_score_cap_m,
             max(0.0, min_clearance),
         )
-        clearance_score = bounded_clearance / self._config.clearance_score_cap_m
+        clearance_score = _trajectory_clearance_score(
+            bounded_clearance, v_mps, self._config
+        )
+        clearance_penalty = _trajectory_clearance_penalty(
+            clearance_score, v_mps, self._config
+        )
         total_score = (
             self._config.progress_weight * progress_potential
             + self._config.clearance_weight * clearance_score
             + self._config.smoothness_weight * smoothness
             + self._config.novelty_weight * novelty
+            - self._config.speed_clearance_penalty_weight * clearance_penalty
             - self._config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
             * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
         )
@@ -2656,12 +2828,18 @@ class TrajectoryRolloutComputer:
             config.clearance_score_cap_m,
             max(0.0, min_clearance),
         )
-        clearance_score = bounded_clearance / config.clearance_score_cap_m
+        clearance_score = _trajectory_clearance_score(
+            bounded_clearance, v_mps, config
+        )
+        clearance_penalty = _trajectory_clearance_penalty(
+            clearance_score, v_mps, config
+        )
         total_score = (
             config.progress_weight * progress_potential
             + config.clearance_weight * clearance_score
             + config.smoothness_weight * smoothness
             + config.novelty_weight * novelty
+            - config.speed_clearance_penalty_weight * clearance_penalty
             - config.localization_observability_weight * (1.0-estimate.localization_quality.observability)
             * abs(omega_rad_s) / max(max_omega_rad_s, 1e-9)
         )

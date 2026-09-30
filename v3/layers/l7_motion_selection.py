@@ -23,6 +23,9 @@ class MotionSelectionConfig:
 
     continuity_score_band: float
     reversal_min_omega_rad_s: float
+    # Continuity may not retain a materially tighter path than another
+    # near-best candidate. Large legacy default disables the guard.
+    continuity_clearance_drop_tolerance_m: float = 1_000_000.0
 
     def __post_init__(self) -> None:
         value = self.continuity_score_band
@@ -41,6 +44,16 @@ class MotionSelectionConfig:
             or reversal < 0.0
         ):
             raise ValueError("reversal_min_omega_rad_s must be finite and non-negative")
+        clearance_drop = self.continuity_clearance_drop_tolerance_m
+        if (
+            isinstance(clearance_drop, bool)
+            or not isinstance(clearance_drop, (int, float))
+            or not math.isfinite(clearance_drop)
+            or clearance_drop < 0.0
+        ):
+            raise ValueError(
+                "continuity_clearance_drop_tolerance_m must be finite and non-negative"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +214,10 @@ class MotionSelector:
                     if candidate.total_score + _SCORE_EPSILON
                     >= best.total_score - band
                 )
+                near_best = _clearance_guarded_near_best(
+                    near_best,
+                    self._config.continuity_clearance_drop_tolerance_m,
+                )
                 selected = min(
                     near_best,
                     key=lambda candidate: _command_continuity_key(
@@ -227,6 +244,23 @@ class MotionSelector:
 
     def _reset(self) -> None:
         self._state = MotionSelectionStateCheckpoint()
+
+
+def _clearance_guarded_near_best(
+    candidates: tuple[TrajectoryEvaluation, ...],
+    clearance_drop_tolerance_m: float,
+) -> tuple[TrajectoryEvaluation, ...]:
+    """Keep continuity inside both score and clearance-equivalence bands."""
+    if not candidates:
+        return ()
+    best_clearance = max(candidate.min_clearance_m for candidate in candidates)
+    floor = best_clearance - clearance_drop_tolerance_m
+    guarded = tuple(
+        candidate
+        for candidate in candidates
+        if candidate.min_clearance_m + _SCORE_EPSILON >= floor
+    )
+    return guarded or candidates
 
 
 def _command_continuity_key(
