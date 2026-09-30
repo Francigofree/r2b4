@@ -3,7 +3,7 @@ from __future__ import annotations
 from v3.diagnostic_contracts import infer_field_contract
 from v3.replay import _physical_evidence
 from v3.test_hub_analysis import Incident, _priority_evidence_candidate
-from v3.test_hub_v2 import _build_diagnosis
+from v3.test_hub_backend import _build_diagnosis
 from v3.test_hub_motion_quality import analyze_motion_quality_ticks
 from v3.test_hub_localization_quality import analyze_localization_quality_ticks
 

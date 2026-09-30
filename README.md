@@ -192,26 +192,29 @@ telepíteni.
 
 ## Test Hub
 
-Az alapértelmezett belépő az integrált Test Hub Next. Paraméter nélkül a
-legújabb `runtime/captures/*.mcap` fájlt elemzi, a capture profiljának megfelelően,
-és 10 Hz-es áttekintést, valamint `agent_view.json` összefoglalót készít:
+A Test Hub egy offline, MCAP-authority alapú diagnosztikai rendszer. Az egyetlen
+publikus Python entrypoint a `v3.test_hub`; a részletes működési szerződés:
+`docs/TEST_HUB.md`.
+
+Paraméter nélkül a legújabb `runtime/captures/*.mcap` fájlt dolgozza fel:
 
 ```bash
 python3 -m v3.test_hub
 python3 -m v3.test_hub run capture.mcap --output-dir /tmp/egyedi-hub --replay full
 python3 -m v3.test_hub view capture.mcap --hz 1 --output /tmp/egyedi-overview.ndjson
 python3 -m v3.test_hub compare before.mcap after.mcap
+python3 -m v3.test_hub inspect capture.mcap --deep
+python3 -m v3.test_hub query capture.mcap --ticks 0:10 --layers L1,L2,L12
 ```
 
-A `v3.test_hub_next` közvetlenül is használható. Az alapértelmezett cél
-`<capture>.evidence/`; meglévő adatot nem ír felül, ismételt futáshoz
-új `--output-dir` szükséges. Az 1/5/10 Hz-es nézet megőrzi a capture-ben rögzített
-állapotváltásokat is. A compare különbségeket mutat, automatikus verdict nélkül.
-A nézetek származtatott adatok; az MCAP és a canonical replay marad az authority.
+Az alapértelmezett derived cél `<capture>.evidence/`. Meglévő evidence-et a
+pipeline nem ír felül. A nézetek, agent összefoglalók és quality artifactok
+származtatott adatok; az MCAP marad a futás authority-je. A runtime csak a
+hardver-ownership lezárása után, külön processzben indítja az elemzést.
 
-A V2 háttérmodulok szükséges függőségek. A runtime utófeldolgozása és az operator
-ugyanezt az automatikus profilválasztást használja. A régi `validate`, `replay`,
-`inspect`, `verify-result`, `verify-evidence` kompatibilitási parancsok is megmaradnak.
+A Test Hub belső moduljai funkció szerint vannak felosztva (`test_hub_app`,
+`test_hub_backend`, analyzerek, views, portable bundle); ezek nem külön publikus
+entrypointok.
 
 ### Capture-alapú feldolgozási profilok
 
@@ -259,34 +262,34 @@ adnak GOOD/BAD minősítést, root cause diagnózist vagy javítási javaslatot.
 Olcsó integritási összefoglaló:
 
 ```bash
-python3 -m v3.test_hub_v2 inspect runtime/captures/<capture>.mcap
-python3 -m v3.test_hub_v2 inspect runtime/captures/<capture>.mcap --deep
+python3 -m v3.test_hub inspect runtime/captures/<capture>.mcap
+python3 -m v3.test_hub inspect runtime/captures/<capture>.mcap --deep
 ```
 
 Kis, agent-barát diagnosztikai összefoglaló:
 
 ```bash
-python3 -m v3.test_hub_v2 agent runtime/captures/<capture>.mcap
+python3 -m v3.test_hub agent runtime/captures/<capture>.mcap
 ```
 
 Teljes run-bound diagnosztikai csomag:
 
 ```bash
-python3 -m v3.test_hub_v2 diagnose runtime/captures/<capture>.mcap \
+python3 -m v3.test_hub diagnose runtime/captures/<capture>.mcap \
   --output-dir /tmp/r2b4-diagnosis
 ```
 
 Célzott, bounded evidence-lekérés:
 
 ```bash
-python3 -m v3.test_hub_v2 query runtime/captures/<capture>.mcap \
+python3 -m v3.test_hub query runtime/captures/<capture>.mcap \
   --ticks 100:120 --layers L2,L3,L6,L9,L12
 ```
 
 Evidence-index ellenőrzése:
 
 ```bash
-python3 -m v3.test_hub_v2 verify-evidence /tmp/r2b4-diagnosis/evidence_index.json
+python3 -m v3.test_hub verify-evidence /tmp/r2b4-diagnosis/evidence_index.json
 ```
 
 A Test Hub képes integritás-ellenőrzésre, bounded/indexelt queryre, timeline-ra,

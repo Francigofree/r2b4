@@ -384,8 +384,8 @@ def _live_idle_session(
             raise AcceptanceError(
                 f"FULL capture did not publish a finalized MCAP: {capture_path}"
             )
-        from v3.test_hub import inspect_capture
-        inspected = inspect_capture(capture_path)
+        from v3.test_hub import inspect_mcap
+        inspected = inspect_mcap(capture_path)
         profile = inspected.get("analysis_profile", {})
         if (inspected.get("status") != "PASS"
                 or profile.get("tick_sample_hz") != 50

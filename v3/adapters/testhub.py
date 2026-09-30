@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from v3.operator_controller import OperatorController
-from v3.test_hub_next import latest_capture, run_default, run_pending
+from v3.test_hub import latest_capture, run_default, run_pending
 
 
 class TestHubInterfaceAdapter:

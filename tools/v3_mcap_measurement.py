@@ -16,7 +16,7 @@ import time
 from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandMailboxConfig
 from v3.mcap_capture import McapCaptureConfig
 from v3.mcap_reader import EVENT_TOPIC, McapReader, RAW_LIDAR_TOPIC, TICK_TOPIC
-from v3.test_hub_v2 import verify_evidence
+from v3.test_hub import verify_evidence
 from v3_process_runtime import (
     PROJECT_ROOT, AsyncResidentStatusPublisher, McapCaptureSession, ResidentStatusConfig,
     _capture_configuration, load_resident_runtime_config, native_lidar_factory,

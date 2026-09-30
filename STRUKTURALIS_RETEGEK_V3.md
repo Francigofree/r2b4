@@ -392,3 +392,13 @@ Ez a dokumentum nem workflow és nem implementációs leltár. Stabil architekt�
 **Nem kell módosítani csak azért**, mert változik: layeren belüli algoritmus; ugyanazon numbered layer belső subsystem/modulstruktúrája; tuning/threshold/config; queue-kapacitás; capture konténerformátum/topic/chunkolás; azonos szemantikájú encoder-optimalizálás; CLI/GUI/agent brief mező; ideiglenes replay bridge; fájlnév/modulon belüli refaktor; vagy authorityt nem változtató diagnosztikai tool.
 
 A pillanatnyi implementáció authorityja a canonical source + aktív config; a konkrét futásé a run-bound evidence. Mindkettőnek e dokumentum architekturális korlátain belül kell maradnia.
+
+<!-- TEST_HUB_OFFLINE_BOUNDARY_V1 -->
+## Test Hub offline határ
+
+A Test Hub az Observation/MCAP capture után, authority-n kívüli offline fogyasztó.
+A finalizált MCAP a futás authority-je; a `.evidence/` újragenerálható derived adat.
+Production runtime/control modul nem importál Test Hub analyzert. A runtime csak a
+hardver-ownership lezárása után indíthat külön Test Hub processzt. Részletes
+szerződés: `docs/TEST_HUB.md`.
+<!-- /TEST_HUB_OFFLINE_BOUNDARY_V1 -->

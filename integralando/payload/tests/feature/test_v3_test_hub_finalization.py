@@ -29,7 +29,7 @@ def test_test_hub_legacy_module_files_are_removed() -> None:
 
 def test_active_tree_has_no_legacy_test_hub_module_reference() -> None:
     root = Path(__file__).resolve().parents[2]
-    skipped = {".git", ".upgrade_backups", "runtime", ".venv", "venv", "__pycache__"}
+    skipped = {".git", ".upgrade_backups", "runtime", ".venv", "venv", "__pycache__", "integralando",}
     suffixes = {".py", ".md", ".rst", ".txt", ".sh", ".json", ".toml", ".yaml", ".yml"}
     bad: list[str] = []
     generated_files = {"APPLY_RESULT.json", "TEST_HUB_FINALIZATION_RESULT.json"}

@@ -243,7 +243,7 @@ def inspect_capture(capture_path: str | Path) -> dict[str, object]:
     """Inspect a native V3 capture."""
 
     if Path(capture_path).suffix.lower() == ".mcap":
-        from .test_hub_v2 import inspect_mcap
+        from .test_hub_backend import inspect_mcap
         return inspect_mcap(capture_path, deep=True)
     path = _regular_file(capture_path, "capture")
     try:

@@ -37,3 +37,12 @@ For deep diagnostics, prefer MCAP + canonical replay + Test Hub evidence.
 - `./r test` — CORE after normal agent changes.
 - `./r test <feature>` — relevant scenario slice, e.g. `follow`.
 - `./r test full` — complete 100-200 case suite for shared boundaries / release acceptance.
+
+<!-- TEST_HUB_INTEGRATION_V1 -->
+## Test Hub integráció
+
+A Test Hub `python3 -m v3.test_hub test --scope core|feature|deep|full` parancsa
+ugyanazt a pattern-alapú pytest registryt használja, mint a kanonikus
+`v3.test_runner`. A Test Hub nem tart fenn külön tesztlistát. Részletek:
+`docs/TEST_HUB.md`.
+<!-- /TEST_HUB_INTEGRATION_V1 -->
