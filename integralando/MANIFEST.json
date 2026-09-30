@@ -1,0 +1,21 @@
+{
+  "name": "r2b4_p0_l11_reversal_fix_20260929",
+  "base_repo": "Francigofree/r2b4",
+  "base_commit": "3df5545081f842f2440dac44b2740c519b3aba73",
+  "severity": "P0",
+  "root_cause": "L11 conflates a partial, live GPIO edge-history reversal fit with missing encoder feedback and therefore ignores L9's finite velocity transition deadline.",
+  "changed_files": [
+    "v3/layers/l11_actuator_control.py"
+  ],
+  "added_files": [
+    "tests/feature/test_v3_l11_reversal_reacquisition.py"
+  ],
+  "config_changes": [],
+  "encoder_backend_changes": [],
+  "safety_invariants": [
+    "trust==0/no-edge feedback keeps the original 250 ms fail-closed watchdog",
+    "partial trust is not promoted to PI control",
+    "transition grace is finite and owned by the original L9 deadline",
+    "grace disappears when current live edge-reacquisition evidence disappears"
+  ]
+}

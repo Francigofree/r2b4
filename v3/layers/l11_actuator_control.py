@@ -455,6 +455,17 @@ class WheelActuatorController:
         # confidence-scaled proportional feedback and freeze the integral.
         missing_edge_feedback = ((required_left and left_measured is None)
                                  or (required_right and right_measured is None))
+        feedback_values = {field.key: field.value for field in feedback.values}
+        bounded_edge_reacquisition = (
+            missing_edge_feedback
+            and self._missing_feedback_is_bounded_edge_reacquisition(
+                feedback_values,
+                required_left=required_left,
+                required_right=required_right,
+                left_measured=left_measured,
+                right_measured=right_measured,
+            )
+        )
         for side, measured, required in (("left", left_measured, required_left),
                                          ("right", right_measured, required_right)):
             quality = 0.0 if measured is None else velocity_quality(measured, self._speed_map.minimum_continuous_speed_mps)
@@ -484,18 +495,29 @@ class WheelActuatorController:
         )
 
         uncertain = left_uncertain or right_uncertain
+        transition_feedback_bounded = (
+            not missing_edge_feedback or bounded_edge_reacquisition
+        )
         if uncertain:
             # The measured wheel follows the command with delay. Keep the
             # original finite L9 deadline until feedback catches up; never
-            # renew it when targets or planner proposals change.
-            if self._feedback_transition_until_ns is None and not missing_edge_feedback:
+            # renew it when targets or planner proposals change. A partial,
+            # clean GPIO edge fit is live reversal evidence, not a silent
+            # encoder; it receives the same finite transition budget.
+            if (
+                self._feedback_transition_until_ns is None
+                and transition_feedback_bounded
+            ):
                 self._feedback_transition_until_ns = wheels.velocity_transition_until_ns
             self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
                 "feedback",
                 self._feedback_uncertain_since_ns,
                 wheels.context.monotonic_ns,
-                transition_until_ns=(self._feedback_transition_until_ns
-                                     if not missing_edge_feedback else None),
+                transition_until_ns=(
+                    self._feedback_transition_until_ns
+                    if transition_feedback_bounded
+                    else None
+                ),
             )
             self._transient_stale_ticks += 1
             self._left_pi.reset()
@@ -644,6 +666,50 @@ class WheelActuatorController:
         # already-admitted trusted test input. Production encoder samples carry
         # both global and per-wheel trust explicitly.
         return 1.0
+
+    @classmethod
+    def _missing_feedback_is_bounded_edge_reacquisition(
+        cls,
+        values: Mapping[str, object],
+        *,
+        required_left: bool,
+        required_right: bool,
+        left_measured: float | None,
+        right_measured: float | None,
+    ) -> bool:
+        """Recognize live, partial reversal fits without blessing silence.
+
+        NativeCounterEncoderBackend deliberately withholds a control-grade
+        velocity while a new-direction GPIO edge fit is still below full trust.
+        That is bounded reacquisition evidence when the counter diagnostics are
+        clean. It is distinct from trust==0/TICK_SNAPSHOT/no-edge feedback.
+        """
+
+        missing_sides = tuple(
+            side
+            for side, required, measured in (
+                ("left", required_left, left_measured),
+                ("right", required_right, right_measured),
+            )
+            if required and measured is None
+        )
+        if not missing_sides:
+            return False
+        if (
+            values.get("measurement_stale") is not False
+            or values.get("measurement_timing_valid") is not True
+            or values.get("rejection_code") != "BASELINE"
+            or not cls._counter_diagnostics_are_clean(values)
+        ):
+            return False
+
+        for side in missing_sides:
+            trust = cls._per_wheel_trust(values, side)
+            if not 0.0 < trust < 1.0:
+                return False
+            if values.get(f"{side}_estimation_timebase") != "GPIO_EDGE_HISTORY":
+                return False
+        return True
 
     @staticmethod
     def _required_feedback_value(
