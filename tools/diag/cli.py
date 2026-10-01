@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from .context import DiagEvidenceError, open_context
 from .contracts import AdmissionState, DiagnosticResult, FullDiagnosticReport
 from .registry import AnalyzerRegistry, build_default_registry
+from .persistence import persist_payload
 
 
 class DiagCliError(RuntimeError):
@@ -33,14 +34,16 @@ def _print_help(registry: AnalyzerRegistry) -> None:
         "R2B4 DIAG — verified EVI evidence -> diagnostic data\n"
         "Usage:\n"
         "  r diag                              Full DIAG on latest evidence (default)\n"
-        "  r diag full [EVIDENCE|latest] [--json]\n"
-        "  r diag ANALYZER [EVIDENCE|latest] [--json]\n"
-        "  r diag admission ANALYZER [EVIDENCE|latest] [--json]\n"
+        "  r diag full [EVIDENCE|latest] [--json] [--no-save]\n"
+        "  r diag ANALYZER [EVIDENCE|latest] [--json] [--no-save]\n"
+        "  r diag admission ANALYZER [EVIDENCE|latest] [--json] [--no-save]\n"
         "  r diag list [--json]\n\n"
         "Data contract:\n"
         "  - input: sealed tools/mcap_evidence EVI bundle only\n"
         "  - source MCAP is never opened by DIAG\n"
         "  - output: facts, measurements, relationships and evidence references\n"
+        "  - diagnostic payloads are atomically saved under runtime/diag by default\n"
+        "  - --no-save requests an explicit ephemeral run\n"
         "  - no recommendations, suggestions or automatic root-cause verdicts\n\n"
         "Analyzers: " + " | ".join(registry.ids())
     )
@@ -50,17 +53,24 @@ def _emit_json(payload: object) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False))
 
 
-def _split_options(argv: Sequence[str]) -> tuple[list[str], bool]:
+def _split_options(
+    argv: Sequence[str], *, allow_no_save: bool = True
+) -> tuple[list[str], bool, bool]:
     positional: list[str] = []
     json_output = False
+    save_output = True
     for token in argv:
         if token == "--json":
             json_output = True
+        elif token == "--no-save":
+            if not allow_no_save:
+                raise DiagCliError("--no-save is not valid for this command")
+            save_output = False
         elif token.startswith("-"):
             raise DiagCliError(f"unknown option: {token}")
         else:
             positional.append(token)
-    return positional, json_output
+    return positional, json_output, save_output
 
 
 def _list(registry: AnalyzerRegistry, *, json_output: bool) -> int:
@@ -134,13 +144,13 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | str | None =
             _print_help(registry)
             return 0
         if args and args[0] == "list":
-            positional, json_output = _split_options(args[1:])
+            positional, json_output, _ = _split_options(args[1:], allow_no_save=False)
             if positional:
                 raise DiagCliError("usage: r diag list [--json]")
             return _list(registry, json_output=json_output)
 
         # No arguments is intentionally operational: full DIAG on latest evidence.
-        positional, json_output = _split_options(args)
+        positional, json_output, save_output = _split_options(args)
         if not positional:
             mode, evidence_value = "full", None
         elif positional[0] == "full":
@@ -164,6 +174,14 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | str | None =
                 "contract": registry.get(analyzer_id).contract.as_dict(),
                 "admission": decision.as_dict(),
             }
+            if save_output:
+                artifact = persist_payload(
+                    root,
+                    payload,
+                    mode=f"admission-{analyzer_id}",
+                    evidence_path=context.facts.as_dict().get("path"),
+                )
+                print(f"diag artifact: {artifact}", file=sys.stderr)
             if json_output:
                 _emit_json(payload)
             else:
@@ -186,15 +204,33 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | str | None =
         context = open_context(root, evidence_value)
         if mode == "full":
             report = registry.run_all(context)
+            payload = report.as_dict()
+            if save_output:
+                artifact = persist_payload(
+                    root,
+                    payload,
+                    mode="full",
+                    evidence_path=context.facts.as_dict().get("path"),
+                )
+                print(f"diag artifact: {artifact}", file=sys.stderr)
             if json_output:
-                _emit_json(report.as_dict())
+                _emit_json(payload)
             else:
                 _human_full(report)
             return 0 if all(item.admission.applicable for item in report.results) else 2
 
         result = registry.run(mode, context)
+        payload = result.as_dict()
+        if save_output:
+            artifact = persist_payload(
+                root,
+                payload,
+                mode=mode,
+                evidence_path=context.facts.as_dict().get("path"),
+            )
+            print(f"diag artifact: {artifact}", file=sys.stderr)
         if json_output:
-            _emit_json(result.as_dict())
+            _emit_json(payload)
         else:
             _human_result(result)
         return 0 if result.admission.applicable else 2

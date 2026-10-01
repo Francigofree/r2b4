@@ -46,7 +46,7 @@ COMMAND_HELP = {
     "test": ("[MODE]", "Célzott tesztek; alapértelmezés: core. Módok: r test list."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
-    "diag": ("[full|ANALYZER] [EVIDENCE|latest] [--json]", "Verified EVI evidence-ből diagnosztikai adatokat szolgáltat; alap: full/latest."),
+    "diag": ("[full|ANALYZER] [EVIDENCE|latest] [--json] [--no-save]", "Verified EVI evidence-ből diagnosztikai adatokat szolgáltat; alap: full/latest, artifact: runtime/diag/."),
     "cpu": ("[SECONDS] [INTERVAL]", "CPU-mérés és naplózás; alapérték: 30 s, 1 s mintavétel."),
     "cpu2": ("[ARGS...]", "Részletes CPU-diagnosztika; opciók: r cpu2 --help."),
     "disc": ("", "Szabad lemezterület és R2B4-adatméretek."),

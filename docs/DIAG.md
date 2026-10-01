@@ -179,3 +179,38 @@ A DIAG profiling path-alapú és nem field-whitelist alapú: új mezők a relev�
 view-kban automatikusan láthatóvá válnak, ha a domain token-scope-ba esnek. A
 full field census az `evidence_health` / `lineage` rétegben ettől függetlenül is
 megmarad.
+
+## Tartós DIAG artifact
+
+A diagnosztikai futások alapértelmezésben a terminálkimenet mellett a teljes
+machine-readable payloadot is elmentik:
+
+```text
+runtime/diag/diag_<UTC timestamp>_<mode>_<evidence>_<unique>.json
+```
+
+Az írás ugyanabban a könyvtárban létrehozott ideiglenes fájlon keresztül történik,
+`flush` + `fsync` után atomi rename publikálja a végleges JSON-t, majd a könyvtár is
+`fsync`-et kap. Sikeres `r diag` visszatérésnél ezért a kiírt `diag artifact:` útvonal
+már tartósan publikált reportot jelöl.
+
+A mentés minden tényleges diagnosztikai futásra érvényes (`full`, egyedi analyzer,
+`admission`). A `list` és help nem hoz létre artifactot.
+
+Explicit ephemeral futás:
+
+```bash
+r diag --no-save
+r diag safety latest --no-save
+```
+
+A `--json` továbbra is tiszta JSON-t ír stdout-ra; a mentett artifact útvonala
+stderr-re kerül, ezért a következő változat gépileg továbbra is közvetlenül
+feldolgozható:
+
+```bash
+r diag --json | jq .
+```
+
+A `runtime/diag/` generált lokális runtime-adat és gitből ignorált.
+

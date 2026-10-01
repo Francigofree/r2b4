@@ -157,7 +157,7 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
 
         analyzers = list(build_default_registry().ids())
         if not before:
-            return hint, _filter(["full", "list", "admission", *analyzers], current)
+            return hint, _filter(["full", "list", "admission", "--json", "--no-save", *analyzers], current)
         if before[0] == "admission" and len(before) == 1:
             return hint, _filter(analyzers, current)
         evidence_position = (
@@ -168,7 +168,7 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
             before[0] == "admission" and len(before) == 2 and before[1] in analyzers
         )
         if evidence_position:
-            evidence = ["latest"]
+            evidence = ["latest", "--json", "--no-save"]
             capture_dir = root / "runtime" / "captures"
             if capture_dir.is_dir():
                 evidence.extend(
