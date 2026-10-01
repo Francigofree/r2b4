@@ -2,7 +2,7 @@
 
 Designed for the short ``./r`` launcher.  Timed motion commands own the whole
 operator session: runtime auto-start, motion, STOP, runtime shutdown, then visible
-capture/Test Hub finalization.
+capture finalization.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import json
 import math
 import os
 import sys
-import threading
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -24,13 +23,7 @@ from v3.action_catalog import (
 )
 from v3.capture_rate import CAPTURE_HZ_VALUES, DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.operator_controller import CAPTURE_MODES, DEFAULT_CAPTURE_MODE, OperatorError, OperatorEvent
-from v3.pytest_profiles import pytest_profile_names
 from v3.robot_interface import RobotInterface, RobotInterfaceError
-
-
-TEST_HUB_STATUS_POLL_S = 0.5
-TEST_HUB_PROGRESS_EVERY_S = 5.0
-TEST_HUB_WAIT_LIMIT_S = 15.0 * 60.0
 
 
 ALIASES = {
@@ -51,7 +44,6 @@ ALIASES = {
     "sd": "shutdown",
     "rt": "runtime",
     "cap": "capture",
-    "th": "testhub",
     "cam": "camera",
     "sys": "system",
 }
@@ -62,9 +54,6 @@ MOTION_COMMANDS = frozenset({
 
 
 def _event_printer(event: OperatorEvent) -> None:
-    if event.message.startswith("TEST_HUB_AUTORUN"):
-        # The progress loop below provides a less cryptic, continuously visible view.
-        return
     stream = sys.stderr if event.kind in {"error", "warning"} else sys.stdout
     print(event.message, file=stream, flush=True)
 
@@ -160,7 +149,7 @@ def _parser() -> argparse.ArgumentParser:
             f"Capture Hz: {' | '.join(f'c {hz}' for hz in CAPTURE_HZ_VALUES)}   (default: {DEFAULT_CAPTURE_HZ} Hz)\n"
             "Legacy capture mode: c alap | c full | c nincs\n"
             "Skip movement trigger: nc   (runtime shutdown may still finalize its capture slot)\n"
-            "Useful: s=status, d=diag, x=STOP, th=Test Hub, cap=capture, rt=runtime."
+            "Useful: s=status, d=diag, x=STOP, cap=capture, rt=runtime."
         ),
     )
     parser.add_argument("--json", action="store_true", help="egy JSON-eredmény stdout-on; folyamatjelzés stderr-en")
@@ -191,7 +180,7 @@ def _parser() -> argparse.ArgumentParser:
     add_command("diag", help="Részletes diagnosztika.")
     add_command("caps", help="Élő RobotInterface-képességek.")
     add_command("stop", help="Mozgás STOP; a runtime futva marad, ha jelen van.")
-    add_command("shutdown", help="STOP + runtime-leállítás + Test Hub folyamatjelzés.")
+    add_command("shutdown", help="STOP + capture-finalizálás + runtime-leállítás.")
     add_command("panic", help="Fail-safe STOP és runtime-leállítás.")
     add_command("proba", help="Integrált fizikai mozgásteszt.")
 
@@ -232,18 +221,6 @@ def _parser() -> argparse.ArgumentParser:
     follow.add_argument("seconds", type=float, nargs="?", default=0.0, help="idő [s]; 0 = folyamatos")
     follow.add_argument("--max-v", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS, help="sebességkorlát [m/s]")
     follow.add_argument("--max-omega", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S, help="szögsebességkorlát [rad/s]")
-
-    testhub = add_command("testhub", help="Test Hub állapot, egy capture elemzése vagy batch futás.")
-    testhub.add_argument("operation", nargs="?", choices=("status", "run", "batch"), default="status")
-    testhub.add_argument("capture", nargs="?")
-    testhub.add_argument("--replay", choices=("off", "incident", "full"), default="incident")
-    testhub.add_argument("--hz", type=int, choices=(1, 5, 10), default=5)
-    testhub.add_argument("--no-sweep", action="store_true")
-    testhub.add_argument(
-        "--pytest", "--pytest-scope", dest="pytest_scope",
-        choices=("off", *pytest_profile_names()), default="off",
-        help="run one shared pytest profile inside Test Hub",
-    )
 
     camera = add_command("camera", help="Exkluzív kameradiagnosztika: photo / video OUTPUT [SECONDS].")
     camera.add_argument("operation", choices=("photo", "video"))
@@ -399,7 +376,7 @@ def _run_timed_motion(
         # owned runtime. A pre-existing runtime belongs to the wider robot session.
         if seconds > 0 and not runtime_preexisting:
             try:
-                _shutdown_with_testhub_progress(interface, capture_mode=effective_mode)
+                _shutdown(interface)
             except Exception:
                 pass
         raise
@@ -434,166 +411,18 @@ def _run_timed_motion(
         }
         print("runtime kept running (pre-existing resident session)")
     else:
-        final = _shutdown_with_testhub_progress(interface, capture_mode=effective_mode)
+        final = _shutdown(interface)
 
     return {
         "status": "INTERRUPTED" if interrupted else "FINISHED",
         "command": command,
         "seconds": seconds,
-        "testhub": final,
+        "runtime": final,
     }
 
-def _shutdown_with_testhub_progress(
-    interface: RobotInterface,
-    *,
-    capture_mode: str | None = None,
-) -> Mapping[str, object]:
-    result: dict[str, object] = {}
-    error: list[BaseException] = []
-
-    def worker() -> None:
-        try:
-            value = interface.execute("operator.runtime.stop")
-            if isinstance(value, Mapping):
-                result.update(value)
-        except BaseException as exc:  # carried back to the main thread
-            error.append(exc)
-
-    thread = threading.Thread(target=worker, name="r2b4-interface-shutdown", daemon=False)
-    thread.start()
-    started = time.monotonic()
-    last_print = 0.0
-    last_state: str | None = None
-    while thread.is_alive():
-        now = time.monotonic()
-        if capture_mode == "nincs":
-            state = "OFF"
-            detail: Mapping[str, object] = {"state": state}
-        else:
-            raw = interface.read("testhub.status")
-            detail = raw if isinstance(raw, Mapping) else {"state": "UNKNOWN"}
-            state = str(detail.get("state") or "UNKNOWN")
-        if state != last_state or now - last_print >= TEST_HUB_PROGRESS_EVERY_S:
-            elapsed = int(now - started)
-            if state == "OFF":
-                print(f"shutdown: runtime stopping | Test Hub OFF | {elapsed}s", flush=True)
-            else:
-                print(f"shutdown/Test Hub: {state} | {elapsed}s", flush=True)
-            last_state = state
-            last_print = now
-        thread.join(TEST_HUB_STATUS_POLL_S)
-    thread.join()
-    if error:
-        raise error[0]
-
-    if capture_mode == "nincs":
-        print("runtime STOPPED | capture/Test Hub OFF")
-        return {"state": "OFF", "status": None}
-
-    # The runtime process can stop before its non-authoritative Test Hub
-    # supervisor finishes.  Continue observing the evidence directory so the
-    # human is never left staring at a silent terminal for minutes.
-    return _wait_testhub_finished(interface, started=started)
-
-
-def _wait_testhub_finished(
-    interface: RobotInterface,
-    *,
-    started: float | None = None,
-) -> Mapping[str, object]:
-    began = started if started is not None else time.monotonic()
-    last_print = 0.0
-    last_state: str | None = None
-    while True:
-        raw = interface.read("testhub.status")
-        status = raw if isinstance(raw, Mapping) else {"state": "UNKNOWN"}
-        state = str(status.get("state") or "UNKNOWN")
-        now = time.monotonic()
-        if state != last_state or now - last_print >= TEST_HUB_PROGRESS_EVERY_S:
-            elapsed = int(now - began)
-            if state == "FINISHED":
-                print(
-                    "Test Hub: FINISHED"
-                    f" | status {status.get('status') or '-'}"
-                    f" | replay {status.get('replay_status') or '-'}"
-                    f" | {elapsed}s",
-                    flush=True,
-                )
-            else:
-                print(f"Test Hub: {state} | {elapsed}s", flush=True)
-            last_state = state
-            last_print = now
-
-        if state == "FINISHED":
-            evidence = status.get("evidence")
-            if evidence:
-                print(f"evidence: {evidence}")
-            return status
-        if state == "IDLE":
-            return status
-        if now - began >= TEST_HUB_WAIT_LIMIT_S:
-            print(
-                f"Test Hub: still {state} after {int(TEST_HUB_WAIT_LIMIT_S)} s; analysis may be inspected with ./r th",
-                file=sys.stderr,
-            )
-            return status
-        try:
-            time.sleep(TEST_HUB_STATUS_POLL_S)
-        except KeyboardInterrupt:
-            # Robot/runtime is already stopped here.  Do not kill an offline
-            # evidence process merely because the user stops watching it.
-            print("\nTest Hub wait cancelled; robot is already stopped.  Status: ./r th", file=sys.stderr)
-            return status
-
-
-def _run_testhub_with_progress(
-    interface: RobotInterface,
-    *,
-    capture: str | None,
-    hz: int,
-    replay: str,
-    no_sweep: bool,
-    pytest_scope: str,
-) -> object:
-    result: list[object] = []
-    error: list[BaseException] = []
-
-    def worker() -> None:
-        try:
-            result.append(interface.execute(
-                "testhub.run",
-                capture=capture,
-                hz=hz,
-                replay=replay,
-                no_sweep=no_sweep,
-                pytest_scope=pytest_scope,
-            ))
-        except BaseException as exc:
-            error.append(exc)
-
-    thread = threading.Thread(target=worker, name="r2b4-testhub-manual", daemon=False)
-    thread.start()
-    start = time.monotonic()
-    last = -TEST_HUB_PROGRESS_EVERY_S
-    while thread.is_alive():
-        elapsed = time.monotonic() - start
-        if elapsed - last >= TEST_HUB_PROGRESS_EVERY_S:
-            print(f"Test Hub: RUNNING | {int(elapsed)}s", flush=True)
-            last = elapsed
-        thread.join(TEST_HUB_STATUS_POLL_S)
-    thread.join()
-    if error:
-        raise error[0]
-    value = result[0] if result else {"status": "ERROR", "error": "no Test Hub result"}
-    if isinstance(value, Mapping):
-        print(
-            f"Test Hub: {value.get('status') or 'DONE'}"
-            f" | replay {value.get('replay_status') or '-'}"
-            f" | {int(time.monotonic() - start)}s"
-        )
-        if value.get("output_dir"):
-            print(f"evidence: {value['output_dir']}")
-    return value
+def _shutdown(interface: RobotInterface) -> Mapping[str, object]:
+    interface.execute("operator.runtime.stop")
+    return {"state": "STOPPED"}
 
 
 def _execute(
@@ -627,7 +456,7 @@ def _execute(
         output = interface.stop()
         print("robot: IDLE (runtime kept running if present)")
     elif command == "shutdown":
-        output = _shutdown_with_testhub_progress(interface, capture_mode=None)
+        output = _shutdown(interface)
     elif command == "panic":
         output = interface.execute("operator.panic")
         print("robot: STOP + runtime shutdown requested")
@@ -641,7 +470,7 @@ def _execute(
                 "operator.runtime.start", capture_mode=capture_mode, capture_hz=capture_hz
             )
         elif args.operation == "stop":
-            output = _shutdown_with_testhub_progress(interface, capture_mode=None)
+            output = _shutdown(interface)
         elif args.operation == "status":
             output = _status_line(interface) if args.json else _print_short_status(interface)
         else:
@@ -659,24 +488,6 @@ def _execute(
             output = interface.read("capture.status")
         if not args.json:
             _print_json(output)
-    elif command == "testhub":
-        if args.operation == "status":
-            output = interface.read("testhub.status")
-            if not args.json:
-                _print_json(output)
-        elif args.operation == "run":
-            output = _run_testhub_with_progress(
-                interface,
-                capture=args.capture,
-                hz=args.hz,
-                replay=args.replay,
-                no_sweep=args.no_sweep,
-                pytest_scope=args.pytest_scope,
-            )
-        else:
-            output = interface.execute("testhub.batch", hz=args.hz, replay=args.replay)
-            if not args.json:
-                _print_json(output)
     elif command == "camera":
         if args.operation == "photo":
             output = interface.execute("camera.photo", output=args.output)
@@ -702,7 +513,7 @@ def main(
     try:
         clean, capture_mode, capture_hz, no_trigger = _extract_capture_selector(raw)
         args = _parser().parse_args(clean)
-        # Progress, including shutdown/Test Hub worker messages, stays visible
+        # Progress, including shutdown/capture messages, stays visible
         # on stderr in JSON mode. stdout contains exactly one final document.
         with contextlib.redirect_stdout(sys.stderr if args.json else sys.stdout):
             interface = RobotInterface(project_root=project_root, event_sink=_event_printer)

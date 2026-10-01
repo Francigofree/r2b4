@@ -30,19 +30,10 @@ DEEP: process/worker failure, delayed async completion, replay/checkpoint, times
 - tests preserving a migration step or an old implementation sequence;
 - pytest infrastructure whose only purpose is to test pytest infrastructure.
 
-For deep diagnostics, prefer MCAP + canonical replay + Test Hub evidence.
+For deep diagnostics, prefer MCAP + canonical replay + explicit MCAP Evidence Compiler.
 
 ## Commands
 
 - `./r test` — CORE after normal agent changes.
 - `./r test <feature>` — relevant scenario slice, e.g. `follow`.
 - `./r test full` — complete 100-200 case suite for shared boundaries / release acceptance.
-
-<!-- TEST_HUB_INTEGRATION_V1 -->
-## Test Hub integráció
-
-A Test Hub `python3 -m v3.test_hub test --scope core|feature|deep|full` parancsa
-ugyanazt a pattern-alapú pytest registryt használja, mint a kanonikus
-`v3.test_runner`. A Test Hub nem tart fenn külön tesztlistát. Részletek:
-`docs/TEST_HUB.md`.
-<!-- /TEST_HUB_INTEGRATION_V1 -->

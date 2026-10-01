@@ -208,7 +208,7 @@ class TriggeredCaptureSession:
 
 
 class McapCaptureSession:
-    """Process-owned Hub lifecycle and passive MCAP/Test Hub consumer."""
+    """Process-owned Hub lifecycle and passive MCAP consumer."""
 
     def __init__(self, capture_id: str, output_path: Path, *,
                  configuration: Mapping[str, object], metadata: Mapping[str, object] | None = None,
@@ -222,7 +222,6 @@ class McapCaptureSession:
         self.worker = McapCaptureConsumer(capture_id, output_path,
                                          subscription=self.subscription,
                                          configuration=configuration, metadata=metadata, config=self.config)
-        self.evidence: dict[str, object] | None = None
 
     @property
     def failed(self) -> bool:
@@ -248,13 +247,6 @@ class McapCaptureSession:
         result = self.worker.finish(status, terminal=True)
         if result is None:
             return None
-        # Hardware ownership has ended and the MCAP is fully fsynced/published.
-        # Analysis is process-isolated behind a tiny stdlib-only handoff.
-        from v3.test_hub_runtime import postprocess_capture
-        self.evidence = postprocess_capture(
-            result.path, project_root=PROJECT_ROOT,
-            replay_mode="incident" if self.config.sensor_debug else "off",
-        )
         return result.path
 
 
@@ -800,11 +792,8 @@ def main(argv: list[str] | None = None) -> int:
             runtime_edges=resolved.edges,
         )
         output = report.as_dict()
-        if capture_session is not None:
-            output["capture_evidence"] = capture_session.evidence
         print(json.dumps(output, sort_keys=True))
-        if capture_session is not None and capture_session.evidence is not None and capture_session.evidence["status"] != "PASS":
-            return report.status or 1
+        return report.status or 1
         return report.status
     except Exception as exc:
         print(

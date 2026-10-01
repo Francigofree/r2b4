@@ -85,9 +85,7 @@ def command_catalog() -> dict[str, object]:
         "tests": {
             "modes": ["core", "quick", *FOCUSED, "full"],
         },
-        "testhub": {
-            "view_hz": [1, 5, 10],
-        },
+        "evidence": {"command": "evi", "operations": ["compile", "verify", "query"]},
         "er2": {
             "commands": ["status", "preview", "stream"],
             "default_command": "stream",
@@ -163,7 +161,7 @@ def print_help() -> None:
         "  r cap start|stop|status     Capture-kezelés\n"
         f"  r rc 30 c 10               Capture Hz: {' / '.join(map(str, CAPTURE_HZ_VALUES))}; alap: {DEFAULT_CAPTURE_HZ} Hz\n"
         "  c alap / c full / c nincs  Capture-mód; nc = mozgás-trigger kihagyása\n"
-        "  r th [status|run|batch]     Test Hub; alapértelmezés: status\n"
+        "  r evi CAPTURE.mcap         Offline MCAP Evidence Compiler\n"
         "  r diag [ANALYZER]          On-demand, MCAP-only offline diagnosztika\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
@@ -212,6 +210,7 @@ def _commands(argv: list[str]) -> int:
         + " | modes " + "/".join(capture["modes"])
     )
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
+    print("Evidence: r evi MCAP | r evi verify BUNDLE | r evi query BUNDLE")
     print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
     print('Auto route: r "REQUEST"; dry-run: r route "REQUEST" --json')
     print('Plain LLM escape: r -- "PROMPT"')
@@ -263,7 +262,7 @@ def _route(argv: Sequence[str], root: Path) -> int:
 
 def _command_names() -> set[str]:
     known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
-    known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands", "route"}
+    known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands", "route", "evi"}
     return known
 
 
@@ -293,7 +292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         root = project_root()
         from v3.runtime_performance import apply_host_affinity
-        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tool", "cpu", "cpu2", "diag"} else "operator"
+        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tool", "cpu", "cpu2", "diag", "evi"} else "operator"
         apply_host_affinity(root, role)
 
         # Private, read-only shell completion transport. It is intentionally not
@@ -327,6 +326,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             args.append("--help")
         args = _normalize_er2_args(args)
+        if args[0] in {"th", "testhub"}:
+            raise LauncherError("A Test Hub megszűnt. Offline evidence: r evi CAPTURE.mcap")
+        if args[0] == "evi":
+            from tools.mcap_evidence.cli import main as evidence_main
+            return evidence_main(args[1:])
         if args[0] == "commands":
             return _commands(args[1:])
         if args[0] == "route":

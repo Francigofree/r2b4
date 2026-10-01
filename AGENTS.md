@@ -40,7 +40,7 @@ A célzott teszt az alapértelmezett.
 
 A pytest fejlesztési policy authorityja a `docs/PYTEST_POLICY.md`; a canonical launcher a `v3/test_runner.py`. Normál agentváltozás után `./r test` (CORE) fusson először. Viselkedés-specifikus változásnál a releváns `./r test <mode>` (`follow`/`roomcruise`/`localization`/`perception`/`motion`/`async`/`process`/`replay`) következzen. A `./r test full` a teljes CORE+FEATURE+DEEP regresszió; nem helyettesíti a célzott tesztet.
 
-Releváns capture esetén használd a natív Replayer/Test Hub utat a V3 contractok szerint.
+Releváns capture esetén használd a natív Replayer és explicit MCAP Evidence Compiler utat a V3 contractok szerint.
 
 Async/process boundary módosításnál a célzott teszteknek szükség szerint bizonyítaniuk kell:
 

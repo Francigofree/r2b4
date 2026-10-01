@@ -4,7 +4,7 @@ Az R2B4 Raspberry Pi 5 alapú, beltéri differenciálhajtású robot natív,
 determinisztikus V3 vezérlő- és diagnosztikai rendszere.
 
 A production control canonical útja az L1–L12 pipeline. Az L12 az egyetlen normál
-motor-write authority; capture, telemetry, GUI, agent és Test Hub nem kerülheti meg
+motor-write authority; capture, telemetry, GUI, agent és offline evidence tool nem kerülheti meg
 a production control- és safety-utat.
 
 ## Authority
@@ -12,7 +12,7 @@ a production control- és safety-utat.
 - Architekturális invariánsok: `STRUKTURALIS_RETEGEK_V3.md`
 - Pillanatnyi implementáció: `v3/` production source + aktív config
 - Konkrét futás szoftveres evidence-e: finalizált, integritás-ellenőrzött capture +
-  canonical Replayer/Test Hub
+  canonical Replayer + explicit MCAP Evidence Compiler
 - Történeti dokumentáció és nyers log: háttéranyag
 
 Aktív konfigurációk:
@@ -87,7 +87,7 @@ jelenik meg; a folyamatjelzések stderr-re kerülnek. Az ER2, Git és nyers pyte
 saját opciókezelése megmarad.
 
 A timed mozgásparancsok a szükséges runtime-ot automatikusan elindítják, majd STOP
-következik. A parancs által indított runtime leáll, és a capture/Test Hub
+következik. A parancs által indított runtime leáll, és a capture
 finalizálása látható; a már előzőleg futó runtime és annak capture-beállításai
 megmaradnak. `0` másodperc folyamatos módot jelent, ilyenkor a runtime futva marad
 explicit STOP/shutdown kérésig. A pozicionális argumentumok sorrendje változatlan:
@@ -111,11 +111,11 @@ választja, önmagában nem kapcsolja be a raw adatokat. Pontos replay csak telj
 ./r cap status
 ```
 
-Test Hub és pytest:
+Offline evidence és pytest:
 
 ```bash
-./r th
-./r th run
+./r evi runtime/captures/<capture>.mcap
+./r evi query <capture>.evidence --tick-id 1505
 ./r test
 ./r test follow
 ./r test full
@@ -190,110 +190,20 @@ Az opcionális `requirements-interop.txt` csak fejlesztői/CI interoperabilitás
 ellenőrzéshez tartalmaz független MCAP implementációt; robot-runtime-ra nem kell
 telepíteni.
 
-## Test Hub
+## MCAP Evidence Compiler
 
-A Test Hub egy offline, MCAP-authority alapú diagnosztikai rendszer. Az egyetlen
-publikus Python entrypoint a `v3.test_hub`; a részletes működési szerződés:
-`docs/TEST_HUB.md`.
-
-Paraméter nélkül a legújabb `runtime/captures/*.mcap` fájlt dolgozza fel:
+A `r evi` explicit offline developer tool: MCAP → teljes, strukturált evidence.
+A runtime leállása capture-finalizálással véget ér; nincs automatikus feldolgozás.
 
 ```bash
-python3 -m v3.test_hub
-python3 -m v3.test_hub run capture.mcap --output-dir /tmp/egyedi-hub --replay full
-python3 -m v3.test_hub view capture.mcap --hz 1 --output /tmp/egyedi-overview.ndjson
-python3 -m v3.test_hub compare before.mcap after.mcap
-python3 -m v3.test_hub inspect capture.mcap --deep
-python3 -m v3.test_hub query capture.mcap --ticks 0:10 --layers L1,L2,L12
+./r evi capture.mcap --output /tmp/capture.evidence --workers auto
+./r evi verify /tmp/capture.evidence --source capture.mcap
+./r evi query /tmp/capture.evidence --tick-id 1505 --field 'expected.layers.L11.*'
 ```
 
-Az alapértelmezett derived cél `<capture>.evidence/`. Meglévő evidence-et a
-pipeline nem ír felül. A nézetek, agent összefoglalók és quality artifactok
-származtatott adatok; az MCAP marad a futás authority-je. A runtime csak a
-hardver-ownership lezárása után, külön processzben indítja az elemzést.
-
-A Test Hub belső moduljai funkció szerint vannak felosztva (`test_hub_app`,
-`test_hub_backend`, analyzerek, views, portable bundle); ezek nem külön publikus
-entrypointok.
-
-### Capture-alapú feldolgozási profilok
-
-A profilválasztás forrása az MCAP `r2b4.capture.tick_sample_hz` metaadata.
-A `--hz` csak az áttekintő nézet sűrűségét állítja; nem módosítja az elemzési profilt.
-
-| Capture | Profil | Vizsgálatok |
-|---|---|---|
-| 50 Hz | `FORENSIC_LOW_LEVEL` | Változatlan tick-/layer-vizsgálatok, timing, raw szenzorok, canonical replay és sweep |
-| ≤10 Hz (jelenleg 1/5/10 Hz) | `BEHAVIORAL_HIGH_LEVEL` | Mission/command életciklus és azonosítók, navigáció, mozgásblokkolás, pose/covariance trend, safety-kimenetel |
-
-Régi, frekvencia-metaadat nélküli MCAP a korábbi 50 Hz-es utat kapja. Hibás vagy
-nem támogatott frekvencia explicit hiba; a rendszer nem találgat a tick-távolságból.
-
-A behavioral profil a meglévő capture-beolvasást és mission-epizódokat használja.
-A szándékos tick-kihagyás nem adatvesztés. A navigációs stagnálás legalább 5 másodperc
-megfigyelt, változatlan progress után jelez, egy aktív autonóm missionon belül.
-Mission-/command-váltás vagy három mintaperiódusnál nagyobb rés új ablakot kezd;
-TELEOP-ra nincs progress-stagnálási szabály. A covariance-jelzés legalább 5 másodperc
-alatti, első és utolsó minta közötti négyszeres növekedést vizsgál.
-
-Az alacsony szintű device-, admission-, layer-fault- és timing-észrevétel legfeljebb
-`WARNING`, és nem válik bizonyított root cause-zá. A megfigyelt mission/safety FAULT,
-mozgásblokkolás vagy navigációs probléma `FINDING` marad. A sérült, hiányos vagy
-nem finalizált capture evidence-hiba (`FAIL`), ezt a ritkább mintavétel nem menti fel.
-
-A behavioral profilban a replay és sweep `NOT_APPLICABLE`, a `--replay` értékétől
-függetlenül. Ez nem `MATCH`, és nem teljesít exact-replay követelményt. Ehhez 50 Hz-es
-capture szükséges. A mozgás- és lokalizációs quality fájlok mintavételezett trendeket
-tartalmaznak; jerk-, control-jitter- és raw-szenzor folytonossági verdictet nem adnak.
-
-A választott profil és korlátai az `agent_view.json`, `diagnosis.json`, agent brief,
-GUI manifest és áttekintő nézet részei. A `behavior_summary.json`,
-`behavior_episodes.ndjson` és `behavior_timeline.ndjson` tartalmazza a mission- és
-command-kapcsolatokat. A számlálók rögzített mintákat számolnak, nem teljes control
-tick-számot vagy időarányt; a köztes, nem rögzített állapotok nem rekonstruálhatók.
-
-A magasabb szintű, döntésmentes evidence réteg `task_evidence_summary.json`,
-`task_evidence_episodes.ndjson` és `task_evidence_timeline.ndjson` fájlokban
-méri az EXPLORE/FOLLOW_PERSON/NAVIGATE feladatspecifikus capture-tényeket.
-A `motion_tuning_summary.json` és `motion_tuning_segments.ndjson` cross-layer
-mozgás-, kerék-, actuator- és planner-metrikákat ad hangoláshoz. Ezek nem
-adnak GOOD/BAD minősítést, root cause diagnózist vagy javítási javaslatot.
-
-Olcsó integritási összefoglaló:
-
-```bash
-python3 -m v3.test_hub inspect runtime/captures/<capture>.mcap
-python3 -m v3.test_hub inspect runtime/captures/<capture>.mcap --deep
-```
-
-Kis, agent-barát diagnosztikai összefoglaló:
-
-```bash
-python3 -m v3.test_hub agent runtime/captures/<capture>.mcap
-```
-
-Teljes run-bound diagnosztikai csomag:
-
-```bash
-python3 -m v3.test_hub diagnose runtime/captures/<capture>.mcap \
-  --output-dir /tmp/r2b4-diagnosis
-```
-
-Célzott, bounded evidence-lekérés:
-
-```bash
-python3 -m v3.test_hub query runtime/captures/<capture>.mcap \
-  --ticks 100:120 --layers L2,L3,L6,L9,L12
-```
-
-Evidence-index ellenőrzése:
-
-```bash
-python3 -m v3.test_hub verify-evidence /tmp/r2b4-diagnosis/evidence_index.json
-```
-
-A Test Hub képes integritás-ellenőrzésre, bounded/indexelt queryre, timeline-ra,
-agent briefre, incident triage-ra és szükség esetén canonical replayre.
+A tool minden recoverelhető message-et, teljes raw LiDAR payloadot és minden JSON
+leaf pathot megőriz/indexel. Sérült inputból `PARTIAL` bundle is készülhet. Nem
+futtat diagnózist, replayt vagy pytestet. Részletek: [MCAP Evidence Compiler](docs/MCAP_EVIDENCE.md).
 
 ## Canonical replay
 
@@ -309,7 +219,7 @@ verdict külön fogalom.
 
 ## Evidence és diagnosztikai állítások
 
-A Test Hub nem általános truth authority.
+Az MCAP Evidence Compiler nem általános truth authority és nem ad diagnózist.
 
 - Közvetlen capture-tény: evidence a saját capture-scope-jában.
 - Artifact-integrity eredmény: ellenőrzött integrity verdict.
@@ -326,5 +236,5 @@ python3 -m v3.import_guard
 python3 -m pytest -q
 ```
 
-Az offline tesztek, MCAP inspection, Test Hub és replay nem nyitnak GPIO- vagy
+Az offline tesztek, MCAP inspection, evidence compilation és replay nem nyitnak GPIO- vagy
 motor-capabilityt. Live motorfutás csak explicit approval-lal indítható.

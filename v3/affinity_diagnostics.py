@@ -69,7 +69,7 @@ def audit_affinity(config: RuntimeAffinityConfig, runtime_pid: int, *,
     selected: dict[int, str] = {runtime_pid: "runtime_background"}
     services = {"r2b4_voice.voice_service": "voice", "r2b4_er2": "er2",
                 "v3.launcher_cli": "operator", "v3.operator_cli": "operator",
-                "v3.test_hub": "diagnostics", "v3.test_runner": "diagnostics"}
+                "v3.test_runner": "diagnostics"}
     for path in Path("/proc").iterdir():
         if not path.name.isdigit():
             continue

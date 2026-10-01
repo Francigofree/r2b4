@@ -12,7 +12,7 @@ Konkrét algoritmus, tuningérték, queue-méret, fájlformátum, CLI/GUI és pi
 
 * **Architekturális ownership, réteghatár, control/safety authority és engedélyezett adatél:** ez a dokumentum.
 * **Pillanatnyi algoritmus, típusmező, konfiguráció és tuning:** canonical source + aktív config, e contract korlátain belül.
-* **Egy konkrét futás tényei:** a végleges, integritás-ellenőrzött capture és az abból dolgozó canonical Replayer/Test Hub evidence.
+* **Egy konkrét futás tényei:** a végleges, integritás-ellenőrzött capture és az abból dolgozó canonical Replayer és az explicit offline MCAP Evidence Compiler evidence.
 * **Történeti dokumentáció, nyers log, fejlesztési jegyzet:** háttéranyag.
 
 Source-first hibakeresésnél a tényleges viselkedést a source-ból kell megérteni, de véletlen source-drift nem írhatja felül ezt a contractot. Ha source és e dokumentum architekturális szabályban ellentmond, az eltérés hiba mindaddig, amíg a contractot tudatosan és az érintett source-szal együtt nem módosítják.
@@ -243,7 +243,7 @@ Az L7→L12→MotorWriter lánc stabil canonical motion core. Új command/missio
 
 Production motion live teszt a teljes CommandGateway→L5→L6→L7→L8→L9→L10→L11→L12→MotorWriter láncon fut. Szűk actuator/hardware teszt nem bizonyítja a teljes production motion utat.
 
-L7–L12 stabil by default; csak konkrét funkció vagy igazolt source/replay/live evidence miatt változzon. Test Hub, teleop, script, follow/AI vagy más command source nem kaphat saját motor- vagy safety-utat.
+L7–L12 stabil by default; csak konkrét funkció vagy igazolt source/replay/live evidence miatt változzon. Offline evidence-eszköz, teleop, script, follow/AI vagy más command source nem kaphat saját motor- vagy safety-utat.
 
 `FORWARD`, `ARC`, `PIVOT`, `MOVE_1M` vagy hasonló primitive nem kaphat külön control-, motor- vagy safety-útvonalat. Recovery, docking, calibration vagy más behavior használhat ilyen mozgásszemantikát, ha azt a canonical CommandGateway→L5→…→L12→MotorWriter út realizálja. Külső command általános kinematikai vagy magasabb szintű mission/navigation célt adjon. Kötelező gate csak olyan capability lehet, amely az adott funkcióhoz ténylegesen szükséges.
 
@@ -269,7 +269,7 @@ A composition root validált, immutable configot injektál; layer nem olvas fáj
 
 GUI, CLI, LLM, tool vagy host/operator control irányban csak a canonical command ingress kliensén keresztül kérhet robotműveletet a `CommandGateway` felé. A host/operator command-request authorityval rendelkezhet, de production actuation-, motion-, safety- vagy motor-authorityval nem.
 
-A host/operator controller birtokolhatja a felhasználói és host-oldali session orchestrationt: runtime process start/stop/shutdown, command-producer process lifecycle, readiness/IDLE/ALLOW várás, capture-session koordináció, Test Hub indítás, diagnosztika és többfázisú fizikai tesztszekvencia. Ezek host-side state-ek; nem válhatnak L0–L12 production state-té.
+A host/operator controller birtokolhatja a felhasználói és host-oldali session orchestrationt: runtime process start/stop/shutdown, command-producer process lifecycle, readiness/IDLE/ALLOW várás, capture-session koordináció, diagnosztika és többfázisú fizikai tesztszekvencia. Ezek host-side state-ek; nem válhatnak L0–L12 production state-té.
 
 A production readiness, lifecycle és safety truth a runtime tulajdona. A host/operator olvashat runtime statust és használhatja azt orchestration döntésekhez, például ACTIVE parancs előtti readiness-váráshoz, valódi ALLOW visszaigazolásához, IDLE felismeréséhez, tesztfázis mérési végpontjához vagy fail-safe megszakításhoz. Nem szintetizálhat saját readiness/ALLOW truth-ot, nem írhatja felül a runtime STOP/FAULT döntését, és nem valósíthat meg kerülő navigation-, motion-, actuator- vagy safety controllert.
 
@@ -277,7 +277,7 @@ Egy logikai aktív command liveness mechanizmusának pontosan egy ownere lehet. 
 
 A resident `CommandGateway` önállóan validálja a command trustot, sorrendet, freshness/TTL-t és process limiteket. Command expiry, hiány vagy ingress-hiba fail-closed STOP/FAULT marad; külső orchestration ezt nem kerülheti meg.
 
-Capture, replay és Test Hub host/operator által koordinálható, de továbbra is observation/evidence capability. Eredményük nem válhat a futó production control pozitív actuation inputjává. Integritási vagy diagnosztikai hiba megszakíthat egy host-oldali tesztszekvenciát vagy indokolhat fail-safe STOP/SHUTDOWN kérést, de nem hozhat létre ALLOW-t és nem módosíthat production layer-outputot.
+Capture host/operator által koordinálható; replay és evidence compilation kizárólag explicit offline developer művelet. Mindegyik observation/evidence capability. Eredményük nem válhat a futó production control pozitív actuation inputjává. Integritási vagy diagnosztikai hiba megszakíthat egy host-oldali tesztszekvenciát vagy indokolhat fail-safe STOP/SHUTDOWN kérést, de nem hozhat létre ALLOW-t és nem módosíthat production layer-outputot.
 
 A runtime headless. Külső I/O megfelelő edge/device, canonical command ingress vagy passzív observation/capture adapterben történik. Adapter vagy edge komponens birtokolhat a saját I/O-, timing-, buffering-, trust- vagy protocol-felelősségéhez szükséges bounded technikai state-et. Nem birtokolhat azonban más réteghez tartozó szemantikai production state-et, és nem válhat kerülő command-, motion-, safety- vagy motor-authorityvá.
 
@@ -285,17 +285,20 @@ A runtime headless. Külső I/O megfelelő edge/device, canonical command ingres
 
 A védett V3 production és canonical validációs source csak V3-at, standard libraryt és explicit jóváhagyott production dependencyket importálhat. Egy új dependency nem válhat control/state authorityvá, nem sértheti a bounded működést, és a replay/determinizmus módjának egyértelműnek kell maradnia.
 
-A host/operator dependency iránya egyirányú: host/operator függhet a canonical command ingress, runtime status/lifecycle edge, capture és Test Hub felületektől, de production layer, TickEngine, composition/runtime root vagy CommandGateway nem függhet vissza launcher- vagy host/operator-implementációtól. Az, hogy egy host/operator modul technikailag a `v3` Python package-ben található, önmagában nem teszi production réteggé.
+A host/operator dependency iránya egyirányú: host/operator függhet a canonical command ingress, runtime status/lifecycle edge, capture felületektől, de production layer, TickEngine, composition/runtime root vagy CommandGateway nem függhet vissza launcher- vagy host/operator-implementációtól. Az, hogy egy host/operator modul technikailag a `v3` Python package-ben található, önmagában nem teszi production réteggé.
 
 Különböző numbered layer implementationök nem importálják egymást. Azonos numbered layer belső subsystem/helper/domain moduljai importálhatják egymást, ha a canonical layer boundary, az egyetlen state owner és a cross-layer dependency irány változatlan marad. A generikus observation/fan-out komponens data-blind marad: nem függ layer implementationtől, engine-től, capture-format logikától, hardware-I/O-tól vagy consumer-specifikus serializációtól.
 
 Külső GUI/vizualizáció/agent kliens használhat saját függőségeket a V3 csomagon kívül, de production V3 nem függhet vissza ezektől.
 
-## 11. Capture, Replay, Test Hub és evidence
+## 11. Capture, Replay és offline evidence
 
-Capture, replay és Test Hub diagnosztikai capability, nem control authority. Hibájuk vagy lassúságuk nem módosíthat robotdöntést vagy motor-outputot. A persistent container formátuma implementációs döntés; a követelmény az ellenőrizhető integrity és a bounded visszakereshetőség.
+Capture, replay és offline evidence-feldolgozás passzív capability, nem control authority. Hibájuk vagy lassúságuk nem módosíthat robotdöntést vagy motor-outputot. A persistent container formátuma implementációs döntés; a követelmény az ellenőrizhető integrity és a bounded visszakereshetőség.
 
-A Test Hub közvetlen capture-tényt, artifact-integrity eredményt és canonical replay verdictet csak a saját pontos scope-jában tekinthet authority evidence-nek. A Test Hub nem általános truth authority. Triage, root-cause rangsor, anomáliaértelmezés és javítási javaslat derived diagnosis; ezek csak közvetlen kauzális evidence esetén minősíthetők PROVEN-nek, egyébként INDICATED, NOT_PROVEN vagy EVIDENCE_BLOCKED maradnak.
+Az MCAP Evidence Compiler kizárólag az inputból közvetlenül bizonyítható adatot
+menti, normalizálja, indexeli és ellenőrzi. Nem diagnosztikai orchestrator, nem
+futtat replayt vagy pytestet, és nem ad robotikai verdictet. A diagnózis külön
+fogyasztó felelőssége.
 
 ### 11.1 Capture integrity
 
@@ -323,15 +326,23 @@ Ha validation scope replayt kér, csak tényleges `MATCH` teljesítheti a replay
 
 Capture/evidence hiány nem software divergence. Software divergence csak elegendő evidence/state mellett, tényleges canonical replay-eltérésből állítható. Bounded, rövid életű conversion/bridge artifact megengedett, de nem válik authorityvá; az eredeti final capture marad authority.
 
-### 11.3 Test Hub és agentikus diagnosztika
+### 11.3 Explicit offline evidence compiler
 
-A Test Hub offline evidence/diagnosztikai orchestrator a canonical capture és Replayer körül; **nem köteles minden kérdéshez replayt futtatni**. Replay nélkül végezhet integrity ellenőrzést, indexelt/bounded evidence-kiválasztást, leíró metrikát, incident triage-ot és agent/CLI/GUI derived nézeteket.
+A runtime és az operator lifecycle a capture finalizálásával lezárul. Nincs
+automatikus evidence-feldolgozás, supervisor vagy RobotInterface evidence capability.
+A developer később explicit `r evi` paranccsal indítja a `tools/mcap_evidence`
+compilert. Production és replay nem importálhatja ezt a csomagot.
 
-Nem futtathat saját production layer-, motion- vagy safety-logikát, és heurisztikát nem nevezhet canonical replaynek. Agent, GUI és CLI ugyanazt az authority- és verdict-szemantikát fogyassza.
+A compiler snapshot EOF-ig olvas, minden biztonságosan recoverelhető message-et
+elszámol, a sérülést és a bizonytalan byte-tartományokat jelenti. Nem gyengíti a
+strict production/replay readert. A teljes raw payload exportálódik; a shardolás
+nem jelent truncationt. A bundle csak export, index, coverage és verification után
+publikálható atomikusan. Régi evidence automatikusan nem törölhető.
 
-Agentikus fejlesztés default útja: **kis összefoglaló → célzott evidence slice/query → csak szükség esetén nagy raw adat vagy széles replay**. Teljes capture automatikus betöltése nem alapértelmezett hibakeresés.
-
-Brief, timeline, manifest, query-result és más derived artifact nem írhatja felül a canonical capture-t. Ha evidence-index authority capture-hez kötést állít, a verification az authority artifactot is ellenőrizze.
+A `COMPLETE`/`PARTIAL` compiler-státusz a feldolgozás és a forrás struktúrájának
+állapota; nem robotikai verdict vagy exact-replay állítás. A capture marad az
+eredeti authority. Az offline index és minden normalized nézet visszavezethető
+source message-re. Részletes CLI/bundle szerződés: `docs/MCAP_EVIDENCE.md`.
 
 ### 11.4 Verdict és root-cause szemantika
 
@@ -371,13 +382,13 @@ Recoverable capability/recovery változásnál célzottan bizonyítandó: expect
 
 Mission-lifecycle delayed-feedback változásnál bizonyítandó: nincs same-tick downstream→L5 callback vagy közvetlen state-write; a feedback korábbi completed tickből származik, immutable és mission/command identityhoz kötött; a feedback ugyanazon későbbi tick `TickInputs` része live/replay módban; L5 marad a mission lifecycle egyetlen ownere.
 
-Host/operator boundary változásnál célzottan bizonyítandó: minden pozitív motion request és STOP a canonical command ingressen halad; aktív command livenessnek egyetlen logikai ownere van; a host/operator runtime readiness/ALLOW/FAULT truth-ot fogyaszt és nem gyárt második authorityt; command-producer hiba vagy megszakítás fail-safe útra jut; production V3 nem függ vissza az operator implementációtól; capture/Test Hub orchestration nem tér vissza production control inputként.
+Host/operator boundary változásnál célzottan bizonyítandó: minden pozitív motion request és STOP a canonical command ingressen halad; aktív command livenessnek egyetlen logikai ownere van; a host/operator runtime readiness/ALLOW/FAULT truth-ot fogyaszt és nem gyárt második authorityt; command-producer hiba vagy megszakítás fail-safe útra jut; production V3 nem függ vissza az operator implementációtól; capture orchestration nem tér vissza production control inputként.
 
 Szenzor/algoritmus-változás saját közvetlen invariánsait célzottan bizonyítja.
 
 Observation/capture boundary változásnál bizonyítandó: producer oldalon nincs consumer I/O/serializáció; required loss explicit; latest-only coalescing nem rontja required capture-t; payload szemantikája nem változik; close/drain/finalize alatt elfogadott required evidence nem vész el.
 
-Capture/Replay/Test Hub közös boundary változásnál legyen valódi, stub nélküli end-to-end teszt typed production record → persisted capture → canonical replay → Test Hub verdict útvonalon, valamint negatív integrity-loss és replay-failure eset.
+Capture/Replay közös boundary változásnál legyen valódi, stub nélküli end-to-end teszt typed production record → persisted capture → canonical replay útvonalon, valamint negatív integrity-loss és replay-failure eset. Compiler-változásnál a source/export accounting, a teljes field census, a lineage és az atomi publikálás legyen ellenőrzött.
 
 Nincs általános kötelező schema/hash/provenance/receipt/formális proof-kapu. Formátum-specifikus interoperability, storage- és performance teszt a konkrét implementáció felelőssége.
 
@@ -392,13 +403,3 @@ Ez a dokumentum nem workflow és nem implementációs leltár. Stabil architekt�
 **Nem kell módosítani csak azért**, mert változik: layeren belüli algoritmus; ugyanazon numbered layer belső subsystem/modulstruktúrája; tuning/threshold/config; queue-kapacitás; capture konténerformátum/topic/chunkolás; azonos szemantikájú encoder-optimalizálás; CLI/GUI/agent brief mező; ideiglenes replay bridge; fájlnév/modulon belüli refaktor; vagy authorityt nem változtató diagnosztikai tool.
 
 A pillanatnyi implementáció authorityja a canonical source + aktív config; a konkrét futásé a run-bound evidence. Mindkettőnek e dokumentum architekturális korlátain belül kell maradnia.
-
-<!-- TEST_HUB_OFFLINE_BOUNDARY_V1 -->
-## Test Hub offline határ
-
-A Test Hub az Observation/MCAP capture után, authority-n kívüli offline fogyasztó.
-A finalizált MCAP a futás authority-je; a `.evidence/` újragenerálható derived adat.
-Production runtime/control modul nem importál Test Hub analyzert. A runtime csak a
-hardver-ownership lezárása után indíthat külön Test Hub processzt. Részletes
-szerződés: `docs/TEST_HUB.md`.
-<!-- /TEST_HUB_OFFLINE_BOUNDARY_V1 -->

@@ -11,7 +11,6 @@ from pathlib import Path
 from v3.adapters.camera import CameraInterfaceAdapter
 from v3.adapters.operator import OperatorInterfaceAdapter
 from v3.adapters.system import SystemInterfaceAdapter
-from v3.adapters.testhub import TestHubInterfaceAdapter
 from v3.adapters.v3_control import V3ControlInterfaceAdapter
 
 
@@ -21,7 +20,6 @@ def build_adapters(controller: object, root: Path) -> tuple[object, ...]:
         V3ControlInterfaceAdapter(controller),
         OperatorInterfaceAdapter(controller),
         CameraInterfaceAdapter(controller),
-        TestHubInterfaceAdapter(controller, root),
         SystemInterfaceAdapter(root),
     )
 

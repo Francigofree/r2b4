@@ -46,7 +46,7 @@ def _top_level_commands() -> list[str]:
     host = sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES))
     return sorted({
         *_canonical_robot_commands(), *host,
-        "commands", "er2", "help", "voice",
+        "commands", "er2", "help", "voice", "evi",
     })
 
 
@@ -212,6 +212,10 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
     if command == "er2":
         return _er2_completion(tail, current)
 
+    if command == "evi":
+        from tools.mcap_evidence.cli import parser
+        return "r evi MCAP | verify BUNDLE | query BUNDLE", _parser_candidates(
+            parser(), tail, current, extra=("verify", "query"))
     if command in host_cli.COMMANDS:
         return _host_completion(command, tail, current, root)
 

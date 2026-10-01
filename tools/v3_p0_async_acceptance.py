@@ -12,7 +12,7 @@ motion command:
 For both sessions it requires IDLE/SAFE-LOW behavior, verifies the configured
 CPU policy when affinity is enabled (or records scheduler-managed mode when disabled),
 reuses the repository's canonical timing audit,
-and for FULL capture runs the canonical Test Hub replay.  The final machine-readable evidence is written under runtime/diag.
+and for FULL capture runs the canonical replay.  The final machine-readable evidence is written under runtime/diag.
 """
 
 from __future__ import annotations
@@ -38,7 +38,6 @@ REQUIRED_ANCHORS = (
     "AGENTS.md",
     "conf/vezerles.json",
     "v3/operator_controller.py",
-    "v3/test_hub.py",
     "tools/v3_performance_audit.py",
 )
 
@@ -384,12 +383,12 @@ def _live_idle_session(
             raise AcceptanceError(
                 f"FULL capture did not publish a finalized MCAP: {capture_path}"
             )
-        from v3.test_hub import inspect_mcap
-        inspected = inspect_mcap(capture_path)
-        profile = inspected.get("analysis_profile", {})
+        from v3.mcap_inspect import inspect_mcap
+        inspected = inspect_mcap(capture_path, deep=True)
+        profile = inspected.get("capture_metadata", {})
         if (inspected.get("status") != "PASS"
-                or profile.get("tick_sample_hz") != 50
-                or profile.get("exact_replay_applicable") is not True):
+                or str(profile.get("tick_sample_hz")) != "50"
+                or inspected.get("integrity_error") is not None):
             raise AcceptanceError("FULL acceptance requires intact, replay-complete 50 Hz capture")
         diag_dir = root / "runtime" / "diag"
         diag_dir.mkdir(parents=True, exist_ok=True)
@@ -398,7 +397,7 @@ def _live_idle_session(
             [
                 sys.executable,
                 "-m",
-                "v3.test_hub",
+                "v3.replay",
                 "replay",
                 str(capture_path),
                 "--output",
@@ -412,7 +411,7 @@ def _live_idle_session(
             [
                 sys.executable,
                 "-m",
-                "v3.test_hub",
+                "v3.replay",
                 "verify-result",
                 str(replay_path),
             ],

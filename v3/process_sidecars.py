@@ -162,20 +162,8 @@ def _capture_sidecar_main(
                     hub.publish(hri_event, topic=HRI_EVENT_TOPIC)
                 hub.close()
                 result = consumer.finish(finish_request[0], terminal=finish_request[1])
-                evidence: dict[str, object] | None = None
-                result_path: str | None = None
-                if result is not None:
-                    result_path = str(result.path)
-                    from v3.test_hub_runtime import postprocess_capture
-
-                    evidence = postprocess_capture(
-                        result.path,
-                        project_root=Path(project_root),
-                        replay_mode=(
-                            "incident" if config.tick_sample_hz == 50 else "off"
-                        ),
-                    )
-                result_queue.put(("done", result_path, evidence))
+                result_path = str(result.path) if result is not None else None
+                result_queue.put(("done", result_path))
                 running = False
                 continue
 
@@ -310,7 +298,6 @@ class ProcessMcapCaptureSession:
         "_transport_capacity",
         "_worker_cpus",
         "_expect_raw_lidar_end",
-        "evidence",
     )
 
     def __init__(
@@ -388,7 +375,6 @@ class ProcessMcapCaptureSession:
         self._started = False
         self._enqueued_count = 0
         self._drop_count = 0
-        self.evidence: dict[str, object] | None = None
 
     @property
     def raw_lidar_queue(self) -> Any:
@@ -485,13 +471,6 @@ class ProcessMcapCaptureSession:
         if message[0] == "error":
             raise RuntimeError(f"capture sidecar failed: {message[1]}:{message[2]}")
         result_path = Path(message[1]) if message[1] is not None else None
-        evidence = message[2]
-        if isinstance(evidence, dict):
-            self.evidence = dict(evidence)
-            if self._drop_count:
-                self.evidence["status"] = "FAIL"
-                self.evidence["process_transport_drop_count"] = self._drop_count
-                self.evidence["process_transport_integrity"] = "FAIL"
         return result_path
 
     def _terminate(self) -> None:

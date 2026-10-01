@@ -373,11 +373,6 @@ class OperatorController:
                 capture = self.current_capture_path()
                 if capture and capture.is_file():
                     self._emit("info", f"capture: {self._display_path(capture)}")
-                    evidence = self._test_hub_evidence_dir(capture)
-                    if evidence.is_dir():
-                        self._emit("info", f"test hub: {self._display_path(evidence)}")
-                    else:
-                        self._emit("info", "test hub: finalization/analysis continuing in runtime log")
                 elif mode == "nincs":
                     self._emit("info", "capture: OFF")
                 return
@@ -726,7 +721,6 @@ class OperatorController:
                 "ticks": final.get("captured_tick_count"),
                 "trigger": final.get("trigger_reason"),
                 "complete": complete,
-                "evidence": str(self._test_hub_evidence_dir(path)) if self._test_hub_evidence_dir(path).is_dir() else None,
             }
         if mode == "full":
             state = "RECORDING"
@@ -822,14 +816,6 @@ class OperatorController:
         proc = subprocess.Popen(command, cwd=self.root)
         self._write_private_text(self.runtime_pid_file, str(proc.pid))
 
-        hub_thread = threading.Thread(
-            target=self._test_hub_supervisor,
-            args=(capture, proc.pid, mode),
-            name="r2b4-test-hub-supervisor",
-            daemon=False,
-        )
-        hub_thread.start()
-
         old_handlers: dict[int, object] = {}
 
         def forward_signal(signum: int, _frame: object) -> None:
@@ -847,13 +833,9 @@ class OperatorController:
         finally:
             for sig, handler in old_handlers.items():
                 signal.signal(sig, handler)
-            hub_thread.join()
 
-        evidence = self._test_hub_evidence_dir(capture)
         if capture.is_file():
             self._emit("info", f"capture: finalized -> {self._display_path(capture)}")
-            if evidence.is_dir():
-                self._emit("info", f"test hub: results -> {self._display_path(evidence)}")
         else:
             self._emit("info", "capture: no finalized MCAP for this runtime session")
         return rc
@@ -1120,7 +1102,7 @@ class OperatorController:
         time.sleep(pause)
 
     # ------------------------------------------------------------------
-    # Capture/Test Hub internals
+    # Capture internals
     # ------------------------------------------------------------------
 
     def _new_capture_path(self) -> Path:
@@ -1208,43 +1190,6 @@ class OperatorController:
                 return
             time.sleep(0.05)
         self._emit("warning", "bounded capture was not finalized before runtime shutdown; native finalizer will finish it")
-
-    def _test_hub_evidence_dir(self, capture: Path) -> Path:
-        return capture.with_suffix(".evidence")
-
-    def _run_test_hub_default(self, capture: Path) -> int:
-        evidence = self._test_hub_evidence_dir(capture)
-        self._emit("info", f"TEST_HUB_AUTORUN START capture={self._display_path(capture)}")
-        proc = subprocess.run(
-            [self.python, "-m", "v3.test_hub", "run", str(capture)],
-            cwd=self.root,
-            check=False,
-        )
-        if proc.returncode == 0:
-            self._emit("info", f"TEST_HUB_AUTORUN PASS evidence={self._display_path(evidence)}")
-        else:
-            self._emit("error", f"TEST_HUB_AUTORUN FAIL rc={proc.returncode} capture={self._display_path(capture)}")
-        return proc.returncode
-
-    def _test_hub_supervisor(self, capture: Path, runtime_pid: int, mode: str) -> None:
-        if mode == "nincs":
-            return
-        if mode == "alap":
-            while self._pid_matches(runtime_pid, ("v3_process_runtime.py",)):
-                if self._capture_ready(capture):
-                    self._run_test_hub_default(capture)
-                    return
-                time.sleep(0.20)
-        else:
-            while self._pid_matches(runtime_pid, ("v3_process_runtime.py",)):
-                time.sleep(0.50)
-        for _ in range(100):
-            if self._capture_ready(capture):
-                self._run_test_hub_default(capture)
-                return
-            time.sleep(0.10)
-        self._emit("warning", f"TEST_HUB_AUTORUN capture wait timeout: {self._display_path(capture)}")
-        self._run_test_hub_default(capture)
 
     # ------------------------------------------------------------------
     # Runtime/status internals

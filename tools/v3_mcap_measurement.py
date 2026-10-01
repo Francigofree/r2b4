@@ -16,7 +16,8 @@ import time
 from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandMailboxConfig
 from v3.mcap_capture import McapCaptureConfig
 from v3.mcap_reader import EVENT_TOPIC, McapReader, RAW_LIDAR_TOPIC, TICK_TOPIC
-from v3.test_hub import verify_evidence
+from tools.mcap_evidence.compiler import compile_evidence
+from tools.mcap_evidence.verify import verify
 from v3_process_runtime import (
     PROJECT_ROOT, AsyncResidentStatusPublisher, McapCaptureSession, ResidentStatusConfig,
     _capture_configuration, load_resident_runtime_config, native_lidar_factory,
@@ -68,9 +69,10 @@ def measure(duration_s: float = 10.0) -> dict[str, object]:
         truncated += int(row['points_truncated'])
     metrics = final['metrics']
     size = capture.path.stat().st_size
-    evidence_verification = verify_evidence(session.evidence['evidence_index'])
+    evidence = compile_evidence(capture.path)
+    evidence_verification = verify(evidence['output'], source=capture.path)
     payload = {
-        'status': 'PASS' if report.status == 0 and all_zero and session.evidence['status'] == 'PASS' and evidence_verification['status'] == 'PASS' else 'FAIL',
+        'status': 'PASS' if report.status == 0 and all_zero and evidence['compiler_status'] == 'COMPLETE' and evidence_verification['status'] == 'PASS' else 'FAIL',
         'output_dir': str(destination), 'capture_path': str(capture.path),
         'runtime_report': report.as_dict(), 'all_final_motor_outputs_zero': all_zero,
         'captured_tick_count': ticks, 'capture_size_bytes': size,
@@ -78,7 +80,7 @@ def measure(duration_s: float = 10.0) -> dict[str, object]:
         'mean_capture_bytes_per_second': size / (metrics['elapsed_ns'] / 1e9),
         'process_cpu_percent_one_core': 100 * metrics['process_cpu_ns'] / metrics['elapsed_ns'],
         'raw_lidar': {'scan_count': raw_count, 'max_points': max_points, 'truncated': truncated},
-        'test_hub': session.evidence, 'evidence_verification': evidence_verification['status'],
+        'evidence': evidence, 'evidence_verification': evidence_verification['status'],
         'scope': 'stationary resident runtime; no physical movement or loaded motor behavior demonstrated',
     }
     (destination / 'measurement.json').write_text(json.dumps(payload, indent=2) + '\n')
