@@ -1,92 +1,181 @@
-# R2B4 DIAG — on-demand MCAP diagnostic subsystem
+# R2B4 DIAG
 
-## Purpose
+A canonical DIAG implementation helye: `tools/diag/`.
 
-DIAG is a separate, offline diagnostic subsystem for expensive or highly targeted analyses that should not lengthen every Test Hub run. It has no robot, motor, safety, mission or capture authority.
+## Adatlánc
 
-**Input contract:** DIAG reads only finalized `.mcap` captures through `v3.mcap_reader.McapReader`. It does not read Test Hub `.evidence/` directories or any other derived evidence artifact.
+```text
+ObservationHub -> capture -> MCAP -> r evi -> .evidence -> tools/diag -> analyzers
+```
 
-## Runtime isolation
+A DIAG közvetlen bemenete kizárólag a `tools/mcap_evidence` által publikált, sealed
+`.evidence` bundle. A DIAG nem nyitja meg az MCAP-ot és nem épít saját második
+capture-parsert.
 
-Analyzer execution is guarded by `OperatorController.operator_transition()`, the same cross-process lifecycle lock used by resident runtime transitions. While the guard is held:
+Az EVI lossless evidence compiler. A DIAG ennek szemantikai fogyasztója.
 
-1. DIAG checks `OperatorController.status()`.
-2. If resident V3 is active, analyzer execution is refused.
-3. If V3 is stopped, the guard remains held for the complete analysis, so a new runtime transition cannot race the offline analysis.
+## Kimeneti szerződés
 
-`r diag list` and help do not read a capture and remain available while V3 is active.
+A DIAG feladata diagnosztikai adatok szolgáltatása ember és LLM számára:
 
-### Launcher name compatibility
+- forrásból származó tények,
+- számlálók és eloszlások,
+- numerikus statisztikák,
+- állapot- és mezőváltozások,
+- rétegek közötti mért kapcsolatok,
+- adatminőségi és coverage adatok,
+- `message_id` / `view` / `source_pointer` / `tick_id` evidence-reference-ek.
 
-The existing detailed resident-runtime status remains available as `r d` (the existing `d -> diag` robot alias) and through `r rt diag`. The top-level full word `r diag ...` is intentionally owned by the new offline DIAG facade. Launcher command discovery hides the shadowed robot canonical name so `r commands` reflects the actual top-level owner.
+A DIAG **nem** ad javítási javaslatot, ajánlást, következő lépést vagy automatikus
+root-cause verdictet. A JSON schema ezt `purpose=DIAGNOSTIC_DATA_ONLY`,
+`source=EVI_EVIDENCE_ONLY`, `root_cause_inferred=false` mezőkkel jelzi.
 
 ## CLI
 
 ```bash
 r diag
+r diag --json
+r diag full latest
+r diag full path/to/run.evidence --json
 r diag list
-r diag list --json
-r diag capture [CAPTURE|latest]
-r diag coverage [CAPTURE|latest]
-r diag admission capture [CAPTURE|latest]
-r diag admission coverage [CAPTURE|latest]
-r diag coverage latest --json
+r diag admission safety latest
+r diag safety latest
+r diag navigation latest --json
 ```
 
-If no capture is supplied, `latest` means the newest regular, non-symlink `runtime/captures/*.mcap`. It is still rejected unless MCAP container CRC and canonical capture finalization/integrity checks pass.
+A `r diag` argumentum nélkül teljes DIAG-ot futtat a
+`runtime/captures/*.evidence` legújabb sealed bundle-jén.
 
-## Framework
+A top-level `r diag` az offline evidence DIAG. A resident runtime részletes
+állapotának rövid aliasa továbbra is `r d`; a runtime útvonalon `r rt diag` is
+megmarad.
 
-`v3/diag/contracts.py` owns the analyzer/admission/result contract types. Every analyzer declares:
+A launcher a `r diag` futást ugyanazzal a cross-process operator lockkal védi,
+így aktív resident V3 runtime mellett nem indul el a Pi-t terhelő offline DIAG.
+A `tools.diag` Python package önmagában robot-runtime dependency nélkül, offboard
+környezetben is futtatható.
 
-- stable analyzer ID and contract version;
-- required MCAP topics;
-- minimum captured tick sample rate, if any;
-- whether complete raw sensor evidence is required;
-- required production diagnostic fields and/or normalized MCAP scalar paths;
-- production fields and generic MCAP paths for which the analyzer owns domain semantics;
-- claim classes it is permitted to emit.
+## Analyzer registry
 
-Admission states are `APPLICABLE`, `NOT_APPLICABLE`, `INSUFFICIENT_EVIDENCE`, and `ERROR`. Current generic admission uses `APPLICABLE`/`INSUFFICIENT_EVIDENCE`; `NOT_APPLICABLE` is reserved for future mode-specific analyzers.
+A registry explicit; nincs filesystem discovery vagy implicit event bus. A full
+DIAG stabil sorrendje:
 
-All `DiagnosticResult` payloads declare `source=MCAP_ONLY` and `root_cause_inferred=false`.
+1. `evidence_health`
+2. `execution_chain`
+3. `safety`
+4. `recovery`
+5. `navigation`
+6. `localization`
+7. `drive`
+8. `world_model`
+9. `lineage`
+10. `lifecycle`
 
-## Registry
+Az analyzer contract required/optional evidence view-kat és source topicokat
+deklarál. Hiányzó required view/topic esetén az admission eredménye
+`INSUFFICIENT_EVIDENCE`; nincs MCAP fallback és nincs hiányzó adatból következtetés.
 
-`v3/diag/registry.py` is intentionally explicit. New analyzers are registered in `build_default_registry()` rather than discovered through filesystem/plugin magic. This keeps startup deterministic and makes analyzer ownership auditable in source review.
+## Evidence API
 
-The initial built-ins are:
+A `tools/mcap_evidence/reader.py` a consumer API. A DIAG ezen keresztül olvas:
 
-- `capture`: finalized MCAP/container/profile/topic inventory;
-- `coverage`: production schema versus observed MCAP fields versus DIAG semantic analyzer ownership.
+- sealed manifest + coverage + integrity,
+- `index.sqlite` message/field/view index,
+- normalized EVI view-k,
+- source-message lineage.
 
-Future analyzers such as `execution`, `recovery`, `safety`, `navigation`, `lineage`, `drive`, `world_model`, and `lifecycle` are added behind the same registry/admission contract.
+Az API nem nyitja meg a source MCAP-ot. A bundle `full` verification kapun megy
+át a DIAG context megnyitásakor. Az EVI verifier ellenőrzi a payload hash-eket,
+message identity-t, field censust, normalized projection lineage-et és coverage
+accountingot.
 
-## Organic co-evolution / anti-drift
+## Analyzer jelentés
 
-The production side remains `v3.diagnostic_contracts.registered_diagnostic_contracts()`. Those contracts are derived from live production dataclasses, so newly added dataclass fields appear in the production schema automatically.
+Egy analyzer eredménye:
 
-The `coverage` analyzer scans `/r2b4/tick` directly from MCAP. In addition to registered sensor/layer contracts it builds a normalized recursive scalar-path inventory (sequence indices collapse to `[]`), so new fields in currently unregistered layers remain visible as generic schema paths. It reports, per registered source:
+```text
+R2B4_DIAG_RESULT_V2
+  purpose = DIAGNOSTIC_DATA_ONLY
+  source = EVI_EVIDENCE_ONLY
+  evidence
+  admission
+  metrics
+  observations[]
+  root_cause_inferred = false
+```
 
-- production fields expected by the current source tree;
-- fields observed in the capture;
-- missing and newly observed/unregistered fields;
-- generic visibility;
-- DIAG analyzers that explicitly own semantic interpretation of a field.
+Observation típusok:
 
-A new production field or previously unregistered tick path can therefore become visible without inventing a meaning for it. Until a DIAG analyzer claims `semantic_fields`, it is reported as `generic_only`. This is the admission/coverage mechanism that makes system development create an explicit diagnostic follow-up instead of silently drifting.
+- `FACT`
+- `DERIVED_MEASUREMENT`
+- `RELATIONSHIP`
+- `DATA_QUALITY`
 
-## Analyzer authoring rule
+Nincs recommendation/suggestion output channel. A registry az ilyen saját DIAG
+output kulcsokat futás közben is tiltja.
 
-An analyzer must:
+## Analyzer scope
 
-1. consume `DiagContext` / `McapReader`, not `.evidence` output;
-2. declare all hard data requirements in `AnalyzerContract`;
-3. declare semantic field ownership explicitly;
-4. emit only declared claim classes;
-5. keep causal claims false unless a later, explicit contract can prove causality directly;
-6. never import runtime control paths to issue robot commands.
+### evidence_health
 
-## Capture profile limitation
+Compiler státusz, source-integrity, message/JSON/quarantine számok, topic/view
+inventory, field census és EVI verification állapot.
 
-Admission uses the capture's `r2b4.capture.tick_sample_hz`. A future low-level analyzer can require `min_tick_sample_hz=50`; a 10 Hz behavioral capture then receives `INSUFFICIENT_EVIDENCE` instead of a fabricated low-level verdict. Raw-sensor analyzers can additionally require complete raw MCAP evidence.
+### execution_chain
+
+L5-L12 state/command/constraint/output mezők, layer message-countok és közös
+message identity intersection. Nem nevez meg root cause-t.
+
+### safety
+
+L8-L12 requested/allowed velocity kapcsolatok, active constraint számok, L11
+saturation, L12 decision/reason/latch/enabled/output eloszlások.
+
+### recovery
+
+Recovery/fault/stop/resume/degraded/lifecycle string-state előfordulások és a
+kapcsolódó event/runtime/L5-L12 mezőprofilok. A matching szabály a kimenetben
+explicit.
+
+### navigation
+
+L4-L8 goal/route/candidate/selection/progress/velocity mezők. L8 requested v/omega
+eloszlás explicit küszöbökkel: stopped/pivot/forward-turning/forward-straight/
+reverse kategóriák. Ezek mérési kategóriák, nem minősítések.
+
+### localization
+
+L1-L4 és a localization szempontból releváns materializált sensor view-k
+(IMU/encoder/wheel/odometry/pose/heading/matcher/motion)
+pose/heading/odometry/quality/freshness/revision mezőprofiljai. A teljes sensor-view
+inventory külön megmarad a kimenetben; nagy, nem localization-jellegű sensor payloadot
+a full DIAG nem jár végig indokolatlanul.
+
+### drive
+
+L8-L12 és encoder/wheel/motor sensor view-k. Wheel target, normalized command és
+final output zero/nonzero/sign számlálók.
+
+### world_model
+
+L3-L6 world/occupancy/obstacle/clearance/corridor/person/goal mezőprofilok. A raw-LiDAR
+materializálás darabszáma látszik, de a full DIAG nem járja végig újra az összes LiDAR
+pontot; a részletes LiDAR evidence továbbra is az EVI bundle-ben marad lekérdezhetően.
+
+### lineage
+
+Index/coverage normalized-view accounting, layer/sensor view counts, source
+snapshot identity. Expliciten jelzi, hogy a DIAG nem nyitotta újra az MCAP-ot.
+
+### lifecycle
+
+Runtime/event/L5/L6/L12 lifecycle/state/status/mode/reason mezők időrendi
+value-change számlálói.
+
+## Anti-drift
+
+Az EVI minden JSON leaf-et indexel, és normalized view-kat lineage-dzsel publikál.
+A DIAG profiling path-alapú és nem field-whitelist alapú: új mezők a releváns
+view-kban automatikusan láthatóvá válnak, ha a domain token-scope-ba esnek. A
+full field census az `evidence_health` / `lineage` rétegben ettől függetlenül is
+megmarad.

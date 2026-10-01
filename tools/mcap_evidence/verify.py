@@ -8,7 +8,7 @@ from pathlib import Path
 from .export import encoded, manifest_digest, sha256
 from .index import read_only, topic_coverage
 from .ingest import decode
-from .normalize import leaves, views as expected_views
+from .normalize import field_index_entries, leaves, views as expected_views
 from .query import bundle_file, read_row
 from .schemas import MANIFEST, COVERAGE
 
@@ -91,8 +91,11 @@ def verify_artifacts(root, manifest, *, source=None):
         raise ValueError('invalid coverage schema')
     db = read_only(root)
     digest = hashlib.sha256()
-    count = valid = field_count = views = 0
+    count = valid = field_count = bulk_array_count = views = 0
     topic_counts, decoded_counts = Counter(), Counter()
+    has_bulk_arrays = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bulk_arrays'"
+    ).fetchone() is not None
     try:
         # Count physical rows too: an unindexed trailing row must not disappear
         # from accounting just because the index or manifest was regenerated.
@@ -143,8 +146,25 @@ def verify_artifacts(root, manifest, *, source=None):
                 valid += 1
                 if encoded(payload) != encoded(row['payload']):
                     raise ValueError('decoded payload mismatch: ' + mid)
-                expected_paths = sorted(path for path, _ in leaves(payload))
-                stored_paths = [r[0] for r in db.execute('SELECT path FROM fields WHERE message_id=? ORDER BY path', (mid,))]
+                if has_bulk_arrays:
+                    expected_paths, expected_bulk = [], []
+                    for entry_kind, path, array_length in field_index_entries(payload):
+                        if entry_kind == 'bulk_array':
+                            expected_bulk.append((path, array_length))
+                        else:
+                            expected_paths.append(path)
+                    expected_paths.sort()
+                    expected_bulk.sort()
+                    stored_bulk = list(db.execute(
+                        'SELECT path,length FROM bulk_arrays WHERE message_id=? ORDER BY path', (mid,)))
+                    if expected_bulk != stored_bulk:
+                        raise ValueError('bulk array census mismatch: ' + mid)
+                    bulk_array_count += len(expected_bulk)
+                else:
+                    # Backward-compatible dense bundle produced before sparse indexing.
+                    expected_paths = sorted(path for path, _ in leaves(payload))
+                stored_paths = [r[0] for r in db.execute(
+                    'SELECT path FROM fields WHERE message_id=? ORDER BY path', (mid,))]
                 if expected_paths != stored_paths:
                     raise ValueError('field census mismatch: ' + mid)
                 field_count += len(expected_paths)
@@ -171,6 +191,8 @@ def verify_artifacts(root, manifest, *, source=None):
             raise ValueError('recovered source stream does not match exports')
         if views != db.execute('SELECT count(*) FROM views').fetchone()[0]:
             raise ValueError('orphan normalized view')
+        if has_bulk_arrays and bulk_array_count != db.execute('SELECT count(*) FROM bulk_arrays').fetchone()[0]:
+            raise ValueError('orphan bulk array posting')
         if (count != integrity['recovered_messages'] or count != coverage['messages']['recovered']
                 or count != coverage['messages']['exported'] or valid != coverage['messages']['json_decoded']
                 or count - valid != coverage['messages']['quarantined']

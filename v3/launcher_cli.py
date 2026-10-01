@@ -162,7 +162,7 @@ def print_help() -> None:
         f"  r rc 30 c 10               Capture Hz: {' / '.join(map(str, CAPTURE_HZ_VALUES))}; alap: {DEFAULT_CAPTURE_HZ} Hz\n"
         "  c alap / c full / c nincs  Capture-mód; nc = mozgás-trigger kihagyása\n"
         "  r evi CAPTURE.mcap         Offline MCAP Evidence Compiler\n"
-        "  r diag [ANALYZER]          On-demand, MCAP-only offline diagnosztika\n"
+        "  r diag [full|ANALYZER]     EVI evidence diagnosztikai adatok; alap: full/latest\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
         "  r \"KÉRÉS\"                 Automatikus végrehajtási mód választás\n"

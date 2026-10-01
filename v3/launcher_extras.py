@@ -152,24 +152,31 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
                 names.update(path.stem for path in parent.glob("*.py"))
         return hint, _filter(sorted(names), current)
     if canonical == "diag":
-        # Registry-driven completion grows with the DIAG subsystem. Importing the
-        # registry is read-only and does not open a capture or touch robot state.
-        from v3.diag.registry import build_default_registry
+        # Registry-driven completion is evidence-only and does not open a bundle.
+        from tools.diag.registry import build_default_registry
 
-        analyzers = [spec.contract.analyzer_id for spec in build_default_registry()]
+        analyzers = list(build_default_registry().ids())
         if not before:
-            return hint, _filter(["list", "admission", *analyzers], current)
+            return hint, _filter(["full", "list", "admission", *analyzers], current)
         if before[0] == "admission" and len(before) == 1:
             return hint, _filter(analyzers, current)
-        capture_position = (before[0] in analyzers and len(before) == 1) or (
+        evidence_position = (
+            before[0] == "full" and len(before) == 1
+        ) or (
+            before[0] in analyzers and len(before) == 1
+        ) or (
             before[0] == "admission" and len(before) == 2 and before[1] in analyzers
         )
-        if capture_position:
-            captures = ["latest"]
+        if evidence_position:
+            evidence = ["latest"]
             capture_dir = root / "runtime" / "captures"
             if capture_dir.is_dir():
-                captures.extend(str(path.relative_to(root)) for path in sorted(capture_dir.glob("*.mcap")))
-            return hint, _filter(captures, current)
+                evidence.extend(
+                    str(path.relative_to(root))
+                    for path in sorted(capture_dir.glob("*.evidence"))
+                    if path.is_dir() and not path.is_symlink() and (path / "manifest.json").is_file()
+                )
+            return hint, _filter(evidence, current)
     return hint, []
 
 

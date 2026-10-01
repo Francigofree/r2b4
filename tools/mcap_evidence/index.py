@@ -3,7 +3,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .normalize import leaves, samples
+from .normalize import (FIELD_INDEX_POLICY, field_index_entries, identifier_entries, samples)
 from .schemas import INDEX
 from .export import write_json
 
@@ -14,6 +14,8 @@ CREATE TABLE messages (
  file TEXT, byte_offset INTEGER, byte_length INTEGER, decode_status TEXT,
  payload_sha256 TEXT);
 CREATE TABLE fields (path TEXT, message_id TEXT, PRIMARY KEY(path, message_id)) WITHOUT ROWID;
+CREATE TABLE bulk_arrays (path TEXT, message_id TEXT, length INTEGER,
+ PRIMARY KEY(path, message_id)) WITHOUT ROWID;
 CREATE TABLE identifiers (kind TEXT, value TEXT, message_id TEXT,
  PRIMARY KEY(kind, value, message_id)) WITHOUT ROWID;
 CREATE TABLE views (message_id TEXT, pointer TEXT, file TEXT, byte_offset INTEGER, byte_length INTEGER);
@@ -50,17 +52,17 @@ def add_message(db, source, location):
     for _, sample in samples(payload):
         db.execute('INSERT OR IGNORE INTO identifiers VALUES (?,?,?)',
                    ('sensor', sample['kind'], source['message_id']))
-    for path, value in leaves(payload):
-        db.execute('INSERT INTO fields VALUES (?,?)', (path, source['message_id']))
-        parts = path.split('/')
-        kind = {'tick_id': 'tick', 'layer': 'layer', 'layer_id': 'layer',
-                'sensor_kind': 'sensor', 'sensor_id': 'sensor'}.get(parts[-1])
-        if kind and isinstance(value, (str, int)) and not isinstance(value, bool):
-            db.execute('INSERT OR IGNORE INTO identifiers VALUES (?,?,?)', (kind, str(value), source['message_id']))
-        for i, part in enumerate(parts[:-1]):
-            if part in ('layers', 'sensors'):
-                db.execute('INSERT OR IGNORE INTO identifiers VALUES (?,?,?)', (
-                    'layer' if part == 'layers' else 'sensor', parts[i + 1], source['message_id']))
+    # Identifier discovery is independent of generic field flattening so sparse
+    # arrays cannot silently remove tick/layer/sensor lookup keys.
+    for kind, value in identifier_entries(payload):
+        db.execute('INSERT OR IGNORE INTO identifiers VALUES (?,?,?)',
+                   (kind, value, source['message_id']))
+    for entry_kind, path, length in field_index_entries(payload):
+        if entry_kind == 'bulk_array':
+            db.execute('INSERT INTO bulk_arrays VALUES (?,?,?)',
+                       (path, source['message_id'], length))
+        else:
+            db.execute('INSERT INTO fields VALUES (?,?)', (path, source['message_id']))
 
 
 def merge(root: Path, worker_roots):
@@ -68,7 +70,7 @@ def merge(root: Path, worker_roots):
     try:
         for worker in worker_roots:
             db.execute('ATTACH DATABASE ? AS worker', (str(worker / 'index.sqlite'),))
-            for table in ('messages', 'fields', 'identifiers', 'views'):
+            for table in ('messages', 'fields', 'bulk_arrays', 'identifiers', 'views'):
                 db.execute(f'INSERT INTO {table} SELECT * FROM worker.{table}')
             db.commit()
             db.execute('DETACH DATABASE worker')
@@ -78,6 +80,7 @@ def merge(root: Path, worker_roots):
         CREATE INDEX message_time ON messages(log_time_ns);
         CREATE INDEX message_offset ON messages(source_offset);
         CREATE INDEX field_message ON fields(message_id, path);
+        CREATE INDEX bulk_array_message ON bulk_arrays(message_id, path);
         CREATE INDEX view_message ON views(message_id);
         CREATE INDEX message_file ON messages(file, byte_offset);
         CREATE INDEX view_file ON views(file, byte_offset);
@@ -90,15 +93,29 @@ def merge(root: Path, worker_roots):
         write_json(root / 'index.json', {'schema': INDEX, 'database': 'index.sqlite',
                                        'messages': count, 'topics': topics,
                                        'time_encoding': 'zero-padded unsigned nanoseconds',
-                                       'field_path_encoding': 'JSON pointer (RFC 6901)'})
-        # Stream the census: path count may itself be very large.
+                                       'field_path_encoding': 'JSON pointer (RFC 6901)',
+                                       'field_index_policy': FIELD_INDEX_POLICY})
+        # Stream the census: sparse bulk roots are reported separately from
+        # actual generic field postings. No descendant coordinate path is emitted.
         with (root / 'field_index.json').open('w') as stream:
-            stream.write('{"schema":' + json.dumps(INDEX) + ',"paths":[')
+            stream.write('{"schema":' + json.dumps(INDEX)
+                         + ',"policy":' + json.dumps(FIELD_INDEX_POLICY, sort_keys=True)
+                         + ',"paths":[')
             first = True
             for path, occurrences in db.execute('SELECT path,count(*) FROM fields GROUP BY path ORDER BY path'):
                 if not first:
                     stream.write(',')
                 stream.write(json.dumps({'path': path, 'messages': occurrences}, ensure_ascii=True))
+                first = False
+            stream.write('],"bulk_arrays":[')
+            first = True
+            for path, occurrences, min_length, max_length in db.execute(
+                    'SELECT path,count(*),min(length),max(length) FROM bulk_arrays GROUP BY path ORDER BY path'):
+                if not first:
+                    stream.write(',')
+                stream.write(json.dumps({'path': path, 'messages': occurrences,
+                                         'min_length': min_length, 'max_length': max_length},
+                                        ensure_ascii=True))
                 first = False
             stream.write(']}\n')
         exported_by_topic = {topic: {'messages': total, 'json_decoded': decoded}

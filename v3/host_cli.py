@@ -46,7 +46,7 @@ COMMAND_HELP = {
     "test": ("[MODE]", "Célzott tesztek; alapértelmezés: core. Módok: r test list."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
-    "diag": ("[ANALYZER] [CAPTURE|latest] [--json]", "On-demand, kizárólag finalizált MCAP-ból dolgozó offline diagnosztika."),
+    "diag": ("[full|ANALYZER] [EVIDENCE|latest] [--json]", "Verified EVI evidence-ből diagnosztikai adatokat szolgáltat; alap: full/latest."),
     "cpu": ("[SECONDS] [INTERVAL]", "CPU-mérés és naplózás; alapérték: 30 s, 1 s mintavétel."),
     "cpu2": ("[ARGS...]", "Részletes CPU-diagnosztika; opciók: r cpu2 --help."),
     "disc": ("", "Szabad lemezterület és R2B4-adatméretek."),
@@ -298,7 +298,11 @@ def execute(command: str, argv: list[str], root: Path) -> int:
     if command == "test": return profile_test(root, argv)
     if command == "tools": return list_tools(root)
     if command == "tool": return run_tool(root, argv)
-    if command == "diag": return _run([sys.executable, "-m", "v3.diag", *argv], root=root)
+    if command == "diag":
+        # Heavy evidence analysis is offline on the robot host. Holding the
+        # operator lock for the subprocess also closes the runtime-start race.
+        with hardware_guard(root):
+            return _run([sys.executable, "-m", "tools.diag", *argv], root=root)
     if command == "cpu": return cpu(root, argv)
     if command == "cpu2": return _run([sys.executable, str(root / "tools" / "r2b4_cpu2.py"), "--root", str(root), *argv], root=root)
     if command == "disc": return disc(root)

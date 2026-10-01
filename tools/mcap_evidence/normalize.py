@@ -13,6 +13,62 @@ def pointer_key(key: str) -> str:
     return key.replace('~', '~0').replace('/', '~1')
 
 
+# P0: large JSON arrays remain lossless in source payloads, but their scalar
+# descendants are not expanded into one generic SQLite field posting each.
+# 64 is intentionally structural and deterministic: it catches LiDAR point
+# arrays while keeping ordinary short vectors fully indexed.
+BULK_ARRAY_MIN_ITEMS = 64
+
+FIELD_INDEX_POLICY = {
+    'mode': 'sparse_bulk_arrays_v1',
+    'bulk_array_min_items': BULK_ARRAY_MIN_ITEMS,
+    'bulk_array_descendants': 'omitted_from_fields',
+    'bulk_array_roots': 'stored_in_bulk_arrays',
+}
+
+
+def field_index_entries(value, path=''):
+    """Yield sparse field postings as (kind, path, length).
+
+    `field` entries preserve the legacy leaf-path index. `bulk_array` entries
+    mark a large list root and stop descent. The payload itself is untouched.
+    """
+    if isinstance(value, dict) and value:
+        for key, child in value.items():
+            yield from field_index_entries(child, path + '/' + pointer_key(key))
+    elif isinstance(value, list) and value:
+        if len(value) >= BULK_ARRAY_MIN_ITEMS:
+            yield 'bulk_array', path, len(value)
+            return
+        for i, child in enumerate(value):
+            yield from field_index_entries(child, path + '/' + str(i))
+    else:
+        yield 'field', path, None
+
+
+def identifier_entries(value):
+    """Preserve identifier indexing independently from sparse field paths."""
+    if isinstance(value, dict):
+        scalar_kinds = {
+            'tick_id': 'tick', 'layer': 'layer', 'layer_id': 'layer',
+            'sensor_kind': 'sensor', 'sensor_id': 'sensor',
+        }
+        for key, child in value.items():
+            kind = scalar_kinds.get(key)
+            if kind and isinstance(child, (str, int)) and not isinstance(child, bool):
+                yield kind, str(child)
+            if key in ('layers', 'sensors') and isinstance(child, dict):
+                structural_kind = 'layer' if key == 'layers' else 'sensor'
+                for name in child:
+                    yield structural_kind, str(name)
+            if isinstance(child, (dict, list)):
+                yield from identifier_entries(child)
+    elif isinstance(value, list):
+        for child in value:
+            if isinstance(child, (dict, list)):
+                yield from identifier_entries(child)
+
+
 def leaves(value, path=''):
     if isinstance(value, dict) and value:
         for key, child in value.items():

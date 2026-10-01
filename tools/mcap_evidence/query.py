@@ -1,8 +1,10 @@
 """Indexed bundle queries; the original MCAP is never opened."""
+from fnmatch import fnmatchcase
 import json
 from pathlib import Path
 
 from .index import read_only
+from .normalize import leaves
 
 
 def bundle_file(root: Path, relative: str) -> Path:
@@ -27,6 +29,13 @@ def read_row(root: Path, file: str, offset: int, length: int):
     return json.loads(data)
 
 
+def _field_matches(payload, pattern: str) -> bool:
+    """Exact legacy field-query semantics, evaluated lazily on candidates."""
+    if payload is None:
+        return False
+    return any(fnmatchcase(path, pattern) for path, _ in leaves(payload))
+
+
 def query(bundle, *, topic=None, message_id=None, tick_id=None, layer=None, sensor=None,
           field=None, channel=None, sequence=None, source_offset=None,
           start_ns=None, end_ns=None, limit=100):
@@ -43,23 +52,45 @@ def query(bundle, *, topic=None, message_id=None, tick_id=None, layer=None, sens
         if value is not None:
             clauses.append('m.message_id IN (SELECT message_id FROM identifiers WHERE kind=? AND value=?)')
             parameters.extend((kind, str(value)))
+    field_pattern = None
     if field is not None:
         if not field.startswith('/') and field != '':
             field = '/' + field.replace('.', '/')
-        clauses.append('m.message_id IN (SELECT message_id FROM fields WHERE path GLOB ?)')
-        parameters.append(field)
+        field_pattern = field
     for op, value in (('>=', start_ns), ('<=', end_ns)):
         if value is not None:
             clauses.append('m.log_time_ns' + op + '?')
             parameters.append(f'{value:020d}')
-    sql = 'SELECT file,byte_offset,byte_length FROM messages m'
-    if clauses:
-        sql += ' WHERE ' + ' AND '.join(clauses)
-    sql += ' ORDER BY message_id LIMIT ?'
-    parameters.append(limit)
     db = read_only(root)
     try:
+        has_bulk_arrays = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bulk_arrays'"
+        ).fetchone() is not None
+        if field_pattern is not None:
+            if has_bulk_arrays:
+                clauses.append(
+                    '(m.message_id IN (SELECT message_id FROM fields WHERE path GLOB ?) '
+                    'OR m.message_id IN (SELECT message_id FROM bulk_arrays '
+                    "WHERE path GLOB ? OR ? GLOB (path || '/*')))")
+                parameters.extend((field_pattern, field_pattern, field_pattern))
+            else:
+                # Backward-compatible dense evidence bundle.
+                clauses.append('m.message_id IN (SELECT message_id FROM fields WHERE path GLOB ?)')
+                parameters.append(field_pattern)
+        sql = 'SELECT file,byte_offset,byte_length FROM messages m'
+        if clauses:
+            sql += ' WHERE ' + ' AND '.join(clauses)
+        sql += ' ORDER BY message_id'
+        if field_pattern is None:
+            sql += ' LIMIT ?'
+            parameters.append(limit)
+        yielded = 0
         for location in db.execute(sql, parameters):
-            yield read_row(root, *location)
+            row = read_row(root, *location)
+            if field_pattern is None or _field_matches(row.get('payload'), field_pattern):
+                yield row
+                yielded += 1
+                if yielded >= limit:
+                    break
     finally:
         db.close()
