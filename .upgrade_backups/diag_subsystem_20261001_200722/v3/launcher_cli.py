@@ -58,9 +58,7 @@ def _robot_catalog() -> list[dict[str, object]]:
         if isinstance(action, argparse._SubParsersAction)
     )
     aliases = dict(interface_cli.ALIASES)
-    # Top-level r diag is owned by the offline DIAG facade; the existing
-    # detailed runtime status remains reachable through the d alias.
-    canonical = sorted((set(subparsers.choices) - set(aliases)) - {"diag"})
+    canonical = sorted(set(subparsers.choices) - set(aliases))
     return [
         {
             "name": name,
@@ -164,7 +162,6 @@ def print_help() -> None:
         f"  r rc 30 c 10               Capture Hz: {' / '.join(map(str, CAPTURE_HZ_VALUES))}; alap: {DEFAULT_CAPTURE_HZ} Hz\n"
         "  c alap / c full / c nincs  Capture-mód; nc = mozgás-trigger kihagyása\n"
         "  r th [status|run|batch]     Test Hub; alapértelmezés: status\n"
-        "  r diag [ANALYZER]          On-demand, MCAP-only offline diagnosztika\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
         "  r \"KÉRÉS\"                 Automatikus végrehajtási mód választás\n"
@@ -293,7 +290,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         root = project_root()
         from v3.runtime_performance import apply_host_affinity
-        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tool", "cpu", "cpu2", "diag"} else "operator"
+        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tool", "cpu", "cpu2"} else "operator"
         apply_host_affinity(root, role)
 
         # Private, read-only shell completion transport. It is intentionally not

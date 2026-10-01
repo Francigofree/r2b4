@@ -46,7 +46,6 @@ COMMAND_HELP = {
     "test": ("[MODE]", "Célzott tesztek; alapértelmezés: core. Módok: r test list."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
-    "diag": ("[ANALYZER] [CAPTURE|latest] [--json]", "On-demand, kizárólag finalizált MCAP-ból dolgozó offline diagnosztika."),
     "cpu": ("[SECONDS] [INTERVAL]", "CPU-mérés és naplózás; alapérték: 30 s, 1 s mintavétel."),
     "cpu2": ("[ARGS...]", "Részletes CPU-diagnosztika; opciók: r cpu2 --help."),
     "disc": ("", "Szabad lemezterület és R2B4-adatméretek."),
@@ -280,7 +279,7 @@ def host(root: Path) -> int:
 def execute(command: str, argv: list[str], root: Path) -> int:
     command = ALIASES.get(command, command)
     # Keep native help/argument semantics for passthrough programs.
-    if argv in (["-h"], ["--help"]) and command not in {"git", "gitre", "pytest", "test", "cpu2", "diag"}:
+    if argv in (["-h"], ["--help"]) and command not in {"git", "gitre", "pytest", "test", "cpu2"}:
         print_help(command)
         return 0
     no_args = {"install", "where", "root", "version", "tools", "disc", "mem", "temp", "ps", "net", "usb", "i2c", "host"}
@@ -298,7 +297,6 @@ def execute(command: str, argv: list[str], root: Path) -> int:
     if command == "test": return profile_test(root, argv)
     if command == "tools": return list_tools(root)
     if command == "tool": return run_tool(root, argv)
-    if command == "diag": return _run([sys.executable, "-m", "v3.diag", *argv], root=root)
     if command == "cpu": return cpu(root, argv)
     if command == "cpu2": return _run([sys.executable, str(root / "tools" / "r2b4_cpu2.py"), "--root", str(root), *argv], root=root)
     if command == "disc": return disc(root)

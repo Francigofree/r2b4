@@ -1,0 +1,3028 @@
+{
+  "admission": {
+    "analyzer_id": "coverage",
+    "applicable": true,
+    "checked_requirements": {
+      "capture_integrity_complete": true,
+      "capture_tick_sample_hz": 10,
+      "min_tick_sample_hz": null,
+      "missing_required_fields": [],
+      "missing_required_paths": [],
+      "missing_topics": [],
+      "required_topics": [
+        "/r2b4/tick"
+      ],
+      "requires_raw_evidence": false
+    },
+    "reasons": [],
+    "state": "APPLICABLE"
+  },
+  "analyzer_id": "coverage",
+  "capture": {
+    "data_crc_ok": true,
+    "file_size": 2731079,
+    "integrity_complete": true,
+    "mcap_library": "R2B4 McapCaptureConsumer stdlib/1",
+    "mcap_profile": "r2b4-v3",
+    "message_count": 319,
+    "message_end_time_ns": 26582920890301,
+    "message_start_time_ns": 26551343131881,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20260930_212030_39452_capture.mcap",
+    "raw_evidence_complete": false,
+    "raw_evidence_requested": false,
+    "summary_crc_ok": true,
+    "tick_sample_hz": 10,
+    "topics": [
+      "/r2b4/checkpoint",
+      "/r2b4/event",
+      "/r2b4/raw_lidar",
+      "/r2b4/runtime",
+      "/r2b4/tick"
+    ]
+  },
+  "claims": [
+    {
+      "causal_claim": false,
+      "claim_class": "FACT",
+      "code": "DIAG_SEMANTIC_COVERAGE_GAPS",
+      "evidence_refs": [],
+      "message": "18 observed production fields have generic visibility but no DIAG semantic analyzer owner."
+    }
+  ],
+  "metrics": {
+    "generic_only_tick_path_count": 242,
+    "generic_tick_path_count": 242,
+    "generic_tick_paths": [
+      "expected.fault_layer",
+      "expected.layers.L1.context.monotonic_ns",
+      "expected.layers.L1.context.tick_id",
+      "expected.layers.L1.io_health[].device_id",
+      "expected.layers.L1.io_health[].reason",
+      "expected.layers.L1.io_health[].state",
+      "expected.layers.L1.sample_count",
+      "expected.layers.L10.context.monotonic_ns",
+      "expected.layers.L10.context.tick_id",
+      "expected.layers.L10.left_mps",
+      "expected.layers.L10.right_mps",
+      "expected.layers.L10.velocity_transition_until_ns",
+      "expected.layers.L11.context.monotonic_ns",
+      "expected.layers.L11.context.tick_id",
+      "expected.layers.L11.left_normalized",
+      "expected.layers.L11.right_normalized",
+      "expected.layers.L11.saturated",
+      "expected.layers.L12.context.monotonic_ns",
+      "expected.layers.L12.context.tick_id",
+      "expected.layers.L12.enabled",
+      "expected.layers.L12.latch_state",
+      "expected.layers.L12.left_output",
+      "expected.layers.L12.reason",
+      "expected.layers.L12.right_output",
+      "expected.layers.L12.safety_decision",
+      "expected.layers.L2.accepted_count",
+      "expected.layers.L2.context.monotonic_ns",
+      "expected.layers.L2.context.tick_id",
+      "expected.layers.L2.degraded_sources[]",
+      "expected.layers.L2.rejected[]",
+      "expected.layers.L2.rejected[].age_ns",
+      "expected.layers.L2.rejected[].reason",
+      "expected.layers.L2.rejected[].source_device_id",
+      "expected.layers.L2.rejected[].source_sequence",
+      "expected.layers.L3.context.monotonic_ns",
+      "expected.layers.L3.context.tick_id",
+      "expected.layers.L3.covariance_5x5[]",
+      "expected.layers.L3.frame_id",
+      "expected.layers.L3.global_pose.frame_id",
+      "expected.layers.L3.global_pose.x_m",
+      "expected.layers.L3.global_pose.y_m",
+      "expected.layers.L3.global_pose.yaw_rad",
+      "expected.layers.L3.local_omega_rad_s",
+      "expected.layers.L3.local_pose.frame_id",
+      "expected.layers.L3.local_pose.x_m",
+      "expected.layers.L3.local_pose.y_m",
+      "expected.layers.L3.local_pose.yaw_rad",
+      "expected.layers.L3.local_v_mps",
+      "expected.layers.L3.localization_quality.encoder_age_ns",
+      "expected.layers.L3.localization_quality.encoder_lidar_consistency_m",
+      "expected.layers.L3.localization_quality.generation",
+      "expected.layers.L3.localization_quality.global_fix_age_ns",
+      "expected.layers.L3.localization_quality.global_position",
+      "expected.layers.L3.localization_quality.global_sigma_m",
+      "expected.layers.L3.localization_quality.heading",
+      "expected.layers.L3.localization_quality.imu_age_ns",
+      "expected.layers.L3.localization_quality.lidar_age_ns",
+      "expected.layers.L3.localization_quality.lidar_relative_consistency_m",
+      "expected.layers.L3.localization_quality.local_pose_continuous",
+      "expected.layers.L3.localization_quality.local_sigma_m",
+      "expected.layers.L3.localization_quality.local_translation",
+      "expected.layers.L3.localization_quality.observability",
+      "expected.layers.L3.localization_quality.pose_discontinuity",
+      "expected.layers.L3.localization_quality.relative_age_ns",
+      "expected.layers.L3.localization_quality.slip_suspected",
+      "expected.layers.L3.localization_quality.yaw_sigma_rad",
+      "expected.layers.L3.map_to_odom.frame_id",
+      "expected.layers.L3.map_to_odom.x_m",
+      "expected.layers.L3.map_to_odom.y_m",
+      "expected.layers.L3.map_to_odom.yaw_rad",
+      "expected.layers.L3.omega_rad_s",
+      "expected.layers.L3.transform_revision",
+      "expected.layers.L3.v_mps",
+      "expected.layers.L3.x_m",
+      "expected.layers.L3.y_m",
+      "expected.layers.L3.yaw_rad",
+      "expected.layers.L4.context.monotonic_ns",
+      "expected.layers.L4.context.tick_id",
+      "expected.layers.L4.frame_id",
+      "expected.layers.L4.freshness_ns",
+      "expected.layers.L4.global_visited_cells[]",
+      "expected.layers.L4.global_visited_cells[][]",
+      "expected.layers.L4.local_costmap.frame_id",
+      "expected.layers.L4.local_costmap.freshness_ns",
+      "expected.layers.L4.local_costmap.occupied_cell_count",
+      "expected.layers.L4.local_costmap.radius_m",
+      "expected.layers.L4.local_costmap.resolution_m",
+      "expected.layers.L4.local_costmap.revision",
+      "expected.layers.L4.local_costmap.source_sequence",
+      "expected.layers.L4.map_revision",
+      "expected.layers.L4.obstacle_track_count",
+      "expected.layers.L4.robot_relative_geometry.captured_monotonic_ns",
+      "expected.layers.L4.robot_relative_geometry.frame_id",
+      "expected.layers.L4.robot_relative_geometry.freshness_ns",
+      "expected.layers.L4.robot_relative_geometry.point_count",
+      "expected.layers.L4.robot_relative_geometry.source_sequence",
+      "expected.layers.L5.constraints.corridor_radius_m",
+      "expected.layers.L5.constraints.goal_tolerance_m",
+      "expected.layers.L5.constraints.max_omega_rad_s",
+      "expected.layers.L5.constraints.max_v_mps",
+      "expected.layers.L5.constraints.yaw_tolerance_rad",
+      "expected.layers.L5.context.monotonic_ns",
+      "expected.layers.L5.context.tick_id",
+      "expected.layers.L5.lifecycle",
+      "expected.layers.L5.mission_id",
+      "expected.layers.L5.mode",
+      "expected.layers.L5.stop_reason",
+      "expected.layers.L5.target_frame_id",
+      "expected.layers.L5.target_pose",
+      "expected.layers.L5.velocity_target",
+      "expected.layers.L6.constraints.corridor_radius_m",
+      "expected.layers.L6.constraints.goal_tolerance_m",
+      "expected.layers.L6.constraints.max_omega_rad_s",
+      "expected.layers.L6.constraints.max_v_mps",
+      "expected.layers.L6.constraints.yaw_tolerance_rad",
+      "expected.layers.L6.context.monotonic_ns",
+      "expected.layers.L6.context.tick_id",
+      "expected.layers.L6.corridor_radius_m",
+      "expected.layers.L6.local_goal",
+      "expected.layers.L6.local_goal.x_m",
+      "expected.layers.L6.local_goal.y_m",
+      "expected.layers.L6.local_goal.yaw_rad",
+      "expected.layers.L6.mission_id",
+      "expected.layers.L6.motion_validity",
+      "expected.layers.L6.motion_validity.frame_id",
+      "expected.layers.L6.motion_validity.geometry_captured_ns",
+      "expected.layers.L6.motion_validity.geometry_revision",
+      "expected.layers.L6.motion_validity.localization_requirement.global_position",
+      "expected.layers.L6.motion_validity.localization_requirement.heading",
+      "expected.layers.L6.motion_validity.localization_requirement.local_translation",
+      "expected.layers.L6.motion_validity.scope",
+      "expected.layers.L6.motion_validity.source_context.monotonic_ns",
+      "expected.layers.L6.motion_validity.source_context.tick_id",
+      "expected.layers.L6.motion_validity.valid_until_ns",
+      "expected.layers.L6.progress",
+      "expected.layers.L6.reason",
+      "expected.layers.L6.route_waypoint_count",
+      "expected.layers.L6.status",
+      "expected.layers.L6.trajectory_candidate_count",
+      "expected.layers.L6.velocity_target",
+      "expected.layers.L7.constraints.corridor_radius_m",
+      "expected.layers.L7.constraints.goal_tolerance_m",
+      "expected.layers.L7.constraints.max_omega_rad_s",
+      "expected.layers.L7.constraints.max_v_mps",
+      "expected.layers.L7.constraints.yaw_tolerance_rad",
+      "expected.layers.L7.context.monotonic_ns",
+      "expected.layers.L7.context.tick_id",
+      "expected.layers.L7.expiry_tick",
+      "expected.layers.L7.kind",
+      "expected.layers.L7.priority",
+      "expected.layers.L7.selected_source",
+      "expected.layers.L7.selection_reason",
+      "expected.layers.L7.target_waypoint",
+      "expected.layers.L7.trajectory",
+      "expected.layers.L7.trajectory.candidate_id",
+      "expected.layers.L7.trajectory.collision",
+      "expected.layers.L7.trajectory.horizon_ns",
+      "expected.layers.L7.trajectory.min_clearance_m",
+      "expected.layers.L7.trajectory.novelty_score",
+      "expected.layers.L7.trajectory.omega_rad_s",
+      "expected.layers.L7.trajectory.progress_potential_score",
+      "expected.layers.L7.trajectory.progress_score",
+      "expected.layers.L7.trajectory.progress_viable",
+      "expected.layers.L7.trajectory.sample_count",
+      "expected.layers.L7.trajectory.smoothness_score",
+      "expected.layers.L7.trajectory.total_score",
+      "expected.layers.L7.trajectory.v_mps",
+      "expected.layers.L7.transition_allowed",
+      "expected.layers.L7.validity",
+      "expected.layers.L7.validity.frame_id",
+      "expected.layers.L7.validity.geometry_captured_ns",
+      "expected.layers.L7.validity.geometry_revision",
+      "expected.layers.L7.validity.localization_requirement.global_position",
+      "expected.layers.L7.validity.localization_requirement.heading",
+      "expected.layers.L7.validity.localization_requirement.local_translation",
+      "expected.layers.L7.validity.scope",
+      "expected.layers.L7.validity.source_context.monotonic_ns",
+      "expected.layers.L7.validity.source_context.tick_id",
+      "expected.layers.L7.validity.valid_until_ns",
+      "expected.layers.L7.velocity_target",
+      "expected.layers.L8.constraints.corridor_radius_m",
+      "expected.layers.L8.constraints.goal_tolerance_m",
+      "expected.layers.L8.constraints.max_omega_rad_s",
+      "expected.layers.L8.constraints.max_v_mps",
+      "expected.layers.L8.constraints.yaw_tolerance_rad",
+      "expected.layers.L8.context.monotonic_ns",
+      "expected.layers.L8.context.tick_id",
+      "expected.layers.L8.horizon_ns",
+      "expected.layers.L8.localization_requirement.global_position",
+      "expected.layers.L8.localization_requirement.heading",
+      "expected.layers.L8.localization_requirement.local_translation",
+      "expected.layers.L8.requested_omega_rad_s",
+      "expected.layers.L8.requested_v_mps",
+      "expected.layers.L8.stop_reason",
+      "expected.layers.L8.transition_allowed",
+      "expected.layers.L9.active_constraints[]",
+      "expected.layers.L9.allowed_omega_rad_s",
+      "expected.layers.L9.allowed_v_mps",
+      "expected.layers.L9.context.monotonic_ns",
+      "expected.layers.L9.context.tick_id",
+      "expected.layers.L9.previous_context",
+      "expected.layers.L9.previous_context.monotonic_ns",
+      "expected.layers.L9.previous_context.tick_id",
+      "expected.layers.L9.previous_velocity",
+      "expected.layers.L9.previous_velocity.omega_rad_s",
+      "expected.layers.L9.previous_velocity.v_mps",
+      "expected.layers.L9.requested_omega_rad_s",
+      "expected.layers.L9.requested_v_mps",
+      "expected.layers.L9.velocity_transition_until_ns",
+      "inputs.command.command_id",
+      "inputs.command.context.monotonic_ns",
+      "inputs.command.context.tick_id",
+      "inputs.command.expiry_tick",
+      "inputs.command.goal[]",
+      "inputs.command.goal[].key",
+      "inputs.command.goal[].value",
+      "inputs.command.mode",
+      "inputs.context.monotonic_ns",
+      "inputs.context.tick_id",
+      "inputs.lifecycle",
+      "inputs.raw_devices.device_health[].device_id",
+      "inputs.raw_devices.device_health[].reason",
+      "inputs.raw_devices.device_health[].state",
+      "monotonic_ns",
+      "record_type",
+      "tick_evidence[].accepted",
+      "tick_evidence[].context.monotonic_ns",
+      "tick_evidence[].context.tick_id",
+      "tick_evidence[].error_type",
+      "tick_evidence[].expires_monotonic_ns",
+      "tick_evidence[].innovation[]",
+      "tick_evidence[].issued_monotonic_ns",
+      "tick_evidence[].layer",
+      "tick_evidence[].message",
+      "tick_evidence[].nis",
+      "tick_evidence[].observed_monotonic_ns",
+      "tick_evidence[].reader_received_ns",
+      "tick_evidence[].revision",
+      "tick_evidence[].threshold",
+      "tick_evidence[].ttl_remaining_ns",
+      "tick_evidence[].update_type",
+      "tick_id"
+    ],
+    "generic_tick_schema_fingerprint": "0e4d3e24d76c29d51932f057cdec0d601874a1212bb70dddea907e18bcece6d0",
+    "generic_unknown_fields_are_supported": true,
+    "observed_source_count": 1,
+    "policy": "GENERIC_VISIBILITY_AUTOMATIC_DOMAIN_SEMANTICS_EXPLICIT",
+    "production_contract_count": 6,
+    "production_schema_fingerprint": "1b03ac681b94cbadc730d19ad29e1515a30e184f0455a5821cb151c8c150cc37",
+    "registered_analyzer_count": 2,
+    "root_cause_inferred": false,
+    "schema": "R2B4_DIAG_COVERAGE_V1",
+    "schema_drift_detected": false,
+    "semantic_coverage_complete": false,
+    "semantic_path_owners": {},
+    "source": "MCAP_ONLY",
+    "sources": {
+      "layer:L3.localization_quality": {
+        "fields": {
+          "encoder_age_ns": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "encoder_lidar_consistency_m": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "generation": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "global_fix_age_ns": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "global_position": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "global_sigma_m": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "heading": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "imu_age_ns": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "lidar_age_ns": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "lidar_relative_consistency_m": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "local_pose_continuous": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "local_sigma_m": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "local_translation": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "observability": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "pose_discontinuity": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "relative_age_ns": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "slip_suspected": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "yaw_sigma_rad": {
+            "generic_supported": true,
+            "observed": true,
+            "production_registered": true,
+            "semantic_analyzers": []
+          }
+        },
+        "generic_supported": true,
+        "missing_from_capture": [],
+        "new_unregistered_fields": [],
+        "observed_fields": [
+          "encoder_age_ns",
+          "encoder_lidar_consistency_m",
+          "generation",
+          "global_fix_age_ns",
+          "global_position",
+          "global_sigma_m",
+          "heading",
+          "imu_age_ns",
+          "lidar_age_ns",
+          "lidar_relative_consistency_m",
+          "local_pose_continuous",
+          "local_sigma_m",
+          "local_translation",
+          "observability",
+          "pose_discontinuity",
+          "relative_age_ns",
+          "slip_suspected",
+          "yaw_sigma_rad"
+        ],
+        "production_contract": {
+          "contract_id": "localization.quality",
+          "criticality": "CONTROL_CRITICAL",
+          "domain_analyzed_fields": [],
+          "field_count": 18,
+          "fields": [
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "local_translation",
+              "origin": "LocalizationQuality.local_translation",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "heading",
+              "origin": "LocalizationQuality.heading",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "global_position",
+              "origin": "LocalizationQuality.global_position",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "local_sigma_m",
+              "origin": "LocalizationQuality.local_sigma_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "global_sigma_m",
+              "origin": "LocalizationQuality.global_sigma_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "yaw_sigma_rad",
+              "origin": "LocalizationQuality.yaw_sigma_rad",
+              "semantic_role": "MEASUREMENT",
+              "unit": "rad"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "encoder_age_ns",
+              "origin": "LocalizationQuality.encoder_age_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "imu_age_ns",
+              "origin": "LocalizationQuality.imu_age_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "lidar_age_ns",
+              "origin": "LocalizationQuality.lidar_age_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "global_fix_age_ns",
+              "origin": "LocalizationQuality.global_fix_age_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "local_pose_continuous",
+              "origin": "LocalizationQuality.local_pose_continuous",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "pose_discontinuity",
+              "origin": "LocalizationQuality.pose_discontinuity",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "lidar_relative_consistency_m",
+              "origin": "LocalizationQuality.lidar_relative_consistency_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "encoder_lidar_consistency_m",
+              "origin": "LocalizationQuality.encoder_lidar_consistency_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "generation",
+              "origin": "LocalizationQuality.generation",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "relative_age_ns",
+              "origin": "LocalizationQuality.relative_age_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "slip_suspected",
+              "origin": "LocalizationQuality.slip_suspected",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "observability",
+              "origin": "LocalizationQuality.observability",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            }
+          ],
+          "schema_fingerprint": "a494c5e0aa3f23991e5b3ddca5928e027d6f414479f30306011c4521688550dc",
+          "selector": "L3.localization_quality",
+          "target": "LAYER_MAPPING"
+        },
+        "sample_count": 317,
+        "schema_drift_detected": false,
+        "semantic_analyzers": {},
+        "status": "PASS"
+      },
+      "sensor:ekf_heading": {
+        "fields": {
+          "calibration": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "confidence": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "measurement_stale": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "measurement_timing_valid": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "omega_calibration": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "omega_confidence": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "omega_rad_s": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "yaw_rad": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          }
+        },
+        "generic_supported": true,
+        "missing_from_capture": [
+          "calibration",
+          "confidence",
+          "measurement_stale",
+          "measurement_timing_valid",
+          "omega_calibration",
+          "omega_confidence",
+          "omega_rad_s",
+          "yaw_rad"
+        ],
+        "new_unregistered_fields": [],
+        "observed_fields": [],
+        "production_contract": {
+          "contract_id": "imu.ekf_heading",
+          "criticality": "PRODUCTION_CRITICAL",
+          "domain_analyzed_fields": [
+            "yaw_rad",
+            "omega_rad_s",
+            "confidence",
+            "calibration",
+            "omega_confidence",
+            "omega_calibration"
+          ],
+          "field_count": 8,
+          "fields": [
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "yaw_rad",
+              "origin": "ImuHeadingReading.yaw_rad",
+              "semantic_role": "MEASUREMENT",
+              "unit": "rad"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "omega_rad_s",
+              "origin": "ImuHeadingReading.omega_rad_s",
+              "semantic_role": "MEASUREMENT",
+              "unit": "rad/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "confidence",
+              "origin": "ImuHeadingReading.confidence",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "calibration",
+              "origin": "ImuHeadingReading.calibration",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "measurement_stale",
+              "origin": "ImuHeadingReading.stale",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "measurement_timing_valid",
+              "origin": "ImuHeadingReading.timing_valid",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "omega_confidence",
+              "origin": "ImuHeadingReading.omega_confidence",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "omega_calibration",
+              "origin": "ImuHeadingReading.omega_calibration",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            }
+          ],
+          "schema_fingerprint": "9e0c19f754b1fc6ab53d3639c055ef11543407df24566c7260ed38f6ff983e01",
+          "selector": "ekf_heading",
+          "target": "SENSOR_SAMPLE"
+        },
+        "sample_count": 0,
+        "schema_drift_detected": false,
+        "semantic_analyzers": {},
+        "status": "NOT_OBSERVED"
+      },
+      "sensor:lidar_matcher_diagnostics": {
+        "fields": {
+          "ambiguity_margin": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "candidate_id": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "degeneracy_reasons": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "inlier_ratio": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_confidence": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_degenerate": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_input_age_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_queue_delay_ms": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_reason": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_runtime_ms": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "matcher_timed_out": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "measurement_monotonic_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "observability_score": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "pose_reference_monotonic_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "robust_rmse_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "scan_end_monotonic_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "scan_pose_alignment_delta_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "scan_start_monotonic_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "sector_coverage": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "seed_pose_x_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "seed_pose_y_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "seed_pose_yaw_rad": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "source_raw_scan_id": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "source_raw_scan_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "source_scan_revision": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "tracking_ready": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          }
+        },
+        "generic_supported": true,
+        "missing_from_capture": [
+          "ambiguity_margin",
+          "candidate_id",
+          "degeneracy_reasons",
+          "inlier_ratio",
+          "matcher_confidence",
+          "matcher_degenerate",
+          "matcher_input_age_ns",
+          "matcher_queue_delay_ms",
+          "matcher_reason",
+          "matcher_runtime_ms",
+          "matcher_timed_out",
+          "measurement_monotonic_ns",
+          "observability_score",
+          "pose_reference_monotonic_ns",
+          "robust_rmse_m",
+          "scan_end_monotonic_ns",
+          "scan_pose_alignment_delta_ns",
+          "scan_start_monotonic_ns",
+          "sector_coverage",
+          "seed_pose_x_m",
+          "seed_pose_y_m",
+          "seed_pose_yaw_rad",
+          "source_raw_scan_id",
+          "source_raw_scan_timestamp_ns",
+          "source_scan_revision",
+          "tracking_ready"
+        ],
+        "new_unregistered_fields": [],
+        "observed_fields": [],
+        "production_contract": {
+          "contract_id": "lidar.matcher_diagnostics",
+          "criticality": "PRODUCTION_CRITICAL",
+          "domain_analyzed_fields": [
+            "tracking_ready",
+            "matcher_timed_out",
+            "matcher_degenerate",
+            "matcher_reason",
+            "matcher_runtime_ms",
+            "matcher_queue_delay_ms",
+            "matcher_input_age_ns",
+            "matcher_confidence",
+            "inlier_ratio",
+            "robust_rmse_m",
+            "sector_coverage",
+            "observability_score",
+            "ambiguity_margin",
+            "degeneracy_reasons"
+          ],
+          "field_count": 26,
+          "fields": [
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "candidate_id",
+              "origin": "LidarMatcherDiagnostics.candidate_id",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "source_raw_scan_id",
+              "origin": "LidarMatcherDiagnostics.source_raw_scan_id",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "source_raw_scan_timestamp_ns",
+              "origin": "LidarMatcherDiagnostics.source_raw_scan_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "scan_start_monotonic_ns",
+              "origin": "LidarMatcherDiagnostics.scan_start_monotonic_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "scan_end_monotonic_ns",
+              "origin": "LidarMatcherDiagnostics.scan_end_monotonic_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "measurement_monotonic_ns",
+              "origin": "LidarMatcherDiagnostics.measurement_monotonic_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "pose_reference_monotonic_ns",
+              "origin": "LidarMatcherDiagnostics.pose_reference_monotonic_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "scan_pose_alignment_delta_ns",
+              "origin": "LidarMatcherDiagnostics.scan_pose_alignment_delta_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "matcher_reason",
+              "origin": "LidarMatcherDiagnostics.matcher_reason",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "tracking_ready",
+              "origin": "LidarMatcherDiagnostics.tracking_ready",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "matcher_timed_out",
+              "origin": "LidarMatcherDiagnostics.matcher_timed_out",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "matcher_degenerate",
+              "origin": "LidarMatcherDiagnostics.matcher_degenerate",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "degeneracy_reasons",
+              "origin": "LidarMatcherDiagnostics.degeneracy_reasons",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "matcher_runtime_ms",
+              "origin": "LidarMatcherDiagnostics.matcher_runtime_ms",
+              "semantic_role": "TIMING",
+              "unit": "ms"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "matcher_queue_delay_ms",
+              "origin": "LidarMatcherDiagnostics.matcher_queue_delay_ms",
+              "semantic_role": "TIMING",
+              "unit": "ms"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "matcher_input_age_ns",
+              "origin": "LidarMatcherDiagnostics.matcher_input_age_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "matcher_confidence",
+              "origin": "LidarMatcherDiagnostics.matcher_confidence",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "inlier_ratio",
+              "origin": "LidarMatcherDiagnostics.inlier_ratio",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "robust_rmse_m",
+              "origin": "LidarMatcherDiagnostics.robust_rmse_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "sector_coverage",
+              "origin": "LidarMatcherDiagnostics.sector_coverage",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "observability_score",
+              "origin": "LidarMatcherDiagnostics.observability_score",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "ambiguity_margin",
+              "origin": "LidarMatcherDiagnostics.ambiguity_margin",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "source_scan_revision",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "seed_pose_x_m",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "seed_pose_y_m",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "seed_pose_yaw_rad",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "MEASUREMENT",
+              "unit": "rad"
+            }
+          ],
+          "schema_fingerprint": "7012052b09ee4bd372d5e172a7364c358a29fcf8207c31e7196bb38ac5fe3654",
+          "selector": "lidar_matcher_diagnostics",
+          "target": "SENSOR_SAMPLE"
+        },
+        "sample_count": 0,
+        "schema_drift_detected": false,
+        "semantic_analyzers": {},
+        "status": "NOT_OBSERVED"
+      },
+      "sensor:lidar_pose": {
+        "fields": {
+          "confidence": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "frame_id": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "r_scale": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "x_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "y_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "yaw_rad": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          }
+        },
+        "generic_supported": true,
+        "missing_from_capture": [
+          "confidence",
+          "frame_id",
+          "r_scale",
+          "x_m",
+          "y_m",
+          "yaw_rad"
+        ],
+        "new_unregistered_fields": [],
+        "observed_fields": [],
+        "production_contract": {
+          "contract_id": "lidar.pose",
+          "criticality": "PRODUCTION_CRITICAL",
+          "domain_analyzed_fields": [
+            "x_m",
+            "y_m",
+            "yaw_rad",
+            "confidence",
+            "r_scale"
+          ],
+          "field_count": 6,
+          "fields": [
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "frame_id",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "x_m",
+              "origin": "LidarPoseReading.x_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "y_m",
+              "origin": "LidarPoseReading.y_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "yaw_rad",
+              "origin": "LidarPoseReading.yaw_rad",
+              "semantic_role": "MEASUREMENT",
+              "unit": "rad"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "r_scale",
+              "origin": "LidarPoseReading.r_scale",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "confidence",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            }
+          ],
+          "schema_fingerprint": "897861e2da6a7948b8a18efd987000331037d1630837b41f7b6672f511231f17",
+          "selector": "lidar_pose",
+          "target": "SENSOR_SAMPLE"
+        },
+        "sample_count": 0,
+        "schema_drift_detected": false,
+        "semantic_analyzers": {},
+        "status": "NOT_OBSERVED"
+      },
+      "sensor:lidar_relative_motion": {
+        "fields": {
+          "dx_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "dy_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "dyaw_rad": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "observability": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "rmse_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "start_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          }
+        },
+        "generic_supported": true,
+        "missing_from_capture": [
+          "dx_m",
+          "dy_m",
+          "dyaw_rad",
+          "observability",
+          "rmse_m",
+          "start_ns"
+        ],
+        "new_unregistered_fields": [],
+        "observed_fields": [],
+        "production_contract": {
+          "contract_id": "lidar.relative_motion",
+          "criticality": "PRODUCTION_CRITICAL",
+          "domain_analyzed_fields": [],
+          "field_count": 6,
+          "fields": [
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "start_ns",
+              "origin": "LidarRelativeMotionReading.start_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "dx_m",
+              "origin": "LidarRelativeMotionReading.dx_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "dy_m",
+              "origin": "LidarRelativeMotionReading.dy_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "dyaw_rad",
+              "origin": "LidarRelativeMotionReading.dyaw_rad",
+              "semantic_role": "MEASUREMENT",
+              "unit": "rad"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "rmse_m",
+              "origin": "LidarRelativeMotionReading.rmse_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "observability",
+              "origin": "LidarRelativeMotionReading.observability",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            }
+          ],
+          "schema_fingerprint": "64f51521f638c144cc34ba8b68963e4d263345efbb1ea9b6497de115b99a0688",
+          "selector": "lidar_relative_motion",
+          "target": "SENSOR_SAMPLE"
+        },
+        "sample_count": 0,
+        "schema_drift_detected": false,
+        "semantic_analyzers": {},
+        "status": "NOT_OBSERVED"
+      },
+      "sensor:wheel_velocity": {
+        "fields": {
+          "computed_left_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "computed_right_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "instantaneous_left_interval_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "instantaneous_left_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "instantaneous_right_interval_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "instantaneous_right_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_confirmed_direction": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_counter_running": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_direction_change_candidates": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_direction_changes_confirmed": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_distance_delta_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_edge_history_count": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_estimation_end_edge_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_estimation_pulse_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_estimation_start_edge_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_estimation_timebase": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_estimation_window_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_invalid_alert_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_invalid_alerts": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_last_a_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_last_b_level": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_last_b_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_measurement_trust": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_pending_direction": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_pending_direction_edges": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_pulse_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_quadrature_rejection_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_quadrature_rejections": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_read_error_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_read_errors": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_velocity_quality": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "left_velocity_uncertainty_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "maximum_abs_velocity_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "measurement_stale": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "measurement_timing_valid": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "raw_left_distance_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "raw_left_pulse_count": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "raw_right_distance_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "raw_right_pulse_count": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "rejection_code": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_confirmed_direction": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_counter_running": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_direction_change_candidates": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_direction_changes_confirmed": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_distance_delta_m": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_edge_history_count": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_estimation_end_edge_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_estimation_pulse_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_estimation_start_edge_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_estimation_timebase": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_estimation_window_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_invalid_alert_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_invalid_alerts": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_last_a_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_last_b_level": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_last_b_timestamp_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_measurement_trust": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_pending_direction": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_pending_direction_edges": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_pulse_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_quadrature_rejection_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_quadrature_rejections": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_read_error_delta": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_read_errors": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_velocity_quality": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "right_velocity_uncertainty_mps": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "sample_interval_ns": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          },
+          "trust": {
+            "generic_supported": true,
+            "observed": false,
+            "production_registered": true,
+            "semantic_analyzers": []
+          }
+        },
+        "generic_supported": true,
+        "missing_from_capture": [
+          "computed_left_mps",
+          "computed_right_mps",
+          "instantaneous_left_interval_ns",
+          "instantaneous_left_mps",
+          "instantaneous_right_interval_ns",
+          "instantaneous_right_mps",
+          "left_confirmed_direction",
+          "left_counter_running",
+          "left_direction_change_candidates",
+          "left_direction_changes_confirmed",
+          "left_distance_delta_m",
+          "left_edge_history_count",
+          "left_estimation_end_edge_timestamp_ns",
+          "left_estimation_pulse_delta",
+          "left_estimation_start_edge_timestamp_ns",
+          "left_estimation_timebase",
+          "left_estimation_window_ns",
+          "left_invalid_alert_delta",
+          "left_invalid_alerts",
+          "left_last_a_timestamp_ns",
+          "left_last_b_level",
+          "left_last_b_timestamp_ns",
+          "left_measurement_trust",
+          "left_mps",
+          "left_pending_direction",
+          "left_pending_direction_edges",
+          "left_pulse_delta",
+          "left_quadrature_rejection_delta",
+          "left_quadrature_rejections",
+          "left_read_error_delta",
+          "left_read_errors",
+          "left_velocity_quality",
+          "left_velocity_uncertainty_mps",
+          "maximum_abs_velocity_mps",
+          "measurement_stale",
+          "measurement_timing_valid",
+          "raw_left_distance_m",
+          "raw_left_pulse_count",
+          "raw_right_distance_m",
+          "raw_right_pulse_count",
+          "rejection_code",
+          "right_confirmed_direction",
+          "right_counter_running",
+          "right_direction_change_candidates",
+          "right_direction_changes_confirmed",
+          "right_distance_delta_m",
+          "right_edge_history_count",
+          "right_estimation_end_edge_timestamp_ns",
+          "right_estimation_pulse_delta",
+          "right_estimation_start_edge_timestamp_ns",
+          "right_estimation_timebase",
+          "right_estimation_window_ns",
+          "right_invalid_alert_delta",
+          "right_invalid_alerts",
+          "right_last_a_timestamp_ns",
+          "right_last_b_level",
+          "right_last_b_timestamp_ns",
+          "right_measurement_trust",
+          "right_mps",
+          "right_pending_direction",
+          "right_pending_direction_edges",
+          "right_pulse_delta",
+          "right_quadrature_rejection_delta",
+          "right_quadrature_rejections",
+          "right_read_error_delta",
+          "right_read_errors",
+          "right_velocity_quality",
+          "right_velocity_uncertainty_mps",
+          "sample_interval_ns",
+          "trust"
+        ],
+        "new_unregistered_fields": [],
+        "observed_fields": [],
+        "production_contract": {
+          "contract_id": "encoder.wheel_velocity",
+          "criticality": "PRODUCTION_CRITICAL",
+          "domain_analyzed_fields": [
+            "left_mps",
+            "right_mps",
+            "left_distance_delta_m",
+            "right_distance_delta_m",
+            "raw_left_distance_m",
+            "raw_right_distance_m",
+            "left_measurement_trust",
+            "right_measurement_trust",
+            "left_velocity_uncertainty_mps",
+            "right_velocity_uncertainty_mps",
+            "rejection_code",
+            "left_read_error_delta",
+            "right_read_error_delta",
+            "left_invalid_alert_delta",
+            "right_invalid_alert_delta",
+            "left_quadrature_rejection_delta",
+            "right_quadrature_rejection_delta"
+          ],
+          "field_count": 70,
+          "fields": [
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_mps",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_mps",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "trust",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "measurement_stale",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "measurement_timing_valid",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "left_velocity_quality",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "right_velocity_quality",
+              "origin": "ADAPTER_DERIVED",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "raw_left_pulse_count",
+              "origin": "EncoderEdgeDiagnostics.raw_left_pulse_count",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "raw_right_pulse_count",
+              "origin": "EncoderEdgeDiagnostics.raw_right_pulse_count",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "left_pulse_delta",
+              "origin": "EncoderEdgeDiagnostics.left_pulse_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "right_pulse_delta",
+              "origin": "EncoderEdgeDiagnostics.right_pulse_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "sample_interval_ns",
+              "origin": "EncoderEdgeDiagnostics.sample_interval_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "left_counter_running",
+              "origin": "EncoderEdgeDiagnostics.left_counter_running",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "right_counter_running",
+              "origin": "EncoderEdgeDiagnostics.right_counter_running",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "left_read_errors",
+              "origin": "EncoderEdgeDiagnostics.left_read_errors",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "right_read_errors",
+              "origin": "EncoderEdgeDiagnostics.right_read_errors",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "left_read_error_delta",
+              "origin": "EncoderEdgeDiagnostics.left_read_error_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "right_read_error_delta",
+              "origin": "EncoderEdgeDiagnostics.right_read_error_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_invalid_alerts",
+              "origin": "EncoderEdgeDiagnostics.left_invalid_alerts",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_invalid_alerts",
+              "origin": "EncoderEdgeDiagnostics.right_invalid_alerts",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_invalid_alert_delta",
+              "origin": "EncoderEdgeDiagnostics.left_invalid_alert_delta",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_invalid_alert_delta",
+              "origin": "EncoderEdgeDiagnostics.right_invalid_alert_delta",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "computed_left_mps",
+              "origin": "EncoderEdgeDiagnostics.computed_left_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "computed_right_mps",
+              "origin": "EncoderEdgeDiagnostics.computed_right_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "instantaneous_left_mps",
+              "origin": "EncoderEdgeDiagnostics.instantaneous_left_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "instantaneous_right_mps",
+              "origin": "EncoderEdgeDiagnostics.instantaneous_right_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "raw_left_distance_m",
+              "origin": "EncoderEdgeDiagnostics.raw_left_distance_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "raw_right_distance_m",
+              "origin": "EncoderEdgeDiagnostics.raw_right_distance_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_distance_delta_m",
+              "origin": "EncoderEdgeDiagnostics.left_distance_delta_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_distance_delta_m",
+              "origin": "EncoderEdgeDiagnostics.right_distance_delta_m",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "left_estimation_pulse_delta",
+              "origin": "EncoderEdgeDiagnostics.left_estimation_pulse_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "right_estimation_pulse_delta",
+              "origin": "EncoderEdgeDiagnostics.right_estimation_pulse_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_estimation_window_ns",
+              "origin": "EncoderEdgeDiagnostics.left_estimation_window_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_estimation_window_ns",
+              "origin": "EncoderEdgeDiagnostics.right_estimation_window_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_estimation_timebase",
+              "origin": "EncoderEdgeDiagnostics.left_estimation_timebase",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_estimation_timebase",
+              "origin": "EncoderEdgeDiagnostics.right_estimation_timebase",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_estimation_start_edge_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.left_estimation_start_edge_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_estimation_end_edge_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.left_estimation_end_edge_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_estimation_start_edge_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.right_estimation_start_edge_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_estimation_end_edge_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.right_estimation_end_edge_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "left_edge_history_count",
+              "origin": "EncoderEdgeDiagnostics.left_edge_history_count",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "right_edge_history_count",
+              "origin": "EncoderEdgeDiagnostics.right_edge_history_count",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "instantaneous_left_interval_ns",
+              "origin": "EncoderEdgeDiagnostics.instantaneous_left_interval_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "instantaneous_right_interval_ns",
+              "origin": "EncoderEdgeDiagnostics.instantaneous_right_interval_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_velocity_uncertainty_mps",
+              "origin": "EncoderEdgeDiagnostics.left_velocity_uncertainty_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_velocity_uncertainty_mps",
+              "origin": "EncoderEdgeDiagnostics.right_velocity_uncertainty_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "left_measurement_trust",
+              "origin": "EncoderEdgeDiagnostics.left_measurement_trust",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "UNIT_INTERVAL_CANDIDATE"
+              ],
+              "name": "right_measurement_trust",
+              "origin": "EncoderEdgeDiagnostics.right_measurement_trust",
+              "semantic_role": "QUALITY",
+              "unit": "ratio"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "FINITE_RANGE",
+                "CHANGE_RATE"
+              ],
+              "name": "maximum_abs_velocity_mps",
+              "origin": "EncoderEdgeDiagnostics.maximum_abs_velocity_mps",
+              "semantic_role": "MEASUREMENT",
+              "unit": "m/s"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "rejection_code",
+              "origin": "EncoderEdgeDiagnostics.rejection_code",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "left_quadrature_rejections",
+              "origin": "EncoderEdgeDiagnostics.left_quadrature_rejections",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "MONOTONICITY_OBSERVATION"
+              ],
+              "name": "right_quadrature_rejections",
+              "origin": "EncoderEdgeDiagnostics.right_quadrature_rejections",
+              "semantic_role": "COUNTER",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "left_quadrature_rejection_delta",
+              "origin": "EncoderEdgeDiagnostics.left_quadrature_rejection_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "right_quadrature_rejection_delta",
+              "origin": "EncoderEdgeDiagnostics.right_quadrature_rejection_delta",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_direction_change_candidates",
+              "origin": "EncoderEdgeDiagnostics.left_direction_change_candidates",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_direction_change_candidates",
+              "origin": "EncoderEdgeDiagnostics.right_direction_change_candidates",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_direction_changes_confirmed",
+              "origin": "EncoderEdgeDiagnostics.left_direction_changes_confirmed",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_direction_changes_confirmed",
+              "origin": "EncoderEdgeDiagnostics.right_direction_changes_confirmed",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_confirmed_direction",
+              "origin": "EncoderEdgeDiagnostics.left_confirmed_direction",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_confirmed_direction",
+              "origin": "EncoderEdgeDiagnostics.right_confirmed_direction",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_pending_direction",
+              "origin": "EncoderEdgeDiagnostics.left_pending_direction",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_pending_direction",
+              "origin": "EncoderEdgeDiagnostics.right_pending_direction",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "left_pending_direction_edges",
+              "origin": "EncoderEdgeDiagnostics.left_pending_direction_edges",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "STATE_DISTRIBUTION",
+                "TRANSITION_COUNT"
+              ],
+              "name": "right_pending_direction_edges",
+              "origin": "EncoderEdgeDiagnostics.right_pending_direction_edges",
+              "semantic_role": "STATE",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_last_a_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.left_last_a_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_last_a_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.right_last_a_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "left_last_b_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.left_last_b_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE",
+                "NONNEGATIVE",
+                "CHANGE_RATE"
+              ],
+              "name": "right_last_b_timestamp_ns",
+              "origin": "EncoderEdgeDiagnostics.right_last_b_timestamp_ns",
+              "semantic_role": "TIMING",
+              "unit": "ns"
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "left_last_b_level",
+              "origin": "EncoderEdgeDiagnostics.left_last_b_level",
+              "semantic_role": "GENERIC",
+              "unit": null
+            },
+            {
+              "generic_checks": [
+                "TYPE_STABILITY",
+                "PRESENCE_RATE"
+              ],
+              "name": "right_last_b_level",
+              "origin": "EncoderEdgeDiagnostics.right_last_b_level",
+              "semantic_role": "GENERIC",
+              "unit": null
+            }
+          ],
+          "schema_fingerprint": "d9faaa4de026a23d6131e4a243e067f0dbd39b81a19d56c9fb9bc58902ede950",
+          "selector": "wheel_velocity",
+          "target": "SENSOR_SAMPLE"
+        },
+        "sample_count": 0,
+        "schema_drift_detected": false,
+        "semantic_analyzers": {},
+        "status": "NOT_OBSERVED"
+      }
+    },
+    "summary": {
+      "generic_only_observed_fields": 18,
+      "missing_production_fields_on_observed_sources": 0,
+      "new_unregistered_fields": 0,
+      "observed_production_fields": 18,
+      "semantic_covered_observed_fields": 0
+    },
+    "tick_count": 317
+  },
+  "root_cause_inferred": false,
+  "schema": "R2B4_DIAG_RESULT_V1",
+  "source": "MCAP_ONLY"
+}
