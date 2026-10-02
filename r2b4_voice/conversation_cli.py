@@ -12,6 +12,7 @@ from pathlib import Path
 from .conversation_interface import build_voice_interface
 from .llm_provider import (
     SUPPORTED_LLM_PROVIDERS,
+    api_key_env_for,
     default_model_for,
     resolve_llm_provider,
 )
@@ -67,7 +68,7 @@ def _parser() -> argparse.ArgumentParser:
 def _resolved_llm(args: argparse.Namespace, project_env: dict[str, str]) -> tuple[str, str, str | None]:
     provider = resolve_llm_provider(args.provider or _setting(project_env, "R2B4_LLM_PROVIDER"))
     model = args.model or _setting(project_env, "R2B4_LLM_MODEL") or default_model_for(provider)
-    key_name = "GEMINI_API_KEY" if provider == "gemini" else "GROQ_API_KEY"
+    key_name = api_key_env_for(provider)
     return provider, model, _setting(project_env, key_name)
 
 
@@ -102,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         return _check(root, provider, model, key)
     if not key:
-        key_name = "GEMINI_API_KEY" if provider == "gemini" else "GROQ_API_KEY"
+        key_name = api_key_env_for(provider)
         print(f"ERROR: {key_name} is not configured in environment or conf/.wake.env", file=sys.stderr)
         return 2
     if not args.text and not args.interactive:

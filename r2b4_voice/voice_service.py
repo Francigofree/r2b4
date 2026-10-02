@@ -2,7 +2,7 @@
 
 Data path:
     NativeUsbMicrophone -> local energy utterance gate -> Groq STT
-    -> RobotInterface conversation.submit_text -> Gemini/Groq LLM
+    -> RobotInterface conversation.submit_text -> OpenAI/Gemini/Groq LLM
     -> LLMDecision proposal -> fresh VoiceActionExecutor gate -> canonical RobotInterface
     -> local Piper TTS (Gemini optional) -> Linux/PipeWire speaker.
 
@@ -44,7 +44,7 @@ from .action_executor import VoiceActionExecutor
 from .conversation_interface import VoiceInterfaceBundle, build_voice_interface
 from .tts_provider import build_tts_client, diagnose_tts
 from .groq_stt import GroqWakeTranscriber, WakeTranscriptionError
-from .llm_provider import default_model_for, resolve_llm_provider
+from .llm_provider import api_key_env_for, default_model_for, resolve_llm_provider
 from .safety_intents import is_stop_intent
 from .voice_output import PcmWavePlayer
 from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActivityConfig
@@ -1101,7 +1101,7 @@ def _setting(project_env: Mapping[str, str], name: str) -> str | None:
 def _resolved_llm(project_env: Mapping[str, str]) -> tuple[str, str, str | None]:
     provider = resolve_llm_provider(_setting(project_env, "R2B4_LLM_PROVIDER"))
     model = _setting(project_env, "R2B4_LLM_MODEL") or default_model_for(provider)
-    key_name = "GEMINI_API_KEY" if provider == "gemini" else "GROQ_API_KEY"
+    key_name = api_key_env_for(provider)
     return provider, model, _setting(project_env, key_name)
 
 

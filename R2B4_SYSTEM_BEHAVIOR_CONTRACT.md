@@ -206,21 +206,22 @@ segítségével teljesítendő-e.
 
 ### Alapértelmezett beszélgető partner
 
-Normál beszélgetési kérésnél az **alapértelmezett beszélgető partner a Gemini**.
+Normál beszélgetési kérésnél az **alapértelmezett beszélgető partner a ChatGPT/OpenAI provider**.
 
 Ez nem kizárólagos backend. A **végrehajtási mód választó** az intent és a szükséges capability alapján választhat más végrehajtási módot is, többek között:
 
+- **Gemini fallback**;
 - **ER2 stream**;
 - **ER2 preview**;
 - később bármely más, a publikus capability boundary mögé szabályosan integrált beszélgetési, reasoning- vagy robotikai végrehajtási módot.
 
-A Gemini, az ER2 stream és az ER2 preview nem külön robotikai authority-k. A kiválasztás azt határozza meg, hogy melyik magasabb szintű végrehajtó/partner dolgozza fel a kérést; robotmozgás esetén a tényleges actuation ettől függetlenül a canonical V3 command- és safety-úton történik.
+A ChatGPT/OpenAI provider, a Gemini, az ER2 stream és az ER2 preview nem külön robotikai authority-k. A kiválasztás azt határozza meg, hogy melyik magasabb szintű végrehajtó/partner dolgozza fel a kérést; robotmozgás esetén a tényleges actuation ettől függetlenül a canonical V3 command- és safety-úton történik.
 
 ### Hallható válasz
 
 Ha a rendszer a választ hallhatóan adja vissza, az **alapértelmezett beszédszintézis a lokális TTS**.
 
-A beszélgető/reasoning partner és a beszédszintézis két külön felelősség. Attól, hogy egy választ Gemini, ER2 stream, ER2 preview vagy más későbbi végrehajtó állít elő, a hallható kimenet alapértelmezett útja továbbra is a lokális TTS.
+A beszélgető/reasoning partner és a beszédszintézis két külön felelősség. Attól, hogy egy választ ChatGPT/OpenAI, Gemini, ER2 stream, ER2 preview vagy más későbbi végrehajtó állít elő, a hallható kimenet alapértelmezett útja továbbra is a lokális TTS.
 
 Más TTS backend később opcionálisan támogatott lehet, de nem válhat szükséges előfeltételévé a normál hallható válasznak.
 
@@ -246,7 +247,8 @@ publikus robot-interface / capability boundary
 végrehajtási mód választó
         ↓
 szükséges capability / partner
-        ├─ Gemini / conversation
+        ├─ ChatGPT/OpenAI / conversation
+        ├─ Gemini / fallback conversation
         ├─ ER2 stream / ER2 preview
         ├─ read / host / observation
         └─ robot action
@@ -310,12 +312,12 @@ A jövőbeli fejlesztések akkor illeszkednek ehhez a rendszerszintű irányhoz,
 6. **Minimum a mikrofon és a kamera V3 nélkül is használható capability.**
 7. **A V3-függetlenségi szabály lehetőség szerint általánosan alkalmazandó más read-only/observation capabilitykre is.**
 8. **Mozgás csak canonical V3 command- és safety-úton történhet.**
-9. **Voice, Gemini, ER2 és más agent/végrehajtó csak kliens/orchestrator lehet, nem motor-authority.**
+9. **Voice, ChatGPT/OpenAI, Gemini, ER2 és más agent/végrehajtó csak kliens/orchestrator lehet, nem motor-authority.**
 10. **A voice/microphone lifecycle és a V3 lifecycle külön kezelendő.**
 11. **A wake phrase konfigurálható; alapértéke `robot`.**
 12. **A wake utáni ready-visszajelzés konfigurálható; alapértéke `figyelek`.**
 13. **A beszélgetési session 10 másodperc folyamatos csend után lezárható.**
-14. **Az alapértelmezett beszélgető partner Gemini; szükség esetén a végrehajtási mód választó ER2 streamet, ER2 preview-t vagy későbbi más végrehajtót választhat.**
+14. **Az alapértelmezett beszélgető partner ChatGPT/OpenAI; szükség esetén a végrehajtási mód választó Gemini fallbacket, ER2 streamet, ER2 preview-t vagy későbbi más végrehajtót választhat.**
 15. **A hallható válaszok alapértelmezett beszédszintézise a lokális TTS.**
 16. **A beszélgető/reasoning partner kiválasztása és a TTS-kimenet külön felelősség.**
 17. **A V3 technikai implementációja változhat anélkül, hogy a felhasználó felől látható rendszerszemantika megváltozna.**
@@ -334,7 +336,7 @@ Ez a contract nem mondja meg:
 - a 10 másodperces session timeout pontosan mely komponensben és milyen timerrel legyen megvalósítva;
 - mozgás után a V3 technikailag azonnal leálljon-e vagy meghatározott ideig IDLE-ben resident maradjon;
 - pontosan mely komponens implementálja a végrehajtási mód választót;
-- a Gemini, ER2 stream, ER2 preview vagy későbbi végrehajtók konkrét routing algoritmusát;
+- a ChatGPT/OpenAI, Gemini, ER2 stream, ER2 preview vagy későbbi végrehajtók konkrét routing algoritmusát;
 - hogyan legyen a kamera vagy más sensor V3-függetlenítve;
 - mely periféria milyen sorrendben bootoljon;
 - pontosan mennyi legyen a LiDAR vagy más periféria readiness timeoutja;
@@ -346,7 +348,7 @@ Ezek source-first implementációs vagy külön contract-kérdések.
 
 A fenti részletek megváltozhatnak. A rendszerszintű cél közben változatlan marad:
 
-> **A robot legyen folyamatosan megszólítható; normál beszélgetésnél alapértelmezetten Geminivel dolgozzon, szükség esetén a végrehajtási mód választó válthasson ER2 streamre, ER2 preview-ra vagy későbbi más végrehajtóra; a hallható válasz alapértelmezetten lokális TTS-en szólaljon meg; és a V3 csak akkor induljon el, amikor tényleges robotmozgás vagy más production controlt igénylő feladat szükséges.**
+> **A robot legyen folyamatosan megszólítható; normál beszélgetésnél alapértelmezetten ChatGPT/OpenAI providerrel dolgozzon, szükség esetén a végrehajtási mód választó válthasson Gemini fallbackre, ER2 streamre, ER2 preview-ra vagy későbbi más végrehajtóra; a hallható válasz alapértelmezetten lokális TTS-en szólaljon meg; és a V3 csak akkor induljon el, amikor tényleges robotmozgás vagy más production controlt igénylő feladat szükséges.**
 
 ---
 

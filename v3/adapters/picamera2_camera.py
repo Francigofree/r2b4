@@ -35,6 +35,7 @@ from .camera_geometry import (
     sensor_crop_from_value,
 )
 from .camera_rectification import CameraRectifier
+from .vision_media_contracts import CameraJpegMetadata
 
 
 class Picamera2Request(Protocol):
@@ -378,6 +379,7 @@ class CameraPhotoStatus:
     saved_count: int
     last_output: str | None
     last_error: str | None
+    last_metadata: CameraJpegMetadata | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,6 +430,7 @@ class NativePicamera2Camera:
         "_photo_saved_count",
         "_photo_last_output",
         "_photo_last_error",
+        "_photo_last_metadata",
     )
 
     def __init__(
@@ -481,6 +484,7 @@ class NativePicamera2Camera:
         self._photo_saved_count = 0
         self._photo_last_output: str | None = None
         self._photo_last_error: str | None = None
+        self._photo_last_metadata: CameraJpegMetadata | None = None
 
     @property
     def config(self) -> Picamera2CameraConfig:
@@ -515,6 +519,7 @@ class NativePicamera2Camera:
             self._photo_saved_count = 0
             self._photo_last_output = None
             self._photo_last_error = None
+            self._photo_last_metadata = None
             self._stop_event.clear()
             self._rectifier = None
             self._frame_condition.notify_all()
@@ -677,6 +682,7 @@ class NativePicamera2Camera:
                 saved_count=self._photo_saved_count,
                 last_output=self._photo_last_output,
                 last_error=self._photo_last_error,
+                last_metadata=self._photo_last_metadata,
             )
 
     def wait_for_new_frame(
@@ -752,16 +758,31 @@ class NativePicamera2Camera:
                 if pending_photo is not None:
                     output, stream_name = pending_photo
                     try:
+                        if snapshot.calibration_state != "CALIBRATED":
+                            raise RuntimeError("camera JPEG frame is not calibrated")
+                        jpeg_geometry = geometry
+                        calibration_id = snapshot.calibration_id
                         if stream_name == geometry.stream_name:
                             saver = getattr(request, "save", None)
                             if not callable(saver):
                                 raise RuntimeError("Picamera2 request.save is unavailable")
                             saver(stream_name, output, format="jpeg")
                         elif stream_name == "main":
-                            self._save_calibrated_main_jpeg(request, output, snapshot)
+                            calibration_id = self._save_calibrated_main_jpeg(request, output, snapshot)
+                            jpeg_geometry = self._main_geometry
                         else:
                             raise RuntimeError("requested camera JPEG stream is not calibrated")
                         with self._frame_condition:
+                            self._photo_last_metadata = CameraJpegMetadata(
+                                source_sequence=snapshot.sequence,
+                                sensor_timestamp_ns=snapshot.sensor_timestamp_ns,
+                                measurement_monotonic_ns=snapshot.measurement_monotonic_ns,
+                                completed_monotonic_ns=self._checked_clock(),
+                                calibration_id=calibration_id,
+                                stream=stream_name,
+                                width=jpeg_geometry.width,
+                                height=jpeg_geometry.height,
+                            )
                             self._photo_saved_count += 1
                             self._photo_last_output = output
                             self._photo_last_error = None
@@ -793,7 +814,7 @@ class NativePicamera2Camera:
         request: Picamera2Request,
         output: str,
         snapshot: CameraFrameSnapshot,
-    ) -> None:
+    ) -> str:
         with self._lock:
             geometry = self._main_geometry
             rectifier = self._rectifier
@@ -818,6 +839,7 @@ class NativePicamera2Camera:
                 lens_position=snapshot.lens_position,
             )
         Path(output).write_bytes(result.jpeg_bytes)
+        return result.calibration_id
 
     def _snapshot_from_request(
         self,

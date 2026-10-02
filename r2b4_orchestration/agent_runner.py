@@ -9,7 +9,7 @@ from collections.abc import Mapping
 
 from r2b4_voice.action_executor import VoiceActionExecutor
 from r2b4_voice.conversation_interface import build_voice_interface
-from r2b4_voice.llm_provider import default_model_for, resolve_llm_provider
+from r2b4_voice.llm_provider import api_key_env_for, default_model_for, resolve_llm_provider
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +58,7 @@ def run_agent_prompt(prompt: str, *, project_root: str | Path, wait_s: float = 9
     env = _load_env(root)
     provider = resolve_llm_provider(_setting(env, "R2B4_LLM_PROVIDER"))
     model = _setting(env, "R2B4_LLM_MODEL") or default_model_for(provider)
-    key_name = "GEMINI_API_KEY" if provider == "gemini" else "GROQ_API_KEY"
+    key_name = api_key_env_for(provider)
     key = _setting(env, key_name)
     if not key:
         raise RuntimeError(f"{key_name} is not configured")
