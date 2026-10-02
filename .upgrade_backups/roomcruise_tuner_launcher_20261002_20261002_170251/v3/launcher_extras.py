@@ -151,15 +151,6 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
             if parent.is_dir():
                 names.update(path.stem for path in parent.glob("*.py"))
         return hint, _filter(sorted(names), current)
-    if canonical == "tune":
-        if not before:
-            return hint, _filter(["roomcruise"], current)
-        if before[0] == "roomcruise":
-            from tools.tuners.r2b4_roomcruise_tuner import parser as tuner_parser
-            return "r tune roomcruise [OPCIÓK]", _parser_candidates(
-                tuner_parser(), before[1:], current
-            )
-        return hint, []
     if canonical == "diag":
         # Registry-driven completion is evidence-only and does not open a bundle.
         from tools.diag.registry import build_default_registry

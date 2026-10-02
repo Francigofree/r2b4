@@ -1,11 +1,13 @@
 """Evidence lineage/index accounting measurements."""
 from __future__ import annotations
 
+from ..basis import coverage_fields, index_query, manifest_fields, source_lineage
 from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation, ObservationKind
 
 CONTRACT = AnalyzerContract(
     analyzer_id="lineage",
     description="Message/view/field lineage accounting from the verified EVI index and coverage artifacts.",
+    contract_version=2,
 )
 
 
@@ -34,11 +36,11 @@ def run(context, registry) -> AnalyzerOutput:
             kind=ObservationKind.RELATIONSHIP,
             code="LINEAGE_VIEW_ACCOUNTING",
             message="Normalized-view totals from the evidence index and coverage artifact are compared.",
-            values={
-                "index": view_total,
-                "coverage": facts.normalized_views,
-                "equal": view_total == facts.normalized_views,
-            },
+            values={"index": view_total, "coverage": facts.normalized_views, "equal": view_total == facts.normalized_views},
+            evidence_basis=(
+                index_query(*tuple(facts.view_counts), operation="sum_view_counts"),
+                coverage_fields("/normalized_views"),
+            ),
         ),
         DiagnosticObservation(
             kind=ObservationKind.FACT,
@@ -48,6 +50,19 @@ def run(context, registry) -> AnalyzerOutput:
                 "source_sha256_from_manifest": facts.source_sha256,
                 "source_bytes_reopened_by_diag": False,
             },
+            evidence_basis=(
+                manifest_fields("/source/sha256", "/source/snapshot_size"),
+                source_lineage(source_bytes_reopened_by_diag=False),
+            ),
         ),
     )
-    return AnalyzerOutput(metrics=metrics, observations=observations)
+    return AnalyzerOutput(
+        metrics=metrics,
+        summary={
+            "view_count_match": view_total == facts.normalized_views,
+            "message_count": facts.message_count,
+            "field_path_count": facts.field_path_count,
+            "sensor_view_count": len(sensor_views),
+        },
+        observations=observations,
+    )

@@ -70,29 +70,48 @@ class AnalyzerRegistry:
     def run(self, analyzer_id: str, context: DiagContext) -> DiagnosticResult:
         spec = self.get(analyzer_id)
         admission = evaluate_admission(spec.contract, context)
+        base_coverage = dict(admission.coverage)
         if not admission.applicable:
             return DiagnosticResult(
                 analyzer_id=analyzer_id,
                 evidence=context.facts,
+                producer=context.producer,
+                contract=spec.contract,
                 admission=admission,
+                coverage=base_coverage,
+                summary={},
                 metrics={},
                 observations=(),
+                episodes=(),
             )
         output = spec.runner(context, self)
+        coverage = dict(base_coverage)
+        if output.coverage:
+            coverage["domain"] = dict(output.coverage)
         _assert_descriptive_output(dict(output.metrics), f"{analyzer_id}.metrics")
+        _assert_descriptive_output(dict(output.summary), f"{analyzer_id}.summary")
+        _assert_descriptive_output(coverage, f"{analyzer_id}.coverage")
         for observation in output.observations:
             _assert_descriptive_output(observation.as_dict(), f"{analyzer_id}.observation")
+        for episode in output.episodes:
+            _assert_descriptive_output(episode.as_dict(), f"{analyzer_id}.episode")
         return DiagnosticResult(
             analyzer_id=analyzer_id,
             evidence=context.facts,
+            producer=context.producer,
+            contract=spec.contract,
             admission=admission,
+            coverage=coverage,
+            summary=output.summary,
             metrics=output.metrics,
             observations=output.observations,
+            episodes=output.episodes,
         )
 
     def run_all(self, context: DiagContext) -> FullDiagnosticReport:
         return FullDiagnosticReport(
             evidence=context.facts,
+            producer=context.producer,
             results=tuple(self.run(analyzer_id, context) for analyzer_id in self._order),
         )
 
@@ -112,7 +131,6 @@ def build_default_registry() -> AnalyzerRegistry:
     )
 
     registry = AnalyzerRegistry()
-    # Explicit order is the stable full-diagnostic order; no filesystem discovery.
     for module in (
         evidence_health,
         execution_chain,

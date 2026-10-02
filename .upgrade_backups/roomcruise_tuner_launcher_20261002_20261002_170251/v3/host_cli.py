@@ -44,7 +44,6 @@ COMMAND_HELP = {
     "git": ("[ARGS...]", "Git a projekt könyvtárában; az argumentumok változatlanul továbbmennek."),
     "pytest": ("[ARGS...]", "Nyers pytest; az argumentumok változatlanul továbbmennek."),
     "test": ("[MODE]", "Célzott tesztek; alapértelmezés: core. Módok: r test list."),
-    "tune": ("roomcruise [ARGS...]", "Offline, non-actuating RoomCruise hangolás; artifact: runtime/tunes/."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),
     "diag": ("[full|ANALYZER] [EVIDENCE|latest] [--json] [--no-save]", "Verified EVI evidence-ből diagnosztikai adatokat szolgáltat; alap: full/latest, artifact: runtime/diag/."),
@@ -123,19 +122,6 @@ def version(root: Path) -> int:
 
 def profile_test(root: Path, argv: list[str]) -> int:
     return test_runner.main(argv)
-
-
-def tune(root: Path, argv: list[str]) -> int:
-    """Run offline tuners without granting robot/runtime authority."""
-    if not argv:
-        print("Használat: r tune roomcruise [OPCIÓK]\nRészletes opciók: r tune roomcruise --help")
-        return 0
-    if argv[0] != "roomcruise":
-        raise HostCliError("usage: r tune roomcruise [ARGS...]")
-    return _run([
-        sys.executable, "-m", "tools.tuners.r2b4_roomcruise_tuner",
-        "--project-root", str(root), *argv[1:],
-    ], root=root)
 
 
 def list_tools(root: Path) -> int:
@@ -310,7 +296,6 @@ def execute(command: str, argv: list[str], root: Path) -> int:
     if command == "git": return _run(["git", "-C", str(root), *argv], root=root)
     if command == "pytest": return _run([sys.executable, "-m", "pytest", *argv], root=root)
     if command == "test": return profile_test(root, argv)
-    if command == "tune": return tune(root, argv)
     if command == "tools": return list_tools(root)
     if command == "tool": return run_tool(root, argv)
     if command == "diag":

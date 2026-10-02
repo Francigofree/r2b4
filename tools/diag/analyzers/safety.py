@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from collections import Counter
 
+from ..basis import view_scan
 from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation, ObservationKind
+from ..episodes import contiguous_field_episodes
 from ..profiling import evidence_ref, profile_views
 
 VIEWS = ("layers/L8", "layers/L9", "layers/L10", "layers/L11", "layers/L12")
@@ -17,6 +19,7 @@ CONTRACT = AnalyzerContract(
     description="L8-L12 safety-path requests, constraints, actuator commands and final safety state.",
     required_views=VIEWS,
     required_topics=("/r2b4/tick",),
+    contract_version=2,
 )
 
 
@@ -91,6 +94,13 @@ def run(context, registry) -> AnalyzerOutput:
             else:
                 output["zero_output_rows"] += 1
 
+    stop_episodes = contiguous_field_episodes(
+        context.bundle,
+        "layers/L12",
+        "/safety_decision",
+        episode_type="SAFETY_DECISION",
+        include=lambda value: value == "STOP",
+    )
     relation_payload = dict(sorted(relation.items()))
     observations = (
         DiagnosticObservation(
@@ -99,6 +109,9 @@ def run(context, registry) -> AnalyzerOutput:
             message="Requested and allowed L9 velocity magnitudes are compared tick by tick.",
             values=relation_payload,
             evidence_refs=tuple(relation_refs),
+            evidence_basis=(view_scan("layers/L9", fields=(
+                "/requested_v_mps", "/allowed_v_mps", "/requested_omega_rad_s", "/allowed_omega_rad_s", "/active_constraints",
+            )),),
         ),
         DiagnosticObservation(
             kind=ObservationKind.DERIVED_MEASUREMENT,
@@ -109,7 +122,11 @@ def run(context, registry) -> AnalyzerOutput:
                 "reasons": dict(reasons),
                 "latches": dict(latches),
                 "outputs": dict(output),
+                "stop_episode_count": len(stop_episodes),
             },
+            evidence_basis=(view_scan("layers/L11", "layers/L12", fields=(
+                "/saturated", "/safety_decision", "/reason", "/latch_state", "/enabled", "/left_output", "/right_output",
+            )),),
         ),
     )
     return AnalyzerOutput(
@@ -122,5 +139,12 @@ def run(context, registry) -> AnalyzerOutput:
             "l12_latch_states": dict(latches),
             "l12_outputs": dict(output),
         },
+        summary={
+            "l12_decisions": dict(decisions),
+            "l11_saturation": dict(l11),
+            "rows_with_active_constraints": relation.get("rows_with_active_constraints", 0),
+            "stop_episode_count": len(stop_episodes),
+        },
         observations=observations,
+        episodes=stop_episodes,
     )

@@ -1,7 +1,7 @@
 """Streaming, domain-neutral descriptive profiling of EVI JSON views."""
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 import json
 import math
@@ -55,11 +55,11 @@ def _stable_value(value: object) -> str:
     return text if len(text) <= 180 else text[:177] + "..."
 
 
-
 def _example_value(value: object) -> object:
     if isinstance(value, str) and len(value) > 240:
         return value[:237] + "..."
     return value
+
 
 def _type_name(value: object) -> str:
     if value is None:
@@ -82,6 +82,7 @@ def _type_name(value: object) -> str:
 @dataclass(slots=True)
 class _FieldStats:
     count: int = 0
+    rows_present: int = 0
     null_count: int = 0
     true_count: int = 0
     false_count: int = 0
@@ -93,19 +94,15 @@ class _FieldStats:
     types: Counter[str] = field(default_factory=Counter)
     values: Counter[str] = field(default_factory=Counter)
     change_count: int = 0
-    _previous: str | None = None
-    _has_previous: bool = False
+    _previous_row_signature: str | None = None
+    _has_previous_row: bool = False
     examples: list[dict[str, object]] = field(default_factory=list)
 
-    def add(self, value: object, row: EvidenceViewRow, path: str, *, max_examples: int) -> None:
+    def _add_value(self, value: object) -> None:
         self.count += 1
         kind = _type_name(value)
         self.types[kind] += 1
         stable = _stable_value(value)
-        if self._has_previous and stable != self._previous:
-            self.change_count += 1
-        self._previous = stable
-        self._has_previous = True
         if value is None:
             self.null_count += 1
             self.values[stable] += 1
@@ -116,8 +113,6 @@ class _FieldStats:
             else:
                 self.false_count += 1
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
-            # Numeric streams can have one distinct value per tick; keep bounded
-            # statistics instead of an unbounded exact-value Counter.
             number = float(value)
             if math.isfinite(number):
                 self.numeric_count += 1
@@ -128,19 +123,46 @@ class _FieldStats:
                     self.nonzero_count += 1
         else:
             self.values[stable] += 1
+
+    def add_row(
+        self,
+        values: list[object],
+        row: EvidenceViewRow,
+        path: str,
+        *,
+        max_examples: int,
+    ) -> None:
+        """Add one evidence row worth of values for a flattened path.
+
+        A path ending in ``[]`` can occur multiple times within one JSON row.
+        Temporal ``change_count`` compares a stable row-level collection signature,
+        not adjacent array elements. This prevents array membership from being
+        misreported as a time transition.
+        """
+        self.rows_present += 1
+        for value in values:
+            self._add_value(value)
+        row_value: object = values[0] if len(values) == 1 else values
+        signature = _stable_value(row_value)
+        if self._has_previous_row and signature != self._previous_row_signature:
+            self.change_count += 1
+        self._previous_row_signature = signature
+        self._has_previous_row = True
         if len(self.examples) < max_examples:
             self.examples.append({
-                "value": _example_value(value),
+                "value": _example_value(row_value),
                 "evidence_ref": evidence_ref(row, path).as_dict(),
             })
 
     def as_dict(self, *, top_values: int) -> dict[str, object]:
         payload: dict[str, object] = {
             "count": self.count,
+            "rows_present": self.rows_present,
             "null_count": self.null_count,
             "types": dict(sorted(self.types.items())),
             "categorical_distinct_values": len(self.values),
             "change_count": self.change_count,
+            "change_semantics": "ROW_TO_ROW_VALUE_COLLECTION",
             "top_values": [
                 {"value": value, "count": count}
                 for value, count in self.values.most_common(top_values)
@@ -160,10 +182,12 @@ class _FieldStats:
         return payload
 
 
-def _selected(path: str, tokens: tuple[str, ...]) -> bool:
+def _selected(path: str, tokens: tuple[str, ...], excluded_prefixes: tuple[str, ...]) -> bool:
+    lower = path.lower()
+    if any(lower.startswith(prefix.lower()) for prefix in excluded_prefixes):
+        return False
     if not tokens:
         return True
-    lower = path.lower()
     return any(token.lower() in lower for token in tokens)
 
 
@@ -172,10 +196,12 @@ def profile_view(
     view: str,
     *,
     tokens: Iterable[str] = (),
+    exclude_path_prefixes: Iterable[str] = (),
     max_examples: int = 2,
     top_values: int = 12,
 ) -> dict[str, object]:
     selected_tokens = tuple(tokens)
+    excluded_prefixes = tuple(exclude_path_prefixes)
     fields: dict[str, _FieldStats] = {}
     row_count = 0
     first_ns: int | None = None
@@ -186,11 +212,13 @@ def profile_view(
         message_ids.add(row.message_id)
         first_ns = row.log_time_ns if first_ns is None else min(first_ns, row.log_time_ns)
         last_ns = row.log_time_ns if last_ns is None else max(last_ns, row.log_time_ns)
+        row_fields: dict[str, list[object]] = defaultdict(list)
         for path, value in flatten(row.payload):
-            if not _selected(path, selected_tokens):
-                continue
+            if _selected(path, selected_tokens, excluded_prefixes):
+                row_fields[path].append(value)
+        for path, values in row_fields.items():
             stats = fields.setdefault(path, _FieldStats())
-            stats.add(value, row, path, max_examples=max_examples)
+            stats.add_row(values, row, path, max_examples=max_examples)
     return {
         "view": view,
         "row_count": row_count,
@@ -207,6 +235,7 @@ def profile_views(
     views: Iterable[str],
     *,
     tokens: Iterable[str] = (),
+    exclude_path_prefixes: Iterable[str] = (),
     max_examples: int = 2,
     top_values: int = 12,
 ) -> dict[str, object]:
@@ -215,6 +244,7 @@ def profile_views(
             bundle,
             view,
             tokens=tokens,
+            exclude_path_prefixes=exclude_path_prefixes,
             max_examples=max_examples,
             top_values=top_values,
         )

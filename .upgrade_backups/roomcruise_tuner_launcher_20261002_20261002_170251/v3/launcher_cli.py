@@ -170,7 +170,6 @@ def print_help() -> None:
         "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
         "  r voice restart|check      Voice service újraindítás / diagnosztika\n"
         "  r test [MODE]              Tesztek; alap: core; módok: r test list\n"
-        "  r tune roomcruise [OPCIÓK] Offline RoomCruise hangolás; runtime/tunes/\n"
         "  r pytest [ARGS...]         Nyers pytest\n"
         "  r git / r gitre            Git-segédek\n"
         "  r tools / r tool NAME      Python segédprogramok\n"
@@ -290,7 +289,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         root = project_root()
         from v3.runtime_performance import apply_host_affinity
-        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tune", "tool", "cpu", "cpu2", "diag", "evi"} else "operator"
+        role = "diagnostics" if args and args[0] in {"pytest", "tests", "test", "tool", "cpu", "cpu2", "diag", "evi"} else "operator"
         apply_host_affinity(root, role)
 
         # Private, read-only shell completion transport. It is intentionally not

@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from pathlib import Path
 
 from tools.mcap_evidence.reader import EvidenceBundle, EvidenceBundleError
 
-from .contracts import EvidenceFacts
+from .contracts import DiagProducerFacts, EvidenceFacts
+from .provenance import collect_producer_facts
 
 
 class DiagEvidenceError(RuntimeError):
@@ -51,6 +51,7 @@ class DiagContext:
     project_root: Path
     bundle: EvidenceBundle
     facts: EvidenceFacts
+    producer: DiagProducerFacts
 
 
 def _int(mapping: dict[str, object], key: str, default: int = 0) -> int:
@@ -92,12 +93,18 @@ def _facts(bundle: EvidenceBundle) -> EvidenceFacts:
 
 
 def open_context(root: Path, evidence_value: str | Path | None, *, verification: str = "full") -> DiagContext:
+    root = Path(root).resolve()
     path = resolve_evidence(root, evidence_value)
     try:
         bundle = EvidenceBundle.open(path, verification=verification)
     except EvidenceBundleError as exc:
         raise DiagEvidenceError(str(exc)) from exc
-    return DiagContext(project_root=Path(root).resolve(), bundle=bundle, facts=_facts(bundle))
+    return DiagContext(
+        project_root=root,
+        bundle=bundle,
+        facts=_facts(bundle),
+        producer=collect_producer_facts(root),
+    )
 
 
 __all__ = ["DiagContext", "DiagEvidenceError", "open_context", "resolve_evidence"]

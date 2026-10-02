@@ -94,7 +94,7 @@ accountingot.
 Egy analyzer eredménye:
 
 ```text
-R2B4_DIAG_RESULT_V2
+R2B4_DIAG_RESULT_V3
   purpose = DIAGNOSTIC_DATA_ONLY
   source = EVI_EVIDENCE_ONLY
   evidence
@@ -213,4 +213,19 @@ r diag --json | jq .
 ```
 
 A `runtime/diag/` generált lokális runtime-adat és gitből ignorált.
+
+## DIAG P0-P1 quality contract
+
+A `R2B4_DIAG_FULL_REPORT_V2` report producer-provenance-t, report-szintű tömör
+summary-t, analyzer coverage-state-et, explicit observation `evidence_basis` lineage-et
+és időben határolt `episodes` adatokat tartalmaz. A nested analyzer result schema
+`R2B4_DIAG_RESULT_V3`; a full report nem ismétli analyzerenként az azonos evidence és
+producer metaadatot.
+
+A profiler `change_count` szemantikája `ROW_TO_ROW_VALUE_COLLECTION`: egy JSON tömb
+különböző elemei egyazon evidence row-ban nem számítanak időbeli transitionnek. A
+recovery state számlálás state-bearing mezőkre korlátozott, configuration/metadata
+mezőket és type/reference metaadatot nem értelmez recovery eseményként.
+
+Részletes design: `docs/DIAG_P0_P1_DESIGN.md`.
 

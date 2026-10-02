@@ -1,16 +1,13 @@
 """Evidence compiler/bundle health data."""
 from __future__ import annotations
 
-from ..contracts import (
-    AnalyzerContract,
-    AnalyzerOutput,
-    DiagnosticObservation,
-    ObservationKind,
-)
+from ..basis import coverage_fields, manifest_fields, verification_gate
+from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation, ObservationKind
 
 CONTRACT = AnalyzerContract(
     analyzer_id="evidence_health",
     description="Verified EVI bundle integrity, compiler status, coverage and inventory.",
+    contract_version=2,
 )
 
 
@@ -44,6 +41,7 @@ def run(context, registry) -> AnalyzerOutput:
             code="EVI_BUNDLE_VERIFIED",
             message="The selected EVI bundle passed the configured evidence verification gate.",
             values={"verification_status": facts.verification_status},
+            evidence_basis=(verification_gate(status=facts.verification_status),),
         ),
         DiagnosticObservation(
             kind=ObservationKind.FACT,
@@ -53,6 +51,7 @@ def run(context, registry) -> AnalyzerOutput:
                 "compiler_status": facts.compiler_status,
                 "source_integrity": facts.source_integrity,
             },
+            evidence_basis=(manifest_fields("/compiler_status", "/source_integrity"),),
         ),
     ]
     if facts.quarantined_messages:
@@ -62,6 +61,18 @@ def run(context, registry) -> AnalyzerOutput:
                 code="EVI_QUARANTINED_MESSAGES_PRESENT",
                 message="The evidence bundle contains source messages that were preserved but not JSON-decoded.",
                 values={"quarantined_messages": facts.quarantined_messages},
+                evidence_basis=(coverage_fields("/messages/quarantined"),),
             )
         )
-    return AnalyzerOutput(metrics=metrics, observations=tuple(observations))
+    return AnalyzerOutput(
+        metrics=metrics,
+        summary={
+            "verification_status": facts.verification_status,
+            "compiler_status": facts.compiler_status,
+            "source_integrity": facts.source_integrity,
+            "message_count": facts.message_count,
+            "quarantined_messages": facts.quarantined_messages,
+            "normalized_views": facts.normalized_views,
+        },
+        observations=tuple(observations),
+    )

@@ -111,6 +111,10 @@ def _human_result(result: DiagnosticResult, *, header: bool = True) -> None:
     if header:
         _human_header(result.evidence)
     print(f"\n[{result.analyzer_id}] admission={result.admission.state.value}")
+    if result.coverage:
+        print("  coverage=" + json.dumps(result.coverage, ensure_ascii=False, sort_keys=True, allow_nan=False))
+    if result.episodes:
+        print(f"  episodes={len(result.episodes)}")
     for reason in result.admission.reasons:
         print(f"  data-gap: {reason}")
     for observation in result.observations:
@@ -167,9 +171,10 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | str | None =
             context = open_context(root, evidence_value)
             decision = registry.admission(analyzer_id, context)
             payload = {
-                "schema": "R2B4_DIAG_ADMISSION_V2",
+                "schema": "R2B4_DIAG_ADMISSION_V3",
                 "purpose": "DIAGNOSTIC_DATA_ONLY",
                 "source": "EVI_EVIDENCE_ONLY",
+                "producer": context.producer.as_dict(),
                 "evidence": context.facts.as_dict(),
                 "contract": registry.get(analyzer_id).contract.as_dict(),
                 "admission": decision.as_dict(),
@@ -187,6 +192,8 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | str | None =
             else:
                 _human_header(context.facts)
                 print(f"\n[{analyzer_id}] admission={decision.state.value}")
+                if decision.coverage:
+                    print("  coverage=" + json.dumps(decision.coverage, ensure_ascii=False, sort_keys=True, allow_nan=False))
                 for reason in decision.reasons:
                     print(f"  data-gap: {reason}")
             return 0 if decision.state is AdmissionState.APPLICABLE else 2

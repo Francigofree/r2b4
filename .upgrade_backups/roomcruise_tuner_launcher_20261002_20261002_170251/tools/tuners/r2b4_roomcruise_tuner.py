@@ -20,20 +20,13 @@ import os
 import statistics
 import subprocess
 import sys
-from datetime import datetime, timezone
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-# Direct-file execution (``python tools/tuners/...py``) otherwise exposes only
-# tools/tuners on sys.path. Bootstrap the repository root before importing v3.
-_PROJECT_ROOT_TEXT = str(PROJECT_ROOT)
-if _PROJECT_ROOT_TEXT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT_TEXT)
-
 RESULT_SCHEMA = "R2B4_ROOMCRUISE_TUNER_RESULT_V1"
-TUNER_VERSION = 2
+TUNER_VERSION = 1
 
 # Source-first baseline of the current operator -> control_cli -> EXPLORE path.
 # The values are intentionally represented as candidate inputs rather than
@@ -734,30 +727,7 @@ def _jsonable_result(result: CandidateResult) -> dict[str, object]:
     }
 
 
-def _resolve_artifact_paths(
-    root: Path,
-    output: Path | None,
-    emit_config_path: Path | None,
-    *,
-    stamp: str | None = None,
-) -> tuple[Path, Path | None]:
-    """Resolve tuner artifacts under runtime/tunes unless explicitly overridden."""
-    artifact_dir = root / "runtime" / "tunes"
-    if stamp is None:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
-    result = artifact_dir / f"roomcruise_tune_{stamp}.json" if output is None else output
-    if not result.is_absolute():
-        result = root / result
-    if emit_config_path is None:
-        config = None
-    elif emit_config_path == Path("__AUTO__"):
-        config = artifact_dir / f"roomcruise_tune_{stamp}.vezerles.json"
-    else:
-        config = emit_config_path if emit_config_path.is_absolute() else root / emit_config_path
-    return result.resolve(strict=False), None if config is None else config.resolve(strict=False)
-
-
-def parser() -> argparse.ArgumentParser:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Non-actuating source-first RoomCruise tuner over the canonical L5-L9 stack"
     )
@@ -766,17 +736,8 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--passes", type=int)
     parser.add_argument("--ticks", type=int)
     parser.add_argument("--scenarios", help="comma-separated scenario names")
-    parser.add_argument(
-        "--output", type=Path,
-        help="result JSON path; default: runtime/tunes/roomcruise_tune_<timestamp>.json",
-    )
-    parser.add_argument(
-        "--emit-config", type=Path, nargs="?", const=Path("__AUTO__"),
-        help=(
-            "write a candidate vezerles JSON; without PATH it is saved beside the "
-            "result under runtime/tunes/"
-        ),
-    )
+    parser.add_argument("--output", type=Path, default=Path("/tmp/r2b4_roomcruise_tuner.json"))
+    parser.add_argument("--emit-config", type=Path)
     parser.add_argument("--top", type=int, default=8)
     parser.add_argument("--baseline-command-max-v", type=float, default=DEFAULT_COMMAND_MAX_V_MPS)
     parser.add_argument("--baseline-command-max-omega", type=float, default=DEFAULT_COMMAND_MAX_OMEGA_RAD_S)
@@ -784,12 +745,8 @@ def parser() -> argparse.ArgumentParser:
     return parser
 
 
-# Backwards-compatible private alias for the first tuner package and focused tests.
-_parser = parser
-
-
 def main(argv: list[str] | None = None) -> int:
-    args = parser().parse_args(argv)
+    args = _parser().parse_args(argv)
     root = args.project_root.resolve()
     if args.list_scenarios:
         for scenario in scenarios():
@@ -820,8 +777,6 @@ def main(argv: list[str] | None = None) -> int:
     passes = args.passes if args.passes is not None else (1 if args.profile == "quick" else 2)
     if ticks <= 0 or passes <= 0 or args.top <= 0:
         raise SystemExit("ticks, passes and top must be positive")
-
-    output_path, emit_config_path = _resolve_artifact_paths(root, args.output, args.emit_config)
 
     baseline_result = evaluate_candidate(control, baseline, selected, ticks=ticks)
     winner, ranked, history = tune(
@@ -861,18 +816,17 @@ def main(argv: list[str] | None = None) -> int:
         ],
     }
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    if emit_config_path is not None:
-        emit_config(root, patch, emit_config_path)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if args.emit_config is not None:
+        emit_config(root, patch, args.emit_config)
     print(json.dumps({
         "schema": RESULT_SCHEMA,
         "status": "PASS" if not winner.hard_fail else "NO_SAFE_WINNER",
         "baseline_score": baseline_result.score,
         "winner_score": winner.score,
         "delta_score": winner.score - baseline_result.score,
-        "output": str(output_path),
-        "emitted_config": None if emit_config_path is None else str(emit_config_path),
+        "output": str(args.output),
         "config_patch": patch,
         "command_ingress_patch": command_patch,
     }, sort_keys=True))

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from ..basis import view_scan
 from ..contracts import AnalyzerContract, AnalyzerOutput, DiagnosticObservation, ObservationKind
 from ..profiling import profile_views
 
@@ -17,6 +18,7 @@ CONTRACT = AnalyzerContract(
     description="L8-L12 drive command chain plus wheel/encoder/motor sensor evidence.",
     required_views=LAYERS,
     required_topics=("/r2b4/tick",),
+    contract_version=2,
 )
 
 
@@ -25,7 +27,7 @@ def _number(value):
 
 
 def _pair_activity(context, view: str, left_key: str, right_key: str, epsilon: float = 1e-9):
-    counts = Counter()
+    counts = Counter({"pairs": 0, "missing_pair": 0, "both_zero": 0, "any_nonzero": 0, "opposite_sign": 0, "same_nonzero_sign": 0})
     for row in context.bundle.iter_view(view):
         payload = row.payload if isinstance(row.payload, dict) else {}
         left, right = _number(payload.get(left_key)), _number(payload.get(right_key))
@@ -57,15 +59,25 @@ def run(context, registry) -> AnalyzerOutput:
         "l11_normalized": _pair_activity(context, "layers/L11", "left_normalized", "right_normalized"),
         "l12_outputs": _pair_activity(context, "layers/L12", "left_output", "right_output"),
     }
+    coverage = {
+        "command_chain_layers": "COMPLETE",
+        "drive_sensor_view_count": len(sensor_views),
+        "drive_sensor_materialization": "PRESENT" if sensor_views else "ABSENT",
+    }
     observations = (
         DiagnosticObservation(
             kind=ObservationKind.DERIVED_MEASUREMENT,
             code="DRIVE_COMMAND_ACTIVITY_COUNTS",
             message="Wheel-target, normalized-actuator and final-output zero/nonzero/sign relationships are counted independently per layer.",
             values=activity,
+            evidence_basis=(view_scan(*LAYERS, *sensor_views, fields=(
+                "/left_mps", "/right_mps", "/left_normalized", "/right_normalized", "/left_output", "/right_output",
+            )),),
         ),
     )
     return AnalyzerOutput(
         metrics={"sensor_views": list(sensor_views), "profiles": profiles, "pair_activity": activity},
+        coverage=coverage,
+        summary={"pair_activity": activity, "drive_sensor_view_count": len(sensor_views)},
         observations=observations,
     )

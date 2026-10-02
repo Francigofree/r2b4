@@ -1,6 +1,6 @@
 # RoomCruise tuner
 
-`tools/tuners/r2b4_roomcruise_tuner.py` is an offline, non-actuating tuner for the current V3 RoomCruise/EXPLORE navigation path. The canonical human/agent entry point is `r tune roomcruise`.
+`tools/tuners/r2b4_roomcruise_tuner.py` is an offline, non-actuating tuner for the current V3 RoomCruise/EXPLORE navigation path.
 
 ## Authority boundary
 
@@ -26,57 +26,33 @@ The default search is deterministic coordinate descent. It tunes one bounded axi
 
 Each candidate runs the same deterministic living-room-like scenarios. Metrics include collision, moving/curved/straight/pivot/reverse/stop ratios, heading diversity, coverage, physical clearance, no-progress events, and steering reversals per metre.
 
-## Launcher usage
+## Usage
 
 Quick pass:
-
-```bash
-r tune roomcruise
-```
-
-Full pass:
-
-```bash
-r tune roomcruise --profile full
-```
-
-By default every result is written below:
-
-```text
-runtime/tunes/roomcruise_tune_<timestamp>.json
-```
-
-Write a separate candidate `vezerles.json` beside the report:
-
-```bash
-r tune roomcruise --profile full --emit-config
-```
-
-This creates:
-
-```text
-runtime/tunes/roomcruise_tune_<timestamp>.vezerles.json
-```
-
-An explicit path can still be supplied:
-
-```bash
-r tune roomcruise --output runtime/tunes/manual.json \
-  --emit-config runtime/tunes/manual.vezerles.json
-```
-
-The direct script entry point remains supported as a developer fallback:
 
 ```bash
 python3 tools/tuners/r2b4_roomcruise_tuner.py --profile quick
 ```
 
-## Validation
+More thorough pass:
+
+```bash
+python3 tools/tuners/r2b4_roomcruise_tuner.py --profile full --output /tmp/roomcruise_full.json
+```
+
+Write a **separate candidate config** without touching production config:
+
+```bash
+python3 tools/tuners/r2b4_roomcruise_tuner.py \
+  --profile full \
+  --emit-config /tmp/vezerles.roomcruise-tuned.json
+```
+
+Focused validation:
 
 ```bash
 python3 -m pytest -q tests/feature/test_v3_roomcruise_tuner.py
 ./r test roomcruise
-r tune roomcruise --list-scenarios
 ```
 
 ## Acceptance

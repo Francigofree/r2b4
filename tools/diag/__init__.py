@@ -5,8 +5,13 @@ has no recommendation/suggestion output channel.
 """
 from .contracts import (
     AdmissionState,
+    CoverageState,
+    DiagProducerFacts,
+    DiagnosticEpisode,
     DiagnosticObservation,
     DiagnosticResult,
+    EvidenceBasis,
+    EvidenceBasisKind,
     FullDiagnosticReport,
     ObservationKind,
 )
@@ -15,8 +20,13 @@ from .registry import AnalyzerRegistry, build_default_registry
 __all__ = [
     "AdmissionState",
     "AnalyzerRegistry",
+    "CoverageState",
+    "DiagProducerFacts",
+    "DiagnosticEpisode",
     "DiagnosticObservation",
     "DiagnosticResult",
+    "EvidenceBasis",
+    "EvidenceBasisKind",
     "FullDiagnosticReport",
     "ObservationKind",
     "build_default_registry",

@@ -1,13 +1,8 @@
 """Focused acceptance for the non-actuating RoomCruise tuner."""
 from __future__ import annotations
 
-import json
 import math
-import subprocess
-import sys
-from pathlib import Path
 
-from v3 import host_cli
 from tools.tuners import r2b4_roomcruise_tuner as tuner
 
 
@@ -70,44 +65,3 @@ def test_roomcruise_tuner_smoke_uses_resolved_headless_l5_l9():
     assert 0.0 <= result.moving_ratio <= 1.0
     assert 0.0 <= result.curved_ratio <= 1.0
     assert result.minimum_clearance_m > 0.0
-
-
-def test_roomcruise_tuner_default_artifacts_live_under_runtime_tunes():
-    output, config = tuner._resolve_artifact_paths(
-        tuner.PROJECT_ROOT, None, Path("__AUTO__"), stamp="TESTSTAMP"
-    )
-    expected = tuner.PROJECT_ROOT / "runtime" / "tunes"
-    assert output == expected / "roomcruise_tune_TESTSTAMP.json"
-    assert config == expected / "roomcruise_tune_TESTSTAMP.vezerles.json"
-
-
-def test_roomcruise_tuner_is_exposed_as_launcher_host_command():
-    assert "tune" in host_cli.COMMANDS
-    usage, description = host_cli.COMMAND_HELP["tune"]
-    assert "roomcruise" in usage
-    assert "RoomCruise" in description
-
-
-def test_roomcruise_tuner_direct_file_execution_can_import_v3(tmp_path):
-    output = tmp_path / "direct.json"
-    completed = subprocess.run(
-        [
-            sys.executable,
-            str(tuner.PROJECT_ROOT / "tools" / "tuners" / "r2b4_roomcruise_tuner.py"),
-            "--project-root", str(tuner.PROJECT_ROOT),
-            "--profile", "quick",
-            "--scenarios", "open_room",
-            "--ticks", "8",
-            "--passes", "1",
-            "--top", "1",
-            "--output", str(output),
-        ],
-        cwd=tuner.PROJECT_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert "ModuleNotFoundError" not in completed.stderr
-    assert output.is_file(), completed.stderr
-    payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["schema"] == tuner.RESULT_SCHEMA
