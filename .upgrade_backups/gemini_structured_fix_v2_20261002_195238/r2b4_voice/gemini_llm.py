@@ -1,16 +1,10 @@
-"""Gemini structured-output adapter for R2B4 conversation/AgentCore.
-
-Plain one-turn Gemini text remains on the Interactions API via ``GeminiChatConfig.endpoint``.
-Structured conversation/AgentCore turns use ``generateContent`` because Gemini 2.5 structured
-output is enforced there with ``responseMimeType`` + ``responseJsonSchema``.
-"""
+"""Gemini Interactions API structured-output adapter for R2B4 conversation/AgentCore."""
 
 from __future__ import annotations
 
 import json
 import os
 import urllib.error
-import urllib.parse
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -32,11 +26,7 @@ class GeminiRequestError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class GeminiChatConfig:
-    # Kept for PlainGeminiClient, which intentionally still uses Interactions.
     endpoint: str = "https://generativelanguage.googleapis.com/v1beta/interactions"
-    structured_endpoint_template: str = (
-        "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    )
     model: str = "gemini-2.5-flash"
     timeout_s: float = 20.0
     thinking_level: str = "low"
@@ -44,10 +34,6 @@ class GeminiChatConfig:
     def __post_init__(self) -> None:
         if not self.endpoint.startswith("https://"):
             raise ValueError("Gemini endpoint must use https")
-        if not self.structured_endpoint_template.startswith("https://"):
-            raise ValueError("Gemini structured endpoint must use https")
-        if "{model}" not in self.structured_endpoint_template:
-            raise ValueError("Gemini structured endpoint must contain {model}")
         if not self.model.strip():
             raise ValueError("model must be non-empty")
         if self.timeout_s <= 0:
@@ -108,7 +94,7 @@ class GeminiStructuredChatClient:
                 action_catalog=action_catalog,
             )
         except (ValueError, DecisionParseError) as exc:
-            raise GeminiRequestError(f"Gemini Agent step failed R2B4 schema validation: {exc}") from exc
+            raise GeminiRequestError(str(exc)) from exc
 
     def _complete_decision(
         self,
@@ -121,7 +107,7 @@ class GeminiStructuredChatClient:
         try:
             return parse_llm_decision(raw, model=self._config.model, action_catalog=action_catalog)
         except DecisionParseError as exc:
-            raise GeminiRequestError(f"Gemini decision failed R2B4 schema validation: {exc}") from exc
+            raise GeminiRequestError(str(exc)) from exc
 
     def _structured(
         self,
@@ -131,31 +117,28 @@ class GeminiStructuredChatClient:
         if not messages:
             raise ValueError("messages must not be empty")
         system_instruction, interaction_input = self._convert_messages(messages)
-        generation_config: dict[str, object] = {
-            "responseMimeType": "application/json",
-            # Use the JSON-Schema surface rather than the older OpenAPI-shaped
-            # responseSchema. R2B4 schemas use nullable type arrays.
-            "responseJsonSchema": dict(schema),
-            "thinkingConfig": self._thinking_config(),
-        }
         body: dict[str, object] = {
-            "contents": [{"role": "user", "parts": [{"text": interaction_input}]}],
-            "generationConfig": generation_config,
+            "model": self._config.model,
+            "input": interaction_input,
+            "store": False,
+            "response_format": {
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": dict(schema),
+            },
+            "generation_config": {"thinking_level": self._config.thinking_level},
         }
         if system_instruction:
-            body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
-
-        model = urllib.parse.quote(self._config.model.strip(), safe="")
-        endpoint = self._config.structured_endpoint_template.format(model=model)
+            body["system_instruction"] = system_instruction
         request = urllib.request.Request(
-            endpoint,
+            self._config.endpoint,
             data=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
             method="POST",
             headers={
                 "x-goog-api-key": self._api_key,
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": "r2b4-agent-llm/2",
+                "User-Agent": "r2b4-agent-llm/1",
             },
         )
         try:
@@ -170,37 +153,14 @@ class GeminiStructuredChatClient:
 
         try:
             decoded = json.loads(payload.decode("utf-8"))
-        except (UnicodeError, json.JSONDecodeError) as exc:
-            raise GeminiRequestError("Gemini generateContent returned a non-JSON response envelope") from exc
-
-        try:
-            content = self._extract_generate_content_text(decoded)
-        except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise GeminiRequestError(f"Gemini generateContent response invalid: {exc}") from exc
-
-        try:
+            content = self._extract_output_text(decoded)
             return json.loads(content)
-        except json.JSONDecodeError as exc:
-            preview = content[:240].replace("\n", "\\n")
-            raise GeminiRequestError(
-                f"Gemini structured output was not JSON: {exc.msg} at char {exc.pos}; "
-                f"output_prefix={preview!r}"
-            ) from exc
-
-    def _thinking_config(self) -> dict[str, object]:
-        """Translate the provider-neutral low/medium/high knob to model-family syntax."""
-        model = self._config.model.strip().lower()
-        level = self._config.thinking_level
-        if model.startswith("gemini-2.5"):
-            # Gemini 2.5 uses thinkingBudget, not thinkingLevel. 0 is the documented
-            # thinking-off/lowest-latency setting; -1 asks for dynamic thinking.
-            budget = {"low": 0, "medium": 1024, "high": -1}[level]
-            return {"thinkingBudget": budget}
-        return {"thinkingLevel": level}
+        except (UnicodeError, json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
+            raise GeminiRequestError("Gemini returned an invalid structured response") from exc
 
     @staticmethod
     def _convert_messages(messages: Sequence[Mapping[str, str]]) -> tuple[str, str]:
-        """Flatten local text history into one stateless Gemini request input."""
+        """Flatten local text history into one stateless Gemini interaction input."""
         systems: list[str] = []
         transcript: list[str] = []
         last_role: str | None = None
@@ -221,38 +181,27 @@ class GeminiStructuredChatClient:
         return "\n\n".join(systems), "\n\n".join(transcript)
 
     @staticmethod
-    def _extract_generate_content_text(decoded: object) -> str:
+    def _extract_output_text(decoded: object) -> str:
         if not isinstance(decoded, Mapping):
-            raise ValueError("response envelope is not an object")
-        candidates = decoded.get("candidates")
-        if not isinstance(candidates, list) or not candidates:
-            prompt_feedback = decoded.get("promptFeedback")
-            detail = json.dumps(prompt_feedback, ensure_ascii=False, sort_keys=True, default=str)[:500]
-            raise ValueError(f"response has no candidates; promptFeedback={detail}")
-        candidate = candidates[0]
-        if not isinstance(candidate, Mapping):
-            raise ValueError("first candidate is not an object")
-        content = candidate.get("content")
-        if not isinstance(content, Mapping):
-            raise ValueError(
-                f"candidate has no content; finishReason={candidate.get('finishReason')!r}"
-            )
-        parts = content.get("parts")
-        if not isinstance(parts, list):
-            raise ValueError("candidate content has no parts")
-        chunks = [
-            item.get("text")
-            for item in parts
-            if isinstance(item, Mapping)
-            and item.get("thought") is not True
-            and isinstance(item.get("text"), str)
-        ]
-        text = "".join(chunks).strip()
-        if text:
-            return text
-        raise ValueError(
-            f"candidate contains no non-thought text; finishReason={candidate.get('finishReason')!r}"
-        )
+            raise ValueError("response is not an object")
+        steps = decoded.get("steps")
+        if not isinstance(steps, list):
+            raise ValueError("response has no steps")
+        for step in reversed(steps):
+            if not isinstance(step, Mapping) or step.get("type") != "model_output":
+                continue
+            content = step.get("content")
+            if not isinstance(content, list):
+                continue
+            chunks = [
+                item.get("text")
+                for item in content
+                if isinstance(item, Mapping) and item.get("type") == "text" and isinstance(item.get("text"), str)
+            ]
+            text = "".join(chunks).strip()
+            if text:
+                return text
+        raise ValueError("response contains no model text output")
 
     @staticmethod
     def _http_error_detail(exc: urllib.error.HTTPError) -> str:
