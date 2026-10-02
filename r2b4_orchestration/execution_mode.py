@@ -1,8 +1,11 @@
-"""System-level execution mode selection for natural-language R2B4 requests.
+"""Minimal system entry routing for natural-language R2B4 requests.
 
-This module owns routing semantics only. It owns no motor, runtime, camera, LLM,
-or safety authority. Executors must still use the canonical RobotInterface / ER2
-boundaries.
+Human language is no longer classified into detailed execution modes with a
+large regex grammar.  Exact STOP remains a deterministic local fast-path;
+everything else goes to the provider-neutral Agent Core, which may answer, use
+R2B4 tools, propose a canonical action or delegate to ER2.
+
+Legacy mode enum members remain for compatibility with explicit/internal plans.
 """
 from __future__ import annotations
 
@@ -18,7 +21,10 @@ from typing import Mapping
 
 
 class ExecutionMode(str, Enum):
-    GEMINI_CHAT = "GEMINI_CHAT"
+    AGENT = "AGENT"
+    # Compatibility alias for callers/tests that still refer to the historical
+    # name. New route evidence serializes this member as AGENT.
+    GEMINI_CHAT = "AGENT"
     HOST_READ = "HOST_READ"
     OBSERVATION = "OBSERVATION"
     DIRECT_V3 = "DIRECT_V3"
@@ -42,7 +48,7 @@ class ExecutionPlan:
 
     def to_jsonable(self) -> dict[str, object]:
         return {
-            "schema": "R2B4_EXECUTION_PLAN_V1",
+            "schema": "R2B4_EXECUTION_PLAN_V2",
             "route_id": self.route_id,
             "source": self.source,
             "mode": self.mode.value,
@@ -58,78 +64,9 @@ class ExecutionPlan:
 
 
 _SPACE_RE = re.compile(r"\s+")
-_METRIC_RE = re.compile(
-    r"(?<!\w)(?:\d+(?:[.,]\d+)?|egy|kettő|ketto|két|ket|fél|fel)\s*"
-    r"(?:m|méter|meter|cm|centi(?:méter|meter)?|mm|milliméter|millimeter)(?!\w)",
-    re.IGNORECASE,
-)
-_ANGLE_RE = re.compile(
-    r"(?<!\w)(?:\d+(?:[.,]\d+)?)\s*(?:°|fok(?:kal)?|degree|degrees)(?!\w)",
-    re.IGNORECASE,
-)
-
-# Commands are deliberately narrow. Ambiguous prose is not turned into actuation.
 _STOP_RE = re.compile(
     r"^(?:állj(?:\s+meg)?|allj(?:\s+meg)?|stop|állítsd\s+meg|allitsd\s+meg|megállás|megallas)[.!?]*$",
     re.IGNORECASE,
-)
-_FORWARD_RE = re.compile(
-    r"^(?:menj|indulj|haladj|gurulj)\s+(?:előre|elore)(?:\s+(?:lassan|óvatosan|ovatosan))?[.!?]*$",
-    re.IGNORECASE,
-)
-_BACKWARD_RE = re.compile(
-    r"^(?:menj|indulj|haladj|gurulj)\s+(?:hátra|hatra)(?:\s+(?:lassan|óvatosan|ovatosan))?[.!?]*$",
-    re.IGNORECASE,
-)
-_EXPLORE_RE = re.compile(
-    r"^(?:járd\s+be|jard\s+be|fedezd\s+fel|nézz\s+körül|nezz\s+korul)(?:\s+(?:a\s+)?(?:szobát|szobat|helyiséget|helyiseget))?[.!?]*$",
-    re.IGNORECASE,
-)
-_FOLLOW_RE = re.compile(
-    r"^(?:kövess|kovess|kövess\s+engem|kovess\s+engem|kövesd\s+(?:az\s+)?embert|kovesd\s+(?:az\s+)?embert)[.!?]*$",
-    re.IGNORECASE,
-)
-_FACE_RE = re.compile(
-    r"^(?:fordulj\s+(?:az\s+)?ember\s+felé|fordulj\s+(?:az\s+)?ember\s+fele|nézz\s+rám|nezz\s+ram)[.!?]*$",
-    re.IGNORECASE,
-)
-
-_OBSERVATION_PATTERNS = (
-    "mit látsz",
-    "mit latsz",
-    "mi van előtted",
-    "mi van elotted",
-    "nézz körül",
-    "nezz korul",
-    "nézz körbe",
-    "nezz korbe",
-    "kamera kép",
-    "kamerakép",
-    "what do you see",
-    "look around",
-)
-_STATUS_PATTERNS = (
-    "robot állapot",
-    "robot allapot",
-    "robot státusz",
-    "robot status",
-    "v3 állapot",
-    "v3 allapot",
-    "v3 status",
-    "fut a v3",
-    "runtime állapot",
-    "runtime allapot",
-)
-
-# These verbs indicate a likely physical command. If it is not simple enough for
-# DIRECT_V3, route it to ER2 rather than silently treating it as ordinary chat.
-_ACTUATION_PATTERNS = (
-    "menj ", "indulj ", "haladj ", "gurulj ", "fordulj ", "kerüld ", "keruld ",
-    "navigálj ", "navigalj ", "kövess", "kovess", "kövesd", "kovesd", "állj meg", "allj meg",
-)
-_EXPLANATION_PREFIXES = (
-    "hogyan ", "miért ", "miert ", "mit jelent", "magyarázd", "magyarazd", "elmagyaráznád", "elmagyaraznad",
-    "mi történne", "mi tortenne", "szerinted", "lehetséges", "lehetseges",
 )
 
 
@@ -141,110 +78,47 @@ def _route_id() -> str:
     return f"route-{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
 
 
-class ExecutionModeSelector:
-    """Deterministic, fail-closed first-pass selector.
+def is_stop_intent(text: str) -> bool:
+    return isinstance(text, str) and bool(_STOP_RE.fullmatch(_normalized(text)))
 
-    The selector intentionally resolves only intents that are safe to classify
-    locally. Generic language stays on the default Gemini conversation path.
-    Likely physical commands that are not simple canonical actions are routed to
-    ER2, never to plain chat.
+
+class ExecutionModeSelector:
+    """Deterministic entry gate: exact STOP or Agent Core.
+
+    This component intentionally does not try to understand open-ended human
+    language. Semantic routing is an Agent Core/provider responsibility; actual
+    capabilities remain enforced by local R2B4 code.
     """
 
     def select(self, text: str, *, source: str = "human") -> ExecutionPlan:
         if not isinstance(text, str) or not text.strip():
             raise ValueError("execution request text must be non-empty")
         original = text.strip()
-        normalized = _normalized(original)
         route_id = _route_id()
-
-        if _STOP_RE.fullmatch(normalized):
+        if is_stop_intent(original):
             return ExecutionPlan(
-                route_id, original, source, ExecutionMode.DIRECT_V3,
-                "EXACT_STOP_INTENT", False,
-                capability="v3.command.stop", action_name="v3.command.stop",
+                route_id,
+                original,
+                source,
+                ExecutionMode.DIRECT_V3,
+                "EXACT_STOP_FAST_PATH",
+                False,
+                capability="v3.command.stop",
+                action_name="v3.command.stop",
             )
-
-        if any(normalized.startswith(prefix) for prefix in _EXPLANATION_PREFIXES):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.GEMINI_CHAT,
-                "EXPLANATORY_OR_INFORMATIONAL_REQUEST", False,
-                capability="conversation.text",
-            )
-
-        if any(pattern in normalized for pattern in _STATUS_PATTERNS):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.HOST_READ,
-                "ROBOT_STATUS_READ", False,
-                capability="operator.status",
-            )
-
-        if any(pattern in normalized for pattern in _OBSERVATION_PATTERNS):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.OBSERVATION,
-                "VISUAL_OBSERVATION_REQUEST", False,
-                capability="camera.latest+er2.preview", camera=True, tools=False,
-            )
-
-        physical_language = any(normalized.startswith(pattern) for pattern in _ACTUATION_PATTERNS)
-        metric_or_angle = bool(_METRIC_RE.search(normalized) or _ANGLE_RE.search(normalized))
-        if physical_language and metric_or_angle:
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.ER2_STREAM,
-                "METRIC_OR_ANGULAR_ROBOT_TASK", True,
-                capability="er2.robotics", camera=True, tools=True,
-            )
-
-        if _FORWARD_RE.fullmatch(normalized):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.DIRECT_V3,
-                "SIMPLE_CANONICAL_FORWARD", True,
-                capability="v3.command.forward", action_name="v3.command.forward",
-            )
-
-        if _BACKWARD_RE.fullmatch(normalized):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.DIRECT_V3,
-                "SIMPLE_CANONICAL_BACKWARD", True,
-                capability="v3.command.backward", action_name="v3.command.backward",
-            )
-
-        if _EXPLORE_RE.fullmatch(normalized):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.DIRECT_V3,
-                "SIMPLE_CANONICAL_EXPLORE", True,
-                capability="v3.command.explore", action_name="v3.command.explore",
-            )
-
-        if _FOLLOW_RE.fullmatch(normalized):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.DIRECT_V3,
-                "SIMPLE_CANONICAL_FOLLOW_PERSON", True,
-                capability="v3.command.follow_person", action_name="v3.command.follow_person",
-            )
-
-        if _FACE_RE.fullmatch(normalized):
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.DIRECT_V3,
-                "SIMPLE_CANONICAL_FACE_PERSON", True,
-                capability="v3.command.face_person", action_name="v3.command.face_person",
-            )
-
-        if physical_language:
-            return ExecutionPlan(
-                route_id, original, source, ExecutionMode.ER2_STREAM,
-                "ROBOT_TASK_REQUIRES_HIGHER_LEVEL_REASONING", True,
-                capability="er2.robotics", camera=True, tools=True,
-            )
-
         return ExecutionPlan(
-            route_id, original, source, ExecutionMode.GEMINI_CHAT,
-            "DEFAULT_CONVERSATION", False,
+            route_id,
+            original,
+            source,
+            ExecutionMode.AGENT,
+            "DEFAULT_AGENT_CORE",
+            False,
             capability="conversation.text",
         )
 
 
 class RouteEvidenceJournal:
-    """Append-only route evidence with no execution authority."""
+    """Append-only entry-route evidence with no execution authority."""
 
     def __init__(self, project_root: Path | str) -> None:
         root = Path(project_root).expanduser().resolve()
@@ -253,7 +127,7 @@ class RouteEvidenceJournal:
     def emit(self, event: str, plan: ExecutionPlan, **extra: object) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "schema": "R2B4_EXECUTION_ROUTE_EVENT_V1",
+            "schema": "R2B4_EXECUTION_ROUTE_EVENT_V2",
             "event": event,
             "wall_time_ns": time.time_ns(),
             "monotonic_ns": time.monotonic_ns(),
@@ -274,4 +148,5 @@ __all__ = [
     "ExecutionModeSelector",
     "ExecutionPlan",
     "RouteEvidenceJournal",
+    "is_stop_intent",
 ]

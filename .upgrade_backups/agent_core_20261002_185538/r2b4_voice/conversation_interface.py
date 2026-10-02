@@ -1,4 +1,4 @@
-"""RobotInterface adapter and composition for host-side R2B4 Agent Core conversation."""
+"""RobotInterface adapter and composition for host-side conversation capabilities."""
 
 from __future__ import annotations
 
@@ -6,14 +6,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from r2b4_orchestration.agent_core import AgentCore, AgentToolBroker
-from r2b4_orchestration.agent_tools import build_default_agent_tools
-
 from .conversation_journal import ConversationJournal
 from .conversation_service import ConversationService, ConversationServiceConfig
 from .llm_provider import build_llm_client
 from .prompting import PromptAssembler
 from .robot_context import RobotContextBuilder
+from .self_knowledge import SelfKnowledgeProvider
 
 
 class ConversationInterfaceAdapter:
@@ -37,7 +35,7 @@ class ConversationInterfaceAdapter:
                 "available": running,
                 "ready": running,
                 "reason": None if running else "CONVERSATION_SERVICE_NOT_RUNNING",
-                "description": "Submit one user text turn into the R2B4 Agent Core conversation orchestrator.",
+                "description": "Submit one user text turn from STT/GUI/agent into the conversation orchestrator.",
                 "parameters": {"text": "string", "source": "string=stt"},
             },
             "conversation.status": {
@@ -45,14 +43,14 @@ class ConversationInterfaceAdapter:
                 "supported": True,
                 "available": True,
                 "ready": True,
-                "description": "Read conversation/Agent Core worker, queue and model status.",
+                "description": "Read conversation worker, queue and model status.",
             },
             "conversation.last_turn": {
                 "kind": "read",
                 "supported": True,
                 "available": True,
                 "ready": True,
-                "description": "Read the latest completed Agent Core turn, including any proposed robot intent.",
+                "description": "Read the latest completed LLM turn, including any proposed robot intent.",
             },
         }
 
@@ -102,12 +100,13 @@ def build_voice_interface(
     model: str | None = None,
     service_config: ConversationServiceConfig = ConversationServiceConfig(),
 ) -> VoiceInterfaceBundle:
-    """Build one RobotInterface facade plus provider-neutral bounded Agent Core.
+    """Build one RobotInterface facade with read-only self knowledge + conversation.
 
-    The model receives only typed capability descriptions/results. It never gets a
-    motor/GPIO/runtime handle. Robot actions remain proposals for the existing
-    fresh-state VoiceActionExecutor gate.
+    The LLM receives no direct V3 runtime/motor handle.  SelfKnowledgeProvider is
+    read-only and source-first; proposed robot actions remain separated from the
+    later VoiceActionExecutor safety/execution gate.
     """
+
     from v3.interface_adapters import build_adapters
     from v3.operator_controller import OperatorController
     from v3.robot_interface import RobotInterface
@@ -119,23 +118,14 @@ def build_voice_interface(
     core_interface = RobotInterface(project_root=root, controller=controller, adapters=core_adapters)
 
     llm = build_llm_client(provider=provider, api_key=api_key, model=model)
-    broker = AgentToolBroker(build_default_agent_tools(root))
-    agent = AgentCore(llm, broker, max_tool_rounds=4)
-    prompt = PromptAssembler(
-        root / "conf" / "r2b4_agent_system.md",
-        max_history_turns=service_config.max_history_turns,
-    )
+    prompt = PromptAssembler(root / "conf" / "voice_llm_system.md", max_history_turns=service_config.max_history_turns)
     journal = ConversationJournal(root / "runtime" / "conversations")
     service = ConversationService(
         llm=llm,
-        agent=agent,
         robot_context=RobotContextBuilder(core_interface),
         prompt_assembler=prompt,
         journal=journal,
-        # Dynamic Agent Core tools supersede the legacy Test-Hub-era evidence
-        # snippets in SelfKnowledgeProvider. Keep that module available only for
-        # compatibility callers; do not inject stale evidence into new turns.
-        self_knowledge=None,
+        self_knowledge=SelfKnowledgeProvider(root),
         config=service_config,
     )
     public_adapters = tuple(core_adapters) + (ConversationInterfaceAdapter(service),)
@@ -143,4 +133,8 @@ def build_voice_interface(
     return VoiceInterfaceBundle(public_interface, service)
 
 
-__all__ = ["ConversationInterfaceAdapter", "VoiceInterfaceBundle", "build_voice_interface"]
+__all__ = [
+    "ConversationInterfaceAdapter",
+    "VoiceInterfaceBundle",
+    "build_voice_interface",
+]

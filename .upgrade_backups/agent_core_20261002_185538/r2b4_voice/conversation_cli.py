@@ -72,7 +72,7 @@ def _resolved_llm(args: argparse.Namespace, project_env: dict[str, str]) -> tupl
 
 
 def _check(root: Path, provider: str, model: str, key: str | None) -> int:
-    prompt = root / "conf" / "r2b4_agent_system.md"
+    prompt = root / "conf" / "voice_llm_system.md"
     secret = root / "conf" / ".wake.env"
     result = {
         "project_root": str(root),
@@ -81,7 +81,7 @@ def _check(root: Path, provider: str, model: str, key: str | None) -> int:
         "llm_model": model,
         "llm_api_key": "PASS" if key else "FAIL",
         "secret_file": str(secret),
-        "action_mode": "AGENT_PROPOSAL_ONLY",
+        "action_mode": "SHADOW",
         "motor_action_execution": False,
         "groq_stt_key_present": "PASS" if _setting(_load_project_env(root), "GROQ_API_KEY") else "FAIL",
     }

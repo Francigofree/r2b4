@@ -65,12 +65,12 @@ PATCHES = {
             '"modes": ["AGENT", "DIRECT_V3"],',
         ),
         (
-            '  r "KÉRÉS"                 Automatikus végrehajtási mód választás\\n',
-            '  r "KÉRÉS"                 Agent Core: LLM + R2B4 toolok; exact STOP lokális\\n',
+            r'  r \"KÉRÉS\"                 Automatikus végrehajtási mód választás\n',
+            r'  r \"KÉRÉS\"                 Agent Core: LLM + R2B4 toolok; exact STOP lokális\n',
         ),
         (
-            '  r route "KÉRÉS" --json    Módválasztás megmutatása végrehajtás nélkül\\n',
-            '  r route "KÉRÉS" --json    Belépési route: STOP vagy AGENT\\n',
+            r'  r route \"KÉRÉS\" --json    Módválasztás megmutatása végrehajtás nélkül\n',
+            r'  r route \"KÉRÉS\" --json    Belépési route: STOP vagy AGENT\n',
         ),
         (
             "print('Auto route: r \"REQUEST\"; dry-run: r route \"REQUEST\" --json')",

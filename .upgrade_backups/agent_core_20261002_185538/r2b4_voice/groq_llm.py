@@ -1,4 +1,4 @@
-"""Groq structured-output adapter for R2B4 conversation/AgentCore."""
+"""Groq structured-output LLM adapter for R2B4 conversation decisions."""
 
 from __future__ import annotations
 
@@ -8,12 +8,6 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
-
-from r2b4_orchestration.agent_contracts import (
-    AgentModelReply,
-    build_agent_step_schema,
-    parse_agent_model_reply,
-)
 
 from .conversation_contracts import LLMDecision
 from .llm_decision import DECISION_SCHEMA, DecisionParseError, build_decision_schema, parse_llm_decision
@@ -64,51 +58,21 @@ class GroqStructuredChatClient:
         return self._config.model
 
     def complete(self, messages: Sequence[Mapping[str, str]]) -> LLMDecision:
-        return self._complete_decision(messages, action_catalog=None)
+        return self._complete(messages, action_catalog=None)
 
     def complete_with_actions(
         self,
         messages: Sequence[Mapping[str, str]],
         action_catalog: Sequence[Mapping[str, object]],
     ) -> LLMDecision:
-        return self._complete_decision(messages, action_catalog=action_catalog)
+        return self._complete(messages, action_catalog=action_catalog)
 
-    def complete_agent_step(
-        self,
-        messages: Sequence[Mapping[str, str]],
-        tool_catalog: Sequence[Mapping[str, object]],
-        action_catalog: Sequence[Mapping[str, object]],
-    ) -> AgentModelReply:
-        raw = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step")
-        try:
-            return parse_agent_model_reply(
-                raw,
-                model=self._config.model,
-                tool_catalog=tool_catalog,
-                action_catalog=action_catalog,
-            )
-        except (ValueError, DecisionParseError) as exc:
-            raise LLMRequestError(str(exc)) from exc
-
-    def _complete_decision(
+    def _complete(
         self,
         messages: Sequence[Mapping[str, str]],
         *,
         action_catalog: Sequence[Mapping[str, object]] | None,
     ) -> LLMDecision:
-        schema = build_decision_schema(action_catalog) if action_catalog is not None else DECISION_SCHEMA
-        raw = self._structured(messages, schema, "r2b4_llm_decision")
-        try:
-            return parse_llm_decision(raw, model=self._config.model, action_catalog=action_catalog)
-        except DecisionParseError as exc:
-            raise LLMRequestError(str(exc)) from exc
-
-    def _structured(
-        self,
-        messages: Sequence[Mapping[str, str]],
-        schema: Mapping[str, object],
-        schema_name: str,
-    ) -> object:
         if not messages:
             raise ValueError("messages must not be empty")
         body = json.dumps(
@@ -117,7 +81,11 @@ class GroqStructuredChatClient:
                 "messages": [dict(item) for item in messages],
                 "response_format": {
                     "type": "json_schema",
-                    "json_schema": {"name": schema_name, "strict": True, "schema": dict(schema)},
+                    "json_schema": {
+                        "name": "r2b4_llm_decision",
+                        "strict": True,
+                        "schema": build_decision_schema(action_catalog) if action_catalog is not None else DECISION_SCHEMA,
+                    },
                 },
             },
             ensure_ascii=False,
@@ -131,7 +99,7 @@ class GroqStructuredChatClient:
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": "r2b4-agent-llm/1",
+                "User-Agent": "r2b4-voice-llm/2",
             },
         )
         try:
@@ -153,9 +121,18 @@ class GroqStructuredChatClient:
         try:
             decoded = json.loads(payload.decode("utf-8"))
             content = decoded["choices"][0]["message"]["content"]
-            return json.loads(content)
+            decision_raw = json.loads(content)
         except (UnicodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise LLMRequestError("Groq LLM returned an invalid structured response") from exc
+        try:
+            return parse_llm_decision(decision_raw, model=self._config.model, action_catalog=action_catalog)
+        except DecisionParseError as exc:
+            raise LLMRequestError(str(exc)) from exc
 
 
-__all__ = ["DECISION_SCHEMA", "GroqChatConfig", "GroqStructuredChatClient", "LLMRequestError"]
+__all__ = [
+    "DECISION_SCHEMA",
+    "GroqChatConfig",
+    "GroqStructuredChatClient",
+    "LLMRequestError",
+]

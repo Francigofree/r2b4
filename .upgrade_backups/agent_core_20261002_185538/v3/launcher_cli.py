@@ -103,7 +103,10 @@ def command_catalog() -> dict[str, object]:
         "execution_router": {
             "usage": 'r "REQUEST"',
             "dry_run": 'r route "REQUEST" --json',
-            "modes": ["AGENT", "DIRECT_V3"],
+            "modes": [
+                "GEMINI_CHAT", "HOST_READ", "OBSERVATION",
+                "DIRECT_V3", "ER2_PREVIEW", "ER2_STREAM",
+            ],
             "evidence": "runtime/execution_routes.ndjson",
         },
         "voice": {
@@ -162,8 +165,8 @@ def print_help() -> None:
         "  r diag [full|ANALYZER]     EVI diagnosztikai adat; alap: full/latest; artifact: runtime/diag/\n"
         "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
-        "  r \"KÉRÉS\"                 Agent Core: LLM + R2B4 toolok; exact STOP lokális\n"
-        "  r route \"KÉRÉS\" --json    Belépési route: STOP vagy AGENT\n"
+        "  r \"KÉRÉS\"                 Automatikus végrehajtási mód választás\n"
+        "  r route \"KÉRÉS\" --json    Módválasztás megmutatása végrehajtás nélkül\n"
         "  r -- \"s\"                   Kényszerített sima Gemini prompt\n"
         "  r er2 \"FELADAT\"            ER2 stream; camera/tools/speak/json bekapcsolva\n"
         "  r er2 status|preview|stream ER2 részletes parancsok\n"
@@ -209,7 +212,7 @@ def _commands(argv: list[str]) -> int:
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
     print("Evidence: r evi MCAP | r evi verify BUNDLE | r evi query BUNDLE")
     print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
-    print('Agent route: r "REQUEST"; dry-run: r route "REQUEST" --json')
+    print('Auto route: r "REQUEST"; dry-run: r route "REQUEST" --json')
     print('Plain LLM escape: r -- "PROMPT"')
     print("Voice wake: r voice status|on|off|restart|check  (alias: r wake ...)")
     print("TAB help: r install telepíti a Bash completiont")

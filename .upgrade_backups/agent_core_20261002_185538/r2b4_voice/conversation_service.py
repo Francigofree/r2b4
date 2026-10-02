@@ -7,7 +7,7 @@ import threading
 import time
 import uuid
 from collections import OrderedDict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -31,19 +31,6 @@ class LLMPort(Protocol):
     @property
     def model(self) -> str: ...
     def complete(self, messages: Sequence[Mapping[str, str]]) -> LLMDecision: ...
-
-
-class AgentPort(Protocol):
-    @property
-    def model(self) -> str: ...
-
-    def run(
-        self,
-        messages: Sequence[Mapping[str, str]],
-        action_catalog: Sequence[Mapping[str, object]],
-        *,
-        event_sink: Callable[[str, Mapping[str, object]], None] | None = None,
-    ) -> LLMDecision: ...
 
 
 class SelfKnowledgePort(Protocol):
@@ -73,7 +60,6 @@ class ConversationService:
         robot_context: RobotContextBuilder,
         prompt_assembler: PromptAssembler,
         journal: ConversationJournal,
-        agent: AgentPort | None = None,
         validator: RobotActionValidator | None = None,
         self_knowledge: SelfKnowledgePort | None = None,
         config: ConversationServiceConfig = ConversationServiceConfig(),
@@ -81,12 +67,9 @@ class ConversationService:
     ) -> None:
         if not callable(getattr(llm, "complete", None)):
             raise TypeError("llm must provide complete()")
-        if agent is not None and not callable(getattr(agent, "run", None)):
-            raise TypeError("agent must provide run()")
         if self_knowledge is not None and not callable(getattr(self_knowledge, "build", None)):
             raise TypeError("self_knowledge must provide build()")
         self._llm = llm
-        self._agent = agent
         self._context = robot_context
         self._prompt = prompt_assembler
         self._journal = journal
@@ -106,17 +89,8 @@ class ConversationService:
         self._worker.start()
         self._journal.append(
             "session_start",
-            {
-                "prompt_version": PROMPT_VERSION,
-                "model": self.model,
-                "action_mode": "PROPOSAL_ONLY",
-                "agent_core": self._agent is not None,
-            },
+            {"prompt_version": PROMPT_VERSION, "model": self._llm.model, "action_mode": "PROPOSAL_ONLY"},
         )
-
-    @property
-    def model(self) -> str:
-        return self._agent.model if self._agent is not None else self._llm.model
 
     @property
     def session_id(self) -> str:
@@ -163,8 +137,7 @@ class ConversationService:
                 "completion_cache_capacity": self._config.completion_cache_size,
                 "last_error": self._last_error,
                 "action_mode": "PROPOSAL_ONLY",
-                "model": self.model,
-                "agent_core": self._agent is not None,
+                "model": self._llm.model,
             }
 
     def last_turn(self) -> dict[str, object] | None:
@@ -228,6 +201,7 @@ class ConversationService:
                 try:
                     knowledge = self._self_knowledge.build(turn.text)
                 except Exception as exc:
+                    # Self-knowledge is informative only; failure must not break normal dialogue.
                     self._journal.append(
                         "self_knowledge_error",
                         {"turn_id": turn.turn_id, "error": f"{type(exc).__name__}: {exc}"},
@@ -237,9 +211,8 @@ class ConversationService:
                 {
                     "turn_id": turn.turn_id,
                     "prompt_version": PROMPT_VERSION,
-                    "model": self.model,
+                    "model": self._llm.model,
                     "robot_context": context.to_jsonable(),
-                    "agent_core": self._agent is not None,
                     "self_knowledge_categories": (
                         list(knowledge.get("matched_categories", []))
                         if isinstance(knowledge, Mapping)
@@ -250,21 +223,21 @@ class ConversationService:
             with self._lock:
                 history = tuple(self._history[-self._config.max_history_turns :])
             if knowledge:
-                messages = self._prompt.build_messages(turn, context, history, self_knowledge=knowledge)
+                messages = self._prompt.build_messages(
+                    turn,
+                    context,
+                    history,
+                    self_knowledge=knowledge,
+                )
             else:
                 messages = self._prompt.build_messages(turn, context, history)
-
-            if self._agent is not None:
-                def emit(event: str, payload: Mapping[str, object]) -> None:
-                    self._journal.append(event, {"turn_id": turn.turn_id, **dict(payload)})
-
-                decision = self._agent.run(messages, context.available_actions, event_sink=emit)
+            complete_with_actions = getattr(self._llm, "complete_with_actions", None)
+            if callable(complete_with_actions):
+                decision = complete_with_actions(messages, context.available_actions)
             else:
-                complete_with_actions = getattr(self._llm, "complete_with_actions", None)
-                if callable(complete_with_actions):
-                    decision = complete_with_actions(messages, context.available_actions)
-                else:
-                    decision = self._llm.complete(messages)
+                # Compatibility for simple/fake LLM ports; production providers
+                # use the dynamic catalog-aware method above.
+                decision = self._llm.complete(messages)
 
             action_status = "NONE"
             if decision.robot_action is not None:
@@ -296,14 +269,13 @@ class ConversationService:
                 proposed_action=None,
                 action_status="ERROR",
                 error=error,
-                model=self.model,
+                model=getattr(self._llm, "model", None),
             )
             self._journal.append("error", result.to_jsonable())
             self._store_result(result, error=error)
 
 
 __all__ = [
-    "AgentPort",
     "ConversationBusyError",
     "ConversationService",
     "ConversationServiceConfig",

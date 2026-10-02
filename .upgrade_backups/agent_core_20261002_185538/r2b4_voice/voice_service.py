@@ -144,7 +144,7 @@ class VoiceServiceConfig:
     session_silence_s: float = 10.0
     microphone_retry_s: float = 2.0
     frame_wait_s: float = 1.0
-    llm_timeout_s: float = 90.0
+    llm_timeout_s: float = 25.0
     speaker_settle_s: float = 0.45
 
     def __post_init__(self) -> None:

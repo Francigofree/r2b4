@@ -1,4 +1,4 @@
-"""Gemini Interactions API structured-output adapter for R2B4 conversation/AgentCore."""
+"""Gemini Interactions API structured-output adapter for R2B4 conversation."""
 
 from __future__ import annotations
 
@@ -9,12 +9,6 @@ import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Callable
-
-from r2b4_orchestration.agent_contracts import (
-    AgentModelReply,
-    build_agent_step_schema,
-    parse_agent_model_reply,
-)
 
 from .conversation_contracts import LLMDecision
 from .llm_decision import DECISION_SCHEMA, DecisionParseError, build_decision_schema, parse_llm_decision
@@ -46,7 +40,7 @@ UrlOpen = Callable[..., object]
 
 
 class GeminiStructuredChatClient:
-    """Stateless Gemini client; R2B4 owns history, tools and robot authority."""
+    """Stateless Gemini client; R2B4 remains owner of conversation history."""
 
     def __init__(
         self,
@@ -70,50 +64,21 @@ class GeminiStructuredChatClient:
         return self._config.model
 
     def complete(self, messages: Sequence[Mapping[str, str]]) -> LLMDecision:
-        return self._complete_decision(messages, action_catalog=None)
+        return self._complete(messages, action_catalog=None)
 
     def complete_with_actions(
         self,
         messages: Sequence[Mapping[str, str]],
         action_catalog: Sequence[Mapping[str, object]],
     ) -> LLMDecision:
-        return self._complete_decision(messages, action_catalog=action_catalog)
+        return self._complete(messages, action_catalog=action_catalog)
 
-    def complete_agent_step(
-        self,
-        messages: Sequence[Mapping[str, str]],
-        tool_catalog: Sequence[Mapping[str, object]],
-        action_catalog: Sequence[Mapping[str, object]],
-    ) -> AgentModelReply:
-        raw = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog))
-        try:
-            return parse_agent_model_reply(
-                raw,
-                model=self._config.model,
-                tool_catalog=tool_catalog,
-                action_catalog=action_catalog,
-            )
-        except (ValueError, DecisionParseError) as exc:
-            raise GeminiRequestError(str(exc)) from exc
-
-    def _complete_decision(
+    def _complete(
         self,
         messages: Sequence[Mapping[str, str]],
         *,
         action_catalog: Sequence[Mapping[str, object]] | None,
     ) -> LLMDecision:
-        schema = build_decision_schema(action_catalog) if action_catalog is not None else DECISION_SCHEMA
-        raw = self._structured(messages, schema)
-        try:
-            return parse_llm_decision(raw, model=self._config.model, action_catalog=action_catalog)
-        except DecisionParseError as exc:
-            raise GeminiRequestError(str(exc)) from exc
-
-    def _structured(
-        self,
-        messages: Sequence[Mapping[str, str]],
-        schema: Mapping[str, object],
-    ) -> object:
         if not messages:
             raise ValueError("messages must not be empty")
         system_instruction, interaction_input = self._convert_messages(messages)
@@ -124,7 +89,7 @@ class GeminiStructuredChatClient:
             "response_format": {
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": dict(schema),
+                "schema": build_decision_schema(action_catalog) if action_catalog is not None else DECISION_SCHEMA,
             },
             "generation_config": {"thinking_level": self._config.thinking_level},
         }
@@ -138,7 +103,7 @@ class GeminiStructuredChatClient:
                 "x-goog-api-key": self._api_key,
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": "r2b4-agent-llm/1",
+                "User-Agent": "r2b4-voice-llm/2",
             },
         )
         try:
@@ -154,13 +119,24 @@ class GeminiStructuredChatClient:
         try:
             decoded = json.loads(payload.decode("utf-8"))
             content = self._extract_output_text(decoded)
-            return json.loads(content)
+            decision_raw = json.loads(content)
         except (UnicodeError, json.JSONDecodeError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise GeminiRequestError("Gemini returned an invalid structured response") from exc
+        try:
+            return parse_llm_decision(decision_raw, model=self._config.model, action_catalog=action_catalog)
+        except DecisionParseError as exc:
+            raise GeminiRequestError(str(exc)) from exc
 
     @staticmethod
     def _convert_messages(messages: Sequence[Mapping[str, str]]) -> tuple[str, str]:
-        """Flatten local text history into one stateless Gemini interaction input."""
+        """Flatten local text history into one stateless Gemini input.
+
+        Interactions ``store=false`` requires exact model-generated steps when
+        replaying native Interaction history, including thought signatures.
+        R2B4 intentionally owns only bounded text history, so we do not forge
+        model_output steps. Instead the local text history is supplied as one
+        explicit transcript in the current user input.
+        """
         systems: list[str] = []
         transcript: list[str] = []
         last_role: str | None = None
