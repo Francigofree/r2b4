@@ -228,7 +228,7 @@ def _parser() -> argparse.ArgumentParser:
         help="heartbeat a generic EXPLORE mission (Room Cruise)",
     )
     explore.add_argument("--command-id")
-    explore.add_argument("--max-v-mps", type=float, default=0.60)
+    explore.add_argument("--max-v-mps", type=float, default=0.40)
     explore.add_argument("--max-omega-rad-s", type=float, default=0.90)
 
     faceperson = subcommands.add_parser(
