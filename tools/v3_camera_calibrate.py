@@ -29,6 +29,17 @@ if str(REPO_ROOT) not in sys.path:
 from v3.adapters.camera_ownership import camera_device_lock  # noqa: E402
 
 
+class CameraCloseFailure(RuntimeError):
+    def __init__(self, camera, error: Exception) -> None:
+        super().__init__(f"raw calibration camera close failed; exclusion retained: {error}")
+        self.camera = camera
+
+
+# A failed device close keeps the physical exclusion and raw handle alive until
+# this maintenance process exits. Ordinary calibration errors release both.
+_failed_camera_cleanup = None
+
+
 def _imports():
     try:
         import cv2  # type: ignore
@@ -108,6 +119,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    global _failed_camera_cleanup
     args = _parse_args()
     for value, name in (
         (args.lens_tolerance, "lens-tolerance"),
@@ -124,8 +136,16 @@ def main() -> int:
     if args.cols < 3 or args.rows < 3 or args.samples < 8:
         raise ValueError("use at least 3x3 inner corners and at least 8 samples")
 
-    with camera_device_lock():
+    exclusion = camera_device_lock()
+    exclusion.__enter__()
+    try:
         return _calibrate(args)
+    except CameraCloseFailure as exc:
+        _failed_camera_cleanup = (exclusion, exc.camera)
+        raise
+    finally:
+        if _failed_camera_cleanup is None or _failed_camera_cleanup[0] is not exclusion:
+            exclusion.__exit__(None, None, None)
 
 
 def _calibrate(args: argparse.Namespace) -> int:
@@ -336,8 +356,8 @@ def _calibrate(args: argparse.Namespace) -> int:
                 pass
         try:
             camera.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            raise CameraCloseFailure(camera, exc) from exc
 
 
 if __name__ == "__main__":

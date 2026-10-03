@@ -10,7 +10,6 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from v3.async_capability import TransportSemantics, latest_state_snapshot
 from v3.runtime_performance import CpuSet, temporary_current_affinity
@@ -51,7 +50,7 @@ class CameraFrameControlSnapshot:
     calibration_id: str
     rectified_K: tuple[tuple[float, float, float], ...]
     rectification_duration_ns: int
-    owner_generation: str = ""
+    owner_generation: str
 
     def __post_init__(self) -> None:
         from .vision_media_contracts import CameraJpegMetadata
@@ -61,6 +60,11 @@ class CameraFrameControlSnapshot:
             self.rectified_K, self.owner_generation, self.calibration_state)
         if self.stride_bytes < self.width * 3 or self.frame_size_bytes < self.stride_bytes * self.height:
             raise ValueError("VISION_FRAME_GEOMETRY_INVALID")
+        if self.lens_position is not None and not math.isfinite(self.lens_position):
+            raise ValueError("VISION_LENS_POSITION_INVALID")
+        if any(value < 0 for value in (self.exposure_time_ns, self.frame_duration_ns,
+                                       self.rectification_duration_ns)):
+            raise ValueError("VISION_FRAME_TIMING_INVALID")
 
     @property
     def completion_lag_ns(self) -> int:
@@ -199,7 +203,6 @@ class ProcessVisionPort:
                 pass
 
     def _accept(self, value: dict, revision: int) -> None:
-        from dataclasses import replace
         from .person_detection import PersonBox, PersonDetection, PersonDetectionProjection
         generation = value["owner_generation"]
         if not isinstance(generation, str) or not generation:
@@ -353,6 +356,10 @@ class ProcessVisionPort:
                     self._photo_status = CameraPhotoStatus(False, previous.saved_count, previous.last_output,
                         f"{type(exc).__name__}:{exc}"[:256], previous.last_metadata)
             finally:
+                with self._condition:
+                    if self._closed and self._photo_status.pending:
+                        self._photo_status = CameraPhotoStatus(False, previous.saved_count,
+                            previous.last_output, "VISION_CONSUMER_CLOSED", previous.last_metadata)
                 self._photo_lock.release()
         threading.Thread(target=save, name="vision-photo-evidence", daemon=True).start()
         return True

@@ -84,51 +84,52 @@ def capture_h264_video(
     first: dict[str, object] | None = None
     last: dict[str, object] | None = None
     try:
-        with tempfile.TemporaryFile() as errors, VisionClient(root=root).session() as session:
-            process = subprocess.Popen(
-                [encoder, "-hide_banner", "-loglevel", "error", "-y", "-f", "image2pipe",
-                 "-vcodec", "mjpeg", "-framerate", str(rate), "-i", "pipe:0", "-an",
-                 "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-                 "-b:v", str(bitrate), str(staging)],
-                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=errors,
-            )
-            assert process.stdin is not None
-            encoder_fd = process.stdin.fileno()
-            os.set_blocking(encoder_fd, False)
-            started: float | None = None
-            next_frame = time.monotonic()
-            while started is None or time.monotonic() < started + duration:
-                if started is not None:
-                    delay = min(next_frame, started + duration) - time.monotonic()
-                    if delay > 0.0:
-                        time.sleep(delay)
-                    if time.monotonic() >= started + duration:
-                        break
-                image = session.observe()
-                metadata = image.metadata.to_jsonable()
-                if first is not None:
-                    if metadata["owner_generation"] != first["owner_generation"]:
-                        raise RuntimeError("vision owner generation changed during video capture")
-                    if (metadata["width"], metadata["height"], metadata["calibration_id"]) != (
-                        first["width"], first["height"], first["calibration_id"],
-                    ):
-                        raise RuntimeError("calibrated camera geometry changed during video capture")
-                    if last is not None and metadata["source_sequence"] <= last["source_sequence"]:
-                        raise RuntimeError("vision owner returned a repeated video frame")
-                if started is None:
-                    started = time.monotonic()
-                    next_frame = started
-                    first = metadata
-                try:
-                    _write_encoder_frame(encoder_fd, image.image_bytes, write_timeout)
-                except BrokenPipeError as exc:
-                    errors.seek(0)
-                    detail = errors.read(1500).decode("utf-8", "replace").strip()
-                    raise RuntimeError(f"calibrated video encoder failed: {detail or 'ffmpeg closed its input'}") from exc
-                frames += 1
-                last = metadata
-                next_frame += 1.0 / rate
-            process.stdin.close()
+        with tempfile.TemporaryFile() as errors:
+            with VisionClient(root=root).session() as session:
+                process = subprocess.Popen(
+                    [encoder, "-hide_banner", "-loglevel", "error", "-y", "-f", "image2pipe",
+                     "-vcodec", "mjpeg", "-framerate", str(rate), "-i", "pipe:0", "-an",
+                     "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                     "-b:v", str(bitrate), str(staging)],
+                    stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=errors,
+                )
+                assert process.stdin is not None
+                encoder_fd = process.stdin.fileno()
+                os.set_blocking(encoder_fd, False)
+                started: float | None = None
+                next_frame = time.monotonic()
+                while started is None or time.monotonic() < started + duration:
+                    if started is not None:
+                        delay = min(next_frame, started + duration) - time.monotonic()
+                        if delay > 0.0:
+                            time.sleep(delay)
+                        if time.monotonic() >= started + duration:
+                            break
+                    image = session.observe()
+                    metadata = image.metadata.to_jsonable()
+                    if first is not None:
+                        if metadata["owner_generation"] != first["owner_generation"]:
+                            raise RuntimeError("vision owner generation changed during video capture")
+                        if (metadata["width"], metadata["height"], metadata["calibration_id"]) != (
+                            first["width"], first["height"], first["calibration_id"],
+                        ):
+                            raise RuntimeError("calibrated camera geometry changed during video capture")
+                        if last is not None and metadata["source_sequence"] <= last["source_sequence"]:
+                            raise RuntimeError("vision owner returned a repeated video frame")
+                    if started is None:
+                        started = time.monotonic()
+                        next_frame = started
+                        first = metadata
+                    try:
+                        _write_encoder_frame(encoder_fd, image.image_bytes, write_timeout)
+                    except BrokenPipeError as exc:
+                        errors.seek(0)
+                        detail = errors.read(1500).decode("utf-8", "replace").strip()
+                        raise RuntimeError(f"calibrated video encoder failed: {detail or 'ffmpeg closed its input'}") from exc
+                    frames += 1
+                    last = metadata
+                    next_frame += 1.0 / rate
+                process.stdin.close()
             return_code = process.wait(timeout=15.0)
             if return_code != 0:
                 errors.seek(0)

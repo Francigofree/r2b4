@@ -637,7 +637,6 @@ class NativePicamera2Camera:
     def stop(self) -> None:
         with self._frame_condition:
             camera = self._picamera
-            was_running = self._running
             self._running = False
             self._stop_event.set()
             self._pending_photo = None
@@ -808,6 +807,8 @@ class NativePicamera2Camera:
                         calibration_id = snapshot.calibration_id
                         rectified_K = snapshot.rectified_K
                         if stream_name == geometry.stream_name:
+                            if not hasattr(request, "stream_map") or not hasattr(request, "picam2"):
+                                raise RuntimeError("calibrated lores JPEG requires the rectified native request")
                             saver = getattr(request, "save", None)
                             if not callable(saver):
                                 raise RuntimeError("Picamera2 request.save is unavailable")

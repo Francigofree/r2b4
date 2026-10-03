@@ -115,10 +115,12 @@ class VisionClient:
     def status(self) -> dict[str, object]:
         try:
             conn = self.connect(launch=False)
-        except (FileNotFoundError, ConnectionRefusedError):
-            return {"running": False, "camera_state": "OFF", "detector_running": False,
+        except OSError as exc:
+            failed = self.socket_path.exists() or not isinstance(exc, (FileNotFoundError, ConnectionRefusedError))
+            return {"running": False, "camera_state": "FAILED" if failed else "OFF", "detector_running": False,
                     "consumers": 0, "manual_demand": False, "owner_generation": "",
-                    "last_error": None, "owner_pid": None}
+                    "last_error": f"VISION_UNAVAILABLE:{type(exc).__name__}:{exc}"[:256] if failed else None,
+                    "owner_pid": None}
         with conn:
             try:
                 conn.settimeout(min(self.timeout_s, 0.5))
@@ -378,15 +380,19 @@ class VisionMediaServer:
                     self.owner.camera_for_generation(generation)
                     metadata.require_fresh(time.monotonic_ns(), generation=generation,
                                            maximum_age_ns=self.owner.maximum_age_ns)
-                    return VisionJpeg(target.read_bytes(), metadata)
+                    with target.open("rb") as source:
+                        payload = source.read(MAX_JPEG_BYTES + 1)
+                    return VisionJpeg(payload, metadata)
                 time.sleep(0.01)
             raise TimeoutError("camera JPEG was not produced")
         finally:
-            cancel = getattr(locals().get("camera"), "cancel_jpeg", None)
-            if callable(cancel):
-                cancel(target)
-            target.unlink(missing_ok=True)
-            self._capture_lock.release()
+            try:
+                cancel = getattr(locals().get("camera"), "cancel_jpeg", None)
+                if callable(cancel):
+                    cancel(target)
+                target.unlink(missing_ok=True)
+            finally:
+                self._capture_lock.release()
 
 
 __all__ = ["VisionClient", "VisionSession", "VisionMediaServer", "default_vision_media_socket_path"]
