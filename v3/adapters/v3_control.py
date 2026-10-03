@@ -11,6 +11,7 @@ from v3.action_catalog import (
     ActionDescriptor,
 )
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
+from v3.finite_navigation import FiniteNavigationExecutor
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
 
@@ -110,6 +111,13 @@ class V3ControlInterfaceAdapter:
             "session_owner_pid": params.pop("session_owner_pid", None),
             "session_watchdog_s": params.pop("session_watchdog_s", None),
         }
+        if action in {"v3.command.move_relative", "v3.command.turn_by"}:
+            cancel_event = params.pop("cancel_event", None)
+            finite_timeout_s = params.pop("finite_timeout_s", None)
+            return FiniteNavigationExecutor(self.controller).execute(
+                action, params, cancel_event=cancel_event, finite_timeout_s=finite_timeout_s, capture=capture,
+                capture_mode=capture_mode, capture_hz=capture_hz, **session,
+            )
         if action == "v3.command.forward":
             speed = params.pop("speed_mps", 0.15)
             self._reject_unknown(params, set())
@@ -129,6 +137,18 @@ class V3ControlInterfaceAdapter:
                 max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
             )
         if action == "v3.command.navigate":
+            # Host-only blocking mode for the ER2 absolute-pose bridge. The
+            # default low-level navigate action still returns acceptance.
+            wait_for_completion = params.pop("wait_for_completion", False)
+            if type(wait_for_completion) is not bool:
+                raise ValueError("wait_for_completion must be bool")
+            if wait_for_completion:
+                cancel_event = params.pop("cancel_event", None)
+                finite_timeout_s = params.pop("finite_timeout_s", None)
+                return FiniteNavigationExecutor(self.controller).execute(
+                    action, params, cancel_event=cancel_event, finite_timeout_s=finite_timeout_s, capture=capture,
+                    capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                )
             frame_id = params.pop("frame_id", "R2B4_BOOT_ROBOT_MAP")
             x = self._required(params, "x_m")
             y = self._required(params, "y_m")

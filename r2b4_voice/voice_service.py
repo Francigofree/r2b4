@@ -58,6 +58,8 @@ def _action_receipt_text(*, status: str, executed: bool, action_name: str | None
     """Return speech derived only from the fresh executor receipt, never from LLM claims."""
     if executed:
         return "Megálltam." if action_name == "v3.command.stop" else "Rendben."
+    if status.startswith("FAILED:"):
+        return "A kért robotművelet nem fejeződött be."
     if status == "SHADOW_ACCEPTED":
         return "Értettem, de a végrehajtás teszt módban van."
     return "A parancsot most nem tudom végrehajtani."
@@ -492,7 +494,8 @@ class VoiceConversationService:
                         command_id=execution.command_id, mission_id=execution.mission_id,
                     )
                     if (
-                        execution.executed and execution.action_name != "v3.command.stop"
+                        execution.executed and execution.status != "COMPLETED"
+                        and execution.action_name != "v3.command.stop"
                         and execution.command_id and execution.mission_id
                     ):
                         self._behavior_observer.observe(
@@ -593,7 +596,8 @@ class VoiceConversationService:
                     mission_id=execution.mission_id,
                 )
                 if (
-                    execution.executed and execution.action_name != "v3.command.stop"
+                    execution.executed and execution.status != "COMPLETED"
+                    and execution.action_name != "v3.command.stop"
                     and execution.command_id and execution.mission_id
                 ):
                     self._behavior_observer.observe(

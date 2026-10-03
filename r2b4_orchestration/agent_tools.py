@@ -19,7 +19,10 @@ def _strict(value: Mapping[str, object], allowed: set[str]) -> dict[str, object]
 
 
 def _er2_delegate(root: Path, value: Mapping[str, object]) -> object:
-    args = _strict(value, {"task", "mode", "camera", "tools", "duration_s"})
+    args = _strict(value, {"task", "reason", "mode", "camera", "tools", "duration_s"})
+    reason = args.get("reason")
+    if reason not in ("visual_observation", "multi_step_physical", "continuous_feedback", "open_ended_spatial"):
+        raise ValueError("reason must be visual_observation|multi_step_physical|continuous_feedback|open_ended_spatial")
     task = args.get("task")
     if not isinstance(task, str) or not task.strip() or len(task) > 4000:
         raise ValueError("task must be 1..4000 characters")
@@ -48,6 +51,7 @@ def _er2_delegate(root: Path, value: Mapping[str, object]) -> object:
         duration_s=duration,
     )
     return {
+        "reason": reason,
         "mode": result.mode,
         "text": result.text,
         "reconnect_count": result.reconnect_count,
@@ -94,10 +98,11 @@ def build_default_agent_tools(project_root: Path):
     tools.append((
         AgentToolSpec(
             "er2.delegate",
-            "Delegate an explicit visual/spatial/complex robot task to canonical ER2. ER2 still executes only through ExternalRobotGateway -> RobotInterface -> V3 safety. Do not use for hypothetical/explanatory requests.",
+            "Delegate an explicit visual/spatial/complex robot task to canonical ER2 with a required reason. Use one canonical action whenever it represents the entire request, including metric move/turn. ER2 still executes only through ExternalRobotGateway -> RobotInterface -> V3 safety. Do not use for hypothetical/explanatory requests.",
             "ROBOTICS",
             {
                 "task": "required explicit robot task text",
+                "reason": "required visual_observation|multi_step_physical|continuous_feedback|open_ended_spatial; a single canonical motion is not an ER2 reason",
                 "mode": "optional preview|stream; stream for physical robotics",
                 "camera": "optional boolean, default true",
                 "tools": "optional boolean, default true for stream",

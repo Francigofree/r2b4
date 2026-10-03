@@ -121,6 +121,16 @@ class VoiceActionExecutor:
         command_id, mission_id = self._correlation_ids(raw_result)
         if mission_id is None and command_id is not None and descriptor.session_watchdog:
             mission_id = f"mission-{command_id}"
+        if descriptor.completion_required:
+            status = raw_result.get("status") if isinstance(raw_result, Mapping) else None
+            reason = raw_result.get("reason") if isinstance(raw_result, Mapping) else None
+            completed = status == "COMPLETED"
+            return VoiceActionExecution(
+                "COMPLETED" if completed else f"FAILED:{reason or status or 'RESULT_UNAVAILABLE'}",
+                action.name, completed,
+                detail=None if reason is None else str(reason),
+                command_id=command_id, mission_id=mission_id,
+            )
         return VoiceActionExecution(
             "EXECUTED",
             action.name,

@@ -13,6 +13,8 @@ import time
 from collections.abc import Callable, Mapping
 
 from v3.external_gateway import ExternalRequest, ExternalRobotGateway, GatewayPolicy
+from v3.capture_rate import DEFAULT_CAPTURE_HZ
+from v3.operator_controller import DEFAULT_CAPTURE_MODE
 from v3.robot_interface import RobotInterface
 
 from .config import Er2Config
@@ -28,10 +30,6 @@ def _finite(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise Er2ToolError(f"{name} must be finite numeric")
     return float(value)
-
-
-def _wrap_yaw(value: float) -> float:
-    return (value + math.pi) % (2.0 * math.pi) - math.pi
 
 
 def _jsonable(value: object) -> object:
@@ -56,7 +54,7 @@ class Er2SafetyError(Er2ToolError):
 
 def _tool_result_metadata(result: Mapping[str, object]) -> dict[str, object]:
     out: dict[str, object] = {"status": result.get("status")}
-    for key in ("mission_id", "reason"):
+    for key in ("command_id", "mission_id", "reason"):
         if isinstance(result.get(key), str):
             out[key] = result[key]
     payload = result.get("result")
@@ -246,34 +244,16 @@ class Er2RobotTools:
             "final": final,
         }
 
-    def _pose_snapshot(self, *, local: bool = False) -> Mapping[str, object]:
-        response = self._handle("read", "v3.status")
-        status = response.get("result")
-        # V3ControlInterfaceAdapter only exposes fresh status from a live process.
-        if response["status"] != "COMPLETED" or not isinstance(status, Mapping):
-            raise Er2ToolError("fresh runtime status unavailable")
-        if status.get("state") != "RUNNING" or status.get("fault_layer") or status.get("safety_decision") == "FAULT":
-            raise Er2ToolError("runtime is not healthy")
-        pose = status.get("estimate")
-        if not isinstance(pose, Mapping) or not isinstance(pose.get("frame_id"), str) or not pose["frame_id"]:
-            raise Er2ToolError("current localization frame unavailable")
-        if local:
-            pose = pose.get("local_pose")
-            if not isinstance(pose, Mapping) or pose.get("frame_id") != "R2B4_ODOM_LOCAL":
-                raise Er2ToolError("continuous local odometry unavailable")
-        for key in ("x_m", "y_m", "yaw_rad"):
-            _finite(pose.get(key), key)
-        return pose
-
     def robot_navigate_to_pose(
         self, *, x_m: float, y_m: float, yaw_rad: float | None = None,
         max_v_mps: float | None = None, max_omega_rad_s: float | None = None,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, object]:
-        target = {"x_m": _finite(x_m, "x_m"), "y_m": _finite(y_m, "y_m")}
-        if yaw_rad is not None:
-            target["yaw_rad"] = _wrap_yaw(_finite(yaw_rad, "yaw_rad"))
-        return self._navigate(target, self._pose_snapshot(), max_v_mps, max_omega_rad_s, cancel_event)
+        return self._finite_action("v3.command.navigate", {
+            "x_m": x_m, "y_m": y_m, "yaw_rad": yaw_rad,
+            "max_v_mps": max_v_mps, "max_omega_rad_s": max_omega_rad_s,
+            "wait_for_completion": True,
+        }, cancel_event)
 
     def robot_move_relative(
         self, *, forward_m: float, left_m: float = 0.0,
@@ -281,148 +261,57 @@ class Er2RobotTools:
         max_v_mps: float | None = None, max_omega_rad_s: float | None = None,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, object]:
-        forward = _finite(forward_m, "forward_m")
-        left = _finite(left_m, "left_m")
-        yaw_delta = None if final_yaw_rad is None else _finite(final_yaw_rad, "final_yaw_rad")
-        pose = self._pose_snapshot(local=True)
-        yaw = float(pose["yaw_rad"])
-        target = {
-            "x_m": float(pose["x_m"]) + forward * math.cos(yaw) - left * math.sin(yaw),
-            "y_m": float(pose["y_m"]) + forward * math.sin(yaw) + left * math.cos(yaw),
-        }
-        if yaw_delta is not None:
-            target["yaw_rad"] = _wrap_yaw(yaw + yaw_delta)
-        return self._navigate(target, pose, max_v_mps, max_omega_rad_s, cancel_event)
+        return self._finite_action("v3.command.move_relative", {
+            "forward_m": forward_m, "left_m": left_m, "final_yaw_rad": final_yaw_rad,
+            "max_v_mps": max_v_mps, "max_omega_rad_s": max_omega_rad_s,
+        }, cancel_event)
 
     def robot_turn_by(
         self, *, angle_deg: float, max_omega_rad_s: float | None = None,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, object]:
-        angle = _finite(angle_deg, "angle_deg")
-        if not -180.0 <= angle <= 180.0:
-            raise Er2ToolError("angle_deg must stay within [-180, 180]; pose goals use the shortest turn")
-        pose = self._pose_snapshot(local=True)
-        target = {"x_m": float(pose["x_m"]), "y_m": float(pose["y_m"]),
-                  "yaw_rad": _wrap_yaw(float(pose["yaw_rad"]) + math.radians(angle))}
-        return self._navigate(target, pose, None, max_omega_rad_s, cancel_event)
+        return self._finite_action("v3.command.turn_by", {
+            "angle_deg": angle_deg, "max_omega_rad_s": max_omega_rad_s,
+        }, cancel_event)
 
-    def _navigate(
-        self, target: dict[str, float], pose: Mapping[str, object],
-        max_v_mps: float | None, max_omega_rad_s: float | None,
+    def _finite_action(
+        self, action: str, parameters: Mapping[str, object],
         cancel_event: threading.Event | None,
     ) -> dict[str, object]:
-        parameters = dict(target)
-        parameters["frame_id"] = pose["frame_id"]
-        for name, requested, bound in (
-            ("max_v_mps", max_v_mps, self.config.max_v_mps),
-            ("max_omega_rad_s", max_omega_rad_s, self.config.max_omega_rad_s),
-        ):
+        # ER2 retains only its provider envelope and gateway adaptation. Goal
+        # geometry and the entire mission/STOP lifecycle belong to V3.
+        params = dict(parameters)
+        for name, bound in (("max_v_mps", self.config.max_v_mps),
+                            ("max_omega_rad_s", self.config.max_omega_rad_s)):
+            if name == "max_v_mps" and action == "v3.command.turn_by":
+                continue
+            requested = params.get(name)
             value = bound if requested is None else _finite(requested, name)
             if not 0 < value <= bound:
                 raise Er2ToolError(f"{name} must be >0 and <= {bound:g}")
-            parameters[name] = value
-        for name, value in target.items():
-            _finite(value, name)
+            params[name] = value
         operator = self._handle("read", "operator.status")
         capture = operator.get("result")
         if operator["status"] != "COMPLETED" or not isinstance(capture, Mapping):
             raise Er2ToolError("operator status unavailable")
-        mode, hz = capture.get("capture_mode"), capture.get("capture_hz")
-        if not isinstance(mode, str) or not isinstance(hz, int) or isinstance(hz, bool):
-            raise Er2ToolError("current capture settings unavailable")
-
-        started = self._monotonic()
-        # Keep the independent producer watchdog as the final liveness bound.
-        timeout_s = min(self.config.session_watchdog_s, self.gateway.policy.session_watchdog_s) - 0.5
-        command: dict[str, object] | None = None
-        mission_id: str | None = None
-        final: Mapping[str, object] = {}
-        reason = "CANCELLED"
-        try:
-            if cancel_event is None or not cancel_event.is_set():
-                command = self._handle("execute", "v3.command.navigate", {
-                    **parameters, "capture": False, "capture_mode": mode, "capture_hz": hz,
-                })
-                if command["status"] not in {"ACCEPTED", "COMPLETED"}:
-                    raise Er2ToolError(f"navigation rejected: {command.get('error') or command['status']}")
-                handle = command.get("result")
-                command_id = handle.get("command_id") if isinstance(handle, Mapping) else None
-                if not isinstance(command_id, str) or not command_id:
-                    raise Er2ToolError("navigation returned no command identity")
-                mission_id = f"mission-{command_id}"
-                while True:
-                    if cancel_event is not None and cancel_event.is_set():
-                        reason = "CANCELLED"
-                        break
-                    remaining = timeout_s - (self._monotonic() - started)
-                    if remaining <= 0:
-                        reason = "TIMEOUT"
-                        break
-                    response = self._handle("read", "v3.status")
-                    payload = response.get("result")
-                    if response["status"] != "COMPLETED" or not isinstance(payload, Mapping):
-                        reason = "STATUS_UNAVAILABLE"
-                        break
-                    final = payload
-                    mission = payload.get("mission")
-                    navigation = payload.get("navigation")
-                    estimate = payload.get("estimate")
-                    if payload.get("state") != "RUNNING" or payload.get("fault_layer") or payload.get("safety_decision") == "FAULT":
-                        reason = "RUNTIME_FAULT"
-                        break
-                    if isinstance(estimate, Mapping) and pose["frame_id"] == "R2B4_ODOM_LOCAL":
-                        estimate = estimate.get("local_pose")
-                    if not isinstance(estimate, Mapping) or estimate.get("frame_id") != pose["frame_id"]:
-                        reason = "LOCALIZATION_FRAME_CHANGED"
-                        break
-                    if not isinstance(mission, Mapping) or mission.get("mission_id") != mission_id:
-                        reason = "MISSION_REPLACED"
-                        break
-                    if not isinstance(navigation, Mapping) or navigation.get("mission_id") != mission_id:
-                        reason = "NAVIGATION_IDENTITY_MISMATCH"
-                        break
-                    if mission.get("lifecycle") in {"FAILED", "CANCELLED"}:
-                        reason = "MISSION_" + str(mission["lifecycle"])
-                        break
-                    nav_status = navigation.get("status")
-                    decision = payload.get("safety_decision")
-                    if decision not in {"ALLOW", "STOP"}:
-                        reason = "SAFETY_STATUS_UNAVAILABLE"
-                        break
-                    if decision == "STOP" and not (
-                        (nav_status == "COMPLETE" and payload.get("safety_reason") == "NOT_ACTIVE")
-                        or (nav_status == "IDLE" and navigation.get("reason") == "LOCALIZATION_HOLD")
-                    ):
-                        reason = "SAFETY_STOP"
-                        break
-                    if mission.get("mode") != "NAVIGATE":
-                        reason = "MISSION_INVALID"
-                        break
-                    if nav_status == "COMPLETE":
-                        reason = "COMPLETE"
-                        break
-                    if nav_status in {"NO_PATH", "INVALIDATED"}:
-                        reason = str(nav_status)
-                        break
-                    if nav_status not in {"ACTIVE", "PENDING", "IDLE"}:
-                        reason = "NAVIGATION_STATUS_UNAVAILABLE"
-                        break
-                    self._sleep(min(0.05, remaining))
-        finally:
-            stop = self.robot_stop()
-
-        navigation = final.get("navigation")
-        navigation = navigation if isinstance(navigation, Mapping) else {}
-        return {
-            "status": "COMPLETED" if reason == "COMPLETE" else "INTERRUPTED",
-            "reason": reason, "mission_id": mission_id, "requested": target,
-            "elapsed_s": max(0.0, self._monotonic() - started),
-            "final_pose": _jsonable(final.get("estimate")),
-            "progress": navigation.get("progress"),
-            "navigation_reason": navigation.get("reason"),
-            "safety_reason": final.get("safety_reason"),
-            "command": command, "stop": stop,
-        }
+        params.update(
+            capture=False,
+            capture_mode=capture.get("capture_mode") or DEFAULT_CAPTURE_MODE,
+            capture_hz=capture.get("capture_hz") or DEFAULT_CAPTURE_HZ,
+            cancel_event=cancel_event,
+            finite_timeout_s=self.config.session_watchdog_s - 0.5,
+        )
+        response = self._handle("execute", action, params)
+        result = response.get("result")
+        if response["status"] not in {"ACCEPTED", "COMPLETED"}:
+            error = str(response.get("error") or response["status"])
+            if error.startswith("FiniteNavigationSafetyError:"):
+                raise Er2SafetyError(error)
+            raise Er2ToolError(f"navigation rejected: {error}")
+        if not isinstance(result, Mapping) or result.get("status") not in {"COMPLETED", "INTERRUPTED"}:
+            self.robot_stop()
+            raise Er2ToolError("finite navigation returned no completion result")
+        return dict(result)
 
     def execute(
         self, name: str, arguments: Mapping[str, object] | None = None,

@@ -48,6 +48,8 @@ def _setting(values: Mapping[str, str], name: str) -> str | None:
 def _receipt(status: str, executed: bool) -> str:
     if executed:
         return "Rendben."
+    if status.startswith("FAILED:"):
+        return "A kért robotművelet nem fejeződött be."
     if status.startswith("REJECTED:"):
         return "A kért robotműveletet most nem tudom biztonságosan végrehajtani."
     return "A robotművelet nem indult el."

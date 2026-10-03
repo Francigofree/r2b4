@@ -74,6 +74,7 @@ class ActionDescriptor:
     voice_exposed: bool = False
     session_watchdog: bool = False
     requirements: tuple[str, ...] = ()
+    completion_required: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.startswith("v3.command."):
@@ -84,6 +85,8 @@ class ActionDescriptor:
             raise TypeError(f"voice_exposed must be bool: {self.name}")
         if type(self.session_watchdog) is not bool:
             raise TypeError(f"session_watchdog must be bool: {self.name}")
+        if type(self.completion_required) is not bool:
+            raise TypeError(f"completion_required must be bool: {self.name}")
         names = [item.name for item in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError(f"duplicate action parameter: {self.name}")
@@ -102,6 +105,7 @@ class ActionDescriptor:
             "description": self.description,
             "voice_exposed": self.voice_exposed,
             "session_watchdog": self.session_watchdog,
+            "completion_required": self.completion_required,
             "requirements": list(self.requirements),
             "parameters": {item.name: item.to_jsonable() for item in self.parameters},
         }
@@ -113,7 +117,7 @@ def _p(name: str, description: str, *, required: bool = False,
     return ActionParameterDescriptor(name, description, required, minimum, maximum, default, value_type)
 
 
-# Voice exposure is opt-in; metric navigation is initially exposed through ER2.
+# Voice exposure is opt-in; finite relative goals hide frame/pose arithmetic.
 _DESCRIPTORS = (
     ActionDescriptor(
         "v3.command.stop",
@@ -145,6 +149,31 @@ _DESCRIPTORS = (
         ),
         voice_exposed=True,
         session_watchdog=True,
+    ),
+    ActionDescriptor(
+        "v3.command.move_relative",
+        "Move to a relative local pose using closed-loop navigation; blocks until completion or failure and STOP. Negative forward_m requests a goal behind the robot.",
+        (
+            _p("forward_m", "Forward distance in metres relative to the starting pose; negative means behind.", required=True),
+            _p("left_m", "Leftward relative goal offset in metres, not sideways driving.", default=0.0),
+            _p("final_yaw_rad", "Optional final heading offset in radians relative to the starting heading."),
+            _p("max_v_mps", "Maximum linear speed.", minimum=0.01, maximum=0.50, default=0.20),
+            _p("max_omega_rad_s", "Maximum turning speed.", minimum=0.01, maximum=1.20, default=0.60),
+        ),
+        voice_exposed=True,
+        session_watchdog=True,
+        completion_required=True,
+    ),
+    ActionDescriptor(
+        "v3.command.turn_by",
+        "Turn in place by a relative angle using closed-loop heading control; blocks until completion or failure and STOP.",
+        (
+            _p("angle_deg", "Relative angle in degrees; positive turns left, negative right. Pose goals use the shortest turn.", required=True, minimum=-180.0, maximum=180.0),
+            _p("max_omega_rad_s", "Maximum turning speed.", minimum=0.01, maximum=1.20, default=0.60),
+        ),
+        voice_exposed=True,
+        session_watchdog=True,
+        completion_required=True,
     ),
     ActionDescriptor(
         "v3.command.navigate",
