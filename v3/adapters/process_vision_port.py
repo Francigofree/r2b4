@@ -13,23 +13,19 @@ from pathlib import Path
 from typing import Any
 
 from v3.async_capability import TransportSemantics, latest_state_snapshot
-from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
+from v3.runtime_performance import CpuSet, temporary_current_affinity
 
 from .camera_geometry import CameraGeometryConfig
-from .litert_person_detector import LiteRtPersonDetectorConfig, LiteRtSsdPersonDetector
+from .litert_person_detector import LiteRtPersonDetectorConfig
 from .vision_media_socket import VisionClient, recv_json_line
 from .person_detection import (
-    NativePersonDetector,
     PersonDetectionRuntimeStatus,
     PersonDetectionSnapshot,
 )
 from .picamera2_camera import (
     CameraEdgeSnapshot,
     CameraRuntimeStatus,
-    NativePicamera2Camera,
     Picamera2CameraConfig,
-    default_picamera2_factory,
-    raspberry_pi_sensor_timestamp_to_monotonic_ns,
 )
 
 _READY_TIMEOUT_S = 15.0
@@ -54,6 +50,7 @@ class CameraFrameControlSnapshot:
     calibration_id: str
     rectified_K: tuple[tuple[float, float, float], ...]
     rectification_duration_ns: int
+    owner_generation: str = ""
 
     @property
     def completion_lag_ns(self) -> int:
@@ -91,6 +88,7 @@ def _wire_camera(edge: CameraEdgeSnapshot) -> tuple[object, ...]:
             frame.calibration_id,
             frame.rectified_K,
             frame.rectification_duration_ns,
+            frame.owner_generation,
         )
     return status_wire, frame_wire
 
@@ -125,10 +123,210 @@ def _unwire_camera(value: tuple[object, ...]) -> CameraEdgeSnapshot:
             calibration_id=str(frame_wire[14]),
             rectified_K=tuple(tuple(float(value) for value in row) for row in frame_wire[15]),
             rectification_duration_ns=int(frame_wire[16]),
+            owner_generation=str(frame_wire[17]),
         )
     # CameraEdgeSnapshot performs no runtime frame-type coercion.  The parent
     # intentionally exposes the metadata-only compatible view above.
     return CameraEdgeSnapshot(status=status, frame=frame)  # type: ignore[arg-type]
+
+
+class ProcessVisionPort:
+    """Idle, metadata-only V3 consumer. It never owns a process or camera."""
+
+    transport_semantics = TransportSemantics.LATEST_STATE
+
+    def __init__(self, camera_config: Picamera2CameraConfig, detector_config: LiteRtPersonDetectorConfig | None,
+                 *, camera_geometry: CameraGeometryConfig | None = None,
+                 worker_cpus: int | CpuSet | None = None, strict_affinity: bool = False,
+                 ready_timeout_s: float = _READY_TIMEOUT_S, root: str | Path | None = None,
+                 socket_path: str | Path | None = None) -> None:
+        self._client = VisionClient(socket_path, root=root, timeout_s=ready_timeout_s)
+        self._condition = threading.Condition()
+        self._wake = threading.Event()
+        self._closed = False
+        self._demand = False
+        self._revision = 0
+        self._conn = None
+        self._pid = None
+        self._generation = ""
+        self._clear()
+        # Idle until a mission requests vision. Launch/connect/cold camera work
+        # happens here, never synchronously on the 50 Hz control interpreter.
+        self._collector = threading.Thread(target=self._collect, name="vision-consumer", daemon=True)
+        with temporary_current_affinity(worker_cpus, role="vision-consumer", strict=strict_affinity):
+            self._collector.start()
+
+    @property
+    def pid(self) -> int | None:
+        return self._pid
+
+    def _clear(self, error: str | None = None) -> None:
+        self._camera_edge = CameraEdgeSnapshot(CameraRuntimeStatus(False, 0, None, error, None, None), None)
+        self._detection = None
+        self._detection_status = PersonDetectionRuntimeStatus(False, 0, 0, None, error)
+        self._error = error
+
+    def set_person_detection_demand(self, active: bool) -> None:
+        if type(active) is not bool:
+            raise TypeError("active must be bool")
+        with self._condition:
+            if self._closed or self._demand == active:
+                return
+            self._demand = active
+            self._revision += 1
+            self._generation = ""
+            self._clear()
+            self._condition.notify_all()
+        self._wake.set()
+
+    def _accept(self, value: dict, revision: int) -> None:
+        from dataclasses import replace
+        from .person_detection import PersonBox, PersonDetection, PersonDetectionProjection
+        generation = value["owner_generation"]
+        if not isinstance(generation, str) or not generation:
+            raise ValueError("VISION_GENERATION_INVALID")
+        edge = _unwire_camera(value["camera"])
+        frame = edge.frame
+        if frame is not None:
+            if frame.calibration_state != "CALIBRATED" or not frame.calibration_id:
+                raise ValueError("VISION_FRAME_UNCALIBRATED")
+            if frame.owner_generation != generation:
+                raise ValueError("VISION_GENERATION_MISMATCH")
+        raw = value["detection"]
+        detection = None
+        if raw is not None:
+            raw = dict(raw)
+            if len(raw["detections"]) > 64:
+                raise ValueError("VISION_DETECTIONS_EXCEEDED_BOUND")
+            raw["detections"] = tuple(PersonDetection(x["confidence"], PersonBox(**x["box"])) for x in raw["detections"])
+            raw["projections"] = tuple(PersonDetectionProjection(**x) for x in raw["projections"])
+            detection = PersonDetectionSnapshot(**raw)
+            if detection.owner_generation != generation:
+                raise ValueError("VISION_GENERATION_MISMATCH")
+        status = PersonDetectionRuntimeStatus(**value["detection_status"])
+        with self._condition:
+            if self._closed or not self._demand or revision != self._revision:
+                return
+            if self._generation and self._generation != generation:
+                raise ValueError("VISION_GENERATION_MISMATCH")
+            self._generation = generation
+            self._pid = value.get("owner_pid")
+            self._camera_edge = edge
+            self._detection = detection
+            self._detection_status = status
+            self._error = None
+            self._condition.notify_all()
+
+    def _collect(self) -> None:
+        import select
+        while not self._closed:
+            self._wake.wait(0.1)
+            self._wake.clear()
+            with self._condition:
+                if not self._demand:
+                    continue
+                revision = self._revision
+            conn = None
+            try:
+                conn = self._client.connect()
+                self._conn = conn
+                conn.sendall(b"R2B4VISION1 PERSON\n")
+                while not self._closed:
+                    with self._condition:
+                        if not self._demand or revision != self._revision:
+                            break
+                    readable, _, _ = select.select([conn], [], [], 0.05)
+                    if readable:
+                        self._accept(recv_json_line(conn), revision)
+            except Exception as exc:
+                with self._condition:
+                    if self._demand and revision == self._revision and not self._closed:
+                        self._clear(f"VISION_UNAVAILABLE:{type(exc).__name__}:{exc}"[:256])
+                        self._condition.notify_all()
+                # A failed active demand is explicit. Do not silently reconnect
+                # and replace its generation; the mission must release it.
+                while not self._closed:
+                    with self._condition:
+                        if revision != self._revision or not self._demand:
+                            break
+                    self._wake.wait(0.1)
+                    self._wake.clear()
+            finally:
+                if conn is not None:
+                    conn.close()
+                self._conn = None
+
+    def capability_snapshot(self, observed_monotonic_ns: int, *, stale_after_ns: int = 250_000_000):
+        edge = self.get_edge_snapshot()
+        frame = edge.frame
+        return latest_state_snapshot(name="vision.camera", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if frame is None else frame.sequence,
+            source_monotonic_ns=None if frame is None else frame.measurement_monotonic_ns,
+            stale_after_ns=stale_after_ns, running=edge.status.running, error=edge.status.last_error)
+
+    def detection_capability_snapshot(self, observed_monotonic_ns: int, *, stale_after_ns: int = 400_000_000):
+        with self._condition:
+            result, status = self._detection, self._detection_status
+        return latest_state_snapshot(name="vision.person_detection", observed_monotonic_ns=observed_monotonic_ns,
+            source_sequence=None if result is None else result.sequence,
+            source_monotonic_ns=None if result is None else result.measurement_monotonic_ns,
+            stale_after_ns=stale_after_ns, running=status.running, error=status.last_error)
+
+    def get_edge_snapshot(self) -> CameraEdgeSnapshot:
+        with self._condition:
+            return self._camera_edge
+
+    def get_runtime_status(self) -> CameraRuntimeStatus:
+        return self.get_edge_snapshot().status
+
+    def get_detection_snapshot(self) -> PersonDetectionSnapshot | None:
+        with self._condition:
+            return self._detection
+
+    def get_detection_status(self) -> PersonDetectionRuntimeStatus:
+        with self._condition:
+            return self._detection_status
+
+    def wait_for_new_frame(self, after_sequence: int = 0, timeout_s: float = 1.0) -> CameraEdgeSnapshot:
+        deadline = time.monotonic() + timeout_s
+        with self._condition:
+            while self._camera_edge.status.frame_sequence <= after_sequence and not self._closed:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._condition.wait(remaining)
+            return self._camera_edge
+
+    def wait_for_new_detection(self, after_sequence: int = 0, timeout_s: float = 1.0) -> PersonDetectionSnapshot | None:
+        deadline = time.monotonic() + timeout_s
+        with self._condition:
+            while (self._detection is None or self._detection.sequence <= after_sequence) and not self._closed:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self._condition.wait(remaining)
+            return self._detection
+
+    def request_jpeg(self, output: str | Path, *, stream_name: str = "lores") -> bool:
+        # Optional photo evidence has its own observation client outside control.
+        return False
+
+    def stop(self) -> None:
+        import socket
+        with self._condition:
+            self._demand = False
+            self._closed = True
+            self._revision += 1
+            self._clear()
+            self._condition.notify_all()
+        self._wake.set()
+        conn = self._conn
+        if conn is not None:
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        self._collector.join(timeout=0.2)
 
 
 class UnavailableVisionPort:

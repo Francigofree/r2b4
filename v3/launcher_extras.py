@@ -47,7 +47,7 @@ def _top_level_commands() -> list[str]:
     host = sorted(set(host_cli.COMMANDS) - set(host_cli.ALIASES))
     return sorted({
         *_canonical_robot_commands(), *host,
-        "commands", "er2", "help", "voice", "evi",
+        "commands", "er2", "help", "voice", "evi", "cam",
     })
 
 

@@ -2,7 +2,7 @@
 """Maintenance-only empirical calibration for the R2B4 front camera.
 
 This is the sole intentional raw-image path introduced by the calibrated-frame
-upgrade.  It must be run with the resident runtime stopped.  It captures a
+upgrade.  It requires exclusive physical camera access.  It captures a
 fixed-focus chessboard data set, solves an OpenCV pinhole calibration, scales K
 back to the native sensor coordinate system, and writes a JSON file consumed by
 the upgrade installer.
@@ -17,23 +17,16 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import time
 from pathlib import Path
 
 
-def _require_runtime_stopped() -> None:
-    socket_path = Path(
-        os.environ.get(
-            "R2B4_VISION_MEDIA_SOCKET",
-            f"/tmp/r2b4_vision_media_{os.getuid()}.sock",
-        )
-    )
-    if socket_path.exists():
-        raise RuntimeError(
-            f"resident vision owner appears active ({socket_path}); stop the runtime first"
-        )
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from v3.adapters.camera_ownership import camera_device_lock  # noqa: E402
 
 
 def _imports():
@@ -131,7 +124,11 @@ def main() -> int:
     if args.cols < 3 or args.rows < 3 or args.samples < 8:
         raise ValueError("use at least 3x3 inner corners and at least 8 samples")
 
-    _require_runtime_stopped()
+    with camera_device_lock():
+        return _calibrate(args)
+
+
+def _calibrate(args: argparse.Namespace) -> int:
     cv2, np, controls, Picamera2 = _imports()
     camera = Picamera2(camera_num=args.camera_index)
     configured = False

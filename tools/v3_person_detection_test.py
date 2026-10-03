@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Bounded live person-detection test using the native R2B4 camera owner."""
+"""Maintenance person probe; the native driver enforces exclusive camera access."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -26,20 +25,6 @@ from v3.adapters.picamera2_camera import (  # noqa: E402
     picamera2_camera_config_from_mapping,
     raspberry_pi_sensor_timestamp_to_monotonic_ns,
 )
-
-
-def _refuse_parallel_runtime_owner() -> None:
-    pid_path = REPO_ROOT / "runtime" / ".r2b4_runtime_pid"
-    if not pid_path.is_file():
-        return
-    try:
-        pid = int(pid_path.read_text(encoding="utf-8").strip())
-        os.kill(pid, 0)
-    except (OSError, ValueError):
-        return
-    raise SystemExit(
-        f"refusing parallel camera ownership while R2B4 runtime PID {pid} is alive; stop the runtime first"
-    )
 
 
 def _camera_config():
@@ -77,7 +62,6 @@ def main() -> int:
     if args.seconds <= 0:
         parser.error("--seconds must be positive")
 
-    _refuse_parallel_runtime_owner()
     camera_config, camera_geometry = _camera_config()
     camera = NativePicamera2Camera(
         camera_config,

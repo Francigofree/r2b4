@@ -117,6 +117,7 @@ class PersonDetectionSnapshot:
     geometry_state: str | None = None
     geometry_reason: str | None = None
     projections: tuple[PersonDetectionProjection, ...] = ()
+    owner_generation: str = ""
 
     def __post_init__(self) -> None:
         _positive_int(self.sequence, "sequence")
@@ -451,6 +452,7 @@ class NativePersonDetector:
                         geometry_state=geometry_state,
                         geometry_reason=geometry_reason,
                         projections=projections,
+                        owner_generation=getattr(frame, "owner_generation", ""),
                     )
                     self._condition.notify_all()
         except Exception as exc:

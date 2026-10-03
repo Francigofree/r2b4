@@ -208,3 +208,126 @@ def test_failed_person_detector_does_not_gain_motor_safety_authority():
     result = gate.finalize(context, request, health, LifecycleState.ACTIVE, None)
     assert result.safety_decision is SafetyDecision.ALLOW
     assert result.enabled is True
+
+
+def test_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure():
+    from dataclasses import replace
+    from rig import resolved_config
+    from test_v3_bno055_imu_backend import Device
+    from test_v3_encoder_ab_direction_robustness import FakeGpio
+    from test_v3_latest_lidar_backend import Port
+    from v3.adapters.process_vision_port import UnavailableVisionPort
+    from v3.contracts import FinalActuation, NavigationPlan, NavigationStatus
+    from v3.engine import LayerRecord, TickResult, TickTrace
+    from v3_hardware_runtime import NativeHardwareSensorOwner
+
+    class VisionConsumer(UnavailableVisionPort):
+        def __init__(self, *args, **kwargs):
+            super().__init__('unused offline camera')
+            self.demands = []
+            self.closed = False
+
+        def set_person_detection_demand(self, active):
+            self.demands.append(active)
+
+        def stop(self):
+            self.set_person_detection_demand(False)
+            self.closed = True
+
+    vision = VisionConsumer()
+    sensors = replace(resolved_config().runtime.sensor_inputs, person_photo_evidence=None)
+    imu, lidar = Device({}), Port()
+    owner = NativeHardwareSensorOwner(
+        FakeGpio(), lambda bus: None, lambda pose: lidar, sensors,
+        open_imu_device=lambda config: imu,
+        open_vision_port=lambda *args, **kwargs: vision,
+    )
+
+    def publish(tick, mode, *, reason=None, mission_id='follow-demand'):
+        mission = replace(_mission(tick, 1_000_000_000 + tick * 20_000_000, mode), mission_id=mission_id)
+        navigation = NavigationPlan(mission.context, mission.mission_id, (), None,
+                                    mission.constraints, 0.0, 0.0,
+                                    NavigationStatus.INVALIDATED, reason or 'PERSON_TARGET_NOT_AVAILABLE')
+        final = FinalActuation(mission.context, 0.0, 0.0, False, SafetyDecision.STOP,
+                               'CLEAR', reason or 'NAVIGATION_HOLD')
+        owner.publish_tick_result(TickResult(final, TickTrace(mission.context,
+                                  (LayerRecord('L5', mission), LayerRecord('L6', navigation)))))
+
+    try:
+        assert owner.inputs.camera_frame_port is vision
+        assert vision.demands == []  # V3 start creates no active camera demand.
+        publish(1, CommandMode.EXPLORE)
+        assert vision.demands[-1] is False
+        publish(2, CommandMode.FOLLOW_PERSON)
+        assert vision.demands[-1] is True  # Acquisition may await its first result.
+        publish(3, CommandMode.FOLLOW_PERSON, reason='PERSON_TARGET_LOST')
+        assert vision.demands[-1] is False
+        publish(4, CommandMode.FOLLOW_PERSON)
+        assert vision.demands[-1] is False  # Continued heartbeat cannot reopen a terminal mission.
+        publish(5, CommandMode.FACE_PERSON, mission_id='face-demand')
+        assert vision.demands[-1] is True
+        stop = replace(_mission(6, 1_120_000_000), mode=CommandMode.STOP,
+                       lifecycle=MissionLifecycle.CANCELLED, stop_reason='COMMAND_STOP')
+        owner.publish_tick_result(TickResult(
+            FinalActuation(stop.context, 0.0, 0.0, False, SafetyDecision.STOP, 'CLEAR', 'COMMAND_STOP'),
+            TickTrace(stop.context, (LayerRecord('L5', stop),)),
+        ))
+        assert vision.demands[-1] is False
+        publish(7, CommandMode.FOLLOW_PERSON, mission_id='new-follow-demand')
+        assert vision.demands[-1] is True
+        publish(8, CommandMode.FOLLOW_PERSON, mission_id='new-follow-demand', reason='PERSON_CAPABILITY_FAILED')
+        assert vision.demands[-1] is False
+    finally:
+        owner.close()
+    assert vision.closed and vision.demands[-1] is False
+    assert imu.close_calls == lidar.stop_calls == 1
+
+
+def test_follow_person_closed_camera_health_revokes_motion_and_replays_failure():
+    from dataclasses import replace
+    from rig import healthy_localization, resolved_config
+    from v3.contracts import AcquisitionFrame, DeviceSample, LOCAL_FRAME_ID, NavigationStatus, RobotEstimate
+    from v3.layers.l2_admission import InputAdmission
+    from v3.layers.l4_world_model import ShadowWorldModel
+    from v3.layers.l6_navigation import TrajectoryNavigator
+
+    control = resolved_config().runtime.composition.live_control.control
+    admission = InputAdmission(control.admission)
+    world_model = ShadowWorldModel(control.world_model)
+    navigator = TrajectoryNavigator(control.navigation, async_config=control.async_l6)
+
+    def step(tick, state, *, mission_id='follow-health', mode=CommandMode.FOLLOW_PERSON, nav=navigator):
+        context = TickContext(tick, 2_000_000_000 + tick * 20_000_000)
+        fields = lambda **values: tuple(DataField(key, value) for key, value in values.items())
+        samples = (
+            DeviceSample('RPLIDAR_C1', 'lidar_health', tick, context.monotonic_ns,
+                         fields(age_ns=0, point_count=80)),
+            DeviceSample('PERSON_DETECTOR_FRONT', 'obstacle_track', tick, context.monotonic_ns,
+                         fields(track_id='person-1', x_m=1.8, y_m=1.0, radius_m=.2,
+                                vx_mps=0.0, vy_mps=0.0, confidence=1.0)),
+        )
+        health = (DeviceHealth('RPLIDAR_C1', DeviceHealthState.OK),
+                  DeviceHealth('PERSON_DETECTOR_FRONT', state))
+        admitted = admission(AcquisitionFrame(context, samples, health))
+        estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                 (0.0,) * 25, localization_quality=healthy_localization())
+        world = world_model(admitted, estimate)
+        assert world.person_detection_state is state
+        mission = replace(_mission(tick, context.monotonic_ns, mode), mission_id=mission_id)
+        return nav.evaluate(mission, estimate, world), mission, estimate, world
+
+    pending, *_ = step(1, DeviceHealthState.UNKNOWN)
+    assert pending.status is NavigationStatus.IDLE and not pending.route
+    active, *_ = step(2, DeviceHealthState.OK)
+    assert active.status is NavigationStatus.ACTIVE
+    stale, *_ = step(3, DeviceHealthState.DEGRADED)
+    assert stale.status is NavigationStatus.IDLE and not stale.route
+    failed, *_ = step(4, DeviceHealthState.FAILED)
+    assert failed.reason == 'PERSON_CAPABILITY_FAILED' and not failed.route
+    restored = TrajectoryNavigator(control.navigation, async_config=control.async_l6)
+    restored.restore(navigator.checkpoint())
+    still_failed, mission, estimate, world = step(5, DeviceHealthState.OK)
+    assert still_failed == restored.evaluate(mission, estimate, world)
+    assert still_failed.reason == 'PERSON_CAPABILITY_FAILED'
+    new_mission, *_ = step(6, DeviceHealthState.OK, mission_id='new-follow-health')
+    assert new_mission.status is NavigationStatus.ACTIVE

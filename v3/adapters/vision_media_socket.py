@@ -251,51 +251,50 @@ class VisionMediaServer:
         demand = None
         image_mode = False
         try:
-            with conn:
-                conn.settimeout(15)
-                parts = recv_line(conn, 128).decode("ascii").split()
-                if len(parts) != 2 or parts[0] != "R2B4VISION1":
-                    raise ValueError("expected canonical vision request")
-                command = parts[1]
-                if command == "STATUS":
-                    send_json_line(conn, self.owner.status())
-                    return
-                if command in {"ON", "OFF"}:
-                    self.owner.set_manual_demand(command == "ON")
-                    send_json_line(conn, self.owner.status())
-                    return
-                if command not in {"PERSON", "IMAGE"}:
-                    raise ValueError("unknown vision request")
-                demand = self.owner.acquire(person=command == "PERSON")
-                generation = self.owner.generation
-                if command == "PERSON":
-                    while not self._stop.is_set():
-                        send_json_line(conn, self.owner.control_state(generation))
-                        readable, _, _ = select.select([conn], [], [], 0.05)
-                        if readable:
-                            if not conn.recv(1):
-                                return
-                            raise ValueError("person session is receive-only")
-                    return
-                image_mode = True
-                send_json_line(conn, {"owner_generation": generation,
-                                      "maximum_age_ns": self.owner.maximum_age_ns})
-                # An image session may wait between observations, holding demand
-                # until its consumer disconnects (video and provider sessions).
-                conn.settimeout(None)
+            conn.settimeout(15)
+            parts = recv_line(conn, 128).decode("ascii").split()
+            if len(parts) != 2 or parts[0] != "R2B4VISION1":
+                raise ValueError("expected canonical vision request")
+            command = parts[1]
+            if command == "STATUS":
+                send_json_line(conn, self.owner.status())
+                return
+            if command in {"ON", "OFF"}:
+                self.owner.set_manual_demand(command == "ON")
+                send_json_line(conn, self.owner.status())
+                return
+            if command not in {"PERSON", "IMAGE"}:
+                raise ValueError("unknown vision request")
+            demand = self.owner.acquire(person=command == "PERSON")
+            generation = self.owner.generation
+            if command == "PERSON":
                 while not self._stop.is_set():
-                    request = recv_line(conn, 128).decode("ascii").split()
-                    if len(request) != 2 or request[0] != "OBSERVE" or request[1] not in {"lores", "main"}:
-                        raise ValueError("invalid observation request")
-                    result = self._capture(request[1], generation)
-                    metadata = json.dumps(result.metadata.to_jsonable(), separators=(",", ":")).encode()
-                    if len(metadata) > MAX_METADATA_BYTES:
-                        raise ValueError("image metadata exceeded its bound")
-                    conn.settimeout(5)
-                    conn.sendall(f"OK {len(metadata)} {len(result.image_bytes)}\n".encode())
-                    conn.sendall(metadata)
-                    conn.sendall(result.image_bytes)
-                    conn.settimeout(None)
+                    send_json_line(conn, self.owner.control_state(generation))
+                    readable, _, _ = select.select([conn], [], [], 0.05)
+                    if readable:
+                        if not conn.recv(1):
+                            return
+                        raise ValueError("person session is receive-only")
+                return
+            image_mode = True
+            send_json_line(conn, {"owner_generation": generation,
+                                  "maximum_age_ns": self.owner.maximum_age_ns})
+            # An image session may wait between observations, holding demand
+            # until its consumer disconnects (video and provider sessions).
+            conn.settimeout(None)
+            while not self._stop.is_set():
+                request = recv_line(conn, 128).decode("ascii").split()
+                if len(request) != 2 or request[0] != "OBSERVE" or request[1] not in {"lores", "main"}:
+                    raise ValueError("invalid observation request")
+                result = self._capture(request[1], generation)
+                metadata = json.dumps(result.metadata.to_jsonable(), separators=(",", ":")).encode()
+                if len(metadata) > MAX_METADATA_BYTES:
+                    raise ValueError("image metadata exceeded its bound")
+                conn.settimeout(5)
+                conn.sendall(f"OK {len(metadata)} {len(result.image_bytes)}\n".encode())
+                conn.sendall(metadata)
+                conn.sendall(result.image_bytes)
+                conn.settimeout(None)
         except (EOFError, BrokenPipeError, ConnectionResetError):
             pass
         except Exception as exc:

@@ -78,7 +78,11 @@ class GroqStructuredChatClient:
         messages: Sequence[Mapping[str, str]],
         tool_catalog: Sequence[Mapping[str, object]],
         action_catalog: Sequence[Mapping[str, object]],
+        *,
+        images: Sequence[object] = (),
     ) -> AgentModelReply:
+        if images:
+            raise LLMRequestError("Groq text model cannot consume canonical image attachments")
         raw = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step")
         try:
             return parse_agent_model_reply(

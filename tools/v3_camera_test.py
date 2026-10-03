@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Physical Camera Module 3 validation through the native R2B4 camera stack."""
+"""Exclusive maintenance frame probe and canonical calibrated photo/video tests."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -22,22 +21,6 @@ from v3.adapters.picamera2_camera import (
 
 
 
-def _refuse_parallel_runtime_owner() -> None:
-    repo = Path(__file__).resolve().parents[1]
-    pid_path = repo / "runtime" / ".r2b4_runtime_pid"
-    if not pid_path.is_file():
-        return
-    try:
-        pid = int(pid_path.read_text(encoding="utf-8").strip())
-        os.kill(pid, 0)
-    except (OSError, ValueError):
-        return
-    raise SystemExit(
-        f"refusing parallel camera ownership while R2B4 runtime PID {pid} is alive; "
-        "stop the runtime first"
-    )
-
-
 def _config(args: argparse.Namespace) -> Picamera2CameraConfig:
     repo = Path(__file__).resolve().parents[1]
     path = repo / "conf" / "hardver.json"
@@ -49,7 +32,7 @@ def _config(args: argparse.Namespace) -> Picamera2CameraConfig:
     if not isinstance(camera, dict) or camera.get("enabled") is not True:
         raise SystemExit("conf/hardver.json camera must be enabled for physical camera tests")
     config = picamera2_camera_config_from_mapping(
-        {key: value for key, value in camera.items() if key != "geometry"}
+        {key: value for key, value in camera.items() if key not in {"geometry", "person_detection"}}
     )
     changes = {}
     if args.camera_index is not None:
@@ -157,7 +140,7 @@ def _status(args: argparse.Namespace) -> int:
 
 
 def _photo(args: argparse.Namespace) -> int:
-    result = capture_photo(Path(args.output), _config(args), warmup_s=args.warmup)
+    result = capture_photo(Path(args.output), root=Path(__file__).resolve().parents[1])
     print(json.dumps({"status": "PASS", **result}, indent=2, default=str))
     return 0
 
@@ -166,9 +149,8 @@ def _video(args: argparse.Namespace) -> int:
     result = capture_h264_video(
         Path(args.output),
         args.seconds,
-        _config(args),
         bitrate=args.bitrate,
-        warmup_s=args.warmup,
+        root=Path(__file__).resolve().parents[1],
     )
     print(json.dumps({"status": "PASS", **result}, indent=2, default=str))
     return 0
@@ -189,22 +171,17 @@ def main() -> int:
     status.add_argument("--seconds", type=float, default=5.0)
     status.set_defaults(func=_status)
 
-    photo = sub.add_parser("photo", help="capture one JPEG with the native policy")
-    _common(photo)
+    photo = sub.add_parser("photo", help="capture one calibrated canonical JPEG")
     photo.add_argument("output")
-    photo.add_argument("--warmup", type=float, default=2.0)
     photo.set_defaults(func=_photo)
 
-    video = sub.add_parser("video", help="record one bounded H.264 hardware test")
-    _common(video)
+    video = sub.add_parser("video", help="record calibrated canonical frames as H.264")
     video.add_argument("output")
     video.add_argument("--seconds", type=float, default=10.0)
-    video.add_argument("--warmup", type=float, default=1.0)
     video.add_argument("--bitrate", type=int, default=4_000_000)
     video.set_defaults(func=_video)
 
     args = parser.parse_args()
-    _refuse_parallel_runtime_owner()
     if hasattr(args, "seconds") and args.seconds <= 0:
         parser.error("--seconds must be positive")
     return int(args.func(args))

@@ -156,7 +156,7 @@ class NativeSensorHardwareConfig:
 
 
 class NativeSensorInputOwner:
-    """Own core source lifetimes and optional auxiliary camera without a runtime loop."""
+    """Own core sources and release optional vision consumer connections."""
 
     __slots__ = (
         "_camera_port",
@@ -191,7 +191,7 @@ class NativeSensorInputOwner:
         if (config.camera_source is None) != (camera_port is None):
             raise ValueError("camera port and source config must be enabled together")
         if camera_port is not None and not callable(getattr(camera_port, "stop", None)):
-            raise TypeError("camera port owner must provide stop")
+            raise TypeError("camera consumer port must provide stop")
         if (config.person_detection_source is None) != (person_detection_port is None):
             raise ValueError(
                 "person detection port and source config must be enabled together"
@@ -199,7 +199,7 @@ class NativeSensorInputOwner:
         if person_detection_port is not None and not callable(
             getattr(person_detection_port, "stop", None)
         ):
-            raise TypeError("person detection port owner must provide stop")
+            raise TypeError("person detection consumer port must provide stop")
 
         try:
             imu_backend = NativeBno055ImuBackend(imu_device, config.imu_backend)
@@ -321,7 +321,7 @@ class NativeSensorInputOwner:
                      if (snapshot := source.integrity_snapshot()) is not None)
 
     def close(self) -> None:
-        """Release every transferred source capability exactly once."""
+        """Close core devices and release this client's vision demand."""
 
         if self._closed:
             return

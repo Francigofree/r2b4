@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from .config import Er2Config, api_key_from_env
 from .evidence import Er2Evidence
-from .media import VisionMediaClient
+from .media import Er2MediaUnavailable, VisionMediaClient
 from .tool_bridge import PHYSICAL_TOOLS, Er2RobotTools, Er2SafetyError
 
 
@@ -203,6 +203,8 @@ class Er2StreamingClient:
                 except asyncio.CancelledError:
                     raise
                 except Er2SafetyError:
+                    raise
+                except Er2MediaUnavailable:
                     raise
                 except Exception as exc:
                     if stop_event.is_set():

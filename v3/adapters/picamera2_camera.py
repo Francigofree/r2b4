@@ -305,6 +305,7 @@ class CameraFrameSnapshot:
     rectified_K: tuple[tuple[float, float, float], ...]
     rectification_duration_ns: int
     sensor_crop: SensorCrop | None = None
+    owner_generation: str = ""
 
     def __post_init__(self) -> None:
         _positive_int(self.sequence, "sequence")
@@ -977,6 +978,7 @@ class NativePicamera2Camera:
             rectified_K=rectified.rectified_K,
             rectification_duration_ns=rectified.rectification_duration_ns,
             sensor_crop=sensor_crop,
+            owner_generation=self._owner_generation,
         )
 
     def _checked_clock(self) -> int:
