@@ -51,8 +51,14 @@ def test_process_determinism_full_lidar_and_indexed_query(tmp_path):
     many = compile_evidence(source, tmp_path / 'many', workers=2, shard_bytes=300)
     assert one['compiler_status'] == many['compiler_status'] == 'COMPLETE'
     assert verify(one['output'], source=source)['messages'] == len(rows)
+    assert verify(many['output'], source=source)['messages'] == len(rows)
+    artifacts = lambda output: {
+        p.relative_to(output).as_posix() for p in Path(output).rglob('*') if p.is_file()
+    }
+    assert artifacts(one['output']) == artifacts(many['output'])
     for p in Path(one['output']).rglob('*'):
-        if p.is_file() and p.name != 'manifest.json':
+        # Measurements/provenance vary with worker count; exported evidence must not.
+        if p.is_file() and p.name not in {'manifest.json', 'compiler_performance.json'}:
             assert p.read_bytes() == (Path(many['output']) / p.relative_to(one['output'])).read_bytes()
     source.unlink()  # Query must remain portable without MCAP access.
     result = list(query(one['output'], tick_id=1505, field='expected.layers.L11.*', layer='L11'))
@@ -153,10 +159,10 @@ def test_atomic_publication_interruption_and_legacy_protection(tmp_path, monkeyp
     original = (output / 'manifest.json').read_bytes()
     with pytest.raises(FileExistsError):
         compile_evidence(source, output)
-    real_verify = compiler.verify
-    def fail(_root):
+    real_verify = compiler.verify_artifacts
+    def fail(_root, _manifest):
         raise KeyboardInterrupt
-    monkeypatch.setattr(compiler, 'verify', fail)
+    monkeypatch.setattr(compiler, 'verify_artifacts', fail)
     with pytest.raises(KeyboardInterrupt):
         compile_evidence(source, output, workers=1, overwrite=True)
     assert (output / 'manifest.json').read_bytes() == original
@@ -164,7 +170,7 @@ def test_atomic_publication_interruption_and_legacy_protection(tmp_path, monkeyp
     with pytest.raises(KeyboardInterrupt):
         compile_evidence(source, tmp_path / 'interrupted', workers=1)
     assert not (tmp_path / 'interrupted').exists()
-    monkeypatch.setattr(compiler, 'verify', real_verify)
+    monkeypatch.setattr(compiler, 'verify_artifacts', real_verify)
     assert compile_evidence(source, output, workers=1, overwrite=True)['compiler_status'] == 'COMPLETE'
     # Hash verification detects output mutation even if queries still parse it.
     with (output / 'source/records.ndjson').open('ab') as stream:
@@ -173,14 +179,16 @@ def test_atomic_publication_interruption_and_legacy_protection(tmp_path, monkeyp
         verify(output)
     assert (legacy / 'manifest.json').is_file()
     # Regenerating a file hash cannot hide an unindexed exported message.
-    from tools.mcap_evidence.export import sha256, write_json
+    from tools.mcap_evidence.export import sha256
     shard = next((output / 'source/messages').glob('*.ndjson'))
     with shard.open('ab') as stream:
         stream.write(shard.read_bytes().splitlines(keepends=True)[0])
     manifest = json.loads((output / 'manifest.json').read_bytes())
     for path in (shard, output / 'source/records.ndjson'):
         manifest['files'][str(path.relative_to(output))] = {'size': path.stat().st_size, 'sha256': sha256(path)}
-    write_json(output / 'manifest.json', manifest)
+    # Reseal provenance/accounting too, so the failure reaches the payload
+    # census instead of stopping at the intentionally modified manifest hash.
+    compiler._seal(output, manifest, json.loads((output / 'compiler_performance.json').read_bytes()))
     with pytest.raises(ValueError, match='unindexed'):
         verify(output)
 

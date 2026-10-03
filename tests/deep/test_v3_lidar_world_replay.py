@@ -2,6 +2,7 @@
 from dataclasses import replace
 import math
 import json
+import pytest
 
 from rig import ROOT, resolved_config
 from v3.capture import CaptureSink
@@ -60,6 +61,7 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
     x = y = yaw = v = omega = left_distance = right_distance = 0.0
     now = 1_000_000_000
     moving = turning = 0
+    blocked_since_ns = None
     checkpoint = None
     try:
         for tick in range(601):
@@ -122,8 +124,17 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
             moving += abs(v)+abs(omega) > 1e-6
             turning += v > .02 and abs(omega) > .1
             if tick > 12:
-                assert abs(v)+abs(omega) > 1e-6, (tick, layers['L6'].reason, layers['L8'].stop_reason)
-                assert result.final_actuation.safety_decision is SafetyDecision.ALLOW
+                if abs(v)+abs(omega) <= 1e-6:
+                    # A newly sampled wall can revoke an accepted trajectory.
+                    # Hold at zero while the delayed planner closes a safe one.
+                    assert layers['L6'].reason == layers['L8'].stop_reason == 'LOCAL_PATH_BLOCKED'
+                    assert result.final_actuation.left_output == result.final_actuation.right_output == 0.0
+                    if blocked_since_ns is None:
+                        blocked_since_ns = now
+                    assert now - blocked_since_ns < config.async_l6.request_timeout_ns
+                else:
+                    blocked_since_ns = None
+                    assert result.final_actuation.safety_decision is SafetyDecision.ALLOW
             composition.dispatch_pending_planner_request(now)
             if tick == 550:
                 checkpoint = composition.checkpoint()
@@ -132,6 +143,7 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
     finally:
         composition.close()
     assert moving > 585 and turning > 50
+    assert blocked_since_ns is None, 'planner never recovered before the scenario ended'
     assert len(writer.writes) == 601
     path = sink.finalize('PASS', tmp_path/'capture.json', initial_state_checkpoint=encode_value(checkpoint))
     replay = replay_capture(path, project_root=ROOT)
@@ -251,8 +263,12 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
     assert replay["determinism"]["executed_tick_count"] == 53
 
 
-def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
-    """601 s, rate-only gyro, 10 Hz scans and quantized cumulative encoders."""
+@pytest.mark.parametrize('tick_count', (
+    pytest.param(1551, id='bounded'),
+    pytest.param(30051, id='endurance', marks=pytest.mark.endurance),
+))
+def test_roomcruise_localization_simulation_and_replay(tmp_path, tick_count):
+    """Rate-only gyro, global-fix loss/recovery and quantized cumulative encoders."""
     config = resolved_config().runtime.composition.live_control.control
     writer = OfflineMotorSink()
     composition = NativeControlComposition(writer, config)
@@ -267,8 +283,10 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
     fix_count = 0
     left_distance = right_distance = 0.0
     baseline_ticks = 0
+    checkpoint_tick = tick_count - 51
+    fix_ticks = (min(500, tick_count // 10), tick_count // 2, tick_count - 26)
     try:
-        for tick in range(30_051):
+        for tick in range(tick_count):
             context = TickContext(tick, 1_000_000_000+tick*20_000_000)
             if tick:
                 x += v*.02*math.cos(yaw+omega*.01)
@@ -309,7 +327,7 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
                         rmse_m=.002, observability=.9))
                 previous_scan = (context.monotonic_ns, x, y, yaw)
             # Verified global fixes and a deliberate large map correction.
-            if tick in (500, 15000, 30025):
+            if tick in fix_ticks:
                 samples.append(sample("RPLIDAR_C1", "lidar_pose", frame_id=GLOBAL_FRAME_ID,
                     x_m=x+.8, y_m=y-.4, yaw_rad=yaw, confidence=1.0, r_scale=.05))
             health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in sorted(set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
@@ -338,19 +356,24 @@ def test_roomcruise_localization_ten_minute_simulation_and_replay(tmp_path):
             v, omega = constrained.allowed_v_mps, constrained.allowed_omega_rad_s
             moving_ticks += abs(v)+abs(omega) > 1e-6
             assert layers['L12'].safety_decision is SafetyDecision.ALLOW or tick < 7
-            if tick == 30000:
+            if tick == checkpoint_tick:
                 checkpoint = composition.checkpoint()
-            elif tick > 30000:
+            elif tick > checkpoint_tick:
                 sink.write(ExecutionRecord(inputs, result))
     finally:
         composition.close()
-    assert moving_ticks > 29000 and global_lost_ticks > 29000
+    assert moving_ticks > tick_count * .95
+    # Each fix remains globally valid for up to three configured age budgets.
+    # The bounded run must still visit LOST and recover three times.
+    assert global_lost_ticks > tick_count - 3 * (config.estimation.quality.global_fix_max_age_ns * 3 // 20_000_000 + 1)
     assert localization_stops == 0
     assert fix_count == 3
+    assert global_lost_ticks > 0
     assert max_local_step < .02
     assert max_disagreement < config.estimation.quality.consistency_good_m
-    assert baseline_ticks > 1000
-    metrics = dict(simulated_seconds=601, moving_ticks=moving_ticks, global_lost_ticks=global_lost_ticks,
+    assert baseline_ticks >= (tick_count // 100) * 4
+    assert len(writer.writes) == tick_count
+    metrics = dict(simulated_seconds=(tick_count - 1) * .02, moving_ticks=moving_ticks, global_lost_ticks=global_lost_ticks,
                    localization_stops=localization_stops, accepted_global_fixes=fix_count,
                    max_local_step_m=max_local_step, max_encoder_lidar_disagreement_m=max_disagreement,
                    encoder_baseline_ticks=baseline_ticks, rate_only_gyro=True)

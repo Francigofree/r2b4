@@ -29,11 +29,26 @@ A célzott validáció az alapértelmezett:
 ./r test async
 ./r test process
 ./r test replay
+./r test evidence
+./r test agent
+./r test voice
+./r test providers
 ./r test full
+./r test endurance
 ./r test list
 ```
 
-A `./r test` egy 11 esetes, fail-fast QUICK kapu. A `./r test core` futtatja a teljes CORE réteget. A fókuszált módok csak a releváns FEATURE/DEEP fájlokat gyűjtik, így nem importálják a teljes réteget. A `./r test full` továbbra is a teljes CORE + FEATURE + DEEP suite.
+A `./r test` egy 20–30 esetes, hardvermentes, fail-fast CORE kapu. A `./r test core` futtatja a teljes CORE könyvtárat. A fókuszált módok explicit fájlokat vagy teszteseteket gyűjtenek. A `./r test full` a teljes, időben korlátozott CORE + FEATURE + DEEP regresszió; a tízperces szimuláció külön `endurance` kérésre fut. Ugyanannak a szimulációnak egy rövid, global-fix loss/recovery és checkpoint replay változata a teljes regresszió része.
+
+Egy konkrét hiba, a kiválasztás és a cache-elt hibák a canonical launcherrel is vizsgálhatók:
+
+```bash
+./r test tests/feature/test_v3_motion_feedback_quality.py
+./r test motion --collect-only
+./r test motion --lf
+```
+
+A `--lf` javítás közbeni segítség; átvételhez a teljes érintett scope kell. A nem gyors kapus futások jelzik az öt leglassabb, 0,5 s feletti esetet. A shared fake-ek a `v3_test_fixtures.py` modulban vannak; a fake kamera nem foglalhatja le a valódi eszközzárat, és assertion-hibánál is le kell állnia.
 
 Nyers pytest továbbra is elérhető:
 
@@ -48,4 +63,4 @@ python -m pytest -q
 
 A célzott pytest nem helyettesíti a szükséges evidence-t. Async/process módosításnál szükség szerint replay kell; timing/GIL javításnál mérési bizonyíték is kell. Fizikai robotmozgást pytest nem indíthat automatikusan. A teljes regresszió közös contract, TickEngine/execution boundary, composition root, aktív config, L12/motor-edge vagy több réteg érintésekor indokolt.
 
-A tesztfájlok canonical helye `tests/core/`, `tests/feature/` és `tests/deep/`. A teljes suite célmérete 100–200 collected case, hard cap 200.
+A tesztfájlok canonical helye `tests/core/`, `tests/feature/` és `tests/deep/`. A teljes fa hard capje 200 collected case, az endurance változatot is beleszámítva. A tesztkiválasztás authorityja a launcher és a policy; az esetszámot a collector számolja.

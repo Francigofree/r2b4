@@ -20,9 +20,14 @@ def _feedback(tick, speed, **extra):
 
 def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
     config = resolved_config().runtime.composition.live_control.control
+    low = config.wheel_pi.velocity_unreliable_below_mps
+    reliable = config.wheel_pi.minimum_reliable_speed_mps
+    band = reliable - low
+    middle, near_low, below = low + band * .5, low + band * .01, low * .5
     controller = WheelActuatorController(config.speed_map, config.wheel_pi)
     restored = None
-    for tick, speed in enumerate((.0, .08, .12, .13, .14, .15, .19, .14, .131, .129, -.12, -.15, -.19)):
+    for tick, speed in enumerate((0., below, low*.9, low, middle, reliable, .19,
+                                  middle, near_low, below, -below, -reliable, -.19)):
         frame = _feedback(tick, speed)
         reference = -.19 if speed < 0 else .19
         wheels = WheelVelocitySetpoint(frame.context, reference, reference,
@@ -43,7 +48,7 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
         deadline = 1_800_000_000
         fault_tick = None
         for tick in range(50):
-            frame = _feedback(tick, .08)
+            frame = _feedback(tick, below)
             if missing:
                 obs = frame.accepted[0]
                 frame = replace(frame, accepted=(replace(obs, values=tuple(
@@ -71,7 +76,7 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
         good = _feedback(tick, .27)
         wheel = good.accepted[0]
         frame = replace(good, accepted=(replace(wheel, values=tuple(
-            DataField(v.key, .08) if v.key == "left_mps" and tick else v
+            DataField(v.key, below) if v.key == "left_mps" and tick else v
             for v in wheel.values)),))
         wheels = WheelVelocitySetpoint(frame.context, .19, .19)
         expected = healthy(wheels, good)
@@ -87,8 +92,9 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
             restored.restore(controller.checkpoint())
 
     # Learned overspeed correction must fade with confidence before the fit
-    # becomes unusable. Otherwise crossing 0.13 erases a full-strength integral
-    # and steps the wheel back to the (higher) feed-forward output.
+    # becomes unusable. Otherwise crossing the lower confidence bound erases an integral
+    # and steps the wheel back to the (higher) feed-forward output. Sample the
+    # configured confidence band rather than freezing a historical tuning limit.
     for sign in (1, -1):
         controller = WheelActuatorController(config.speed_map, config.wheel_pi)
         for tick in range(20):
@@ -98,15 +104,15 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
         feedforward = config.speed_map.lookup("left", sign * .15)[0]
         strong_correction = abs(output.left_normalized - feedforward)
         assert strong_correction > .01
-        for tick, speed in enumerate((.14, .131, .129), 20):
+        for tick, speed in enumerate((middle, near_low, below), 20):
             frame = _feedback(tick, sign * speed)
             wheels = replace(wheels, context=frame.context)
             output = controller(wheels, frame)
             correction = abs(output.left_normalized - feedforward)
-            if speed == .131:
+            if speed == near_low:
                 assert correction < strong_correction * .1
                 restored = WheelActuatorController(config.speed_map, config.wheel_pi)
                 restored.restore(controller.checkpoint())
-            if speed == .129:
+            if speed == below:
                 assert output == restored(wheels, frame)
                 assert correction == pytest.approx(0.0)

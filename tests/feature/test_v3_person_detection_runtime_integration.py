@@ -1,7 +1,11 @@
 from __future__ import annotations
 import threading
 import time
+import sys
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
+import numpy as np
 from v3.adapters.person_photo_evidence import PersonPhotoEvidenceConfig, PersonPhotoEvidenceRecorder
 from v3.adapters.camera_geometry import camera_geometry_config_from_mapping
 from v3.adapters.picamera2_camera import NativePicamera2Camera, Picamera2CameraConfig
@@ -94,6 +98,10 @@ class _SavingRequest:
     def __init__(self, timestamp_ns: int) -> None:
         self.timestamp_ns = timestamp_ns
         self.released = False
+        self.stream_map = {'lores': object()}
+        self.picam2 = object()
+        self.array = np.zeros(640 * 360 * 3, dtype=np.uint8)
+        self.mapped = False
 
     def get_metadata(self):
         return {'SensorTimestamp': self.timestamp_ns, 'ExposureTime': 10000, 'FrameDuration': 50000, 'AfState': 2, 'LensPosition': 1.0}
@@ -105,6 +113,7 @@ class _SavingRequest:
     def save(self, stream_name: str, output: str, *, format=None):
         assert stream_name == 'lores'
         assert format == 'jpeg'
+        assert self.mapped  # Save only after the native buffer was rectified.
         Path(output).write_bytes(b'test-jpeg')
 
     def release(self):
@@ -155,7 +164,22 @@ class _LiveSavingCamera:
     def close(self):
         return None
 
-def _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path):
+def _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path, monkeypatch):
+    class MappedArray:
+        def __init__(self, request, stream, **kwargs):
+            assert stream == 'lores' and kwargs['write'] is True
+            self.request = request
+            self.array = request.array
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.request.mapped = True
+
+    monkeypatch.setitem(sys.modules, 'picamera2', SimpleNamespace(MappedArray=MappedArray))
+    # This owner has a fake camera; never acquire the live robot's device lock.
+    monkeypatch.setattr('v3.adapters.picamera2_camera.camera_device_lock', nullcontext)
     camera = _LiveSavingCamera()
     clock = [2000000000]
 
@@ -163,21 +187,28 @@ def _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path):
         clock[0] += 50000000
         return clock[0]
     owner = NativePicamera2Camera(Picamera2CameraConfig(max_frame_completion_lag_ns=2000000000), camera_geometry_config=_empirical_geometry(), picamera_factory=lambda index: camera, sensor_timestamp_mapper=lambda value: value, camera_controls_factory=lambda: {}, monotonic_ns=monotonic_ns)
-    assert owner.start()
-    output = tmp_path / 'person.jpg'
-    assert owner.request_jpeg(output, stream_name='lores') is True
-    assert owner.request_jpeg(tmp_path / 'second.jpg', stream_name='lores') is False
-    camera.allow_capture.set()
-    deadline = time.monotonic() + 1.0
-    while owner.get_photo_status().saved_count < 1 and time.monotonic() < deadline:
-        time.sleep(0.005)
-    status = owner.get_photo_status()
-    assert status.saved_count == 1
-    assert status.last_error is None
-    assert status.last_output == str(output)
-    assert output.read_bytes() == b'test-jpeg'
-    assert owner.get_runtime_status().running is True
-    owner.stop()
+    try:
+        assert owner.start(), owner.get_runtime_status()
+        output = tmp_path / 'person.jpg'
+        assert owner.request_jpeg(output, stream_name='lores') is True
+        assert owner.request_jpeg(tmp_path / 'second.jpg', stream_name='lores') is False
+        camera.allow_capture.set()
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            status = owner.get_photo_status()
+            if status.saved_count or status.last_error:
+                break
+            time.sleep(0.005)
+        assert status.last_error is None, status.last_error
+        assert status.saved_count == 1
+        assert status.last_output == str(output)
+        assert status.last_metadata.calibration_id
+        assert status.last_metadata.owner_generation
+        assert status.last_metadata.measurement_monotonic_ns <= status.last_metadata.completed_monotonic_ns
+        assert output.read_bytes() == b'test-jpeg'
+        assert owner.get_runtime_status().running is True
+    finally:
+        owner.stop()
 
 def _check_canonical_runtime_config_closes_noncritical_person_capability():
     runtime = load_resident_runtime_config(PROJECT_ROOT)
@@ -210,10 +241,10 @@ def _check_failed_person_detector_does_not_gain_motor_safety_authority():
     assert result.enabled is True
 
 
-def test_person_photo_evidence_uses_admitted_results_and_bounded_camera_request(tmp_path):
+def test_person_photo_evidence_uses_admitted_results_and_bounded_camera_request(tmp_path, monkeypatch):
     _check_photo_evidence_counts_only_new_l2_admitted_results_and_explore(tmp_path)
     _check_photo_evidence_rearms_after_real_person_free_detector_results(tmp_path)
-    _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path)
+    _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path, monkeypatch)
 
 
 def _check_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure():
@@ -222,7 +253,7 @@ def _check_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failu
     from dataclasses import replace
     from rig import resolved_config
     from test_v3_bno055_imu_backend import Device
-    from test_v3_encoder_ab_direction_robustness import FakeGpio
+    from v3_test_fixtures import FakeGpio
     from test_v3_latest_lidar_backend import Port
     from v3.adapters.process_vision_port import UnavailableVisionPort
     from v3.contracts import FinalActuation, NavigationPlan, NavigationStatus

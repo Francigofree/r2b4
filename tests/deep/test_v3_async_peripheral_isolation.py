@@ -162,7 +162,7 @@ def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path,
 
     # spawn imports this fake module ahead of any installed hardware driver.
     (tmp_path / 'lgpio.py').write_text(
-        'from test_v3_encoder_ab_direction_robustness import FakeGpio\n'
+        'from v3_test_fixtures import FakeGpio\n'
         'import os\n'
         '_gpio = FakeGpio()\n'
         'RISING_EDGE = 1\nBOTH_EDGES = 3\nSET_PULL_UP = 32\n'

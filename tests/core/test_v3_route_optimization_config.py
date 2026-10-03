@@ -21,13 +21,17 @@ ROOT = next(
 )
 
 
-def _resolved():
+def _documents():
     conf = ROOT / "conf"
     documents = [
         json.loads((conf / name).read_text(encoding="utf-8"))
         for name in ("hardver.json", "fizika.json", "speed_map.json", "vezerles.json")
     ]
-    return ConfigResolver.from_documents(*documents)
+    return documents
+
+
+def _resolved():
+    return ConfigResolver.from_documents(*_documents())
 
 
 def _candidate(candidate_id: str, *, clearance: float, score: float) -> TrajectoryEvaluation:
@@ -50,22 +54,17 @@ def _candidate(candidate_id: str, *, clearance: float, score: float) -> Trajecto
 
 
 def test_production_route_tuning_is_explicit_config_authority():
-    resolved = _resolved()
-    control = resolved.runtime.composition.live_control.control
-    nav = control.navigation
-    selection = control.motion_selection
-
-    assert nav.speed_clearance_enabled is True
-    assert nav.speed_clearance_low_speed_mps == 0.2
-    assert nav.speed_clearance_high_speed_mps == 0.4
-    assert nav.speed_clearance_low_m == 0.18
-    assert nav.speed_clearance_high_m == 0.3
-    assert nav.speed_clearance_penalty_weight == 0.18
-    assert nav.rollout_horizon_ns == 1_000_000_000
-    assert nav.rollout_step_count == 10
-    assert l6._explore_goal_distances(nav) == pytest.approx((0.9, 0.75, 0.6, 0.45))
-    assert selection.continuity_score_band == 0.02
-    assert selection.continuity_clearance_drop_tolerance_m == 0.04
+    documents = _documents()
+    navigation = documents[-1]['layers']['navigation']
+    key = 'explore_local_goal_max_distance_m'
+    navigation[key] += .1
+    resolved = ConfigResolver.from_documents(*documents)
+    nav = resolved.runtime.composition.live_control.control.navigation
+    assert nav.explore_local_goal_max_distance_m == navigation[key]
+    # Missing authority must fail closed instead of restoring a test's tuning.
+    del navigation[key]
+    with pytest.raises(ValueError, match=key):
+        ConfigResolver.from_documents(*documents)
 
 
 def test_speed_clearance_soft_barrier_penalizes_fast_tight_path_first():

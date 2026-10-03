@@ -19,6 +19,52 @@ from v3.contracts import (
 from v3_bounded_config import NativeSensorPolicyConfig
 
 
+class FakeGpio:
+    """Device-free GPIO counter API, importable by spawned encoder workers."""
+
+    RISING_EDGE = 1
+    BOTH_EDGES = 3
+    SET_PULL_UP = 32
+
+    def __init__(self, levels=None):
+        self.levels = dict(levels or {})
+        self.callbacks = {}
+
+    def gpiochip_open(self, chip):
+        return 7
+
+    def gpio_claim_alert(self, handle, pin, edge, flags):
+        return 0
+
+    def gpio_set_debounce_micros(self, handle, pin, value):
+        return 0
+
+    def gpio_read(self, handle, pin):
+        return self.levels.get(pin, 0)
+
+    def callback(self, handle, pin, edge, function):
+        class Callback:
+            def __init__(self):
+                self.function = function
+
+            def cancel(self):
+                return 0
+
+        callback = Callback()
+        self.callbacks[pin] = callback
+        return callback
+
+    def gpio_free(self, handle, pin):
+        return 0
+
+    def gpiochip_close(self, handle):
+        return 0
+
+    def emit(self, pin, level, tick, *, chip=2):
+        self.levels[pin] = level
+        self.callbacks[pin].function(chip, pin, level, tick)
+
+
 _SENSOR_POLICY_DEFAULTS = {
     "encoder_maximum_sample_interval_ns": 100_000_000,
     "encoder_maximum_abs_velocity_mps": 1.5,
