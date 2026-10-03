@@ -10,7 +10,7 @@ import math
 import os
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from v3.external_gateway import ExternalRequest, ExternalRobotGateway, GatewayPolicy
 from v3.robot_interface import RobotInterface
@@ -88,6 +88,7 @@ class Er2RobotTools:
         sleep=time.sleep,
         monotonic=time.monotonic,
         debug_drive: bool = False,
+        ensure_runtime: Callable[[], None] | None = None,
     ) -> None:
         if not isinstance(gateway, ExternalRobotGateway):
             raise TypeError("gateway must be ExternalRobotGateway")
@@ -100,6 +101,8 @@ class Er2RobotTools:
         self._monotonic = monotonic
         self._seq = 0
         self._debug_drive = debug_drive
+        self._ensure_runtime = ensure_runtime
+        self.motion_attempted = False
 
     @classmethod
     def from_interface(
@@ -109,6 +112,7 @@ class Er2RobotTools:
         *,
         session_owner_pid: int | None = None,
         evidence: Er2Evidence | None = None,
+        ensure_runtime: Callable[[], None] | None = None,
     ) -> "Er2RobotTools":
         cfg = config or Er2Config.from_env()
         owner = os.getpid() if session_owner_pid is None else session_owner_pid
@@ -120,7 +124,14 @@ class Er2RobotTools:
                 session_watchdog_s=cfg.session_watchdog_s,
             ),
         )
-        return cls(gateway, cfg, evidence=evidence)
+        return cls(gateway, cfg, evidence=evidence, ensure_runtime=ensure_runtime)
+
+    def _activate_motion(self, cancel_event: threading.Event | None) -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise Er2ToolError("physical tool cancelled before runtime activation")
+        self.motion_attempted = True
+        if self._ensure_runtime is not None:
+            self._ensure_runtime()
 
     def _emit(self, event_type: str, **fields: object) -> None:
         if self.evidence is not None:
@@ -435,6 +446,7 @@ class Er2RobotTools:
                 missing = sorted(set(schema.get("required", ())) - set(args))
                 if unknown or missing:
                     raise Er2ToolError(f"invalid {name} arguments: unknown={unknown}, missing={missing}")
+                self._activate_motion(cancel_event)
                 result = getattr(self, name)(**args, cancel_event=cancel_event)
             elif name == "robot_drive" and self._debug_drive:
                 allowed = {"v_mps", "omega_rad_s", "duration_s"}
@@ -444,6 +456,7 @@ class Er2RobotTools:
                     raise Er2ToolError("unknown robot_drive arguments: " + ", ".join(unknown))
                 if missing:
                     raise Er2ToolError("missing robot_drive arguments: " + ", ".join(missing))
+                self._activate_motion(cancel_event)
                 result = self.robot_drive(
                     v_mps=args["v_mps"],  # type: ignore[arg-type]
                     omega_rad_s=args["omega_rad_s"],  # type: ignore[arg-type]

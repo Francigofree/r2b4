@@ -146,6 +146,7 @@ class InputAdmission:
             tuple(accepted),
             tuple(rejected),
             tuple(sorted(degraded)),
+            frame.io_health,
         )
 
 
@@ -167,7 +168,7 @@ def admit(frame: AcquisitionFrame) -> AdmittedFrame:
         for health in frame.io_health
         if health.state is not DeviceHealthState.OK
     )
-    return AdmittedFrame(frame.context, accepted, (), degraded)
+    return AdmittedFrame(frame.context, accepted, (), degraded, frame.io_health)
 
 
 __all__ = ["AdmissionConfig", "AdmissionStateCheckpoint", "InputAdmission", "admit"]

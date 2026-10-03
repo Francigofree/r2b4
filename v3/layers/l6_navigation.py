@@ -14,6 +14,7 @@ from v3.wheel_motion import WheelMotionLimits
 
 from v3.contracts import (
     CommandMode,
+    DeviceHealthState,
     MissionIntent,
     MissionLifecycle,
     MotionValidity,
@@ -563,6 +564,7 @@ class NavigationStateCheckpoint:
     localization_generation: int = -1
     global_transform_revision: int = -1
     localization_envelope: tuple[str, str, int] | None = None
+    person_capability_failed_mission_id: str | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -706,6 +708,7 @@ class TrajectoryNavigator:
         "_local_goal",
         "_max_plan_age_ns",
         "_mission_id",
+        "_person_capability_failed_mission_id",
         "_pending_goal_selected_ns",
         "_pending_release_not_before_ns",
         "_pending_release_tick_id",
@@ -771,6 +774,7 @@ class TrajectoryNavigator:
         self._rollout_release_delay_ns = rollout_release_delay_ns
         self._max_plan_age_ns = max_plan_age_ns
         self._mission_id: str | None = None
+        self._person_capability_failed_mission_id: str | None = None
         self._initial_distance_m = 0.0
         self._progress = 0.0
         self._completed = False
@@ -833,6 +837,7 @@ class TrajectoryNavigator:
             self._follow_person_search_budget_ns,
             self._localization_recovery_started_ns, self._localization_recovery_mission_id,
             self._localization_generation, self._global_transform_revision, self._localization_envelope,
+            self._person_capability_failed_mission_id,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -843,6 +848,7 @@ class TrajectoryNavigator:
         self._localization_generation = checkpoint.localization_generation
         self._global_transform_revision = checkpoint.global_transform_revision
         self._localization_envelope = checkpoint.localization_envelope
+        self._person_capability_failed_mission_id = checkpoint.person_capability_failed_mission_id
         self._abandon_pending_rollout()
         self._mission_id = checkpoint.mission_id
         self._initial_distance_m = checkpoint.initial_distance_m
@@ -910,6 +916,21 @@ class TrajectoryNavigator:
     ) -> NavigationPlan:
         estimate = estimate.in_local_frame()
         if mission.lifecycle is MissionLifecycle.ACTIVE and mission.context == estimate.context == world.context:
+            if mission.mode in (CommandMode.FACE_PERSON, CommandMode.FOLLOW_PERSON):
+                # Closed capability health revokes vision motion before target
+                # prediction, SEARCH or localization-recovery guidance can run.
+                if (
+                    self._person_capability_failed_mission_id == mission.mission_id
+                    or world.person_detection_state is DeviceHealthState.FAILED
+                ):
+                    if self._person_capability_failed_mission_id != mission.mission_id:
+                        self._reset()
+                        self._person_capability_failed_mission_id = mission.mission_id
+                    self._clear_trajectory_plan()
+                    return self._inactive(mission, NavigationStatus.INVALIDATED, "PERSON_CAPABILITY_FAILED")
+                if world.person_detection_state in (DeviceHealthState.UNKNOWN, DeviceHealthState.DEGRADED):
+                    self._clear_trajectory_plan()
+                    return self._inactive(mission, NavigationStatus.IDLE, "PERSON_CAPABILITY_UNAVAILABLE")
             recovery = self._localization_plan(mission, estimate, world)
             if recovery is not None:
                 return recovery
@@ -1263,6 +1284,7 @@ class TrajectoryNavigator:
     def _reset(self) -> None:
         self._abandon_pending_rollout()
         self._mission_id = None
+        self._person_capability_failed_mission_id = None
         self._initial_distance_m = 0.0
         self._progress = 0.0
         self._completed = False

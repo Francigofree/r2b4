@@ -19,6 +19,7 @@ from v3.test_runner import FOCUSED
 
 VOICE_UNIT = "r2b4-wake.service"
 VOICE_OPERATIONS = ("status", "on", "off", "restart", "check")
+CAMERA_OPERATIONS = ("status", "on", "off", "photo", "video")
 VOICE_ALIASES = {
     "be": "on",
     "enable": "on",
@@ -135,6 +136,59 @@ def _er2_completion(before: Sequence[str], current: str) -> tuple[str, list[str]
     return child.format_usage().strip(), _parser_candidates(child, tail, current)
 
 
+def camera_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="r cam",
+        description="Önálló kamera: igényvezérelt, kalibrált kép; V3 és LLM nélkül.",
+    )
+    sub = parser.add_subparsers(dest="operation")
+    for operation, description in (
+        ("status", "Kamera- és consumerállapot; nem kapcsolja be a kamerát."),
+        ("on", "Manuális kameraigény bekapcsolása."),
+        ("off", "Manuális kameraigény elengedése; más consumer megmarad."),
+    ):
+        child = sub.add_parser(operation, help=description, description=description)
+        child.add_argument("--json", action="store_true")
+    photo = sub.add_parser("photo", help="Friss kalibrált JPEG készítése.")
+    photo.add_argument("output", help="JPEG célfájl (.jpg / .jpeg)")
+    photo.add_argument("--json", action="store_true")
+    video = sub.add_parser("video", help="Kalibrált videó készítése.")
+    video.add_argument("output", help="Videó célfájl (.mp4 / .h264)")
+    video.add_argument("seconds", type=float, nargs="?", default=10.0)
+    video.add_argument("--json", action="store_true")
+    return parser
+
+
+def camera_command(argv: Sequence[str], root: Path) -> int:
+    from v3.adapters.camera_media import capture_h264_video, capture_photo
+    from v3.adapters.vision_media_socket import VisionClient
+
+    args = camera_parser().parse_args(list(argv) if argv else ["status"])
+    client = VisionClient(root=root)
+    if args.operation == "status":
+        result = client.status()
+    elif args.operation in {"on", "off"}:
+        result = client.set_manual_demand(args.operation == "on")
+    elif args.operation == "photo":
+        result = capture_photo(args.output, root=root)
+    elif args.operation == "video":
+        result = capture_h264_video(args.output, args.seconds, root=root)
+    else:
+        raise ValueError("usage: r cam status|on|off|photo OUTPUT|video OUTPUT [SECONDS]")
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def _camera_completion(before: Sequence[str], current: str) -> tuple[str, list[str]]:
+    parser = camera_parser()
+    if not before:
+        return "r cam status|on|off|photo|video", _filter(CAMERA_OPERATIONS, current)
+    child = _subparsers(parser).choices.get(before[0])
+    if child is None:
+        return parser.format_usage().strip(), []
+    return child.format_usage().strip(), _parser_candidates(child, before[1:], current)
+
+
 def _host_completion(command: str, before: Sequence[str], current: str, root: Path) -> tuple[str, list[str]]:
     canonical = host_cli.ALIASES.get(command, command)
     usage, description = host_cli.COMMAND_HELP.get(canonical, ("", ""))
@@ -215,6 +269,8 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
             return "r help PARANCS — célzott, végrehajtás nélküli súgó", _filter(_top_level_commands(), current)
         if tail[0] == "er2":
             return _er2_completion(tail[1:], current)
+        if tail[0] in {"cam", "camera"}:
+            return _camera_completion(tail[1:], current)
         return "r help PARANCS", []
 
     if command == "commands":
@@ -227,6 +283,9 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
 
     if command == "er2":
         return _er2_completion(tail, current)
+
+    if command in {"cam", "camera"}:
+        return _camera_completion(tail, current)
 
     if command == "evi":
         from tools.mcap_evidence.cli import parser
@@ -417,9 +476,12 @@ def voice_command(argv: Sequence[str], root: Path) -> int:
 
 
 __all__ = [
+    "CAMERA_OPERATIONS",
     "VOICE_OPERATIONS",
     "VOICE_UNIT",
     "completion",
+    "camera_parser",
+    "camera_command",
     "emit_completion",
     "install_extras",
     "voice_command",

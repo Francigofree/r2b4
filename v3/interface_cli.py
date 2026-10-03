@@ -222,9 +222,9 @@ def _parser() -> argparse.ArgumentParser:
     follow.add_argument("--max-v", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS, help="sebességkorlát [m/s]")
     follow.add_argument("--max-omega", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S, help="szögsebességkorlát [rad/s]")
 
-    camera = add_command("camera", help="Exkluzív kameradiagnosztika: photo / video OUTPUT [SECONDS].")
-    camera.add_argument("operation", choices=("photo", "video"))
-    camera.add_argument("output")
+    camera = add_command("camera", help="Önálló kamera: status / on / off / photo / video OUTPUT [SECONDS].")
+    camera.add_argument("operation", choices=("status", "on", "off", "photo", "video"), nargs="?", default="status")
+    camera.add_argument("output", nargs="?")
     camera.add_argument("seconds", type=float, nargs="?", default=10.0)
 
     add_command("system", help="RPi/Linux rendszerállapot.")
@@ -489,7 +489,16 @@ def _execute(
         if not args.json:
             _print_json(output)
     elif command == "camera":
-        if args.operation == "photo":
+        if args.operation in {"status", "on", "off"}:
+            if args.output is not None:
+                raise ValueError(f"camera {args.operation} does not accept an output file")
+            output = (
+                interface.read("camera.status") if args.operation == "status"
+                else interface.execute(f"camera.{args.operation}")
+            )
+        elif args.output is None:
+            raise ValueError(f"camera {args.operation} requires an output file")
+        elif args.operation == "photo":
             output = interface.execute("camera.photo", output=args.output)
         else:
             output = interface.execute("camera.video", output=args.output, duration_s=args.seconds)

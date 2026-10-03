@@ -66,8 +66,8 @@ def run_er2_task(
     cfg = Er2Config.from_env()
     interface = RobotInterface(project_root=root)
     evidence = Er2Evidence.from_project_root(root)
-    tools = Er2RobotTools.from_interface(interface, cfg, evidence=evidence)
     lease = _RuntimeLease(interface)
+    tools = Er2RobotTools.from_interface(interface, cfg, evidence=evidence, ensure_runtime=lease.ensure)
 
     evidence.emit(
         "EXECUTION_ROUTER_ER2_START",
@@ -80,15 +80,11 @@ def run_er2_task(
 
     try:
         if normalized_mode == "preview":
-            if tools_enabled:
-                lease.ensure()
             image_bytes = None
             if camera:
-                # Current media ownership is still coupled to the resident V3
-                # process. The selector itself marks observation as V3-free; this
-                # lease is a compatibility bridge until the P1 camera split lands.
-                lease.ensure()
-                image_bytes = VisionMediaClient(timeout_s=cfg.media_timeout_s).latest_jpeg_sync()
+                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s).observe_sync()
+                image_bytes = observation.image_bytes
+                evidence.emit("ER2_CAMERA_OBSERVATION", lineage=observation.metadata.to_jsonable())
             result = Er2PreviewClient(cfg, evidence=evidence).run(
                 task.strip(),
                 image_bytes=image_bytes,
@@ -103,9 +99,7 @@ def run_er2_task(
             )
             return Er2ExecutionResult(mode="preview", text=text)
 
-        # Streaming currently depends on the live V3 media/tool session.
-        lease.ensure()
-        media = VisionMediaClient(timeout_s=cfg.media_timeout_s)
+        media = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s)
         chunks: list[str] = []
 
         def on_text(chunk: str) -> None:
@@ -113,8 +107,8 @@ def run_er2_task(
                 chunks.append(chunk)
 
         stream_result = Er2StreamingClient(
-            tools,
-            media,
+            tools if tools_enabled else None,
+            media if camera else None,
             cfg,
             on_text=on_text,
             evidence=evidence,
@@ -137,7 +131,7 @@ def run_er2_task(
         )
     finally:
         try:
-            if normalized_mode == "stream" or tools_enabled:
+            if tools.motion_attempted:
                 tools.robot_stop()
         finally:
             lease.close()

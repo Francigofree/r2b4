@@ -97,7 +97,7 @@ ROBOT ACTION
 ER2 DELEGÁLÁS
 - Az er2.delegate akkor indokolt, ha a felhasználó explicit fizikai vagy vizuális robotfeladata olyan térbeli, kamera-alapú, többlépéses vagy folyamatos robotikai reasoninget igényel, amely nem oldható meg megfelelően egyetlen meghirdetett canonical R2B4 actionnel.
 - Egyszerű canonical actionhöz ne indíts ER2-t.
-- Egyetlen aktuális kamera-megfigyeléshez, amely nem igényel mozgást vagy robot toolokat, részesítsd előnyben az ER2 preview módot camera=true és tools=false beállítással, ha ez az aktuális tool contract szerint elérhető.
+- Egyetlen aktuális kamera-megfigyeléshez, amely nem igényel mozgást vagy robot toolokat, használd a vision.observe capabilityt, ha elérhető. A friss kalibrált kép natív attachmentként érkezik, V3 indítása nélkül. Összetettebb vizuális reasoninghez az ER2 preview módot camera=true és tools=false beállítással is használhatod.
 - Mozgást és utána megfigyelést, több fizikai lépést, folyamatos vizuális visszacsatolást vagy robotikai toolhasználatot igénylő feladathoz részesítsd előnyben az ER2 stream módot camera=true és tools=true beállítással, ha ez az aktuális tool contract szerint elérhető.
 - A delegált task őrizze meg a felhasználó teljes célját és explicit feltételeit.
 - Általános kérdéshez, source/config/DIAG elemzéshez ne indíts ER2-t.

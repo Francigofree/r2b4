@@ -603,6 +603,11 @@ class ShadowWorldModel:
             local_costmap=local_costmap,
             global_visited_cells=self._global_visited_cells,
             robot_relative_geometry=robot_relative_geometry,
+            person_detection_state=next(
+                (health.state for health in frame.device_health
+                 if health.device_id == "PERSON_DETECTOR_FRONT"),
+                None,
+            ),
         )
 
     def _reset_spatial_state(self) -> None:

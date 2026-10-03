@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Protocol
 
 from r2b4_voice.conversation_contracts import LLMDecision
+from v3.adapters.vision_media_contracts import VisionJpeg
 
 from .agent_contracts import AgentModelReply, AgentToolRequest, AgentToolResult, AgentToolSpec
 
@@ -24,6 +25,8 @@ class AgentModelPort(Protocol):
         messages: Sequence[Mapping[str, str]],
         tool_catalog: Sequence[Mapping[str, object]],
         action_catalog: Sequence[Mapping[str, object]],
+        *,
+        images: Sequence[VisionJpeg] = (),
     ) -> AgentModelReply: ...
 
 
@@ -56,7 +59,9 @@ class AgentToolBroker:
             return AgentToolResult(request.name, "REJECTED", error="TOOL_NOT_REGISTERED")
         try:
             data = handler(request.arguments)
-            result = AgentToolResult(request.name, "COMPLETED", data=data)
+            result = data if isinstance(data, AgentToolResult) else AgentToolResult(request.name, "COMPLETED", data=data)
+            if result.name != request.name:
+                raise ValueError("tool result name does not match request")
             encoded = json.dumps(result.to_jsonable(), ensure_ascii=False, sort_keys=True, default=str)
             if len(encoded) > self._max_result_chars:
                 return AgentToolResult(
@@ -117,8 +122,11 @@ class AgentCore:
             + json.dumps(catalog, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         ))
 
+        images: tuple[VisionJpeg, ...] = ()
         for round_index in range(self._max_tool_rounds + 1):
-            reply = self._model.complete_agent_step(work, catalog, action_catalog)
+            # Images remain transient provider attachments, outside text messages
+            # and the conversation journal. Only the latest observation is held.
+            reply = self._model.complete_agent_step(work, catalog, action_catalog, images=images) if images else self._model.complete_agent_step(work, catalog, action_catalog)
             if reply.tool_request is None:
                 return reply.to_decision()
             if round_index >= self._max_tool_rounds:
@@ -131,6 +139,10 @@ class AgentCore:
                 "arguments": dict(request.arguments),
             })
             result = self._broker.execute(request)
+            if result.images:
+                images = result.images
+            elif request.name == "vision.observe":
+                images = ()
             self._emit(event_sink, "agent_tool_completed", {
                 "round": round_index + 1,
                 "tool": result.name,

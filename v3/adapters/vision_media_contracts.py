@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import math
 
 MAX_JPEG_BYTES = 4 * 1024 * 1024
 MAX_METADATA_BYTES = 4096
@@ -17,6 +18,8 @@ class CameraJpegMetadata:
     stream: str
     width: int
     height: int
+    rectified_K: tuple[tuple[float, float, float], ...]
+    owner_generation: str
     calibration_state: str = "CALIBRATED"
 
     def __post_init__(self) -> None:
@@ -32,9 +35,32 @@ class CameraJpegMetadata:
             raise ValueError("JPEG must have canonical calibration identity")
         if self.stream not in {"lores", "main"}:
             raise ValueError("stream must be lores or main")
+        if not isinstance(self.owner_generation, str) or not self.owner_generation:
+            raise ValueError("JPEG owner generation is missing")
+        matrix = self.rectified_K
+        if (not isinstance(matrix, tuple) or len(matrix) != 3
+                or any(not isinstance(row, tuple) or len(row) != 3 for row in matrix)
+                or any(type(v) not in (int, float) or not math.isfinite(v) for row in matrix for v in row)
+                or matrix[0][0] <= 0 or matrix[1][1] <= 0
+                or tuple(matrix[2]) != (0, 0, 1)):
+            raise ValueError("JPEG rectified_K must be valid immutable camera intrinsics")
 
     def to_jsonable(self) -> dict[str, object]:
         return asdict(self)
+
+    @classmethod
+    def from_jsonable(cls, value: dict) -> CameraJpegMetadata:
+        value = dict(value)
+        value["rectified_K"] = tuple(tuple(row) for row in value["rectified_K"])
+        return cls(**value)
+
+    def require_fresh(self, now_ns: int, *, generation: str, maximum_age_ns: int) -> None:
+        if self.owner_generation != generation:
+            raise RuntimeError("VISION_GENERATION_MISMATCH")
+        if not 0 <= now_ns - self.measurement_monotonic_ns <= maximum_age_ns:
+            raise RuntimeError("VISION_FRAME_STALE")
+        if self.completed_monotonic_ns > now_ns:
+            raise RuntimeError("VISION_LINEAGE_INVALID")
 
 
 @dataclass(frozen=True, slots=True)

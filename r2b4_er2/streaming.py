@@ -27,8 +27,8 @@ class Er2StreamingResult:
 class Er2StreamingClient:
     def __init__(
         self,
-        tools: Er2RobotTools,
-        media: VisionMediaClient,
+        tools: Er2RobotTools | None,
+        media: VisionMediaClient | None,
         config: Er2Config | None = None,
         *,
         api_key: str | None = None,
@@ -38,7 +38,7 @@ class Er2StreamingClient:
     ) -> None:
         self.tools = tools
         self.media = media
-        self.config = config or tools.config
+        self.config = config or (tools.config if tools is not None else Er2Config.from_env())
         self._api_key = api_key
         self._client = client
         self._on_text = on_text or (lambda text: print(text, end="", flush=True))
@@ -97,7 +97,7 @@ class Er2StreamingClient:
                 )
                 config_kwargs: dict[str, object] = {
                     "response_modalities": ["TEXT"],
-                    "tools": self.tools.live_tools(),
+                    "tools": self.tools.live_tools() if self.tools is not None else [],
                     "system_instruction": types.Content(
                         parts=[types.Part(text=_system_instruction(self.config))]
                     ),
@@ -132,21 +132,22 @@ class Er2StreamingClient:
                         timer_task: asyncio.Task | None = None
                         try:
                             if connection_was_initial:
-                                frame = await self.media.latest_jpeg(stream_name="lores")
+                                observation = await self.media.observe(stream_name="lores") if self.media is not None else None
+                                parts = [types.Part(text=initial_task)]
+                                if observation is not None:
+                                    parts.insert(0, types.Part(inline_data=types.Blob(data=observation.image_bytes, mime_type="image/jpeg")))
                                 await session.send_client_content(
                                     turns=types.Content(
                                         role="user",
-                                        parts=[
-                                            types.Part(inline_data=types.Blob(data=frame, mime_type="image/jpeg")),
-                                            types.Part(text=initial_task),
-                                        ],
+                                        parts=parts,
                                     ),
                                     turn_complete=True,
                                 )
                                 self._emit(
                                     "ER2_STREAM_INITIAL_TURN_TX",
                                     task_chars=len(initial_task),
-                                    frame_bytes=len(frame),
+                                    frame_bytes=len(observation.image_bytes) if observation is not None else 0,
+                                    lineage=observation.metadata.to_jsonable() if observation is not None else None,
                                     turn_complete=True,
                                 )
                                 first_connection = False
@@ -234,7 +235,8 @@ class Er2StreamingClient:
             )
             raise
         finally:
-            await asyncio.to_thread(self.tools.robot_stop)
+            if self.tools is not None and self.tools.motion_attempted:
+                await asyncio.to_thread(self.tools.robot_stop)
         result = Er2StreamingResult(reconnect_count, self._resume_handle, clean)
         self._emit(
             "ER2_STREAM_COMPLETE",
@@ -249,6 +251,8 @@ class Er2StreamingClient:
         return asyncio.run(self.run_async(task, duration_s=duration_s))
 
     async def _execute_tool(self, name: str, args: Mapping[str, object]) -> dict[str, object]:
+        if self.tools is None:
+            return {"status": "REJECTED", "error": "ROBOT_TOOLS_DISABLED"}
         # Cancelling to_thread only cancels its waiter. Keep ownership of the
         # physical operation until its worker has exited and issued final STOP.
         cancelled = threading.Event()
@@ -369,9 +373,10 @@ class Er2StreamingClient:
             turn_done.clear()
         while not stop_event.is_set():
             started = asyncio.get_running_loop().time()
-            frame = await self.media.latest_jpeg(stream_name="lores")
-            await session.send_realtime_input(video=types.Blob(data=frame, mime_type="image/jpeg"))
-            status = await asyncio.to_thread(self.tools.robot_status)
+            observation = await self.media.observe(stream_name="lores") if self.media is not None else None
+            if observation is not None:
+                await session.send_realtime_input(video=types.Blob(data=observation.image_bytes, mime_type="image/jpeg"))
+            status = await asyncio.to_thread(self.tools.robot_status) if self.tools is not None else {"tools_enabled": False}
             await session.send_realtime_input(
                 text=(
                     "[R2B4 HEARTBEAT] Observe the latest frame and robot status. "
@@ -382,7 +387,8 @@ class Er2StreamingClient:
             )
             self._emit(
                 "ER2_STREAM_HEARTBEAT_TX",
-                frame_bytes=len(frame),
+                frame_bytes=len(observation.image_bytes) if observation is not None else 0,
+                lineage=observation.metadata.to_jsonable() if observation is not None else None,
                 status_chars=len(_compact(status)),
             )
             await turn_done.wait()

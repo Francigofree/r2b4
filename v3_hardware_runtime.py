@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from v3.adapters.bno055_device import (
@@ -20,18 +21,7 @@ from v3.adapters.gpio_counter import GpioCounterBackend
 from v3.adapters.gpio_motor import PwmGpioBackend
 from v3.adapters.latest_lidar import LatestMatcherResultPort
 from v3.adapters.native_lidar_port import TimedPoseReference
-from v3.adapters.picamera2_camera import (
-    NativePicamera2Camera,
-    Picamera2Factory,
-    default_picamera2_factory,
-    raspberry_pi_sensor_timestamp_to_monotonic_ns,
-)
-from v3.adapters.litert_person_detector import LiteRtSsdPersonDetector
-from v3.adapters.person_detection import (
-    NativePersonDetector,
-    PersonDetectionPort,
-    UnavailablePersonDetectionPort,
-)
+from v3.adapters.person_detection import PersonDetectionPort
 from v3.adapters.person_photo_evidence import PersonPhotoEvidenceRecorder
 from v3.adapters.async_person_photo_evidence import AsyncPersonPhotoEvidenceRecorder
 from v3.composition.live_inputs import (
@@ -51,6 +41,11 @@ from v3.contracts import (
     AdmittedFrame,
     LifecycleState,
     MissionIntent,
+    MissionLifecycle,
+    CommandMode,
+    NavigationPlan,
+    NavigationStatus,
+    SafetyDecision,
     RobotEstimate,
     TickContext,
 )
@@ -59,7 +54,6 @@ from v3.execution import CaptureRecord
 from v3.ports import CommandGateway
 from v3.runtime_performance import (
     RuntimeAffinityConfig,
-    temporary_current_affinity,
 )
 from v3.device_health_policy import (
     PRODUCTION_CRITICAL_DEVICE_IDS,
@@ -341,7 +335,7 @@ class NativePoseFeedback:
 
 
 class NativeHardwareSensorOwner:
-    """Acquire/release core sensors plus the optional native camera capability."""
+    """Own core sensors and consume the independent vision capability."""
 
     # P0_CONTROL_PROCESS_ISOLATION_20260920: retain port only for tiny pose-ring publication.
     __slots__ = (
@@ -350,6 +344,8 @@ class NativeHardwareSensorOwner:
         "_lidar_port",
         "_person_evidence",
         "_pose_feedback",
+        "_vision_port",
+        "_vision_terminal_mission_id",
     )
 
     def __init__(
@@ -359,7 +355,8 @@ class NativeHardwareSensorOwner:
         open_lidar_port: LidarPortFactory,
         config: NativeSensorHardwareConfig,
         *,
-        open_camera: Picamera2Factory = default_picamera2_factory,
+        open_vision_port: Callable[..., object] = ProcessVisionPort,
+        project_root: Path | None = None,
         open_imu_device: Callable[[NativeBno055DeviceConfig], Bno055SamplePort] | None = None,
         affinity_config: RuntimeAffinityConfig | None = None,
         runtime_edges=None,
@@ -376,7 +373,7 @@ class NativeHardwareSensorOwner:
         for callback, name in (
             (open_imu_bus, "open_imu_bus"),
             (open_lidar_port, "open_lidar_port"),
-            (open_camera, "open_camera"),
+            (open_vision_port, "open_vision_port"),
             (monotonic_ns, "monotonic_ns"),
             (sleep, "sleep"),
         ):
@@ -415,13 +412,15 @@ class NativeHardwareSensorOwner:
                     strict_affinity=(affinity.strict if affinity.enabled else False),
                 )
 
-            # Camera + detector share one child so frame bytes never cross IPC.
-            if config.camera_device is not None and open_camera is default_picamera2_factory:
+            # This client starts idle. Only an active vision mission creates a
+            # demand on the independent owner; V3 never owns a camera process.
+            if config.camera_device is not None:
                 try:
-                    camera = ProcessVisionPort(
+                    camera = open_vision_port(
                         config.camera_device,
                         config.person_detection_backend,
                         camera_geometry=config.camera_geometry,
+                        root=project_root or Path(__file__).resolve().parent,
                         worker_cpus=(affinity.vision_cpus if affinity.enabled else None),
                         strict_affinity=(affinity.strict if affinity.enabled else False),
                     )
@@ -430,73 +429,8 @@ class NativeHardwareSensorOwner:
                 if config.person_detection_backend is not None:
                     person_detection_port = camera  # type: ignore[assignment]
 
-            if config.camera_device is not None and not isinstance(
-                camera, (ProcessVisionPort, UnavailableVisionPort)
-            ):
-                with temporary_current_affinity(
-                    affinity.vision_cpus if affinity.enabled else None,
-                    role="vision",
-                    strict=affinity.strict,
-                ):
-                    camera = NativePicamera2Camera(
-                        config.camera_device,
-                        camera_geometry_config=config.camera_geometry,
-                        picamera_factory=open_camera,
-                        sensor_timestamp_mapper=(
-                            raspberry_pi_sensor_timestamp_to_monotonic_ns
-                        ),
-                        monotonic_ns=monotonic_ns,
-                    )
-                    # Camera/libcamera workers inherit the dedicated vision CPU.
-                    # Camera remains non-critical for motor safety authority.
-                    camera.start()
-
-            if (
-                config.person_detection_backend is not None
-                and person_detection_port is None
-            ):
+            if config.person_detection_backend is not None:
                 assert config.inputs.person_detection_source is not None
-                if camera is None or not camera.get_runtime_status().running:
-                    camera_error = (
-                        camera.get_runtime_status().last_error
-                        if camera is not None
-                        else "camera capability unavailable"
-                    )
-                    person_detection_port = UnavailablePersonDetectionPort(
-                        f"PERSON_DETECTOR_CAMERA_UNAVAILABLE:{camera_error}"
-                    )
-                else:
-                    detector: NativePersonDetector | None = None
-                    with temporary_current_affinity(
-                        affinity.vision_cpus if affinity.enabled else None,
-                        role="vision",
-                        strict=affinity.strict,
-                    ):
-                        try:
-                            backend = LiteRtSsdPersonDetector(
-                                config.person_detection_backend
-                            )
-                            detector = NativePersonDetector(
-                                camera,
-                                backend,
-                                camera_geometry_config=config.camera_geometry,
-                            )
-                            if not detector.start():
-                                raise RuntimeError("person detector worker did not start")
-                            person_detection_port = detector
-                        except Exception as exc:
-                            if detector is not None:
-                                try:
-                                    detector.stop()
-                                except Exception:
-                                    pass
-                            # Detector/model/runtime failures are capability-local.
-                            # TELEOP/EXPLORE motor availability is unchanged because
-                            # PERSON_DETECTOR_FRONT is not production-critical.
-                            person_detection_port = UnavailablePersonDetectionPort(
-                                f"{type(exc).__name__}:{exc}"
-                            )
-
                 if config.person_photo_evidence is not None:
                     person_evidence = AsyncPersonPhotoEvidenceRecorder(
                         PersonPhotoEvidenceRecorder(
@@ -561,6 +495,8 @@ class NativeHardwareSensorOwner:
         self._lidar_port = lidar
         self._pose_feedback = pose_feedback
         self._person_evidence = person_evidence
+        self._vision_port = camera
+        self._vision_terminal_mission_id: str | None = None
         self._closed = False
 
     @property
@@ -597,6 +533,26 @@ class NativeHardwareSensorOwner:
                 )
         admitted = _layer_output(result, "L2")
         mission = _layer_output(result, "L5")
+        navigation = _layer_output(result, "L6")
+        active_vision = bool(
+            isinstance(mission, MissionIntent)
+            and mission.lifecycle is MissionLifecycle.ACTIVE
+            and mission.mode in (CommandMode.FACE_PERSON, CommandMode.FOLLOW_PERSON)
+            and result.trace.fault_layer is None
+            and result.final_actuation.safety_decision is not SafetyDecision.FAULT
+        )
+        if active_vision and isinstance(mission, MissionIntent):
+            if isinstance(navigation, NavigationPlan) and (
+                navigation.status is NavigationStatus.COMPLETE
+                or navigation.reason in {"PERSON_TARGET_LOST", "PERSON_CAPABILITY_FAILED"}
+            ):
+                self._vision_terminal_mission_id = mission.mission_id
+            active_vision = mission.mission_id != self._vision_terminal_mission_id
+        else:
+            self._vision_terminal_mission_id = None
+        set_demand = getattr(self._vision_port, "set_person_detection_demand", None)
+        if callable(set_demand):
+            set_demand(active_vision)
         if (
             self._person_evidence is not None
             and isinstance(admitted, AdmittedFrame)

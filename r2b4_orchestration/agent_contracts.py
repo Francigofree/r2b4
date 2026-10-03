@@ -13,6 +13,7 @@ from types import MappingProxyType
 
 from r2b4_voice.conversation_contracts import LLMDecision, RobotAction
 from r2b4_voice.llm_decision import build_decision_schema, parse_llm_decision
+from v3.adapters.vision_media_contracts import VisionJpeg
 
 AGENT_STEP_SCHEMA = "R2B4_AGENT_STEP_V1"
 TOOL_RESULT_SCHEMA = "R2B4_AGENT_TOOL_RESULT_V1"
@@ -71,6 +72,11 @@ class AgentToolResult:
     status: str
     data: object | None = None
     error: str | None = None
+    images: tuple[VisionJpeg, ...] = field(default=(), repr=False)
+
+    def __post_init__(self) -> None:
+        if len(self.images) > 1 or any(not isinstance(image, VisionJpeg) for image in self.images):
+            raise ValueError("agent result supports one canonical calibrated image")
 
     def to_jsonable(self) -> dict[str, object]:
         return {

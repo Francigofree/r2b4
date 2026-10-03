@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from collections.abc import Mapping
 
-from .agent_contracts import AgentToolSpec
+from .agent_contracts import AgentToolResult, AgentToolSpec
 from .agent_config_tools import build_config_tools
 from .agent_evidence_tools import build_evidence_tools
 from .agent_source_tools import build_source_tools
@@ -56,6 +56,20 @@ def _er2_delegate(root: Path, value: Mapping[str, object]) -> object:
     }
 
 
+def _vision_observe(root: Path, value: Mapping[str, object]) -> AgentToolResult:
+    args = _strict(value, {"stream"})
+    stream = args.get("stream", "lores")
+    if stream not in {"lores", "main"}:
+        raise ValueError("stream must be lores or main")
+    from v3.adapters.vision_media_socket import VisionClient
+    observation = VisionClient(root=root).observe(stream_name=stream)
+    return AgentToolResult(
+        "vision.observe", "COMPLETED",
+        data={"lineage": observation.metadata.to_jsonable(), "image_attached": True},
+        images=(observation,),
+    )
+
+
 def build_default_agent_tools(project_root: Path):
     """Return the explicit current AgentCore tool surface.
 
@@ -67,6 +81,15 @@ def build_default_agent_tools(project_root: Path):
         *build_source_tools(root),
         *build_evidence_tools(root),
         *build_config_tools(root),
+        (
+            AgentToolSpec(
+                "vision.observe",
+                "Observe one fresh calibrated camera image without starting V3. The image is attached natively to your next provider step; the JSON result contains exact frame lineage only.",
+                "READ",
+                {"stream": "optional lores|main, default lores"},
+            ),
+            lambda args: _vision_observe(root, args),
+        ),
     ]
     tools.append((
         AgentToolSpec(

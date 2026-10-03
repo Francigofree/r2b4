@@ -20,6 +20,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,7 @@ from .camera_geometry import (
     sensor_crop_from_value,
 )
 from .camera_rectification import CameraRectifier
+from .camera_ownership import camera_device_lock
 from .vision_media_contracts import CameraJpegMetadata
 
 
@@ -431,6 +433,8 @@ class NativePicamera2Camera:
         "_photo_last_output",
         "_photo_last_error",
         "_photo_last_metadata",
+        "_device_lock",
+        "_owner_generation",
     )
 
     def __init__(
@@ -485,6 +489,12 @@ class NativePicamera2Camera:
         self._photo_last_output: str | None = None
         self._photo_last_error: str | None = None
         self._photo_last_metadata: CameraJpegMetadata | None = None
+        self._device_lock = None
+        self._owner_generation = ""
+
+    @property
+    def owner_generation(self) -> str:
+        return self._owner_generation
 
     @property
     def config(self) -> Picamera2CameraConfig:
@@ -542,6 +552,10 @@ class NativePicamera2Camera:
 
         camera: Picamera2Device | None = None
         try:
+            device_lock = camera_device_lock()
+            device_lock.__enter__()
+            self._device_lock = device_lock
+            self._owner_generation = uuid.uuid4().hex
             camera = self._factory(self._config.camera_index)
             model = _camera_model(camera)
             if self._config.expected_model.casefold() not in model.casefold():
@@ -578,6 +592,9 @@ class NativePicamera2Camera:
                     camera.close()
                 except Exception:
                     pass
+            if self._device_lock is not None:
+                self._device_lock.__exit__(None, None, None)
+                self._device_lock = None
             with self._frame_condition:
                 self._last_error = f"{type(exc).__name__}:{exc}"
                 self._running = False
@@ -634,6 +651,9 @@ class NativePicamera2Camera:
             except Exception:
                 if was_running:
                     raise
+        if self._device_lock is not None:
+            self._device_lock.__exit__(None, None, None)
+            self._device_lock = None
 
     def get_edge_snapshot(self) -> CameraEdgeSnapshot:
         now_ns = self._checked_clock()
@@ -762,13 +782,14 @@ class NativePicamera2Camera:
                             raise RuntimeError("camera JPEG frame is not calibrated")
                         jpeg_geometry = geometry
                         calibration_id = snapshot.calibration_id
+                        rectified_K = snapshot.rectified_K
                         if stream_name == geometry.stream_name:
                             saver = getattr(request, "save", None)
                             if not callable(saver):
                                 raise RuntimeError("Picamera2 request.save is unavailable")
                             saver(stream_name, output, format="jpeg")
                         elif stream_name == "main":
-                            calibration_id = self._save_calibrated_main_jpeg(request, output, snapshot)
+                            calibration_id, rectified_K = self._save_calibrated_main_jpeg(request, output, snapshot)
                             jpeg_geometry = self._main_geometry
                         else:
                             raise RuntimeError("requested camera JPEG stream is not calibrated")
@@ -782,6 +803,8 @@ class NativePicamera2Camera:
                                 stream=stream_name,
                                 width=jpeg_geometry.width,
                                 height=jpeg_geometry.height,
+                                rectified_K=rectified_K,
+                                owner_generation=self._owner_generation,
                             )
                             self._photo_saved_count += 1
                             self._photo_last_output = output
@@ -814,7 +837,7 @@ class NativePicamera2Camera:
         request: Picamera2Request,
         output: str,
         snapshot: CameraFrameSnapshot,
-    ) -> str:
+    ) -> tuple[str, tuple[tuple[float, float, float], ...]]:
         with self._lock:
             geometry = self._main_geometry
             rectifier = self._rectifier
@@ -839,7 +862,7 @@ class NativePicamera2Camera:
                 lens_position=snapshot.lens_position,
             )
         Path(output).write_bytes(result.jpeg_bytes)
-        return result.calibration_id
+        return result.calibration_id, result.rectified_K
 
     def _snapshot_from_request(
         self,

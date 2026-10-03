@@ -199,6 +199,7 @@ class AdmittedFrame:
     accepted: tuple[Observation, ...]
     rejected: tuple[RejectedObservation, ...]
     degraded_sources: tuple[str, ...] = ()
+    device_health: tuple[DeviceHealth, ...] = ()
 
     def __post_init__(self) -> None:
         accepted_keys = tuple((item.source_device_id, item.kind, item.source_sequence) for item in self.accepted)
@@ -214,6 +215,8 @@ class AdmittedFrame:
             raise ContractValidationError("AdmittedFrame.degraded_sources must be unique")
         for source in self.degraded_sources:
             require_token(source, "AdmittedFrame.degraded_sources")
+        health_keys = tuple(item.device_id for item in self.device_health)
+        _require_unique(self.device_health, health_keys, "AdmittedFrame.device_health")
 
 
 @dataclass(frozen=True, slots=True)
@@ -436,10 +439,15 @@ class WorldSnapshot:
     local_costmap: RollingLocalCostmap | None = None
     global_visited_cells: tuple[tuple[int, int, int], ...] = ()
     robot_relative_geometry: RobotRelativeGeometry | None = None
+    person_detection_state: DeviceHealthState | None = None
 
     def __post_init__(self) -> None:
         require_token(self.frame_id, "WorldSnapshot.frame_id")
         require_nonnegative(self.map_revision, "WorldSnapshot.map_revision")
+        if self.person_detection_state is not None and not isinstance(
+            self.person_detection_state, DeviceHealthState
+        ):
+            raise ContractValidationError("WorldSnapshot.person_detection_state must be DeviceHealthState or None")
         track_keys = tuple(item.track_id for item in self.obstacle_tracks)
         _require_unique(self.obstacle_tracks, track_keys, "WorldSnapshot.obstacle_tracks")
         require_nonnegative(self.freshness_ns, "WorldSnapshot.freshness_ns")

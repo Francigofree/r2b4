@@ -76,7 +76,15 @@ class NativePersonDetectionSource:
         if status.last_error:
             return self._failed(context, "PERSON_DETECTOR_RUNTIME_ERROR")
         if not status.running:
-            return self._failed(context, "PERSON_DETECTOR_NOT_RUNNING")
+            self._last_capability = latest_state_snapshot(
+                name="vision.person_detection", observed_monotonic_ns=context.monotonic_ns,
+                source_sequence=None, source_monotonic_ns=None,
+                stale_after_ns=self._config.maximum_result_age_ns, running=False,
+            )
+            return LiveDeviceSnapshot(
+                context,
+                DeviceHealth(self.device_id, DeviceHealthState.UNKNOWN, "PERSON_DETECTOR_NOT_RUNNING"),
+            )
         if result is None:
             self._last_capability = None
             return LiveDeviceSnapshot(

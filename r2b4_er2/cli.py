@@ -60,13 +60,13 @@ def _parser() -> argparse.ArgumentParser:
     stream.add_argument("task")
     stream.add_argument(
         "--camera",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="use the canonical live camera feed (enabled by default)",
     )
     stream.add_argument(
         "--tools",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
         help="allow canonical bounded robot tools (enabled by default)",
     )
@@ -95,11 +95,9 @@ def _safe_read(interface: RobotInterface, resource: str) -> object:
 
 def _probe_media(media: VisionMediaClient) -> dict[str, object]:
     try:
-        payload = media.latest_jpeg_sync(stream_name="lores")
+        status = media.status()
         return {
-            "available": True,
-            "stream": "lores",
-            "jpeg_bytes": len(payload),
+            **status,
             "socket": str(media.socket_path),
         }
     except Er2MediaUnavailable as exc:
@@ -125,7 +123,7 @@ def _value(mapping: object, key: str, default: object = None) -> object:
 def _status_payload(interface: RobotInterface, cfg: Er2Config) -> dict[str, object]:
     operator = _safe_read(interface, "operator.status")
     v3_status = _safe_read(interface, "v3.status")
-    media = VisionMediaClient(timeout_s=cfg.media_timeout_s)
+    media = VisionMediaClient(project_root=interface.root, timeout_s=cfg.media_timeout_s)
     media_probe = _probe_media(media)
     return {
         "preview_model": cfg.preview_model,
@@ -154,7 +152,7 @@ def _print_status(data: Mapping[str, object]) -> None:
 
     media_ready = _value(media, "available") is True
     media_detail = (
-        f"READY {_value(media, 'jpeg_bytes', '?')} B lores JPEG"
+        f"READY camera={_value(media, 'camera_active', False)}"
         if media_ready
         else f"UNAVAILABLE ({_value(media, 'error', 'unknown')})"
     )
@@ -192,18 +190,17 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
             _print_status(data)
         return 0
 
-    tools = Er2RobotTools.from_interface(interface, cfg, evidence=evidence)
     lease = _RuntimeLease(interface)
+    tools = Er2RobotTools.from_interface(interface, cfg, evidence=evidence, ensure_runtime=lease.ensure)
     try:
         if args.command == "preview":
-            if args.tools:
-                lease.ensure()
             image_bytes = None
             if args.image is not None:
                 image_bytes = args.image.read_bytes()
             elif args.camera:
-                lease.ensure()
-                image_bytes = VisionMediaClient(timeout_s=cfg.media_timeout_s).latest_jpeg_sync()
+                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s).observe_sync()
+                image_bytes = observation.image_bytes
+                evidence.emit("ER2_CAMERA_OBSERVATION", lineage=observation.metadata.to_jsonable())
             result = Er2PreviewClient(cfg, evidence=evidence).run(
                 args.prompt,
                 image_bytes=image_bytes,
@@ -220,8 +217,7 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
             return 0
 
         if args.command == "stream":
-            lease.ensure()
-            media = VisionMediaClient(timeout_s=cfg.media_timeout_s)
+            media = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s)
             text_chunks: list[str] = []
 
             def on_text(chunk: str) -> None:
@@ -239,8 +235,8 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
                 bounded_duration_s=args.seconds,
             )
             result = Er2StreamingClient(
-                tools,
-                media,
+                tools if args.tools else None,
+                media if args.camera else None,
                 cfg,
                 on_text=on_text,
                 evidence=evidence,
@@ -281,7 +277,7 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
             return 0
     finally:
         try:
-            if args.command == "stream" or args.tools:
+            if tools.motion_attempted:
                 tools.robot_stop()
         finally:
             lease.close()

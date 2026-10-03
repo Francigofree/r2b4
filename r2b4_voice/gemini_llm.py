@@ -7,6 +7,7 @@ output is enforced there with ``responseMimeType`` + ``responseJsonSchema``.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import urllib.error
@@ -21,6 +22,7 @@ from r2b4_orchestration.agent_contracts import (
     build_agent_step_schema,
     parse_agent_model_reply,
 )
+from v3.adapters.vision_media_contracts import VisionJpeg
 
 from .conversation_contracts import LLMDecision
 from .llm_decision import DECISION_SCHEMA, DecisionParseError, build_decision_schema, parse_llm_decision
@@ -98,8 +100,10 @@ class GeminiStructuredChatClient:
         messages: Sequence[Mapping[str, str]],
         tool_catalog: Sequence[Mapping[str, object]],
         action_catalog: Sequence[Mapping[str, object]],
+        *,
+        images: Sequence[VisionJpeg] = (),
     ) -> AgentModelReply:
-        raw = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog))
+        raw = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), images=images)
         try:
             return parse_agent_model_reply(
                 raw,
@@ -127,6 +131,8 @@ class GeminiStructuredChatClient:
         self,
         messages: Sequence[Mapping[str, str]],
         schema: Mapping[str, object],
+        *,
+        images: Sequence[VisionJpeg] = (),
     ) -> object:
         if not messages:
             raise ValueError("messages must not be empty")
@@ -139,7 +145,13 @@ class GeminiStructuredChatClient:
             "thinkingConfig": self._thinking_config(),
         }
         body: dict[str, object] = {
-            "contents": [{"role": "user", "parts": [{"text": interaction_input}]}],
+            "contents": [{"role": "user", "parts": [
+                {"text": interaction_input},
+                *[
+                    {"inlineData": {"mimeType": "image/jpeg", "data": base64.b64encode(image.image_bytes).decode("ascii")}}
+                    for image in images
+                ],
+            ]}],
             "generationConfig": generation_config,
         }
         if system_instruction:

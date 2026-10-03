@@ -93,6 +93,13 @@ def command_catalog() -> dict[str, object]:
             "stream_options": ["--camera", "--tools", "--speak", "--json", "--seconds"],
             "execution": "REAL_ONLY",
         },
+        "camera": {
+            "command": "cam",
+            "aliases": ["camera"],
+            "operations": list(launcher_extras.CAMERA_OPERATIONS),
+            "runtime": "NONE",
+            "images": "CALIBRATED_ONLY",
+        },
         "plain_llm": {
             "usage": 'r "PROMPT"',
             "escape_usage": 'r -- "PROMPT"',
@@ -166,7 +173,8 @@ def print_help() -> None:
         "  c alap / c full / c nincs  Capture-mód; nc = mozgás-trigger kihagyása\n"
         "  r evi CAPTURE.mcap         Offline MCAP Evidence Compiler\n"
         "  r diag [full|ANALYZER]     EVI diagnosztikai adat; alap: full/latest; artifact: runtime/diag/\n"
-        "  r cam photo OUTPUT         Kamerafotó; videó: r cam video OUTPUT [SECONDS]\n"
+        "  r cam status|on|off        Kameraállapot / manuális igény be / ki; V3 nélkül\n"
+        "  r cam photo OUTPUT         Kalibrált JPEG; videó: r cam video OUTPUT [SECONDS]\n"
         "\nAI, voice, fejlesztés és gépállapot:\n"
         "  r \"KÉRÉS\"                 Agent Core: LLM + R2B4 toolok; exact STOP lokális\n"
         "  r route \"KÉRÉS\" --json    Belépési route: STOP vagy AGENT\n"
@@ -217,6 +225,7 @@ def _commands(argv: list[str]) -> int:
     print("Test modes: " + ", ".join(catalog["tests"]["modes"]))
     print("Evidence: r evi MCAP | r evi verify BUNDLE | r evi query BUNDLE")
     print("\nER2: r er2 status|preview|stream; röviden: r er2 \"FELADAT\"")
+    print("Camera: r cam status|on|off|photo OUTPUT|video OUTPUT [SECONDS]; V3 nélkül")
     print('Agent route: r "REQUEST"; dry-run: r route "REQUEST" --json')
     print('Plain LLM escape: r -- "PROMPT"')
     print("Voice wake: r voice status|on|off|restart|check  (alias: r wake ...)")
@@ -345,6 +354,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return chatgpt_oauth_main(list(args[1:]), project_root=root)
         if args[0] == "voice" or args[0] == "wake":
             return launcher_extras.voice_command(args[1:], root)
+        if args[0] in {"cam", "camera"}:
+            return launcher_extras.camera_command(args[1:], root)
         if args[0] == "er2":
             # R2B4_ER2_P0_20260925: provider integration is a consumer of the
             # canonical RobotInterface/ExternalRobotGateway, not a robot layer.

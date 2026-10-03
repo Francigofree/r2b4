@@ -10,6 +10,7 @@ authentication paths exercise one response parser.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import urllib.error
@@ -23,6 +24,7 @@ from r2b4_orchestration.agent_contracts import (
     build_agent_step_schema,
     parse_agent_model_reply,
 )
+from v3.adapters.vision_media_contracts import VisionJpeg
 
 from .conversation_contracts import LLMDecision
 from .llm_decision import (
@@ -452,8 +454,10 @@ class OpenAIResponsesChatClient:
         messages: Sequence[Mapping[str, str]],
         tool_catalog: Sequence[Mapping[str, object]],
         action_catalog: Sequence[Mapping[str, object]],
+        *,
+        images: Sequence[VisionJpeg] = (),
     ) -> AgentModelReply:
-        raw, used_model = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step")
+        raw, used_model = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step", images=images)
         try:
             return parse_agent_model_reply(
                 raw,
@@ -482,8 +486,23 @@ class OpenAIResponsesChatClient:
         messages: Sequence[Mapping[str, str]],
         schema: Mapping[str, object],
         schema_name: str,
+        *,
+        images: Sequence[VisionJpeg] = (),
     ) -> tuple[object, str]:
         body = _base_body(self._config, messages)
+        if images:
+            inputs = body["input"]
+            last = inputs[-1]
+            last["content"] = [
+                {"type": "input_text", "text": last["content"]},
+                *[
+                    {
+                        "type": "input_image",
+                        "image_url": "data:image/jpeg;base64," + base64.b64encode(image.image_bytes).decode("ascii"),
+                    }
+                    for image in images
+                ],
+            ]
         used_model = self._transport.resolve_model(self._config.model)
         body["model"] = used_model
         body["text"] = {
