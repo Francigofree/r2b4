@@ -188,6 +188,15 @@ Ez nem engedély kamera-, mikrofon- vagy sensor-ownership megkerülésére. Az S
 
 A helyes fejlesztési irány nem második kamera- vagy mikrofonút létrehozása, hanem a capability olyan ownershipje és publikációja, amely a magasabb szintű rendszerszemantikával és a meglévő V3 contractokkal egyszerre konzisztens.
 
+A kamera alapállapota OFF. Csak aktív vision igény kapcsolhatja be; sem V3,
+Agent, ER2 vagy voice indulása önmagában nem igény. A vision-függő V3 mission
+LLM nélkül is létrehozza és a végén elengedi saját igényét. Az önálló
+`vision.observe` és CLI kameraút V3 nélkül kalibrált képet ad; több fogyasztó
+ugyanazt a fizikai ownert használja. Az utolsó fogyasztó után rövid grace
+lezárhatja a kamerát. Más aktív fogyasztó mellett V3 stop vagy manuális camera
+OFF nem szakíthatja meg a megfigyelést. Kamerahiba csak a vision capabilityt
+teszi elérhetetlenné; vision-függő mozgás ilyenkor biztonságosan megáll.
+
 ---
 
 ## 7. A végrehajtási mód kiválasztása

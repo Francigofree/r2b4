@@ -57,6 +57,13 @@ Az edge owner/worker saját device- vagy algoritmus-lokális állapotot tarthat,
 
 Ha a controlnak csak származtatott eredmény kell, a nagy raw adat maradjon a producer oldalán. Példa: kép → detection, teljes LiDAR scan → safety/localization/local-perception eredmény. Raw evidence közvetlenül mehet passzív observation/capture irányba anélkül, hogy a control interpreterbe belépne.
 
+A kamera/vision owner V3-tól független, demand-driven capability. Idle állapotban
+a supervisor maradhat, de Picamera2 zárt, frame processing és detector nem fut.
+V3 mission-demand változtatása bounded, nem blokkoló kliensművelet; kameraindítás,
+rectification, inference és kép-encode a külön ownerben marad. V3 shutdown csak
+saját demandet enged el, más fogyasztó képútját nem állítja le. Vision failure
+lezárt capability input; nem vehet át motor safety authorityt.
+
 ### Completion / Input Closure
 
 Ez az **egyetlen engedélyezett async → deterministic control kapu**.

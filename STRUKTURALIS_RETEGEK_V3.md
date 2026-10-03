@@ -150,6 +150,25 @@ Egy réteg nem módosíthat másik réteg state-jét és nem adhat át más komp
 
 A fizikai device handle/busz/driver lifetime az edge/device owner felelőssége; ez nem külön control layer. L0 csak a már megszerzett, publikált input bounded történetét és determinisztikus tick-zárását birtokolhatja.
 
+A kamera/vision capability egyetlen fizikai ownere V3-független. V3 start/stop
+nem kamera-lifecycle: V3, Agent, ER2 és CLI csak fogyasztói igényt tartanak vagy
+engednek el. Igény nélkül a fizikai kamera zárt, rectification, detector és JPEG
+encode nem fut; az utolsó igény után rövid idle grace megengedett. Manuális OFF
+csak a manuális igényt engedi el. Maintenance raw hozzáférés ugyanazzal a
+kizárólagos fizikai ownership-gate-tel ütközik, és aktív owner mellett elutasítandó.
+
+Production kép kizárólag kalibrált/rectified lehet, a konkrét JPEG-et létrehozó
+frame source sequence-ével, measurement/completion idejével, méretével,
+calibration identityjével, érvényes rectified K-val és owner generationnel.
+Hiányos kalibráció, stale vagy generation-mismatch nem adhat raw fallback képet.
+Image bytes közvetlen observation/provider attachmentként távoznak; tool JSON,
+szöveges journal és control IPC nem hordozza őket. V3 csak kompakt immutable
+camera/person eredményt zárhat TickInputs-ba. Kamera/detector failure önmagában
+nem egész-robot fault; vision-függő mission friss capability evidence nélkül
+nem kérhet pozitív mozgást. Generation-váltás megőrizheti a tényleges source
+sequence-resetet, kizárólag újabb measurement mellett; régi generation nem
+válhat újra elfogadott decision inputtá.
+
 A host/operator controller a production L0–L12 és a composition/runtime root fölötti orchestration komponens; nem L13 és nem production robotréteg. Saját state-je kizárólag host/session state lehet, például process supervision, parancsproducer-életciklus, capture-session, tesztfázis vagy felhasználói művelet állapota. Production lifecycle-, navigation-, motion-, actuator- vagy safety-state-et nem birtokolhat.
 
 ## 5. Engedélyezett production adat-élek
