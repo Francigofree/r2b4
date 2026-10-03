@@ -43,7 +43,7 @@ COMMAND_HELP = {
     "gitre": ("[ARGS...]", "A projekt gitre segédprogramja."),
     "git": ("[ARGS...]", "Git a projekt könyvtárában; az argumentumok változatlanul továbbmennek."),
     "pytest": ("[ARGS...]", "Nyers pytest; az argumentumok változatlanul továbbmennek."),
-    "test": ("[MODE]", "Célzott tesztek; alapértelmezés: quick (11 high-signal CORE eset). Módok: r test list."),
+    "test": ("[MODE]", "Célzott tesztek; alapértelmezés: core. Módok: r test list."),
     "tune": ("roomcruise [ARGS...]", "Offline, non-actuating RoomCruise hangolás; artifact: runtime/tunes/."),
     "tools": ("", "Elérhető Python segédprogramok listája."),
     "tool": ("NAME [ARGS...]", "Segédprogram futtatása név alapján; lista: r tools."),

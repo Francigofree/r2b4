@@ -34,7 +34,6 @@ For deep diagnostics, prefer MCAP + canonical replay + explicit MCAP Evidence Co
 
 ## Commands
 
-- `./r test` — QUICK: 11 high-signal, hardware-free CORE cases for the normal edit loop.
-- `./r test core` — complete CORE layer.
-- `./r test <feature>` — relevant scenario slice, e.g. `follow`; collect only the files owned by that slice.
+- `./r test` — CORE after normal agent changes.
+- `./r test <feature>` — relevant scenario slice, e.g. `follow`.
 - `./r test full` — complete 100-200 case suite for shared boundaries / release acceptance.

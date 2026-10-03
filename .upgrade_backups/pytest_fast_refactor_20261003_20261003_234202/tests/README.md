@@ -20,7 +20,6 @@ A célzott validáció az alapértelmezett:
 
 ```bash
 ./r test
-./r test core
 ./r test follow
 ./r test roomcruise
 ./r test localization
@@ -33,7 +32,7 @@ A célzott validáció az alapértelmezett:
 ./r test list
 ```
 
-A `./r test` egy 11 esetes, fail-fast QUICK kapu. A `./r test core` futtatja a teljes CORE réteget. A fókuszált módok csak a releváns FEATURE/DEEP fájlokat gyűjtik, így nem importálják a teljes réteget. A `./r test full` továbbra is a teljes CORE + FEATURE + DEEP suite.
+A `./r test` CORE-t futtat. A fókuszált módok a megfelelő FEATURE vagy DEEP szeletet futtatják. A `./r test full` a teljes CORE + FEATURE + DEEP suite.
 
 Nyers pytest továbbra is elérhető:
 
