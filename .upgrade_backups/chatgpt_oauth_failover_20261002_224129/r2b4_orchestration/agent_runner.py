@@ -60,6 +60,9 @@ def run_agent_prompt(prompt: str, *, project_root: str | Path, wait_s: float = 9
     model = _setting(env, "R2B4_LLM_MODEL") or default_model_for(provider)
     key_name = api_key_env_for(provider)
     key = _setting(env, key_name)
+    if not key:
+        raise RuntimeError(f"{key_name} is not configured")
+
     with build_voice_interface(root, api_key=key, provider=provider, model=model) as bundle:
         accepted = bundle.interface.execute("conversation.submit_text", text=prompt, source="launcher")
         turn_id = accepted.get("turn_id") if isinstance(accepted, Mapping) else None

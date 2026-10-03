@@ -96,7 +96,7 @@ def command_catalog() -> dict[str, object]:
         "plain_llm": {
             "usage": 'r "PROMPT"',
             "escape_usage": 'r -- "PROMPT"',
-            "provider": "chatgpt_oauth+failover",
+            "provider": "gemini",
             "tts": "default",
             "runtime": "NONE",
         },
@@ -105,12 +105,6 @@ def command_catalog() -> dict[str, object]:
             "dry_run": 'r route "REQUEST" --json',
             "modes": ["AGENT", "DIRECT_V3"],
             "evidence": "runtime/execution_routes.ndjson",
-        },
-        "chatgpt": {
-            "command": "chatgpt",
-            "operations": ["status", "login", "host-id", "import", "logout"],
-            "auth": "OAUTH_PRIMARY_API_KEY_OPTIONAL",
-            "runtime": "NONE",
         },
         "voice": {
             "command": "voice",
@@ -170,12 +164,11 @@ def print_help() -> None:
         "\nAI, voice, fejlesztés és gépállapot:\n"
         "  r \"KÉRÉS\"                 Agent Core: LLM + R2B4 toolok; exact STOP lokális\n"
         "  r route \"KÉRÉS\" --json    Belépési route: STOP vagy AGENT\n"
-        "  r -- \"s\"                   Sima LLM prompt (ChatGPT OAuth + failover)\n"
+        "  r -- \"s\"                   Kényszerített sima Gemini prompt\n"
         "  r er2 \"FELADAT\"            ER2 stream; camera/tools/speak/json bekapcsolva\n"
         "  r er2 status|preview|stream ER2 részletes parancsok\n"
         "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
         "  r voice restart|check      Voice service újraindítás / diagnosztika\n"
-        "  r chatgpt status|login     ChatGPT OAuth állapot / böngészős belépés\n"
         "  r test [MODE]              Tesztek; alap: core; módok: r test list\n"
         "  r tune roomcruise [OPCIÓK] Offline RoomCruise hangolás; runtime/tunes/\n"
         "  r pytest [ARGS...]         Nyers pytest\n"
@@ -267,7 +260,7 @@ def _route(argv: Sequence[str], root: Path) -> int:
 
 def _command_names() -> set[str]:
     known = {item["name"] for item in _robot_catalog()} | set(interface_cli.ALIASES)
-    known |= set(host_cli.COMMANDS) | {"chatgpt", "er2", "voice", "wake", "help", "commands", "route", "evi"}
+    known |= set(host_cli.COMMANDS) | {"er2", "voice", "wake", "help", "commands", "route", "evi"}
     return known
 
 
@@ -306,7 +299,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return launcher_extras.emit_completion(args[1:], root)
 
         # Explicit escape: after `--`, even a text equal to an existing r command
-        # is treated as a plain LLM prompt.
+        # is treated as a plain Gemini prompt.
         if args and args[0] == "--":
             return _plain_prompt(args[1:], root)
 
@@ -340,9 +333,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _commands(args[1:])
         if args[0] == "route":
             return _route(args[1:], root)
-        if args[0] == "chatgpt":
-            from r2b4_voice.openai_oauth import cli_main as chatgpt_oauth_main
-            return chatgpt_oauth_main(list(args[1:]), project_root=root)
         if args[0] == "voice" or args[0] == "wake":
             return launcher_extras.voice_command(args[1:], root)
         if args[0] == "er2":

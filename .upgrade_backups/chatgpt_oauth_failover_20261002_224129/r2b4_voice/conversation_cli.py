@@ -11,7 +11,6 @@ from pathlib import Path
 
 from .conversation_interface import build_voice_interface
 from .llm_provider import (
-    llm_auth_summary,
     SUPPORTED_LLM_PROVIDERS,
     api_key_env_for,
     default_model_for,
@@ -76,22 +75,20 @@ def _resolved_llm(args: argparse.Namespace, project_env: dict[str, str]) -> tupl
 def _check(root: Path, provider: str, model: str, key: str | None) -> int:
     prompt = root / "conf" / "r2b4_agent_system.md"
     secret = root / "conf" / ".wake.env"
-    project_env = _load_project_env(root)
-    auth = llm_auth_summary(root, project_env=project_env)
     result = {
         "project_root": str(root),
         "system_prompt": "PASS" if prompt.is_file() else "FAIL",
         "llm_provider": provider,
         "llm_model": model,
-        "llm_api_key": "OPTIONAL:PRESENT" if key else "OPTIONAL:MISSING",
-        "llm_auth": auth,
+        "llm_api_key": "PASS" if key else "FAIL",
         "secret_file": str(secret),
         "action_mode": "AGENT_PROPOSAL_ONLY",
         "motor_action_execution": False,
-        "groq_stt_key_present": "PASS" if _setting(project_env, "GROQ_API_KEY") else "FAIL",
+        "groq_stt_key_present": "PASS" if _setting(_load_project_env(root), "GROQ_API_KEY") else "FAIL",
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result["system_prompt"] == "PASS" and auth.get("llm_ready") is True else 1
+    return 0 if result["system_prompt"] == "PASS" and result["llm_api_key"] == "PASS" else 1
+
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
@@ -105,6 +102,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         return _check(root, provider, model, key)
+    if not key:
+        key_name = api_key_env_for(provider)
+        print(f"ERROR: {key_name} is not configured in environment or conf/.wake.env", file=sys.stderr)
+        return 2
     if not args.text and not args.interactive:
         print("ERROR: use --text TEXT, --interactive, or --check", file=sys.stderr)
         return 2

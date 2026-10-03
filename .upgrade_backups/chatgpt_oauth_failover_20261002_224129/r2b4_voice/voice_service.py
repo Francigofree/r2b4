@@ -2,7 +2,7 @@
 
 Data path:
     NativeUsbMicrophone -> local energy utterance gate -> Groq STT
-    -> RobotInterface conversation.submit_text -> ChatGPT OAuth/OpenAI API key/Gemini/Groq LLM
+    -> RobotInterface conversation.submit_text -> OpenAI/Gemini/Groq LLM
     -> LLMDecision proposal -> fresh VoiceActionExecutor gate -> canonical RobotInterface
     -> local Piper TTS (Gemini optional) -> Linux/PipeWire speaker.
 
@@ -44,7 +44,7 @@ from .action_executor import VoiceActionExecutor
 from .conversation_interface import VoiceInterfaceBundle, build_voice_interface
 from .tts_provider import build_tts_client, diagnose_tts
 from .groq_stt import GroqWakeTranscriber, WakeTranscriptionError
-from .llm_provider import api_key_env_for, default_model_for, llm_auth_summary, resolve_llm_provider
+from .llm_provider import api_key_env_for, default_model_for, resolve_llm_provider
 from .safety_intents import is_stop_intent
 from .voice_output import PcmWavePlayer
 from .wake_core import EnergyUtteranceBuilder, WakePhraseMatcher, WakeVoiceActivityConfig
@@ -1117,7 +1117,6 @@ def _diagnostic_check(root: Path) -> int:
 
     groq_key = _setting(project_env, "GROQ_API_KEY")
     gemini_key = _setting(project_env, "GEMINI_API_KEY")
-    auth = llm_auth_summary(root, project_env=project_env)
     try:
         tts_diagnostic = diagnose_tts(root, project_env, gemini_api_key=gemini_key)
     except Exception as exc:
@@ -1132,8 +1131,7 @@ def _diagnostic_check(root: Path) -> int:
         "groq_stt_key": "PASS" if groq_key else "FAIL",
         "llm_provider": provider,
         "llm_model": model,
-        "llm_api_key": "OPTIONAL:PRESENT" if llm_key else "OPTIONAL:MISSING",
-        "llm_auth": auth,
+        "llm_api_key": "PASS" if llm_key else "FAIL",
         **tts_diagnostic,
         "action_mode": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).lower(),
         "motor_action_execution": (_setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).lower() == "execute",
@@ -1154,7 +1152,7 @@ def _diagnostic_check(root: Path) -> int:
     return 0 if all(
         (
             groq_key,
-            auth.get("llm_ready") is True,
+            llm_key,
             tts_diagnostic.get("tts_status") == "PASS",
             isinstance(result["microphone"], dict) and result["microphone"].get("status") == "PASS",
             isinstance(result["speaker"], dict) and result["speaker"].get("status") == "PASS",
@@ -1202,7 +1200,6 @@ def main(argv: list[str] | None = None) -> int:
         groq_key = _setting(project_env, "GROQ_API_KEY")
         gemini_key = _setting(project_env, "GEMINI_API_KEY")
         provider, model, llm_key = _resolved_llm(project_env)
-        auth = llm_auth_summary(root, project_env=project_env)
         action_mode = (args.action_mode or _setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).strip().lower()
         if action_mode not in {"shadow", "execute"}:
             raise RuntimeError("R2B4_VOICE_ACTION_MODE must be shadow or execute")
@@ -1212,8 +1209,8 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("voice action watchdog must be within [1, 600] seconds")
         if not groq_key:
             raise RuntimeError("GROQ_API_KEY is required for STT")
-        if auth.get("llm_ready") is not True:
-            raise RuntimeError("no usable LLM authentication; run ./r chatgpt login or configure a fallback API key")
+        if not llm_key:
+            raise RuntimeError(f"missing API key for LLM provider {provider}")
         transcriber = GroqWakeTranscriber(api_key=groq_key)
         tts = build_tts_client(
             root,

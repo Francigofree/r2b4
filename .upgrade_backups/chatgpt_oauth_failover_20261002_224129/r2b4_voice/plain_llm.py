@@ -1,9 +1,8 @@
 """Host-side one-turn LLM -> stdout -> TTS path for the root ``r`` launcher.
 
-The selected provider follows ``R2B4_LLM_PROVIDER``. ChatGPT OAuth is the
-default OpenAI authentication path; API key, Gemini and Groq are automatic
-fallbacks when configured. This module owns no robot/runtime/ER2 state and
-cannot execute robot actions.
+The selected provider follows ``R2B4_LLM_PROVIDER``. OpenAI/ChatGPT is the
+default; Gemini and Groq remain explicit fallbacks. This module owns no
+robot/runtime/ER2 state and cannot execute robot actions.
 """
 from __future__ import annotations
 
@@ -19,16 +18,12 @@ from typing import Any, Callable, TextIO
 
 from .gemini_llm import GeminiChatConfig, GeminiRequestError
 from .groq_llm import GroqChatConfig, LLMRequestError
-from .llm_failover import FailoverLLMClient, LLMProviderCandidate
 from .llm_provider import (
-    DEFAULT_GEMINI_MODEL,
-    DEFAULT_GROQ_MODEL,
-    DEFAULT_OPENAI_MODEL,
-    model_for,
+    api_key_env_for,
+    default_model_for,
     resolve_llm_provider,
 )
 from .openai_llm import OpenAIChatConfig, OpenAIPlainClient
-from .openai_oauth import ChatGPTOAuthTokenProvider
 from .tts_provider import build_tts_client
 from .voice_output import PcmWavePlayer
 
@@ -274,58 +269,22 @@ def _start_tts_warmup(tts: Any) -> threading.Thread | None:
     return thread
 
 
-def _plain_candidates(root: Path, project_env: Mapping[str, str], provider: str, model: str | None = None):
-    order = tuple([provider] + [name for name in ("openai", "gemini", "groq") if name != provider])
-    candidates: list[LLMProviderCandidate] = []
-    for current in order:
-        current_model = model_for(
-            current,
-            selected_provider=provider,
-            explicit_model=model,
-            project_env=project_env,
+def _build_plain_client(provider: str, api_key: str | None, model: str):
+    if provider == "openai":
+        return OpenAIPlainClient(
+            api_key=api_key,
+            config=OpenAIChatConfig(model=model),
         )
-        if current == "openai":
-            oauth = ChatGPTOAuthTokenProvider(root)
-            if oauth.available():
-                candidates.append(
-                    LLMProviderCandidate(
-                        "openai_oauth",
-                        OpenAIPlainClient(token_provider=oauth, config=OpenAIChatConfig(model=current_model)),
-                    )
-                )
-            openai_key = _setting(project_env, "OPENAI_API_KEY")
-            if openai_key:
-                candidates.append(
-                    LLMProviderCandidate(
-                        "openai_api_key",
-                        OpenAIPlainClient(api_key=openai_key, config=OpenAIChatConfig(model=current_model)),
-                    )
-                )
-            continue
-        if current == "gemini":
-            key = _setting(project_env, "GEMINI_API_KEY") or _setting(project_env, "GOOGLE_API_KEY")
-            if key:
-                candidates.append(
-                    LLMProviderCandidate(
-                        "gemini",
-                        PlainGeminiClient(api_key=key, config=GeminiChatConfig(model=current_model)),
-                    )
-                )
-            continue
-        key = _setting(project_env, "GROQ_API_KEY")
-        if key:
-            candidates.append(
-                LLMProviderCandidate(
-                    "groq",
-                    PlainGroqClient(api_key=key, config=GroqChatConfig(model=current_model)),
-                )
-            )
-    if not candidates:
-        raise RuntimeError(
-            "no usable LLM authentication is configured; run './r chatgpt login' "
-            "or configure OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY"
+    if provider == "gemini":
+        return PlainGeminiClient(
+            api_key=api_key,
+            config=GeminiChatConfig(model=model),
         )
-    return FailoverLLMClient(candidates)
+    return PlainGroqClient(
+        api_key=api_key,
+        config=GroqChatConfig(model=model),
+    )
+
 
 def run_plain_prompt(
     prompt: str,
@@ -343,14 +302,15 @@ def run_plain_prompt(
     root = _root(project_root)
     project_env = _load_project_env(root)
     provider = resolve_llm_provider(_setting(project_env, "R2B4_LLM_PROVIDER"))
-    model = _setting(project_env, "R2B4_LLM_MODEL")
+    model = _setting(project_env, "R2B4_LLM_MODEL") or default_model_for(provider)
+    api_key = _setting(project_env, api_key_env_for(provider))
     gemini_tts_key = (
         _setting(project_env, "GEMINI_API_KEY")
         or _setting(project_env, "GOOGLE_API_KEY")
     )
 
     if client is None:
-        client = _plain_candidates(root, project_env, provider, model)
+        client = _build_plain_client(provider, api_key, model)
     if tts is None:
         tts = build_tts_client(
             project_root=root,
@@ -362,7 +322,7 @@ def run_plain_prompt(
 
     answer = client.complete_text(prompt.strip())
     if not isinstance(answer, str) or not answer.strip():
-        raise RuntimeError("LLM failover chain returned empty plain-text output")
+        raise RuntimeError(f"{provider} returned empty plain-text output")
     answer = answer.strip()
 
     print(answer, file=stdout, flush=True)

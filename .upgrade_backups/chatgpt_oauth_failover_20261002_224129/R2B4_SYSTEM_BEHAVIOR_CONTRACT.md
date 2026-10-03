@@ -217,15 +217,6 @@ Ez nem kizárólagos backend. A **végrehajtási mód választó** az intent és
 
 A ChatGPT/OpenAI provider, a Gemini, az ER2 stream és az ER2 preview nem külön robotikai authority-k. A kiválasztás azt határozza meg, hogy melyik magasabb szintű végrehajtó/partner dolgozza fel a kérést; robotmozgás esetén a tényleges actuation ettől függetlenül a canonical V3 command- és safety-úton történik.
 
-
-### LLM hitelesítés és automatikus fallback
-
-A ChatGPT/OpenAI elsődleges hitelesítési útja a **Sign in with ChatGPT OAuth**. A mentett OAuth access token automatikusan használható, lejárat előtt vagy lejáratkor a hozzá tartozó rotating refresh tokennel megújítandó. Az `OPENAI_API_KEY` opcionális fallback, nem kötelező előfeltétel.
-
-Az LLM provider-lánc normál sorrendje: **ChatGPT/OpenAI OAuth → OpenAI API key → Gemini → Groq**, kizárólag azokból az ágakból, amelyekhez érvényes helyi hitelesítés van. Kvóta-, rate-limit-, provider-, transport- vagy érvénytelen LLM-válasz hiba esetén csak minimális, indokolt újrapróbálkozás engedett; ezután a következő konfigurált LLM-re kell váltani. Kvóta/rate-limit és szemantikai/strukturált válaszhiba nem indokol ismételt azonos-provider próbálkozásokat.
-
-A provider-váltás kizárólag a magas szintű LLM-válasz előállítását érinti. Nem ismételhet meg már végrehajtott toolt vagy robotakciót, nem hoz létre új robotikai authorityt, és nem kerülheti meg a canonical RobotInterface/V3 command- és safety-utat.
-
 ### Hallható válasz
 
 Ha a rendszer a választ hallhatóan adja vissza, az **alapértelmezett beszédszintézis a lokális TTS**.
@@ -326,7 +317,7 @@ A jövőbeli fejlesztések akkor illeszkednek ehhez a rendszerszintű irányhoz,
 11. **A wake phrase konfigurálható; alapértéke `robot`.**
 12. **A wake utáni ready-visszajelzés konfigurálható; alapértéke `figyelek`.**
 13. **A beszélgetési session 10 másodperc folyamatos csend után lezárható.**
-14. **Az alapértelmezett beszélgető partner ChatGPT/OpenAI; LLM-hibánál a hitelesített fallback-lánc automatikusan válthat OpenAI API key, Gemini vagy Groq providerre; ER2 stream/preview továbbra is külön végrehajtási mód.**
+14. **Az alapértelmezett beszélgető partner ChatGPT/OpenAI; szükség esetén a végrehajtási mód választó Gemini fallbacket, ER2 streamet, ER2 preview-t vagy későbbi más végrehajtót választhat.**
 15. **A hallható válaszok alapértelmezett beszédszintézise a lokális TTS.**
 16. **A beszélgető/reasoning partner kiválasztása és a TTS-kimenet külön felelősség.**
 17. **A V3 technikai implementációja változhat anélkül, hogy a felhasználó felől látható rendszerszemantika megváltozna.**
@@ -357,7 +348,7 @@ Ezek source-first implementációs vagy külön contract-kérdések.
 
 A fenti részletek megváltozhatnak. A rendszerszintű cél közben változatlan marad:
 
-> **A robot legyen folyamatosan megszólítható; normál beszélgetésnél alapértelmezetten ChatGPT/OpenAI OAuth-pal dolgozzon, LLM-hibánál automatikusan válthasson a konfigurált fallback providerre, és szükség esetén a végrehajtási mód választó külön ER2 streamre vagy ER2 preview-ra válthasson; a hallható válasz alapértelmezetten lokális TTS-en szólaljon meg; és a V3 csak akkor induljon el, amikor tényleges robotmozgás vagy más production controlt igénylő feladat szükséges.**
+> **A robot legyen folyamatosan megszólítható; normál beszélgetésnél alapértelmezetten ChatGPT/OpenAI providerrel dolgozzon, szükség esetén a végrehajtási mód választó válthasson Gemini fallbackre, ER2 streamre, ER2 preview-ra vagy későbbi más végrehajtóra; a hallható válasz alapértelmezetten lokális TTS-en szólaljon meg; és a V3 csak akkor induljon el, amikor tényleges robotmozgás vagy más production controlt igénylő feladat szükséges.**
 
 ---
 

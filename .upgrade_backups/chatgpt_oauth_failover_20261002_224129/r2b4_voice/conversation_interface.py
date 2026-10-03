@@ -118,7 +118,7 @@ def build_voice_interface(
     core_adapters = build_adapters(controller, root)
     core_interface = RobotInterface(project_root=root, controller=controller, adapters=core_adapters)
 
-    llm = build_llm_client(provider=provider, api_key=api_key, model=model, project_root=root)
+    llm = build_llm_client(provider=provider, api_key=api_key, model=model)
     broker = AgentToolBroker(build_default_agent_tools(root))
     agent = AgentCore(llm, broker, max_tool_rounds=4)
     prompt = PromptAssembler(
