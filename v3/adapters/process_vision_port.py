@@ -25,6 +25,7 @@ from .person_detection import (
 from .picamera2_camera import (
     CameraEdgeSnapshot,
     CameraRuntimeStatus,
+    CameraPhotoStatus,
     Picamera2CameraConfig,
 )
 
@@ -51,6 +52,15 @@ class CameraFrameControlSnapshot:
     rectified_K: tuple[tuple[float, float, float], ...]
     rectification_duration_ns: int
     owner_generation: str = ""
+
+    def __post_init__(self) -> None:
+        from .vision_media_contracts import CameraJpegMetadata
+        CameraJpegMetadata(self.sequence, self.sensor_timestamp_ns,
+            self.measurement_monotonic_ns, self.completed_monotonic_ns,
+            self.calibration_id, "lores", self.width, self.height,
+            self.rectified_K, self.owner_generation, self.calibration_state)
+        if self.stride_bytes < self.width * 3 or self.frame_size_bytes < self.stride_bytes * self.height:
+            raise ValueError("VISION_FRAME_GEOMETRY_INVALID")
 
     @property
     def completion_lag_ns(self) -> int:
@@ -149,6 +159,8 @@ class ProcessVisionPort:
         self._conn = None
         self._pid = None
         self._generation = ""
+        self._photo_lock = threading.Lock()
+        self._photo_status = CameraPhotoStatus(False, 0, None, None, None)
         self._clear()
         # Idle until a mission requests vision. Launch/connect/cold camera work
         # happens here, never synchronously on the 50 Hz control interpreter.
@@ -167,6 +179,7 @@ class ProcessVisionPort:
         self._error = error
 
     def set_person_detection_demand(self, active: bool) -> None:
+        import socket
         if type(active) is not bool:
             raise TypeError("active must be bool")
         with self._condition:
@@ -176,8 +189,14 @@ class ProcessVisionPort:
             self._revision += 1
             self._generation = ""
             self._clear()
+            conn = self._conn if not active else None
             self._condition.notify_all()
         self._wake.set()
+        if conn is not None:
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
 
     def _accept(self, value: dict, revision: int) -> None:
         from dataclasses import replace
@@ -315,8 +334,32 @@ class ProcessVisionPort:
             return self._detection
 
     def request_jpeg(self, output: str | Path, *, stream_name: str = "lores") -> bool:
-        # Optional photo evidence has its own observation client outside control.
-        return False
+        if stream_name not in {"lores", "main"}:
+            raise ValueError("stream_name must be lores or main")
+        if self._closed or not self._photo_lock.acquire(blocking=False):
+            return False
+        with self._condition:
+            previous = self._photo_status
+            self._photo_status = CameraPhotoStatus(True, previous.saved_count, previous.last_output, None, previous.last_metadata)
+        def save() -> None:
+            try:
+                if self._closed:
+                    return
+                metadata = self._client.save_photo(output, stream_name=stream_name)
+                with self._condition:
+                    self._photo_status = CameraPhotoStatus(False, previous.saved_count + 1, str(output), None, metadata)
+            except Exception as exc:
+                with self._condition:
+                    self._photo_status = CameraPhotoStatus(False, previous.saved_count, previous.last_output,
+                        f"{type(exc).__name__}:{exc}"[:256], previous.last_metadata)
+            finally:
+                self._photo_lock.release()
+        threading.Thread(target=save, name="vision-photo-evidence", daemon=True).start()
+        return True
+
+    def get_photo_status(self) -> CameraPhotoStatus:
+        with self._condition:
+            return self._photo_status
 
     def stop(self) -> None:
         import socket

@@ -60,10 +60,12 @@ class CameraVisionOwner:
                     raise RuntimeError(camera.get_runtime_status().last_error or "VISION_CAMERA_FAILED")
             except BaseException as exc:
                 self._last_error = f"{type(exc).__name__}:{exc}"
-                try:
-                    if camera is not None:
+                if camera is not None:
+                    try:
                         camera.stop()
-                finally:
+                    except Exception as cleanup_exc:
+                        self._last_error += f";close_failed:{type(cleanup_exc).__name__}:{cleanup_exc}"
+                        raise RuntimeError(self._last_error) from exc
                     self._camera = None
                 raise RuntimeError(self._last_error)
             self._last_error = None
@@ -229,6 +231,7 @@ def main(argv=None) -> int:
         owner = CameraVisionOwner(camera_factory, detector_factory,
             idle_grace_s=float(os.environ.get("R2B4_VISION_IDLE_GRACE_S", "1.0")),
             maximum_age_ns=config.inputs.camera_source.maximum_frame_age_ns if config.inputs.camera_source else 250_000_000)
+        owner.project_root = args.root.resolve()
         server = VisionMediaServer(owner, args.socket)
         stopped = threading.Event()
         for sig in (signal.SIGTERM, signal.SIGINT):

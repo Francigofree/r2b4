@@ -121,6 +121,7 @@ class VisionClient:
                     "last_error": None, "owner_pid": None}
         with conn:
             try:
+                conn.settimeout(min(self.timeout_s, 0.5))
                 conn.sendall(b"R2B4VISION1 STATUS\n")
                 return recv_json_line(conn)
             except (OSError, EOFError, RuntimeError, ValueError) as exc:
@@ -144,6 +145,19 @@ class VisionClient:
 
     def session(self) -> VisionSession:
         return VisionSession(self)
+
+    def save_photo(self, output: str | Path, *, stream_name: str = "lores") -> CameraJpegMetadata:
+        """Producer-side evidence save; only lineage returns to the caller."""
+        if stream_name not in {"lores", "main"}:
+            raise ValueError("stream_name must be lores or main")
+        with self.connect() as conn:
+            conn.sendall(b"R2B4VISION1 PHOTO\n")
+            send_json_line(conn, {"output": str(Path(output).resolve()), "stream": stream_name})
+            reply = recv_json_line(conn)
+            metadata = CameraJpegMetadata.from_jsonable(reply["metadata"])
+            metadata.require_fresh(time.monotonic_ns(), generation=reply["owner_generation"],
+                                   maximum_age_ns=reply["maximum_age_ns"])
+            return metadata
 
     def observe(self, *, stream_name: str = "lores") -> VisionJpeg:
         with self.session() as session:
@@ -276,10 +290,27 @@ class VisionMediaServer:
                 self.owner.set_manual_demand(command == "ON")
                 send_json_line(conn, self.owner.status())
                 return
-            if command not in {"PERSON", "IMAGE"}:
+            if command not in {"PERSON", "IMAGE", "PHOTO"}:
                 raise ValueError("unknown vision request")
+            photo_request = None
+            if command == "PHOTO":
+                photo_request = recv_json_line(conn)
+                target = Path(photo_request["output"]).resolve()
+                root = getattr(self.owner, "project_root", Path(__file__).resolve().parents[2])
+                target.relative_to(root)
+                if target.suffix.lower() not in {".jpg", ".jpeg"} or target.exists():
+                    raise ValueError("photo evidence requires a new JPEG below project root")
+                if photo_request["stream"] not in {"lores", "main"}:
+                    raise ValueError("invalid photo stream")
             demand = self.owner.acquire(person=command == "PERSON")
             generation = self.owner.generation
+            if command == "PHOTO":
+                result = self._capture(photo_request["stream"], generation)
+                with target.open("xb") as output:
+                    output.write(result.image_bytes)
+                send_json_line(conn, {"metadata": result.metadata.to_jsonable(),
+                    "owner_generation": generation, "maximum_age_ns": self.owner.maximum_age_ns})
+                return
             if command == "PERSON":
                 while not self._stop.is_set():
                     send_json_line(conn, self.owner.control_state(generation))

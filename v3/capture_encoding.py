@@ -196,6 +196,8 @@ def _compact_admitted_frame(output: object, inputs: object) -> dict[str, object]
         return None
     if output.context != inputs.context:
         return None
+    if output.device_health != inputs.raw_devices.device_health:
+        return None
     sample_indices: dict[tuple[str, str, int], int] = {
         (sample.device_id, sample.kind, sample.sequence): index
         for index, sample in enumerate(inputs.raw_devices.samples)

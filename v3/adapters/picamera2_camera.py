@@ -594,16 +594,23 @@ class NativePicamera2Camera:
                 camera.set_controls(controls)
             camera.start()
         except Exception as exc:
+            close_error = None
             if camera is not None:
                 try:
                     camera.close()
-                except Exception:
-                    pass
-            if self._device_lock is not None:
+                except Exception as cleanup_exc:
+                    close_error = cleanup_exc
+            if close_error is not None:
+                # Keep both the handle and exclusion until close succeeds.
+                # A failed partial startup must not admit a second owner.
+                self._picamera = camera
+            elif self._device_lock is not None:
                 self._device_lock.__exit__(None, None, None)
                 self._device_lock = None
             with self._frame_condition:
                 self._last_error = f"{type(exc).__name__}:{exc}"
+                if close_error is not None:
+                    self._last_error += f";close_failed:{type(close_error).__name__}:{close_error}"
                 self._running = False
                 self._frame_condition.notify_all()
             return False
@@ -646,18 +653,15 @@ class NativePicamera2Camera:
             if thread.is_alive():
                 raise RuntimeError("Picamera2 acquisition thread did not stop")
         self._thread = None
+        if camera is not None:
+            camera.close()
         with self._frame_condition:
             self._picamera = None
             self._geometry = None
             self._main_geometry = None
             self._rectifier = None
+            self._latest = None
             self._frame_condition.notify_all()
-        if camera is not None:
-            try:
-                camera.close()
-            except Exception:
-                if was_running:
-                    raise
         if self._device_lock is not None:
             self._device_lock.__exit__(None, None, None)
             self._device_lock = None

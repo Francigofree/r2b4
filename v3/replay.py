@@ -1259,6 +1259,7 @@ def _expanded_expected_layers(
             "accepted": accepted,
             "rejected": copy.deepcopy(value.get("rejected")),
             "degraded_sources": copy.deepcopy(value.get("degraded_sources")),
+            "device_health": copy.deepcopy(raw.get("device_health")),
         }
     return expanded
 
