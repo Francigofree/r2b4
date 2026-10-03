@@ -60,6 +60,15 @@ def status_text(status: object) -> str:
     return "A V3 fut, de friss részletes runtime-állapot most nem érhető el."
 
 
+def _agent_return_code(action_status: str | None) -> int:
+    # Keep pure conversation successful, but expose physical action failure to shell/automation.
+    if action_status is None or action_status in {"NONE", "COMPLETED", "EXECUTED"}:
+        return 0
+    if action_status.startswith("FAILED:") or action_status.startswith("REJECTED:"):
+        return 2
+    return 0
+
+
 def execute_plan(plan: ExecutionPlan, *, project_root: str | Path) -> int:
     root = Path(project_root).expanduser().resolve()
     evidence = RouteEvidenceJournal(root)
@@ -70,8 +79,14 @@ def execute_plan(plan: ExecutionPlan, *, project_root: str | Path) -> int:
             result = run_agent_prompt(plan.text, project_root=root)
             print(result.text, flush=True)
             speak_text(result.text, project_root=root)
-            evidence.emit("ROUTE_EXECUTION_COMPLETE", plan, return_code=0, action_status=result.action_status)
-            return 0
+            return_code = _agent_return_code(result.action_status)
+            evidence.emit(
+                "ROUTE_EXECUTION_COMPLETE",
+                plan,
+                return_code=return_code,
+                action_status=result.action_status,
+            )
+            return return_code
 
         # Legacy explicit plans remain supported, but the natural-language selector
         # no longer creates them except DIRECT_V3 STOP.

@@ -37,3 +37,20 @@ def test_exact_stop_stays_direct_v3(monkeypatch, tmp_path) -> None:
     plan = ExecutionModeSelector().select("stop", source="test")
     assert executor.execute_plan(plan, project_root=tmp_path) == 0
     assert seen == [("v3.command.stop", {})]
+
+
+def test_agent_action_failure_returns_nonzero(monkeypatch, tmp_path) -> None:
+    from r2b4_orchestration.execution_mode import ExecutionModeSelector
+    from r2b4_orchestration import executor
+
+    module = types.ModuleType("r2b4_orchestration.agent_runner")
+    module.run_agent_prompt = lambda *args, **kwargs: types.SimpleNamespace(
+        text="A kért robotművelet nem fejeződött be.",
+        action_status="FAILED:TIMEOUT",
+    )
+    monkeypatch.setitem(sys.modules, "r2b4_orchestration.agent_runner", module)
+    monkeypatch.setattr(executor, "speak_text", lambda *args, **kwargs: None)
+
+    plan = ExecutionModeSelector().select("menj előre 1,2 m-t", source="test")
+    assert executor.execute_plan(plan, project_root=tmp_path) == 2
+

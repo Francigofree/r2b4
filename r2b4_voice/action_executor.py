@@ -124,7 +124,7 @@ class VoiceActionExecutor:
         if descriptor.completion_required:
             status = raw_result.get("status") if isinstance(raw_result, Mapping) else None
             reason = raw_result.get("reason") if isinstance(raw_result, Mapping) else None
-            completed = status == "COMPLETED"
+            completed = status == "COMPLETED" and reason == "COMPLETE"
             return VoiceActionExecution(
                 "COMPLETED" if completed else f"FAILED:{reason or status or 'RESULT_UNAVAILABLE'}",
                 action.name, completed,

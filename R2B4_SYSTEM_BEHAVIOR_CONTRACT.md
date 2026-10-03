@@ -156,6 +156,27 @@ véges átmenet; a kis sebességű encoder-fit nem megbízható sebesség-author
 
 A jelenlegi implementációs coupling nem válhat automatikusan rendszerszintű követelménnyé.
 
+### 5.1. Állapot-provenance és state/action konzisztencia
+
+A magas szintű Agent szándékot és célt választ; nem feltételezheti, hogy egy
+korábban megfigyelt fizikai állapot változatlanul érvényes. Minden fizikai
+végrehajtásnak bizonyítható kapcsolatban kell maradnia azzal az állapottal,
+amelyből a cél készült.
+
+Relatív finite motion esetén kötelező sorrend:
+
+`runtime/capture stabilizálás → STOP/IDLE → friss pose → target → admission`
+
+A friss pose és az admission között runtime restart, capture re-arm vagy más
+local-frame epoch váltás nem megengedett. A hostoldali operator transition ezt
+sorosan védi; a resident runtime-session identitás változása fail-closed hiba.
+
+A kutatás/fejlesztési evidence-nek legalább a requestet, start pose-t, target
+pose-t, final pose-t, command/mission identitást, completion/failure reasont és
+a frame/runtime provenance-t meg kell őriznie. A robot nem állíthatja egy
+műveletről, hogy sikeres, ha a completion identity vagy a provenance nem
+bizonyítható.
+
 ---
 
 ## 6. V3-független capability-k fejlesztési iránya

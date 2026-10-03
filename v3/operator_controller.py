@@ -60,6 +60,15 @@ class MotionHandle:
 
 
 @dataclass(frozen=True, slots=True)
+class MotionPreparation:
+    # Proof that finite-motion state and admission share one runtime session.
+    runtime_pid: int
+    capture_mode: str
+    capture_hz: int
+    capture: bool
+
+
+@dataclass(frozen=True, slots=True)
 class OperatorSnapshot:
     runtime_running: bool
     runtime_pid: int | None
@@ -304,6 +313,50 @@ class OperatorController:
             )
         return self.runtime_start(requested, requested_hz)
 
+    @contextmanager
+    def finite_motion_transaction(
+        self,
+        *,
+        capture: bool = True,
+        capture_mode: str = DEFAULT_CAPTURE_MODE,
+        capture_hz: int = DEFAULT_CAPTURE_HZ,
+    ):
+        # Serialize finite-motion world-state capture and command admission.
+        #
+        # Safety-critical ordering:
+        # runtime/capture stabilization -> STOP/IDLE -> fresh readiness
+        # -> caller pose snapshot/target construction -> prepared NAVIGATE.
+        requested = self._validate_capture_mode(capture_mode)
+        hz = self._validate_capture_hz(capture_hz)
+        with self.operator_transition():
+            self.ensure_runtime(requested, hz)
+            self.stop()
+
+            mode = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
+            if mode == "alap" and capture:
+                # A previous bounded slot may require a resident restart.
+                # This MUST happen before the relative pose snapshot.
+                self._ensure_fresh_capture_slot()
+                self._wait_ready()
+            else:
+                self._unlink(self.movement_capture_file)
+
+            pid = self._runtime_pid()
+            actual_mode = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
+            actual_hz = self.current_capture_hz() or DEFAULT_CAPTURE_HZ
+            if pid is None:
+                raise OperatorError("runtime disappeared while preparing finite motion")
+            if actual_mode != requested or actual_hz != hz:
+                raise OperatorError(
+                    "runtime capture identity changed while preparing finite motion"
+                )
+            yield MotionPreparation(
+                runtime_pid=pid,
+                capture_mode=actual_mode,
+                capture_hz=actual_hz,
+                capture=bool(capture),
+            )
+
     def _preempt_motion_once(self) -> Exception | None:
         error: Exception | None = None
         try:
@@ -473,6 +526,7 @@ class OperatorController:
         capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
+        preparation: MotionPreparation | None = None,
     ) -> MotionHandle:
         if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
             raise OperatorError("unsupported navigation frame")
@@ -495,6 +549,7 @@ class OperatorController:
             "navigate", capture, capture_mode, args, require_real_motion=False,
             navigate_command_id=command_id, capture_hz=capture_hz,
             session_owner_pid=session_owner_pid, session_watchdog_s=session_watchdog_s,
+            preparation=preparation,
         )
         return MotionHandle(pid=pid, label="navigate", command_id=command_id, capture_mode=mode)
 
@@ -857,19 +912,41 @@ class OperatorController:
         navigate_command_id: str | None = None,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
+        preparation: MotionPreparation | None = None,
     ) -> tuple[int, str]:
         requested = self._validate_capture_mode(capture_mode)
         hz = self._validate_capture_hz(capture_hz)
-        self.ensure_runtime(requested, hz)
-        self.stop()
 
-        mode = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
-        if mode == "alap" and capture:
-            self._ensure_fresh_capture_slot()
-            self._wait_ready()
-            self._write_private_text(self.movement_capture_file, "movement")
+        if preparation is None:
+            self.ensure_runtime(requested, hz)
+            self.stop()
+            mode = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
+            if mode == "alap" and capture:
+                self._ensure_fresh_capture_slot()
+                self._wait_ready()
+                self._write_private_text(self.movement_capture_file, "movement")
+            else:
+                self._unlink(self.movement_capture_file)
         else:
-            self._unlink(self.movement_capture_file)
+            if not isinstance(preparation, MotionPreparation):
+                raise OperatorError("invalid finite-motion preparation token")
+            if preparation.capture != bool(capture):
+                raise OperatorError("prepared capture policy does not match motion request")
+            if preparation.capture_mode != requested or preparation.capture_hz != hz:
+                raise OperatorError("prepared capture identity does not match motion request")
+            pid = self._runtime_pid()
+            mode = self.current_capture_mode() or DEFAULT_CAPTURE_MODE
+            current_hz = self.current_capture_hz() or DEFAULT_CAPTURE_HZ
+            if pid != preparation.runtime_pid:
+                raise OperatorError("prepared runtime session changed before motion admission")
+            if mode != requested or current_hz != hz:
+                raise OperatorError("prepared runtime capture identity changed before motion admission")
+            # Stabilization/STOP already happened inside finite_motion_transaction.
+            # Do not restart or preempt again after the target was derived.
+            if mode == "alap" and capture:
+                self._write_private_text(self.movement_capture_file, "movement")
+            else:
+                self._unlink(self.movement_capture_file)
 
         status = self._read_status_optional()
         baseline = self._tick(status) if status else -1

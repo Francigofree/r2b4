@@ -106,31 +106,59 @@ class FiniteNavigationExecutor:
                     raise ValueError("finite_timeout_s must be positive")
                 timeout = min(timeout, requested_timeout)
             deadline = started + timeout
+            preparation = None
+            start_status: Mapping[str, object] = {}
+            start_generation: object = None
             if cancel_event is None or not cancel_event.is_set():
-                self.controller.ensure_runtime(capture_mode, capture_hz)
-                pose, final, reason = self._pose_snapshot(frame_id, min(deadline, self._monotonic() + 8.0), cancel_event)
-                if pose is not None:
-                    if action != "v3.command.navigate":
-                        yaw = float(pose["yaw_rad"])
-                        target = {
-                            "x_m": float(pose["x_m"]) + forward * math.cos(yaw) - left * math.sin(yaw),
-                            "y_m": float(pose["y_m"]) + forward * math.sin(yaw) + left * math.cos(yaw),
-                        }
-                        if yaw_delta is not None:
-                            target["yaw_rad"] = _wrap_yaw(yaw + yaw_delta)
-                    target["frame_id"] = frame_id
-                    if cancel_event is not None and cancel_event.is_set():
-                        reason = "CANCELLED"
-                    elif self._monotonic() >= deadline:
-                        reason = "TIMEOUT"
-                    else:
-                        handle = self.controller.navigate(**target, max_v_mps=max_v, max_omega_rad_s=max_omega, **options)
-                        command_id = handle.get("command_id") if isinstance(handle, Mapping) else getattr(handle, "command_id", None)
-                        if not isinstance(command_id, str) or not command_id:
-                            raise RuntimeError("navigation returned no command identity")
-                        mission_id = f"mission-{command_id}"
-                        generation = self._generation(final) if frame_id == LOCAL_FRAME_ID else None
-                        final, reason = self._wait(mission_id, frame_id, generation, deadline, cancel_event)
+                # P0 state/action transaction: any capture re-arm/runtime restart,
+                # prior motion preemption and IDLE confirmation happen BEFORE the
+                # pose snapshot. The operator lock remains held through admission.
+                with self.controller.finite_motion_transaction(
+                    capture=capture, capture_mode=capture_mode, capture_hz=capture_hz,
+                ) as preparation:
+                    pose, start_status, reason = self._pose_snapshot(
+                        frame_id,
+                        min(deadline, self._monotonic() + 8.0),
+                        cancel_event,
+                        runtime_pid=preparation.runtime_pid,
+                    )
+                    final = start_status
+                    if pose is not None:
+                        if action != "v3.command.navigate":
+                            yaw = float(pose["yaw_rad"])
+                            target = {
+                                "x_m": float(pose["x_m"]) + forward * math.cos(yaw) - left * math.sin(yaw),
+                                "y_m": float(pose["y_m"]) + forward * math.sin(yaw) + left * math.cos(yaw),
+                            }
+                            if yaw_delta is not None:
+                                target["yaw_rad"] = _wrap_yaw(yaw + yaw_delta)
+                        target["frame_id"] = frame_id
+                        start_generation = self._generation(start_status) if frame_id == LOCAL_FRAME_ID else None
+                        if cancel_event is not None and cancel_event.is_set():
+                            reason = "CANCELLED"
+                        elif self._monotonic() >= deadline:
+                            reason = "TIMEOUT"
+                        else:
+                            handle = self.controller.navigate(
+                                **target,
+                                max_v_mps=max_v,
+                                max_omega_rad_s=max_omega,
+                                preparation=preparation,
+                                **options,
+                            )
+                            command_id = handle.get("command_id") if isinstance(handle, Mapping) else getattr(handle, "command_id", None)
+                            if not isinstance(command_id, str) or not command_id:
+                                raise RuntimeError("navigation returned no command identity")
+                            mission_id = f"mission-{command_id}"
+                if mission_id is not None and preparation is not None:
+                    final, reason = self._wait(
+                        mission_id,
+                        frame_id,
+                        start_generation,
+                        deadline,
+                        cancel_event,
+                        runtime_pid=preparation.runtime_pid,
+                    )
         finally:
             try:
                 self.controller.stop()
@@ -144,6 +172,12 @@ class FiniteNavigationExecutor:
             "reason": reason, "command_id": command_id, "mission_id": mission_id,
             "requested": requested, "start_pose": dict(pose) if pose is not None else None,
             "target_pose": target, "final_pose": self._pose(final, target.get("frame_id", LOCAL_FRAME_ID)),
+            "frame_provenance": {
+                "frame_id": target.get("frame_id", frame_id),
+                "runtime_pid": None if preparation is None else preparation.runtime_pid,
+                "localization_generation": start_generation,
+                "pose_status_monotonic_ns": start_status.get("monotonic_ns"),
+            },
             "elapsed_s": max(0.0, self._monotonic() - started),
             "progress": navigation.get("progress"), "navigation_reason": navigation.get("reason"),
             "safety_reason": final.get("safety_reason"), "stop": {"status": "STOPPED"},
@@ -168,6 +202,7 @@ class FiniteNavigationExecutor:
 
     def _pose_snapshot(
         self, frame_id: str, deadline: float, cancel_event: threading.Event | None,
+        *, runtime_pid: int,
     ) -> tuple[Mapping[str, object] | None, Mapping[str, object], str]:
         status: Mapping[str, object] = {}
         while True:
@@ -175,6 +210,8 @@ class FiniteNavigationExecutor:
                 return None, status, "CANCELLED"
             if self._monotonic() >= deadline:
                 return None, status, "TIMEOUT"
+            if self.controller.snapshot().runtime_pid != runtime_pid:
+                return None, status, "RUNTIME_SESSION_CHANGED"
             current = self.controller.live_runtime_status()
             if isinstance(current, Mapping):
                 status = current
@@ -189,12 +226,14 @@ class FiniteNavigationExecutor:
 
     def _wait(
         self, mission_id: str, frame_id: str, generation: object,
-        deadline: float, cancel_event: threading.Event | None,
+        deadline: float, cancel_event: threading.Event | None, *, runtime_pid: int,
     ) -> tuple[Mapping[str, object], str]:
         final: Mapping[str, object] = {}
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 return final, "CANCELLED"
+            if self.controller.snapshot().runtime_pid != runtime_pid:
+                return final, "RUNTIME_SESSION_CHANGED"
             remaining = deadline - self._monotonic()
             if remaining <= 0:
                 return final, "TIMEOUT"

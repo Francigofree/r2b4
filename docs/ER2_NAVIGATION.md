@@ -50,7 +50,18 @@ elutasított státusz, mission-váltás, frame-váltás, navigation-hiba vagy sa
 STOP/FAULT megszakítja a műveletet. A completion természetes `NOT_ACTIVE`
 STOP-ja megengedett; egyéb safety STOP nem jelent sikert. Sikertelen STOP
 esetén a provider session hibával megszakad, nem kap sikeres tool-eredményt.
-A lokális odometria generation váltása szintén frame-váltásként megszakít.
+A finite relative action admissionje egyetlen hostoldali state/action
+tranzakció: capture/runtime stabilizálás és szükséges re-arm → STOP/IDLE →
+friss pose → relatív target → ugyanazon resident runtime-session NAVIGATE
+admission. A pose és a target ezért nem élhet túl egy capture által kiváltott
+runtime restartot. A runtime PID/session változása `RUNTIME_SESSION_CHANGED`,
+a lokális odometria generation váltása `LOCALIZATION_FRAME_CHANGED` okkal
+fail-closed megszakítást jelent.
+
+A visszatérés `frame_provenance` mezőben megőrzi a frame ID-t, a resident
+runtime PID-t, a lokalizáció generationt és a pose-státusz monotonic
+időbélyegét. Ez fejlesztési/evidence adat; nem motor-authority.
+
 A visszatérés tartalmazza a command és mission ID-t, a kért paramétereket,
 induló pose-t, tényleges target pose-t, végső pose-t, progress-t és a
 navigation/safety okot. A `COMPLETED` csak `COMPLETE` és sikeres STOP után
