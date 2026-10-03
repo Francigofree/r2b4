@@ -29,7 +29,7 @@ def _observation() -> VisionJpeg:
     )
 
 
-def test_camera_observation_agent_attaches_native_image_without_text_payload(monkeypatch, tmp_path: Path) -> None:
+def _assert_native_agent_image_without_text_payload(monkeypatch, tmp_path: Path) -> None:
     from v3.adapters.vision_media_socket import VisionClient
     observation = _observation()
     requests = []
@@ -85,7 +85,7 @@ def test_camera_observation_agent_attaches_native_image_without_text_payload(mon
         assert "canonical-camera-image" not in repr(tool_result)
 
 
-def test_camera_only_er2_preview_and_stream_never_start_v3(monkeypatch, tmp_path: Path) -> None:
+def _assert_camera_only_er2_never_starts_v3(monkeypatch, tmp_path: Path) -> None:
     import r2b4_er2.executor as executor
     from r2b4_er2.cli import _parser, _probe_media
     observation = _observation()
@@ -144,3 +144,10 @@ def test_camera_only_er2_preview_and_stream_never_start_v3(monkeypatch, tmp_path
     assert media_calls == ["observe", "status"]
     parsed = _parser().parse_args(["stream", "mit látsz?", "--no-tools", "--no-camera"])
     assert parsed.tools is False and parsed.camera is False
+
+
+def test_camera_observation_native_provider_attachments_and_v3_independence(monkeypatch, tmp_path: Path) -> None:
+    with monkeypatch.context() as patch:
+        _assert_native_agent_image_without_text_payload(patch, tmp_path / "agent")
+    with monkeypatch.context() as patch:
+        _assert_camera_only_er2_never_starts_v3(patch, tmp_path / "er2")

@@ -21,13 +21,14 @@ class CameraInterfaceAdapter:
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
         status = VisionClient(root=self.controller.root).status()
         ready = status.get("camera_state") == "ON"
+        failed = status.get("camera_state") == "FAILED"
         return {
             name: {
                 "kind": "read" if name == "camera.status" else "action",
                 "supported": True,
-                "available": True,
+                "available": not failed or name in {"camera.status", "camera.on", "camera.off"},
                 "ready": ready or name in {"camera.status", "camera.off"},
-                "reason": "CALIBRATED_DEMAND_DRIVEN",
+                "reason": status.get("last_error") if failed else "CALIBRATED_DEMAND_DRIVEN",
             }
             for name in self.capability_names
         }

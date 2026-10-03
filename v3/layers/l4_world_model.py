@@ -22,6 +22,7 @@ from v3.contracts import (
     AdmittedFrame,
     CostmapCell,
     DataField,
+    DeviceHealthState,
     ObstacleTrack,
     Observation,
     RobotEstimate,
@@ -604,7 +605,9 @@ class ShadowWorldModel:
             global_visited_cells=self._global_visited_cells,
             robot_relative_geometry=robot_relative_geometry,
             person_detection_state=next(
-                (health.state for health in frame.device_health
+                (DeviceHealthState.DEGRADED
+                 if health.state is DeviceHealthState.OK and health.device_id in frame.degraded_sources
+                 else health.state for health in frame.device_health
                  if health.device_id == "PERSON_DETECTOR_FRONT"),
                 None,
             ),

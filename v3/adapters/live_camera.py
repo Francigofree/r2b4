@@ -141,6 +141,7 @@ class NativeCameraSource:
                 # Process vision exposes metadata only; raw image bytes stay child-owned.
                 DataField("payload_bytes", frame.frame_size_bytes),
                 DataField("camera_model", status.camera_model),
+                DataField("owner_generation", getattr(frame, "owner_generation", "")),
             ),
         )
         return LiveDeviceSnapshot(

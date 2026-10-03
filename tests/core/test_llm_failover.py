@@ -25,38 +25,20 @@ class ProviderError(RuntimeError):
         self.code = code
 
 
-def test_quota_switches_provider_without_retry() -> None:
-    primary = Client("openai", [ProviderError("quota", status_code=429)])
-    fallback = Client("gemini", ["ok"])
-    chain = FailoverLLMClient(
-        [LLMProviderCandidate("openai_oauth", primary), LLMProviderCandidate("gemini", fallback)],
-        sleep=lambda _seconds: None,
+def test_llm_failover_quota_bounded_retry_and_invalid_response_contract() -> None:
+    scenarios = (
+        ([ProviderError("quota", status_code=429)], "gemini", ["ok"], 1, 1, "gemini"),
+        ([ProviderError("temporary", status_code=503, retryable=True), "ok"], "gemini", ["unused"], 2, 0, "openai_oauth"),
+        ([RuntimeError("schema validation failed")], "groq", ["ok"], 1, 1, "groq"),
     )
-    assert chain.complete_text("x") == "ok"
-    assert primary.calls == 1
-    assert fallback.calls == 1
-    assert chain.last_provider == "gemini"
-
-
-def test_one_transient_retry_then_success() -> None:
-    primary = Client("openai", [ProviderError("temporary", status_code=503, retryable=True), "ok"])
-    fallback = Client("gemini", ["unused"])
-    chain = FailoverLLMClient(
-        [LLMProviderCandidate("openai_oauth", primary), LLMProviderCandidate("gemini", fallback)],
-        sleep=lambda _seconds: None,
-    )
-    assert chain.complete_text("x") == "ok"
-    assert primary.calls == 2
-    assert fallback.calls == 0
-
-
-def test_invalid_response_switches_immediately() -> None:
-    primary = Client("openai", [RuntimeError("schema validation failed")])
-    fallback = Client("groq", ["ok"])
-    chain = FailoverLLMClient(
-        [LLMProviderCandidate("openai_oauth", primary), LLMProviderCandidate("groq", fallback)],
-        sleep=lambda _seconds: None,
-    )
-    assert chain.complete_text("x") == "ok"
-    assert primary.calls == 1
-    assert fallback.calls == 1
+    for primary_outcomes, fallback_name, fallback_outcomes, primary_calls, fallback_calls, final_provider in scenarios:
+        primary = Client("openai", primary_outcomes)
+        fallback = Client(fallback_name, fallback_outcomes)
+        chain = FailoverLLMClient(
+            [LLMProviderCandidate("openai_oauth", primary), LLMProviderCandidate(fallback_name, fallback)],
+            sleep=lambda _seconds: None,
+        )
+        assert chain.complete_text("x") == "ok"
+        assert primary.calls == primary_calls
+        assert fallback.calls == fallback_calls
+        assert chain.last_provider == final_provider

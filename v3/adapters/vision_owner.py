@@ -52,12 +52,17 @@ class CameraVisionOwner:
         if self._closed:
             raise RuntimeError("VISION_OWNER_CLOSED")
         if self._camera is None:
-            camera = self._camera_factory()
-            self._camera = camera
-            if not camera.start():
-                self._last_error = camera.get_runtime_status().last_error or "VISION_CAMERA_FAILED"
+            camera = None
+            try:
+                camera = self._camera_factory()
+                self._camera = camera
+                if not camera.start():
+                    raise RuntimeError(camera.get_runtime_status().last_error or "VISION_CAMERA_FAILED")
+            except BaseException as exc:
+                self._last_error = f"{type(exc).__name__}:{exc}"
                 try:
-                    camera.stop()
+                    if camera is not None:
+                        camera.stop()
                 finally:
                     self._camera = None
                 raise RuntimeError(self._last_error)
@@ -65,12 +70,12 @@ class CameraVisionOwner:
         elif not self._camera.get_runtime_status().running:
             self._last_error = self._camera.get_runtime_status().last_error or "VISION_CAMERA_FAILED"
             raise RuntimeError(self._last_error)
-        if person and self._detector is None:
+        if person and (self._detector is None or not self._detector.get_detection_status().running):
             if self._detector_factory is None:
                 self._detector_error = "PERSON_DETECTOR_UNAVAILABLE"
                 raise RuntimeError(self._detector_error)
             try:
-                detector = self._detector_factory(self._camera)
+                detector = self._detector or self._detector_factory(self._camera)
                 self._detector = detector
                 if not detector.start():
                     raise RuntimeError(detector.get_detection_status().last_error or "PERSON_DETECTOR_FAILED")
@@ -99,8 +104,10 @@ class CameraVisionOwner:
         with self._lock:
             self._demands.pop(token, None)
             if not any(self._demands.values()) and self._detector is not None:
-                self._detector.stop()
-                self._detector = None
+                try:
+                    self._detector.stop()
+                except Exception as exc:
+                    self._detector_error = f"PERSON_DETECTOR_CLOSE_FAILED:{type(exc).__name__}:{exc}"
             if not self._demands:
                 self._idle_deadline = time.monotonic() + self.idle_grace_s
 
@@ -138,6 +145,7 @@ class CameraVisionOwner:
                     "detector_running": bool(detector_status and detector_status.running),
                     "consumers": len(self._demands), "manual_demand": "manual" in self._demands,
                     "owner_generation": self.generation, "last_error": error,
+                    "detector_last_error": self._detector_error or (detector_status.last_error if detector_status else None),
                     "owner_pid": os.getpid()}
 
     def control_state(self, generation: str) -> dict:
@@ -155,13 +163,19 @@ class CameraVisionOwner:
                     "detection_status": asdict(status), "owner_pid": os.getpid()}
 
     def _deactivate(self) -> None:
+        error = None
         if self._detector is not None:
-            self._detector.stop()
-            self._detector = None
+            try:
+                self._detector.stop()
+                self._detector = None
+            except Exception as exc:
+                error = exc
         if self._camera is not None:
             self._camera.stop()
             self._camera = None
         self._idle_deadline = None
+        if error is not None:
+            raise error
 
     def _idle_loop(self) -> None:
         while not self._stop.wait(0.05):

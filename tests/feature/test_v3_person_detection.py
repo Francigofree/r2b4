@@ -61,7 +61,7 @@ class _Backend:
         self.frames.append(frame.sequence)
         return (PersonDetection(0.8, PersonBox(0.1, 0.2, 0.9, 0.7)), PersonDetection(0.6, PersonBox(0.2, 0.1, 0.8, 0.5)))
 
-def test_person_detector_publishes_frame_lineage_and_primary():
+def _check_person_detector_publishes_frame_lineage_and_primary():
     camera = _Camera()
     backend = _Backend()
     detector = NativePersonDetector(camera, backend)
@@ -103,7 +103,7 @@ class _FakeInterpreter:
         values = {2: np.array([[[0.1, 0.2, 0.9, 0.8], [0.0, 0.0, 0.5, 0.5], [0.2, 0.3, 0.6, 0.7]]], dtype=np.float32), 3: np.array([[0.0, 3.0, 0.0]], dtype=np.float32), 4: np.array([[0.91, 0.99, 0.2]], dtype=np.float32), 5: np.array([3.0], dtype=np.float32)}
         return values[index]
 
-def test_litert_backend_filters_person_class_and_threshold(tmp_path: Path):
+def _check_litert_backend_filters_person_class_and_threshold(tmp_path: Path):
     model = tmp_path / 'model.tflite'
     model.write_bytes(b'fake')
     detector = LiteRtSsdPersonDetector(LiteRtPersonDetectorConfig(model_path=str(model), person_class_id=0, score_threshold=0.45, max_detections=5), interpreter_factory=_FakeInterpreter)
@@ -114,7 +114,7 @@ def test_litert_backend_filters_person_class_and_threshold(tmp_path: Path):
     assert result[0].box.xmin == pytest.approx(0.2)
 import pytest
 
-def test_person_box_rejects_zero_area():
+def _check_person_box_rejects_zero_area():
     with pytest.raises(ValueError):
         PersonBox(0.1, 0.2, 0.1, 0.8)
 
@@ -123,7 +123,7 @@ class _BrokenBackend:
     def detect(self, frame):
         raise RuntimeError('inference failed')
 
-def test_backend_failure_isolated_in_detector_status():
+def _check_backend_failure_isolated_in_detector_status():
     camera = _Camera()
     detector = NativePersonDetector(camera, _BrokenBackend())
     detector.start()
@@ -138,7 +138,7 @@ def test_backend_failure_isolated_in_detector_status():
     assert 'inference failed' in status.last_error
     assert detector.get_detection_snapshot() is None
 
-def test_picamera2_rgb888_memory_is_reordered_to_model_rgb(tmp_path: Path):
+def _check_picamera2_rgb888_memory_is_reordered_to_model_rgb(tmp_path: Path):
     model = tmp_path / 'model.tflite'
     model.write_bytes(b'fake')
     created = []
@@ -153,3 +153,15 @@ def test_picamera2_rgb888_memory_is_reordered_to_model_rgb(tmp_path: Path):
     detector.detect(_Frame(1, 10, image_bytes=payload))
     assert created[0].input[0, 0, 0].tolist() == [30, 20, 10]
     assert created[0].input[0, 0, 1].tolist() == [60, 50, 40]
+
+
+def _check_person_detector_preserves_frame_lineage_and_isolates_invalid_or_failed_evidence():
+    _check_person_detector_publishes_frame_lineage_and_primary()
+    _check_person_box_rejects_zero_area()
+    _check_backend_failure_isolated_in_detector_status()
+
+
+def test_person_detector_lineage_failure_filtering_and_camera_color_contract(tmp_path):
+    _check_person_detector_preserves_frame_lineage_and_isolates_invalid_or_failed_evidence()
+    _check_litert_backend_filters_person_class_and_threshold(tmp_path)
+    _check_picamera2_rgb888_memory_is_reordered_to_model_rgb(tmp_path)

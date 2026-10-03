@@ -33,7 +33,7 @@ def _admitted(tick: int, now_ns: int, *, sequence: int | None, person: bool, fra
         accepted = (Observation(kind='person_detection', source_device_id='PERSON_DETECTOR_FRONT', source_sequence=sequence, captured_monotonic_ns=now_ns - 20000000, values=(DataField('age_ns', 20000000), DataField('measurement_timing_valid', True), DataField('measurement_stale', False), DataField('source_frame_sequence', frame_sequence if frame_sequence is not None else sequence + 10), DataField('inference_duration_ns', 31000000), DataField('person_count', 1 if person else 0), DataField('person_detected', person))),)
     return AdmittedFrame(context, accepted, (), ())
 
-def test_photo_evidence_counts_only_new_l2_admitted_results_and_explore(tmp_path):
+def _check_photo_evidence_counts_only_new_l2_admitted_results_and_explore(tmp_path):
     photo = PhotoPort()
     recorder = PersonPhotoEvidenceRecorder(photo, PersonPhotoEvidenceConfig(enabled=True, directory='pic', confirm_results=3, rearm_misses=2, minimum_interval_ns=1000000000), project_root=tmp_path)
     for tick in range(1, 6):
@@ -53,7 +53,7 @@ def test_photo_evidence_counts_only_new_l2_admitted_results_and_explore(tmp_path
     assert recorder.observe(_admitted(20, now_ns, sequence=4, person=True), _mission(20, now_ns, mode=CommandMode.TELEOP)) is False
     assert len(photo.requests) == 1
 
-def test_photo_evidence_rearms_after_real_person_free_detector_results(tmp_path):
+def _check_photo_evidence_rearms_after_real_person_free_detector_results(tmp_path):
     photo = PhotoPort()
     recorder = PersonPhotoEvidenceRecorder(photo, PersonPhotoEvidenceConfig(enabled=True, directory='pic', confirm_results=1, rearm_misses=2, minimum_interval_ns=100000000), project_root=tmp_path)
     now_ns = 200000000
@@ -155,7 +155,7 @@ class _LiveSavingCamera:
     def close(self):
         return None
 
-def test_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path):
+def _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path):
     camera = _LiveSavingCamera()
     clock = [2000000000]
 
@@ -179,7 +179,7 @@ def test_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path):
     assert owner.get_runtime_status().running is True
     owner.stop()
 
-def test_canonical_runtime_config_closes_noncritical_person_capability():
+def _check_canonical_runtime_config_closes_noncritical_person_capability():
     runtime = load_resident_runtime_config(PROJECT_ROOT)
     sensors = runtime.sensor_inputs
     assert sensors.person_detection_backend is not None
@@ -199,7 +199,7 @@ class _Writer:
     def write(self, value) -> None:
         self.values.append(value)
 
-def test_failed_person_detector_does_not_gain_motor_safety_authority():
+def _check_failed_person_detector_does_not_gain_motor_safety_authority():
     context = TickContext(1, 1000000000)
     writer = _Writer()
     gate = FinalSafetyGate(writer, critical_device_ids=PRODUCTION_CRITICAL_DEVICE_IDS)
@@ -210,7 +210,15 @@ def test_failed_person_detector_does_not_gain_motor_safety_authority():
     assert result.enabled is True
 
 
-def test_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure():
+def test_person_photo_evidence_uses_admitted_results_and_bounded_camera_request(tmp_path):
+    _check_photo_evidence_counts_only_new_l2_admitted_results_and_explore(tmp_path)
+    _check_photo_evidence_rearms_after_real_person_free_detector_results(tmp_path)
+    _check_photo_request_uses_existing_camera_owner_and_is_bounded(tmp_path)
+
+
+def _check_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure():
+    _check_canonical_runtime_config_closes_noncritical_person_capability()
+    _check_failed_person_detector_does_not_gain_motor_safety_authority()
     from dataclasses import replace
     from rig import resolved_config
     from test_v3_bno055_imu_backend import Device
@@ -244,7 +252,7 @@ def test_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure
     )
 
     def publish(tick, mode, *, reason=None, mission_id='follow-demand'):
-        mission = replace(_mission(tick, 1_000_000_000 + tick * 20_000_000, mode), mission_id=mission_id)
+        mission = replace(_mission(tick, 1_000_000_000 + tick * 20_000_000), mode=mode, mission_id=mission_id)
         navigation = NavigationPlan(mission.context, mission.mission_id, (), None,
                                     mission.constraints, 0.0, 0.0,
                                     NavigationStatus.INVALIDATED, reason or 'PERSON_TARGET_NOT_AVAILABLE')
@@ -283,7 +291,7 @@ def test_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure
     assert imu.close_calls == lidar.stop_calls == 1
 
 
-def test_follow_person_closed_camera_health_revokes_motion_and_replays_failure():
+def _check_follow_person_closed_camera_health_revokes_motion_and_replays_failure():
     from dataclasses import replace
     from rig import healthy_localization, resolved_config
     from v3.contracts import AcquisitionFrame, DeviceSample, LOCAL_FRAME_ID, NavigationStatus, RobotEstimate
@@ -303,17 +311,18 @@ def test_follow_person_closed_camera_health_revokes_motion_and_replays_failure()
             DeviceSample('RPLIDAR_C1', 'lidar_health', tick, context.monotonic_ns,
                          fields(age_ns=0, point_count=80)),
             DeviceSample('PERSON_DETECTOR_FRONT', 'obstacle_track', tick, context.monotonic_ns,
-                         fields(track_id='person-1', x_m=1.8, y_m=1.0, radius_m=.2,
+                         fields(track_id='person-1', x_m=1.8, y_m=1.3, radius_m=.2,
                                 vx_mps=0.0, vy_mps=0.0, confidence=1.0)),
         )
         health = (DeviceHealth('RPLIDAR_C1', DeviceHealthState.OK),
-                  DeviceHealth('PERSON_DETECTOR_FRONT', state))
+                  DeviceHealth('PERSON_DETECTOR_FRONT', state,
+                               None if state is DeviceHealthState.OK else 'OFFLINE_CAPABILITY_UNAVAILABLE'))
         admitted = admission(AcquisitionFrame(context, samples, health))
         estimate = RobotEstimate(context, LOCAL_FRAME_ID, 0.0, 0.0, 0.0, 0.0, 0.0,
                                  (0.0,) * 25, localization_quality=healthy_localization())
         world = world_model(admitted, estimate)
         assert world.person_detection_state is state
-        mission = replace(_mission(tick, context.monotonic_ns, mode), mission_id=mission_id)
+        mission = replace(_mission(tick, context.monotonic_ns), mode=mode, mission_id=mission_id)
         return nav.evaluate(mission, estimate, world), mission, estimate, world
 
     pending, *_ = step(1, DeviceHealthState.UNKNOWN)
@@ -331,3 +340,103 @@ def test_follow_person_closed_camera_health_revokes_motion_and_replays_failure()
     assert still_failed.reason == 'PERSON_CAPABILITY_FAILED'
     new_mission, *_ = step(6, DeviceHealthState.OK, mission_id='new-follow-health')
     assert new_mission.status is NavigationStatus.ACTIVE
+
+    # Restart retains physical frame sequence but changes owner identity. An
+    # old generation cannot return after the new one has entered input closure.
+    from v3.contracts import RejectionReason
+    for kind, device_id in (('camera_frame_health', 'CAMERA_FRONT'),
+                            ('person_detection', 'PERSON_DETECTOR_FRONT')):
+        live = InputAdmission(control.admission)
+
+        def frame(tick, sequence, generation, measured_ns):
+            context = TickContext(tick, 3_000_000_000 + tick * 20_000_000)
+            return AcquisitionFrame(
+                context,
+                (DeviceSample(device_id, kind, sequence, measured_ns,
+                              (DataField('owner_generation', generation),)),),
+                (DeviceHealth(device_id, DeviceHealthState.OK),),
+            )
+
+        assert live(frame(1, 31, 'owner-one', 3_000_000_000)).accepted
+        restarted = live(frame(2, 1, 'owner-two', 3_030_000_000))
+        assert restarted.accepted[0].source_sequence == 1
+        assert restarted.accepted[0].captured_monotonic_ns == 3_030_000_000
+        replay = InputAdmission(control.admission)
+        replay.restore(live.checkpoint())
+        delayed = frame(3, 32, 'owner-one', 3_010_000_000)
+        rejected = live(delayed)
+        assert rejected == replay(delayed)
+        assert not rejected.accepted
+        assert rejected.rejected[0].reason is RejectionReason.OUT_OF_ORDER
+        assert rejected.degraded_sources == (device_id,)
+        missing_generation = frame(4, 2, '', 3_060_000_000)
+        rejected = live(missing_generation)
+        assert rejected == replay(missing_generation)
+        assert rejected.rejected[0].reason is RejectionReason.UNTRUSTED
+        current = frame(5, 2, 'owner-two', 3_080_000_000)
+        assert live(current) == replay(current)
+        assert live.checkpoint() == replay.checkpoint()
+
+
+def _check_follow_person_closed_health_native_replay(tmp_path):
+    from rig import ROOT, resolved_config
+    from v3.capture import CaptureSink
+    from v3.composition.full_fake import OfflineMotorSink
+    from v3.composition.native_control import NativeControlComposition
+    from v3.contracts import CommandRequest, DeviceSample, RawDeviceBatch
+    from v3.engine import TickInputs
+    from v3.execution import ExecutionRecord
+    from v3.replay import replay_capture
+
+    config = resolved_config().runtime.composition.live_control.control
+    writer = OfflineMotorSink()
+    composition = NativeControlComposition(writer, config)
+    sink = CaptureSink('follow-camera-failure', configuration={'production_control': config})
+    states = (DeviceHealthState.UNKNOWN, DeviceHealthState.OK,
+              DeviceHealthState.FAILED, DeviceHealthState.OK)
+    try:
+        for tick, state in enumerate(states):
+            context = TickContext(tick, 4_000_000_000 + tick * 20_000_000)
+
+            def sample(device, kind, **values):
+                return DeviceSample(device, kind, tick + 1, context.monotonic_ns,
+                                    tuple(DataField(key, value) for key, value in values.items()))
+
+            samples = (
+                sample('WHEEL_ENCODERS', 'wheel_velocity', left_mps=0.0, right_mps=0.0, trust=1.0),
+                sample('BNO055_IMU', 'ekf_heading', yaw_rad=0.0, omega_rad_s=0.0, confidence=1.0),
+                sample('RPLIDAR_C1', 'lidar_health', age_ns=0, point_count=80),
+                sample('PERSON_DETECTOR_FRONT', 'person_detection', person_count=0,
+                       person_detected=False, owner_generation='replay-owner'),
+            )
+            health = tuple(DeviceHealth(name, DeviceHealthState.OK)
+                           for name in sorted(config.critical_device_ids)) + (
+                DeviceHealth('PERSON_DETECTOR_FRONT', state,
+                             None if state is DeviceHealthState.OK else 'CAMERA_CAPABILITY_UNAVAILABLE'),
+            )
+            inputs = composition.close_inputs(TickInputs(
+                context, RawDeviceBatch(context, samples, health),
+                CommandRequest(context, 'follow-camera-failure', CommandMode.FOLLOW_PERSON, (), tick),
+                LifecycleState.ACTIVE,
+            ))
+            result = composition.run_tick(inputs)
+            layers = {row.layer: row.output for row in result.trace.layers}
+            assert result.trace.fault_layer is None
+            assert layers['L2'].device_health == health
+            assert layers['L4'].person_detection_state is state
+            if tick >= 2:
+                assert layers['L6'].reason == 'PERSON_CAPABILITY_FAILED'
+            assert result.final_actuation.left_output == result.final_actuation.right_output == 0.0
+            assert result.final_actuation.safety_decision is not SafetyDecision.FAULT
+            sink.write(ExecutionRecord(inputs, result))
+    finally:
+        composition.close()
+    capture = sink.finalize('PASS', tmp_path / 'follow-camera-failure.json')
+    replay = replay_capture(capture, project_root=ROOT)
+    assert replay['status'] == 'MATCH', replay['diagnostics']
+
+
+def test_follow_person_camera_consumer_demand_failure_and_generation_contract(tmp_path):
+    _check_camera_demand_belongs_to_follow_mission_and_releases_on_stop_or_failure()
+    _check_follow_person_closed_camera_health_revokes_motion_and_replays_failure()
+    _check_follow_person_closed_health_native_replay(tmp_path)

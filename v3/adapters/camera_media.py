@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import math
 import os
+from contextlib import suppress
 from pathlib import Path
+import select
 import shutil
 import subprocess
 import tempfile
@@ -34,12 +36,29 @@ def capture_photo(
     return {"output": str(target), "bytes": len(image.image_bytes), **image.metadata.to_jsonable()}
 
 
+def _write_encoder_frame(fd: int, payload: bytes, timeout_s: float) -> None:
+    deadline = time.monotonic() + timeout_s
+    remaining_payload = memoryview(payload)
+    while remaining_payload:
+        remaining_s = deadline - time.monotonic()
+        if remaining_s <= 0.0 or not select.select([], [fd], [], remaining_s)[1]:
+            raise TimeoutError("calibrated video encoder stopped accepting frames")
+        try:
+            written = os.write(fd, remaining_payload)
+        except BlockingIOError:
+            continue
+        if written <= 0:
+            raise BrokenPipeError("calibrated video encoder closed its input")
+        remaining_payload = remaining_payload[written:]
+
+
 def capture_h264_video(
     output: str | Path,
     duration_s: float,
     *,
     bitrate: int = 4_000_000,
     fps: float = 5.0,
+    write_timeout_s: float = 5.0,
     root: str | Path | None = None,
 ) -> dict[str, object]:
     duration = float(duration_s)
@@ -50,6 +69,9 @@ def capture_h264_video(
         raise ValueError("camera video fps must be within [0.1, 30]")
     if not isinstance(bitrate, int) or isinstance(bitrate, bool) or bitrate <= 0:
         raise ValueError("camera video bitrate must be a positive integer")
+    write_timeout = float(write_timeout_s)
+    if not math.isfinite(write_timeout) or not 0.1 <= write_timeout <= 15.0:
+        raise ValueError("camera video write timeout must be within [0.1, 15]")
     encoder = shutil.which("ffmpeg")
     if encoder is None:
         raise RuntimeError("calibrated video requires ffmpeg with the libx264 encoder")
@@ -71,6 +93,8 @@ def capture_h264_video(
                 stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=errors,
             )
             assert process.stdin is not None
+            encoder_fd = process.stdin.fileno()
+            os.set_blocking(encoder_fd, False)
             started: float | None = None
             next_frame = time.monotonic()
             while started is None or time.monotonic() < started + duration:
@@ -95,7 +119,12 @@ def capture_h264_video(
                     started = time.monotonic()
                     next_frame = started
                     first = metadata
-                process.stdin.write(image.image_bytes)
+                try:
+                    _write_encoder_frame(encoder_fd, image.image_bytes, write_timeout)
+                except BrokenPipeError as exc:
+                    errors.seek(0)
+                    detail = errors.read(1500).decode("utf-8", "replace").strip()
+                    raise RuntimeError(f"calibrated video encoder failed: {detail or 'ffmpeg closed its input'}") from exc
                 frames += 1
                 last = metadata
                 next_frame += 1.0 / rate
@@ -117,7 +146,8 @@ def capture_h264_video(
             process.kill()
             process.wait(timeout=5.0)
         if process is not None and process.stdin is not None and not process.stdin.closed:
-            process.stdin.close()
+            with suppress(OSError):
+                process.stdin.close()
         staging.unlink(missing_ok=True)
 
 

@@ -75,7 +75,7 @@ class AgentToolResult:
     images: tuple[VisionJpeg, ...] = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
-        if len(self.images) > 1 or any(not isinstance(image, VisionJpeg) for image in self.images):
+        if not isinstance(self.images, tuple) or len(self.images) > 1 or any(not isinstance(image, VisionJpeg) for image in self.images):
             raise ValueError("agent result supports one canonical calibrated image")
 
     def to_jsonable(self) -> dict[str, object]:

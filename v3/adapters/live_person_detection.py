@@ -129,6 +129,7 @@ class NativePersonDetectionSource:
             DataField("person_count", len(result.detections)),
             DataField("emitted_person_count", len(detections)),
             DataField("person_detected", primary is not None),
+            DataField("owner_generation", getattr(result, "owner_generation", "")),
         ]
         if result.geometry_state is not None:
             values.append(DataField("geometry_projection_state", result.geometry_state))

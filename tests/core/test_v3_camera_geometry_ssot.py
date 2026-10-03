@@ -24,7 +24,7 @@ def _documents():
     )
 
 
-def test_live_world_model_camera_projection_has_no_second_config_authority():
+def test_camera_geometry_has_one_config_authority_and_rejects_legacy_override():
     hardware, physics, speed_map, control = _documents()
     world_document = control["layers"]["world_model"]
     assert "person_camera_horizontal_fov_rad" not in world_document
@@ -40,9 +40,6 @@ def test_live_world_model_camera_projection_has_no_second_config_authority():
     assert world.person_camera_yaw_offset_rad == pytest.approx(
         math.radians(geometry.mount.yaw_deg)
     )
-
-
-def test_legacy_live_camera_fov_key_is_rejected_instead_of_becoming_second_ssot():
     hardware, physics, speed_map, control = _documents()
     control = deepcopy(control)
     control["layers"]["world_model"]["person_camera_horizontal_fov_rad"] = math.radians(66.0)

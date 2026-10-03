@@ -227,17 +227,22 @@ class ProcessVisionPort:
                     continue
                 revision = self._revision
             conn = None
+            reader = None
             try:
                 conn = self._client.connect()
                 self._conn = conn
+                with self._condition:
+                    if self._closed or not self._demand or revision != self._revision:
+                        continue
                 conn.sendall(b"R2B4VISION1 PERSON\n")
+                reader = conn.makefile("rb")
                 while not self._closed:
                     with self._condition:
                         if not self._demand or revision != self._revision:
                             break
                     readable, _, _ = select.select([conn], [], [], 0.05)
                     if readable:
-                        self._accept(recv_json_line(conn), revision)
+                        self._accept(recv_json_line(conn, reader=reader), revision)
             except Exception as exc:
                 with self._condition:
                     if self._demand and revision == self._revision and not self._closed:
@@ -252,6 +257,8 @@ class ProcessVisionPort:
                     self._wake.wait(0.1)
                     self._wake.clear()
             finally:
+                if reader is not None:
+                    reader.close()
                 if conn is not None:
                     conn.close()
                 self._conn = None

@@ -30,7 +30,7 @@ def _context() -> RobotContextSnapshot:
     )
 
 
-def test_prompt_v2_builds_stable_core_then_runtime_data(tmp_path: Path) -> None:
+def _assert_prompt_core_and_runtime_data(tmp_path: Path) -> None:
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text(
         f"{PROMPT_VERSION}\n"
@@ -63,7 +63,7 @@ def test_prompt_v2_builds_stable_core_then_runtime_data(tmp_path: Path) -> None:
     ]
 
 
-def test_prompt_v2_self_knowledge_is_explicit_data_layer(tmp_path: Path) -> None:
+def _assert_self_knowledge_data_layer(tmp_path: Path) -> None:
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text(
         f"{PROMPT_VERSION}\n"
@@ -84,7 +84,7 @@ def test_prompt_v2_self_knowledge_is_explicit_data_layer(tmp_path: Path) -> None
     assert "SELF_KNOWLEDGE_JSON=" in messages[2]["content"]
 
 
-def test_prompt_v2_rejects_stale_system_prompt_header(tmp_path: Path) -> None:
+def _assert_stale_prompt_rejected(tmp_path: Path) -> None:
     prompt_path = tmp_path / "system.md"
     prompt_path.write_text("R2B4_AGENT_SYSTEM_V1\nold", encoding="utf-8")
     try:
@@ -95,7 +95,7 @@ def test_prompt_v2_rejects_stale_system_prompt_header(tmp_path: Path) -> None:
         raise AssertionError("stale prompt version must fail closed")
 
 
-def test_repository_system_prompt_contains_embodied_and_multistep_contract() -> None:
+def _assert_embodied_observation_and_multistep_contract() -> None:
     root = Path(__file__).resolve().parents[2]
     text = (root / "conf" / "r2b4_agent_system.md").read_text(encoding="utf-8")
 
@@ -107,6 +107,15 @@ def test_repository_system_prompt_contains_embodied_and_multistep_contract() -> 
         "ne zárd le a feladatot pusztán az első rész-actionnel",
         "preview módot camera=true és tools=false",
         "stream módot camera=true és tools=true",
+        "vision.observe capabilityt",
     )
     for phrase in required:
         assert phrase in text
+
+
+def test_agent_prompt_hierarchy_and_observation_authority_contract(tmp_path: Path) -> None:
+    for scenario in (_assert_prompt_core_and_runtime_data, _assert_self_knowledge_data_layer, _assert_stale_prompt_rejected):
+        scenario_root = tmp_path / scenario.__name__
+        scenario_root.mkdir()
+        scenario(scenario_root)
+    _assert_embodied_observation_and_multistep_contract()

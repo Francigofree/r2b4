@@ -15,7 +15,7 @@ class _Response:
         return self._payload
 
 
-def test_gemini_25_agent_structured_output_uses_generate_content_json_schema() -> None:
+def test_gemini_agent_structured_transport_contract() -> None:
     seen: dict[str, object] = {}
 
     def fake_urlopen(request, timeout):
@@ -71,9 +71,6 @@ def test_gemini_25_agent_structured_output_uses_generate_content_json_schema() -
     assert generation["responseMimeType"] == "application/json"
     assert generation["responseJsonSchema"]["type"] == "object"
     assert generation["thinkingConfig"] == {"thinkingBudget": 0}
-
-
-def test_gemini_structured_non_json_output_has_diagnostic_prefix() -> None:
     def fake_urlopen(_request, *, timeout):
         assert timeout == 20.0
         return _Response({
@@ -87,12 +84,17 @@ def test_gemini_structured_non_json_output_has_diagnostic_prefix() -> None:
     with pytest.raises(GeminiRequestError, match="structured output was not JSON") as caught:
         client.complete_agent_step([{"role": "user", "content": "teszt"}], (), ())
     assert "Ez nem JSON." in str(caught.value)
+    def thinking_level_urlopen(request, **kwargs):
+        seen["body"] = json.loads(request.data)
+        return _Response({"candidates": [{"content": {"parts": [{"text": json.dumps({
+            "kind": "final", "spoken_text": "kész", "tool_name": None,
+            "tool_arguments_json": None, "action_name": None, "action_parameters": {},
+        })}]}}]})
 
-
-def test_gemini_3_uses_thinking_level_on_generate_content() -> None:
     client = GeminiStructuredChatClient(
         api_key="test-key",
         config=GeminiChatConfig(model="gemini-3.8-flash", thinking_level="medium"),
-        urlopen=lambda *_args, **_kwargs: None,
+        urlopen=thinking_level_urlopen,
     )
-    assert client._thinking_config() == {"thinkingLevel": "medium"}
+    assert client.complete_agent_step([{"role": "user", "content": "teszt"}], (), ()).spoken_text == "kész"
+    assert seen["body"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "medium"}

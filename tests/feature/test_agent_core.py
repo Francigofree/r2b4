@@ -15,16 +15,13 @@ class FakeModel:
         return AgentModelReply(self.model, spoken_text="kész")
 
 
-def test_agent_core_runs_bounded_tool_loop() -> None:
+def test_agent_core_bounded_tool_loop_and_unregistered_tool_rejection() -> None:
     model = FakeModel()
     broker = AgentToolBroker(((AgentToolSpec("x.read", "read x", "READ", {"value": "int"}), lambda a: {"value": a["value"]}),))
     core = AgentCore(model, broker, max_tool_rounds=2)
     result = core.run([{"role": "user", "content": "teszt"}], ())
     assert result.spoken_text == "kész"
     assert model.calls == 2
-
-
-def test_unregistered_tool_is_not_executed() -> None:
     broker = AgentToolBroker(())
     result = broker.execute(AgentToolRequest("shell.exec", {"x": 1}))
     assert result.status == "REJECTED"

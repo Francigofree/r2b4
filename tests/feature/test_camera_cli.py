@@ -4,14 +4,22 @@ from contextlib import contextmanager
 import json
 import shutil
 import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 
-def test_camera_cli_without_v3_and_photo_exact_lineage(monkeypatch, tmp_path, capsys):
+def test_camera_cli_calibrated_media_without_v3(monkeypatch, tmp_path, capsys):
+    with monkeypatch.context() as patches:
+        assert_camera_cli_photo_and_manual_demand(patches, tmp_path, capsys)
+    with monkeypatch.context() as patches:
+        assert_camera_video_session_and_generation(patches, tmp_path)
+
+
+def assert_camera_cli_photo_and_manual_demand(monkeypatch, tmp_path, capsys):
     from v3 import interface_cli, launcher_cli, launcher_extras, runtime_performance
-    from v3.adapters import camera_media, vision_media_socket
+    from v3.adapters import camera as camera_adapter, camera_media, vision_media_socket
     from v3.adapters.camera import CameraInterfaceAdapter
 
     calls = []
@@ -26,13 +34,16 @@ def test_camera_cli_without_v3_and_photo_exact_lineage(monkeypatch, tmp_path, ca
 
     class Client:
         manual = False
+        failed = False
 
         def __init__(self, **kwargs):
             assert kwargs["root"] == tmp_path
 
         def status(self):
             calls.append("status")
-            return {"camera_state": "ON", "manual_demand": self.manual, "consumers": 1 + int(self.manual)}
+            return {"camera_state": "FAILED" if self.failed else "ON",
+                    "last_error": "owner crashed" if self.failed else None,
+                    "manual_demand": self.manual, "consumers": 1 + int(self.manual)}
 
         def set_manual_demand(self, active):
             calls.append(("manual", active))
@@ -45,6 +56,7 @@ def test_camera_cli_without_v3_and_photo_exact_lineage(monkeypatch, tmp_path, ca
 
     monkeypatch.setattr(vision_media_socket, "VisionClient", Client)
     monkeypatch.setattr(camera_media, "VisionClient", Client)
+    monkeypatch.setattr(camera_adapter, "VisionClient", Client)
     monkeypatch.setattr(launcher_cli, "project_root", lambda: tmp_path)
     monkeypatch.setattr(runtime_performance, "apply_host_affinity", lambda *a: None)
     monkeypatch.setattr(interface_cli, "main", lambda *a, **k: pytest.fail("camera started the V3 interface"))
@@ -74,9 +86,15 @@ def test_camera_cli_without_v3_and_photo_exact_lineage(monkeypatch, tmp_path, ca
     assert adapter.capabilities()["camera.photo"]["available"] is True
     assert adapter.execute("camera.off")["consumers"] == 1
     assert adapter.read("camera.status")["manual_demand"] is False
+    Client.failed = True
+    capabilities = adapter.capabilities()
+    assert capabilities["camera.photo"]["available"] is False
+    assert capabilities["camera.video"]["available"] is False
+    assert capabilities["camera.off"]["available"] is True
+    assert capabilities["camera.photo"]["reason"] == "owner crashed"
 
 
-def test_camera_video_session_and_fail_closed_generation(monkeypatch, tmp_path):
+def assert_camera_video_session_and_generation(monkeypatch, tmp_path):
     from v3.adapters import camera_media
 
     encoder = shutil.which("ffmpeg")
@@ -94,6 +112,7 @@ def test_camera_video_session_and_fail_closed_generation(monkeypatch, tmp_path):
     class Session:
         sequence = 0
         change_generation = False
+        image_bytes = jpeg
 
         def observe(self):
             self.sequence += 1
@@ -105,7 +124,7 @@ def test_camera_video_session_and_fail_closed_generation(monkeypatch, tmp_path):
                 "measurement_monotonic_ns": self.sequence * 1000,
                 "completed_monotonic_ns": self.sequence * 1000 + 10,
             }
-            return SimpleNamespace(image_bytes=jpeg, metadata=SimpleNamespace(to_jsonable=lambda: metadata))
+            return SimpleNamespace(image_bytes=self.image_bytes, metadata=SimpleNamespace(to_jsonable=lambda: metadata))
 
     current = Session()
 
@@ -134,4 +153,24 @@ def test_camera_video_session_and_fail_closed_generation(monkeypatch, tmp_path):
         camera_media.capture_h264_video(failed, 0.22, fps=10)
     assert not failed.exists()
     assert releases[-1] is current
+    assert not list(tmp_path.glob(".r2b4-camera-*"))
+
+    current = Session()
+    current.image_bytes = jpeg * 4096
+    spawned = []
+    original_popen = subprocess.Popen
+
+    def blocked_encoder(argv, **kwargs):
+        child = original_popen([sys.executable, "-c", "import time; time.sleep(60)"], **kwargs)
+        spawned.append(child)
+        return child
+
+    blocked = tmp_path / "blocked.mp4"
+    with monkeypatch.context() as patches:
+        patches.setattr(subprocess, "Popen", blocked_encoder)
+        with pytest.raises(TimeoutError, match="stopped accepting frames"):
+            camera_media.capture_h264_video(blocked, 0.22, write_timeout_s=0.1)
+    assert spawned and spawned[0].poll() is not None
+    assert releases[-1] is current
+    assert not blocked.exists()
     assert not list(tmp_path.glob(".r2b4-camera-*"))

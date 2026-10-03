@@ -31,28 +31,36 @@ class AdmissionConfig:
 @dataclass(frozen=True, slots=True)
 class AdmissionStateCheckpoint:
     last_sequences: tuple[tuple[str, str, int], ...]
+    source_generations: tuple[tuple[str, str, str, int], ...] = ()
 
     def __post_init__(self) -> None:
         for device_id, kind, sequence in self.last_sequences:
             if not device_id or not kind or sequence < 0:
                 raise ValueError("admission checkpoint contains an invalid sequence")
+        for device_id, kind, generation, measured_ns in self.source_generations:
+            if not device_id or not kind or not generation or measured_ns < 0:
+                raise ValueError("admission checkpoint contains invalid vision lineage")
 
 
 class InputAdmission:
     """Own per-source sequence history and close L2 admission deterministically."""
 
-    __slots__ = ("_config", "_last_sequences")
+    __slots__ = ("_config", "_last_sequences", "_source_generations")
 
     def __init__(self, config: AdmissionConfig) -> None:
         self._config = config
         self._last_sequences: dict[tuple[str, str], int] = {}
+        self._source_generations: dict[tuple[str, str], tuple[str, int]] = {}
 
     def checkpoint(self) -> AdmissionStateCheckpoint:
         return AdmissionStateCheckpoint(
             tuple(
                 (device_id, kind, sequence)
                 for (device_id, kind), sequence in sorted(self._last_sequences.items())
-            )
+            ),
+            tuple((device_id, kind, generation, measured_ns)
+                  for (device_id, kind), (generation, measured_ns)
+                  in sorted(self._source_generations.items())),
         )
 
     def restore(self, checkpoint: AdmissionStateCheckpoint) -> None:
@@ -61,6 +69,10 @@ class InputAdmission:
         self._last_sequences = {
             (device_id, kind): sequence
             for device_id, kind, sequence in checkpoint.last_sequences
+        }
+        self._source_generations = {
+            (device_id, kind): (generation, measured_ns)
+            for device_id, kind, generation, measured_ns in checkpoint.source_generations
         }
 
     def __call__(self, frame: AcquisitionFrame) -> AdmittedFrame:
@@ -82,6 +94,24 @@ class InputAdmission:
             values = {field.key: field.value for field in sample.values}
             measurement_timing_valid = values.get("measurement_timing_valid", True)
             measurement_stale = values.get("measurement_stale", False)
+            generation = values.get("owner_generation", "") if sample.kind in {
+                "camera_frame_health", "person_detection"
+            } else ""
+            if not isinstance(generation, str):
+                raise ValueError(f"{sample.kind}.owner_generation must be str")
+            current_generation = self._source_generations.get(key)
+            generation_error = None
+            if current_generation is not None and not generation:
+                generation_error = RejectionReason.UNTRUSTED
+            elif generation and (current_generation is None or generation != current_generation[0]):
+                if current_generation is not None and sample.captured_monotonic_ns <= current_generation[1]:
+                    generation_error = RejectionReason.OUT_OF_ORDER
+                else:
+                    # The prior physical device closes before the new owner
+                    # generation measures; sequence may reset, time may not.
+                    previous_sequence = None
+            if generation_error is not None:
+                degraded.add(sample.device_id)
             for value, name in (
                 (measurement_timing_valid, "measurement_timing_valid"),
                 (measurement_stale, "measurement_stale"),
@@ -91,7 +121,9 @@ class InputAdmission:
             if not measurement_timing_valid or measurement_stale:
                 degraded.add(sample.device_id)
 
-            if not measurement_timing_valid:
+            if generation_error is not None:
+                reason = generation_error
+            elif not measurement_timing_valid:
                 reason = RejectionReason.TIME_ALIGNMENT_FAILED
             elif measurement_stale or age_ns > self._config.max_sample_age_ns:
                 reason = RejectionReason.STALE
@@ -113,10 +145,16 @@ class InputAdmission:
                 reason = RejectionReason.UNTRUSTED
 
             if (
-                reason is not RejectionReason.TIME_ALIGNMENT_FAILED
+                generation_error is None
+                and reason is not RejectionReason.TIME_ALIGNMENT_FAILED
                 and (previous_sequence is None or sample.sequence > previous_sequence)
             ):
                 self._last_sequences[key] = sample.sequence
+                if generation:
+                    self._source_generations[key] = (generation, max(
+                        sample.captured_monotonic_ns,
+                        current_generation[1] if current_generation is not None else 0,
+                    ))
 
             if reason is not None:
                 rejection_key = (sample.device_id, sample.sequence, reason)

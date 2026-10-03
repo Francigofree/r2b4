@@ -137,7 +137,7 @@ def _detect(camera: _Camera):
     return result
 
 
-def test_vision_owner_projects_bbox_from_camera_geometry_ssot():
+def _check_vision_owner_projects_bbox_from_camera_geometry_ssot():
     result = _detect(_Camera(_valid_status()))
     assert result.geometry_state == "VALID"
     assert result.geometry_reason is None
@@ -148,7 +148,7 @@ def test_vision_owner_projects_bbox_from_camera_geometry_ssot():
     assert projection.geometry_quality == "empirical"
 
 
-def test_invalid_runtime_geometry_keeps_2d_detection_but_blocks_spatial_projection():
+def _check_invalid_runtime_geometry_keeps_2d_detection_but_blocks_spatial_projection():
     invalid = CameraGeometryStatus(
         "INVALID",
         "UNIT_CELL_MISMATCH",
@@ -189,7 +189,7 @@ class _Port:
         return None
 
 
-def test_projected_bearings_cross_l0_as_bounded_semantic_fields():
+def _check_projected_bearings_cross_l0_as_bounded_semantic_fields():
     result = _detect(_Camera(_valid_status()))
     source = NativePersonDetectionSource(_Port(result), NativePersonDetectionConfig())
     snapshot = source.read(TickContext(1, result.measurement_monotonic_ns + 1))
@@ -226,7 +226,7 @@ def _person_observation(*, state: str, include_bearings: bool) -> Observation:
     return Observation("person_detection", "PERSON_DETECTOR_FRONT", 1, 1000, tuple(values))
 
 
-def test_l4_consumes_projected_bearings_instead_of_reconstructing_fov():
+def _check_l4_consumes_projected_bearings_instead_of_reconstructing_fov():
     world = ShadowWorldModel(_world_config())
     detections = world._person_image_detections(
         _person_observation(state="VALID", include_bearings=True)
@@ -236,8 +236,16 @@ def test_l4_consumes_projected_bearings_instead_of_reconstructing_fov():
     assert detections[0].right_bearing_rad == pytest.approx(0.25)
 
 
-def test_l4_fails_closed_for_explicit_invalid_geometry_projection():
+def _check_l4_fails_closed_for_explicit_invalid_geometry_projection():
     world = ShadowWorldModel(_world_config())
     assert world._person_image_detections(
         _person_observation(state="INVALID", include_bearings=False)
     ) == ()
+
+
+def test_person_geometry_calibrated_bearings_and_fail_closed_projection_contract():
+    _check_vision_owner_projects_bbox_from_camera_geometry_ssot()
+    _check_projected_bearings_cross_l0_as_bounded_semantic_fields()
+    _check_l4_consumes_projected_bearings_instead_of_reconstructing_fov()
+    _check_invalid_runtime_geometry_keeps_2d_detection_but_blocks_spatial_projection()
+    _check_l4_fails_closed_for_explicit_invalid_geometry_projection()

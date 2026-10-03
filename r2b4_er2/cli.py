@@ -98,7 +98,7 @@ def _probe_media(media: VisionMediaClient) -> dict[str, object]:
         status = media.status()
         return {
             **status,
-            "available": status.get("running") is True and not status.get("last_error"),
+            "available": status.get("owner_pid") is not None and not status.get("last_error"),
             "socket": str(media.socket_path),
         }
     except Er2MediaUnavailable as exc:
@@ -152,13 +152,13 @@ def _print_status(data: Mapping[str, object]) -> None:
     fault = _value(robot, "fault_layer")
 
     media_ready = _value(media, "available") is True
-    media_detail = (
-        f"READY camera={_value(media, 'camera_state', 'OFF')}"
-        if media_ready
-        else f"UNAVAILABLE ({_value(media, 'error', _value(media, 'last_error'))})"
-        if _value(media, 'error') or _value(media, 'last_error')
-        else "IDLE; camera starts on observation demand"
-    )
+    media_error = _value(media, "error") or _value(media, "last_error")
+    if media_ready:
+        media_detail = f"READY camera={_value(media, 'camera_state', 'OFF')}"
+    elif media_error:
+        media_detail = f"UNAVAILABLE ({media_error})"
+    else:
+        media_detail = "IDLE; camera starts on observation demand"
 
     print(f"ER2 Preview:   {data['preview_model']}")
     print(f"ER2 Streaming: {data['streaming_model']}")

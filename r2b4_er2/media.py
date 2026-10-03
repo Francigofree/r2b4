@@ -32,17 +32,10 @@ class VisionMediaClient:
     def observe_sync(self, *, stream_name: str = "lores") -> VisionJpeg:
         try:
             return self._client.observe(stream_name=stream_name)
-        except (OSError, ValueError, RuntimeError) as exc:
+        except (EOFError, OSError, ValueError, RuntimeError) as exc:
             raise Er2MediaUnavailable(f"vision observation unavailable: {exc}") from exc
 
     async def observe(self, *, stream_name: str = "lores") -> VisionJpeg:
         return await asyncio.to_thread(self.observe_sync, stream_name=stream_name)
-
-    def latest_jpeg_sync(self, *, stream_name: str = "lores") -> bytes:
-        return self.observe_sync(stream_name=stream_name).image_bytes
-
-    async def latest_jpeg(self, *, stream_name: str = "lores") -> bytes:
-        return (await self.observe(stream_name=stream_name)).image_bytes
-
 
 __all__ = ["Er2MediaUnavailable", "VisionMediaClient"]

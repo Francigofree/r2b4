@@ -24,7 +24,9 @@ from r2b4_er2.media import VisionMediaClient
 from r2b4_er2.preview import Er2PreviewClient
 from r2b4_er2.streaming import Er2StreamingClient
 from r2b4_er2.tool_bridge import Er2RobotTools
+from v3.adapters.vision_media_contracts import CameraJpegMetadata, VisionJpeg
 from v3.adapters.vision_media_socket import VisionMediaServer
+from v3.adapters.vision_owner import CameraVisionOwner
 from v3.external_gateway import ExternalRobotGateway, GatewayPolicy
 
 
@@ -63,9 +65,51 @@ class Clock:
         self.now += float(seconds)
 
 
+def fake_observation(*, stream_name="lores", sequence=1, generation="offline-fake-owner") -> VisionJpeg:
+    now = time.monotonic_ns()
+    width, height = (640, 360) if stream_name == "lores" else (1280, 720)
+    metadata = CameraJpegMetadata(
+        source_sequence=sequence, sensor_timestamp_ns=now,
+        measurement_monotonic_ns=now, completed_monotonic_ns=now,
+        calibration_id="offline-fake-calibration", stream=stream_name,
+        width=width, height=height,
+        rectified_K=((500.0, 0.0, width / 2), (0.0, 500.0, height / 2), (0.0, 0.0, 1.0)),
+        owner_generation=generation,
+    )
+    return VisionJpeg(b"\xff\xd8R2B4-ER2-TEST\xff\xd9", metadata)
+
+
 class FakeCamera:
+    owner_generation = "offline-fake-owner"
+
+    def __init__(self) -> None:
+        self.running = False
+        self.start_count = 0
+        self.stop_count = 0
+        self.sequence = 0
+        self.photo = SimpleNamespace(last_output=None, last_error=None, last_metadata=None)
+
+    def start(self) -> bool:
+        self.start_count += 1
+        self.running = True
+        return True
+
+    def stop(self) -> None:
+        self.stop_count += 1
+        self.running = False
+
+    def get_runtime_status(self):
+        return SimpleNamespace(running=self.running, last_error=None)
+
+    def get_photo_status(self):
+        return self.photo
+
     def request_jpeg(self, output, *, stream_name="lores") -> bool:
-        Path(output).write_bytes(b"\xff\xd8R2B4-ER2-TEST\xff\xd9")
+        assert self.running
+        self.sequence += 1
+        observation = fake_observation(stream_name=stream_name, sequence=self.sequence, generation=self.owner_generation)
+        Path(output).write_bytes(observation.image_bytes)
+        self.photo = SimpleNamespace(last_output=str(output), last_error=None, last_metadata=observation.metadata)
         return True
 
 
@@ -121,8 +165,8 @@ class FakeLiveTools:
 
 
 class FakeMedia:
-    async def latest_jpeg(self, *, stream_name="lores"):
-        return b"\xff\xd8x\xff\xd9"
+    async def observe(self, *, stream_name="lores") -> VisionJpeg:
+        return fake_observation(stream_name=stream_name)
 
 
 def validate_tools() -> None:
@@ -158,13 +202,32 @@ def validate_tools() -> None:
 def validate_media() -> None:
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / "vision.sock"
-        server = VisionMediaServer(FakeCamera(), path, photo_timeout_s=0.3)
+        camera = FakeCamera()
+        owner = CameraVisionOwner(lambda: camera, idle_grace_s=0.02)
+        server = VisionMediaServer(owner, path, photo_timeout_s=0.3)
         server.start()
         try:
-            payload = VisionMediaClient(path, timeout_s=0.5).latest_jpeg_sync()
-            assert payload.startswith(b"\xff\xd8") and payload.endswith(b"\xff\xd9")
+            client = VisionMediaClient(path, timeout_s=0.5)
+            assert client.status()["camera_state"] == "OFF"
+            assert camera.start_count == 0
+            observation = client.observe_sync()
+            assert observation.image_bytes == b"\xff\xd8R2B4-ER2-TEST\xff\xd9"
+            assert observation.metadata == camera.photo.last_metadata
+            assert observation.metadata.calibration_state == "CALIBRATED"
+            assert observation.metadata.calibration_id == "offline-fake-calibration"
+            assert observation.metadata.owner_generation == camera.owner_generation
+            assert observation.metadata.source_sequence == 1
+            assert observation.metadata.width == 640 and observation.metadata.height == 360
+            assert observation.metadata.rectified_K[2] == (0.0, 0.0, 1.0)
+            assert camera.start_count == 1
+            deadline = time.monotonic() + 1.0
+            while owner.status()["camera_state"] != "OFF" and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert owner.status()["camera_state"] == "OFF"
+            assert camera.stop_count == 1
         finally:
             server.stop()
+            owner.close()
         assert not path.exists()
 
 

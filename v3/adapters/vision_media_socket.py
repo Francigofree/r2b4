@@ -35,8 +35,16 @@ def recv_line(conn: socket.socket, limit: int = MAX_STATE_BYTES) -> bytes:
     raise ValueError("vision transport exceeded its bound")
 
 
-def recv_json_line(conn: socket.socket) -> dict:
-    value = json.loads(recv_line(conn))
+def recv_json_line(conn: socket.socket, *, reader=None) -> dict:
+    if reader is None:
+        payload = recv_line(conn)
+    else:
+        payload = reader.readline(MAX_STATE_BYTES + 1)
+        if not payload:
+            raise EOFError("vision owner disconnected")
+        if len(payload) > MAX_STATE_BYTES or not payload.endswith(b"\n"):
+            raise ValueError("vision transport exceeded its bound")
+    value = json.loads(payload)
     if not isinstance(value, dict):
         raise ValueError("invalid vision state")
     if value.get("error"):
@@ -112,8 +120,13 @@ class VisionClient:
                     "consumers": 0, "manual_demand": False, "owner_generation": "",
                     "last_error": None, "owner_pid": None}
         with conn:
-            conn.sendall(b"R2B4VISION1 STATUS\n")
-            return recv_json_line(conn)
+            try:
+                conn.sendall(b"R2B4VISION1 STATUS\n")
+                return recv_json_line(conn)
+            except (OSError, EOFError, RuntimeError, ValueError) as exc:
+                return {"running": False, "camera_state": "FAILED", "detector_running": False,
+                        "consumers": 0, "manual_demand": False, "owner_generation": "",
+                        "last_error": f"VISION_UNAVAILABLE:{type(exc).__name__}:{exc}"[:256], "owner_pid": None}
 
     def set_manual_demand(self, active: bool) -> dict[str, object]:
         if type(active) is not bool:
@@ -307,12 +320,14 @@ class VisionMediaServer:
             except OSError:
                 pass
         finally:
-            if demand is not None:
-                self.owner.release(demand)
-            conn.close()
-            with self._connections_lock:
-                self._connections.discard(conn)
-            self._clients.release()
+            try:
+                if demand is not None:
+                    self.owner.release(demand)
+            finally:
+                conn.close()
+                with self._connections_lock:
+                    self._connections.discard(conn)
+                self._clients.release()
 
     def _capture(self, stream_name: str, generation: str) -> VisionJpeg:
         if not self._capture_lock.acquire(timeout=self.photo_timeout_s):
@@ -336,6 +351,9 @@ class VisionMediaServer:
                 time.sleep(0.01)
             raise TimeoutError("camera JPEG was not produced")
         finally:
+            cancel = getattr(locals().get("camera"), "cancel_jpeg", None)
+            if callable(cancel):
+                cancel(target)
             target.unlink(missing_ok=True)
             self._capture_lock.release()
 

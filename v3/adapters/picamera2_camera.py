@@ -436,6 +436,8 @@ class NativePicamera2Camera:
         "_photo_last_metadata",
         "_device_lock",
         "_owner_generation",
+        "_active_photo",
+        "_discard_active_photo",
     )
 
     def __init__(
@@ -492,6 +494,8 @@ class NativePicamera2Camera:
         self._photo_last_metadata: CameraJpegMetadata | None = None
         self._device_lock = None
         self._owner_generation = ""
+        self._active_photo: str | None = None
+        self._discard_active_photo = False
 
     @property
     def owner_generation(self) -> str:
@@ -531,6 +535,8 @@ class NativePicamera2Camera:
             self._photo_last_output = None
             self._photo_last_error = None
             self._photo_last_metadata = None
+            self._active_photo = None
+            self._discard_active_photo = False
             self._stop_event.clear()
             self._rectifier = None
             self._frame_condition.notify_all()
@@ -706,6 +712,16 @@ class NativePicamera2Camera:
                 last_metadata=self._photo_last_metadata,
             )
 
+    def cancel_jpeg(self, output: str | Path) -> None:
+        """Discard an internal timed-out photo, including a late encoder write."""
+        target = str(Path(output))
+        with self._frame_condition:
+            if self._pending_photo is not None and self._pending_photo[0] == target:
+                self._pending_photo = None
+            if self._active_photo == target:
+                self._discard_active_photo = True
+            self._frame_condition.notify_all()
+
     def wait_for_new_frame(
         self,
         after_sequence: int = 0,
@@ -773,6 +789,9 @@ class NativePicamera2Camera:
                 with self._frame_condition:
                     pending_photo = self._pending_photo
                     self._pending_photo = None
+                    if pending_photo is not None:
+                        self._active_photo = pending_photo[0]
+                        self._discard_active_photo = False
                     self._latest = snapshot
                     self._last_error = None
                     self._frame_condition.notify_all()
@@ -818,6 +837,13 @@ class NativePicamera2Camera:
                                 f"{type(photo_exc).__name__}:{photo_exc}"
                             )
                             self._frame_condition.notify_all()
+                    finally:
+                        with self._frame_condition:
+                            discard = self._discard_active_photo
+                            self._active_photo = None
+                            self._discard_active_photo = False
+                        if discard:
+                            Path(output).unlink(missing_ok=True)
             except Exception as exc:
                 if self._stop_event.is_set():
                     return

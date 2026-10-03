@@ -285,7 +285,6 @@ class NativePersonDetector:
             self._stop_event.clear()
             self._last_error = None
             self._latest = None
-            self._result_sequence = 0
             self._running = True
             self._thread = threading.Thread(
                 target=self._run,
