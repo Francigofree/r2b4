@@ -507,6 +507,7 @@ class WheelActuatorController:
                 required_right=required_right,
                 left_measured=left_measured,
                 right_measured=right_measured,
+                wheels=wheels,
             )
         )
         for side, measured, required in (("left", left_measured, required_left),
@@ -714,22 +715,23 @@ class WheelActuatorController:
         # both global and per-wheel trust explicitly.
         return 1.0
 
-    @classmethod
     def _missing_feedback_is_bounded_edge_reacquisition(
-        cls,
+        self,
         values: Mapping[str, object],
         *,
         required_left: bool,
         required_right: bool,
         left_measured: float | None,
         right_measured: float | None,
+        wheels: WheelVelocitySetpoint,
     ) -> bool:
         """Recognize live, partial reversal fits without blessing silence.
 
         NativeCounterEncoderBackend deliberately withholds a control-grade
         velocity while a new-direction GPIO edge fit is still below full trust.
         That is bounded reacquisition evidence when the counter diagnostics are
-        clean. It is distinct from trust==0/TICK_SNAPSHOT/no-edge feedback.
+        clean. A short TICK_SNAPSHOT pause can retain the original L9 budget
+        only while accepted signed edges prove the opposite physical direction.
         """
 
         missing_sides = tuple(
@@ -745,16 +747,38 @@ class WheelActuatorController:
         if (
             values.get("measurement_stale") is not False
             or values.get("measurement_timing_valid") is not True
-            or values.get("rejection_code") != "BASELINE"
-            or not cls._counter_diagnostics_are_clean(values)
+            or values.get("rejection_code") not in ("BASELINE", "NONE")
+            or not self._counter_diagnostics_are_clean(values)
         ):
             return False
 
         for side in missing_sides:
-            trust = cls._per_wheel_trust(values, side)
-            if not 0.0 < trust < 1.0:
-                return False
-            if values.get(f"{side}_estimation_timebase") != "GPIO_EDGE_HISTORY":
+            trust = self._per_wheel_trust(values, side)
+            timebase = values.get(f"{side}_estimation_timebase")
+            if 0.0 < trust < 1.0 and timebase == "GPIO_EDGE_HISTORY":
+                continue
+
+            # A fresh standstill fit preserves its newest accepted signed edge
+            # as the start timestamp. last_a/callback receipt can also advance
+            # on rejected or pending pulses and must never renew this window.
+            edge_ns = values.get(f"{side}_estimation_start_edge_timestamp_ns")
+            direction = values.get(f"{side}_confirmed_direction")
+            target = getattr(wheels, f"{side}_mps")
+            transition_until_ns = self._feedback_transition_until_ns
+            now_ns = wheels.context.monotonic_ns
+            if (
+                timebase != "TICK_SNAPSHOT"
+                or values.get(f"{side}_counter_running") is not True
+                or abs(target) >= self._config.velocity_unreliable_below_mps
+                or type(direction) is not int or direction not in (-1, 1)
+                or direction * target >= 0.0
+                or type(edge_ns) is not int or not 0 <= edge_ns <= now_ns
+                or transition_until_ns is None
+                or deadline_reached(now_ns, min(
+                    transition_until_ns,
+                    edge_ns + self._config.max_feedback_uncertainty_ns,
+                ))
+            ):
                 return False
         return True
 
