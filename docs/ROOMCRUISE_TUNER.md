@@ -14,7 +14,7 @@ The tuner deliberately does **not** vary `speed_map.json`, encoder reliability t
 
 `config_patch` separates `behavior.roomcruise` recommendations from shared `layers.navigation` execution recommendations. An emitted candidate config includes both and must pass ConfigResolver before it is written. Production config is never overwritten. Explicit baseline envelope options are experiments and are checked against production ingress acceptance.
 
-`python -m v3.control_cli config` prints the resolved configuration, snapshot ID, derived centered-spin floor and inactive/unrealizable knob diagnostics without opening hardware. Status-sidecar output carries the same passive diagnostics. An unrealizable recovery speed is reported without changing the existing HOLD behavior.
+`python -m v3.control_cli config` prints the resolved configuration, snapshot ID, derived centered-spin floor and inactive/unrealizable knob diagnostics without opening hardware. Status-sidecar output carries the same passive diagnostics. Live localization recovery requests the smallest centered spin derived from the calibrated wheel minimum and track width. A lower mission or operational cap still prevents motion; freshness, reliable heading, the recovery deadline and final safety remain mandatory. Historical captures retain their recorded recovery speed, including a request below the physical floor.
 
 The simulator closes EXPLORE preferences into the same CommandRequest/L5 mission contract. Its synchronous L5-L9 path shares production algorithms and physical limits, while worker timing, sensor dynamics and L10-L12 execution remain outside the simulation. It is not evidence of full live equivalence.
 

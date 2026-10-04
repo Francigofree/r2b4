@@ -1,5 +1,6 @@
 """Local motion remains available without global XY corrections."""
 from dataclasses import replace
+import math
 
 from rig import resolved_config, healthy_localization
 from v3.contracts import (
@@ -81,18 +82,20 @@ def test_roomcruise_localization_motion_requires_independent_local_quality():
     assert request.goal == direct.local_goal
     assert TrajectoryRolloutComputer(config.navigation).compute(request).trajectory_candidates == direct.trajectory_candidates
 
-    # An absolute map goal still needs reliable XY, even though it also uses
-    # a local rollout. The new mission cannot inherit Room Cruise's exemption.
+    # An absolute map goal still needs reliable XY. Recovery may only spin;
+    # the new mission cannot inherit Room Cruise's translation exemption.
     estimate, world = _scene(6)
     command = CommandRequest(estimate.context, "navigate", CommandMode.NAVIGATE,
                              (DataField("x_m", 1.0), DataField("y_m", 0.0)), 6)
     plan = navigator.evaluate(manager.evaluate(command), estimate, world)
     motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
-    assert plan.reason == "LOCALIZATION_HOLD"
+    assert plan.reason == "LOCALIZATION_REACQUIRE"
+    assert plan.local_goal is None
+    assert plan.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
     assert motion.requested_v_mps == 0
+    assert motion.requested_omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
     denied = replace(motion, localization_requirement=LocalizationRequirement())
     allowed = limiter.evaluate(denied, estimate)
-    assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
     assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
 
 
@@ -114,10 +117,15 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         CommandRequest(estimate.context, "recovery-geometry", CommandMode.EXPLORE, (), 0)
     )
 
-    # Production recovery cap cannot realize the physical wheel minimum.
-    held = navigator.evaluate(mission, estimate, world)
-    assert held.reason == "LOCALIZATION_HOLD"
-    # Neither an absent nor a stale map permits exceeding that recovery cap.
+    # Recovery uses the calibrated spin floor and fresh robot-relative geometry.
+    # A frozen or absent pose-aligned costmap does not authorize translation.
+    floor = config.navigation.wheel_limits.minimum_center_spin_rad_s
+    recovered = navigator.evaluate(mission, estimate, world)
+    assert recovered.status is NavigationStatus.ACTIVE
+    assert recovered.reason == 'LOCALIZATION_REACQUIRE'
+    assert recovered.velocity_target.v_mps == 0
+    assert recovered.velocity_target.omega_rad_s == floor
+    assert recovered.constraints.max_omega_rad_s <= mission.constraints.max_omega_rad_s
     for broken_world in (
         replace(world, local_costmap=None),
         replace(
@@ -129,11 +137,67 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         ),
     ):
         plan = navigator.evaluate(mission, estimate, broken_world)
-        assert plan.status is NavigationStatus.IDLE
-        assert plan.reason == "LOCALIZATION_HOLD"
+        assert plan.status is NavigationStatus.ACTIVE
+        assert plan.reason == "LOCALIZATION_REACQUIRE"
         motion = realizer.evaluate(selector.evaluate(plan), estimate, broken_world)
-        allowed = limiter.evaluate(motion, estimate)
-        assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
+        assert motion.requested_v_mps == 0
+        assert motion.requested_omega_rad_s == floor
+
+    # The unchanged L8-L10 chain ramps the spin within angular/wheel budgets.
+    from v3.layers.l10_chassis_control import DifferentialDriveKinematics
+    kinematics = DifferentialDriveKinematics(config.chassis_control)
+    previous = None
+    for tick in range(40):
+        current, scene = _scene(tick)
+        current = replace(current, localization_quality=estimate.localization_quality)
+        request = CommandRequest(current.context, 'recovery-geometry', CommandMode.EXPLORE, (), tick)
+        plan = navigator.evaluate(manager.evaluate(request), current, scene)
+        motion = realizer.evaluate(selector.evaluate(plan), current, scene)
+        allowed = limiter.evaluate(motion, current)
+        wheels = kinematics(allowed)
+        assert allowed.allowed_v_mps == 0
+        assert 0 <= allowed.allowed_omega_rad_s <= min(floor, mission.constraints.max_omega_rad_s,
+                                                     config.operational_constraints.max_omega_rad_s)
+        if previous is not None:
+            for side in ('left_mps', 'right_mps'):
+                assert abs(getattr(wheels, side) - getattr(previous, side)) <= config.operational_constraints.max_acceleration_mps2 * .02 + 1e-12
+        previous = wheels
+    assert math.isclose(wheels.left_mps, -config.navigation.wheel_limits.minimum_mps)
+    assert math.isclose(wheels.right_mps, config.navigation.wheel_limits.minimum_mps)
+
+    # A cap below the physical floor remains HOLD; neither L6 nor L9 amplifies.
+    capped = replace(mission, constraints=replace(mission.constraints, max_omega_rad_s=floor * .95))
+    held = navigator.evaluate(capped, estimate, world)
+    assert held.reason == 'LOCALIZATION_HOLD'
+    limited = OperationalConstraintLayer(replace(config.operational_constraints, max_omega_rad_s=floor * .95))
+    motion = realizer.evaluate(selector.evaluate(recovered), estimate, world)
+    denied = limited.evaluate(motion, estimate)
+    assert denied.allowed_v_mps == denied.allowed_omega_rad_s == 0
+    assert ConstraintCode.SPEED_LIMIT in denied.active_constraints
+    next_estimate = replace(estimate, context=_scene(1)[0].context)
+    denied = limited.evaluate(replace(motion, context=next_estimate.context), next_estimate)
+    assert denied.allowed_v_mps == denied.allowed_omega_rad_s == 0
+
+    # The old captured request still cannot turn this physical robot.
+    from v3.layers.l6_navigation import TrajectoryNavigator
+    legacy = TrajectoryNavigator(replace(config.navigation, localization_recovery_omega_rad_s=.2),
+                                 async_config=config.async_l6)
+    assert legacy.evaluate(mission, estimate, world).reason == 'LOCALIZATION_HOLD'
+
+    deadline = math.ceil(config.navigation.localization_recovery_timeout_ns / 20_000_000)
+    current, scene = _scene(deadline)
+    current = replace(current, localization_quality=estimate.localization_quality)
+    expired = navigator.evaluate(replace(mission, context=current.context), current, scene)
+    assert expired.reason == 'LOCALIZATION_HOLD'
+
+    for quality, scene in (
+        (replace(estimate.localization_quality, heading=QualityState.LOST), world),
+        (replace(estimate.localization_quality, heading=QualityState.DEGRADED), world),
+        (replace(estimate.localization_quality, lidar_age_ns=config.navigation.max_costmap_freshness_ns + 1), world),
+        (estimate.localization_quality, replace(world, freshness_ns=config.navigation.max_world_freshness_ns + 1)),
+    ):
+        _, _, case_navigator, _, _, _ = _chain()
+        assert case_navigator.evaluate(mission, replace(estimate, localization_quality=quality), scene).reason == 'LOCALIZATION_HOLD'
 
     # P1: recovery now depends on fresh pose-independent ROBOT_BASE geometry.
     for geometry in (
@@ -362,7 +426,7 @@ def test_roomcruise_soft_localization_changes_replan_without_zero_motion_gap():
             assert navigator.pending_rollout_request is not None
 
     # A true local-translation LOST state still revokes translation and enters
-    # bounded localization recovery; this P0 does not weaken fail-closed gates.
+    # bounded localization recovery with independent heading authority.
     estimate, world = _scene(8)
     estimate = replace(
         estimate,
@@ -377,9 +441,12 @@ def test_roomcruise_soft_localization_changes_replan_without_zero_motion_gap():
         CommandRequest(estimate.context, "soft-localization-continuity", CommandMode.EXPLORE, (), 8)
     )
     plan = navigator.evaluate(mission, estimate, world)
-    assert plan.reason == "LOCALIZATION_HOLD"
+    assert plan.reason == "LOCALIZATION_REACQUIRE"
+    assert plan.local_goal is None
+    assert plan.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
     motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
+    assert motion.requested_omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
 
 
 
@@ -411,5 +478,11 @@ def test_global_navigation_motion_continues_only_inside_committed_local_generati
             motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
             assert motion.requested_v_mps >= .15
         else:
-            assert plan.reason == "LOCALIZATION_HOLD"
+            # A generation change revokes committed guidance. Only bounded
+            # heading recovery is available until global XY is trustworthy.
+            assert plan.reason == "LOCALIZATION_REACQUIRE"
             assert plan.local_goal is None
+            assert plan.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
+            motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
+            assert motion.requested_v_mps == 0.0
+            assert motion.requested_omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s

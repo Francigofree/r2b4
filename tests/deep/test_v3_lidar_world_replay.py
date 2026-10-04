@@ -18,6 +18,103 @@ from v3.execution import ExecutionRecord
 from v3.replay import replay_capture, write_replay_result
 
 
+def test_localization_recovery_realizes_calibrated_spin_and_replays_historical_hold(tmp_path):
+    resolved = resolved_config()
+    control = resolved.runtime.composition.live_control.control
+    configs = {
+        'current': control,
+        'historical': replace(control, navigation=replace(control.navigation, localization_recovery_omega_rad_s=.2)),
+    }
+    writers = {name: OfflineMotorSink() for name in configs}
+    compositions = {name: NativeControlComposition(writers[name], cfg) for name, cfg in configs.items()}
+    sinks = {name: CaptureSink(name, configuration={'production_control': cfg}) for name, cfg in configs.items()}
+    checkpoints = {}
+    dt_ns = resolved.runtime.tick_period_ns
+    ticks = math.ceil(control.navigation.localization_recovery_timeout_ns / dt_ns) + 3
+    wheels = control.navigation.wheel_limits
+    v = omega = yaw = 0.0
+    moving = 0
+    previous_wheels = None
+    health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in
+                   sorted(set(control.critical_device_ids) | {'ENCODER', 'IMU', 'RPLIDAR_C1'}))
+    try:
+        for tick in range(ticks):
+            context = TickContext(tick, 1_000_000_000 + tick * dt_ns)
+            yaw += omega * dt_ns / 1e9
+
+            def sample(device, kind, **values):
+                return DeviceSample(device, kind, tick, context.monotonic_ns,
+                                    tuple(DataField(key, value) for key, value in values.items()))
+
+            left, right = wheels.wheels(v, omega)
+            # One fresh wheel/gyro disagreement establishes LOST translation
+            # through real L3, while the independent heading remains GOOD.
+            if tick == 0:
+                left, right = -wheels.minimum_mps, wheels.minimum_mps
+            point_count = 0 if tick == 50 else 1
+            safety = sample('RPLIDAR_C1', 'lidar_safety_clearance', age_ns=0,
+                            **{f'{sector}_{key}': value for sector in ('front', 'rear', 'left', 'right')
+                               for key, value in (('clearance_m', .05 if tick == 40 else 2.0), ('observation_count', 10))})
+            if tick == 70:
+                safety = replace(safety, captured_monotonic_ns=context.monotonic_ns-control.lidar_safety.maximum_sample_age_ns-1)
+            samples = (
+                sample('ENCODER', 'wheel_velocity', left_mps=left, right_mps=right, trust=1.0),
+                sample('IMU', 'ekf_heading', yaw_rad=yaw, omega_rad_s=omega, confidence=1.0, omega_confidence=1.0),
+                sample('RPLIDAR_C1', 'lidar_health', point_count=point_count, age_ns=0),
+                sample('RPLIDAR_C1', 'lidar_local_points', frame_id='ROBOT_BASE', point_count=point_count,
+                       **({} if not point_count else {'point_000_x_m': 1.0, 'point_000_y_m': 0.0, 'point_000_quality': 10})),
+                safety,
+            )
+            command = CommandRequest(context, 'recovery', CommandMode.EXPLORE,
+                (DataField('max_v_mps', resolved.roomcruise.max_v_mps),
+                 DataField('max_omega_rad_s', resolved.roomcruise.max_omega_rad_s)), tick)
+            for name, composition in compositions.items():
+                inputs = composition.close_inputs(TickInputs(context, RawDeviceBatch(context, samples, health),
+                                                             command, LifecycleState.ACTIVE))
+                result = composition.run_tick(inputs)
+                assert result.trace.fault_layer is None
+                layers = {row.layer: row.output for row in result.trace.layers}
+                quality = layers['L3'].localization_quality
+                assert quality.local_translation.value == 'LOST'
+                assert quality.heading.value == 'GOOD'
+                final = result.final_actuation
+                if name == 'historical':
+                    assert layers['L6'].reason == 'LOCALIZATION_HOLD'
+                    assert final.left_output == final.right_output == 0.0
+                else:
+                    allowed = layers['L9']
+                    assert allowed.allowed_v_mps == 0.0
+                    assert 0 <= allowed.allowed_omega_rad_s <= wheels.minimum_center_spin_rad_s
+                    if tick >= math.ceil(control.navigation.localization_recovery_timeout_ns / dt_ns) or tick == 50:
+                        assert layers['L6'].reason == 'LOCALIZATION_HOLD'
+                        assert final.left_output == final.right_output == 0.0
+                    else:
+                        assert layers['L6'].reason == 'LOCALIZATION_REACQUIRE'
+                    if tick in (40, 70):
+                        assert final.safety_decision is SafetyDecision.STOP
+                        assert final.left_output == final.right_output == 0.0
+                    moving += abs(final.left_output) + abs(final.right_output) > 0.0
+                    target_wheels = wheels.wheels(allowed.allowed_v_mps, allowed.allowed_omega_rad_s)
+                    if previous_wheels is not None and tick not in (50, math.ceil(control.navigation.localization_recovery_timeout_ns / dt_ns)):
+                        assert max(abs(a-b) for a, b in zip(target_wheels, previous_wheels)) <= control.operational_constraints.max_acceleration_mps2 * dt_ns / 1e9 + 1e-12
+                    previous_wheels = target_wheels
+                    v, omega = ((allowed.allowed_v_mps, allowed.allowed_omega_rad_s)
+                                if final.safety_decision is SafetyDecision.ALLOW else (0.0, 0.0))
+                if tick == 35:
+                    checkpoints[name] = composition.checkpoint()
+                elif tick > 35:
+                    sinks[name].write(ExecutionRecord(inputs, result))
+    finally:
+        for composition in compositions.values():
+            composition.close()
+    assert moving > ticks // 2
+    for name, sink in sinks.items():
+        path = sink.finalize('PASS', tmp_path / f'{name}.json', initial_state_checkpoint=encode_value(checkpoints[name]))
+        replay = replay_capture(path, project_root=ROOT)
+        assert replay['status'] == 'MATCH', replay['diagnostics']
+        assert replay['determinism']['repeated_trace_match']
+
+
 def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_path):
     """Actual registration + delayed closure + the complete non-actuating chain."""
     from rig import room_lidar_scan

@@ -126,7 +126,8 @@ def test_roomcruise_profile_crosses_canonical_interface_cli_gateway_and_mission(
     diagnostics = resolved.configuration_diagnostics()
     wheels = resolved.runtime.composition.live_control.control.navigation.wheel_limits
     assert diagnostics['minimum_center_spin_rad_s'] == 2 * wheels.minimum_mps / wheels.track_width_m
-    assert any(k['state'] == 'UNREALIZABLE' and k['priority'] == 'P1' for k in diagnostics['knobs'])
+    assert diagnostics['localization_recovery_omega_rad_s'] == wheels.minimum_center_spin_rad_s
+    assert not any(k['state'] == 'UNREALIZABLE' for k in diagnostics['knobs'])
     # Developer CLI defaults share the same profile and acceptance limits.
     assert control_cli.main(['explore', '--command-id', 'cli-default']) == 0
     default = gateway.snapshot(TickContext(1, time.monotonic_ns()))
@@ -217,3 +218,25 @@ def test_historical_capture_migration_disables_new_route_policy():
     historical = _decode_production_value(_migrate_legacy_resolved_config_snapshot(snapshot), ResolvedRobotConfig, 'historical.config')
     assert historical.roomcruise is None
     assert historical.runtime == expected.runtime
+
+    # Historical document authority also preserves the old recovery HOLD.
+    control['layers']['navigation']['localization_recovery_omega_rad_s'] = .2
+    migrated = _compat_control_config_from_documents(physics, speed_map, hardware, (), control)
+    assert migrated.navigation.localization_recovery_omega_rad_s == .2
+    assert migrated.navigation.wheel_limits.constrain(0, .2) == (0, 0)
+    control['layers']['navigation']['localization_recovery_omega_rad_s'] = None
+    from v3.replay import V3ReplayError
+    with pytest.raises(V3ReplayError):
+        _compat_control_config_from_documents(physics, speed_map, hardware, (), control)
+
+
+def test_recovery_speed_is_derived_from_calibration_and_rejects_second_authority():
+    documents = _documents()
+    documents[1]['nyomtav_szelesseg_m'] *= .9
+    resolved = ConfigResolver.from_documents(*documents)
+    nav = resolved.runtime.composition.live_control.control.navigation
+    assert nav.localization_recovery_omega_rad_s == nav.wheel_limits.minimum_center_spin_rad_s
+    assert nav.wheel_limits.wheels(0, nav.localization_recovery_omega_rad_s) == (-nav.wheel_limits.minimum_mps, nav.wheel_limits.minimum_mps)
+    documents[-1]['layers']['navigation']['localization_recovery_omega_rad_s'] = .2
+    with pytest.raises(ValueError, match='unknown.*localization_recovery_omega_rad_s'):
+        ConfigResolver.from_documents(*documents)

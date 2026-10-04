@@ -31,6 +31,7 @@ from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
 from v3.lidar_config import LidarMatcherConfig
+from v3.wheel_motion import WheelMotionLimits
 from v3.runtime_performance import RuntimeAffinityConfig
 from v3.config_hardware import NativeSensorPolicyConfig, POSE_FRAME_ID, _encoder_runtime_config, _motor_channel, _sensor_hardware_config
 from v3.composition.runtime_config import ResidentPhysicalRuntimeConfig
@@ -223,7 +224,7 @@ class ResolvedRobotConfig:
 
         if nav.localization_recovery_omega_rad_s < wheels.minimum_center_spin_rad_s:
             note("P1", "layers.navigation.localization_recovery_omega_rad_s", "UNREALIZABLE",
-                 "Recovery requests a centered spin below the wheel floor; existing HOLD behavior is preserved.")
+                 "Captured recovery request is below the wheel floor; it remains HOLD during historical replay.")
         if nav.minimum_planning_speed_mps < wheels.minimum_mps:
             note("P1", "layers.navigation.minimum_planning_speed_mps", "SHADOWED_RANGE",
                  "Values below the calibrated wheel floor do not lower nonzero rollout samples.")
@@ -258,6 +259,7 @@ class ResolvedRobotConfig:
                         centered_spin_available=min(mission_omega, control.operational_constraints.max_omega_rad_s)
                             >= wheels.minimum_center_spin_rad_s)
         return dict(minimum_center_spin_rad_s=wheels.minimum_center_spin_rad_s,
+                    localization_recovery_omega_rad_s=nav.localization_recovery_omega_rad_s,
                     roomcruise=room, knobs=knobs)
 
     @property
@@ -324,7 +326,7 @@ class ConfigResolver:
         for section, derived_names in {
             "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
             "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
-            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits"} | ExplorePreferences.field_names(),
+            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits", "localization_recovery_omega_rad_s"} | ExplorePreferences.field_names(),
             "motion_realization": {"wheel_limits", "max_world_freshness_ns"},
             "operational_constraints": {"wheel_limits"},
             "world_model": {
@@ -356,6 +358,7 @@ class ConfigResolver:
         minimum_speed = resolved_speed_map.minimum_continuous_speed_mps
         wheel_limits = dict(track_width_m=p["nyomtav_szelesseg_m"], minimum_mps=minimum_speed,
                             maximum_mps=min(curve.points[-1].speed_mps for curve in resolved_speed_map.curves))
+        recovery_omega = _typed(WheelMotionLimits, wheel_limits, "wheel_limits").minimum_center_spin_rad_s
         layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID,
                                 "minimum_reliable_wheel_speed_mps":policy.encoder_minimum_reliable_speed_mps,
                                 "wheel_velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
@@ -363,6 +366,7 @@ class ConfigResolver:
                               "minimum_reliable_speed_mps":policy.encoder_minimum_reliable_speed_mps,
                               "velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
         layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"],
+                                "localization_recovery_omega_rad_s": recovery_omega,
                                 **{field.key: field.value for field in roomcruise.preferences.as_fields()}}
         layers["motion_realization"] = {**layers["motion_realization"],
                                        "max_world_freshness_ns": layers["navigation"]["max_world_freshness_ns"]}

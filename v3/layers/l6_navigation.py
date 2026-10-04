@@ -152,6 +152,8 @@ class FollowPersonEvidence:
 @dataclass(frozen=True, slots=True)
 class NavigationConfig:
     localization_recovery_timeout_ns: int
+    # Live config derives the smallest centered spin from calibrated wheel
+    # limits. Keep captured numeric values for exact historical replay.
     localization_recovery_omega_rad_s: float
     localization_degraded_speed_scale: float
     localization_inflation_sigma: float
@@ -237,7 +239,11 @@ class NavigationConfig:
     def __post_init__(self) -> None:
         if self.localization_recovery_timeout_ns <= 0 or not 0 < self.localization_degraded_speed_scale <= 1:
             raise ValueError("invalid localization recovery limits")
-        if not 0 < self.localization_recovery_omega_rad_s <= .5 or not 0 < self.localization_inflation_sigma <= 5:
+        omega = self.localization_recovery_omega_rad_s
+        if (isinstance(omega, bool) or not isinstance(omega, (int, float))
+                or not math.isfinite(omega) or omega <= 0):
+            raise ValueError("localization recovery omega must be finite and positive")
+        if not 0 < self.localization_inflation_sigma <= 5:
             raise ValueError("invalid localization preservation limits")
         for name in (
             "max_world_freshness_ns",
@@ -1056,7 +1062,7 @@ class TrajectoryNavigator:
                 or geometry.freshness_ns > self._config.max_costmap_freshness_ns):
             return self._inactive(mission, NavigationStatus.IDLE, "LOCALIZATION_HOLD")
         # Recovery must itself be realizable without increasing the authorized
-        # angular speed. At the production 0.2 rad/s cap a pivot is impossible.
+        # angular speed. A mission cap below the calibrated spin floor is HOLD.
         recovery_omega = min(mission.constraints.max_omega_rad_s,
                              self._config.localization_recovery_omega_rad_s)
         _, recovery_omega = self._config.wheel_limits.constrain(0.0, recovery_omega)

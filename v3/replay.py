@@ -21,7 +21,7 @@ import time
 import types
 import typing
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import MISSING, dataclass, fields, is_dataclass
+from dataclasses import MISSING, dataclass, fields, is_dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
@@ -911,12 +911,16 @@ def _compat_control_config_from_documents(physics, speed_map_raw, hardware, inpu
     """Document captures must contain the same complete schema as startup."""
     from v3.config import ConfigResolver
     try:
-        if control is not None and "behavior" not in control:
+        # Live recovery speed is now derived; document captures may still own
+        # a historical numeric request. Preserve it solely in this replay path.
+        control = copy.deepcopy(dict(control or {}))
+        captured_recovery = MISSING
+        if isinstance(control.get("layers"), dict) and isinstance(control["layers"].get("navigation"), dict):
+            captured_recovery = control["layers"]["navigation"].pop("localization_recovery_omega_rad_s", MISSING)
+        if "behavior" not in control:
             # Schema-only migration of complete pre-profile document captures.
             # Use captured values exclusively, never the active robot config.
-            from copy import deepcopy
             from v3.contracts import ExplorePreferences
-            control = deepcopy(dict(control))
             layers = control["layers"]
             preferences = {name: layers["navigation"].pop(name) for name in ExplorePreferences.field_names()}
             mission = layers["mission"]["default_constraints"]
@@ -932,7 +936,10 @@ def _compat_control_config_from_documents(physics, speed_map_raw, hardware, inpu
             result_age = control["lidar_runtime"].pop("matcher_max_result_age_s")
             if round(result_age * 1e9) != control["sensor_policy"]["lidar_maximum_result_age_ns"]:
                 raise ValueError("captured lidar result age mismatch")
-        return ConfigResolver.from_documents(dict(hardware), dict(physics), dict(speed_map_raw), dict(control or {})).runtime.composition.live_control.control
+        resolved = ConfigResolver.from_documents(dict(hardware), dict(physics), dict(speed_map_raw), control).runtime.composition.live_control.control
+        if captured_recovery is not MISSING:
+            resolved = replace(resolved, navigation=replace(resolved.navigation, localization_recovery_omega_rad_s=captured_recovery))
+        return resolved
     except (ValueError, TypeError, KeyError) as exc:
         raise V3ReplayError("capture has no complete resolved robot configuration; legacy defaults are not authoritative") from exc
 

@@ -99,8 +99,11 @@ def test_localization_global_loss_and_relocalization_preserve_local_map_follow_a
     mission = manager.evaluate(CommandRequest(f.context, "global", CommandMode.NAVIGATE,
         (DataField("x_m", 1.0), DataField("y_m", 0.0)), 351))
     recovery = nav.evaluate(mission, baseline, baseline_world)
-    assert recovery.reason == "LOCALIZATION_HOLD"
-    assert recovery.velocity_target is None
+    assert recovery.reason == "LOCALIZATION_REACQUIRE"
+    assert recovery.local_goal is None
+    assert recovery.velocity_target.v_mps == 0.0
+    assert recovery.velocity_target.omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
+    assert recovery.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
     recovered = nav.evaluate(mission, fixed, fixed_world)
     assert recovered.mission_id == recovery.mission_id
     assert recovered.status is NavigationStatus.ACTIVE
