@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from v3.contracts import CommandMode, CommandRequest, DataField, TickContext
+from v3.contracts import CommandMode, CommandRequest, DataField, ExplorePreferences, TickContext
+from v3.config_types import CommandIngressPolicy
 from v3.contracts.base import require_token
 from v3.runtime_performance import CpuSet, normalize_cpus, temporary_current_affinity
 
@@ -67,6 +68,15 @@ class ResidentCommandMailboxConfig:
     maximum_angular_speed_rad_s: float = 1.20
     maximum_file_bytes: int = 4096
     expected_uid: int = -1
+
+    @classmethod
+    def from_policy(cls, path: Path, policy: CommandIngressPolicy) -> ResidentCommandMailboxConfig:
+        """Client and runtime resolve the same ingress acceptance authority."""
+        return cls(path=path, maximum_ttl_ns=policy.maximum_ttl_ns,
+                   maximum_future_skew_ns=policy.maximum_future_skew_ns,
+                   maximum_linear_speed_mps=policy.maximum_linear_speed_mps,
+                   maximum_angular_speed_rad_s=policy.maximum_angular_speed_rad_s,
+                   maximum_file_bytes=policy.maximum_file_bytes)
 
     def __post_init__(self) -> None:
         path = Path(self.path)
@@ -246,6 +256,8 @@ class AtomicResidentCommandGateway:
             if mode is CommandMode.FACE_PERSON
             else set()
         )
+        if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(payload):
+            expected_keys |= ExplorePreferences.field_names()
         if set(payload) != expected_keys:
             raise ValueError("command mailbox fields do not match its mode")
 
@@ -318,6 +330,12 @@ class AtomicResidentCommandGateway:
                 expiry_tick=context.tick_id,
             )
         if mode in (CommandMode.EXPLORE, CommandMode.FOLLOW_PERSON):
+            preference_fields = ()
+            if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(payload):
+                preferences = ExplorePreferences.from_mapping(
+                    {key: payload[key] for key in ExplorePreferences.field_names()}
+                )
+                preference_fields = preferences.as_fields()
             return CommandRequest(
                 context=context,
                 command_id=command_id,
@@ -325,7 +343,7 @@ class AtomicResidentCommandGateway:
                 goal=(
                     DataField("max_v_mps", max_v_mps),
                     DataField("max_omega_rad_s", max_omega_rad_s),
-                ),
+                ) + preference_fields,
                 expiry_tick=context.tick_id,
             )
 
@@ -483,6 +501,7 @@ class ResidentCommandClient:
         max_v_mps: float,
         max_omega_rad_s: float,
         ttl_ns: int,
+        preferences: ExplorePreferences | None = None,
     ) -> int:
         return self._publish(
             command_id,
@@ -490,6 +509,7 @@ class ResidentCommandClient:
             {
                 "max_v_mps": max_v_mps,
                 "max_omega_rad_s": max_omega_rad_s,
+                **({field.key: field.value for field in preferences.as_fields()} if preferences is not None else {}),
             },
             ttl_ns,
         )
@@ -587,6 +607,9 @@ class ResidentCommandClient:
             if mode is CommandMode.FACE_PERSON
             else set()
         )
+        if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(values):
+            expected |= ExplorePreferences.field_names()
+            ExplorePreferences.from_mapping({key: values[key] for key in ExplorePreferences.field_names() if key in values})
         if set(values) != expected:
             raise ValueError("client command values do not match its mode")
         normalized = {key: _finite(value, key) for key, value in values.items() if key != "frame_id"}

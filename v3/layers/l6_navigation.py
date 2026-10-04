@@ -15,6 +15,7 @@ from v3.wheel_motion import WheelMotionLimits
 from v3.contracts import (
     CommandMode,
     DeviceHealthState,
+    ExplorePreferences,
     MissionIntent,
     MissionLifecycle,
     MotionValidity,
@@ -92,11 +93,12 @@ def _trajectory_clearance_penalty(
     return _speed_clearance_ratio(v_mps, config) * (1.0 - clearance_score)
 
 
-def _explore_goal_distances(config: "NavigationConfig") -> tuple[float, ...]:
+def _explore_goal_distances(config: "NavigationConfig", preferences: "ExplorePreferences | None" = None) -> tuple[float, ...]:
     """Far-to-near EXPLORE goal candidates; one sample preserves legacy behavior."""
     count = config.explore_local_goal_distance_samples
-    maximum = config.explore_local_goal_max_distance_m
-    minimum = config.explore_local_goal_min_distance_m
+    policy = config if preferences is None else preferences
+    maximum = policy.explore_local_goal_max_distance_m
+    minimum = policy.explore_local_goal_min_distance_m
     if count == 1 or maximum - minimum <= _POINT_CLEARANCE_EPSILON_M:
         return (maximum,)
     step = (maximum - minimum) / (count - 1)
@@ -1888,7 +1890,7 @@ class TrajectoryNavigator:
                 # arc while the mission cap also makes an in-place turn
                 # infeasible. Waiting for goal age would strand the robot.
                 scene = self._build_planning_scene(world)
-                goal = self._choose_local_goal(estimate, costmap, scene)
+                goal = self._choose_local_goal(estimate, costmap, scene, mission.explore_preferences)
                 goal_selected_ns = mission.context.monotonic_ns
             assert goal is not None
             self._schedule_or_store_rollout(
@@ -2324,7 +2326,11 @@ class TrajectoryNavigator:
         estimate: RobotEstimate,
         costmap: RollingLocalCostmap,
         scene: _LocalPlanningScene,
+        preferences: "ExplorePreferences | None" = None,
     ) -> Waypoint:
+        # Ranking preferences arrive from the caller; geometry, sampling budget,
+        # coverage, lifecycle and feasibility remain owned by generic L6.
+        policy = self._config if preferences is None else preferences
         options: list[tuple[float, float, int, int, Waypoint]] = []
         footprint_radius = 0.5 * math.hypot(
             self._config.footprint_length_m,
@@ -2334,10 +2340,10 @@ class TrajectoryNavigator:
             self._config.clearance_score_cap_m,
             footprint_radius + self._config.footprint_safety_margin_m,
         ) + _POINT_CLEARANCE_EPSILON_M
-        distances = _explore_goal_distances(self._config)
+        distances = _explore_goal_distances(self._config, preferences)
         distance_span = max(
-            self._config.explore_local_goal_max_distance_m
-            - self._config.explore_local_goal_min_distance_m,
+            policy.explore_local_goal_max_distance_m
+            - policy.explore_local_goal_min_distance_m,
             _POINT_CLEARANCE_EPSILON_M,
         )
         for index in range(self._config.local_goal_heading_samples):
@@ -2371,14 +2377,14 @@ class TrajectoryNavigator:
                 distance_score = (
                     1.0
                     if len(distances) == 1
-                    else (distance_m - self._config.explore_local_goal_min_distance_m)
+                    else (distance_m - policy.explore_local_goal_min_distance_m)
                     / distance_span
                 )
                 score = (
-                    self._config.local_goal_novelty_weight * novelty
-                    + self._config.local_goal_clearance_weight * clearance_score
-                    + self._config.local_goal_forward_weight * forward_preference
-                    + self._config.explore_local_goal_distance_weight * distance_score
+                    policy.local_goal_novelty_weight * novelty
+                    + policy.local_goal_clearance_weight * clearance_score
+                    + policy.local_goal_forward_weight * forward_preference
+                    + policy.explore_local_goal_distance_weight * distance_score
                 )
                 options.append((score, distance_m, index, distance_index, goal))
         if not options:

@@ -25,6 +25,11 @@ class WheelMotionLimits:
         turn = omega * self.track_width_m * 0.5
         return v - turn, v + turn
 
+    @property
+    def minimum_center_spin_rad_s(self) -> float:
+        """Derived realizable spin floor; never a separately tuned parameter."""
+        return 2 * self.minimum_mps / self.track_width_m
+
     def linear_sample(self, index: int, count: int, maximum: float,
                       minimum_planning_mps: float = 0.0) -> float:
         """Keep the zero candidate and spend the other samples above the floor."""

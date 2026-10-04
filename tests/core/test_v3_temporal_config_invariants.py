@@ -34,7 +34,8 @@ def _documents():
 
 
 def test_production_temporal_invariants_resolve_unchanged():
-    ConfigResolver.from_documents(*_documents())
+    resolved = ConfigResolver.from_documents(*_documents())
+    assert resolved.lidar.maximum_result_age_ns == resolved.runtime.sensor_inputs.inputs.lidar_backend.maximum_result_age_ns
 
 
 def test_l11_feedback_cache_cannot_outlive_admission_freshness():
@@ -46,11 +47,15 @@ def test_l11_feedback_cache_cannot_outlive_admission_freshness():
         ConfigResolver.from_documents(hardware, physics, speed_map, candidate)
 
 
-def test_l6_and_l8_world_freshness_must_match():
+def test_world_freshness_has_one_authority_and_rejects_a_second():
     hardware, physics, speed_map, control = _documents()
     candidate = deepcopy(control)
-    candidate["layers"]["motion_realization"]["max_world_freshness_ns"] += 1
-    with pytest.raises(ValueError, match="navigation/motion world freshness mismatch"):
+    candidate["layers"]["navigation"]["max_world_freshness_ns"] += 1
+    resolved = ConfigResolver.from_documents(hardware, physics, speed_map, candidate)
+    layers = resolved.runtime.composition.live_control.control
+    assert layers.motion_realization.max_world_freshness_ns == layers.navigation.max_world_freshness_ns
+    candidate["layers"]["motion_realization"]["max_world_freshness_ns"] = layers.navigation.max_world_freshness_ns
+    with pytest.raises(ValueError, match="unknown.*max_world_freshness_ns"):
         ConfigResolver.from_documents(hardware, physics, speed_map, candidate)
 
 

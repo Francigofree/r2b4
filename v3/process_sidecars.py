@@ -212,7 +212,8 @@ def _status_sidecar_main(
                 strict=strict_affinity,
             )
         target = Path(path)
-        configuration = ({"effective_config": effective_config.as_dict(), "config_snapshot_id": effective_config.snapshot_id}
+        configuration = ({"effective_config": effective_config.as_dict(), "config_snapshot_id": effective_config.snapshot_id,
+                          "configuration_diagnostics": effective_config.configuration_diagnostics()}
                          if effective_config is not None else {})
         _atomic_private_json(
             target,

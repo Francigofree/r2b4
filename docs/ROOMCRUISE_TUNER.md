@@ -8,9 +8,15 @@ The tool reads the canonical production configuration with `ConfigResolver` and 
 
 The tuner deliberately does **not** vary `speed_map.json`, encoder reliability thresholds, wheel calibration, L10-L12 safety, or hardware configuration.
 
-## Why the command envelope is reported separately
+## Configuration authority
 
-The current operator RoomCruise path launches `v3.control_cli explore`, whose defaults are `max_v_mps=0.30` and `max_omega_rad_s=0.60`. Those values can cap the effective RoomCruise envelope below `vezerles.json`. They are therefore included in the search and report, but they are returned as `command_ingress_patch`; they are not silently written into `vezerles.json`.
+`conf/vezerles.json` → `behavior.roomcruise` owns the requested envelope and EXPLORE local-goal preferences. OperatorController resolves the profile and submits it explicitly through `v3.control_cli`; the developer CLI uses the same resolved profile when arguments are omitted. The tuner reads that profile, the same ingress acceptance policy, calibrated wheel limits and `runtime.tick_period_ns`. This document does not define tuning defaults.
+
+`config_patch` separates `behavior.roomcruise` recommendations from shared `layers.navigation` execution recommendations. An emitted candidate config includes both and must pass ConfigResolver before it is written. Production config is never overwritten. Explicit baseline envelope options are experiments and are checked against production ingress acceptance.
+
+`python -m v3.control_cli config` prints the resolved configuration, snapshot ID, derived centered-spin floor and inactive/unrealizable knob diagnostics without opening hardware. Status-sidecar output carries the same passive diagnostics. An unrealizable recovery speed is reported without changing the existing HOLD behavior.
+
+The simulator closes EXPLORE preferences into the same CommandRequest/L5 mission contract. Its synchronous L5-L9 path shares production algorithms and physical limits, while worker timing, sensor dynamics and L10-L12 execution remain outside the simulation. It is not evidence of full live equivalence.
 
 ## Search
 
@@ -74,7 +80,7 @@ python3 tools/tuners/r2b4_roomcruise_tuner.py --profile quick
 ## Validation
 
 ```bash
-python3 -m pytest -q tests/feature/test_v3_roomcruise_tuner.py
+./r test tests/feature/test_v3_roomcruise_tuner.py
 ./r test roomcruise
 r tune roomcruise --list-scenarios
 ```
@@ -83,8 +89,8 @@ r tune roomcruise --list-scenarios
 
 A tuner winner is only a simulation candidate. Before promoting values to production:
 
-1. inspect `config_patch` and `command_ingress_patch` separately;
+1. inspect behavior and execution changes within `config_patch` separately;
 2. run the focused RoomCruise regression;
-3. run a short live RoomCruise session through the canonical operator path;
+3. with explicit user authorization, run a short live RoomCruise session through the canonical operator path;
 4. compile MCAP evidence;
 5. compare curve/straight/reverse/stop/no-progress behavior and safety/localization evidence with the baseline.

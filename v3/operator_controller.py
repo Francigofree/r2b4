@@ -33,6 +33,7 @@ from v3.action_catalog import (
 )
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.control_cli import RESIDENT_PROCESS_STATUS_SCHEMA, _read_status
+from v3.contracts import ExplorePreferences
 from v3.mcap_reader import McapReadError, McapReader
 
 
@@ -578,14 +579,31 @@ class OperatorController:
     def roomcruise(
         self,
         *,
+        max_v_mps: float | None = None,
+        max_omega_rad_s: float | None = None,
+        explore_preferences: ExplorePreferences | None = None,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
     ) -> MotionHandle:
+        from v3.config import ConfigResolver
+        resolved = ConfigResolver.for_project(self.root).resolve()
+        profile = resolved.roomcruise
+        max_v = profile.max_v_mps if max_v_mps is None else self._finite(max_v_mps, "max_v_mps")
+        max_omega = profile.max_omega_rad_s if max_omega_rad_s is None else self._finite(max_omega_rad_s, "max_omega_rad_s")
+        ingress = resolved.edges.command_ingress
+        if not 0 < max_v <= ingress.maximum_linear_speed_mps or not 0 < max_omega <= ingress.maximum_angular_speed_rad_s:
+            raise OperatorError("RoomCruise envelope exceeds configured ingress acceptance limits")
+        preferences = profile.preferences if explore_preferences is None else explore_preferences
+        if not isinstance(preferences, ExplorePreferences):
+            raise TypeError("explore_preferences must be ExplorePreferences")
         command_id = f"operator-roomcruise-{time.time_ns()}-{os.getpid()}"
-        args = [self.python, "-m", "v3.control_cli", "explore", "--command-id", command_id]
+        args = [self.python, "-m", "v3.control_cli", "explore", "--command-id", command_id,
+                "--max-v-mps", str(max_v), "--max-omega-rad-s", str(max_omega)]
+        for field in preferences.as_fields():
+            args.extend(["--" + field.key.replace("_", "-"), str(field.value)])
         pid, mode = self._start_motion(
             "roomcruise", capture, capture_mode, args,
             capture_hz=capture_hz, session_owner_pid=session_owner_pid,

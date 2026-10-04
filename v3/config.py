@@ -25,7 +25,8 @@ from v3.capture_encoding import encode_value
 from v3.composition.native_control import NativeControlCompositionConfig, V3NavigationConfig
 from v3.composition.resident_live_control import ResidentLiveControlConfig
 from v3.composition.resident_physical_control import ResidentPhysicalControlConfig
-from v3.config_types import CommandIngressPolicy, EncoderProcessConfig, ImuProcessConfig, LidarProcessConfig, PlannerProcessConfig
+from v3.config_types import CommandIngressPolicy, EncoderProcessConfig, ImuProcessConfig, LidarProcessConfig, PlannerProcessConfig, RoomCruiseConfig
+from v3.contracts import ExplorePreferences
 from v3.device_health_policy import PRODUCTION_CRITICAL_DEVICE_IDS
 from v3.layers.l10_chassis_control import ChassisControlConfig
 from v3.layers.l11_actuator_control import WheelSpeedMap
@@ -159,10 +160,19 @@ class ResolvedRobotConfig:
     lidar: NativeLidarPortConfig
     affinity: RuntimeAffinityConfig
     edges: RuntimeEdgeConfig
+    # None is reserved for historical typed snapshots. Live resolution requires
+    # the host behavior profile explicitly, never constructor defaults.
+    roomcruise: RoomCruiseConfig | None = None
 
     def __post_init__(self) -> None:
         control = self.runtime.composition.live_control.control
         sensors = self.runtime.sensor_inputs
+        if self.roomcruise is not None:
+            if any(getattr(control.navigation, field.key) != field.value for field in self.roomcruise.preferences.as_fields()):
+                raise ValueError("navigation fallback preferences differ from the resolved RoomCruise profile")
+            if (self.roomcruise.max_v_mps > self.edges.command_ingress.maximum_linear_speed_mps
+                    or self.roomcruise.max_omega_rad_s > self.edges.command_ingress.maximum_angular_speed_rad_s):
+                raise ValueError("RoomCruise envelope exceeds command ingress acceptance limits")
         if control.lidar_safety is None or control.critical_device_ids != PRODUCTION_CRITICAL_DEVICE_IDS:
             raise ValueError("resolved production config requires canonical safety inputs")
         if control.world_model.local_costmap_max_points_per_scan != sensors.inputs.lidar_source.local_perception_max_points:
@@ -200,6 +210,55 @@ class ResolvedRobotConfig:
 
     def as_dict(self) -> dict:
         return encode_value(self)
+
+    def configuration_diagnostics(self) -> dict:
+        """Passive startup/status evidence; never changes execution or tuning."""
+        control = self.runtime.composition.live_control.control
+        nav = control.navigation
+        wheels = nav.wheel_limits
+        knobs = []
+
+        def note(priority, path, state, detail):
+            knobs.append(dict(priority=priority, path=path, state=state, detail=detail))
+
+        if nav.localization_recovery_omega_rad_s < wheels.minimum_center_spin_rad_s:
+            note("P1", "layers.navigation.localization_recovery_omega_rad_s", "UNREALIZABLE",
+                 "Recovery requests a centered spin below the wheel floor; existing HOLD behavior is preserved.")
+        if nav.minimum_planning_speed_mps < wheels.minimum_mps:
+            note("P1", "layers.navigation.minimum_planning_speed_mps", "SHADOWED_RANGE",
+                 "Values below the calibrated wheel floor do not lower nonzero rollout samples.")
+        note("P1", "speed_map.curves.*.startup_pwm", "METADATA_ONLY",
+             "Validated calibration metadata; actuator realization uses calibrated speed curves, not startup_pwm.")
+        note("P1", "layers.mission.default_constraints.corridor_radius_m", "METADATA_ONLY",
+             "Carried as guidance metadata; it does not enforce a geometric corridor.")
+        note("P2", "fizika.encoder_impulzus_per_fordulat", "METADATA_ONLY",
+             "Distance estimation uses calibrated metres per pulse (lepes_hossz_m and side multipliers).")
+        note("P2", "layers.navigation.follow_person_search_step_ns", "COMPATIBILITY_ONLY",
+             "Historical configuration field; current bounded FOLLOW search uses angular segments.")
+        for path in ("layers.motion_realization.cruise_v_mps", "layers.motion_realization.distance_gain"):
+            note("P2", path, "WAYPOINT_ONLY",
+                 "Used by waypoint realization; it does not tune EXPLORE trajectory speed.")
+        if control.motion_realization.max_requested_omega_rad_s > control.mission.default_constraints.max_omega_rad_s:
+            note("P1", "layers.motion_realization.max_requested_omega_rad_s", "SHADOWED_RANGE",
+                 "Values above the mission angular cap cannot increase executable angular speed.")
+        if control.async_l6.completion_inputs:
+            for path in ("layers.async_l6.release_tick_gap", "layers.async_l6.release_delay_ns",
+                         "layers.navigation.trajectory_replan_min_tick_gap"):
+                note("P2", path, "INACTIVE_IN_PRODUCTION_MODE",
+                     "Completion-input mode uses measured completion/monotonic time; retained for alternate paths and replay.")
+        room = None
+        if self.roomcruise is not None:
+            mission_v = min(self.roomcruise.max_v_mps, control.mission.default_constraints.max_v_mps)
+            mission_omega = min(self.roomcruise.max_omega_rad_s, control.mission.default_constraints.max_omega_rad_s)
+            straight_cap = min(mission_v, control.operational_constraints.max_v_mps, wheels.maximum_mps)
+            room = dict(requested_max_v_mps=self.roomcruise.max_v_mps,
+                        requested_max_omega_rad_s=self.roomcruise.max_omega_rad_s,
+                        mission_max_v_mps=mission_v, mission_max_omega_rad_s=mission_omega,
+                        steady_straight_max_v_mps=straight_cap if straight_cap >= wheels.minimum_mps else 0.0,
+                        centered_spin_available=min(mission_omega, control.operational_constraints.max_omega_rad_s)
+                            >= wheels.minimum_center_spin_rad_s)
+        return dict(minimum_center_spin_rad_s=wheels.minimum_center_spin_rad_s,
+                    roomcruise=room, knobs=knobs)
 
     @property
     def snapshot_id(self) -> str:
@@ -251,7 +310,9 @@ class ConfigResolver:
         _keys(h["imu"]["bno055"], {"bus", "address", "use_external_crystal"}, "hardver.imu.bno055")
         calibration_names = {"imu_heading_clockwise_positive", "imu_yaw_rate_axis", "imu_yaw_rate_clockwise_positive", "imu_yaw_offset_rad"}
         _keys(p, {"nyomtav_szelesseg_m", "encoder_impulzus_per_fordulat", "lepes_hossz_m", "lepes_hossz_bal_szorzo", "lepes_hossz_jobb_szorzo", "footprint_length_m", "footprint_width_m", "encoder_forward_b_level", "imu_axis_order", "imu_axis_sign"} | calibration_names, "fizika")
-        _keys(c, {"layers", "local_perception", "sensor_policy", "motor", "encoder", "imu", "lidar_driver", "lidar_pose", "lidar_runtime", "runtime_affinity", "runtime"}, "vezerles")
+        _keys(c, {"behavior", "layers", "local_perception", "sensor_policy", "motor", "encoder", "imu", "lidar_driver", "lidar_pose", "lidar_runtime", "runtime_affinity", "runtime"}, "vezerles")
+        _keys(c["behavior"], {"roomcruise"}, "behavior")
+        roomcruise = _typed(RoomCruiseConfig, c["behavior"]["roomcruise"], "behavior.roomcruise")
         runtime = c["runtime"]
         edge_names = {f.name for f in fields(RuntimeEdgeConfig)}
         _keys(runtime, edge_names | {"tick_period_ns", "max_preflight_age_ns", "required_lidar_preflight_revisions"}, "runtime")
@@ -263,8 +324,8 @@ class ConfigResolver:
         for section, derived_names in {
             "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
             "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
-            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits"},
-            "motion_realization": {"wheel_limits"},
+            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits"} | ExplorePreferences.field_names(),
+            "motion_realization": {"wheel_limits", "max_world_freshness_ns"},
             "operational_constraints": {"wheel_limits"},
             "world_model": {
                 "local_costmap_max_points_per_scan",
@@ -301,7 +362,10 @@ class ConfigResolver:
         layers["wheel_pi"] = {**layers["wheel_pi"],
                               "minimum_reliable_speed_mps":policy.encoder_minimum_reliable_speed_mps,
                               "velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
-        layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"]}
+        layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"],
+                                **{field.key: field.value for field in roomcruise.preferences.as_fields()}}
+        layers["motion_realization"] = {**layers["motion_realization"],
+                                       "max_world_freshness_ns": layers["navigation"]["max_world_freshness_ns"]}
         for section in ("navigation", "motion_realization", "operational_constraints"):
             layers[section] = {**layers[section], "wheel_limits":wheel_limits}
         layers["world_model"] = {
@@ -352,7 +416,7 @@ class ConfigResolver:
         pose = _typed(LidarMatcherConfig,c["lidar_pose"],"lidar_pose")
         _keys(c["lidar_driver"], {f.name for f in fields(RplidarC1Config)} - {"port", "baudrate", "minimum_distance_m", "maximum_distance_m"}, "lidar_driver")
         driver = _typed(RplidarC1Config, {**c["lidar_driver"], **h["lidar"], "minimum_distance_m":pose.min_valid_distance_m, "maximum_distance_m":pose.max_valid_distance_m}, "lidar_driver")
-        lr = _keys(c["lidar_runtime"], {"matcher_process_start_method", "matcher_process_ready_timeout_s", "matcher_stop_timeout_s", "latest_scan_queue_size", "latest_result_queue_size", "matcher_max_input_age_s", "matcher_max_result_age_s", "driver_poll_hz"}, "lidar_runtime")
+        lr = _keys(c["lidar_runtime"], {"matcher_process_start_method", "matcher_process_ready_timeout_s", "matcher_stop_timeout_s", "latest_scan_queue_size", "latest_result_queue_size", "matcher_max_input_age_s", "driver_poll_hz"}, "lidar_runtime")
         hz = _typed(float,lr["driver_poll_hz"],"lidar_runtime.driver_poll_hz")
         if hz <= 0:
             raise ValueError("driver_poll_hz must be positive")
@@ -360,7 +424,7 @@ class ConfigResolver:
             poll_interval_s=1/hz, process_ready_timeout_s=_typed(float,lr["matcher_process_ready_timeout_s"],"matcher ready"),
             process_stop_timeout_s=_typed(float,lr["matcher_stop_timeout_s"],"matcher stop"),
             maximum_input_age_ns=round(_typed(float,lr["matcher_max_input_age_s"],"matcher input age")*1e9),
-            maximum_result_age_ns=round(_typed(float,lr["matcher_max_result_age_s"],"matcher result age")*1e9),
+            maximum_result_age_ns=policy.lidar_maximum_result_age_ns,
             matcher_start_method=lr["matcher_process_start_method"], input_queue_capacity=lr["latest_scan_queue_size"], result_queue_capacity=lr["latest_result_queue_size"])
         tick_ns = _typed(int,runtime["tick_period_ns"],"runtime.tick_period_ns")
         _validate_temporal_invariants(
@@ -376,4 +440,4 @@ class ConfigResolver:
         physical = ResidentPhysicalRuntimeConfig(ResidentPhysicalControlConfig(
             ResidentLiveControlConfig(resolved_control, runtime["max_preflight_age_ns"],runtime["required_lidar_preflight_revisions"]), motor_output),
             sensors,tick_ns)
-        return ResolvedRobotConfig(physical, lidar, _typed(RuntimeAffinityConfig,c["runtime_affinity"],"runtime_affinity"),edges)
+        return ResolvedRobotConfig(physical, lidar, _typed(RuntimeAffinityConfig,c["runtime_affinity"],"runtime_affinity"),edges,roomcruise)

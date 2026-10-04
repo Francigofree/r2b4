@@ -284,6 +284,17 @@ Az encoder pulse-integritása és a velocity estimate megbízhatósága külön 
 
 ## 9. Konfiguráció, command, host/operator és külső I/O
 
+### V3 CLOSED — execution és behavior határ
+
+A V3 bemenete canonical command/mission intent, kért constraint és opcionális immutable behavior-preferencia vagy lokális cél. A caller a szándékot és a preferenciát adja; nem injektálhat trajectory-, kerék-, PWM- vagy safety-döntést downstream rétegbe. A profil egy logical command identity része, heartbeat közben nem változhat ugyanazon ID alatt.
+
+A V3 a lezárt inputból és saját owned state-ből bounded, determinisztikus mozgást vagy explicit HOLD/STOP/FAULT eredményt ad. A fizikai realizálhatóságot, lokalizációs és gyorsulási korlátokat, final safetyt és motor-realizációt a canonical L0–L12 lánc érvényesíti; a completed eredmény és lineage passzív evidence-ként megfigyelhető. Nem garantálhat pozitív mozgást vagy a behavior cél teljesülését elégtelen evidence vagy fizikailag lehetetlen kérés esetén.
+
+A robot személyisége, autonóm szándéka, RoomCruise karaktere, social policyja és hosszú távú feladatválasztása a V3 feletti robot/behavior réteg felelőssége. A RoomCruise envelope és EXPLORE célpreferenciák host-oldali profilként jutnak a canonical command útra. L6 továbbra is birtokolja a coverage/progress state-et, a lokális cél lifecycle-ját, a costmap-, footprint-, rollout-, recovery- és feasibility-döntéseket. A több mission által használt trajectory scorer execution-policy; nem válik automatikusan RoomCruise behavior-policyvá.
+
+„V3 CLOSED” feltétele: azonos szemantikai fogalomnak egy konfigurációs tulajdonosa van; a fizikai minimumok származtatottak; ingress acceptance, mission cap, operational limit és safety külön authority marad; a CLI és a tuner a feloldott konfigurációt fogyasztja; a diagnosztika az inaktív vagy nem realizálható tartományokat feltárja. Strukturális lezárásnál azonos input és fizikai konfiguráció mellett azonos execution eredmény szükséges. A későbbi behavior tuning külön változtatás, külön validációval.
+
+
 A composition root validált, immutable configot injektál; layer nem olvas fájlt, environment variable-t vagy globális config managert. Actuationt érintő config csak biztonságos production lifecycle-határon, fizikailag inaktív motor mellett cserélhető.
 
 GUI, CLI, LLM, tool vagy host/operator control irányban csak a canonical command ingress kliensén keresztül kérhet robotműveletet a `CommandGateway` felé. A host/operator command-request authorityval rendelkezhet, de production actuation-, motion-, safety- vagy motor-authorityval nem.

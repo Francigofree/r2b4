@@ -911,6 +911,27 @@ def _compat_control_config_from_documents(physics, speed_map_raw, hardware, inpu
     """Document captures must contain the same complete schema as startup."""
     from v3.config import ConfigResolver
     try:
+        if control is not None and "behavior" not in control:
+            # Schema-only migration of complete pre-profile document captures.
+            # Use captured values exclusively, never the active robot config.
+            from copy import deepcopy
+            from v3.contracts import ExplorePreferences
+            control = deepcopy(dict(control))
+            layers = control["layers"]
+            preferences = {name: layers["navigation"].pop(name) for name in ExplorePreferences.field_names()}
+            mission = layers["mission"]["default_constraints"]
+            ingress = control["runtime"]["command_ingress"]
+            control["behavior"] = {"roomcruise": {
+                "max_v_mps": min(mission["max_v_mps"], ingress["maximum_linear_speed_mps"]),
+                "max_omega_rad_s": min(mission["max_omega_rad_s"], ingress["maximum_angular_speed_rad_s"]),
+                "preferences": preferences,
+            }}
+            # Preserve the old equality invariants before removing duplicates.
+            if layers["motion_realization"].pop("max_world_freshness_ns") != layers["navigation"]["max_world_freshness_ns"]:
+                raise ValueError("captured navigation/motion world freshness mismatch")
+            result_age = control["lidar_runtime"].pop("matcher_max_result_age_s")
+            if round(result_age * 1e9) != control["sensor_policy"]["lidar_maximum_result_age_ns"]:
+                raise ValueError("captured lidar result age mismatch")
         return ConfigResolver.from_documents(dict(hardware), dict(physics), dict(speed_map_raw), dict(control or {})).runtime.composition.live_control.control
     except (ValueError, TypeError, KeyError) as exc:
         raise V3ReplayError("capture has no complete resolved robot configuration; legacy defaults are not authoritative") from exc
@@ -1209,6 +1230,11 @@ def _expanded_expected_layers(
     """Expand the two measured input duplications before field diagnostics."""
 
     expanded = dict(layers)
+    mission = expanded.get("L5")
+    if isinstance(mission, Mapping) and mission.get("__type__") == "MissionIntent" and "explore_preferences" not in mission:
+        # Historical absence means no caller profile, not today's RoomCruise
+        # default. Normalize only this additive field for exact comparison.
+        expanded["L5"] = {**mission, "explore_preferences": None}
     inputs = tick.get("inputs")
     if not isinstance(inputs, Mapping):
         return expanded

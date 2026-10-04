@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from enum import Enum
 
 from .localization import LocalizationQuality, LocalizationRequirement, Pose2D
@@ -533,6 +533,51 @@ class MissionConstraints:
 
 
 @dataclass(frozen=True, slots=True)
+class ExplorePreferences:
+    """Caller-owned EXPLORE goal preferences; no feasibility or motor authority.
+
+    All fields travel together as scalar command goal fields. An absent profile
+    preserves historical commands' captured NavigationConfig preferences.
+    """
+
+    local_goal_novelty_weight: float
+    local_goal_clearance_weight: float
+    local_goal_forward_weight: float
+    explore_local_goal_min_distance_m: float
+    explore_local_goal_max_distance_m: float
+    explore_local_goal_distance_weight: float
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ContractValidationError(f"ExplorePreferences.{field.name} must be numeric")
+            require_finite(value, f"ExplorePreferences.{field.name}")
+            if value < 0:
+                raise ContractValidationError(f"ExplorePreferences.{field.name} cannot be negative")
+        if not 0 < self.explore_local_goal_min_distance_m <= self.explore_local_goal_max_distance_m:
+            raise ContractValidationError("EXPLORE goal distances must satisfy 0 < min <= max")
+        weight_sum = (self.local_goal_novelty_weight + self.local_goal_clearance_weight
+                      + self.local_goal_forward_weight + self.explore_local_goal_distance_weight)
+        require_finite(weight_sum, "ExplorePreferences.weight_sum")
+        if weight_sum <= 0:
+            raise ContractValidationError("at least one EXPLORE local-goal weight must be positive")
+
+    @classmethod
+    def field_names(cls) -> frozenset[str]:
+        return frozenset(field.name for field in fields(cls))
+
+    @classmethod
+    def from_mapping(cls, values) -> ExplorePreferences:
+        if set(values) != cls.field_names():
+            raise ContractValidationError("EXPLORE preferences must contain every profile field")
+        return cls(**values)
+
+    def as_fields(self) -> tuple[DataField, ...]:
+        return tuple(DataField(field.name, getattr(self, field.name)) for field in fields(self))
+
+
+@dataclass(frozen=True, slots=True)
 class MissionIntent:
     context: TickContext
     mission_id: str
@@ -543,9 +588,15 @@ class MissionIntent:
     lifecycle: MissionLifecycle
     stop_reason: str | None = None
     target_frame_id: str = "R2B4_BOOT_ROBOT_MAP"
+    explore_preferences: ExplorePreferences | None = None
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "MissionIntent.mission_id")
+        if self.explore_preferences is not None and (
+            self.mode is not CommandMode.EXPLORE
+            or not isinstance(self.explore_preferences, ExplorePreferences)
+        ):
+            raise ContractValidationError("only EXPLORE may carry typed exploration preferences")
         if self.target_frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
             raise ContractValidationError("invalid mission target frame")
         _require_optional_token(self.stop_reason, "MissionIntent.stop_reason")

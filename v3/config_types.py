@@ -1,8 +1,9 @@
-"""Immutable runtime-edge policy values; file loading belongs to ConfigResolver."""
+"""Immutable host/edge policy values; file loading belongs to ConfigResolver."""
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
 import math
+from v3.contracts import ExplorePreferences
 
 
 
@@ -74,3 +75,20 @@ class CommandIngressPolicy:
 
     def __post_init__(self) -> None:
         _positive_fields(self)
+
+
+@dataclass(frozen=True, slots=True)
+class RoomCruiseConfig:
+    """Host behavior profile, resolved once and submitted as command intent."""
+
+    max_v_mps: float
+    max_omega_rad_s: float
+    preferences: ExplorePreferences
+
+    def __post_init__(self) -> None:
+        for name in ("max_v_mps", "max_omega_rad_s"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+                raise ValueError(f"RoomCruiseConfig.{name} must be finite and positive")
+        if not isinstance(self.preferences, ExplorePreferences):
+            raise TypeError("RoomCruiseConfig.preferences must be ExplorePreferences")

@@ -33,6 +33,8 @@ A dokumentációk között részleteket nem kell másolni. Ahol egy alacsonyabb 
 
 Az **R2B4 robotrendszer több, mint a V3**.
 
+A RoomCruise karaktere és kért sebességprofilja a robot magasabb szintű viselkedésének része. A felső réteg a RobotInterface-en át ad intentet, constraintet és preferenciát; a determinisztikus, fizikailag realizálható és biztonságos végrehajtás határát a `STRUKTURALIS_RETEGEK_V3.md` „V3 CLOSED” contractja rögzíti.
+
 A **V3** ebben a dokumentumban a teljes production mozgási/control környezetet jelenti: azt a futó rendszert, amely a robot fizikai mozgatásához szükséges perifériákat, world modelt, control- és safety-rétegeket, valamint a canonical végrehajtási útvonalat biztosítja.
 
 A V3 számítás- és energiaigényes komponens. Ezért **nem kell folyamatosan futnia csak azért, hogy a robot megszólítható vagy megfigyelésre képes legyen**.

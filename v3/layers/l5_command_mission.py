@@ -9,6 +9,7 @@ from v3.contracts import (
     GLOBAL_FRAME_ID, LOCAL_FRAME_ID,
     CommandRequest,
     DataField,
+    ExplorePreferences,
     MissionConstraints,
     MissionIntent,
     MissionLifecycle,
@@ -82,6 +83,7 @@ class MissionManager:
         try:
             values = _field_values(command.goal)
             constraints = _constraints(values, self._config.default_constraints)
+            explore_preferences = None
             if command.mode is CommandMode.NAVIGATE:
                 _require_keys(
                     values,
@@ -121,8 +123,11 @@ class MissionManager:
                 _require_keys(
                     values,
                     required=frozenset(),
-                    optional=frozenset({"max_v_mps", "max_omega_rad_s"}),
+                    optional=frozenset({"max_v_mps", "max_omega_rad_s"}) | ExplorePreferences.field_names(),
                 )
+                preference_values = {key: values[key] for key in ExplorePreferences.field_names() if key in values}
+                if preference_values:
+                    explore_preferences = ExplorePreferences.from_mapping(preference_values)
                 target_pose = None
                 velocity_target = None
             elif command.mode is CommandMode.FACE_PERSON:
@@ -157,6 +162,7 @@ class MissionManager:
             constraints=constraints,
             lifecycle=MissionLifecycle.ACTIVE,
             target_frame_id=values.get("frame_id", GLOBAL_FRAME_ID),
+            explore_preferences=explore_preferences,
         )
 
     def _stopped(

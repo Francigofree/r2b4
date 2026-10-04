@@ -1,4 +1,18 @@
 {
+  "behavior": {
+    "roomcruise": {
+      "max_v_mps": 0.4,
+      "max_omega_rad_s": 0.9,
+      "preferences": {
+        "explore_local_goal_distance_weight": 0.05,
+        "explore_local_goal_max_distance_m": 0.75,
+        "explore_local_goal_min_distance_m": 0.45,
+        "local_goal_clearance_weight": 0.1,
+        "local_goal_forward_weight": 0.2,
+        "local_goal_novelty_weight": 0.45
+      }
+    }
+  },
   "lidar_pose": {
     "dx_range": [
       -0.12,
@@ -121,7 +135,6 @@
     "latest_scan_queue_size": 1,
     "latest_result_queue_size": 1,
     "matcher_max_input_age_s": 0.25,
-    "matcher_max_result_age_s": 0.25,
     "driver_poll_hz": 120
   },
   "runtime_affinity": {
@@ -375,9 +388,6 @@
       "planning_bucket_size_m": 0.3,
       "local_escape_trigger_clearance_m": 0.12,
       "local_escape_reverse_max_v_mps": 0.25,
-      "local_goal_novelty_weight": 0.45,
-      "local_goal_clearance_weight": 0.1,
-      "local_goal_forward_weight": 0.2,
       "minimum_planning_speed_mps": 0.15,
       "localization_recovery_timeout_ns": 5000000000,
       "localization_recovery_omega_rad_s": 0.2,
@@ -391,10 +401,7 @@
       "speed_clearance_high_m": 0.3,
       "speed_clearance_barrier_power": 2.0,
       "speed_clearance_penalty_weight": 0.18,
-      "explore_local_goal_min_distance_m": 0.45,
-      "explore_local_goal_max_distance_m": 0.75,
-      "explore_local_goal_distance_samples": 4,
-      "explore_local_goal_distance_weight": 0.05
+      "explore_local_goal_distance_samples": 4
     },
     "async_l6": {
       "enabled": true,
@@ -411,7 +418,6 @@
       "heading_gain": 1.8,
       "max_requested_omega_rad_s": 2.0,
       "heading_stop_threshold_rad": 0.7,
-      "max_world_freshness_ns": 250000000,
       "horizon_ns": 100000000,
       "cross_track_gain": 3.0,
       "angular_velocity_gain": 0.25,

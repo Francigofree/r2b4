@@ -1,4 +1,4 @@
-"""Thin machine-oriented CLI over the resident V3 command mailbox."""
+"""Developer/transport CLI; behavior defaults and acceptance come from ConfigResolver."""
 
 from __future__ import annotations
 
@@ -21,12 +21,12 @@ from v3.adapters.resident_command import (
     ResidentCommandClient,
     ResidentCommandMailboxConfig,
 )
+from v3.contracts import ExplorePreferences
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONTROL_CLI_RESULT_SCHEMA = "R2B4_V3_CONTROL_CLI_RESULT_V1"
 RESIDENT_PROCESS_STATUS_SCHEMA = "R2B4_V3_RESIDENT_PROCESS_STATUS_V1"
-DEFAULT_TTL_NS = 250_000_000
 DEFAULT_HEARTBEAT_NS = 100_000_000
 _STATUS_MAXIMUM_BYTES = 65_536
 
@@ -195,14 +195,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--status-path", default="runtime/v3_status.json")
     parser.add_argument("--owner-pid", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--max-runtime-s", type=float, help=argparse.SUPPRESS)
-    parser.add_argument("--ttl-ms", type=int, default=DEFAULT_TTL_NS // 1_000_000)
+    parser.add_argument("--ttl-ms", type=int, help="default: resolved command ingress TTL")
     parser.add_argument(
         "--heartbeat-ms",
         type=int,
-        default=DEFAULT_HEARTBEAT_NS // 1_000_000,
+        help="default: bounded by resolved command TTL",
     )
     subcommands = parser.add_subparsers(dest="operation", required=True)
     subcommands.add_parser("status", help="print the resident status JSON")
+    subcommands.add_parser("config", help="print resolved configuration and passive limit diagnostics; no hardware")
 
     stop = subcommands.add_parser("stop", help="publish one STOP command")
     stop.add_argument("--command-id")
@@ -228,8 +229,11 @@ def _parser() -> argparse.ArgumentParser:
         help="heartbeat a generic EXPLORE mission (Room Cruise)",
     )
     explore.add_argument("--command-id")
-    explore.add_argument("--max-v-mps", type=float, default=0.40)
-    explore.add_argument("--max-omega-rad-s", type=float, default=0.90)
+    explore.add_argument("--max-v-mps", type=float, help="default: behavior.roomcruise.max_v_mps")
+    explore.add_argument("--max-omega-rad-s", type=float, help="default: behavior.roomcruise.max_omega_rad_s")
+    for name in sorted(ExplorePreferences.field_names()):
+        explore.add_argument("--" + name.replace("_", "-"), type=float,
+                            help="default: resolved RoomCruise profile preference")
 
     faceperson = subcommands.add_parser(
         "faceperson",
@@ -259,9 +263,26 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(_read_status(status_path), sort_keys=True))
             return 0
 
-        ttl_ns = args.ttl_ms * 1_000_000
-        heartbeat_ns = args.heartbeat_ms * 1_000_000
-        config = ResidentCommandMailboxConfig(path=command_path)
+        from v3.config import ConfigResolver
+        try:
+            resolved = ConfigResolver.for_project(PROJECT_ROOT).resolve()
+        except (ValueError, TypeError, KeyError, OSError):
+            if args.operation != "stop":
+                raise
+            # STOP remains available if host configuration is broken. A one-ns
+            # lease fits every positive runtime TTL; an expired request is STOP
+            # as well. No active envelope is synthesized in this fallback.
+            resolved = None
+        if args.operation == "config":
+            print(json.dumps({"effective_config": resolved.as_dict(),
+                              "config_snapshot_id": resolved.snapshot_id,
+                              "configuration_diagnostics": resolved.configuration_diagnostics()}, sort_keys=True))
+            return 0
+        policy = None if resolved is None else resolved.edges.command_ingress
+        config = (ResidentCommandMailboxConfig(path=command_path) if policy is None
+                  else ResidentCommandMailboxConfig.from_policy(command_path, policy))
+        ttl_ns = (1 if policy is None else policy.maximum_ttl_ns) if args.ttl_ms is None else args.ttl_ms * 1_000_000
+        heartbeat_ns = min(DEFAULT_HEARTBEAT_NS, max(1, ttl_ns // 2)) if args.heartbeat_ms is None else args.heartbeat_ms * 1_000_000
         client = ResidentCommandClient(config)
         command_id = args.command_id or _logical_id(args.operation)
         if args.operation == "stop":
@@ -295,10 +316,16 @@ def main(argv: list[str] | None = None) -> int:
                 ttl_ns=ttl_ns,
             )
         elif args.operation == "explore":
+            profile = resolved.roomcruise
+            preferences = ExplorePreferences.from_mapping({
+                name: getattr(profile.preferences, name) if getattr(args, name) is None else getattr(args, name)
+                for name in ExplorePreferences.field_names()
+            })
             publish = lambda logical_id: client.publish_explore(
                 logical_id,
-                max_v_mps=args.max_v_mps,
-                max_omega_rad_s=args.max_omega_rad_s,
+                max_v_mps=profile.max_v_mps if args.max_v_mps is None else args.max_v_mps,
+                max_omega_rad_s=profile.max_omega_rad_s if args.max_omega_rad_s is None else args.max_omega_rad_s,
+                preferences=preferences,
                 ttl_ns=ttl_ns,
             )
         elif args.operation == "faceperson":
@@ -345,7 +372,6 @@ if __name__ == "__main__":
 __all__ = [
     "CONTROL_CLI_RESULT_SCHEMA",
     "DEFAULT_HEARTBEAT_NS",
-    "DEFAULT_TTL_NS",
     "PROJECT_ROOT",
     "main",
 ]

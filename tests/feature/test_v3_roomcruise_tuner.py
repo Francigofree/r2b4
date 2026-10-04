@@ -12,20 +12,7 @@ from tools.tuners import r2b4_roomcruise_tuner as tuner
 
 
 def test_roomcruise_tuner_search_space_stays_inside_rollout_contract():
-    baseline = tuner.Candidate(
-        command_max_v_mps=.30,
-        command_max_omega_rad_s=.60,
-        minimum_planning_speed_mps=.15,
-        rollout_linear_samples=6,
-        rollout_angular_samples=9,
-        localization_degraded_speed_scale=.40,
-        local_goal_novelty_weight=.45,
-        local_goal_clearance_weight=.10,
-        local_goal_forward_weight=.20,
-        smoothness_weight=.20,
-        novelty_weight=.10,
-        localization_observability_weight=.20,
-    )
+    baseline = tuner._baseline_candidate(tuner._load_resolved(tuner.PROJECT_ROOT))
     axes = tuner._axis_specs(baseline)
     assert axes
     assert {axis.name for axis in axes} >= {
@@ -51,15 +38,13 @@ def test_roomcruise_tuner_geometry_and_score_helpers_are_deterministic():
     assert tuner._percentile([3.0, 1.0, 2.0, 4.0], .05) == 1.0
 
 
-def test_roomcruise_tuner_smoke_uses_resolved_headless_l5_l9():
-    control = tuner._load_control(tuner.PROJECT_ROOT)
-    baseline = tuner._baseline_candidate(
-        control,
-        tuner.DEFAULT_COMMAND_MAX_V_MPS,
-        tuner.DEFAULT_COMMAND_MAX_OMEGA_RAD_S,
-    )
+def test_roomcruise_tuner_smoke_uses_resolved_headless_l5_l9(tmp_path, monkeypatch):
+    resolved = tuner._load_resolved(tuner.PROJECT_ROOT)
+    baseline = tuner._baseline_candidate(resolved)
+    assert baseline.command_max_v_mps == resolved.roomcruise.max_v_mps
+    assert baseline.command_max_omega_rad_s == resolved.roomcruise.max_omega_rad_s
     result = tuner.simulate_candidate(
-        control,
+        resolved,
         baseline,
         tuner.scenarios()[0],
         ticks=25,
@@ -70,6 +55,46 @@ def test_roomcruise_tuner_smoke_uses_resolved_headless_l5_l9():
     assert 0.0 <= result.moving_ratio <= 1.0
     assert 0.0 <= result.curved_ratio <= 1.0
     assert result.minimum_clearance_m > 0.0
+    from dataclasses import replace
+    import pytest
+    with pytest.raises(ValueError, match='command ingress'):
+        tuner.simulate_candidate(resolved, replace(baseline,
+            command_max_v_mps=resolved.edges.command_ingress.maximum_linear_speed_mps + .01),
+            tuner.scenarios()[0], ticks=1)
+    changed = replace(baseline, command_max_v_mps=baseline.command_max_v_mps * .9,
+                      local_goal_forward_weight=baseline.local_goal_forward_weight + .01)
+    patch = tuner._config_patch(baseline, changed)
+    assert patch['behavior']['roomcruise']['max_v_mps'] == changed.command_max_v_mps
+    assert patch['behavior']['roomcruise']['preferences']['local_goal_forward_weight'] == changed.local_goal_forward_weight
+    assert 'layers' not in patch
+    output = tmp_path / 'tuned.json'
+    tuner.emit_config(tuner.PROJECT_ROOT, patch, output)
+    from v3.config import ConfigResolver
+    conf = tuner.PROJECT_ROOT / 'conf'
+    tuned = ConfigResolver(conf / 'hardver.json', conf / 'fizika.json', conf / 'speed_map.json', output).resolve()
+    assert tuned.roomcruise.max_v_mps == changed.command_max_v_mps
+    assert tuned.roomcruise.preferences.local_goal_forward_weight == changed.local_goal_forward_weight
+    assert tuned.runtime.tick_period_ns == resolved.runtime.tick_period_ns
+    # A slower configured tick must not reactivate the legacy tick-count gate
+    # ignored by production completion-input mode. Observe actual replan times.
+    documents = [json.loads((conf / name).read_text()) for name in
+                 ('hardver.json', 'fizika.json', 'speed_map.json', 'vezerles.json')]
+    documents[-1]['runtime']['tick_period_ns'] = 40_000_000
+    slower = ConfigResolver.from_documents(*documents)
+    from v3.layers.l6_navigation import TrajectoryNavigator
+    replans = []
+    store = TrajectoryNavigator._store_trajectory_plan
+
+    def record_store(self, now_ns, *args, **kwargs):
+        replans.append(now_ns)
+        return store(self, now_ns, *args, **kwargs)
+
+    monkeypatch.setattr(TrajectoryNavigator, '_store_trajectory_plan', record_store)
+    tuner.simulate_candidate(slower, tuner._baseline_candidate(slower), tuner.scenarios()[0], ticks=10)
+    interval = slower.runtime.composition.live_control.control.navigation.trajectory_replan_interval_ns
+    expected_gap = math.ceil(interval / slower.runtime.tick_period_ns) * slower.runtime.tick_period_ns
+    assert len(replans) >= 3
+    assert all(b - a == expected_gap for a, b in zip(replans, replans[1:]))
 
 
 def test_roomcruise_tuner_default_artifacts_live_under_runtime_tunes():
@@ -111,3 +136,4 @@ def test_roomcruise_tuner_direct_file_execution_can_import_v3(tmp_path):
     assert output.is_file(), completed.stderr
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["schema"] == tuner.RESULT_SCHEMA
+    assert payload['baseline_overrides'] == {}

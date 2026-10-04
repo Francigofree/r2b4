@@ -33,13 +33,7 @@ if _PROJECT_ROOT_TEXT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT_TEXT)
 
 RESULT_SCHEMA = "R2B4_ROOMCRUISE_TUNER_RESULT_V1"
-TUNER_VERSION = 2
-
-# Source-first baseline of the current operator -> control_cli -> EXPLORE path.
-# The values are intentionally represented as candidate inputs rather than
-# production config authority because v3/control_cli.py currently owns them.
-DEFAULT_COMMAND_MAX_V_MPS = 0.30
-DEFAULT_COMMAND_MAX_OMEGA_RAD_S = 0.60
+TUNER_VERSION = 3
 
 _EPS = 1e-9
 
@@ -216,11 +210,13 @@ def scenarios() -> tuple[Scenario, ...]:
     )
 
 
-def _baseline_candidate(control, command_max_v: float, command_max_omega: float) -> Candidate:
+def _baseline_candidate(resolved, command_max_v: float | None = None, command_max_omega: float | None = None) -> Candidate:
+    control = resolved.runtime.composition.live_control.control
+    profile = resolved.roomcruise
     nav = control.navigation
     return Candidate(
-        command_max_v_mps=command_max_v,
-        command_max_omega_rad_s=command_max_omega,
+        command_max_v_mps=profile.max_v_mps if command_max_v is None else command_max_v,
+        command_max_omega_rad_s=profile.max_omega_rad_s if command_max_omega is None else command_max_omega,
         minimum_planning_speed_mps=nav.minimum_planning_speed_mps,
         rollout_linear_samples=nav.rollout_linear_samples,
         rollout_angular_samples=nav.rollout_angular_samples,
@@ -300,10 +296,10 @@ def _git_head(root: Path) -> str | None:
         return None
 
 
-def _load_control(root: Path):
+def _load_resolved(root: Path):
     from v3.config import ConfigResolver
 
-    return ConfigResolver.for_project(root).resolve().runtime.composition.live_control.control
+    return ConfigResolver.for_project(root).resolve()
 
 
 def _composition_for(control, candidate: Candidate):
@@ -311,6 +307,11 @@ def _composition_for(control, candidate: Candidate):
 
     nav = replace(
         control.navigation,
+        # Completion-input production mode gates replans by monotonic time,
+        # ignoring the legacy tick-count knob. Preserve that cadence when
+        # running the scorer inline, including at a non-20-ms tick period.
+        trajectory_replan_min_tick_gap=(1 if control.async_l6.completion_inputs
+                                       else control.navigation.trajectory_replan_min_tick_gap),
         minimum_planning_speed_mps=candidate.minimum_planning_speed_mps,
         rollout_linear_samples=candidate.rollout_linear_samples,
         rollout_angular_samples=candidate.rollout_angular_samples,
@@ -397,12 +398,11 @@ def _percentile(values: Sequence[float], fraction: float) -> float:
 
 
 def simulate_candidate(
-    control,
+    resolved,
     candidate: Candidate,
     scenario: Scenario,
     *,
     ticks: int,
-    dt_s: float = 0.02,
 ) -> ScenarioMetrics:
     """Run one deterministic closed-loop, non-actuating L5-L9 RoomCruise scenario."""
     from v3.contracts import (
@@ -422,6 +422,15 @@ def simulate_candidate(
 
     if ticks <= 0:
         raise ValueError("ticks must be positive")
+    control = resolved.runtime.composition.live_control.control
+    ingress = resolved.edges.command_ingress
+    if (candidate.command_max_v_mps > ingress.maximum_linear_speed_mps
+            or candidate.command_max_omega_rad_s > ingress.maximum_angular_speed_rad_s):
+        raise ValueError("candidate envelope exceeds production command ingress limits")
+    preferences = replace(resolved.roomcruise.preferences,
+                          local_goal_novelty_weight=candidate.local_goal_novelty_weight,
+                          local_goal_clearance_weight=candidate.local_goal_clearance_weight,
+                          local_goal_forward_weight=candidate.local_goal_forward_weight)
     composition, nav = _composition_for(control, candidate)
     resolution = control.world_model.local_costmap_resolution_m
     occupied = _rasterized_cells(scenario, resolution)
@@ -434,7 +443,8 @@ def simulate_candidate(
     x, y, yaw = scenario.start
     v = omega = 0.0
     now_ns = 1_000_000_000
-    dt_ns = int(round(dt_s * 1e9))
+    dt_ns = resolved.runtime.tick_period_ns
+    dt_s = dt_ns / 1e9
     coverage: set[tuple[int, int]] = set()
     headings: set[int] = set()
     clearances: list[float] = []
@@ -518,7 +528,7 @@ def simulate_candidate(
             (
                 DataField("max_v_mps", candidate.command_max_v_mps),
                 DataField("max_omega_rad_s", candidate.command_max_omega_rad_s),
-            ),
+            ) + preferences.as_fields(),
             tick + 1,
         )
         trace = composition.run_tick(MissionNavigationInputs(context, command, estimate, world))
@@ -608,14 +618,14 @@ def simulate_candidate(
 
 
 def evaluate_candidate(
-    control,
+    resolved,
     candidate: Candidate,
     selected_scenarios: Sequence[Scenario],
     *,
     ticks: int,
 ) -> CandidateResult:
     metrics = tuple(
-        simulate_candidate(control, candidate, scenario, ticks=ticks)
+        simulate_candidate(resolved, candidate, scenario, ticks=ticks)
         for scenario in selected_scenarios
     )
     hard_fail = any(item.collision for item in metrics)
@@ -626,7 +636,7 @@ def evaluate_candidate(
 
 
 def tune(
-    control,
+    resolved,
     baseline: Candidate,
     selected_scenarios: Sequence[Scenario],
     *,
@@ -641,7 +651,7 @@ def tune(
     def measured(candidate: Candidate) -> CandidateResult:
         result = cache.get(candidate.key)
         if result is None:
-            result = evaluate_candidate(control, candidate, selected_scenarios, ticks=ticks)
+            result = evaluate_candidate(resolved, candidate, selected_scenarios, ticks=ticks)
             cache[candidate.key] = result
         return result
 
@@ -650,7 +660,10 @@ def tune(
     for pass_index in range(passes):
         changed = False
         for axis in _axis_specs(baseline):
-            variants = [_candidate_with(current, changes) for changes in axis.variants]
+            ingress = resolved.edges.command_ingress
+            variants = [variant for changes in axis.variants
+                        if (variant := _candidate_with(current, changes)).command_max_v_mps <= ingress.maximum_linear_speed_mps
+                        and variant.command_max_omega_rad_s <= ingress.maximum_angular_speed_rad_s]
             if all(item.key != current.key for item in variants):
                 variants.append(current)
             results = [measured(item) for item in variants]
@@ -684,6 +697,7 @@ def tune(
 
 def _config_patch(baseline: Candidate, candidate: Candidate) -> dict[str, object]:
     nav = {}
+    preferences = {}
     for name in (
         "minimum_planning_speed_mps",
         "rollout_linear_samples",
@@ -699,16 +713,15 @@ def _config_patch(baseline: Candidate, candidate: Candidate) -> dict[str, object
         old = getattr(baseline, name)
         new = getattr(candidate, name)
         if old != new:
-            nav[name] = new
-    return {"layers": {"navigation": nav}} if nav else {}
-
-
-def _command_patch(baseline: Candidate, candidate: Candidate) -> dict[str, object]:
-    result = {}
+            (preferences if name.startswith("local_goal_") else nav)[name] = new
+    room = {"preferences": preferences} if preferences else {}
     if candidate.command_max_v_mps != baseline.command_max_v_mps:
-        result["explore_default_max_v_mps"] = candidate.command_max_v_mps
+        room["max_v_mps"] = candidate.command_max_v_mps
     if candidate.command_max_omega_rad_s != baseline.command_max_omega_rad_s:
-        result["explore_default_max_omega_rad_s"] = candidate.command_max_omega_rad_s
+        room["max_omega_rad_s"] = candidate.command_max_omega_rad_s
+    result = {"layers": {"navigation": nav}} if nav else {}
+    if room:
+        result["behavior"] = {"roomcruise": room}
     return result
 
 
@@ -721,6 +734,16 @@ def emit_config(root: Path, patch: dict[str, object], destination: Path) -> None
     nav_changes = patch.get("layers", {}).get("navigation", {}) if patch else {}
     if nav_changes:
         value["layers"]["navigation"].update(nav_changes)
+    room_changes = patch.get("behavior", {}).get("roomcruise", {}) if patch else {}
+    for name, changed in room_changes.items():
+        if name == "preferences":
+            value["behavior"]["roomcruise"]["preferences"].update(changed)
+        else:
+            value["behavior"]["roomcruise"][name] = changed
+    from v3.config import ConfigResolver
+    documents = [json.loads((root / "conf" / name).read_text(encoding="utf-8"))
+                 for name in ("hardver.json", "fizika.json", "speed_map.json")]
+    ConfigResolver.from_documents(*documents, value)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -778,8 +801,8 @@ def parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--top", type=int, default=8)
-    parser.add_argument("--baseline-command-max-v", type=float, default=DEFAULT_COMMAND_MAX_V_MPS)
-    parser.add_argument("--baseline-command-max-omega", type=float, default=DEFAULT_COMMAND_MAX_OMEGA_RAD_S)
+    parser.add_argument("--baseline-command-max-v", type=float, help="explicit experiment; default: resolved RoomCruise envelope")
+    parser.add_argument("--baseline-command-max-omega", type=float, help="explicit experiment; default: resolved RoomCruise envelope")
     parser.add_argument("--list-scenarios", action="store_true")
     return parser
 
@@ -798,11 +821,12 @@ def main(argv: list[str] | None = None) -> int:
     if not (root / "AGENTS.md").is_file() or not (root / "conf" / "vezerles.json").is_file():
         raise SystemExit(f"not an R2B4 project root: {root}")
 
-    control = _load_control(root)
+    resolved = _load_resolved(root)
+    production_baseline = _baseline_candidate(resolved)
     baseline = _baseline_candidate(
-        control,
-        float(args.baseline_command_max_v),
-        float(args.baseline_command_max_omega),
+        resolved,
+        args.baseline_command_max_v,
+        args.baseline_command_max_omega,
     )
     available = {scenario.name: scenario for scenario in scenarios()}
     if args.scenarios:
@@ -823,21 +847,28 @@ def main(argv: list[str] | None = None) -> int:
 
     output_path, emit_config_path = _resolve_artifact_paths(root, args.output, args.emit_config)
 
-    baseline_result = evaluate_candidate(control, baseline, selected, ticks=ticks)
+    baseline_result = evaluate_candidate(resolved, baseline, selected, ticks=ticks)
     winner, ranked, history = tune(
-        control,
+        resolved,
         baseline,
         selected,
         ticks=ticks,
         passes=passes,
     )
-    patch = _config_patch(baseline, winner.candidate)
-    command_patch = _command_patch(baseline, winner.candidate)
+    # Recommendations/exports are always relative to the active configuration,
+    # even if the experiment began with an explicit envelope override.
+    patch = _config_patch(production_baseline, winner.candidate)
     payload = {
         "schema": RESULT_SCHEMA,
         "tuner_version": TUNER_VERSION,
         "project_root": str(root),
         "git_head": _git_head(root),
+        "config_snapshot_id": resolved.snapshot_id,
+        "tick_period_ns": resolved.runtime.tick_period_ns,
+        "baseline_overrides": {name: value for name, value in (
+            ("max_v_mps", args.baseline_command_max_v),
+            ("max_omega_rad_s", args.baseline_command_max_omega)) if value is not None},
+        "configuration_diagnostics": resolved.configuration_diagnostics(),
         "non_actuating": True,
         "profile": args.profile,
         "ticks_per_scenario": ticks,
@@ -847,11 +878,6 @@ def main(argv: list[str] | None = None) -> int:
         "winner": _jsonable_result(winner),
         "delta_score": winner.score - baseline_result.score,
         "config_patch": patch,
-        "command_ingress_patch": command_patch,
-        "command_ingress_note": (
-            "RoomCruise operator currently reaches v3.control_cli explore defaults; "
-            "command envelope recommendations are source changes, not vezerles.json fields."
-        ),
         "ranking": [_jsonable_result(item) for item in ranked[: args.top]],
         "search_history": list(history),
         "limitations": [
@@ -874,7 +900,6 @@ def main(argv: list[str] | None = None) -> int:
         "output": str(output_path),
         "emitted_config": None if emit_config_path is None else str(emit_config_path),
         "config_patch": patch,
-        "command_ingress_patch": command_patch,
     }, sort_keys=True))
     return 0 if not winner.hard_fail else 1
 

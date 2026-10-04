@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
+from v3.contracts import ExplorePreferences
 
 
 ACTION_CATALOG_SCHEMA = "R2B4_ACTION_CATALOG_V1"
@@ -201,6 +202,12 @@ _DESCRIPTORS = (
     ActionDescriptor(
         "v3.command.explore",
         "Start autonomous room exploration using the canonical navigation stack.",
+        (
+            _p("max_v_mps", "Requested linear cap; omitted values use behavior.roomcruise config.", minimum=0.01),
+            _p("max_omega_rad_s", "Requested angular cap; omitted values use behavior.roomcruise config.", minimum=0.01),
+        ) + tuple(_p(name, "EXPLORE goal preference; omitted values use the configured RoomCruise profile.",
+                     minimum=0.01 if name.endswith("distance_m") else 0.0)
+                  for name in sorted(ExplorePreferences.field_names())),
         voice_exposed=True,
         session_watchdog=True,
     ),

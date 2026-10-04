@@ -113,7 +113,8 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
                            for name in sorted(set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
             backend.now_ns = now
             inputs = composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
-                CommandRequest(context, "cruise", CommandMode.EXPLORE, (), tick), LifecycleState.ACTIVE))
+                CommandRequest(context, "cruise", CommandMode.EXPLORE,
+                    resolved.roomcruise.preferences.as_fields(), tick), LifecycleState.ACTIVE))
             result = composition.run_tick(inputs)
             assert result.trace.fault_layer is None
             layers = {row.layer: row.output for row in result.trace.layers}
@@ -152,10 +153,18 @@ def test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay(tmp_pat
 
 
 def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_path):
-    config = resolved_config().runtime.composition.live_control.control
+    from hashlib import sha256
+    from v3.capture_encoding import encode_capture_record
+    resolved = resolved_config()
+    config = resolved.runtime.composition.live_control.control
     writer = OfflineMotorSink()
     composition = NativeControlComposition(writer, config)
-    sink = CaptureSink("l4-multirate", configuration={"production_control": config})
+    # A typed pre-profile snapshot and pre-profile L5 expected output must replay
+    # from captured values, without a RoomCruise profile from the working tree.
+    historical = resolved.as_dict()
+    historical.pop('roomcruise')
+    snapshot_id = sha256(json.dumps(historical, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    sink = CaptureSink("l4-multirate", configuration={'effective_config': historical, 'snapshot_id': snapshot_id})
     initial_checkpoint = None
     previous_map = None
     cached_ticks = 0
@@ -248,7 +257,9 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
             if tick == 301:
                 initial_checkpoint = composition.checkpoint()
             elif tick > 301:
-                sink.write(ExecutionRecord(inputs, result))
+                encoded = encode_capture_record(ExecutionRecord(inputs, result))
+                assert encoded['expected']['layers']['L5'].pop('explore_preferences') is None
+                sink.write_encoded(encoded)
     finally:
         composition.close()
     assert cached_ticks == 284

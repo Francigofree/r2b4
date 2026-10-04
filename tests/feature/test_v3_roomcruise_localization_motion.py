@@ -44,11 +44,17 @@ def _chain():
 
 def test_roomcruise_localization_motion_requires_independent_local_quality():
     config, manager, navigator, selector, realizer, limiter = _chain()
+    _, explicit_manager, explicit_navigator, *_ = _chain()
+    profile = resolved_config().roomcruise.preferences
     # Global covariance alone never establishes local motion quality.
     for tick, variance in enumerate((0.2465, 0.2517, 0.5017, 0.6497, 0.9, 0.2386)):
         estimate, world = _scene(tick, variance)
         command = CommandRequest(estimate.context, "cruise", CommandMode.EXPLORE, (), tick)
         plan = navigator.evaluate(manager.evaluate(command), estimate, world)
+        explicit_plan = explicit_navigator.evaluate(
+            explicit_manager.evaluate(replace(command, goal=profile.as_fields())), estimate, world,
+        )
+        assert explicit_plan == plan
         objective = selector.evaluate(plan)
         motion = realizer.evaluate(objective, estimate, world)
         allowed = limiter.evaluate(motion, estimate)
@@ -58,6 +64,22 @@ def test_roomcruise_localization_motion_requires_independent_local_quality():
         assert ConstraintCode.LOCALIZATION_DEGRADED not in allowed.active_constraints
         if tick:
             assert abs(allowed.allowed_v_mps) + abs(allowed.allowed_omega_rad_s) > 0
+
+    # Preferences affect the chosen goal through the command, without replacing
+    # the shared rollout scorer. The worker gets exactly that immutable goal.
+    from v3.layers.l6_navigation import TrajectoryRolloutComputer
+    custom = replace(profile, explore_local_goal_min_distance_m=.9, explore_local_goal_max_distance_m=.9)
+    custom_estimate, custom_world = _scene(0)
+    custom_command = CommandRequest(custom_estimate.context, 'custom', CommandMode.EXPLORE, custom.as_fields(), 0)
+    custom_mission = manager.evaluate(custom_command)
+    direct_navigator = TrajectoryNavigator(config.navigation, async_config=replace(config.async_l6, enabled=False, completion_inputs=False))
+    direct = direct_navigator.evaluate(custom_mission, custom_estimate, custom_world)
+    assert direct.local_goal.x_m == .9
+    worker_navigator = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
+    worker_navigator.evaluate(custom_mission, custom_estimate, custom_world)
+    request = worker_navigator.pending_rollout_request
+    assert request.goal == direct.local_goal
+    assert TrajectoryRolloutComputer(config.navigation).compute(request).trajectory_candidates == direct.trajectory_candidates
 
     # An absolute map goal still needs reliable XY, even though it also uses
     # a local rollout. The new mission cannot inherit Room Cruise's exemption.

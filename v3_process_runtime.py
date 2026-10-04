@@ -698,12 +698,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             resource_tracker.ensure_running()
         command_gateway = AsyncResidentCommandGateway(
-            ResidentCommandMailboxConfig(path=command_path,
-                maximum_ttl_ns=resolved.edges.command_ingress.maximum_ttl_ns,
-                maximum_future_skew_ns=resolved.edges.command_ingress.maximum_future_skew_ns,
-                maximum_linear_speed_mps=resolved.edges.command_ingress.maximum_linear_speed_mps,
-                maximum_angular_speed_rad_s=resolved.edges.command_ingress.maximum_angular_speed_rad_s,
-                maximum_file_bytes=resolved.edges.command_ingress.maximum_file_bytes),
+            ResidentCommandMailboxConfig.from_policy(command_path, resolved.edges.command_ingress),
             reader_poll_s=resolved.edges.command_ingress.reader_poll_s,
             reader_stop_timeout_s=resolved.edges.command_ingress.reader_stop_timeout_s,
             worker_cpus=(affinity_config.command_cpus if affinity_config.enabled else None),

@@ -11,6 +11,7 @@ from v3.action_catalog import (
     ActionDescriptor,
 )
 from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
+from v3.contracts import ExplorePreferences
 from v3.finite_navigation import FiniteNavigationExecutor
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 
@@ -167,8 +168,15 @@ class V3ControlInterfaceAdapter:
             self._reject_unknown(params, set())
             return self.controller.wheels(left, right, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
         if action == "v3.command.explore":
+            envelope = {name: params.pop(name) for name in ("max_v_mps", "max_omega_rad_s") if name in params}
+            preferences = {name: params.pop(name) for name in ExplorePreferences.field_names() if name in params}
             self._reject_unknown(params, set())
-            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session)
+            if preferences:
+                from v3.config import ConfigResolver
+                profile = ConfigResolver.for_project(self.controller.root).resolve().roomcruise.preferences
+                request = ExplorePreferences.from_mapping({**{f.key: f.value for f in profile.as_fields()}, **preferences})
+                envelope["explore_preferences"] = request
+            return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **envelope, **session)
         if action == "v3.command.face_person":
             max_omega = params.pop("max_omega_rad_s", 0.50)
             self._reject_unknown(params, set())
