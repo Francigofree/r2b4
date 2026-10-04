@@ -103,7 +103,7 @@ def _assert_camera_only_er2_never_starts_v3(monkeypatch, tmp_path: Path) -> None
     class Media:
         socket_path = tmp_path / "vision.sock"
         def __init__(self, **kwargs): pass
-        def observe_sync(self):
+        def observe_sync(self, **kwargs):
             media_calls.append("observe")
             return observation
         def status(self):

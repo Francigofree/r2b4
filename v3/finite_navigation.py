@@ -115,6 +115,7 @@ class FiniteNavigationExecutor:
                 # pose snapshot. The operator lock remains held through admission.
                 with self.controller.finite_motion_transaction(
                     capture=capture, capture_mode=capture_mode, capture_hz=capture_hz,
+                    deadline=deadline, cancel_event=cancel_event,
                 ) as preparation:
                     pose, start_status, reason = self._pose_snapshot(
                         frame_id,
@@ -159,6 +160,8 @@ class FiniteNavigationExecutor:
                         cancel_event,
                         runtime_pid=preparation.runtime_pid,
                     )
+        except TimeoutError:
+            reason = "CANCELLED" if cancel_event is not None and cancel_event.is_set() else "TIMEOUT"
         finally:
             try:
                 self.controller.stop()

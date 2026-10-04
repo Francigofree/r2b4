@@ -7,6 +7,8 @@ provider-neutral LLMDecision.
 from __future__ import annotations
 
 import json
+import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Protocol
 
@@ -14,6 +16,13 @@ from r2b4_voice.conversation_contracts import LLMDecision
 from v3.adapters.vision_media_contracts import VisionJpeg
 
 from .agent_contracts import AgentModelReply, AgentToolRequest, AgentToolResult, AgentToolSpec
+
+
+def _check_turn(cancel_event: threading.Event | None, deadline: float | None) -> None:
+    if cancel_event is not None and cancel_event.is_set():
+        raise TimeoutError("AGENT_TURN_CANCELLED")
+    if deadline is not None and time.monotonic() >= deadline:
+        raise TimeoutError("AGENT_TURN_EXPIRED")
 
 
 class AgentModelPort(Protocol):
@@ -53,12 +62,20 @@ class AgentToolBroker:
     def catalog(self) -> tuple[dict[str, object], ...]:
         return tuple(self._specs[name].to_jsonable() for name in sorted(self._specs))
 
-    def execute(self, request: AgentToolRequest) -> AgentToolResult:
+    def execute(self, request: AgentToolRequest, *, cancel_event: threading.Event | None = None,
+                deadline: float | None = None) -> AgentToolResult:
+        _check_turn(cancel_event, deadline)
         handler = self._handlers.get(request.name)
         if handler is None:
             return AgentToolResult(request.name, "REJECTED", error="TOOL_NOT_REGISTERED")
         try:
-            data = handler(request.arguments)
+            # ROBOTICS handlers carry the host turn's cancellation/deadline to
+            # their finite executor. Read/config tools still use their own API.
+            _check_turn(cancel_event, deadline)
+            if self._specs[request.name].kind == "ROBOTICS" and (cancel_event is not None or deadline is not None):
+                data = handler(request.arguments, cancel_event=cancel_event, deadline=deadline)
+            else:
+                data = handler(request.arguments)
             result = data if isinstance(data, AgentToolResult) else AgentToolResult(request.name, "COMPLETED", data=data)
             if result.name != request.name:
                 raise ValueError("tool result name does not match request")
@@ -112,6 +129,8 @@ class AgentCore:
         action_catalog: Sequence[Mapping[str, object]],
         *,
         event_sink: Callable[[str, Mapping[str, object]], None] | None = None,
+        cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> LLMDecision:
         work = [dict(item) for item in messages]
         catalog = self.tool_catalog
@@ -124,9 +143,11 @@ class AgentCore:
 
         images: tuple[VisionJpeg, ...] = ()
         for round_index in range(self._max_tool_rounds + 1):
+            _check_turn(cancel_event, deadline)
             # Images remain transient provider attachments, outside text messages
             # and the conversation journal. Only the latest observation is held.
             reply = self._model.complete_agent_step(work, catalog, action_catalog, images=images) if images else self._model.complete_agent_step(work, catalog, action_catalog)
+            _check_turn(cancel_event, deadline)
             if reply.tool_request is None:
                 return reply.to_decision()
             if round_index >= self._max_tool_rounds:
@@ -138,7 +159,7 @@ class AgentCore:
                 "tool": request.name,
                 "arguments": dict(request.arguments),
             })
-            result = self._broker.execute(request)
+            result = self._broker.execute(request, cancel_event=cancel_event, deadline=deadline)
             if result.images:
                 images = result.images
             elif request.name == "vision.observe":

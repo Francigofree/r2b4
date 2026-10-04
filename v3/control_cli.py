@@ -88,8 +88,10 @@ def _result(status: str, **values: object) -> dict[str, object]:
 
 
 def _active_preflight(status_path: Path) -> None:
+    from v3.resident_status import status_is_fresh
     status = _read_status(status_path)
-    if status.get("state") != "RUNNING" or status.get("ready_for_active") is not True:
+    if (not status_is_fresh(status) or status.get("state") != "RUNNING"
+            or status.get("ready_for_active") is not True):
         raise ValueError("resident runtime is not ready for an ACTIVE command")
 
 
@@ -283,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
                   else ResidentCommandMailboxConfig.from_policy(command_path, policy))
         ttl_ns = (1 if policy is None else policy.maximum_ttl_ns) if args.ttl_ms is None else args.ttl_ms * 1_000_000
         heartbeat_ns = min(DEFAULT_HEARTBEAT_NS, max(1, ttl_ns // 2)) if args.heartbeat_ms is None else args.heartbeat_ms * 1_000_000
+        if args.operation not in {"stop", "status", "config"} and not 0 < heartbeat_ns < ttl_ns:
+            raise ValueError("heartbeat must be positive and shorter than command TTL")
         client = ResidentCommandClient(config)
         command_id = args.command_id or _logical_id(args.operation)
         if args.operation == "stop":

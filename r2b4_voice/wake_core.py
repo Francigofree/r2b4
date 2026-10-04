@@ -158,6 +158,12 @@ class EnergyUtteranceBuilder:
         self._noise_floor = config.noise_floor_initial_rms
         self._last_sequence = 0
         self._gap_count = 0
+        self._last_frame_voiced = False
+
+    @property
+    def last_frame_voiced(self) -> bool:
+        """Activity of the most recently fed PCM frame, using the same VAD."""
+        return self._last_frame_voiced
 
     @property
     def sequence_gap_count(self) -> int:
@@ -179,6 +185,7 @@ class EnergyUtteranceBuilder:
         )
 
     def reset(self, *, reset_sequence: bool = False) -> None:
+        self._last_frame_voiced = False
         self._pre_roll.clear()
         self._candidate.clear()
         self._frames.clear()
@@ -200,6 +207,7 @@ class EnergyUtteranceBuilder:
         rms = self._rms_s16le(frame.pcm)
         threshold = self.current_threshold_rms
         voiced = rms >= threshold
+        self._last_frame_voiced = voiced
 
         if not self._active:
             if voiced:

@@ -23,10 +23,26 @@ def default_vision_media_socket_path() -> Path:
     return Path(raw) if raw else Path(tempfile.gettempdir()) / f"r2b4_vision_media_{os.getuid()}.sock"
 
 
-def recv_line(conn: socket.socket, limit: int = MAX_STATE_BYTES) -> bytes:
+def _receive(conn: socket.socket, size: int, deadline=None, cancel_event=None) -> bytes:
+    while True:
+        if cancel_event is not None and cancel_event.is_set():
+            raise TimeoutError("vision observation cancelled")
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("vision observation deadline reached")
+            conn.settimeout(min(remaining, 0.02) if cancel_event is not None else remaining)
+        try:
+            return conn.recv(size)
+        except socket.timeout:
+            if cancel_event is None:
+                raise
+
+
+def recv_line(conn: socket.socket, limit: int = MAX_STATE_BYTES, *, deadline=None, cancel_event=None) -> bytes:
     data = bytearray()
     while len(data) < limit:
-        part = conn.recv(1)
+        part = _receive(conn, 1, deadline, cancel_event)
         if not part:
             raise EOFError("vision owner disconnected")
         if part == b"\n":
@@ -35,9 +51,9 @@ def recv_line(conn: socket.socket, limit: int = MAX_STATE_BYTES) -> bytes:
     raise ValueError("vision transport exceeded its bound")
 
 
-def recv_json_line(conn: socket.socket, *, reader=None) -> dict:
+def recv_json_line(conn: socket.socket, *, reader=None, deadline=None, cancel_event=None) -> dict:
     if reader is None:
-        payload = recv_line(conn)
+        payload = recv_line(conn, deadline=deadline, cancel_event=cancel_event)
     else:
         payload = reader.readline(MAX_STATE_BYTES + 1)
         if not payload:
@@ -59,10 +75,10 @@ def send_json_line(conn: socket.socket, value: dict) -> None:
     conn.sendall(payload + b"\n")
 
 
-def _recv_exact(conn: socket.socket, size: int) -> bytes:
+def _recv_exact(conn: socket.socket, size: int, *, deadline=None, cancel_event=None) -> bytes:
     payload = bytearray()
     while len(payload) < size:
-        part = conn.recv(min(65536, size - len(payload)))
+        part = _receive(conn, min(65536, size - len(payload)), deadline, cancel_event)
         if not part:
             raise EOFError("incomplete vision payload")
         payload.extend(part)
@@ -80,19 +96,26 @@ class VisionClient:
         if not 0.1 <= self.timeout_s <= 30:
             raise ValueError("vision timeout must be within [0.1, 30]")
 
-    def _connect(self) -> socket.socket:
+    def _connect(self, *, deadline=None, cancel_event=None) -> socket.socket:
         conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        conn.settimeout(self.timeout_s)
         try:
+            if cancel_event is not None and cancel_event.is_set():
+                raise TimeoutError("vision observation cancelled")
+            remaining = self.timeout_s if deadline is None else deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("vision observation deadline reached")
+            conn.settimeout(min(self.timeout_s, remaining))
             conn.connect(str(self.socket_path))
         except BaseException:
             conn.close()
             raise
         return conn
 
-    def connect(self, *, launch: bool = True) -> socket.socket:
+    def connect(self, *, launch: bool = True, deadline=None, cancel_event=None) -> socket.socket:
+        own_deadline = time.monotonic() + self.timeout_s
+        deadline = own_deadline if deadline is None else min(deadline, own_deadline)
         try:
-            return self._connect()
+            return self._connect(deadline=deadline, cancel_event=cancel_event)
         except (FileNotFoundError, ConnectionRefusedError):
             if not launch:
                 raise
@@ -104,10 +127,9 @@ class VisionClient:
             cwd=self.root, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True,
         )
-        deadline = time.monotonic() + self.timeout_s
         while time.monotonic() < deadline:
             try:
-                return self._connect()
+                return self._connect(deadline=deadline, cancel_event=cancel_event)
             except (FileNotFoundError, ConnectionRefusedError):
                 time.sleep(0.025)
         raise RuntimeError("VISION_OWNER_UNAVAILABLE")
@@ -161,25 +183,29 @@ class VisionClient:
                                    maximum_age_ns=reply["maximum_age_ns"])
             return metadata
 
-    def observe(self, *, stream_name: str = "lores") -> VisionJpeg:
-        with self.session() as session:
+    def observe(self, *, stream_name: str = "lores", deadline=None, cancel_event=None) -> VisionJpeg:
+        own_deadline = time.monotonic() + self.timeout_s
+        deadline = own_deadline if deadline is None else min(deadline, own_deadline)
+        with VisionSession(self, deadline=deadline, cancel_event=cancel_event) as session:
             return session.observe(stream_name=stream_name)
 
 
 class VisionSession:
     """Socket lifetime holds one image demand; disconnect releases it."""
 
-    def __init__(self, client: VisionClient) -> None:
+    def __init__(self, client: VisionClient, *, deadline=None, cancel_event=None) -> None:
         self.client = client
         self.conn: socket.socket | None = None
         self.generation = ""
         self.maximum_age_ns = 250_000_000
+        self.deadline = deadline
+        self.cancel_event = cancel_event
 
     def __enter__(self) -> VisionSession:
-        conn = self.client.connect()
+        conn = self.client.connect(deadline=self.deadline, cancel_event=self.cancel_event)
         try:
             conn.sendall(b"R2B4VISION1 IMAGE\n")
-            hello = recv_json_line(conn)
+            hello = recv_json_line(conn, deadline=self.deadline, cancel_event=self.cancel_event)
             self.generation = str(hello["owner_generation"])
             self.maximum_age_ns = int(hello["maximum_age_ns"])
             if not self.generation or self.maximum_age_ns <= 0:
@@ -197,7 +223,7 @@ class VisionSession:
         if conn is None:
             raise RuntimeError("vision session is closed")
         conn.sendall(f"OBSERVE {stream_name}\n".encode())
-        header = recv_line(conn, 1024).decode()
+        header = recv_line(conn, 1024, deadline=self.deadline, cancel_event=self.cancel_event).decode()
         if header.startswith("ERR "):
             raise RuntimeError(header[4:])
         parts = header.split()
@@ -206,8 +232,8 @@ class VisionSession:
         metadata_size, image_size = map(int, parts[1:])
         if not 1 <= metadata_size <= MAX_METADATA_BYTES or not 1 <= image_size <= MAX_JPEG_BYTES:
             raise ValueError("vision image exceeded its bound")
-        metadata = CameraJpegMetadata.from_jsonable(json.loads(_recv_exact(conn, metadata_size)))
-        payload = _recv_exact(conn, image_size)
+        metadata = CameraJpegMetadata.from_jsonable(json.loads(_recv_exact(conn, metadata_size, deadline=self.deadline, cancel_event=self.cancel_event)))
+        payload = _recv_exact(conn, image_size, deadline=self.deadline, cancel_event=self.cancel_event)
         metadata.require_fresh(time.monotonic_ns(), generation=self.generation,
                                maximum_age_ns=self.maximum_age_ns)
         if metadata.stream != stream_name:

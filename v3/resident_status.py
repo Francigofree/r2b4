@@ -14,6 +14,17 @@ from v3.contracts import AcquisitionFrame, MissionIntent, NavigationPlan, RobotE
 from v3.engine import TickResult
 
 RESIDENT_PROCESS_STATUS_SCHEMA = "R2B4_V3_RESIDENT_PROCESS_STATUS_V1"
+HOST_STATUS_MAX_AGE_NS = 500_000_000
+
+
+def status_is_fresh(status: Mapping[str, object], *, observed_ns: int | None = None,
+                    max_age_ns: int = HOST_STATUS_MAX_AGE_NS) -> bool:
+    """One host observation-age rule; runtime safety remains independent."""
+    stamp = status.get("monotonic_ns")
+    if not isinstance(stamp, int) or isinstance(stamp, bool):
+        return False
+    now = time.monotonic_ns() if observed_ns is None else observed_ns
+    return 0 <= now - stamp < max_age_ns
 
 
 def _atomic_private_json(path: Path, payload: Mapping[str, object], mode: int) -> None:
@@ -193,5 +204,4 @@ def _tick_status(
         "mission": mission_payload,
         "navigation": navigation_payload,
     }
-
 

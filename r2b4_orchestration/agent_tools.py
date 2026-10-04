@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 from collections.abc import Mapping
 
 from .agent_contracts import AgentToolResult, AgentToolSpec
@@ -18,7 +20,8 @@ def _strict(value: Mapping[str, object], allowed: set[str]) -> dict[str, object]
     return args
 
 
-def _er2_delegate(root: Path, value: Mapping[str, object]) -> object:
+def _er2_delegate(root: Path, value: Mapping[str, object], *,
+                  cancel_event: threading.Event | None = None, deadline: float | None = None) -> object:
     args = _strict(value, {"task", "reason", "mode", "camera", "tools", "duration_s"})
     reason = args.get("reason")
     if reason not in ("visual_observation", "multi_step_physical", "continuous_feedback", "open_ended_spatial"):
@@ -42,6 +45,13 @@ def _er2_delegate(root: Path, value: Mapping[str, object]) -> object:
         duration = float(duration)
 
     from r2b4_er2.executor import run_er2_task
+    if cancel_event is not None and cancel_event.is_set():
+        raise TimeoutError("AGENT_TURN_CANCELLED")
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("AGENT_TURN_EXPIRED")
+        duration = remaining if duration is None else min(duration, remaining)
     result = run_er2_task(
         task.strip(),
         project_root=root,
@@ -49,6 +59,7 @@ def _er2_delegate(root: Path, value: Mapping[str, object]) -> object:
         camera=camera,
         tools_enabled=tools_enabled,
         duration_s=duration,
+        cancel_event=cancel_event,
     )
     return {
         "reason": reason,
@@ -109,7 +120,7 @@ def build_default_agent_tools(project_root: Path):
                 "duration_s": "optional bounded 1..30 seconds; stream default 20",
             },
         ),
-        lambda args: _er2_delegate(root, args),
+        lambda args, **control: _er2_delegate(root, args, **control),
     ))
     return tuple(tools)
 

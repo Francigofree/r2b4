@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import threading
+import time
+import math
 
 from v3.robot_interface import RobotInterface
 
@@ -29,17 +32,21 @@ class Er2ExecutionResult:
 
 
 class _RuntimeLease:
-    def __init__(self, interface: RobotInterface) -> None:
+    def __init__(self, interface: RobotInterface, *, deadline: float | None = None,
+                 cancel_event: threading.Event | None = None) -> None:
         self.interface = interface
         self.owned = False
+        self.deadline = deadline
+        self.cancel_event = cancel_event
 
-    def ensure(self) -> None:
+    def ensure(self, *, cancel_event: threading.Event | None = None) -> None:
         status = self.interface.read("operator.status")
         running = isinstance(status, dict) and status.get("runtime_running") is True
         if running:
             return
-        self.interface.execute("operator.runtime.start", capture_mode="nincs", capture_hz=10)
-        self.owned = True
+        with self.interface.controller.operator_transition(deadline=self.deadline, cancel_event=cancel_event or self.cancel_event):
+            self.interface.execute("operator.runtime.start", capture_mode="nincs", capture_hz=10)
+            self.owned = True
 
     def close(self) -> None:
         if self.owned:
@@ -55,18 +62,31 @@ def run_er2_task(
     camera: bool = True,
     tools_enabled: bool = True,
     duration_s: float | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> Er2ExecutionResult:
     if not isinstance(task, str) or not task.strip():
         raise ValueError("ER2 task must be non-empty")
     normalized_mode = str(mode).strip().lower()
     if normalized_mode not in {"preview", "stream"}:
         raise ValueError("mode must be preview or stream")
+    if duration_s is not None and (isinstance(duration_s, bool) or not isinstance(duration_s, (int, float))
+                                  or not math.isfinite(duration_s) or duration_s <= 0):
+        raise ValueError("duration_s must be finite and positive or None")
+    deadline = None if duration_s is None else time.monotonic() + duration_s
+    def remaining() -> float | None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise TimeoutError("ER2 host turn cancelled")
+        value = None if deadline is None else deadline - time.monotonic()
+        if value is not None and value <= 0:
+            raise TimeoutError("ER2 host turn expired")
+        return value
+    remaining()
 
     root = Path(project_root).expanduser().resolve()
     cfg = Er2Config.from_env()
     interface = RobotInterface(project_root=root)
     evidence = Er2Evidence.from_project_root(root)
-    lease = _RuntimeLease(interface)
+    lease = _RuntimeLease(interface, deadline=deadline, cancel_event=cancel_event)
     tools = Er2RobotTools.from_interface(interface, cfg, evidence=evidence, ensure_runtime=lease.ensure)
 
     evidence.emit(
@@ -82,13 +102,16 @@ def run_er2_task(
         if normalized_mode == "preview":
             image_bytes = None
             if camera:
-                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s).observe_sync()
+                remaining()
+                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s).observe_sync(deadline=deadline, cancel_event=cancel_event)
                 image_bytes = observation.image_bytes
                 evidence.emit("ER2_CAMERA_OBSERVATION", lineage=observation.metadata.to_jsonable())
             result = Er2PreviewClient(cfg, evidence=evidence).run(
                 task.strip(),
                 image_bytes=image_bytes,
                 tools=tools if tools_enabled else None,
+                timeout_s=remaining() if deadline is not None else 30.0,
+                cancel_event=cancel_event,
             )
             text = result.text.strip()
             evidence.emit(
@@ -112,7 +135,7 @@ def run_er2_task(
             cfg,
             on_text=on_text,
             evidence=evidence,
-        ).run(task.strip(), duration_s=duration_s)
+        ).run(task.strip(), duration_s=remaining(), cancel_event=cancel_event)
         text = "".join(chunks).strip()
         evidence.emit(
             "EXECUTION_ROUTER_ER2_COMPLETE",

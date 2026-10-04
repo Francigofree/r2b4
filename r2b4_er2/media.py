@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from pathlib import Path
 
 from v3.adapters.vision_media_contracts import VisionJpeg
@@ -29,13 +30,24 @@ class VisionMediaClient:
         """Read owner readiness without creating camera demand."""
         return self._client.status()
 
-    def observe_sync(self, *, stream_name: str = "lores") -> VisionJpeg:
+    def observe_sync(self, *, stream_name: str = "lores", deadline=None, cancel_event=None) -> VisionJpeg:
         try:
-            return self._client.observe(stream_name=stream_name)
+            return self._client.observe(stream_name=stream_name, deadline=deadline, cancel_event=cancel_event)
         except (EOFError, OSError, ValueError, RuntimeError) as exc:
             raise Er2MediaUnavailable(f"vision observation unavailable: {exc}") from exc
 
-    async def observe(self, *, stream_name: str = "lores") -> VisionJpeg:
-        return await asyncio.to_thread(self.observe_sync, stream_name=stream_name)
+    async def observe(self, *, stream_name: str = "lores", deadline=None) -> VisionJpeg:
+        cancelled = threading.Event()
+        worker = asyncio.create_task(asyncio.to_thread(self.observe_sync, stream_name=stream_name,
+                                                     deadline=deadline, cancel_event=cancelled))
+        try:
+            return await asyncio.shield(worker)
+        except asyncio.CancelledError:
+            cancelled.set()
+            try:
+                await worker
+            except Er2MediaUnavailable:
+                pass
+            raise
 
 __all__ = ["Er2MediaUnavailable", "VisionMediaClient"]

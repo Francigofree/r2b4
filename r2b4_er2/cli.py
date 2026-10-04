@@ -23,13 +23,14 @@ class _RuntimeLease:
         self.interface = interface
         self.owned = False
 
-    def ensure(self) -> None:
+    def ensure(self, *, cancel_event=None) -> None:
         status = self.interface.read("operator.status")
         running = isinstance(status, dict) and status.get("runtime_running") is True
         if running:
             return
-        self.interface.execute("operator.runtime.start", capture_mode="nincs", capture_hz=10)
-        self.owned = True
+        with self.interface.controller.operator_transition(cancel_event=cancel_event):
+            self.interface.execute("operator.runtime.start", capture_mode="nincs", capture_hz=10)
+            self.owned = True
 
     def close(self) -> None:
         if self.owned:

@@ -129,7 +129,7 @@ class Er2RobotTools:
             raise Er2ToolError("physical tool cancelled before runtime activation")
         self.motion_attempted = True
         if self._ensure_runtime is not None:
-            self._ensure_runtime()
+            self._ensure_runtime(cancel_event=cancel_event)
 
     def _emit(self, event_type: str, **fields: object) -> None:
         if self.evidence is not None:
@@ -248,35 +248,39 @@ class Er2RobotTools:
         self, *, x_m: float, y_m: float, yaw_rad: float | None = None,
         max_v_mps: float | None = None, max_omega_rad_s: float | None = None,
         cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> dict[str, object]:
         return self._finite_action("v3.command.navigate", {
             "x_m": x_m, "y_m": y_m, "yaw_rad": yaw_rad,
             "max_v_mps": max_v_mps, "max_omega_rad_s": max_omega_rad_s,
             "wait_for_completion": True,
-        }, cancel_event)
+        }, cancel_event, deadline)
 
     def robot_move_relative(
         self, *, forward_m: float, left_m: float = 0.0,
         final_yaw_rad: float | None = None,
         max_v_mps: float | None = None, max_omega_rad_s: float | None = None,
         cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> dict[str, object]:
         return self._finite_action("v3.command.move_relative", {
             "forward_m": forward_m, "left_m": left_m, "final_yaw_rad": final_yaw_rad,
             "max_v_mps": max_v_mps, "max_omega_rad_s": max_omega_rad_s,
-        }, cancel_event)
+        }, cancel_event, deadline)
 
     def robot_turn_by(
         self, *, angle_deg: float, max_omega_rad_s: float | None = None,
         cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> dict[str, object]:
         return self._finite_action("v3.command.turn_by", {
             "angle_deg": angle_deg, "max_omega_rad_s": max_omega_rad_s,
-        }, cancel_event)
+        }, cancel_event, deadline)
 
     def _finite_action(
         self, action: str, parameters: Mapping[str, object],
         cancel_event: threading.Event | None,
+        deadline: float | None = None,
     ) -> dict[str, object]:
         # ER2 retains only its provider envelope and gateway adaptation. Goal
         # geometry and the entire mission/STOP lifecycle belong to V3.
@@ -294,12 +298,17 @@ class Er2RobotTools:
         capture = operator.get("result")
         if operator["status"] != "COMPLETED" or not isinstance(capture, Mapping):
             raise Er2ToolError("operator status unavailable")
+        timeout = self.config.session_watchdog_s - 0.5
+        if deadline is not None:
+            timeout = min(timeout, deadline - time.monotonic())
+            if timeout <= 0:
+                raise Er2ToolError("physical tool deadline reached")
         params.update(
             capture=False,
             capture_mode=capture.get("capture_mode") or DEFAULT_CAPTURE_MODE,
             capture_hz=capture.get("capture_hz") or DEFAULT_CAPTURE_HZ,
             cancel_event=cancel_event,
-            finite_timeout_s=self.config.session_watchdog_s - 0.5,
+            finite_timeout_s=timeout,
         )
         response = self._handle("execute", action, params)
         result = response.get("result")
@@ -316,6 +325,7 @@ class Er2RobotTools:
     def execute(
         self, name: str, arguments: Mapping[str, object] | None = None,
         *, cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> dict[str, object]:
         args = dict(arguments or {})
         self._emit("ER2_TOOL_CALL", tool_name=name, arguments=_jsonable(args))
@@ -336,7 +346,7 @@ class Er2RobotTools:
                 if unknown or missing:
                     raise Er2ToolError(f"invalid {name} arguments: unknown={unknown}, missing={missing}")
                 self._activate_motion(cancel_event)
-                result = getattr(self, name)(**args, cancel_event=cancel_event)
+                result = getattr(self, name)(**args, cancel_event=cancel_event, deadline=deadline)
             elif name == "robot_drive" and self._debug_drive:
                 allowed = {"v_mps", "omega_rad_s", "duration_s"}
                 unknown = sorted(set(args) - allowed)

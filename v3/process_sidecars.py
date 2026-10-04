@@ -39,6 +39,17 @@ _RAW_LIDAR_DRAIN_BATCH = 256
 _SIDECAR_READY_TIMEOUT_S = 10.0
 _SIDECAR_FINISH_TIMEOUT_S = 120.0
 _RAW_END_TIMEOUT_S = 2.0
+_SIDECAR_IO_TIMEOUT_S = 2.0
+_SIDECAR_TERMINATE_TIMEOUT_S = 2.0
+_STATUS_FINISH_TIMEOUT_S = 10.0
+
+
+def observation_shutdown_budget_s(*, capture_enabled: bool) -> float:
+    """Outer host shutdown includes both sequential observer finish paths."""
+    status = _SIDECAR_IO_TIMEOUT_S + _STATUS_FINISH_TIMEOUT_S + _SIDECAR_TERMINATE_TIMEOUT_S
+    capture = (2 * _SIDECAR_IO_TIMEOUT_S + _SIDECAR_FINISH_TIMEOUT_S
+               + _SIDECAR_TERMINATE_TIMEOUT_S) if capture_enabled else 0.0
+    return status + capture
 
 # R2B4_HRI_P0_V1
 
@@ -459,14 +470,14 @@ class ProcessMcapCaptureSession:
         status = "PASS" if error is None and getattr(report, "status", 1) == 0 else "FAULT"
         self._control_queue.put(
             ("finish", status, True, self._enqueued_count, self._drop_count),
-            timeout=2.0,
+            timeout=_SIDECAR_IO_TIMEOUT_S,
         )
         self._process.join(_SIDECAR_FINISH_TIMEOUT_S)
         if self._process.is_alive():
             self._terminate()
             raise RuntimeError("capture sidecar did not stop")
         try:
-            message = self._result_queue.get(timeout=2.0)
+            message = self._result_queue.get(timeout=_SIDECAR_IO_TIMEOUT_S)
         except queue.Empty as exc:
             raise RuntimeError("capture sidecar returned no result") from exc
         if message[0] == "error":
@@ -477,7 +488,7 @@ class ProcessMcapCaptureSession:
     def _terminate(self) -> None:
         if self._process.is_alive():
             self._process.terminate()
-            self._process.join(timeout=2.0)
+            self._process.join(timeout=_SIDECAR_TERMINATE_TIMEOUT_S)
 
 
 class ProcessResidentStatusPublisher:
@@ -617,12 +628,12 @@ class ProcessResidentStatusPublisher:
                 type(error).__name__ if error is not None else None,
                 str(error) if error is not None else None,
             ),
-            timeout=2.0,
+            timeout=_SIDECAR_IO_TIMEOUT_S,
         )
-        self._process.join(timeout=10.0)
+        self._process.join(timeout=_STATUS_FINISH_TIMEOUT_S)
         if self._process.is_alive():
             self._process.terminate()
-            self._process.join(timeout=2.0)
+            self._process.join(timeout=_SIDECAR_TERMINATE_TIMEOUT_S)
             raise RuntimeError("status sidecar did not stop")
         self._poll_error()
 

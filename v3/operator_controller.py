@@ -35,6 +35,7 @@ from v3.capture_rate import DEFAULT_CAPTURE_HZ, validate_capture_hz
 from v3.control_cli import RESIDENT_PROCESS_STATUS_SCHEMA, _read_status
 from v3.contracts import ExplorePreferences
 from v3.mcap_reader import McapReadError, McapReader
+from v3.resident_status import HOST_STATUS_MAX_AGE_NS, status_is_fresh
 
 
 DEFAULT_CAPTURE_MODE = "alap"
@@ -123,6 +124,8 @@ class OperatorController:
         self._transition_thread_lock = threading.RLock()
         self._transition_depth = 0
         self._transition_stream = None
+        self._transition_deadline = None
+        self._transition_cancel_event = None
 
     # ------------------------------------------------------------------
     # Public API: status / lifecycle
@@ -158,7 +161,7 @@ class OperatorController:
         result["command_log_tail"] = self._tail(command_log, 20) if command_log else []
         return result
 
-    def live_runtime_status(self, *, max_age_ns: int = 500_000_000) -> dict[str, object] | None:
+    def live_runtime_status(self, *, max_age_ns: int = HOST_STATUS_MAX_AGE_NS) -> dict[str, object] | None:
         """Return only status proven to belong to a currently live resident runtime."""
         if not isinstance(max_age_ns, int) or isinstance(max_age_ns, bool) or max_age_ns <= 0:
             raise ValueError("max_age_ns must be a positive integer")
@@ -167,19 +170,19 @@ class OperatorController:
         status = self._read_status_optional()
         if status is None or status.get("state") != "RUNNING":
             return None
-        stamp = status.get("monotonic_ns")
-        if not isinstance(stamp, int) or isinstance(stamp, bool):
-            return None
-        age = time.monotonic_ns() - stamp
-        if not 0 <= age < max_age_ns:
+        if not status_is_fresh(status, max_age_ns=max_age_ns):
             return None
         return status
 
     @contextmanager
-    def operator_transition(self):
+    def operator_transition(self, *, deadline: float | None = None,
+                            cancel_event: threading.Event | None = None):
         """Cross-process serialization for host/session state transitions only."""
-        with self._transition_thread_lock:
+        while not self._transition_thread_lock.acquire(timeout=0.05):
+            self._check_budget(deadline, cancel_event)
+        try:
             if self._transition_depth > 0:
+                self._check_transition_budget()
                 self._transition_depth += 1
                 try:
                     yield
@@ -187,11 +190,20 @@ class OperatorController:
                     self._transition_depth -= 1
                 return
 
+            self._check_budget(deadline, cancel_event)
+            self._transition_deadline = deadline
+            self._transition_cancel_event = cancel_event
             self.runtime_dir.mkdir(parents=True, exist_ok=True)
             stream = self.operator_lock_file.open("a+")
             self.operator_lock_file.chmod(0o600)
             try:
-                fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+                while True:
+                    self._check_transition_budget()
+                    try:
+                        fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        self._transition_sleep(0.05)
                 self._transition_stream = stream
                 self._transition_depth = 1
                 try:
@@ -202,6 +214,34 @@ class OperatorController:
                     fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
             finally:
                 stream.close()
+        finally:
+            if self._transition_depth == 0:
+                self._transition_deadline = None
+                self._transition_cancel_event = None
+            self._transition_thread_lock.release()
+
+    @staticmethod
+    def _check_budget(deadline, cancel_event) -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise TimeoutError("operator transition cancelled")
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("operator transition deadline reached")
+
+    def _check_transition_budget(self) -> None:
+        self._check_budget(getattr(self, "_transition_deadline", None),
+                           getattr(self, "_transition_cancel_event", None))
+
+    def _transition_sleep(self, seconds: float) -> None:
+        self._check_transition_budget()
+        deadline = getattr(self, "_transition_deadline", None)
+        if deadline is not None:
+            seconds = min(seconds, max(0.0, deadline - time.monotonic()))
+        cancel = getattr(self, "_transition_cancel_event", None)
+        if cancel is None:
+            time.sleep(seconds)
+        else:
+            cancel.wait(seconds)
+        self._check_transition_budget()
 
     @_serialized_operator_transition
     def runtime_start(
@@ -214,7 +254,7 @@ class OperatorController:
             self._emit("info", "runtime: existing instance -> STOP")
             self.runtime_stop()
             self._emit("info", "runtime: waiting 5 s")
-            time.sleep(5.0)
+            self._transition_sleep(5.0)
             if self._pid_matches(old, ("v3_process_runtime.py",)):
                 raise OperatorError(f"old runtime still running (PID {old})")
             self._unlink(self.runtime_pid_file)
@@ -263,8 +303,8 @@ class OperatorController:
                 break
             if supervisor.poll() is not None:
                 break
-            time.sleep(0.05)
-        time.sleep(0.20)
+            self._transition_sleep(0.05)
+        self._transition_sleep(0.20)
 
         if pid is None or not self._pid_matches(pid, ("v3_process_runtime.py",)):
             self._unlink(self.runtime_pid_file)
@@ -321,6 +361,8 @@ class OperatorController:
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ,
+        deadline: float | None = None,
+        cancel_event: threading.Event | None = None,
     ):
         # Serialize finite-motion world-state capture and command admission.
         #
@@ -329,7 +371,7 @@ class OperatorController:
         # -> caller pose snapshot/target construction -> prepared NAVIGATE.
         requested = self._validate_capture_mode(capture_mode)
         hz = self._validate_capture_hz(capture_hz)
-        with self.operator_transition():
+        with self.operator_transition(deadline=deadline, cancel_event=cancel_event):
             self.ensure_runtime(requested, hz)
             self.stop()
 
@@ -351,6 +393,7 @@ class OperatorController:
                 raise OperatorError(
                     "runtime capture identity changed while preparing finite motion"
                 )
+            self._check_transition_budget()
             yield MotionPreparation(
                 runtime_pid=pid,
                 capture_mode=actual_mode,
@@ -419,7 +462,8 @@ class OperatorController:
         except ProcessLookupError:
             pass
 
-        deadline = time.monotonic() + 10.0
+        from v3.process_sidecars import observation_shutdown_budget_s
+        deadline = time.monotonic() + 10.0 + observation_shutdown_budget_s(capture_enabled=mode != "nincs")
         while time.monotonic() < deadline:
             if not self._pid_matches(pid, ("v3_process_runtime.py",)):
                 self._unlink(self.runtime_pid_file)
@@ -430,7 +474,7 @@ class OperatorController:
                 elif mode == "nincs":
                     self._emit("info", "capture: OFF")
                 return
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         raise OperatorError(f"runtime did not exit after shutdown (PID {pid})")
 
     def shutdown(self) -> None:
@@ -768,7 +812,7 @@ class OperatorController:
         for _ in range(70):
             if self._capture_ready(path):
                 break
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         return self.capture_status()
 
     def capture_status(self) -> dict[str, object]:
@@ -969,6 +1013,7 @@ class OperatorController:
         status = self._read_status_optional()
         baseline = self._tick(status) if status else -1
         try:
+            self._check_transition_budget()
             if session_owner_pid is None and session_watchdog_s is None:
                 pid = self._spawn_control_process(command)
             else:
@@ -1065,9 +1110,9 @@ class OperatorController:
             if self._runtime_pid() is None:
                 self._failure_report(label, last)
                 return False
-            last = self.live_runtime_status() if navigate_command_id is not None else self._read_status_optional()
+            last = self.live_runtime_status()
             if last is None:
-                time.sleep(0.05)
+                self._transition_sleep(0.05)
                 continue
             if self._tick(last) > baseline:
                 if self._status_is_fault(last):
@@ -1085,7 +1130,7 @@ class OperatorController:
                         and navigation.get("mission_id") == mission.get("mission_id")
                     ):
                         return True
-                    time.sleep(0.05)
+                    self._transition_sleep(0.05)
                     continue
                 allowed = (
                     self._status_has_real_allow(last)
@@ -1094,7 +1139,7 @@ class OperatorController:
                 )
                 if allowed:
                     return True
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         self._failure_report(label, last)
         return False
 
@@ -1165,7 +1210,7 @@ class OperatorController:
                     raise OperatorError("phase did not reach ALLOW")
 
                 if not allowed:
-                    time.sleep(0.05)
+                    self._transition_sleep(0.05)
                     continue
                 elapsed = now - started
                 if angle:
@@ -1182,7 +1227,7 @@ class OperatorController:
                         raise OperatorError("turn did not reach its target within 30 s")
                 elif elapsed >= 5.0:
                     break
-                time.sleep(0.05)
+                self._transition_sleep(0.05)
         finally:
             with self.operator_transition():
                 if self._proba_owner() == sequence_owner:
@@ -1194,7 +1239,7 @@ class OperatorController:
     def _proba_idle(self, pause: float) -> None:
         # Quiet pause: the next phase requests fresh readiness. The operator
         # does not impose a health policy on the resident runtime during IDLE.
-        time.sleep(pause)
+        self._transition_sleep(pause)
 
     # ------------------------------------------------------------------
     # Capture internals
@@ -1283,7 +1328,7 @@ class OperatorController:
         for _ in range(70):
             if self._capture_ready(path):
                 return
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         self._emit("warning", "bounded capture was not finalized before runtime shutdown; native finalizer will finish it")
 
     # ------------------------------------------------------------------
@@ -1297,18 +1342,17 @@ class OperatorController:
         while time.monotonic() < deadline:
             status = self._read_status_optional()
             if status is None:
-                time.sleep(0.05)
+                self._transition_sleep(0.05)
                 continue
-            age = time.monotonic_ns() - int(status.get("monotonic_ns", 0))
             if (
                 status.get("state") == "RUNNING"
-                and 0 <= age < 500_000_000
+                and status_is_fresh(status)
                 and self._stopped(status)
             ):
                 return
             if status.get("state") != "RUNNING" or status.get("fault_layer") or status.get("safety_decision") == "FAULT":
                 break
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         raise OperatorError("runtime did not confirm ready IDLE with inactive outputs")
 
     def _wait_ready(self, timeout: float = 8.0) -> None:
@@ -1316,10 +1360,10 @@ class OperatorController:
         while time.monotonic() < deadline:
             if self._runtime_pid() is None:
                 break
-            status = self._read_status_optional()
+            status = self.live_runtime_status()
             if status and status.get("state") == "RUNNING" and status.get("ready_for_active") is True:
                 return
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         raise OperatorError("runtime not ready")
 
     def _wait_fresh_ready(
@@ -1336,12 +1380,13 @@ class OperatorController:
             status = self._read_status_optional()
             if (
                 status is not None
+                and status_is_fresh(status)
                 and status != baseline
                 and status.get("state") == "RUNNING"
                 and status.get("ready_for_active") is True
             ):
                 return True
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         return False
 
     def _read_status_optional(self) -> dict[str, object] | None:
@@ -1424,10 +1469,12 @@ class OperatorController:
 
     def _publish_stop(self) -> None:
         try:
+            deadline = getattr(self, "_transition_deadline", None)
+            timeout = 1.0 if deadline is None else min(1.0, max(0.001, deadline - time.monotonic()))
             result = subprocess.run(
                 [self.python, "-m", "v3.control_cli", "stop", "--command-id",
                  f"operator-stop-{time.time_ns()}-{os.getpid()}"],
-                cwd=self.root, text=True, capture_output=True, timeout=1.0, check=False,
+                cwd=self.root, text=True, capture_output=True, timeout=timeout, check=False,
             )
         except subprocess.TimeoutExpired as exc:
             raise OperatorError("control_cli STOP timed out") from exc
@@ -1512,8 +1559,7 @@ class OperatorController:
         argv = [part.decode("utf-8", "replace") for part in raw.split(b"\0") if part]
         return all(token in argv for token in required_args)
 
-    @staticmethod
-    def _wait_gone(pid: int, timeout: float) -> bool:
+    def _wait_gone(self, pid: int, timeout: float) -> bool:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
@@ -1526,7 +1572,7 @@ class OperatorController:
                     return True
             except OSError:
                 return True
-            time.sleep(0.05)
+            self._transition_sleep(0.05)
         return False
 
     # ------------------------------------------------------------------

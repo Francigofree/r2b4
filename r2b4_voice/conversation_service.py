@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import math
 import threading
 import time
 import uuid
@@ -43,6 +44,8 @@ class AgentPort(Protocol):
         action_catalog: Sequence[Mapping[str, object]],
         *,
         event_sink: Callable[[str, Mapping[str, object]], None] | None = None,
+        cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> LLMDecision: ...
 
 
@@ -55,14 +58,25 @@ class ConversationServiceConfig:
     queue_size: int = 8
     max_history_turns: int = 8
     completion_cache_size: int = 32
+    turn_timeout_s: float = 90.0
 
     def __post_init__(self) -> None:
+        if (isinstance(self.turn_timeout_s, bool) or not isinstance(self.turn_timeout_s, (int, float))
+                or not math.isfinite(self.turn_timeout_s) or self.turn_timeout_s <= 0):
+            raise ValueError("turn_timeout_s must be finite and positive")
         if not isinstance(self.queue_size, int) or isinstance(self.queue_size, bool) or self.queue_size <= 0:
             raise ValueError("queue_size must be a positive integer")
         if not isinstance(self.max_history_turns, int) or isinstance(self.max_history_turns, bool) or self.max_history_turns < 0:
             raise ValueError("max_history_turns must be non-negative")
         if not isinstance(self.completion_cache_size, int) or isinstance(self.completion_cache_size, bool) or self.completion_cache_size <= 0:
             raise ValueError("completion_cache_size must be a positive integer")
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingTurn:
+    turn: UserTextTurn
+    cancelled: threading.Event
+    deadline: float
 
 
 class ConversationService:
@@ -94,7 +108,8 @@ class ConversationService:
         self._self_knowledge = self_knowledge
         self._config = config
         self._monotonic_ns = monotonic_ns
-        self._queue: queue.Queue[UserTextTurn | None] = queue.Queue(maxsize=config.queue_size)
+        self._queue: queue.Queue[_PendingTurn | None] = queue.Queue(maxsize=config.queue_size)
+        self._pending: dict[str, _PendingTurn] = {}
         self._history: list[ConversationMemoryTurn] = []
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
@@ -138,7 +153,12 @@ class ConversationService:
             monotonic_ns=turn.monotonic_ns,
         )
         try:
-            self._queue.put_nowait(turn)
+            with self._lock:
+                if self._closed:
+                    raise RuntimeError("conversation service is closed")
+                pending = _PendingTurn(turn, threading.Event(), time.monotonic() + self._config.turn_timeout_s)
+                self._queue.put_nowait(pending)
+                self._pending[turn.turn_id] = pending
         except queue.Full as exc:
             self._journal.append(
                 "user_rejected",
@@ -174,7 +194,7 @@ class ConversationService:
     def wait_for_turn(self, turn_id: str, timeout_s: float = 20.0) -> dict[str, object] | None:
         if not isinstance(turn_id, str) or not turn_id:
             raise ValueError("turn_id must be non-empty")
-        if not isinstance(timeout_s, (int, float)) or isinstance(timeout_s, bool) or timeout_s <= 0:
+        if not isinstance(timeout_s, (int, float)) or isinstance(timeout_s, bool) or not math.isfinite(timeout_s) or timeout_s <= 0:
             raise ValueError("timeout_s must be positive")
         deadline = time.monotonic() + float(timeout_s)
         with self._condition:
@@ -183,18 +203,30 @@ class ConversationService:
                 if result is not None:
                     return result.to_jsonable()
                 remaining = deadline - time.monotonic()
-                if remaining <= 0:
+                if remaining <= 0 or self._closed:
+                    pending = self._pending.get(turn_id)
+                    if pending is not None:
+                        pending.cancelled.set()
                     return None
                 self._condition.wait(timeout=remaining)
+
+    def cancel_pending_turns(self) -> None:
+        """Revoke queued/running host intents, including in-flight delegates."""
+        with self._condition:
+            for pending in self._pending.values():
+                pending.cancelled.set()
+            self._condition.notify_all()
 
     def close(self, timeout_s: float = 2.0) -> None:
         with self._condition:
             if self._closed:
                 return
             self._closed = True
+            for pending in self._pending.values():
+                pending.cancelled.set()
             self._condition.notify_all()
         try:
-            self._queue.put(None, timeout=max(0.01, timeout_s))
+            self._queue.put_nowait(None)
         except queue.Full:
             pass
         self._worker.join(timeout=timeout_s)
@@ -202,12 +234,18 @@ class ConversationService:
 
     def _run(self) -> None:
         while True:
+            with self._lock:
+                if self._closed:
+                    return
             item = self._queue.get()
             try:
                 if item is None:
                     return
                 self._process(item)
             finally:
+                if item is not None:
+                    with self._lock:
+                        self._pending.pop(item.turn.turn_id, None)
                 self._queue.task_done()
 
     def _store_result(self, result: ConversationTurnResult, *, error: str | None) -> None:
@@ -220,8 +258,13 @@ class ConversationService:
                 self._completed.popitem(last=False)
             self._condition.notify_all()
 
-    def _process(self, turn: UserTextTurn) -> None:
+    def _process(self, pending: _PendingTurn) -> None:
+        turn = pending.turn
+        def check_active() -> None:
+            if pending.cancelled.is_set() or time.monotonic() >= pending.deadline:
+                raise TimeoutError("CONVERSATION_TURN_CANCELLED_OR_EXPIRED")
         try:
+            check_active()
             context = self._context.build()
             knowledge: Mapping[str, object] | None = None
             if self._self_knowledge is not None:
@@ -258,7 +301,8 @@ class ConversationService:
                 def emit(event: str, payload: Mapping[str, object]) -> None:
                     self._journal.append(event, {"turn_id": turn.turn_id, **dict(payload)})
 
-                decision = self._agent.run(messages, context.available_actions, event_sink=emit)
+                decision = self._agent.run(messages, context.available_actions, event_sink=emit,
+                                           cancel_event=pending.cancelled, deadline=pending.deadline)
             else:
                 complete_with_actions = getattr(self._llm, "complete_with_actions", None)
                 if callable(complete_with_actions):
@@ -266,6 +310,7 @@ class ConversationService:
                 else:
                     decision = self._llm.complete(messages)
 
+            check_active()
             action_status = "NONE"
             if decision.robot_action is not None:
                 validation = self._validator.validate(decision.robot_action, context)

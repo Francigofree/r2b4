@@ -58,7 +58,55 @@ class Er2StreamingClient:
         client = self._client or genai.Client(api_key=self._api_key or api_key_from_env())
         return client, types
 
-    async def run_async(self, task: str, *, duration_s: float | None = None) -> Er2StreamingResult:
+    async def run_async(self, task: str, *, duration_s: float | None = None,
+                        cancel_event: threading.Event | None = None) -> Er2StreamingResult:
+        """Bound the whole session, including connect/media/initial-send.
+
+        Cancellation still awaits the existing physical worker's final STOP;
+        abandoning that worker would permit late motion after caller return.
+        """
+        if duration_s is not None and (
+            isinstance(duration_s, bool) or not isinstance(duration_s, (int, float))
+            or not math.isfinite(duration_s) or duration_s <= 0
+        ):
+            raise ValueError("duration_s must be finite and positive or None")
+        if cancel_event is not None and cancel_event.is_set():
+            raise TimeoutError("ER2 host turn cancelled")
+        self._reconnect_count = 0
+        worker = asyncio.create_task(self._run_async(task, duration_s=duration_s))
+        async def wait_cancel() -> None:
+            while cancel_event is not None and not cancel_event.is_set():
+                await asyncio.sleep(0.02)
+        watcher = asyncio.create_task(wait_cancel()) if cancel_event is not None else None
+        try:
+            waiters = {worker} if watcher is None else {worker, watcher}
+            done, _ = await asyncio.wait(waiters, timeout=duration_s, return_when=asyncio.FIRST_COMPLETED)
+            if worker in done:
+                return worker.result()
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
+            if watcher is not None and watcher in done:
+                raise TimeoutError("ER2 host turn cancelled")
+            result = Er2StreamingResult(self._reconnect_count, self._resume_handle, True)
+            self._emit("ER2_STREAM_COMPLETE", model=self.config.streaming_model,
+                       reconnect_count=result.reconnect_count,
+                       resumable=bool(result.latest_resumption_handle), stopped_cleanly=True)
+            return result
+        finally:
+            if not worker.done():
+                worker.cancel()
+                try:
+                    await worker
+                except asyncio.CancelledError:
+                    pass
+            if watcher is not None:
+                watcher.cancel()
+                await asyncio.gather(watcher, return_exceptions=True)
+
+    async def _run_async(self, task: str, *, duration_s: float | None = None) -> Er2StreamingResult:
         if not isinstance(task, str) or not task.strip():
             raise ValueError("task must be non-empty")
         if duration_s is not None and (
@@ -71,6 +119,7 @@ class Er2StreamingClient:
         stop_event = asyncio.Event()
         reconnect_count = 0
         deadline = None if duration_s is None else asyncio.get_running_loop().time() + float(duration_s)
+        self._session_deadline = deadline
         initial_task = task.strip()
         first_connection = True
         self._resume_handle = None
@@ -132,7 +181,7 @@ class Er2StreamingClient:
                         timer_task: asyncio.Task | None = None
                         try:
                             if connection_was_initial:
-                                observation = await self.media.observe(stream_name="lores") if self.media is not None else None
+                                observation = await self.media.observe(stream_name="lores", deadline=deadline) if self.media is not None else None
                                 parts = [types.Part(text=initial_task)]
                                 if observation is not None:
                                     parts.insert(0, types.Part(inline_data=types.Blob(data=observation.image_bytes, mime_type="image/jpeg")))
@@ -181,9 +230,11 @@ class Er2StreamingClient:
                                     completed.result()
                             if reconnect_requested.is_set():
                                 reconnect_count += 1
+                                self._reconnect_count = reconnect_count
                                 self._emit("ER2_STREAM_RECONNECT", reason="GO_AWAY", reconnect_count=reconnect_count)
                             elif recv_task in done and not stop_event.is_set():
                                 reconnect_count += 1
+                                self._reconnect_count = reconnect_count
                                 self._emit("ER2_STREAM_RECONNECT", reason="RECEIVE_ENDED", reconnect_count=reconnect_count)
                         finally:
                             tasks = [t for t in (heartbeat_task, timer_task, recv_task) if t is not None]
@@ -210,6 +261,7 @@ class Er2StreamingClient:
                     if stop_event.is_set():
                         break
                     reconnect_count += 1
+                    self._reconnect_count = reconnect_count
                     self._emit(
                         "ER2_STREAM_RECONNECT",
                         reason="EXCEPTION",
@@ -249,8 +301,9 @@ class Er2StreamingClient:
         )
         return result
 
-    def run(self, task: str, *, duration_s: float | None = None) -> Er2StreamingResult:
-        return asyncio.run(self.run_async(task, duration_s=duration_s))
+    def run(self, task: str, *, duration_s: float | None = None,
+            cancel_event: threading.Event | None = None) -> Er2StreamingResult:
+        return asyncio.run(self.run_async(task, duration_s=duration_s, cancel_event=cancel_event))
 
     async def _execute_tool(self, name: str, args: Mapping[str, object]) -> dict[str, object]:
         if self.tools is None:
@@ -260,6 +313,7 @@ class Er2StreamingClient:
         cancelled = threading.Event()
         worker = asyncio.create_task(asyncio.to_thread(
             self.tools.execute, name, args, cancel_event=cancelled,
+            deadline=getattr(self, "_session_deadline", None),
         ))
         try:
             return await asyncio.shield(worker)

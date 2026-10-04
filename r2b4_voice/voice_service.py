@@ -368,11 +368,11 @@ class VoiceConversationService:
         self._set_state(VoiceServiceState.CONVERSATION_LISTENING)
 
     def _conversation_cycle(self) -> None:
+        self._set_state(VoiceServiceState.CONVERSATION_LISTENING)
+        utterance = self._read_utterance()
         if self._session_expired():
             self._close_session("silence-timeout")
             return
-        self._set_state(VoiceServiceState.CONVERSATION_LISTENING)
-        utterance = self._read_utterance()
         if utterance is None:
             if self._session_expired():
                 self._close_session("silence-timeout")
@@ -815,6 +815,9 @@ class VoiceConversationService:
     ) -> bool:
         if source == "INTERRUPT":
             self._stop_interrupt_latched.set()
+        cancel = getattr(self._conversation, "cancel_pending_turns", None)
+        if callable(cancel):
+            cancel()
         self._hri_event(
             "STOP_REQUESTED",
             interaction_id=interaction_id,
@@ -922,9 +925,12 @@ class VoiceConversationService:
                 sequence = self._microphone.health().sequence
 
     def _read_utterance(self):
+        wait_s = self._config.frame_wait_s
+        if self._session_open and self._session_deadline_ns is not None:
+            wait_s = min(wait_s, max(0.0, (self._session_deadline_ns - self._monotonic_ns()) / 1_000_000_000))
         frame = self._microphone.port.read_after(
             self._last_sequence,
-            timeout_s=self._config.frame_wait_s,
+            timeout_s=wait_s,
         )
         if frame is None:
             health = self._microphone.health()
@@ -934,7 +940,17 @@ class VoiceConversationService:
                 self._publish_status()
             return None
         self._last_sequence = frame.sequence
-        return self._builder.feed(frame)
+        utterance = self._builder.feed(frame)
+        if (self._session_open and self._builder.last_frame_voiced
+                and self._session_deadline_ns is not None
+                and frame.monotonic_ns <= self._session_deadline_ns):
+            # Continuous silence starts at physical PCM activity, rather than
+            # completion of an utterance or late consumption of buffered audio.
+            self._session_deadline_ns = min(frame.monotonic_ns, self._monotonic_ns()) + int(
+                self._config.session_silence_s * 1_000_000_000
+            )
+            self._publish_status()
+        return utterance
 
     def _transcribe(self, utterance) -> str | None:
         try:
@@ -985,6 +1001,9 @@ class VoiceConversationService:
         was_open = self._session_open
         self._session_open = False
         self._session_deadline_ns = None
+        cancel = getattr(self._conversation, "cancel_pending_turns", None)
+        if callable(cancel):
+            cancel()
         if was_open:
             self._hri_event("WAKE_SESSION_CLOSED", reason=reason)
         self._set_state(VoiceServiceState.WAKE_LISTENING)

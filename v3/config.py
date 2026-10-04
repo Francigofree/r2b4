@@ -199,6 +199,24 @@ class ResolvedRobotConfig:
             raise ValueError("IMU process period exceeds freshness")
         if self.edges.multirate.max_snapshot_age_ns > control.admission.max_sample_age_ns:
             raise ValueError("multirate snapshot freshness exceeds admission limit")
+        ingress = self.edges.command_ingress
+        if ingress.reader_poll_s * 1_000_000_000 >= ingress.maximum_ttl_ns:
+            raise ValueError("command reader poll must be shorter than command TTL")
+        multirate = self.edges.multirate
+        source_limits = {
+            "WHEEL_ENCODERS": sensors.inputs.encoder_backend.maximum_sample_interval_ns,
+            "BNO055_IMU": sensors.inputs.imu_backend.maximum_sample_age_ns,
+            "RPLIDAR_C1": control.lidar_safety.maximum_sample_age_ns,
+        }
+        for device_id in control.critical_device_ids:
+            budget = min(multirate.max_snapshot_age_ns, control.admission.max_sample_age_ns,
+                         source_limits[device_id])
+            if multirate.period_for(device_id, critical=True) > budget:
+                raise ValueError(f"multirate period exceeds freshness for {device_id}")
+        if multirate.auxiliary_default_period_ns > multirate.max_snapshot_age_ns or any(
+            item.period_ns > multirate.max_snapshot_age_ns for item in multirate.source_periods
+        ):
+            raise ValueError("multirate period exceeds snapshot freshness")
 
     @property
     def navigation(self) -> V3NavigationConfig:

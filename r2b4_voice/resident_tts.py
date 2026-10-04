@@ -11,6 +11,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import math
 import os
 import socket
 import struct
@@ -58,9 +59,18 @@ def resident_socket_path(config: PiperTtsConfig, dependency_dir: Path) -> Path:
     return _runtime_dir() / name
 
 
-def _recv_exact(sock: socket.socket, size: int) -> bytes:
+def _remaining(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise ResidentTtsError("resident TTS deadline reached")
+    return remaining
+
+
+def _recv_exact(sock: socket.socket, size: int, *, deadline: float | None = None) -> bytes:
     data = bytearray()
     while len(data) < size:
+        if deadline is not None:
+            sock.settimeout(_remaining(deadline))
         chunk = sock.recv(size - len(data))
         if not chunk:
             raise ResidentTtsError("resident TTS connection closed early")
@@ -68,19 +78,21 @@ def _recv_exact(sock: socket.socket, size: int) -> bytes:
     return bytes(data)
 
 
-def _send_message(sock: socket.socket, payload: dict[str, object]) -> None:
+def _send_message(sock: socket.socket, payload: dict[str, object], *, deadline: float | None = None) -> None:
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(encoded) > _MAX_HEADER_BYTES:
         raise ResidentTtsError("resident TTS request is too large")
+    if deadline is not None:
+        sock.settimeout(_remaining(deadline))
     sock.sendall(struct.pack("!I", len(encoded)) + encoded)
 
 
-def _recv_response(sock: socket.socket) -> tuple[dict[str, Any], bytes]:
-    header_size = struct.unpack("!I", _recv_exact(sock, 4))[0]
+def _recv_response(sock: socket.socket, *, deadline: float | None = None) -> tuple[dict[str, Any], bytes]:
+    header_size = struct.unpack("!I", _recv_exact(sock, 4, deadline=deadline))[0]
     if header_size <= 0 or header_size > _MAX_HEADER_BYTES:
         raise ResidentTtsError("resident TTS returned an invalid header size")
     try:
-        header = json.loads(_recv_exact(sock, header_size).decode("utf-8"))
+        header = json.loads(_recv_exact(sock, header_size, deadline=deadline).decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise ResidentTtsError("resident TTS returned an invalid response header") from exc
     if not isinstance(header, dict):
@@ -88,7 +100,7 @@ def _recv_response(sock: socket.socket) -> tuple[dict[str, Any], bytes]:
     pcm_size = header.get("pcm_bytes", 0)
     if not isinstance(pcm_size, int) or isinstance(pcm_size, bool) or pcm_size < 0:
         raise ResidentTtsError("resident TTS returned an invalid PCM size")
-    pcm = _recv_exact(sock, pcm_size) if pcm_size else b""
+    pcm = _recv_exact(sock, pcm_size, deadline=deadline) if pcm_size else b""
     return header, pcm
 
 
@@ -114,8 +126,9 @@ class ResidentPiperTtsClient:
         self._connect_timeout_s = float(connect_timeout_s)
         self._request_timeout_s = float(request_timeout_s)
         self._startup_timeout_s = float(startup_timeout_s)
-        if min(self._connect_timeout_s, self._request_timeout_s, self._startup_timeout_s) <= 0:
-            raise ValueError("resident TTS timeouts must be positive")
+        if any(not math.isfinite(v) or v <= 0 for v in
+               (self._connect_timeout_s, self._request_timeout_s, self._startup_timeout_s)):
+            raise ValueError("resident TTS timeouts must be finite and positive")
         self._fallback: PiperTtsClient | None = None
 
     @property
@@ -171,17 +184,18 @@ class ResidentPiperTtsClient:
                 self._fallback = PiperTtsClient(self._config)
             return self._fallback.synthesize(spoken)
 
-    def _request(self, payload: dict[str, object]) -> tuple[dict[str, Any], bytes]:
+    def _request(self, payload: dict[str, object], *, deadline: float | None = None) -> tuple[dict[str, Any], bytes]:
+        request_deadline = time.monotonic() + self._request_timeout_s
+        deadline = request_deadline if deadline is None else min(deadline, request_deadline)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(self._connect_timeout_s)
+            sock.settimeout(min(self._connect_timeout_s, _remaining(deadline)))
             sock.connect(str(self._socket_path))
-            sock.settimeout(self._request_timeout_s)
-            _send_message(sock, payload)
-            return _recv_response(sock)
+            _send_message(sock, payload, deadline=deadline)
+            return _recv_response(sock, deadline=deadline)
 
-    def _ping(self) -> bool:
+    def _ping(self, *, deadline: float | None = None) -> bool:
         try:
-            header, _ = self._request({"op": "ping", "protocol": _PROTOCOL})
+            header, _ = self._request({"op": "ping", "protocol": _PROTOCOL}, deadline=deadline)
             return (
                 header.get("ok") is True
                 and header.get("protocol") == _PROTOCOL
@@ -191,25 +205,32 @@ class ResidentPiperTtsClient:
             return False
 
     def _ensure_daemon(self) -> None:
-        if self._ping():
+        deadline = time.monotonic() + self._startup_timeout_s
+        if self._ping(deadline=deadline):
             return
         lock_path = self._socket_path.with_suffix(self._socket_path.suffix + ".lock")
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("a+b") as lock_file:
             os.chmod(lock_path, 0o600)
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            if self._ping():
+            while True:
+                _remaining(deadline)
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(min(0.05, _remaining(deadline)))
+            if self._ping(deadline=deadline):
                 return
             try:
                 self._socket_path.unlink()
             except FileNotFoundError:
                 pass
+            _remaining(deadline)
             self._spawn_daemon()
-            deadline = time.monotonic() + self._startup_timeout_s
             while time.monotonic() < deadline:
-                if self._ping():
+                if self._ping(deadline=deadline):
                     return
-                time.sleep(0.05)
+                time.sleep(min(0.05, _remaining(deadline)))
             raise ResidentTtsError(
                 f"resident Piper sidecar did not become ready: {self._socket_path}"
             )

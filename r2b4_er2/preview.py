@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import base64
 import json
+import math
+import queue
+import threading
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -65,6 +69,35 @@ class Er2PreviewClient:
         if self.evidence is not None:
             self.evidence.emit(event_type, provider="gemini", endpoint="preview", **fields)
 
+    def _create(self, deadline: float, cancel_event: threading.Event | None, **kwargs):
+        # Only a model request runs in this daemon thread. Late responses cannot
+        # dispatch tools; the caller owns all tool admission and cancellation.
+        def remaining() -> float:
+            if cancel_event is not None and cancel_event.is_set():
+                raise TimeoutError("ER2 preview cancelled")
+            value = deadline - time.monotonic()
+            if value <= 0:
+                raise TimeoutError("ER2 preview deadline reached")
+            return value
+        remaining()
+        response: queue.Queue = queue.Queue(maxsize=1)
+        def request() -> None:
+            try:
+                result = self.client.interactions.create(timeout=remaining(), **kwargs)
+                response.put_nowait((True, result))
+            except Exception as exc:
+                response.put_nowait((False, exc))
+        threading.Thread(target=request, name="er2-preview-request", daemon=True).start()
+        while True:
+            try:
+                ok, value = response.get(timeout=min(0.02, remaining()))
+            except queue.Empty:
+                continue
+            remaining()
+            if not ok:
+                raise value
+            return value
+
     def run(
         self,
         prompt: str,
@@ -73,6 +106,8 @@ class Er2PreviewClient:
         mime_type: str = "image/jpeg",
         tools: Er2RobotTools | None = None,
         max_tool_rounds: int = 8,
+        timeout_s: float = 30.0,
+        cancel_event: threading.Event | None = None,
     ) -> Er2PreviewResult:
         if not isinstance(prompt, str) or not prompt.strip():
             raise ValueError("prompt must be non-empty")
@@ -80,6 +115,9 @@ class Er2PreviewClient:
             raise TypeError("image_bytes must be bytes or None")
         if max_tool_rounds < 0:
             raise ValueError("max_tool_rounds must be non-negative")
+        if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or not math.isfinite(timeout_s) or timeout_s <= 0:
+            raise ValueError("timeout_s must be finite and positive")
+        deadline = time.monotonic() + timeout_s
 
         inputs: list[dict[str, object]] = []
         if image_bytes is not None:
@@ -116,7 +154,7 @@ class Er2PreviewClient:
                 image_bytes=len(image_bytes) if image_bytes is not None else 0,
                 tool_declarations=len(tool_declarations or ()),
             )
-            interaction = self.client.interactions.create(**kwargs)  # type: ignore[attr-defined]
+            interaction = self._create(deadline, cancel_event, **kwargs)
             steps = _interaction_steps(interaction)
             self._emit(
                 "ER2_PREVIEW_RESPONSE_RX",
@@ -144,6 +182,8 @@ class Er2PreviewClient:
                 function_results: list[dict[str, object]] = []
                 physical_tool_executed = False
                 for call in calls:
+                    if (cancel_event is not None and cancel_event.is_set()) or time.monotonic() >= deadline:
+                        raise TimeoutError("ER2 preview cancelled or expired")
                     name = getattr(call, "name", None)
                     arguments = _function_call_arguments(call)
                     call_id = getattr(call, "id", None)
@@ -169,7 +209,7 @@ class Er2PreviewClient:
                         if name in PHYSICAL_TOOLS:
                             physical_tool_executed = True
                         try:
-                            result = tools.execute(name, arguments)
+                            result = tools.execute(name, arguments, cancel_event=cancel_event, deadline=deadline)
                         except Er2SafetyError:
                             raise
                         except Exception as exc:
@@ -204,7 +244,7 @@ class Er2PreviewClient:
                     tool_round=rounds,
                     result_count=len(function_results),
                 )
-                interaction = self.client.interactions.create(  # type: ignore[attr-defined]
+                interaction = self._create(deadline, cancel_event,
                     model=self.config.preview_model,
                     previous_interaction_id=previous_id,
                     input=function_results,
