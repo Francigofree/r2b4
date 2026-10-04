@@ -1470,7 +1470,7 @@ class OperatorController:
     def _publish_stop(self) -> None:
         try:
             deadline = getattr(self, "_transition_deadline", None)
-            timeout = 1.0 if deadline is None else min(1.0, max(0.001, deadline - time.monotonic()))
+            timeout = 3.0 if deadline is None else min(3.0, max(0.001, deadline - time.monotonic()))
             result = subprocess.run(
                 [self.python, "-m", "v3.control_cli", "stop", "--command-id",
                  f"operator-stop-{time.time_ns()}-{os.getpid()}"],

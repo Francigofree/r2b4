@@ -151,7 +151,8 @@ A mozgás kívánt működése folyamatos, sima haladás, menet közbeni sebess�
 és pályakorrekcióval. A replanning, globális lokalizáció és háttérmunka önmagában
 nem tördelheti a fizikai mozgást. Friss robot-relative geometria és használható
 lokális odometria/heading mellett a globális pozíció bizonytalansága óvatosabb,
-legalább 0,15 m/s-os realizálható tartós haladást vagy háttérkorrekciót indokol.
+a mozgó kerekeken legalább 0,15 m/s-os realizálható tartós mozgást vagy
+háttérkorrekciót indokol; az egykerekezős forduló álló kereke kivétel.
 Valós lokális evidence-vesztés, akadály, célhoz érkezés, explicit STOP és safety
 korlát továbbra is indokolhat megállást. A 0–0,15 m/s közötti indulás/fékezés
 véges átmenet; a kis sebességű encoder-fit nem megbízható sebesség-authority.

@@ -242,7 +242,8 @@ class MotionRealizer:
             self._config.max_tracking_correction_rad_s,
         )
         wheels = self._config.wheel_limits.wheels(v_mps, omega_rad_s)
-        if abs(v_mps) > 1e-12 and wheels[0] * wheels[1] <= 1e-12:
+        if (abs(v_mps) > 1e-12 and abs(omega_rad_s) > 1e-12
+                and (wheels[0] * wheels[1] < 0.0 or min(abs(w) for w in wheels) <= 1e-12)):
             # Preserve one-wheel and counter-rotating tight circles. An
             # independent omega correction would silently turn it into an
             # infeasible small counter-rotation and lose the maneuver in L9.
