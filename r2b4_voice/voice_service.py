@@ -268,6 +268,10 @@ class VoiceConversationService:
 
     def request_stop(self) -> None:
         self._stop_event.set()
+        self._stop_interrupt_latched.set()
+        cancel = getattr(self._conversation, "cancel_pending_turns", None)
+        if callable(cancel):
+            cancel()
 
     def run_forever(self) -> int:
         self._publish_status()
@@ -675,6 +679,8 @@ class VoiceConversationService:
                         ),
                         camera=plan.camera,
                         tools_enabled=plan.tools,
+                        cancel_event=self._stop_interrupt_latched,
+                        duration_s=self._config.llm_timeout_s,
                     )
                 finally:
                     self._interrupt_enabled.clear()
@@ -813,8 +819,7 @@ class VoiceConversationService:
     def _execute_voice_stop(
         self, *, interaction_id: str, source: str, transcript: str | None = None
     ) -> bool:
-        if source == "INTERRUPT":
-            self._stop_interrupt_latched.set()
+        self._stop_interrupt_latched.set()
         cancel = getattr(self._conversation, "cancel_pending_turns", None)
         if callable(cancel):
             cancel()
@@ -943,10 +948,10 @@ class VoiceConversationService:
         utterance = self._builder.feed(frame)
         if (self._session_open and self._builder.last_frame_voiced
                 and self._session_deadline_ns is not None
-                and frame.monotonic_ns <= self._session_deadline_ns):
+                and frame.read_monotonic_ns <= self._session_deadline_ns):
             # Continuous silence starts at physical PCM activity, rather than
             # completion of an utterance or late consumption of buffered audio.
-            self._session_deadline_ns = min(frame.monotonic_ns, self._monotonic_ns()) + int(
+            self._session_deadline_ns = min(frame.read_monotonic_ns, self._monotonic_ns()) + int(
                 self._config.session_silence_s * 1_000_000_000
             )
             self._publish_status()
@@ -1001,6 +1006,7 @@ class VoiceConversationService:
         was_open = self._session_open
         self._session_open = False
         self._session_deadline_ns = None
+        self._stop_interrupt_latched.set()
         cancel = getattr(self._conversation, "cancel_pending_turns", None)
         if callable(cancel):
             cancel()

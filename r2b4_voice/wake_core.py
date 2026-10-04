@@ -134,6 +134,7 @@ class EnergyUtteranceBuilder:
         "_frames",
         "_gap_count",
         "_last_sequence",
+        "_last_frame_voiced",
         "_noise_floor",
         "_pre_roll",
         "_silence_frames",

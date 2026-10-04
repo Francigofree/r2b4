@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import struct
 
 import pytest
 
@@ -10,6 +11,7 @@ from r2b4_voice.voice_service import (
     VoiceServiceState,
 )
 from v3.adapters.microphone import MicrophoneHealth, MicrophoneState
+from v3.adapters.microphone import AudioFrame
 
 
 class FakePort:
@@ -146,6 +148,27 @@ def test_contract_defaults_are_robot_figyelek_and_ten_seconds() -> None:
     assert config.keyword == "robot"
     assert config.ready_text == "figyelek"
     assert config.session_silence_s == 10.0
+
+
+def test_continuous_speech_refreshes_silence_from_pcm_time(monkeypatch):
+    clock = Clock()
+    service, interface, _, _ = build_service(running=True, clock=clock)
+    service._open_session()
+    service._resume_session_timeout()
+    start = clock.now_ns
+    frames = [AudioFrame(i, start + offset, 48000, 1, "S16_LE", 960,
+                        struct.pack("<h", 1000) * 960)
+              for i, offset in ((8, 9_900_000_000), (9, 9_920_000_000), (10, 10_000_000_000))]
+    monkeypatch.setattr(service._microphone.port, "read_after", lambda *args, **kwargs: frames.pop(0) if frames else None)
+    for offset in (9_900_000_000, 9_920_000_000, 10_000_000_000):
+        clock.now_ns = start + offset
+        service._conversation_cycle()
+        assert service.snapshot().session_open
+    # A silent read arriving later must not renew the last physical speech time.
+    clock.now_ns = start + 20_000_000_001
+    service._conversation_cycle()
+    assert not service.snapshot().session_open
+    assert interface.executed == []
 
 
 @pytest.mark.parametrize("runtime_running", [False, True])

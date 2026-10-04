@@ -7,6 +7,8 @@ an already executed R2B4 tool or robot action.
 from __future__ import annotations
 
 import re
+import queue
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -144,6 +146,7 @@ class FailoverLLMClient:
         self._sleep = sleep
         self._cooldown_until: dict[str, float] = {}
         self._last_provider: str | None = None
+        self._request_slot = threading.BoundedSemaphore(1)
 
     @property
     def model(self) -> str:
@@ -170,10 +173,46 @@ class FailoverLLMClient:
         return self._call("complete_text", *args, **kwargs)
 
     def _call(self, method_name: str, *args: Any, **kwargs: Any):
+        deadline = kwargs.pop("deadline", None)
+        cancel_event = kwargs.pop("cancel_event", None)
+        def remaining() -> float:
+            if cancel_event is not None and cancel_event.is_set():
+                raise TimeoutError("LLM turn cancelled")
+            value = 0.02 if deadline is None else deadline - self._monotonic()
+            if value <= 0:
+                raise TimeoutError("LLM turn deadline reached")
+            return value
+        def request(method):
+            if deadline is None and cancel_event is None:
+                return method(*args, **kwargs)
+            # A blocking SDK/HTTP call may finish late. Keep at most one such
+            # request per client and discard its result after turn revocation.
+            while not self._request_slot.acquire(timeout=min(0.02, remaining())):
+                pass
+            response: queue.Queue = queue.Queue(maxsize=1)
+            def run() -> None:
+                try:
+                    remaining()
+                    response.put_nowait((True, method(*args, **kwargs)))
+                except Exception as exc:
+                    response.put_nowait((False, exc))
+                finally:
+                    self._request_slot.release()
+            threading.Thread(target=run, name="r2b4-provider-request", daemon=True).start()
+            while True:
+                try:
+                    ok, value = response.get(timeout=min(0.02, remaining()))
+                except queue.Empty:
+                    continue
+                remaining()
+                if not ok:
+                    raise value
+                return value
         failures: list[dict[str, object]] = []
         now = self._monotonic()
         attempted = 0
         for candidate in self._candidates:
+            remaining()
             method = getattr(candidate.client, method_name, None)
             if not callable(method):
                 continue
@@ -191,13 +230,15 @@ class FailoverLLMClient:
             attempted += 1
             attempt = 0
             while True:
+                remaining()
                 attempt += 1
                 try:
-                    result = method(*args, **kwargs)
+                    result = request(method)
                     self._last_provider = candidate.name
                     self._cooldown_until.pop(candidate.name, None)
                     return result
                 except Exception as exc:
+                    remaining()
                     policy = classify_llm_error(exc)
                     failures.append(
                         {
@@ -211,7 +252,11 @@ class FailoverLLMClient:
                     can_retry = policy.retry_same_provider and attempt < self._max_transient_attempts
                     if can_retry:
                         if self._retry_delay_s:
-                            self._sleep(self._retry_delay_s)
+                            delay = self._retry_delay_s if deadline is None else min(self._retry_delay_s, remaining())
+                            if cancel_event is None:
+                                self._sleep(delay)
+                            else:
+                                cancel_event.wait(delay)
                         continue
                     if policy.cooldown_s > 0:
                         self._cooldown_until[candidate.name] = self._monotonic() + policy.cooldown_s

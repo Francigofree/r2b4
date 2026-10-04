@@ -36,6 +36,8 @@ class AgentModelPort(Protocol):
         action_catalog: Sequence[Mapping[str, object]],
         *,
         images: Sequence[VisionJpeg] = (),
+        cancel_event: threading.Event | None = None,
+        deadline: float | None = None,
     ) -> AgentModelReply: ...
 
 
@@ -146,7 +148,10 @@ class AgentCore:
             _check_turn(cancel_event, deadline)
             # Images remain transient provider attachments, outside text messages
             # and the conversation journal. Only the latest observation is held.
-            reply = self._model.complete_agent_step(work, catalog, action_catalog, images=images) if images else self._model.complete_agent_step(work, catalog, action_catalog)
+            options = {"images": images} if images else {}
+            if cancel_event is not None or deadline is not None:
+                options.update(cancel_event=cancel_event, deadline=deadline)
+            reply = self._model.complete_agent_step(work, catalog, action_catalog, **options)
             _check_turn(cancel_event, deadline)
             if reply.tool_request is None:
                 return reply.to_decision()

@@ -9,7 +9,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from .action_validation import RobotActionValidator
@@ -199,6 +199,8 @@ class ConversationService:
         deadline = time.monotonic() + float(timeout_s)
         with self._condition:
             while True:
+                if self._closed:
+                    return None
                 result = self._completed.get(turn_id)
                 if result is not None:
                     return result.to_jsonable()
@@ -250,6 +252,16 @@ class ConversationService:
 
     def _store_result(self, result: ConversationTurnResult, *, error: str | None) -> None:
         with self._condition:
+            pending = self._pending.get(result.turn_id)
+            if result.error is None and (self._closed or (pending is not None and (
+                pending.cancelled.is_set() or time.monotonic() >= pending.deadline
+            ))):
+                error = "CONVERSATION_TURN_CANCELLED_OR_EXPIRED"
+                result = replace(result, spoken_text=None, proposed_action=None, action_status="ERROR", error=error)
+            if result.error is None and result.spoken_text:
+                self._history.append(ConversationMemoryTurn(result.user_text, result.spoken_text))
+                if len(self._history) > self._config.max_history_turns:
+                    del self._history[: len(self._history) - self._config.max_history_turns]
             self._last_turn = result
             self._last_error = error
             self._completed[result.turn_id] = result
@@ -326,11 +338,6 @@ class ConversationService:
                 model=decision.model,
             )
             self._journal.append("assistant", result.to_jsonable())
-            with self._lock:
-                if decision.spoken_text:
-                    self._history.append(ConversationMemoryTurn(turn.text, decision.spoken_text))
-                    if len(self._history) > self._config.max_history_turns:
-                        del self._history[: len(self._history) - self._config.max_history_turns]
             self._store_result(result, error=None)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"

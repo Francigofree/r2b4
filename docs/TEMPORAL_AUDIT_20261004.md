@@ -1,8 +1,30 @@
 # R2B4 Temporal Audit — 2026-10-04
 
-Az audit eredménye **1 P0, 6 P1 és 5 P2 megállapítás**. A P0 a beszélgetési turn lejárata/lezárása után végrehajtható robotképes toolhívás. Hardvermentes reprodukció elérte a valódi default tool-regiszter `er2.delegate` határát a service lezárása után; fizikai végrehajtást nem indítottunk.
+Az eredeti audit eredménye **1 P0, 6 P1 és 5 P2 megállapítás**. A P0 a beszélgetési turn lejárata/lezárása után végrehajtható robotképes toolhívás volt. Hardvermentes reprodukció elérte a valódi default tool-regiszter `er2.delegate` határát a service lezárása után; fizikai végrehajtást nem indítottunk.
 
-Ez állapotfelmérés és javítási sorrend. A felsorolt hibák nincsenek kijavítva. Production source, aktív config és authority-contract nem módosult.
+Az alábbi eredeti leltár, megállapítások és CSV az audit idején vizsgált forrást őrzik. A későbbi P0/P1 javítások állapotát a következő szakasz rögzíti; a történeti CSV nem a módosított source új leltára.
+
+## P0/P1 javítások lezárása — 2026-10-04
+
+A felhasználó kérésére a P0 és mind a hat P1 megállapítás javítása elkészült. A fejlesztés a P0/P1 scope validációjával lezárva; a P2 tételek külön feladatként maradnak. Robotikai authority-contract, L0–L12 layer-kód és aktív JSON-érték nem változott.
+
+| Tétel | Javítás és owner | Regressziós bizonyíték |
+|---|---|---|
+| P0-01 | `ConversationService` véges turn deadline, queued/running cancellation timeout/close/STOP esetén; `AgentCore` ellenőrzés modell előtt/után és broker-dispatchnél; ROBOTICS delegate továbbadja a cancellationt és fennmaradó időt. A revoked eredmény nem publikálható érvényes javaslatként. | Default robot toolhatár nem érhető el timeout, close, STOP cancellation vagy turn deadline után. |
+| P1-01 | A voice continuous-silence határ a meglévő VAD voiced PCM frame-jének `read_monotonic_ns` idejét követi. Az utterance elkészülése nem szükséges a beszédaktivitás figyelembevételéhez; a frame-read a fennmaradó csendablakhoz igazodik. | Határ előtt induló folyamatos beszéd 10 s-nál megtartja a sessiont; utána 10 s valódi csend lezárja. |
+| P1-02 | A host shutdown 10 s-os runtime grace-éhez a sidecar saját konstansaiból származtatott, egymás utáni status/capture finish budget adódik. Capture esetén 150 s, nélküle 24 s a külső keret; a belső capture finish 120 s maradt. | Virtuális idővel a saját finish budgetén belül kilépő capture/runtime nem okoz hamis host shutdown-hibát. |
+| P1-03 | ConfigResolver elutasítja a TTL-hez túl lassú reader pollt és a kritikus source/snapshot freshnesshez túl lassú multirate cadence-et. Explicit command heartbeat is a TTL-nél rövidebb kell legyen. | Az eredeti rossz reader/encoder variánsok elutasítva; production config változatlanul feloldható. |
+| P1-04 | `resident_status.status_is_fresh` a közös host observation-age szabály. Ready, fresh-ready, IDLE, ALLOW és CLI ACTIVE preflight ezt használja, a meglévő élő runtime ellenőrzés mellett. | Régi RUNNING/ready/ALLOW status elutasítva; friss status elfogadva. |
+| P1-05 | Teljes ER2 async session timeout connect/media/initial-send előtt; preview teljes request/tool-round budget és késői response eldobás. Media connect/read és a canonical véges navigáció előkészítés/lock/poll/indítás örökli a deadline/cancellationt. A provider failover host-várakozása ugyanazt a turn budgetet használja, clientenként legfeljebb egy későn befejeződő provider requesttel. | Connect, media és első send stall bounded; késői preview robottool eldobva; deadline/cancel az előkészítésben nem jut NAVIGATE-ig; lejárt turn nem indít provider retry/failovert vagy párhuzamos új provider requestet. |
+| P1-06 | Resident TTS deadline az első ping előtt indul; nonblocking flock acquisition, ping connect/send/összes recv ugyanabból a startup keretből kap maradék időt. Synthesis request budget továbbra is külön. | Stalloló ping és foglalt file-lock is bounded startup-failure; meglévő TTS roundtrip sikeres. |
+
+Javítási validáció: első CORE gate **26 passed**; provider scope **6 passed**; végső célzott host/config/voice/camera/TTS regresszió **17 passed**; `./r test full` **199 passed, 1 deselected**, 43,65 s. A teljes scope a szintetikus native replay-, process-, async-, perception-, motion-, voice- és provider-teszteket is tartalmazza. A 200-as repo tesztkvótán belül a kapcsolódó új boundary ellenőrzések két összetett host-szcenárióba kerültek, a cadence-negatív esetek a meglévő CORE invariáns-szcenárió részei. Whitespace/diff ellenőrzés is sikeres.
+
+A releváns új ellenőrzések: [host temporal boundary szcenáriók](../tests/feature/test_temporal_host_boundaries.py), [voice continuous silence](../tests/feature/test_voice_orchestration_p0.py), [config cadence invariánsok](../tests/core/test_v3_temporal_config_invariants.py).
+
+Live runtime vagy fizikai robotmozgás nem indult. Meglévő MCAP/capture feldolgozás és explicit Evidence Compiler nem futott. A replay szintetikus, a lassú I/O a regresszióban fake vagy lokális tesztsocket. A már elindult külső SDK/HTTP hívás nem kényszeríthető leállításra: a caller budgeten belül megszakad a várakozás, a késői eredmény nem indíthat robottoolt; a provider client megtartja a bounded request slotot az I/O befejezéséig. Fizikai művelet cancellationjekor a canonical STOP és a worker rendezett kilépése megvárandó, ezért a safety cleanup külön idő a munkavégzési deadline után. A natív Piper fallback compute továbbra is külön, saját hard compute-deadline nélküli út.
+
+Hardveres timing/jitter, tényleges hálózati/SDK késések és capture-writer véglegesítési idő nem bizonyított. Nem maradt ismert, elbukó P0/P1 regresszió; a P2 és a live bizonyítás külön scope. A helyi runtime/capture adatokhoz a javítás nem nyúlt; commit/push parancsot nem futtattunk.
 
 ## Hatókör, bizonyítás és leltár
 
@@ -213,7 +235,7 @@ Az alábbi táblázat az aktív JSON-on kívüli konstansokat/defaultokat és sz
 | `deploy/systemd/r2b4-wake.service` | Restart on failure, RestartSec 2 s; SIGTERM; TimeoutStopSec 5 s | Külső process lifetime; önmagában nem törli a processben futó turnt a SIGTERM előtt |
 | `tools/**`, root diag/probe és tesztek | Minden lexical/AST timeout/poll/window/default a CSV-ben saját fájl/symbol/scope szerint | Invocation-local/offline/teszt policy; nincs production override |
 
-## Validáció és fennmaradó bizonyítási korlátok
+## Az eredeti audit validációja és bizonyítási korlátai
 
 A canonical launcherrel futott ellenőrzések:
 

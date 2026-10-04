@@ -36,6 +36,8 @@ def _documents():
 def test_production_temporal_invariants_resolve_unchanged():
     resolved = ConfigResolver.from_documents(*_documents())
     assert resolved.lidar.maximum_result_age_ns == resolved.runtime.sensor_inputs.inputs.lidar_backend.maximum_result_age_ns
+    for invalid_cadence in ("command_reader", "encoder_closure"):
+        _check_cadence_cannot_outlive_its_acceptance_budget(invalid_cadence)
 
 
 def test_l11_feedback_cache_cannot_outlive_admission_freshness():
@@ -75,3 +77,17 @@ def test_existing_planner_transport_budget_remains_strict():
     candidate["layers"]["async_l6"]["request_timeout_ns"] = candidate["layers"]["async_l6"]["transport_timeout_ns"]
     with pytest.raises(ValueError):
         ConfigResolver.from_documents(hardware, physics, speed_map, candidate)
+
+
+def _check_cadence_cannot_outlive_its_acceptance_budget(invalid_cadence):
+    hardware, physics, speed_map, control = _documents()
+    if invalid_cadence == "command_reader":
+        ingress = control["runtime"]["command_ingress"]
+        ingress["reader_poll_s"] = ingress["maximum_ttl_ns"] / 1e9
+        reason = "reader poll.*TTL"
+    else:
+        multirate = control["runtime"]["multirate"]
+        multirate["source_periods"][0]["period_ns"] = multirate["max_snapshot_age_ns"] + 1
+        reason = "multirate period exceeds freshness"
+    with pytest.raises(ValueError, match=reason):
+        ConfigResolver.from_documents(hardware, physics, speed_map, control)
