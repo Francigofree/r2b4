@@ -302,6 +302,66 @@ def test_motion_native_reversal_pause_continues_and_recovers_per_wheel_pi():
             assert abs(getattr(output, f"{side}_normalized")) < abs(config.speed_map.lookup(side, reference)[0])
 
 
+def test_native_above_floor_reversal_without_ramp_deadline_has_one_edge_budget():
+    resolved = resolved_config()
+    config = resolved.runtime.composition.live_control.control
+    for flips in (False, True):
+        native, controller = _warm_native_feedback(resolved, None, side="left", sign=1)
+        restored = None
+        original_start = None
+        fault = None
+        for tick in range(30, 80):
+            # No new left physical edge; right feedback and callback receipt
+            # keep advancing. Flip-back and active zeros cannot revive old edges.
+            f = native.frame(tick, 0., .25)
+            target = (0. if tick % 3 == 1 else -.19 if tick % 3 == 2 else .19) if flips else .19
+            wheels = WheelVelocitySetpoint(f.context, target, .19)
+            try:
+                output = controller(wheels, f)
+            except ValueError as exc:
+                assert "feedback remained uncertain too long" in str(exc)
+                if restored is not None:
+                    with pytest.raises(ValueError):
+                        restored(wheels, f)
+                fault = f.context.monotonic_ns
+                break
+            if restored is not None:
+                assert restored(wheels, f) == output
+            state = controller.checkpoint()
+            if original_start is None:
+                original_start = state.feedback_uncertain_since_ns
+            assert state.feedback_uncertain_since_ns == original_start
+            assert state.feedback_transition_until_ns is None
+            if target:
+                assert f.context.monotonic_ns < original_start + config.wheel_pi.max_feedback_uncertainty_ns
+            if tick == 30:
+                assert output.left_normalized == pytest.approx(config.speed_map.lookup("left", .19)[0])
+                restored = WheelActuatorController(config.speed_map, config.wheel_pi)
+                restored.restore(state)
+        assert fault is not None
+        # A zero left demand needs no left liveness check; the first subsequent
+        # active demand must fault at the same original deadline.
+        assert fault <= original_start + config.wheel_pi.max_feedback_uncertainty_ns + 40_000_000
+
+    # A full active zero likewise preserves the episode; explicit revocation
+    # is the only zero that resets it. Post-epoch matching physical edges recover.
+    native, controller = _warm_native_feedback(resolved, None, side="left", sign=1)
+    f = native.frame(30, 0., .25)
+    controller(WheelVelocitySetpoint(f.context, .19, .19), f)
+    start = controller.checkpoint().feedback_uncertain_since_ns
+    f = native.frame(31, 0., 0.)
+    controller(WheelVelocitySetpoint(f.context, 0., 0.), f)
+    assert controller.checkpoint().feedback_uncertain_since_ns == start
+    f = native.frame(32, .25, .25)
+    controller(WheelVelocitySetpoint(f.context, .19, .19), f)
+    f = native.frame(33, .25, .25)
+    controller(WheelVelocitySetpoint(f.context, .19, .19), f)
+    assert controller.checkpoint().feedback_uncertain_since_ns is None
+    f = native.frame(34, 0., 0.)
+    controller(WheelVelocitySetpoint(f.context, 0., 0., motion_revoked=True), f)
+    assert controller.checkpoint().left_direction_epoch_ns is None
+
+
 def test_motion_native_degraded_start_hold_resume_and_edge_watchdogs():
     from rig import healthy_localization
     from v3.adapters.fake_edges import FakeHal

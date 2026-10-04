@@ -262,6 +262,43 @@ def test_localization_accumulated_drift_keeps_local_motion_and_bad_interval_hold
             assert abs(motion.requested_v_mps)+abs(motion.requested_omega_rad_s) > 0.0
 
 
+def test_localization_failure_requires_independent_interval_after_its_end():
+    from v3.capture import encode_value
+    from v3.layers.l3_state_estimation import ConsistencyFailure, NativeEstimatorStateCheckpoint
+    from v3.replay import _decode_production_value
+
+    config = resolved_config().runtime.composition.live_control.control.estimation
+    estimator = NativeStateEstimator(config)
+    for tick in range(7):
+        estimator(frame(tick))
+    failure_end = frame(6).context.monotonic_ns
+    # A qualified provider's retained failure is not cleared by the current
+    # snapshot-only wheel/gyro path or by a delayed good scan from before it.
+    checkpoint = replace(estimator.checkpoint(), slip_suspected=True,
+        local_translation_state=QualityState.LOST, local_loss_relative_ns=failure_end,
+        wheel_failure=ConsistencyFailure(failure_end-20_000_000, failure_end,
+                                        "ENCODER", 6, 0, yaw_error_rad=.4))
+    checkpoint = _decode_production_value(encode_value(checkpoint),
+                                         NativeEstimatorStateCheckpoint, "checkpoint")
+    estimator.restore(checkpoint)
+    restored = NativeStateEstimator(config)
+    restored.restore(checkpoint)
+    for tick, start, end, sequence, observable in (
+        (7, failure_end-60_000_000, failure_end-40_000_000, 1, 1.),
+        (8, failure_end-60_000_000, failure_end-40_000_000, 1, 1.),  # duplicate
+        (9, failure_end, failure_end+20_000_000, 2, 0.),           # unqualified
+        (10, failure_end+20_000_000, failure_end+80_000_000, 3, 1.),
+    ):
+        f = frame(tick)
+        f = replace(f, accepted=f.accepted+(observation("lidar_relative_motion", sequence, end,
+            start_ns=start, dx_m=0., dy_m=0., dyaw_rad=0., rmse_m=.001, observability=observable),))
+        estimate = estimator(f)
+        assert restored(f) == estimate
+        assert estimate.localization_quality.slip_suspected is (tick < 10)
+        assert (estimate.localization_quality.local_translation is QualityState.LOST) is (tick < 10)
+        assert (estimator.checkpoint().wheel_failure is not None) is (tick < 10)
+
+
 def test_localization_relative_scan_registration_and_feature_poor_corridor():
     import numpy as np
     from v3.lidar_relative_odometry import RelativeLidarOdometry

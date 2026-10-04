@@ -320,6 +320,7 @@ def select_motion(plan: NavigationPlan) -> MotionObjective:
             velocity_target=None,
             constraints=plan.constraints,
             validity=plan.motion_validity,
+            geometry_proof=plan.geometry_proof,
         )
     if plan.status is NavigationStatus.ACTIVE and plan.velocity_target is not None:
         return MotionObjective(
@@ -333,6 +334,7 @@ def select_motion(plan: NavigationPlan) -> MotionObjective:
             velocity_target=plan.velocity_target,
             constraints=plan.constraints,
             validity=plan.motion_validity,
+            geometry_proof=plan.geometry_proof,
         )
     return _stop_objective(plan, plan.reason or plan.status.value)
 
@@ -401,6 +403,7 @@ def _trajectory_objective(
         constraints=plan.constraints,
         trajectory=selected,
         validity=plan.motion_validity,
+        geometry_proof=plan.geometry_proof,
     )
 
 

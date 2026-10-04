@@ -282,9 +282,9 @@ A fizikai tartós kerékminimum a kalibráció része; L6 transzlációs mintav�
 
 Az encoder pulse-integritása és a velocity estimate megbízhatósága külön evidence. 0,13–0,15 m/s a bizonytalan sáv; alatta a fit nem control-grade. Az ép signed displacement lokális odometria marad, velocity/yaw scalar korrekció nem adhat hozzá második X/Y elmozdulást. L11 friss, ép és a kért irányú accepted GPIO-élekkel kerékenként bizonyított mozgás mellett tartósan használhat kalibrált feed-forwardot, megbízhatatlan velocity-fitből PI-korrekció nélkül. A liveness-budgetet kizárólag a saját kerék accepted edge-időbélyege újíthatja meg; snapshot/callback publikálás, elutasított pulse és a másik kerék nem. Ha ez a bizonyíték hiányzik, a meglévő uncertainty watchdog és a bizonyított, véges L9 átmenet eredeti lejárata alkalmazandó, nem megújítható. Hiányzó/stale/hibás encoderre a tartós tolerancia nem alkalmazható. Az összegzett pozícióeltérés DEGRADED evidence; LOST-hoz aktuális intervalhiba, slip, freshness/integrity vagy folytonosságvesztés szükséges, recoveryhez új relatív mérés kell.
 
-## 9. Konfiguráció, command, host/operator és külső I/O
-
 Encoder acquisition-idő és friss snapshot nem igazol lezárt fizikai pulse-prefixet. Wheel–gyro slip-authorityhoz fizikailag közös, időben qualified intervallum szükséges; a snapshot-only összevetés UNQUALIFIED. Igazolt consistency-hibát csak annak végét követő friss, observable independent relatív intervallum oldhat fel. Régebbi arrival, duplikált vagy UNQUALIFIED evidence nem törli a failure-lineage-et. L11 az új requested direction kezdetét követő accepted physical edge-dzsel zárhat irányváltási uncertainty epizódot; célváltás, közbenső aktív nulla cél és PI-reset nem újítja a watchdogot. Explicit motion-visszavonás külön metadata az L9→L10→L11 úton, és nulla kimenetet jelent.
+
+## 9. Konfiguráció, command, host/operator és külső I/O
 
 ### V3 CLOSED — execution és behavior határ
 

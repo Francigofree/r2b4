@@ -991,13 +991,16 @@ class TrajectoryNavigator:
                 self._last_maneuver_direction = 1 if omega > 0 else -1
             if mission.mode is CommandMode.EXPLORE:
                 pending = self._pending_rollout_request
-                proposed = pending is not None and plan.local_goal == pending.goal
+                proposed = (pending is not None and plan.local_goal == pending.goal
+                            and self._pending_goal_selected_ns is not None)
                 plan = replace(plan,
                     goal_selection_reason=(self._pending_goal_selection_reason if proposed else self._goal_selection_reason),
                     goal_selected_ns=(self._pending_goal_selected_ns if proposed else self._goal_selected_ns))
         return plan
 
-    def _motion_geometry_proof(self, plan, estimate, world):
+    def _motion_geometry_proof(
+        self, plan: NavigationPlan, estimate: RobotEstimate, world: WorldSnapshot,
+    ) -> LocalMotionProof | None:
         validity, costmap = plan.motion_validity, world.local_costmap
         quality = estimate.localization_quality
         now = plan.context.monotonic_ns
@@ -1017,12 +1020,16 @@ class TrajectoryNavigator:
         speed_cap = min(plan.constraints.max_v_mps, self._config.operational_max_v_mps)
         bound = speed_cap * horizon_ns / 1e9
         scene = self._build_planning_scene(world)
-        clearance = _planning_scene_point_clearance(
-            estimate.x_m, estimate.y_m, scene, costmap.radius_m, margin + bound)
+        clearance = min(costmap.radius_m, _planning_scene_point_clearance(
+            estimate.x_m, estimate.y_m, scene, costmap.radius_m, margin + bound))
         for obstacle in world.obstacle_tracks:
             if obstacle.confidence >= self._config.obstacle_confidence_floor:
                 clearance = min(clearance, math.hypot(obstacle.x_m-estimate.x_m, obstacle.y_m-estimate.y_m)
                     - obstacle.radius_m - math.hypot(obstacle.vx_mps, obstacle.vy_mps)*horizon_ns/1e9)
+        if clearance < margin:
+            # A zero displacement bound would still admit rotation. The full
+            # robot circle must be clear before certifying any altered motion.
+            return None
         captured_ns = now - costmap.freshness_ns
         until = min(validity.valid_until_ns,
                     captured_ns + self._config.max_costmap_freshness_ns,
@@ -1030,7 +1037,7 @@ class TrajectoryNavigator:
         return LocalMotionProof(plan.context, world.frame_id, validity.scope,
             costmap.revision, captured_ns, until, horizon_ns, max(0., min(bound, clearance-margin)))
 
-    def _goal_handoff_ns(self):
+    def _goal_handoff_ns(self) -> int:
         # Completion-input mode has no release_delay authority. The next replan
         # plus the bounded request lifetime is the actual replacement budget.
         return self._config.trajectory_replan_interval_ns + min(self._request_timeout_ns, self._max_plan_age_ns)
@@ -2369,6 +2376,7 @@ class TrajectoryNavigator:
         self._pending_rollout_id = None
         self._pending_rollout_request = None
         self._pending_goal_selected_ns = None
+        self._pending_goal_selection_reason = None
         self._pending_release_tick_id = None
         self._pending_release_not_before_ns = None
         if selected_ns is not None:
