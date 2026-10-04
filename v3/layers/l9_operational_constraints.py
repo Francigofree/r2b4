@@ -111,41 +111,26 @@ class OperationalConstraintLayer:
         speed_scale = self._config.degraded_velocity_scale if degraded else 1.0
         acceleration_scale = self._config.degraded_acceleration_scale if degraded else 1.0
         codes: list[ConstraintCode] = []
-        allowed_v_mps = _clamp(motion.requested_v_mps, motion.constraints.max_v_mps)
-        allowed_omega_rad_s = _clamp(
-            motion.requested_omega_rad_s,
-            motion.constraints.max_omega_rad_s,
-        )
-        if (
-            allowed_v_mps != motion.requested_v_mps
-            or allowed_omega_rad_s != motion.requested_omega_rad_s
-        ):
+        if (abs(motion.requested_v_mps) > motion.constraints.max_v_mps
+                or abs(motion.requested_omega_rad_s) > motion.constraints.max_omega_rad_s):
             codes.append(ConstraintCode.MISSION_LIMIT)
 
         linear_cap = (self._config.wheel_limits.degraded_linear_cap(
             self._config.max_v_mps, self._config.max_omega_rad_s, speed_scale,
         ) if degraded else self._config.max_v_mps)
-        platform_v = _clamp(allowed_v_mps, linear_cap)
         angular_cap = self._config.wheel_limits.degraded_angular_cap(
             self._config.max_omega_rad_s, speed_scale,
         ) if degraded else self._config.max_omega_rad_s
-        platform_omega = _clamp(allowed_omega_rad_s, angular_cap)
-        if platform_v != allowed_v_mps or platform_omega != allowed_omega_rad_s:
+        allowed_v_mps, allowed_omega_rad_s = self._config.wheel_limits.constrain(
+            motion.requested_v_mps, motion.requested_omega_rad_s,
+            max_v_mps=min(motion.constraints.max_v_mps, linear_cap),
+            max_omega_rad_s=min(motion.constraints.max_omega_rad_s, angular_cap),
+            max_curvature_rad_per_m=self._config.max_curvature_rad_per_m)
+        if (allowed_v_mps, allowed_omega_rad_s) != (motion.requested_v_mps, motion.requested_omega_rad_s):
             codes.append(ConstraintCode.SPEED_LIMIT)
-        allowed_v_mps = platform_v
-        allowed_omega_rad_s = platform_omega
-
-        if abs(allowed_v_mps) > 1e-12:
-            curvature_limit = self._config.max_curvature_rad_per_m * abs(allowed_v_mps)
-            curved_omega = _clamp(allowed_omega_rad_s, curvature_limit)
-            if curved_omega != allowed_omega_rad_s:
-                codes.append(ConstraintCode.CURVATURE_LIMIT)
-                allowed_omega_rad_s = curved_omega
-
-        feasible_v, feasible_omega = self._config.wheel_limits.constrain(allowed_v_mps, allowed_omega_rad_s)
-        if (feasible_v, feasible_omega) != (allowed_v_mps, allowed_omega_rad_s):
-            codes.append(ConstraintCode.SPEED_LIMIT)
-        allowed_v_mps, allowed_omega_rad_s = feasible_v, feasible_omega
+        if (abs(motion.requested_v_mps) > 1e-12
+                and abs(motion.requested_omega_rad_s) > self._config.max_curvature_rad_per_m*abs(motion.requested_v_mps)):
+            codes.append(ConstraintCode.CURVATURE_LIMIT)
 
         previous_v, previous_omega, dt_s = self._previous_motion(estimate)
         limited_v = _rate_limited(
@@ -182,6 +167,16 @@ class OperationalConstraintLayer:
         if ((abs(allowed_v_mps) > 1e-12 and quality.local_translation is QualityState.LOST)
                 or (abs(allowed_omega_rad_s) > 1e-12 and quality.heading is QualityState.LOST)):
             return self._stop(motion, (ConstraintCode.LOCALIZATION_DEGRADED,))
+        if motion.geometry_required:
+            approved = motion.approved_velocity
+            altered = (approved is None or (allowed_v_mps, allowed_omega_rad_s)
+                       != (approved.v_mps, approved.omega_rad_s))
+            if altered and (allowed_v_mps != 0.0 or allowed_omega_rad_s != 0.0):
+                proof = motion.geometry_proof
+                if (proof is None or not proof.usable_at(motion.context, motion.motion_validity)
+                        or not proof.covers(allowed_v_mps)
+                        or (motion.transition_allowed and not proof.covers(previous_v))):
+                    return self._stop(motion, (ConstraintCode.LOCAL_CLEARANCE,))
         transition = motion.transition_allowed and ConstraintCode.ACCELERATION_LIMIT in codes and dt_s > 0.0
         subfloor = any(1e-12 < abs(w) < self._config.wheel_limits.minimum_mps - 1e-12
                        for w in self._config.wheel_limits.wheels(allowed_v_mps, allowed_omega_rad_s))

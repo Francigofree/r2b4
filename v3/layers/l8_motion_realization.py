@@ -168,8 +168,9 @@ class MotionRealizer:
                 requested_v_mps *= max(0.0, math.cos(heading_error))
 
         requested_v_mps, requested_omega_rad_s = self._config.wheel_limits.constrain(
-            math.copysign(min(abs(requested_v_mps), objective.constraints.max_v_mps), requested_v_mps),
-            _clamp(requested_omega_rad_s, objective.constraints.max_omega_rad_s),
+            requested_v_mps, requested_omega_rad_s,
+            max_v_mps=objective.constraints.max_v_mps,
+            max_omega_rad_s=objective.constraints.max_omega_rad_s,
         )
         return MotionIntent(
             context=objective.context,
@@ -181,6 +182,13 @@ class MotionRealizer:
             localization_requirement=(
                 LocalizationRequirement() if objective.validity is None else objective.validity.localization_requirement
             ),
+            geometry_proof=objective.geometry_proof,
+            motion_validity=objective.validity,
+            approved_velocity=(VelocityTarget(objective.trajectory.v_mps, objective.trajectory.omega_rad_s)
+                               if objective.trajectory is not None else None),
+            geometry_required=(objective.validity is not None and (
+                objective.kind is MotionObjectiveKind.TRACK_TRAJECTORY
+                or (objective.kind is MotionObjectiveKind.TRACK_PLAN and abs(requested_v_mps) > 1e-12))),
         )
 
     def _velocity_reference(self, target: VelocityTarget, estimate: RobotEstimate) -> Waypoint:
@@ -282,7 +290,10 @@ class MotionRealizer:
         self._state = MotionRealizationStateCheckpoint()
         return MotionIntent(objective.context, 0.0, 0.0,
                             self._config.horizon_ns, objective.constraints,
-                            transition_allowed=objective.transition_allowed)
+                            transition_allowed=objective.transition_allowed,
+                            geometry_proof=objective.geometry_proof,
+                            motion_validity=objective.validity,
+                            geometry_required=objective.geometry_proof is not None)
 
 
 def realize_stop(

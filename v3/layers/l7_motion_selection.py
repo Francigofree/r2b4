@@ -155,6 +155,7 @@ class MotionSelector:
                 validity=replace(previous.validity, valid_until_ns=min(
                     previous.validity.valid_until_ns, validity.valid_until_ns,
                 )),
+                geometry_proof=plan.geometry_proof,
                 constraints=replace(plan.constraints,
                     max_v_mps=min(previous.constraints.max_v_mps, plan.constraints.max_v_mps),
                     max_omega_rad_s=min(previous.constraints.max_omega_rad_s, plan.constraints.max_omega_rad_s)),
@@ -167,18 +168,20 @@ class MotionSelector:
         else:
             transition_allowed = previous is not None and previous.validity is not None
             if previous is not None and previous.trajectory is not None:
-                # A newly rejected command cannot survive as a braking origin.
-                # Candidate grid IDs may change on replan: compare the physical
-                # command as well as the planner identity.
+                # Grid IDs are not physical identity. Collision revokes the
+                # old command; changed goal-progress permits only a freshly
+                # proved, bounded L9 transition toward the new viable target.
                 old = previous.trajectory
-                if any(
-                    (candidate.candidate_id == old.candidate_id
-                     or (candidate.v_mps == old.v_mps and candidate.omega_rad_s == old.omega_rad_s))
-                    and (candidate.collision or not candidate.progress_viable)
-                    for candidate in plan.trajectory_candidates
-                ):
+                matching = tuple(c for c in plan.trajectory_candidates
+                                 if c.v_mps == old.v_mps and c.omega_rad_s == old.omega_rad_s)
+                if any(c.collision for c in matching):
                     transition_allowed = False
-            objective = replace(objective, transition_allowed=transition_allowed)
+                elif any(not c.progress_viable for c in matching):
+                    proof = plan.geometry_proof
+                    transition_allowed = (transition_allowed and proof is not None
+                                          and proof.usable_at(plan.context, validity))
+            objective = replace(objective, transition_allowed=transition_allowed,
+                                geometry_proof=plan.geometry_proof)
             command = objective.trajectory or objective.velocity_target
             self._state = MotionSelectionStateCheckpoint(
                 last_mission_id=plan.mission_id,

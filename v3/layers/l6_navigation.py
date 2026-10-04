@@ -19,6 +19,7 @@ from v3.contracts import (
     MissionIntent,
     MissionLifecycle,
     MotionValidity,
+    LocalMotionProof,
     NavigationPlan,
     NavigationStatus,
     RobotEstimate,
@@ -243,6 +244,11 @@ class NavigationConfig:
     explore_local_goal_distance_weight: float = 0.0
 
     def __post_init__(self) -> None:
+        if (type(self.motion_proof_horizon_ns) is not int or self.motion_proof_horizon_ns <= 0
+                or any(math.isnan(cap) or cap <= 0 for cap in (
+                    self.operational_max_v_mps, self.operational_max_omega_rad_s,
+                    self.operational_max_curvature_rad_per_m))):
+            raise ValueError("invalid derived navigation motion envelope")
         if self.localization_recovery_timeout_ns <= 0 or not 0 < self.localization_degraded_speed_scale <= 1:
             raise ValueError("invalid localization recovery limits")
         omega = self.localization_recovery_omega_rad_s
@@ -992,7 +998,6 @@ class TrajectoryNavigator:
         return plan
 
     def _motion_geometry_proof(self, plan, estimate, world):
-        from v3.contracts import LocalMotionProof
         validity, costmap = plan.motion_validity, world.local_costmap
         quality = estimate.localization_quality
         now = plan.context.monotonic_ns
@@ -1122,7 +1127,7 @@ class TrajectoryNavigator:
             self._localization_recovery_mission_id = mission.mission_id
             self._localization_recovery_direction = (
                 (1 if estimate.omega_rad_s > 0 else -1) if abs(estimate.omega_rad_s) > 1e-3
-                else self._last_maneuver_direction or 1)
+                else (self._last_maneuver_direction if self._mission_id == mission.mission_id else 0) or 1)
         elapsed = now - self._localization_recovery_started_ns
         geometry = world.robot_relative_geometry
         # Recovery must not depend on the pose-aligned costmap: L4 intentionally
@@ -1378,6 +1383,8 @@ class TrajectoryNavigator:
         self._coverage.clear()
         self._local_goal = None
         self._goal_selected_ns = 0
+        self._goal_selection_reason = None
+        self._last_maneuver_direction = 0
         self._last_replan_ns = None
         self._last_replan_tick_id = None
         self._trajectory_candidates = ()
@@ -1961,22 +1968,20 @@ class TrajectoryNavigator:
             if goal is not None:
                 bearing = math.atan2(goal.y_m - estimate.y_m, goal.x_m - estimate.x_m)
                 approach_speed = max(0.0, estimate.v_mps * math.cos(bearing - estimate.yaw_rad))
-            if (
-                goal is None
-                or math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
-                <= (self._config.local_goal_tolerance_m
-                    + approach_speed * self._config.rollout_horizon_ns / 1e9)
-                or (self._trajectory_candidates and not any(
-                    not candidate.collision and candidate.progress_viable
-                    for candidate in self._trajectory_candidates
-                ))
-                or mission.context.monotonic_ns - self._goal_selected_ns
-                >= self._config.local_goal_max_age_ns
-            ):
-                # EXPLORE waypoints guide continuous travel, not arrival stops.
-                # Replace one rollout before actual arrival. A stationary turn
-                # must keep its waypoint instead of chasing a new bearing at
-                # every replan merely because the mission speed cap is high.
+            goal_reason = None
+            if goal is None:
+                goal_reason = "INITIAL_GOAL"
+            elif self._trajectory_candidates and not any(
+                    not c.collision and c.progress_viable for c in self._trajectory_candidates):
+                goal_reason = "NO_VIABLE_PATH"
+            elif mission.context.monotonic_ns - self._goal_selected_ns >= self._config.local_goal_max_age_ns:
+                goal_reason = "GOAL_MAX_AGE"
+            elif math.hypot(goal.x_m-estimate.x_m, goal.y_m-estimate.y_m) <= (
+                    self._config.local_goal_tolerance_m + approach_speed*self._goal_handoff_ns()/1e9):
+                goal_reason = "GOAL_HANDOFF"
+            if goal_reason is not None:
+                # Collision lookahead is not the waypoint replacement lead.
+                # Keep an approaching, viable goal until its bounded handoff.
                 scene = self._build_planning_scene(world)
                 goal = self._choose_local_goal(estimate, costmap, scene, mission.explore_preferences)
                 goal_selected_ns = mission.context.monotonic_ns
@@ -1990,6 +1995,7 @@ class TrajectoryNavigator:
                 mission.constraints.max_omega_rad_s,
                 scene=scene,
                 goal_selected_ns=goal_selected_ns,
+                goal_selection_reason=goal_reason,
                 allow_exploration_detour=True,
             )
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
@@ -2073,15 +2079,17 @@ class TrajectoryNavigator:
                                                and abs(c.omega_rad_s) > _MOTION_EPSILON)))
         if proposals:
             proposal = max(proposals, key=lambda c: (c.total_score, c.candidate_id))
-            v = min(v_cap, proposal.v_mps)
-            omega = max(-omega_cap, min(omega_cap, proposal.omega_rad_s))
+            v, omega = proposal.v_mps, proposal.omega_rad_s
         else:
             heading_error = _wrapped_angle(math.atan2(goal.y_m-estimate.y_m,
                                                        goal.x_m-estimate.x_m)-estimate.yaw_rad)
             v = 0.0 if abs(heading_error) > math.pi / 4 else v_cap
             omega = (math.copysign(omega_cap, heading_error) if v == 0.0
                      else max(-omega_cap, min(omega_cap, heading_error)))
-        v, omega = self._config.wheel_limits.constrain(v, omega)
+        v, omega = self._config.wheel_limits.constrain(v, omega,
+            max_v_mps=min(v_cap, self._config.operational_max_v_mps),
+            max_omega_rad_s=min(omega_cap, self._config.operational_max_omega_rad_s),
+            max_curvature_rad_per_m=self._config.operational_max_curvature_rad_per_m)
         if abs(v) <= _MOTION_EPSILON and abs(omega) <= _MOTION_EPSILON:
             return None
         # One horizon, one candidate, using the existing bounded spatial index.
@@ -2091,7 +2099,7 @@ class TrajectoryNavigator:
         clearance = _footprint_clearance(estimate.x_m, estimate.y_m, estimate.yaw_rad,
                                          world, self._config, scene)
         candidate = self._evaluate_trajectory(0, 0, v, omega, estimate, world, scene,
-                                             goal, v_cap, omega_cap, clearance)
+                                             goal, v_cap, omega_cap, clearance, planning=False)
         if candidate.collision:
             return self._inactive(mission, NavigationStatus.INVALIDATED, "LOCAL_PATH_BLOCKED")
         if not candidate.progress_viable and mission.mode is CommandMode.EXPLORE:
@@ -2101,7 +2109,7 @@ class TrajectoryNavigator:
             return None
         # Leave braking room before the committed local goal. A global mission
         # with a lost map fix must never roll beyond this bounded segment.
-        if candidate.v_mps * candidate.horizon_ns / 1e9 > distance:
+        if mission.mode is not CommandMode.EXPLORE and candidate.v_mps * candidate.horizon_ns / 1e9 > distance:
             return None
         validity = self._guidance_validity(mission, world)
         until = min(validity.valid_until_ns,
@@ -2177,6 +2185,7 @@ class TrajectoryNavigator:
         *,
         scene: _LocalPlanningScene | None = None,
         goal_selected_ns: int | None = None,
+        goal_selection_reason: str | None = None,
         allow_exploration_detour: bool = False,
     ) -> None:
         if estimate.localization_quality.local_translation is QualityState.DEGRADED or estimate.localization_quality.heading is QualityState.DEGRADED:
@@ -2201,6 +2210,7 @@ class TrajectoryNavigator:
             )
             if goal_selected_ns is not None:
                 self._goal_selected_ns = goal_selected_ns
+                self._goal_selection_reason = goal_selection_reason
             self._store_trajectory_plan(
                 context.monotonic_ns,
                 context.tick_id,
@@ -2225,6 +2235,7 @@ class TrajectoryNavigator:
             ),
             allow_exploration_detour=allow_exploration_detour,
         )
+        self._pending_goal_selection_reason = goal_selection_reason
         if self._completion_inputs:
             self._pending_rollout_id = context.tick_id + 1
             self._pending_rollout_request = request
@@ -2293,6 +2304,7 @@ class TrajectoryNavigator:
 
         if self._pending_goal_selected_ns is not None:
             self._goal_selected_ns = self._pending_goal_selected_ns
+            self._goal_selection_reason = self._pending_goal_selection_reason
         self._store_trajectory_plan(
             request.context.monotonic_ns,
             request.context.tick_id,
@@ -2353,6 +2365,7 @@ class TrajectoryNavigator:
             return _RolloutDisposition.HOLD
 
         selected_ns = self._pending_goal_selected_ns
+        selection_reason = self._pending_goal_selection_reason
         self._pending_rollout_id = None
         self._pending_rollout_request = None
         self._pending_goal_selected_ns = None
@@ -2360,6 +2373,7 @@ class TrajectoryNavigator:
         self._pending_release_not_before_ns = None
         if selected_ns is not None:
             self._goal_selected_ns = selected_ns
+            self._goal_selection_reason = selection_reason
         self._store_trajectory_plan(
             result.source_context.monotonic_ns,
             result.source_context.tick_id,
@@ -2383,6 +2397,7 @@ class TrajectoryNavigator:
         self._pending_rollout_id = None
         self._pending_rollout_request = None
         self._pending_goal_selected_ns = None
+        self._pending_goal_selection_reason = None
         self._pending_release_tick_id = None
         self._pending_release_not_before_ns = None
 
@@ -2429,14 +2444,16 @@ class TrajectoryNavigator:
         # Ranking preferences arrive from the caller; geometry, sampling budget,
         # coverage, lifecycle and feasibility remain owned by generic L6.
         policy = self._config if preferences is None else preferences
-        options: list[tuple[float, float, int, int, Waypoint]] = []
+        options: list[tuple[float, float, int, int, Waypoint, float]] = []
+        uncertainty = self._config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m
+        tangent = estimate.yaw_rad + estimate.omega_rad_s*self._goal_handoff_ns()/1e9
         footprint_radius = 0.5 * math.hypot(
             self._config.footprint_length_m,
             self._config.footprint_width_m,
         )
         relevant_clearance_m = max(
             self._config.clearance_score_cap_m,
-            footprint_radius + self._config.footprint_safety_margin_m,
+            footprint_radius + self._config.footprint_safety_margin_m + uncertainty,
         ) + _POINT_CLEARANCE_EPSILON_M
         distances = _explore_goal_distances(self._config, preferences)
         distance_span = max(
@@ -2462,7 +2479,7 @@ class TrajectoryNavigator:
                     costmap.radius_m,
                     relevant_clearance_m,
                 )
-                if clearance <= footprint_radius + self._config.footprint_safety_margin_m:
+                if clearance <= footprint_radius + self._config.footprint_safety_margin_m + uncertainty:
                     continue
                 visits = self._coverage.get(
                     self._coverage_key(goal.x_m, goal.y_m), (0, 0)
@@ -2484,15 +2501,17 @@ class TrajectoryNavigator:
                     + policy.local_goal_forward_weight * forward_preference
                     + policy.explore_local_goal_distance_weight * distance_score
                 )
-                options.append((score, distance_m, index, distance_index, goal))
+                # Distance already has caller-owned preference. Count the
+                # additional turn here, avoiding a second short-goal bias.
+                maneuver = abs(_wrapped_angle(heading-tangent))
+                options.append((score, distance_m, index, distance_index, goal, maneuver))
         if not options:
             return Waypoint(estimate.x_m, estimate.y_m, estimate.yaw_rad)
-        # Equal-quality options prefer the longer smooth segment, then the
-        # canonical alternating heading order.
-        return max(
-            options,
-            key=lambda item: (item[0], item[1], -item[2], -item[3]),
-        )[4]
+        best_score = max(item[0] for item in options)
+        score_band = policy.local_goal_clearance_weight * min(1.,
+            (costmap.resolution_m + uncertainty)/self._config.clearance_score_cap_m)
+        near_best = (item for item in options if item[0] >= best_score-score_band-1e-12)
+        return min(near_best, key=lambda item: (item[5], -item[0], -item[1], item[2], item[3]))[4]
 
     def _trajectory_rollout(
         self,
@@ -2615,8 +2634,12 @@ class TrajectoryNavigator:
         max_v_mps: float,
         max_omega_rad_s: float,
         start_clearance_m: float,
+        *, planning: bool = True,
     ) -> TrajectoryEvaluation:
-        v_mps, omega_rad_s = self._config.wheel_limits.constrain(v_mps, omega_rad_s, planning=True)
+        v_mps, omega_rad_s = self._config.wheel_limits.constrain(v_mps, omega_rad_s, planning=planning,
+            max_v_mps=min(max_v_mps, self._config.operational_max_v_mps),
+            max_omega_rad_s=min(max_omega_rad_s, self._config.operational_max_omega_rad_s),
+            max_curvature_rad_per_m=self._config.operational_max_curvature_rad_per_m)
         step_ns = self._config.rollout_horizon_ns // self._config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
@@ -2877,7 +2900,10 @@ class TrajectoryRolloutComputer:
         coverage: dict[tuple[int, int], int],
     ) -> TrajectoryEvaluation:
         config = self._config
-        v_mps, omega_rad_s = config.wheel_limits.constrain(v_mps, omega_rad_s, planning=True)
+        v_mps, omega_rad_s = config.wheel_limits.constrain(v_mps, omega_rad_s, planning=True,
+            max_v_mps=min(max_v_mps, config.operational_max_v_mps),
+            max_omega_rad_s=min(max_omega_rad_s, config.operational_max_omega_rad_s),
+            max_curvature_rad_per_m=config.operational_max_curvature_rad_per_m)
         step_ns = config.rollout_horizon_ns // config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
