@@ -160,6 +160,10 @@ class EncoderEdgeDiagnostics:
     right_last_callback_latency_ns: int | None = None
     left_max_callback_latency_ns: int | None = None
     right_max_callback_latency_ns: int | None = None
+    left_last_accepted_edge_timestamp_ns: int | None = None
+    right_last_accepted_edge_timestamp_ns: int | None = None
+    left_last_accepted_edge_direction: int = 0
+    right_last_accepted_edge_direction: int = 0
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -281,6 +285,8 @@ class EncoderEdgeDiagnostics:
             (self.right_last_callback_latency_ns, "right_last_callback_latency_ns"),
             (self.left_max_callback_latency_ns, "left_max_callback_latency_ns"),
             (self.right_max_callback_latency_ns, "right_max_callback_latency_ns"),
+            (self.left_last_accepted_edge_timestamp_ns, "left_last_accepted_edge_timestamp_ns"),
+            (self.right_last_accepted_edge_timestamp_ns, "right_last_accepted_edge_timestamp_ns"),
         ):
             _optional_integer(value, name)
         for value, name in (
@@ -288,6 +294,8 @@ class EncoderEdgeDiagnostics:
             (self.right_confirmed_direction, "right_confirmed_direction"),
             (self.left_pending_direction, "left_pending_direction"),
             (self.right_pending_direction, "right_pending_direction"),
+            (self.left_last_accepted_edge_direction, "left_last_accepted_edge_direction"),
+            (self.right_last_accepted_edge_direction, "right_last_accepted_edge_direction"),
         ):
             if value not in (-1, 0, 1):
                 raise ValueError(f"{name} must be -1, 0 or 1")
@@ -466,6 +474,10 @@ class NativeEncoderSource:
             DataField("raw_right_pulse_count", diagnostics.raw_right_pulse_count),
             DataField("left_pulse_delta", diagnostics.left_pulse_delta),
             DataField("right_pulse_delta", diagnostics.right_pulse_delta),
+            DataField("left_last_accepted_edge_timestamp_ns", diagnostics.left_last_accepted_edge_timestamp_ns),
+            DataField("right_last_accepted_edge_timestamp_ns", diagnostics.right_last_accepted_edge_timestamp_ns),
+            DataField("left_last_accepted_edge_direction", diagnostics.left_last_accepted_edge_direction),
+            DataField("right_last_accepted_edge_direction", diagnostics.right_last_accepted_edge_direction),
             DataField("sample_interval_ns", diagnostics.sample_interval_ns),
             DataField("left_counter_running", diagnostics.left_counter_running),
             DataField("right_counter_running", diagnostics.right_counter_running),

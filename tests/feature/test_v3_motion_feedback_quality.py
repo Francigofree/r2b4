@@ -211,6 +211,7 @@ class _NativeFeedback:
             self.counters["left"], self.counters["right"], self.config,
         ), config.runtime.sensor_inputs.inputs.encoder_source)
         self.previous_ns = 1_000_000_000
+        self.pulse_fraction = {side: 0.0 for side in self.counters}
 
     def frame(self, tick, left_mps, right_mps, *, now_ns=None):
         now_ns = 1_000_000_000 + tick * 20_000_000 if now_ns is None else now_ns
@@ -220,11 +221,18 @@ class _NativeFeedback:
             edges = list(old.edge_history)
             count, direction = old.pulse_count, old.confirmed_direction
             if speed:
-                direction = 1 if speed > 0 else -1
-                interval = round(getattr(self.config, f"{side}_step_distance_m") / abs(speed) * 1e9)
-                for timestamp in range(self.previous_ns + interval, now_ns + 1, interval):
+                next_direction = 1 if speed > 0 else -1
+                if next_direction != direction:
+                    self.pulse_fraction[side] = 0.0
+                direction = next_direction
+                interval = getattr(self.config, f"{side}_step_distance_m") / abs(speed) * 1e9
+                fraction = self.pulse_fraction[side]
+                total = fraction + (now_ns - self.previous_ns) / interval
+                for index in range(int(total)):
+                    timestamp = round(self.previous_ns + (index + 1 - fraction) * interval)
                     count += direction
                     edges.append(SignedPulseEdge(timestamp, count))
+                self.pulse_fraction[side] = total - int(total)
             counter.value = replace(old, pulse_count=count, edge_history=tuple(edges[-128:]),
                                     confirmed_direction=direction,
                                     # Rejected/pending A callbacks and receipt
@@ -295,87 +303,158 @@ def test_motion_native_reversal_pause_continues_and_recovers_per_wheel_pi():
             assert abs(getattr(output, f"{side}_normalized")) < abs(config.speed_map.lookup(side, reference)[0])
 
 
-def test_motion_native_reversal_pause_keeps_original_deadlines_and_fails_closed():
+def test_motion_native_degraded_start_hold_resume_and_edge_watchdogs():
+    from rig import healthy_localization
     from v3.adapters.fake_edges import FakeHal
-    from v3.contracts import LifecycleState, SafetyDecision
+    from v3.contracts import (LifecycleState, LocalizationRequirement, MotionIntent,
+                              QualityState, RobotEstimate, SafetyDecision)
+    from v3.layers.l9_operational_constraints import OperationalConstraintLayer
+    from v3.layers.l10_chassis_control import DifferentialDriveKinematics
     from v3.layers.l12_safety_final import FinalSafetyGate
 
     resolved = resolved_config()
     config = resolved.runtime.composition.live_control.control
-    for original_deadline in (1_740_000_000, 2_400_000_000):
-        native, controller = _warm_native_feedback(resolved, original_deadline)
-        restored = WheelActuatorController(config.speed_map, config.wheel_pi)
-        restored.restore(controller.checkpoint())
-        last_edge = min(c.value.edge_history[-1].timestamp_ns for c in native.counters.values())
-        deadline = min(original_deadline, last_edge + config.wheel_pi.max_feedback_uncertainty_ns)
-        # Planner deadlines, magnitudes, active sides and fresh acquisitions
-        # all change while the original uncertainty episode remains continuous.
-        for tick in range(30, 44):
-            now = min(1_000_000_000 + tick * 20_000_000, deadline - 1)
-            frame = native.frame(tick, 0., 0., now_ns=now)
-            target = .02 if tick % 2 else .04
-            wheels = WheelVelocitySetpoint(frame.context,
-                target if tick % 2 else 0., 0. if tick % 2 else target,
-                velocity_transition_until_ns=now + 2_000_000_000)
-            output = controller(wheels, frame)
+    limiter = OperationalConstraintLayer(config.operational_constraints)
+    chassis = DifferentialDriveKinematics(config.chassis_control)
+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+    native = _NativeFeedback(resolved)
+    restored = None
+    subfloor_after_watchdog = 0
+    saw_first_edge_without_fit = False
+    previous = None
+    # Both startup and HOLD recovery have a real DEGRADED L9 pivot ramp.
+    # Simulate static friction for 320 ms, then slow accepted signed progress:
+    # the fit remains below control-grade speed while physical liveness is good.
+    for tick in range(500):
+        hold = 80 <= tick < 85
+        starting = tick < 18 or 85 <= tick < 103
+        measured_left = 0.0 if starting or hold else -.02
+        measured_right = 0.0 if starting or hold else .02
+        frame = native.frame(tick, measured_left, measured_right)
+        context = frame.context
+        quality = healthy_localization(local_translation=QualityState.DEGRADED,
+                                       heading=QualityState.DEGRADED,
+                                       global_position=QualityState.LOST)
+        estimate = RobotEstimate(context, 'odom', 0., 0., 0., 0., 0., (0.,) * 25,
+                                 localization_quality=quality)
+        motion = MotionIntent(context, 0., 0. if hold else config.operational_constraints.wheel_limits.target_center_spin_rad_s,
+            config.motion_realization.horizon_ns, config.mission.default_constraints,
+            stop_reason='LOCALIZATION_HOLD' if hold else None,
+            transition_allowed=not hold,
+            localization_requirement=LocalizationRequirement(False, True, False))
+        wheels = chassis(limiter.evaluate(motion, estimate))
+        output = controller(wheels, frame)
+        if restored is not None:
             assert restored(wheels, frame) == output
-            assert output.left_normalized > 0 or output.right_normalized > 0
-            if now == deadline - 1:
-                break
-        frame = native.frame(tick + 1, 0., 0., now_ns=deadline)
-        wheels = replace(wheels, context=frame.context, left_mps=.02, right_mps=.02)
-        for candidate in (controller, restored):
-            with pytest.raises(ValueError, match="MISSING_EDGE:"):
-                candidate(wheels, frame)
+        if hold or tick == 0:
+            assert output.left_normalized == output.right_normalized == 0.
+        else:
+            assert output.left_normalized < 0 < output.right_normalized
+            assert output.left_normalized == pytest.approx(config.speed_map.lookup('left', wheels.left_mps)[0])
+            assert output.right_normalized == pytest.approx(config.speed_map.lookup('right', wheels.right_mps)[0])
+            if previous is not None:
+                budget = min(config.operational_constraints.max_acceleration_mps2,
+                    config.operational_constraints.max_angular_acceleration_rad_s2 *
+                    config.chassis_control.track_width_m / 2) * config.operational_constraints.degraded_acceleration_scale * .02
+                assert abs(wheels.left_mps - previous.left_mps) <= budget + 1e-12
+                assert abs(wheels.right_mps - previous.right_mps) <= budget + 1e-12
+            if (tick > 13 and tick < 80 or tick > 98) and abs(wheels.left_mps) < config.speed_map.minimum_continuous_speed_mps:
+                subfloor_after_watchdog += 1
+            values = {v.key: v.value for v in frame.accepted[0].values}
+            if values['left_last_accepted_edge_timestamp_ns'] is not None and values['left_estimation_timebase'] is None:
+                saw_first_edge_without_fit = True
+        if tick == 105:
+            restored = WheelActuatorController(config.speed_map, config.wheel_pi)
+            restored.restore(controller.checkpoint())
+        previous = None if hold else wheels
+    assert subfloor_after_watchdog > 40
+    assert saw_first_edge_without_fit
+
+    # A stopped left wheel must fail at its own last accepted edge deadline.
+    # The right wheel, fresh snapshots, rejected callbacks and moving L9
+    # deadlines cannot renew it; the real L12 error path writes zero FAULT.
+    last_edge = native.counters['left'].value.edge_history[-1].timestamp_ns
+    deadline = last_edge + config.wheel_pi.max_feedback_uncertainty_ns
+    for tick in range(500, 520):
+        now = min(1_000_000_000 + tick * 20_000_000, deadline)
+        frame = native.frame(tick, 0., .02, now_ns=now)
+        wheels = WheelVelocitySetpoint(frame.context, -.19, .19,
+                                       velocity_transition_until_ns=now + 5_000_000_000)
+        if now < deadline:
+            assert controller(wheels, frame).left_normalized < 0
+            continue
+        with pytest.raises(ValueError, match='MISSING_EDGE:left$'):
+            controller(wheels, frame)
         writer = FakeHal()
-        final = FinalSafetyGate(writer).finalize(frame.context, None, (), LifecycleState.ACTIVE, "L11_ERROR")
+        final = FinalSafetyGate(writer).finalize(frame.context, None, (), LifecycleState.ACTIVE, 'L11_ERROR')
         assert final.safety_decision is SafetyDecision.FAULT
         assert not final.enabled and final.left_output == final.right_output == 0
         assert writer.writes == (final,)
+        break
+    else:
+        pytest.fail('silent left encoder did not spend its own accepted-edge watchdog')
 
-    # Native stale/timing/counter errors and ordinary same-direction edge
-    # loss still reach the existing HOLD/FAULT path after a spent watchdog.
-    for failure in ("same_direction", "speed_boundary", "no_original_deadline",
-                    "stale_acquisition", "stale_edges", "read_error", "stopped_counter", "invalid_timing"):
-        native, controller = _warm_native_feedback(resolved, 2_400_000_000)
-        for tick in range(30, 36):
-            frame = native.frame(tick, 0., 0.)
-        context = frame.context
-        target = .02
-        if failure == "same_direction":
-            target = -target
-        elif failure == "speed_boundary":
-            target = config.wheel_pi.velocity_unreliable_below_mps
-        elif failure == "no_original_deadline":
-            checkpoint = controller.checkpoint()
-            controller.restore(replace(checkpoint, feedback_transition_until_ns=None))
-        elif failure == "stale_acquisition":
-            context = TickContext(36, context.monotonic_ns + config.wheel_pi.max_feedback_age_ns + 1)
-            frame = replace(frame, context=context)
+    # No first accepted edge has only the original L9 startup budget. Direction
+    # changes and publications cannot prolong it; a fresh wrong-direction fit
+    # cannot substitute for requested-direction signed progress either.
+    for failure in ('no_edges', 'wrong_direction', 'direction_counter_mismatch'):
+        native = _NativeFeedback(resolved)
+        controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+        initial_deadline = 1_800_000_000
+        for tick in range(41):
+            speed = -.25 if failure == 'wrong_direction' else .25 if failure == 'direction_counter_mismatch' else 0.
+            frame = native.frame(tick, speed, speed)
+            if failure == 'direction_counter_mismatch':
+                observation = frame.accepted[0]
+                frame = replace(frame, accepted=(replace(observation, values=tuple(
+                    DataField(v.key, -1) if v.key.endswith('confirmed_direction') else v
+                    for v in observation.values)),))
+            target = -.02 if failure == 'no_edges' and tick % 2 else .02
+            wheels = WheelVelocitySetpoint(frame.context, target, .02,
+                velocity_transition_until_ns=initial_deadline + tick * 20_000_000)
+            try:
+                controller(wheels, frame)
+            except ValueError:
+                assert frame.context.monotonic_ns <= initial_deadline
+                break
         else:
-            if failure == "read_error":
-                counter = native.counters["left"]
-                counter.value = replace(counter.value, read_errors=1)
-            elif failure == "stopped_counter":
-                native.counters["left"].running = False
-            elif failure == "invalid_timing":
-                counter = native.counters["left"]
-                edges = counter.value.edge_history
-                counter.value = replace(counter.value, edge_history=edges[:-1] + (
-                    replace(edges[-1], timestamp_ns=2_000_000_000),))
-            elif failure == "stale_edges":
-                counter = native.counters["left"]
-                old = counter.value
-                edge = SignedPulseEdge(old.edge_history[-1].timestamp_ns + 1,
-                                       old.pulse_count - 1)
-                counter.value = replace(old, pulse_count=edge.pulse_count,
-                                        edge_history=old.edge_history + (edge,))
-            frame = native.frame(36, 0., 0.)
-            context = frame.context
-        wheels = WheelVelocitySetpoint(context, target, target,
+            pytest.fail(f'{failure} renewed the original startup uncertainty deadline')
+
+    # Keep independent source-failure coverage on the native L11 -> L12 path.
+    # The startup allowance never covers stale, corrupt or stopped encoders.
+    for failure in ('stale_acquisition', 'stale_edges', 'read_error',
+                    'stopped_counter', 'invalid_timing'):
+        native, controller = _warm_native_feedback(resolved, 2_400_000_000)
+        counter = native.counters['left']
+        old = counter.value
+        if failure == 'read_error':
+            counter.value = replace(old, read_errors=1)
+        elif failure == 'stopped_counter':
+            counter.running = False
+        elif failure == 'invalid_timing':
+            counter.value = replace(old, edge_history=old.edge_history[:-1] + (
+                replace(old.edge_history[-1], timestamp_ns=2_000_000_000),))
+        elif failure == 'stale_edges':
+            edge = SignedPulseEdge(old.edge_history[-1].timestamp_ns + 1,
+                                   old.pulse_count - 1)
+            counter.value = replace(old, pulse_count=edge.pulse_count,
+                                    edge_history=old.edge_history + (edge,))
+        now = 1_900_000_000 if failure == 'stale_edges' else 1_600_000_000
+        frame = native.frame(30, 0., 0., now_ns=now)
+        if failure == 'stale_acquisition':
+            context = TickContext(31, now + config.wheel_pi.max_feedback_age_ns + 1)
+            frame = replace(frame, context=context)
+            wheels = WheelVelocitySetpoint(context, -.02, -.02,
+                                           velocity_transition_until_ns=3_000_000_000)
+            held = controller(wheels, frame)
+            assert held.left_normalized == held.right_normalized == 0.
+            context = TickContext(32, context.monotonic_ns + config.wheel_pi.max_feedback_uncertainty_ns)
+            frame = replace(frame, context=context)
+        wheels = WheelVelocitySetpoint(frame.context, -.02, -.02,
                                        velocity_transition_until_ns=3_000_000_000)
         with pytest.raises(ValueError):
             controller(wheels, frame)
         writer = FakeHal()
-        final = FinalSafetyGate(writer).finalize(context, None, (), LifecycleState.ACTIVE, "L11_ERROR")
-        assert not final.enabled and final.left_output == final.right_output == 0
+        final = FinalSafetyGate(writer).finalize(frame.context, None, (), LifecycleState.ACTIVE, 'L11_ERROR')
+        assert final.safety_decision is SafetyDecision.FAULT
+        assert not final.enabled and final.left_output == final.right_output == 0.

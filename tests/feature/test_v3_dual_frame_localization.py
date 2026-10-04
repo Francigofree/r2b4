@@ -102,7 +102,9 @@ def test_localization_global_loss_and_relocalization_preserve_local_map_follow_a
     assert recovery.reason == "LOCALIZATION_REACQUIRE"
     assert recovery.local_goal is None
     assert recovery.velocity_target.v_mps == 0.0
-    assert recovery.velocity_target.omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
+    assert recovery.velocity_target.omega_rad_s == config.navigation.localization_recovery_omega_rad_s
+    assert all(config.navigation.wheel_limits.minimum_mps <= abs(speed) <= config.navigation.wheel_limits.maximum_mps
+               for speed in config.navigation.wheel_limits.wheels(0.0, recovery.velocity_target.omega_rad_s))
     assert recovery.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
     recovered = nav.evaluate(mission, fixed, fixed_world)
     assert recovered.mission_id == recovery.mission_id
@@ -193,18 +195,26 @@ def test_localization_stale_imu_slip_and_bad_producer_fail_closed():
             assert restored(f) == estimate
 
 
-def test_localization_slow_encoder_drift_is_detected_and_checkpoint_is_exact():
+def test_localization_accumulated_drift_keeps_local_motion_and_bad_interval_holds():
     config = resolved_config().runtime.composition.live_control.control
     estimator = NativeStateEstimator(config.estimation)
+    world_model = ShadowWorldModel(config.world_model)
     restored = None
     residuals = []
     for tick in range(601):
         f = frame(tick, speed=.204, step_ns=100_000_000)
+        ns = f.context.monotonic_ns
+        f = replace(f, accepted=f.accepted+(scan(tick, ns),))
         if tick:
-            ns = f.context.monotonic_ns
             f = replace(f, accepted=f.accepted+(observation("lidar_relative_motion", tick, ns,
-                start_ns=ns-100_000_000, dx_m=.020, dy_m=0., dyaw_rad=0., rmse_m=.001, observability=.9),))
+                start_ns=ns-100_000_000, dx_m=.020, dy_m=0.,
+                dyaw_rad=-config.estimation.quality.relative_yaw_slip_rad*.02,
+                rmse_m=.001, observability=.9),))
         estimate = estimator(f)
+        world = world_model(f, estimate)
+        assert estimate.localization_quality.heading is not QualityState.LOST
+        assert world.local_costmap.source_sequence == tick
+        assert world.local_costmap.freshness_ns == 0
         if restored is not None:
             assert restored(f) == estimate
         if tick == 300:
@@ -215,6 +225,41 @@ def test_localization_slow_encoder_drift_is_detected_and_checkpoint_is_exact():
     assert residuals[0] < residuals[1] < residuals[2]
     assert residuals[-1] > config.estimation.quality.consistency_good_m
     assert estimate.localization_quality.local_translation is QualityState.DEGRADED
+    assert estimate.localization_quality.heading is QualityState.DEGRADED
+    assert estimate.local_pose.yaw_rad == 0.0
+
+    manager, nav, selector, realizer, limiter = layers(config)
+    for tick in (601, 602, 603):
+        f = frame(tick, speed=.204, step_ns=100_000_000)
+        ns = f.context.monotonic_ns
+        extra = (scan(tick, ns),)
+        if tick != 602:
+            # An actual bad interval still revokes heading. A fresh IMU on the
+            # next tick cannot erase it; a new good relative interval can.
+            extra += (observation("lidar_relative_motion", tick, ns,
+                start_ns=ns-100_000_000, dx_m=.020, dy_m=0.,
+                dyaw_rad=-config.estimation.quality.relative_yaw_slip_rad*1.1 if tick == 601 else 0.,
+                rmse_m=.001, observability=.9),)
+        f = replace(f, accepted=f.accepted+extra)
+        estimate = estimator(f)
+        assert restored(f) == estimate
+        world = world_model(f, estimate)
+        mission = manager.evaluate(CommandRequest(f.context, "drift", CommandMode.EXPLORE, (), tick))
+        plan = nav.evaluate(mission, estimate, world)
+        motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
+        allowed = limiter.evaluate(motion, estimate)
+        if tick < 603:
+            assert estimate.localization_quality.heading is QualityState.LOST
+            assert world.local_costmap.source_sequence == 600
+            assert world.local_costmap.freshness_ns == (tick-600)*100_000_000
+            assert plan.reason == "LOCALIZATION_HOLD"
+            assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
+        else:
+            assert estimate.localization_quality.heading is QualityState.DEGRADED
+            assert world.local_costmap.source_sequence == tick
+            assert world.local_costmap.freshness_ns == 0
+            assert plan.status is NavigationStatus.ACTIVE
+            assert abs(motion.requested_v_mps)+abs(motion.requested_omega_rad_s) > 0.0
 
 
 def test_localization_relative_scan_registration_and_feature_poor_corridor():

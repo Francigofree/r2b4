@@ -196,7 +196,12 @@ def test_localization_missing_absolute_and_rate_heading_authority_still_fails_cl
                                               else checkpoint.last_relative_ns-100_000_000)
                         values["observability"] = 1.0
                     elif failure == "yaw_disagreement":
-                        values["dyaw_rad"] = .03
+                        # A small discrepancy per interval can accumulate into
+                        # drift without local authority loss. Prove an actual
+                        # interval-slip gate after a degraded interval instead.
+                        values["dyaw_rad"] = config.quality.relative_yaw_slip_rad * (
+                            .75 if tick < 111 else 1.1
+                        )
                 changed.append(replace(observation, values=tuple(DataField(k, v) for k, v in values.items())))
             estimate = estimator(replace(frame, accepted=tuple(changed)))
             if failure in {"relative_unaligned", "relative_overlap"}:

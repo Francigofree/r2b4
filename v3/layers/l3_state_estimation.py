@@ -1283,6 +1283,7 @@ class NativeEstimatorStateCheckpoint:
     relative_translation_error_m: float = 0.0
     local_translation_state: QualityState = QualityState.GOOD
     local_loss_relative_ns: int | None = None
+    relative_yaw_error_rad: float = 0.0
 
 
 class NativeStateEstimator:
@@ -1301,6 +1302,7 @@ class NativeStateEstimator:
         self._last_lidar_ns = self._last_fix_ns = self._last_relative_ns = None
         self._consistency_x_m = self._consistency_y_m = 0.0
         self._consistency_yaw_rad = 0.0
+        self._relative_yaw_error_rad = 0.0
         self._relative_rmse_m = None
         self._observability = 0.0
         self._unverified_sigma_m = 0.01
@@ -1325,7 +1327,7 @@ class NativeStateEstimator:
             self._heading_trusted, self._generation, self._transform_revision,
             self._relative_sequence, self._slip_suspected, self._consistency_yaw_rad,
             self._relative_translation_error_m, self._local_translation_state,
-            self._local_loss_relative_ns,
+            self._local_loss_relative_ns, self._relative_yaw_error_rad,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1369,6 +1371,7 @@ class NativeStateEstimator:
             self._unverified_sigma_m = cfg.local_lost_sigma_m
             self._last_relative_ns = None
             self._consistency_yaw_rad = 0.0
+            self._relative_yaw_error_rad = 0.0
         # Consumer freshness is evaluated here, even when L2 admits no new event.
         fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= self._config.max_measurement_age_ns)
         frame = replace(frame, accepted=fresh)
@@ -1539,7 +1542,7 @@ class NativeStateEstimator:
             unverified_s = relative_age / 1e9
             relative_variance = (
                 self._config.yaw_measurement_variance / max(cfg.minimum_observability, self._observability)
-                + self._consistency_yaw_rad**2
+                + self._relative_yaw_error_rad**2
                 + self._config.process_noise[2] * unverified_s / self._config.process_noise_reference_dt_s
                 + self._config.omega_measurement_variance * unverified_s**2
                 + self._config.process_noise[4] / self._config.process_noise_reference_dt_s * unverified_s**3 / 3
@@ -1559,7 +1562,7 @@ class NativeStateEstimator:
         if (not continuous or not self._heading_trusted
                 or source_is_stale(now, self._local._last_heading_ns, self._config.max_measurement_age_ns)
                 or yaw_sigma**2 > cfg.max_yaw_variance
-                or abs(self._consistency_yaw_rad) > cfg.relative_yaw_slip_rad):
+                or abs(self._relative_yaw_error_rad) > cfg.relative_yaw_slip_rad):
             heading_state = QualityState.LOST
         global_sigma = math.sqrt(max(global_estimate.covariance_5x5[0], global_estimate.covariance_5x5[6]))
         global_state = QualityState.GOOD
@@ -1626,6 +1629,12 @@ class NativeStateEstimator:
         error_y = dy-_numeric_value(observation, "dy_m")
         error_yaw = _normalize_angle(yaw-_numeric_value(observation, "dyaw_rad"))
         self._relative_translation_error_m = math.hypot(error_x, error_y)
+        # Local heading authority belongs to this measured scan interval. A
+        # slowly accumulated gyro/registration bias degrades map alignment but
+        # is not uncertainty or slip of the current interval. Keep a bad
+        # interval until a fresh, observable, non-overlapping interval replaces
+        # it; fresh IMU/global corrections alone cannot erase that evidence.
+        self._relative_yaw_error_rad = error_yaw
         # Non-overlapping scan intervals accumulate systematic slow encoder drift.
         decay = math.exp(-(end_ns-start_ns)/1e9/cfg.consistency_memory_s)
         self._consistency_x_m = decay*self._consistency_x_m + math.cos(a.yaw_rad)*error_x-math.sin(a.yaw_rad)*error_y

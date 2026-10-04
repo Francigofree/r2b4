@@ -12,6 +12,7 @@ from v3.composition.native_control import NativeControlComposition
 from v3.contracts import (
     CommandMode, CommandRequest, ConstraintCode, DataField, DeviceHealth, DeviceHealthState,
     DeviceSample, LifecycleState, RawDeviceBatch, SafetyDecision, TickContext,
+    QualityState,
 )
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
@@ -32,6 +33,9 @@ def test_localization_recovery_realizes_calibrated_spin_and_replays_historical_h
     dt_ns = resolved.runtime.tick_period_ns
     ticks = math.ceil(control.navigation.localization_recovery_timeout_ns / dt_ns) + 3
     wheels = control.navigation.wheel_limits
+    recovery_cap = min(control.navigation.localization_recovery_omega_rad_s,
+                       resolved.roomcruise.max_omega_rad_s,
+                       control.operational_constraints.max_omega_rad_s)
     v = omega = yaw = 0.0
     moving = 0
     previous_wheels = None
@@ -84,7 +88,7 @@ def test_localization_recovery_realizes_calibrated_spin_and_replays_historical_h
                 else:
                     allowed = layers['L9']
                     assert allowed.allowed_v_mps == 0.0
-                    assert 0 <= allowed.allowed_omega_rad_s <= wheels.minimum_center_spin_rad_s
+                    assert 0 <= allowed.allowed_omega_rad_s <= recovery_cap
                     if tick >= math.ceil(control.navigation.localization_recovery_timeout_ns / dt_ns) or tick == 50:
                         assert layers['L6'].reason == 'LOCALIZATION_HOLD'
                         assert final.left_output == final.right_output == 0.0
@@ -303,6 +307,17 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
                            frame_id="ROBOT_BASE", point_count=1,
                            point_000_x_m=1.05, point_000_y_m=0.05, point_000_quality=10),
                 ))
+                if tick:
+                    # Small scan/heading disagreement accumulates beyond the
+                    # slip threshold without making any current interval bad.
+                    # Inject one actual bad interval after the checkpoint.
+                    yaw_error = config.estimation.quality.relative_yaw_slip_rad * (
+                        1.1 if tick == 310 else .05
+                    )
+                    samples.append(sample("RPLIDAR_C1", "lidar_relative_motion", tick // 5,
+                        context.monotonic_ns, start_ns=context.monotonic_ns-100_000_000,
+                        dx_m=.019, dy_m=0.0, dyaw_rad=-yaw_error,
+                        rmse_m=.001, observability=.9))
             current_safety = safety_sample
             if tick == 350:
                 current_safety = replace(safety_sample, values=tuple(
@@ -329,7 +344,17 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
             assert result.trace.fault_layer is None
             layers = {row.layer: row.output for row in result.trace.layers}
             costmap = layers["L4"].local_costmap
-            if tick < 350 and layers["L3"].covariance_5x5[0] > config.estimation.quality.max_position_variance:
+            quality = layers["L3"].localization_quality
+            if 310 <= tick < 315:
+                assert quality.heading is QualityState.LOST
+                assert layers["L6"].reason == "LOCALIZATION_HOLD"
+                assert result.final_actuation.left_output == result.final_actuation.right_output == 0.0
+                assert costmap.source_sequence == 305//5
+                assert costmap.freshness_ns == (tick-305)*20_000_000
+            elif tick >= 150:
+                assert quality.heading is QualityState.DEGRADED
+                assert costmap.freshness_ns <= 100_000_000
+            if tick < 350 and not 310 <= tick < 315 and layers["L3"].covariance_5x5[0] > config.estimation.quality.max_position_variance:
                 assert ConstraintCode.LOCALIZATION_DEGRADED not in layers["L9"].active_constraints
                 assert not layers["L8"].localization_requirement.global_position
                 assert layers["L12"].safety_decision is SafetyDecision.ALLOW
@@ -349,8 +374,8 @@ def test_lidar_world_roomcruise_localization_native_replay_from_checkpoint(tmp_p
                 assert costmap.occupied_cells is previous_map.occupied_cells
                 cached_ticks += 1
             previous_map = costmap
-            # Start mid-period: replay must reuse the map cache AND remember
-            # that the velocity fit at tick 300 has already been consumed.
+            # Replay must reuse the map cache, remember consumed velocity fits
+            # and restore current relative yaw evidence plus accumulated drift.
             if tick == 301:
                 initial_checkpoint = composition.checkpoint()
             elif tick > 301:

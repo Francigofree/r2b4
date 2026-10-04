@@ -93,7 +93,7 @@ def test_roomcruise_localization_motion_requires_independent_local_quality():
     assert plan.local_goal is None
     assert plan.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
     assert motion.requested_v_mps == 0
-    assert motion.requested_omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
+    assert motion.requested_omega_rad_s == config.navigation.localization_recovery_omega_rad_s
     denied = replace(motion, localization_requirement=LocalizationRequirement())
     allowed = limiter.evaluate(denied, estimate)
     assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0.0
@@ -117,14 +117,15 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         CommandRequest(estimate.context, "recovery-geometry", CommandMode.EXPLORE, (), 0)
     )
 
-    # Recovery uses the calibrated spin floor and fresh robot-relative geometry.
+    # Recovery uses its configured realizable spin and fresh robot-relative geometry.
     # A frozen or absent pose-aligned costmap does not authorize translation.
     floor = config.navigation.wheel_limits.minimum_center_spin_rad_s
+    recovery_omega = config.navigation.localization_recovery_omega_rad_s
     recovered = navigator.evaluate(mission, estimate, world)
     assert recovered.status is NavigationStatus.ACTIVE
     assert recovered.reason == 'LOCALIZATION_REACQUIRE'
     assert recovered.velocity_target.v_mps == 0
-    assert recovered.velocity_target.omega_rad_s == floor
+    assert recovered.velocity_target.omega_rad_s == recovery_omega
     assert recovered.constraints.max_omega_rad_s <= mission.constraints.max_omega_rad_s
     for broken_world in (
         replace(world, local_costmap=None),
@@ -141,7 +142,7 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         assert plan.reason == "LOCALIZATION_REACQUIRE"
         motion = realizer.evaluate(selector.evaluate(plan), estimate, broken_world)
         assert motion.requested_v_mps == 0
-        assert motion.requested_omega_rad_s == floor
+        assert motion.requested_omega_rad_s == recovery_omega
 
     # The unchanged L8-L10 chain ramps the spin within angular/wheel budgets.
     from v3.layers.l10_chassis_control import DifferentialDriveKinematics
@@ -156,14 +157,16 @@ def test_localization_recovery_uses_robot_relative_geometry_not_pose_aligned_cos
         allowed = limiter.evaluate(motion, current)
         wheels = kinematics(allowed)
         assert allowed.allowed_v_mps == 0
-        assert 0 <= allowed.allowed_omega_rad_s <= min(floor, mission.constraints.max_omega_rad_s,
+        assert 0 <= allowed.allowed_omega_rad_s <= min(recovery_omega, mission.constraints.max_omega_rad_s,
                                                      config.operational_constraints.max_omega_rad_s)
         if previous is not None:
             for side in ('left_mps', 'right_mps'):
                 assert abs(getattr(wheels, side) - getattr(previous, side)) <= config.operational_constraints.max_acceleration_mps2 * .02 + 1e-12
         previous = wheels
-    assert math.isclose(wheels.left_mps, -config.navigation.wheel_limits.minimum_mps)
-    assert math.isclose(wheels.right_mps, config.navigation.wheel_limits.minimum_mps)
+    expected_left, expected_right = config.navigation.wheel_limits.wheels(0.0, recovery_omega)
+    assert math.isclose(wheels.left_mps, expected_left)
+    assert math.isclose(wheels.right_mps, expected_right)
+    assert floor <= recovery_omega <= mission.constraints.max_omega_rad_s
 
     # A cap below the physical floor remains HOLD; neither L6 nor L9 amplifies.
     capped = replace(mission, constraints=replace(mission.constraints, max_omega_rad_s=floor * .95))
@@ -446,7 +449,7 @@ def test_roomcruise_soft_localization_changes_replan_without_zero_motion_gap():
     assert plan.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
     motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
     assert motion.requested_v_mps == 0.0
-    assert motion.requested_omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
+    assert motion.requested_omega_rad_s == config.navigation.localization_recovery_omega_rad_s
 
 
 
@@ -485,4 +488,4 @@ def test_global_navigation_motion_continues_only_inside_committed_local_generati
             assert plan.motion_validity.localization_requirement == LocalizationRequirement(False, True, False)
             motion = realizer.evaluate(selector.evaluate(plan), estimate, world)
             assert motion.requested_v_mps == 0.0
-            assert motion.requested_omega_rad_s == config.navigation.wheel_limits.minimum_center_spin_rad_s
+            assert motion.requested_omega_rad_s == config.navigation.localization_recovery_omega_rad_s

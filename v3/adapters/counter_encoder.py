@@ -328,6 +328,14 @@ class NativeCounterEncoderBackend:
             raw_right_pulse_count=current.right.pulse_count,
             left_pulse_delta=left_pulse_delta,
             right_pulse_delta=right_pulse_delta,
+            left_last_accepted_edge_timestamp_ns=(
+                current.left.edge_history[-1].timestamp_ns if current.left.edge_history else None
+            ),
+            right_last_accepted_edge_timestamp_ns=(
+                current.right.edge_history[-1].timestamp_ns if current.right.edge_history else None
+            ),
+            left_last_accepted_edge_direction=NativeCounterEncoderBackend._last_edge_direction(current.left),
+            right_last_accepted_edge_direction=NativeCounterEncoderBackend._last_edge_direction(current.right),
             sample_interval_ns=sample_interval_ns,
             left_counter_running=current.left_running,
             right_counter_running=current.right_running,
@@ -456,6 +464,17 @@ class NativeCounterEncoderBackend:
             left_max_callback_latency_ns=current.left.max_callback_latency_ns,
             right_max_callback_latency_ns=current.right.max_callback_latency_ns,
         )
+
+    @staticmethod
+    def _last_edge_direction(snapshot: SignedPulseCounterSnapshot) -> int:
+        """Read accepted signed progress even before a velocity fit exists."""
+        edges = snapshot.edge_history
+        if not edges:
+            return 0
+        # GPIO counters start at zero. A single first accepted edge therefore
+        # has count +/-1; later history has an explicit preceding signed total.
+        delta = edges[-1].pulse_count - (edges[-2].pulse_count if len(edges) > 1 else 0)
+        return delta if delta in (-1, 1) else 0
 
     def _stationary_estimate(
         self,

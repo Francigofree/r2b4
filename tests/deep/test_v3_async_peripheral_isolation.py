@@ -156,34 +156,72 @@ def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path,
     import signal
     from dataclasses import replace
     from rig import resolved_config
-    from v3.adapters.counter_encoder import NativeCounterEncoderBackend, SignedPulseCounterSnapshot
+    from v3.adapters.counter_encoder import (
+        NativeCounterEncoderBackend, SignedPulseCounterSnapshot, SignedPulseEdge,
+    )
     from v3.adapters.live_encoder import NativeEncoderSource
     from v3.adapters.process_encoder_backend import ProcessEncoderBackend
 
+    config = resolved_config()
+    inputs = config.runtime.sensor_inputs.inputs
+    left = inputs.encoder_counter.left
+    right = inputs.encoder_counter.right
+    physical_ns = time.monotonic_ns() - 20_000_000
+    accepted_edges = {
+        'left_last_accepted_edge_timestamp_ns': physical_ns,
+        'right_last_accepted_edge_timestamp_ns': physical_ns + 2_000_000,
+        'left_last_accepted_edge_direction': 1,
+        'right_last_accepted_edge_direction': -1,
+    }
+    emit_request = tmp_path / 'emit-encoder-edges'
+    initial_levels = {
+        left.pin_b: left.forward_b_level if not left.invert else 1-left.forward_b_level,
+        right.pin_b: 1-right.forward_b_level if not right.invert else right.forward_b_level,
+    }
     # spawn imports this fake module ahead of any installed hardware driver.
+    # Deliver one accepted edge per wheel after initialization, with physical
+    # event times distinct from debounce and Python callback receipt times.
     (tmp_path / 'lgpio.py').write_text(
         'from v3_test_fixtures import FakeGpio\n'
-        'import os\n'
-        '_gpio = FakeGpio()\n'
+        'from pathlib import Path\n'
+        'import os, threading, time\n'
+        f'_gpio = FakeGpio({initial_levels!r})\n'
         'RISING_EDGE = 1\nBOTH_EDGES = 3\nSET_PULL_UP = 32\n'
         'def gpiochip_open(chip):\n'
         '    if os.environ.get("R2B4_TEST_ENCODER_FAIL"): raise OSError("injected GPIO error")\n'
         '    return _gpio.gpiochip_open(chip)\n'
+        'def _emit_edges():\n'
+        f'    while not Path({str(emit_request)!r}).exists(): time.sleep(.002)\n'
+        f'    _gpio.emit({left.pin_a}, 1, {physical_ns + left.a_debounce_micros*1_000}, '
+        f'chip={inputs.encoder_counter.gpio_chip})\n'
+        f'    _gpio.emit({right.pin_a}, 1, {physical_ns + 2_000_000 + right.a_debounce_micros*1_000}, '
+        f'chip={inputs.encoder_counter.gpio_chip})\n'
+        'def callback(handle, pin, edge, function):\n'
+        '    result = _gpio.callback(handle, pin, edge, function)\n'
+        f'    if pin == {right.pin_a}: threading.Thread(target=_emit_edges, daemon=True).start()\n'
+        '    return result\n'
         'def __getattr__(name):\n    return getattr(_gpio, name)\n'
     )
     monkeypatch.syspath_prepend(str(tmp_path))
-    config = resolved_config()
-    inputs = config.runtime.sensor_inputs.inputs
     process_config = replace(config.edges.encoder_process, stop_timeout_s=.1)
     edge = ProcessEncoderBackend(inputs.encoder_counter, inputs.encoder_backend,
                                  process_config=process_config)
     source = NativeEncoderSource(edge, inputs.encoder_source)
     class Counter:
         running = True
+        def __init__(self, timestamp_ns, direction):
+            self.edge = SignedPulseEdge(timestamp_ns, direction)
         def snapshot(self):
-            return SignedPulseCounterSnapshot(0)
-    direct = NativeCounterEncoderBackend(Counter(), Counter(), inputs.encoder_backend)
+            return SignedPulseCounterSnapshot(self.edge.pulse_count,
+                                              edge_history=(self.edge,))
+    direct = NativeCounterEncoderBackend(Counter(physical_ns, 1),
+                                        Counter(physical_ns + 2_000_000, -1),
+                                        inputs.encoder_backend)
     try:
+        emit_request.touch()
+        _wait_until(lambda: all(
+            getattr(edge.read(TickContext(0, time.monotonic_ns())).diagnostics, name) == value
+            for name, value in accepted_edges.items()))
         initial = edge.read(TickContext(0, time.monotonic_ns()))
         direct.read(TickContext(initial.sequence, initial.captured_monotonic_ns))
         _wait_until(lambda: edge.read(TickContext(0, time.monotonic_ns())).captured_monotonic_ns
@@ -199,6 +237,13 @@ def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path,
                 expected.trust, expected.stale, expected.timing_valid)
         assert reading.diagnostics.raw_left_distance_m == expected.diagnostics.raw_left_distance_m
         assert reading.diagnostics.raw_right_distance_m == expected.diagnostics.raw_right_distance_m
+        for name, value in accepted_edges.items():
+            assert getattr(reading.diagnostics, name) == getattr(expected.diagnostics, name) == value
+        for side, channel in (('left', left), ('right', right)):
+            physical_edge_ns = accepted_edges[f'{side}_last_accepted_edge_timestamp_ns']
+            assert getattr(reading.diagnostics, f'{side}_last_a_timestamp_ns') == physical_edge_ns
+            assert getattr(reading.diagnostics, f'{side}_last_callback_received_ns') > (
+                physical_edge_ns + channel.a_debounce_micros * 1_000)
         samples = []
         started_ns = time.monotonic_ns()
         for tick in range(50):
@@ -208,6 +253,8 @@ def test_encoder_process_preserves_source_time_through_stall_and_crash(tmp_path,
         assert all(s.sequence == reading.sequence and s.captured_monotonic_ns == reading.captured_monotonic_ns
                    for s in samples)
         assert all(isinstance(f.value, (str, int, float, bool, type(None))) for f in samples[-1].values)
+        assert all(all({f.key: f.value for f in sample.values}[name] == value
+                       for name, value in accepted_edges.items()) for sample in samples)
         # Parent polling never renews the source measurement's lifetime.
         expired_ns = reading.captured_monotonic_ns + 250_000_001
         assert source.capability_snapshot(expired_ns).state.value == 'STALE'
