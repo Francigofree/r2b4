@@ -83,7 +83,7 @@ def command_catalog() -> dict[str, object]:
             "modes": ["alap", "full", "nincs"],
         },
         "tests": {
-            "modes": ["core", "quick", *FOCUSED, "full"],
+            "modes": ["quick", *FOCUSED, "full", "core", "feature", "deep"],
         },
         "evidence": {"command": "evi", "operations": ["compile", "verify", "query"]},
         "er2": {
@@ -184,7 +184,7 @@ def print_help() -> None:
         "  r voice status|on|off      Voice wake állapot / bekapcsolás / kikapcsolás\n"
         "  r voice restart|check      Voice service újraindítás / diagnosztika\n"
         "  r chatgpt status|login     ChatGPT OAuth állapot / böngészős belépés\n"
-        "  r test [MODE]              Tesztek; alap: quick; teljes CORE: r test core\n"
+        "  r test [MODE]              Tesztek; alap: kis gate; release: r test release\n"
         "  r tune roomcruise [OPCIÓK] Offline RoomCruise hangolás; runtime/tunes/\n"
         "  r pytest [ARGS...]         Nyers pytest\n"
         "  r git / r gitre            Git-segédek\n"

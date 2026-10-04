@@ -1,55 +1,35 @@
-"""R2B4 pytest layer registry for offline Test Hub integration.
+"""Offline pytest profile registry.
 
-The canonical developer/agent runner is :mod:`v3.test_runner`. This module owns
-no robot runtime state and only exposes the current CORE/FEATURE/DEEP layout to
-offline consumers that still need explicit pytest targets.
+Permanent regression selection is owned by the gate/scenario manifests.
+Developer packs remain discoverable but are not promoted into the mandatory
+release suite merely because a test file exists.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from fnmatch import fnmatchcase
 from pathlib import Path
+
+from v3.test_runner import MANIFESTS, PACKS, _load_manifest, _release_targets
 
 
 @dataclass(frozen=True, slots=True)
 class PytestProfile:
     name: str
-    marker: str | None
     description: str
-    patterns: tuple[str, ...]
     explicit_targets: bool = True
 
 
-_PROFILES: tuple[PytestProfile, ...] = (
-    PytestProfile(
-        "core",
-        None,
-        "Safety, canonical authority, runtime composition and basic control-chain tests.",
-        ("tests/core/test_*.py",),
-    ),
-    PytestProfile(
-        "feature",
-        None,
-        "User-visible robot behavior: Follow, Room Cruise, localization, perception and motion.",
-        ("tests/feature/test_*.py",),
-    ),
-    PytestProfile(
-        "deep",
-        None,
-        "Process/worker failure, delayed async completion, replay and fault-injection tests.",
-        ("tests/deep/test_*.py",),
-    ),
-    PytestProfile(
-        "full",
-        None,
-        "Entire curated CORE + FEATURE + DEEP pytest suite.",
-        ("tests/core/test_*.py", "tests/feature/test_*.py", "tests/deep/test_*.py"),
-        explicit_targets=False,
-    ),
+_PROFILES = (
+    PytestProfile("gate", "Small mandatory robot invariant gate."),
+    PytestProfile("release", "Gate plus user-visible robot scenarios."),
+    PytestProfile("all", "All optional developer packs.", explicit_targets=False),
+    PytestProfile("core", "Compatibility developer pack: former core tests.", explicit_targets=False),
+    PytestProfile("feature", "Compatibility developer pack: former feature tests.", explicit_targets=False),
+    PytestProfile("deep", "Compatibility developer pack: former deep tests.", explicit_targets=False),
 )
-
 _PROFILE_BY_NAME = {profile.name: profile for profile in _PROFILES}
+_ALIASES = {"quick": "gate", "full": "release"}
 
 
 def pytest_profile_names() -> tuple[str, ...]:
@@ -57,6 +37,7 @@ def pytest_profile_names() -> tuple[str, ...]:
 
 
 def get_pytest_profile(name: str) -> PytestProfile:
+    name = _ALIASES.get(name, name)
     try:
         return _PROFILE_BY_NAME[name]
     except KeyError as exc:
@@ -66,32 +47,35 @@ def get_pytest_profile(name: str) -> PytestProfile:
 
 def resolve_pytest_files(project_root: str | Path, name: str) -> tuple[str, ...]:
     root = Path(project_root).resolve()
-    profile = get_pytest_profile(name)
-    matched: set[str] = set()
-    for pattern in profile.patterns:
-        for path in root.glob(pattern):
-            if path.is_file() and path.suffix == ".py":
-                matched.add(path.relative_to(root).as_posix())
-    if not matched:
+    name = _ALIASES.get(name, name)
+    get_pytest_profile(name)
+    if name in {"gate", "release"}:
+        targets = _load_manifest("gate") if name == "gate" else _release_targets()
+        return tuple(sorted({target.split("::", 1)[0] for target in targets}))
+    path = root / "tests" / "packs"
+    if name in {"core", "feature", "deep"}:
+        path = path / name
+    files = tuple(
+        sorted(p.relative_to(root).as_posix() for p in path.rglob("test_*.py") if p.is_file())
+    )
+    if not files:
         raise FileNotFoundError(f"pytest profile {name!r} matched no test files under {root}")
-    return tuple(sorted(matched))
+    return files
 
 
 def resolve_pytest_targets(project_root: str | Path, name: str) -> tuple[str, ...]:
-    profile = get_pytest_profile(name)
-    files = resolve_pytest_files(project_root, name)
-    return files if profile.explicit_targets else ()
+    name = _ALIASES.get(name, name)
+    get_pytest_profile(name)
+    if name == "gate":
+        return _load_manifest("gate")
+    if name == "release":
+        return _release_targets()
+    return ()
 
 
 def markers_for_test_path(relative_path: str | Path) -> tuple[str, ...]:
-    normalized = Path(relative_path).as_posix()
-    markers: list[str] = []
-    for profile in _PROFILES:
-        if profile.marker is None:
-            continue
-        if any(fnmatchcase(normalized, pattern) for pattern in profile.patterns):
-            markers.append(profile.marker)
-    return tuple(markers)
+    # Markers are legacy developer metadata only; they no longer select gates.
+    return ()
 
 
 __all__ = [

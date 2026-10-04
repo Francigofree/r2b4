@@ -1,0 +1,44 @@
+{
+  "schema": "R2B4_PYTEST_CONTRACT_MANIFEST_V1",
+  "name": "scenarios",
+  "budget": 10,
+  "purpose": "Small release set of observable robot behaviors crossing real canonical boundaries.",
+  "tests": [
+    {
+      "id": "tests/packs/feature/test_v3_canonical_motion_harmony.py::test_escape_preserves_rejected_forward_evidence_and_revokes_braking_origin",
+      "contract": "Blocked forward motion can revoke the old objective and produce a bounded escape alternative."
+    },
+    {
+      "id": "tests/packs/feature/test_v3_canonical_motion_harmony.py::test_roomcruise_follow_canonical_motion_harmony_survives_background_replans[roomcruise]",
+      "contract": "RoomCruise keeps canonical continuous motion semantics across background replans."
+    },
+    {
+      "id": "tests/packs/feature/test_v3_canonical_motion_harmony.py::test_roomcruise_follow_canonical_motion_harmony_survives_background_replans[follow]",
+      "contract": "Follow keeps canonical continuous motion semantics across background replans."
+    },
+    {
+      "id": "tests/packs/feature/test_v3_roomcruise_localization_motion.py::test_roomcruise_localization_motion_requires_independent_local_quality",
+      "contract": "RoomCruise distinguishes local motion quality from global localization quality."
+    },
+    {
+      "id": "tests/packs/deep/test_v3_async_peripheral_isolation.py::test_encoder_process_preserves_source_time_through_stall_and_crash",
+      "contract": "Encoder process stall/crash preserves source-time truth and fails without invented freshness."
+    },
+    {
+      "id": "tests/packs/feature/test_v3_person_detection_runtime_integration.py::test_follow_person_camera_consumer_demand_failure_and_generation_contract",
+      "contract": "Follow person keeps camera demand/generation ownership and fails closed on capability loss."
+    },
+    {
+      "id": "tests/packs/deep/test_v3_lidar_world_replay.py::test_roomcruise_resampled_surfaces_delayed_planner_and_native_replay",
+      "contract": "Delayed planning remains observable and canonical replay reproduces the bounded execution."
+    },
+    {
+      "id": "tests/packs/deep/test_mcap_evidence.py::test_process_determinism_full_lidar_and_indexed_query",
+      "contract": "MCAP evidence preserves deterministic full-LiDAR data and indexed query lineage."
+    },
+    {
+      "id": "tests/packs/feature/test_temporal_host_boundaries.py::test_turn_revocation_and_fresh_host_admission",
+      "contract": "Host-side turn revocation requires fresh admission and cannot reuse stale physical state."
+    }
+  ]
+}

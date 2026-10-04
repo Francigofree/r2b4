@@ -2,96 +2,86 @@
 
 ## Purpose
 
-Pytest protects robot-level contracts and high-value scenarios. It is not an implementation diary.
+Pytest is a small robot-contract safety net. It must not preserve yesterday's
+implementation, tuning, private helper layout or provider choice.
 
-## Validation cost and selection
+The permanent regression authority is:
 
-The normal edit loop starts with a bounded, hardware-free CORE gate (20-30
-cases), then the affected behavior or boundary. The complete `core` directory
-also contains host/provider checks; collecting it is not necessary for every
-robot edit. Select by risk, not by repository size or test count alone.
+- `tests/gate/manifest.json` — mandatory robot invariants;
+- `tests/scenarios/manifest.json` — a few user-visible canonical scenarios;
+- `tests/endurance/manifest.json` — explicit long-running checks.
 
-| Changed responsibility | Follow-up scope | Required evidence |
-|---|---|---|
-| Follow / person capability | `follow`, `perception` as relevant | admitted lineage, capability loss, STOP, fresh-generation recovery |
-| Room Cruise / localization | `roomcruise`, `localization` | independent local quality, global loss/recovery, safe holds |
-| Motion / encoder / actuator | `motion` | bounded acceleration/reversal, per-wheel feedback, zero STOP/FAULT |
-| Async / process edge | `async`, `process` | non-blocking transport, source time, sequence, stale/crash/error |
-| Decision inputs / checkpoint | `replay` | real canonical replay MATCH, including delayed completions |
-| MCAP extraction / publication | `evidence` | lossless payload, accounting, lineage, atomic publication |
-| Agent / voice / provider | `agent`, `voice`, `providers` | affected host behavior and canonical command ingress |
-
-`full` runs all bounded CORE + FEATURE + DEEP scenarios for shared boundaries,
-composition/config/L12 changes or release acceptance. Long repeated simulations
-belong to `endurance`, explicitly requested for drift/accumulation concerns.
-The same simulation also has a bounded regression variant that exercises global
-fix loss/recovery, encoder gaps, continuity and a checkpoint replay. Never shorten
-a run below the freshness/recovery deadline that gives its assertion meaning.
-
-The curated tree has a hard cap of 200 collected cases, including endurance.
-Prefer replacing overlapping cases; do not delete an independent safety or
-failure scenario just to reduce the count. Counts are collected from source,
-not copied into a historical suite manifest. Successful unchanged validations
-are not repeated without a concrete reason.
-
-## What belongs here
-
-CORE: safety, canonical authority, STOP/FAULT, TTL/freshness, runtime composition, basic control chain, import boundaries.
-FEATURE: user-visible robot behavior such as Follow, Room Cruise, localization, perception and motion scenarios.
-DEEP: process/worker failure, delayed async completion, replay/checkpoint, timestamp edges and fault injection.
-
-## What does not belong here
-
-- assertions on private `_foo` fields;
-- exact queue/buffer sizes unless they are a documented safety contract;
-- constructor-signature compatibility;
-- copied unit config or constructor reflection;
-- tuning-number snapshots that production ConfigResolver already owns;
-- tests preserving a migration step or an old implementation sequence;
-- pytest infrastructure whose only purpose is to test pytest infrastructure.
-
-For deep diagnostics, prefer MCAP + canonical replay + explicit MCAP Evidence Compiler.
-
-## Stable scenarios
-
-- Shared device fakes belong in importable helper modules, including under
-  multiprocessing `spawn`; do not depend on a test file moved to `old/`.
-- Fake camera owners must not acquire the live camera's device lock. Stop
-  threads, processes and owners in `finally`, including after an assertion fails.
-- Use resolved production config; sample its confidence/freshness boundaries
-  rather than freezing past tuning values. Assert authority and fail-closed
-  behavior, not a copied list of tuning numbers.
-- Use virtual time for semantic deadlines. For actual concurrency, wait for an
-  observable condition with a bounded timeout and clean up on failure. Do not
-  add automatic reruns to conceal races or weaken a production timing bound.
-- Navigation can legitimately revoke a trajectory when new obstacle evidence
-  arrives. Assert zero output, a specific reason, bounded recovery and eventual
-  progress; permanent ALLOW is not a safe robot-level invariant.
-- Compare deterministic exported evidence across worker counts. Verify each
-  bundle's integrity, but do not demand equal wall time, RSS or worker provenance.
+Everything below `tests/packs/` is optional developer evidence. Adding a pack
+test does **not** add a release requirement.
 
 ## Commands
 
-- `./r test` / `./r test quick` — bounded CORE gate, fail-fast.
-- `./r test core` — complete CORE layer.
-- `./r test <mode>` — relevant scenario slice; explicit files/node IDs avoid
-  collecting entire layers only to discard them with `-k`.
-- `./r test full` — complete bounded regression; one endurance variant is
-  explicitly deselected by the default `not endurance` marker expression.
-- `./r test endurance` — ten-minute synthetic robot run and checkpoint replay;
-  it does not open physical devices or prove live timing.
-- `./r test tests/feature/test_FILE.py::test_NAME` — one exact failing scenario.
-- `./r test <mode> --collect-only` — inspect selection without execution.
-- `./r test <mode> --lf` — cached failures while repairing; this does not replace
-  the complete affected scope for acceptance.
+```bash
+./r test
+./r test release
+./r test full
+./r test pack core
+./r test pack feature
+./r test pack deep
+./r test all
+./r test endurance
+./r test tests/packs/.../test_file.py::test_name
+```
 
-The launcher forwards pytest options, reports the five slowest calls above
-0.5 s in non-gate runs and disables unrelated plugin autoloading. Explicit `-p`
-plugins and `PYTEST_DISABLE_PLUGIN_AUTOLOAD=0` remain available. Raw pytest uses
-the same default endurance exclusion; `-m endurance` opts into long scenarios.
-## Robot-level maintenance rule
+`r test` is the normal edit gate and must stay small and fail-fast.
+`r test release` (`full` is an alias) is the complete mandatory software
+regression. `r test all` runs developer packs and is diagnostic, not a release
+contract.
 
-The curated regression suite protects externally meaningful robot contracts and failure boundaries, not implementation history. Prefer one public-path scenario that crosses the owning boundary over several tests of private helpers. Provider/model defaults, CLI help/completion text, artifact filenames, private `_foo` helpers, and retired config/capture migration steps are not regression contracts unless they are explicitly declared supported compatibility surfaces.
+Raw `python -m pytest` intentionally runs the packs; it is a developer tool, not
+the canonical acceptance command.
 
-When a lower-level unit assertion duplicates a public L5-L12, sensor-to-state, host-to-runtime, replay, or evidence scenario, keep the public scenario and remove the duplicate. Historical replay compatibility that must remain supported requires an explicit named replay fixture/evidence artifact; otherwise it does not stay in the permanent pytest gate.
+## Admission rule
 
+A test may enter `gate` only when its failure can permit one of these:
+
+1. unsafe or unauthorized actuation;
+2. bypass of canonical command/motor/safety authority;
+3. stale/invalid evidence becoming positive motion authority;
+4. physically impossible live configuration being accepted by the maintained
+   robot contract;
+5. non-deterministic result for the same closed canonical execution input.
+
+A test may enter `scenarios` only for externally meaningful robot behavior that
+crosses a canonical boundary. Prefer one end-to-end scenario over several
+layer/helper assertions.
+
+Gate budget: **15 logical manifest entries**.
+Scenario budget: **10 logical manifest entries**.
+A new behavior does not automatically justify a new permanent test: replace an
+overlapping scenario where possible.
+
+## What permanent tests assert
+
+Assert relationships and observable outcomes:
+
+- STOP/FAULT -> zero physical output;
+- critical failure/staleness -> fail closed;
+- one canonical command and motor authority;
+- live config -> physically realizable envelope;
+- closed input/state -> deterministic execution/replay;
+- bounded recovery -> only fresh/revalidated evidence can resume motion.
+
+Do not freeze tuning numbers. For example, test
+`effective_omega >= target_center_spin_rad_s`, not `max_omega == 1.4`.
+
+## What belongs only in packs
+
+Implementation/helper tests, exact tuning snapshots, queue sizes, CLI wording,
+provider/model defaults, filesystem naming, migration history, algorithm-specific
+score details, diagnostics formatting, and experiments belong in `tests/packs/`
+when useful. They may be edited or deleted with the implementation.
+
+Markers remain registered only as compatibility metadata for existing packs.
+They are not routing or acceptance authority.
+
+## Evidence beyond pytest
+
+Pytest does not replace live MCAP evidence, canonical replay, timing measurement
+or hardware acceptance. Physical robot motion is never started automatically by
+the pytest gate.

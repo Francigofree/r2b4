@@ -1,0 +1,56 @@
+{
+  "schema": "R2B4_PYTEST_CONTRACT_MANIFEST_V1",
+  "name": "gate",
+  "budget": 15,
+  "purpose": "Fast mandatory robot invariants. Values/tuning are not contracts; authority, safety, freshness and physical feasibility are.",
+  "tests": [
+    {
+      "id": "tests/packs/core/test_v3_stop_only_composition.py::test_edge_snapshot_failure_commits_one_zero_fault",
+      "contract": "Critical edge failure produces exactly one zero FAULT actuation."
+    },
+    {
+      "id": "tests/packs/core/test_v3_stop_only_composition.py::test_missing_and_mismatched_actuator_requests_latch_zero_fault",
+      "contract": "Missing or context-mismatched actuator request fails closed and latches."
+    },
+    {
+      "id": "tests/packs/core/test_v3_stop_only_composition.py::test_fault_latch_keeps_later_healthy_request_at_zero",
+      "contract": "A latched FAULT cannot be cleared by a later healthy request."
+    },
+    {
+      "id": "tests/packs/core/test_v3_stop_only_composition.py::test_writer_failure_is_single_zero_attempt_and_faults_lifecycle",
+      "contract": "Motor writer failure cannot retry positive actuation and faults lifecycle."
+    },
+    {
+      "id": "tests/packs/core/test_v3_gpio_motor.py::test_stop_and_fault_cancel_pwm_hold_verified_low_and_keep_ownership",
+      "contract": "STOP/FAULT cancels PWM and verifies physical outputs low without ownership handoff."
+    },
+    {
+      "id": "tests/packs/core/test_v3_temporal_contract.py::test_source_freshness_boundary_and_unknown_age",
+      "contract": "Unknown/stale source time is never treated as fresh."
+    },
+    {
+      "id": "tests/packs/core/test_v3_multirate_inputs.py::test_worker_initializer_failure_aborts_before_runtime_use",
+      "contract": "Critical worker startup failure aborts before runtime use."
+    },
+    {
+      "id": "tests/packs/core/test_operator_sequence_stop.py::test_command_producer_owner_exit_and_watchdog_stop_before_next_heartbeat",
+      "contract": "Command producer loss/watchdog expiry publishes STOP before another heartbeat."
+    },
+    {
+      "id": "tests/packs/core/test_operator_sequence_stop.py::test_launcher_tool_cannot_bypass_runtime_or_hardware_ownership",
+      "contract": "Launcher/developer tools cannot bypass runtime or physical hardware ownership."
+    },
+    {
+      "id": "tests/packs/core/test_v3_minimum_continuous_wheel_speed.py::test_unrealizable_steady_motion_is_not_amplified_and_stop_is_exact",
+      "contract": "Physically unrealizable motion is rejected rather than amplified; STOP remains exact zero."
+    },
+    {
+      "id": "tests/packs/core/test_v3_minimum_continuous_wheel_speed.py::test_kinematics_preserves_the_authorized_twist_including_live_regressions",
+      "contract": "Canonical kinematics preserves an already-authorized realizable twist."
+    },
+    {
+      "id": "tests/packs/core/test_robot_contract_config.py::test_live_config_preserves_robot_motion_feasibility",
+      "contract": "Resolved live config keeps recovery, mission, operational and ingress envelopes physically consistent."
+    }
+  ]
+}

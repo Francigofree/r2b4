@@ -1,0 +1,12 @@
+{
+  "schema": "R2B4_PYTEST_CONTRACT_MANIFEST_V1",
+  "name": "endurance",
+  "budget": 5,
+  "purpose": "Explicit long-running stability checks; never part of the normal gate or release suite.",
+  "tests": [
+    {
+      "id": "tests/packs/deep/test_v3_lidar_world_replay.py::test_roomcruise_localization_simulation_and_replay[endurance]",
+      "contract": "Long synthetic RoomCruise/localization execution and replay remains bounded and deterministic."
+    }
+  ]
+}

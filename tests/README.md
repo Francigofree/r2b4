@@ -1,70 +1,50 @@
-# R2B4 pytest rendszer
+# R2B4 pytest
 
-A pytest fejlesztési bizonyíték, nem production authority. A robot authorityja továbbra is a V3 contractok és a canonical source; capture/replay/Test Hub pedig offline diagnosztikai capability.
+A pytest-rendszer szándékosan vékony. A fejlesztést nem a teljes tesztfa állapota,
+hanem néhány robot-szintű contract védi.
 
-## Rétegek
+## Szerkezet
 
-A canonical pytest policy: `docs/PYTEST_POLICY.md`. A tesztfájlok három rétegben vannak:
+```text
+tests/
+  gate/manifest.json          kötelező, gyors robot-invariánsok
+  scenarios/manifest.json     kevés release scenario
+  packs/core/                 opcionális fejlesztői tesztek
+  packs/feature/              opcionális fejlesztői tesztek
+  packs/deep/                 opcionális fejlesztői tesztek
+  endurance/manifest.json     explicit hosszú futás
+```
 
-| Réteg | Mire való |
-|---|---|
-| `core` | safety, canonical authority, STOP/FAULT, TTL/freshness, runtime composition, basic control chain, import boundaries |
-| `feature` | user-visible robot behavior: Follow, Room Cruise, localization, perception, motion |
-| `deep` | process/worker failure, delayed async completion, replay/checkpoint, timestamp edges, fault injection |
-
-A canonical futtató a `v3/test_runner.py`.
+A manifest csak meglévő pack-tesztek node ID-ját nevezi meg. Így ugyanaz a teszt
+nem másolódik két helyre, és egy új pytest fájl nem válik automatikusan release
+követelménnyé.
 
 ## Használat
 
-A célzott validáció az alapértelmezett:
-
 ```bash
-./r test
-./r test core
-./r test follow
-./r test roomcruise
-./r test localization
-./r test perception
-./r test motion
-./r test async
-./r test process
-./r test replay
-./r test evidence
-./r test agent
-./r test voice
-./r test providers
-./r test full
+./r test                     # kicsi, fail-fast gate
+./r test release             # gate + robot scenariók
+./r test full                # release alias
+./r test pack core
+./r test pack feature
+./r test pack deep
+./r test all                 # összes pack; diagnosztikai
 ./r test endurance
-./r test list
+./r test tests/packs/feature/test_FILE.py::test_NAME
 ```
 
-A `./r test` egy 20–30 esetes, hardvermentes, fail-fast CORE kapu. A `./r test core` futtatja a teljes CORE könyvtárat. A fókuszált módok explicit fájlokat vagy teszteseteket gyűjtenek. A `./r test full` a teljes, időben korlátozott CORE + FEATURE + DEEP regresszió; a tízperces szimuláció külön `endurance` kérésre fut. Ugyanannak a szimulációnak egy rövid, global-fix loss/recovery és checkpoint replay változata a teljes regresszió része.
+Normál fejlesztésnél először `r test`. A módosított subsystem packja csak akkor
+fusson, ha az adott implementációhoz hasznos. Release vagy közös canonical
+boundary változásnál `r test release`.
 
-Egy konkrét hiba, a kiválasztás és a cache-elt hibák a canonical launcherrel is vizsgálhatók:
+A `python -m pytest` továbbra is használható, de a teljes pack-fát futtatja; ez
+nem a kötelező regressziós definíció.
 
-```bash
-./r test tests/feature/test_v3_motion_feedback_quality.py
-./r test motion --collect-only
-./r test motion --lf
-```
+## Karbantartási szabály
 
-A `--lf` javítás közbeni segítség; átvételhez a teljes érintett scope kell. A nem gyors kapus futások jelzik az öt leglassabb, 0,5 s feletti esetet. A shared fake-ek a `v3_test_fixtures.py` modulban vannak; a fake kamera nem foglalhatja le a valódi eszközzárat, és assertion-hibánál is le kell állnia.
+Permanent teszt értéket/algoritmust ne fagyasszon. Kapcsolatot és roboteredményt
+védjen: authority, STOP/FAULT, freshness, fizikai realizálhatóság, determinisztikus
+execution/replay. Privát helper, tuning, provider, CLI-szöveg és lezárt migráció
+maradjon pack-szintű fejlesztői evidence.
 
-Nyers pytest továbbra is elérhető:
-
-```bash
-./r pytest -q tests/core
-./r pytest -q tests/feature
-./r pytest -q tests/deep
-python -m pytest -q
-```
-
-## Szabályok
-
-A célzott pytest nem helyettesíti a szükséges evidence-t. Async/process módosításnál szükség szerint replay kell; timing/GIL javításnál mérési bizonyíték is kell. Fizikai robotmozgást pytest nem indíthat automatikusan. A teljes regresszió közös contract, TickEngine/execution boundary, composition root, aktív config, L12/motor-edge vagy több réteg érintésekor indokolt.
-
-A tesztfájlok canonical helye `tests/core/`, `tests/feature/` és `tests/deep/`. A teljes fa hard capje 200 collected case, az endurance változatot is beleszámítva. A tesztkiválasztás authorityja a launcher és a policy; az esetszámot a collector számolja.
-## Karbantartási elv
-
-A regressziós suite robot-szintű szerződéseket véd. Nem tartunk külön pytestet csak azért, hogy egy privát helper, CLI-help szöveg, fájlnév, provider/model default vagy lezárt migrációs lépés változatlan maradjon. Ha ugyanazt a kockázatot egy publikus L5-L12, sensor→state, host→runtime, replay vagy evidence scenario már bizonyítja, az alacsonyabb szintű duplikátum törlendő.
-
+A permanent budget a manifestekben van: gate <= 15, scenarios <= 10.

@@ -197,7 +197,7 @@ def _host_completion(command: str, before: Sequence[str], current: str, root: Pa
         hint += f" — {description}"
 
     if canonical == "test":
-        modes = ["core", "quick", *FOCUSED, "full", "list", "help"]
+        modes = ["quick", *FOCUSED, "full", "core", "feature", "deep", "list", "help"]
         return hint, _filter(modes, current)
     if canonical == "tool" and not before:
         names: set[str] = set()

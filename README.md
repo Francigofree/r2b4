@@ -117,14 +117,15 @@ Offline evidence és pytest:
 ./r evi runtime/captures/<capture>.mcap
 ./r evi query <capture>.evidence --tick-id 1505
 ./r test
-./r test follow
-./r test full
-./r test list
+./r test release
+./r test pack feature
+./r test all
 ```
 
-A canonical pytest modell a `tests/core/`, `tests/feature/` és `tests/deep/` réteg,
-a policy forrása a `docs/PYTEST_POLICY.md`, a launcher futtatója pedig a
-`v3/test_runner.py`. Nyers pytest továbbra is elérhető: `./r pytest ...`.
+A permanent pytest authority két kis manifest: `tests/gate/manifest.json` és
+`tests/scenarios/manifest.json`. A `tests/packs/` fejlesztői evidence, nem
+automatikus release-követelmény. Policy: `docs/PYTEST_POLICY.md`; canonical
+runner: `v3/test_runner.py`. Nyers pytest továbbra is elérhető: `./r pytest ...`.
 
 Fejlesztő/host segédek például: `r git`, `r gitre`, `r tools`, `r tool NAME`,
 `r cpu`, `r cpu2`, `r disc`, `r mem`, `r temp`, `r ps`, `r net`, `r usb`, `r i2c`,

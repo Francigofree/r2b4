@@ -80,8 +80,9 @@ python3 tools/tuners/r2b4_roomcruise_tuner.py --profile quick
 ## Validation
 
 ```bash
-./r test tests/feature/test_v3_roomcruise_tuner.py
-./r test roomcruise
+./r test tests/packs/feature/test_v3_roomcruise_tuner.py
+./r test pack feature
+./r test release
 r tune roomcruise --list-scenarios
 ```
 
