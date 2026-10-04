@@ -747,6 +747,48 @@ class MotionValidity:
 
 
 @dataclass(frozen=True, slots=True)
+class LocalMotionProof:
+    """L6's current rotation-safe free-displacement bound, consumed by L9.
+
+    No obstacle payload or upstream control state crosses this forward edge.
+    Expiry governs admission; horizon bounds the next control-gap movement.
+    """
+
+    context: TickContext
+    frame_id: str
+    scope: str
+    geometry_revision: int
+    geometry_captured_ns: int
+    valid_until_ns: int
+    horizon_ns: int
+    max_displacement_m: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.context, TickContext):
+            raise ContractValidationError("local motion proof requires context")
+        require_token(self.frame_id, "proof.frame_id")
+        require_token(self.scope, "proof.scope")
+        for name in ("geometry_revision", "geometry_captured_ns", "valid_until_ns", "horizon_ns"):
+            require_nonnegative(getattr(self, name), "proof." + name)
+        require_finite(self.max_displacement_m, "proof.max_displacement_m")
+        if (self.horizon_ns <= 0 or self.max_displacement_m < 0
+                or self.geometry_captured_ns > self.context.monotonic_ns
+                or self.valid_until_ns < self.context.monotonic_ns):
+            raise ContractValidationError("invalid local motion proof bounds")
+
+    def usable_at(self, context: TickContext, validity: MotionValidity | None) -> bool:
+        return (validity is not None and validity.usable_at(context)
+                and self.context == context
+                and self.frame_id == validity.frame_id and self.scope == validity.scope
+                and context.monotonic_ns <= self.valid_until_ns <= validity.valid_until_ns)
+
+    def covers(self, v_mps: float) -> bool:
+        # The certified robot circle permits every heading; only translation
+        # consumes its displacement radius. L9 still enforces angular caps.
+        return abs(v_mps) * self.horizon_ns / 1e9 <= self.max_displacement_m + 1e-12
+
+
+@dataclass(frozen=True, slots=True)
 class NavigationPlan:
     context: TickContext
     mission_id: str
@@ -760,9 +802,17 @@ class NavigationPlan:
     local_goal: Waypoint | None = None
     trajectory_candidates: tuple[TrajectoryEvaluation, ...] = ()
     motion_validity: MotionValidity | None = None
+    geometry_proof: LocalMotionProof | None = None
+    goal_selection_reason: str | None = None
+    goal_selected_ns: int | None = None
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "NavigationPlan.mission_id")
+        if self.geometry_proof is not None and not isinstance(self.geometry_proof, LocalMotionProof):
+            raise ContractValidationError("plan geometry proof must be typed")
+        _require_optional_token(self.goal_selection_reason, "goal_selection_reason")
+        if self.goal_selected_ns is not None:
+            require_nonnegative(self.goal_selected_ns, "goal_selected_ns")
         if self.motion_validity is not None and not isinstance(self.motion_validity, MotionValidity):
             raise ContractValidationError("NavigationPlan.motion_validity must be typed")
         if self.status is NavigationStatus.PENDING and self.motion_validity is None:
@@ -814,9 +864,12 @@ class MotionObjective:
     trajectory: TrajectoryEvaluation | None = None
     validity: MotionValidity | None = None
     transition_allowed: bool = False
+    geometry_proof: LocalMotionProof | None = None
 
     def __post_init__(self) -> None:
         require_token(self.selected_source, "MotionObjective.selected_source")
+        if self.geometry_proof is not None and not isinstance(self.geometry_proof, LocalMotionProof):
+            raise ContractValidationError("objective geometry proof must be typed")
         if type(self.transition_allowed) is not bool:
             raise ContractValidationError("objective transition_allowed must be bool")
         if self.validity is not None and not isinstance(self.validity, MotionValidity):
@@ -872,9 +925,20 @@ class MotionIntent:
     stop_reason: str | None = None
     transition_allowed: bool = False
     localization_requirement: LocalizationRequirement = LocalizationRequirement()
+    geometry_proof: LocalMotionProof | None = None
+    motion_validity: MotionValidity | None = None
+    approved_velocity: VelocityTarget | None = None
+    geometry_required: bool = False
 
     def __post_init__(self) -> None:
         require_finite(self.requested_v_mps, "MotionIntent.requested_v_mps")
+        if type(self.geometry_required) is not bool:
+            raise ContractValidationError("geometry_required must be bool")
+        for name, value, expected in (("geometry_proof", self.geometry_proof, LocalMotionProof),
+                                      ("motion_validity", self.motion_validity, MotionValidity),
+                                      ("approved_velocity", self.approved_velocity, VelocityTarget)):
+            if value is not None and not isinstance(value, expected):
+                raise ContractValidationError(name + " must be typed")
         require_finite(self.requested_omega_rad_s, "MotionIntent.requested_omega_rad_s")
         require_nonnegative(self.horizon_ns, "MotionIntent.horizon_ns")
         _require_optional_token(self.stop_reason, "MotionIntent.stop_reason")

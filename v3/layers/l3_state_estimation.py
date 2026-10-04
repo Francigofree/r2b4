@@ -1261,6 +1261,27 @@ class LocalPoseSample:
 
 
 @dataclass(frozen=True, slots=True)
+class ConsistencyFailure:
+    """L3-owned failing measurement interval; arrival time cannot clear it."""
+
+    start_ns: int
+    end_ns: int
+    source_id: str
+    source_sequence: int
+    generation: int
+    translation_error_m: float = 0.0
+    yaw_error_rad: float = 0.0
+
+    def __post_init__(self) -> None:
+        if (any(type(value) is not int or value < 0 for value in (
+                self.start_ns, self.end_ns, self.source_sequence, self.generation))
+                or self.start_ns > self.end_ns or not self.source_id
+                or not math.isfinite(self.translation_error_m) or self.translation_error_m < 0
+                or not math.isfinite(self.yaw_error_rad)):
+            raise ValueError("invalid consistency failure interval")
+
+
+@dataclass(frozen=True, slots=True)
 class NativeEstimatorStateCheckpoint:
     global_filter: PoseFilterStateCheckpoint
     local_filter: PoseFilterStateCheckpoint
@@ -1284,6 +1305,10 @@ class NativeEstimatorStateCheckpoint:
     local_translation_state: QualityState = QualityState.GOOD
     local_loss_relative_ns: int | None = None
     relative_yaw_error_rad: float = 0.0
+    wheel_failure: ConsistencyFailure | None = None
+    relative_failure: ConsistencyFailure | None = None
+    last_relative_start_ns: int | None = None
+    wheel_gyro_qualification: str = "UNQUALIFIED"
 
 
 class NativeStateEstimator:
@@ -1313,6 +1338,9 @@ class NativeStateEstimator:
         self._relative_translation_error_m = 0.0
         self._local_translation_state = QualityState.GOOD
         self._local_loss_relative_ns = None
+        self._wheel_failure = self._relative_failure = None
+        self._last_relative_start_ns = None
+        self._wheel_gyro_qualification = "UNQUALIFIED"
 
     @property
     def last_update_evidence(self) -> tuple[EkfUpdateEvidence, ...]:
@@ -1328,6 +1356,8 @@ class NativeStateEstimator:
             self._relative_sequence, self._slip_suspected, self._consistency_yaw_rad,
             self._relative_translation_error_m, self._local_translation_state,
             self._local_loss_relative_ns, self._relative_yaw_error_rad,
+            self._wheel_failure, self._relative_failure,
+            self._last_relative_start_ns, self._wheel_gyro_qualification,
         )
 
     def restore(self, checkpoint: NativeEstimatorStateCheckpoint) -> None:
@@ -1339,6 +1369,15 @@ class NativeStateEstimator:
         for name in checkpoint.__dataclass_fields__:
             if name not in {"global_filter", "local_filter", "history"}:
                 setattr(self, "_" + name, getattr(checkpoint, name))
+        if checkpoint.slip_suspected and self._wheel_failure is None and self._relative_failure is None:
+            # Historical checkpoints have no failure lineage. Conservatively
+            # require independent evidence after the restored control boundary.
+            context = checkpoint.local_filter.last_context
+            if context is not None:
+                self._wheel_failure = ConsistencyFailure(
+                    context.monotonic_ns, context.monotonic_ns, "LEGACY",
+                    0, checkpoint.generation,
+                )
 
     def _pose_at(self, ns: int) -> Pose2D | None:
         if not self._history or ns < self._history[0].monotonic_ns or ns > self._history[-1].monotonic_ns:
@@ -1372,6 +1411,9 @@ class NativeStateEstimator:
             self._last_relative_ns = None
             self._consistency_yaw_rad = 0.0
             self._relative_yaw_error_rad = 0.0
+            self._wheel_failure = self._relative_failure = None
+            self._last_relative_start_ns = None
+            self._local_loss_relative_ns = now
         # Consumer freshness is evaluated here, even when L2 admits no new event.
         fresh = tuple(o for o in frame.accepted if 0 <= now-o.captured_monotonic_ns <= self._config.max_measurement_age_ns)
         frame = replace(frame, accepted=fresh)
@@ -1437,15 +1479,17 @@ class NativeStateEstimator:
                 and self._wheel_trusted
                 and _numeric_value(wheel, "trust") >= cfg.minimum_sensor_trust
                 and rate_heading_confidence >= cfg.minimum_sensor_trust):
-            self._slip_suspected = self._slip_suspected or self._wheel_gyro_slip(
-                wheel, heading, previous_encoder,
-            )
+            # Count acquisition timestamps do not certify physical callback
+            # prefix completeness. An unqualified comparison is neither a
+            # slip nor permission to clear a previously qualified failure.
+            self._wheel_gyro_slip(wheel, heading, previous_encoder)
         # Count displacement even when BASELINE supplies no qualified velocity.
         if continuous and previous_pose is not None:
             self._unverified_sigma_m += math.hypot(
                 pose.x_m-previous_pose.x_m, pose.y_m-previous_pose.y_m,
             ) * cfg.unverified_drift_per_m
         self._relative_check(frame)
+        self._slip_suspected = self._wheel_failure is not None or self._relative_failure is not None
 
         # Project delayed global measurements to this tick using only the local
         # displacement over the actual measurement interval, never publication time.
@@ -1520,7 +1564,8 @@ class NativeStateEstimator:
                 # not a tick oscillating around the old cumulative threshold.
                 if (self._last_relative_ns is None
                         or (self._local_loss_relative_ns is not None
-                            and self._last_relative_ns <= self._local_loss_relative_ns)
+                            and (self._last_relative_start_ns is None
+                                 or self._last_relative_start_ns < self._local_loss_relative_ns))
                         or source_is_stale(now, self._last_relative_ns, cfg.relative_max_age_ns)
                         or sigma >= cfg.local_good_sigma_m):
                     local_state = QualityState.LOST
@@ -1529,7 +1574,8 @@ class NativeStateEstimator:
             ):
                 local_state = QualityState.DEGRADED
         if local_state is QualityState.LOST and self._local_translation_state is not QualityState.LOST:
-            self._local_loss_relative_ns = self._last_relative_ns
+            failures = tuple(f for f in (self._wheel_failure, self._relative_failure) if f is not None)
+            self._local_loss_relative_ns = max(f.end_ns for f in failures) if failures else now
         self._local_translation_state = local_state
         yaw_variance = local.covariance_5x5[12]
         relative_heading = False
@@ -1562,7 +1608,9 @@ class NativeStateEstimator:
         if (not continuous or not self._heading_trusted
                 or source_is_stale(now, self._local._last_heading_ns, self._config.max_measurement_age_ns)
                 or yaw_sigma**2 > cfg.max_yaw_variance
-                or abs(self._relative_yaw_error_rad) > cfg.relative_yaw_slip_rad):
+                or abs(self._relative_yaw_error_rad) > cfg.relative_yaw_slip_rad
+                or (self._relative_failure is not None
+                    and abs(self._relative_failure.yaw_error_rad) > cfg.relative_yaw_slip_rad)):
             heading_state = QualityState.LOST
         global_sigma = math.sqrt(max(global_estimate.covariance_5x5[0], global_estimate.covariance_5x5[6]))
         global_state = QualityState.GOOD
@@ -1582,29 +1630,14 @@ class NativeStateEstimator:
     def _wheel_gyro_slip(
         self, wheel: Observation, heading: Observation,
         previous: EncoderAnchor | None,
-    ) -> bool:
-        totals = self._local._encoder_totals(wheel)
-        limit = self._config.quality.wheel_imu_slip_rad_s
-        if totals is None:
-            # Legacy velocity-only sources have no displacement interval.
-            wheel_rate = (_numeric_value(wheel, "right_mps")-_numeric_value(wheel, "left_mps"))/self._config.track_width_m
-            return abs(wheel_rate-_numeric_value(heading, "omega_rad_s")) > limit
-        # Each wheel's fitted velocity may end at a different physical edge,
-        # before the current gyro sample (especially while braking/reversing).
-        # Compare signed wheel displacement and gyro-owned local heading over
-        # the SAME measurement interval instead. Acquisition is not a new edge.
-        if previous is None or previous.source_id != wheel.source_device_id:
-            return False
-        end_ns = wheel.captured_monotonic_ns
-        span_ns = end_ns-previous.captured_ns
-        if not 0 < span_ns <= self._config.max_measurement_age_ns:
-            return False
-        start, end = self._pose_at(previous.captured_ns), self._pose_at(end_ns)
-        if start is None or end is None:
-            return False
-        wheel_yaw = ((totals[1]-previous.right_m)-(totals[0]-previous.left_m))/self._config.track_width_m
-        gyro_yaw = _normalize_angle(end.yaw_rad-start.yaw_rad)
-        return abs(wheel_yaw-gyro_yaw) > limit*span_ns/1e9
+    ) -> None:
+        # Neither native poll-count snapshots nor legacy velocity fits expose
+        # a paired physical displacement interval with a complete event prefix.
+        # Do not turn callback delivery jitter into wheel-slip authority. Raw
+        # count odometry, independent LiDAR consistency and freshness/integrity
+        # gates remain active. A future qualified provider must supply actual
+        # interval lineage; now-minus-margin cannot manufacture it.
+        self._wheel_gyro_qualification = "UNQUALIFIED"
 
     def _relative_check(self, frame: AdmittedFrame) -> None:
         observation = _optional_observation(frame, "lidar_relative_motion")
@@ -1642,9 +1675,25 @@ class NativeStateEstimator:
         self._consistency_yaw_rad = decay*self._consistency_yaw_rad + error_yaw
         self._relative_rmse_m = _numeric_value(observation, "rmse_m")
         self._last_relative_ns = end_ns
+        self._last_relative_start_ns = start_ns
         self._unverified_sigma_m = .01 + self._relative_rmse_m
-        self._slip_suspected = (abs(error_yaw) > cfg.relative_yaw_slip_rad
-                                or math.hypot(error_x, error_y) > cfg.consistency_lost_m)
+        failed = (abs(error_yaw) > cfg.relative_yaw_slip_rad
+                  or math.hypot(error_x, error_y) > cfg.consistency_lost_m)
+        if failed:
+            self._relative_failure = ConsistencyFailure(
+                start_ns, end_ns, observation.source_device_id,
+                observation.source_sequence, self._generation,
+                math.hypot(error_x, error_y), error_yaw,
+            )
+            # A later failing interval advances the recovery boundary too.
+            if self._local_loss_relative_ns is not None:
+                self._local_loss_relative_ns = max(self._local_loss_relative_ns, end_ns)
+        elif not source_is_stale(frame.context.monotonic_ns, end_ns, cfg.relative_max_age_ns):
+            for name in ("_wheel_failure", "_relative_failure"):
+                failure = getattr(self, name)
+                if (failure is not None and start_ns >= failure.end_ns
+                        and failure.generation == self._generation):
+                    setattr(self, name, None)
 
 
 class ShadowStateEstimator:

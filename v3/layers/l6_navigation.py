@@ -222,6 +222,12 @@ class NavigationConfig:
     local_goal_forward_weight: float
     wheel_limits: WheelMotionLimits = WheelMotionLimits()
     minimum_planning_speed_mps: float = 0.15
+    # Derived from the existing L9 policy / control-gap owner by the resolver.
+    # Infinity defaults decode historical configs predating this forward edge.
+    operational_max_v_mps: float = math.inf
+    operational_max_omega_rad_s: float = math.inf
+    operational_max_curvature_rad_per_m: float = math.inf
+    motion_proof_horizon_ns: int = 250_000_000
     # Soft navigation envelope. L12 remains the independent hard safety gate.
     speed_clearance_enabled: bool = False
     speed_clearance_low_speed_mps: float = 0.20
@@ -573,6 +579,10 @@ class NavigationStateCheckpoint:
     global_transform_revision: int = -1
     localization_envelope: tuple[str, str, int] | None = None
     person_capability_failed_mission_id: str | None = None
+    localization_recovery_direction: int = 0
+    last_maneuver_direction: int = 0
+    goal_selection_reason: str | None = None
+    pending_goal_selection_reason: str | None = None
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -689,6 +699,8 @@ class TrajectoryNavigator:
     """Own reusable trajectory evaluation plus deterministic exploration state."""
 
     __slots__ = (
+        "_localization_recovery_direction", "_last_maneuver_direction",
+        "_goal_selection_reason", "_pending_goal_selection_reason",
         "_localization_recovery_started_ns", "_localization_recovery_mission_id",
         "_localization_generation", "_global_transform_revision", "_localization_envelope",
         "_completed",
@@ -769,6 +781,8 @@ class TrajectoryNavigator:
                 )
         self._localization_recovery_started_ns = None
         self._localization_recovery_mission_id = None
+        self._localization_recovery_direction = self._last_maneuver_direction = 0
+        self._goal_selection_reason = self._pending_goal_selection_reason = None
         self._localization_generation = self._global_transform_revision = -1
         self._localization_envelope = None
         self._completion_inputs = completion_inputs
@@ -846,6 +860,8 @@ class TrajectoryNavigator:
             self._localization_recovery_started_ns, self._localization_recovery_mission_id,
             self._localization_generation, self._global_transform_revision, self._localization_envelope,
             self._person_capability_failed_mission_id,
+            self._localization_recovery_direction, self._last_maneuver_direction,
+            self._goal_selection_reason, self._pending_goal_selection_reason,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -857,6 +873,9 @@ class TrajectoryNavigator:
         self._global_transform_revision = checkpoint.global_transform_revision
         self._localization_envelope = checkpoint.localization_envelope
         self._person_capability_failed_mission_id = checkpoint.person_capability_failed_mission_id
+        self._localization_recovery_direction = checkpoint.localization_recovery_direction
+        self._last_maneuver_direction = checkpoint.last_maneuver_direction
+        self._goal_selection_reason = checkpoint.goal_selection_reason
         self._abandon_pending_rollout()
         self._mission_id = checkpoint.mission_id
         self._initial_distance_m = checkpoint.initial_distance_m
@@ -890,6 +909,7 @@ class TrajectoryNavigator:
             self._pending_rollout_id = pending.context.tick_id + 1
             self._pending_rollout_request = pending
             self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns
+            self._pending_goal_selection_reason = checkpoint.pending_goal_selection_reason
             return
         if pending is not None:
             backend = self._rollout_backend
@@ -912,6 +932,7 @@ class TrajectoryNavigator:
             self._pending_rollout_id = request_id
             self._pending_rollout_request = pending
             self._pending_goal_selected_ns = checkpoint.pending_goal_selected_ns
+            self._pending_goal_selection_reason = checkpoint.pending_goal_selection_reason
             self._pending_release_tick_id = release_tick_id
             self._pending_release_not_before_ns = release_not_before_ns
 
@@ -947,14 +968,67 @@ class TrajectoryNavigator:
             self._localization_recovery_mission_id = None
         plan = self._evaluate(mission, estimate, world, planner_input)
         if plan.status is NavigationStatus.ACTIVE and plan.motion_validity is None:
-            return replace(plan, motion_validity=self._guidance_validity(
+            plan = replace(plan, motion_validity=self._guidance_validity(
                 mission, world, trajectory=bool(plan.trajectory_candidates),
                 translation=(bool(plan.trajectory_candidates)
                     or (plan.velocity_target is not None and abs(plan.velocity_target.v_mps) > 1e-12)
                     or bool(plan.route and math.hypot(plan.route[0].x_m-estimate.x_m,
                                plan.route[0].y_m-estimate.y_m) > mission.constraints.goal_tolerance_m)),
             ))
+        if plan.status in (NavigationStatus.ACTIVE, NavigationStatus.PENDING):
+            proof = self._motion_geometry_proof(plan, estimate, world)
+            plan = replace(plan, geometry_proof=proof)
+        if plan.status is NavigationStatus.ACTIVE:
+            omega = (plan.velocity_target.omega_rad_s if plan.velocity_target is not None
+                     else estimate.omega_rad_s)
+            if abs(omega) > 1e-3 and estimate.localization_quality.heading is QualityState.GOOD:
+                self._last_maneuver_direction = 1 if omega > 0 else -1
+            if mission.mode is CommandMode.EXPLORE:
+                pending = self._pending_rollout_request
+                proposed = pending is not None and plan.local_goal == pending.goal
+                plan = replace(plan,
+                    goal_selection_reason=(self._pending_goal_selection_reason if proposed else self._goal_selection_reason),
+                    goal_selected_ns=(self._pending_goal_selected_ns if proposed else self._goal_selected_ns))
         return plan
+
+    def _motion_geometry_proof(self, plan, estimate, world):
+        from v3.contracts import LocalMotionProof
+        validity, costmap = plan.motion_validity, world.local_costmap
+        quality = estimate.localization_quality
+        now = plan.context.monotonic_ns
+        if (validity is None or not validity.usable_at(plan.context) or costmap is None
+                or costmap.frame_id != world.frame_id or world.frame_id != estimate.frame_id
+                or costmap.freshness_ns > self._config.max_costmap_freshness_ns
+                or world.freshness_ns > self._config.max_world_freshness_ns
+                or quality.local_translation is QualityState.LOST
+                or quality.heading is QualityState.LOST
+                or not quality.local_pose_continuous or quality.pose_discontinuity):
+            return None
+        horizon_ns = self._config.motion_proof_horizon_ns
+        robot_radius = .5 * math.hypot(self._config.footprint_length_m, self._config.footprint_width_m)
+        margin = (robot_radius + self._config.footprint_safety_margin_m
+                  + self._config.localization_inflation_sigma * quality.local_sigma_m)
+        # Only the displacement needed under the hard speed cap is queried.
+        speed_cap = min(plan.constraints.max_v_mps, self._config.operational_max_v_mps)
+        bound = speed_cap * horizon_ns / 1e9
+        scene = self._build_planning_scene(world)
+        clearance = _planning_scene_point_clearance(
+            estimate.x_m, estimate.y_m, scene, costmap.radius_m, margin + bound)
+        for obstacle in world.obstacle_tracks:
+            if obstacle.confidence >= self._config.obstacle_confidence_floor:
+                clearance = min(clearance, math.hypot(obstacle.x_m-estimate.x_m, obstacle.y_m-estimate.y_m)
+                    - obstacle.radius_m - math.hypot(obstacle.vx_mps, obstacle.vy_mps)*horizon_ns/1e9)
+        captured_ns = now - costmap.freshness_ns
+        until = min(validity.valid_until_ns,
+                    captured_ns + self._config.max_costmap_freshness_ns,
+                    now + self._config.max_world_freshness_ns - world.freshness_ns)
+        return LocalMotionProof(plan.context, world.frame_id, validity.scope,
+            costmap.revision, captured_ns, until, horizon_ns, max(0., min(bound, clearance-margin)))
+
+    def _goal_handoff_ns(self):
+        # Completion-input mode has no release_delay authority. The next replan
+        # plus the bounded request lifetime is the actual replacement budget.
+        return self._config.trajectory_replan_interval_ns + min(self._request_timeout_ns, self._max_plan_age_ns)
 
     def _guidance_validity(
         self, mission: MissionIntent, world: WorldSnapshot, *, trajectory: bool = False,
@@ -1039,12 +1113,16 @@ class TrajectoryNavigator:
                 self._clear_trajectory_plan()
             self._localization_recovery_started_ns = None
             self._localization_recovery_mission_id = None
+            self._localization_recovery_direction = 0
             return None
         self._clear_trajectory_plan()
         now = mission.context.monotonic_ns
         if self._localization_recovery_mission_id != mission.mission_id:
             self._localization_recovery_started_ns = now
             self._localization_recovery_mission_id = mission.mission_id
+            self._localization_recovery_direction = (
+                (1 if estimate.omega_rad_s > 0 else -1) if abs(estimate.omega_rad_s) > 1e-3
+                else self._last_maneuver_direction or 1)
         elapsed = now - self._localization_recovery_started_ns
         geometry = world.robot_relative_geometry
         # Recovery must not depend on the pose-aligned costmap: L4 intentionally
@@ -1066,6 +1144,7 @@ class TrajectoryNavigator:
         recovery_omega = min(mission.constraints.max_omega_rad_s,
                              self._config.localization_recovery_omega_rad_s)
         _, recovery_omega = self._config.wheel_limits.constrain(0.0, recovery_omega)
+        recovery_omega *= self._localization_recovery_direction
         if recovery_omega == 0.0:
             return self._inactive(mission, NavigationStatus.IDLE, "LOCALIZATION_HOLD")
         # No translation; L12 independently verifies the raw side clearances.

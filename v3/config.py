@@ -344,7 +344,9 @@ class ConfigResolver:
         for section, derived_names in {
             "estimation": {"frame_id", "track_width_m", "minimum_reliable_wheel_speed_mps", "wheel_velocity_unreliable_below_mps"},
             "wheel_pi": {"minimum_reliable_speed_mps", "velocity_unreliable_below_mps"},
-            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits", "localization_recovery_omega_rad_s"} | ExplorePreferences.field_names(),
+            "navigation": {"footprint_length_m", "footprint_width_m", "wheel_limits", "localization_recovery_omega_rad_s",
+                           "operational_max_v_mps", "operational_max_omega_rad_s",
+                           "operational_max_curvature_rad_per_m", "motion_proof_horizon_ns"} | ExplorePreferences.field_names(),
             "motion_realization": {"wheel_limits", "max_world_freshness_ns"},
             "operational_constraints": {"wheel_limits"},
             "world_model": {
@@ -386,6 +388,11 @@ class ConfigResolver:
                               "velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}
         layers["navigation"] = {**layers["navigation"], "footprint_length_m":p["footprint_length_m"], "footprint_width_m":p["footprint_width_m"],
                                 "localization_recovery_omega_rad_s": recovery_omega,
+                                "operational_max_v_mps": layers["operational_constraints"]["max_v_mps"],
+                                "operational_max_omega_rad_s": layers["operational_constraints"]["max_omega_rad_s"],
+                                "operational_max_curvature_rad_per_m": layers["operational_constraints"]["max_curvature_rad_per_m"],
+                                "motion_proof_horizon_ns": max(layers["motion_realization"]["max_control_gap_ns"],
+                                                               layers["wheel_pi"]["max_control_gap_ns"]),
                                 **{field.key: field.value for field in roomcruise.preferences.as_fields()}}
         layers["motion_realization"] = {**layers["motion_realization"],
                                        "max_world_freshness_ns": layers["navigation"]["max_world_freshness_ns"]}

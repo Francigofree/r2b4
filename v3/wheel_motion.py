@@ -56,24 +56,62 @@ class WheelMotionLimits:
             return maximum
         return minimum + (maximum-minimum) * (index-1) / (count-2)
 
-    def constrain(self, v: float, omega: float, *, planning: bool = False) -> tuple[float, float]:
-        """Reduce a steady target to its feasible envelope; never amplify it.
+    def constrain(self, v: float, omega: float, *, planning: bool = False,
+                  max_v_mps: float = math.inf, max_omega_rad_s: float = math.inf,
+                  max_curvature_rad_per_m: float = math.inf) -> tuple[float, float]:
+        """Project a steady target jointly, preserving its signed wheel family.
 
-        Ordinary translation keeps both wheels rolling. Exact one-wheel pivots
-        and spins are allowed when their moving wheels are themselves feasible.
-        A target below the floor becomes zero; L9 owns the finite transition.
+        Body caps, curvature and wheel floors are one feasible region. Clamping
+        omega before this operation can turn a one-wheel pivot into a rolling
+        arc or erase a realizable counter-arc. L9 alone owns subfloor ramps.
         """
         minimum = self.target_floor_mps if planning else self.minimum_mps
-        left, right = self.wheels(v, omega)
-        scale = min(1.0, self.maximum_mps / max(abs(left), abs(right), 1e-12))
-        v, omega = v * scale, omega * scale
-        left, right = self.wheels(v, omega)
-        if all(abs(w) < 1e-12 or abs(w) >= minimum - 1e-12 for w in (left, right)):
+        if not math.isfinite(v) or not math.isfinite(omega):
+            raise ValueError("motion must be finite")
+        if any(math.isnan(cap) or cap < 0 for cap in (max_v_mps, max_omega_rad_s, max_curvature_rad_per_m)):
+            raise ValueError("motion caps must be nonnegative")
+        half_track = self.track_width_m * .5
+        turn = omega * half_track
+        left, right = v - turn, v + turn
+        if (abs(v) <= max_v_mps and abs(omega) <= max_omega_rad_s
+                and (abs(v) <= 1e-12 or abs(omega) <= max_curvature_rad_per_m * abs(v))
+                and all(abs(w) <= self.maximum_mps + 1e-12
+                        and (abs(w) <= 1e-12 or abs(w) >= minimum - 1e-12)
+                        for w in (left, right))):
             return v, omega
-        if abs(v) < minimum - 1e-12:
+
+        # Fixed-family half planes a*v+b*turn <= c. This is a two-dimensional
+        # projection with a fixed small candidate budget, not a search/solver.
+        planes: list[tuple[float, float, float]] = []
+        for a, b, value, cap in ((1., 0., v, max_v_mps), (0., 1., turn, max_omega_rad_s * half_track)):
+            sign = 1. if value >= 0 else -1.
+            planes.extend(((sign*a, sign*b, min(abs(value), cap)), (-sign*a, -sign*b, 0.)))
+        for a, b, wheel in ((1., -1., left), (1., 1., right)):
+            if abs(wheel) <= 1e-12:
+                planes.extend(((a, b, 0.), (-a, -b, 0.)))
+            else:
+                sign = math.copysign(1., wheel)
+                planes.extend(((sign*a, sign*b, self.maximum_mps), (-sign*a, -sign*b, -minimum)))
+        if abs(v) > 1e-12 and math.isfinite(max_curvature_rad_per_m):
+            sign = math.copysign(1., v)
+            slope = max_curvature_rad_per_m * half_track
+            planes.extend(((-slope*sign, 1., 0.), (-slope*sign, -1., 0.)))
+        candidates = [(v, turn)]
+        for index, (a, b, c) in enumerate(planes):
+            distance = (a*v + b*turn - c) / (a*a + b*b)
+            candidates.append((v - a*distance, turn - b*distance))
+            for d, e, f in planes[:index]:
+                determinant = a*e - b*d
+                if abs(determinant) > 1e-12:
+                    candidates.append(((c*e - b*f)/determinant, (a*f - c*d)/determinant))
+        feasible = [(x, y) for x, y in candidates
+                    if all(a*x + b*y <= c + 1e-12 for a, b, c in planes)
+                    and (abs(v) <= 1e-12 or abs(x) > 1e-12)]
+        if not feasible:
             return 0.0, 0.0
-        turn_limit = max(0.0, 2 * (abs(v) - minimum) / self.track_width_m)
-        return v, math.copysign(min(abs(omega), turn_limit), omega)
+        x, y = min(feasible, key=lambda p: ((p[0]-v)**2 + (p[1]-turn)**2, p))
+        return (0.0 if abs(x) <= 1e-12 else x,
+                0.0 if abs(y) <= 1e-12 else y/half_track)
 
     def degraded_linear_cap(self, v: float, omega: float, scale: float) -> float:
         # Reserve room for steering at the reduced angular cap. The caller's
