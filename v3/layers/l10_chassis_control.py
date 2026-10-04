@@ -59,13 +59,14 @@ class DifferentialDriveKinematics:
             left_mps=float(left_mps),
             right_mps=float(right_mps),
             velocity_transition_until_ns=motion.velocity_transition_until_ns,
+            motion_revoked=motion.motion_revoked,
         )
 
 
 def zero_wheel_setpoint(motion: ConstrainedMotion) -> WheelVelocitySetpoint:
     """Preserve the explicit zero stage used by the STOP-only composition."""
 
-    return WheelVelocitySetpoint(motion.context, left_mps=0.0, right_mps=0.0)
+    return WheelVelocitySetpoint(motion.context, left_mps=0.0, right_mps=0.0, motion_revoked=True)
 
 
 __all__ = [

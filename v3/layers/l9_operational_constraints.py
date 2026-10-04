@@ -232,6 +232,7 @@ class OperationalConstraintLayer:
             allowed_v_mps=0.0,
             allowed_omega_rad_s=0.0,
             active_constraints=codes,
+            motion_revoked=True,
         )
 
     def _remember(self, context: TickContext, v_mps: float, omega_rad_s: float) -> None:
@@ -248,6 +249,7 @@ def constrain_stop(motion: MotionIntent, estimate: RobotEstimate) -> Constrained
         allowed_v_mps=0.0,
         allowed_omega_rad_s=0.0,
         active_constraints=(),
+        motion_revoked=True,
     )
 
 

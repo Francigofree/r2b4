@@ -22,7 +22,7 @@ def _feedback(tick, speed, **extra):
         context.monotonic_ns, tuple(DataField(k, v) for k, v in values.items())),), ())
 
 
-def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
+def test_motion_low_speed_feedback_uses_feedforward_recovers_and_preserves_watchdogs():
     config = resolved_config().runtime.composition.live_control.control
     low = config.wheel_pi.velocity_unreliable_below_mps
     reliable = config.wheel_pi.minimum_reliable_speed_mps
@@ -39,7 +39,7 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
         output = controller(wheels, frame)
         if restored is not None:
             assert restored(wheels, frame) == output
-        if tick < 5 or tick in (9, 10):
+        if abs(speed) < reliable:
             assert output.left_normalized == pytest.approx(config.speed_map.lookup("left", reference)[0])
             assert output.right_normalized == pytest.approx(config.speed_map.lookup("right", reference)[0])
         if tick == 6:
@@ -95,10 +95,8 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
             restored = WheelActuatorController(config.speed_map, config.wheel_pi)
             restored.restore(controller.checkpoint())
 
-    # Learned overspeed correction must fade with confidence before the fit
-    # becomes unusable. Otherwise crossing the lower confidence bound erases an integral
-    # and steps the wheel back to the (higher) feed-forward output. Sample the
-    # configured confidence band rather than freezing a historical tuning limit.
+    # A previously learned correction cannot survive in an uncertain fit band.
+    # Signed-edge liveness is independent; the intermediate fit gives no PI.
     for sign in (1, -1):
         controller = WheelActuatorController(config.speed_map, config.wheel_pi)
         for tick in range(20):
@@ -113,6 +111,7 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
             wheels = replace(wheels, context=frame.context)
             output = controller(wheels, frame)
             correction = abs(output.left_normalized - feedforward)
+            assert correction == pytest.approx(0.0)
             if speed == near_low:
                 assert correction < strong_correction * .1
                 restored = WheelActuatorController(config.speed_map, config.wheel_pi)

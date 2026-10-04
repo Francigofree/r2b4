@@ -158,7 +158,9 @@ def test_localization_stale_imu_slip_and_bad_producer_fail_closed():
     ns = f.context.monotonic_ns
     wheel = observation("wheel_velocity", 1, ns, left_mps=.3, right_mps=-.3, trust=1.0)
     f = replace(f, accepted=tuple(wheel if o.kind == "wheel_velocity" else o for o in f.accepted)+(observation(
-        "lidar_pose", 1, ns, frame_id=GLOBAL_FRAME_ID, x_m=0., y_m=0., yaw_rad=0., confidence=1., r_scale=1.),))
+        "lidar_pose", 1, ns, frame_id=GLOBAL_FRAME_ID, x_m=0., y_m=0., yaw_rad=0., confidence=1., r_scale=1.),
+        observation("lidar_relative_motion", 1, ns, start_ns=ns-20_000_000,
+                    dx_m=0., dy_m=0., dyaw_rad=.4, rmse_m=.001, observability=1.)))
     slipped = estimator(f)
     assert slipped.localization_quality.global_position is QualityState.GOOD
     assert slipped.localization_quality.local_translation is QualityState.LOST
@@ -169,8 +171,8 @@ def test_localization_stale_imu_slip_and_bad_producer_fail_closed():
 
     # Physical wheel fits end at different edges. An old reverse fit paired
     # with a fresh forward fit is not simultaneous wheel/gyro slip evidence.
-    # Reproduce the live 08:42 tick 539 velocities with consistent cumulative
-    # displacement, then inject a real differential displacement mismatch.
+    # Even a count burst lacks physical-prefix completeness: a poll-span
+    # mismatch alone cannot be qualified wheel/gyro slip evidence.
     estimator = NativeStateEstimator(config.estimation)
     checkpoint = None
     for tick in range(4):
@@ -184,12 +186,10 @@ def test_localization_stale_imu_slip_and_bad_producer_fail_closed():
         estimate = estimator(f)
         if tick == 2:
             checkpoint = estimator.checkpoint()
-        if tick < 3:
-            assert not estimate.localization_quality.slip_suspected
-            assert estimate.localization_quality.local_translation is not QualityState.LOST
-        else:
-            assert estimate.localization_quality.slip_suspected
-            assert estimate.localization_quality.local_translation is QualityState.LOST
+        assert not estimate.localization_quality.slip_suspected
+        assert estimate.localization_quality.local_translation is not QualityState.LOST
+        assert estimator.checkpoint().wheel_gyro_qualification == "UNQUALIFIED"
+        if tick == 3:
             restored = NativeStateEstimator(config.estimation)
             restored.restore(checkpoint)
             assert restored(f) == estimate

@@ -965,8 +965,12 @@ class ConstrainedMotion:
     previous_velocity: VelocityTarget | None = None
     previous_context: TickContext | None = None
     velocity_transition_until_ns: int | None = None
+    motion_revoked: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.motion_revoked) is not bool or (self.motion_revoked and (
+                self.allowed_v_mps != 0.0 or self.allowed_omega_rad_s != 0.0)):
+            raise ContractValidationError("revoked motion must be zero")
         if self.velocity_transition_until_ns is not None:
             require_nonnegative(self.velocity_transition_until_ns, "velocity_transition_until_ns")
             if self.velocity_transition_until_ns < self.context.monotonic_ns:
@@ -1017,8 +1021,12 @@ class WheelVelocitySetpoint:
     left_mps: float
     right_mps: float
     velocity_transition_until_ns: int | None = None
+    motion_revoked: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.motion_revoked) is not bool or (self.motion_revoked and (
+                self.left_mps != 0.0 or self.right_mps != 0.0)):
+            raise ContractValidationError("revoked wheel motion must be zero")
         require_finite(self.left_mps, "WheelVelocitySetpoint.left_mps")
         require_finite(self.right_mps, "WheelVelocitySetpoint.right_mps")
         if self.velocity_transition_until_ns is not None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+import math
 
 from v3.contracts.planner import PlannerInput, TrajectoryRolloutRequest
 from v3.contracts import DeviceHealth, LifecycleState, TickContext
@@ -194,6 +195,16 @@ class NativeControlCompositionConfig:
         if (self.wheel_pi.minimum_reliable_speed_mps != self.estimation.minimum_reliable_wheel_speed_mps
                 or self.wheel_pi.velocity_unreliable_below_mps != self.estimation.wheel_velocity_unreliable_below_mps):
             raise ValueError("L3 and L11 must share encoder velocity quality thresholds")
+        # Historical capture configs predate the derived forward envelope.
+        # Live resolution always supplies the existing L9/control-gap policy.
+        if math.isfinite(self.navigation.operational_max_v_mps) and (
+            self.navigation.operational_max_v_mps != self.operational_constraints.max_v_mps
+            or self.navigation.operational_max_omega_rad_s != self.operational_constraints.max_omega_rad_s
+            or self.navigation.operational_max_curvature_rad_per_m != self.operational_constraints.max_curvature_rad_per_m
+            or self.navigation.motion_proof_horizon_ns < max(
+                self.motion_realization.max_control_gap_ns, self.wheel_pi.max_control_gap_ns)
+        ):
+            raise ValueError("navigation must consume the derived operational motion envelope")
         if self.lidar_safety is not None and not isinstance(
             self.lidar_safety,
             LidarSafetyConfig,

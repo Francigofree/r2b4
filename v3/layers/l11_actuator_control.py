@@ -251,6 +251,10 @@ class WheelActuatorStateCheckpoint:
     right_motion_feedback_seen: bool | None = None
     left_motion_started_ns: int | None = None
     right_motion_started_ns: int | None = None
+    left_requested_direction: int = 0
+    right_requested_direction: int = 0
+    left_direction_epoch_ns: int | None = None
+    right_direction_epoch_ns: int | None = None
 
 
 class _PIState:
@@ -326,6 +330,8 @@ class WheelActuatorController:
         "_left_velocity_feedback_ready", "_right_velocity_feedback_ready",
         "_left_motion_feedback_seen", "_right_motion_feedback_seen",
         "_left_motion_started_ns", "_right_motion_started_ns",
+        "_left_requested_direction", "_right_requested_direction",
+        "_left_direction_epoch_ns", "_right_direction_epoch_ns",
     )
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
@@ -343,6 +349,8 @@ class WheelActuatorController:
         self._left_velocity_feedback_ready = self._right_velocity_feedback_ready = False
         self._left_motion_feedback_seen = self._right_motion_feedback_seen = False
         self._left_motion_started_ns = self._right_motion_started_ns = None
+        self._left_requested_direction = self._right_requested_direction = 0
+        self._left_direction_epoch_ns = self._right_direction_epoch_ns = None
 
     def reset(self) -> None:
         self._left_pi.reset()
@@ -357,6 +365,8 @@ class WheelActuatorController:
         self._left_velocity_feedback_ready = self._right_velocity_feedback_ready = False
         self._left_motion_feedback_seen = self._right_motion_feedback_seen = False
         self._left_motion_started_ns = self._right_motion_started_ns = None
+        self._left_requested_direction = self._right_requested_direction = 0
+        self._left_direction_epoch_ns = self._right_direction_epoch_ns = None
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
@@ -375,6 +385,8 @@ class WheelActuatorController:
             self._feedback_transition_until_ns,
             self._left_motion_feedback_seen, self._right_motion_feedback_seen,
             self._left_motion_started_ns, self._right_motion_started_ns,
+            self._left_requested_direction, self._right_requested_direction,
+            self._left_direction_epoch_ns, self._right_direction_epoch_ns,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
@@ -400,6 +412,8 @@ class WheelActuatorController:
             (checkpoint.feedback_transition_until_ns, "feedback_transition_until_ns"),
             (checkpoint.left_motion_started_ns, "left_motion_started_ns"),
             (checkpoint.right_motion_started_ns, "right_motion_started_ns"),
+            (checkpoint.left_direction_epoch_ns, "left_direction_epoch_ns"),
+            (checkpoint.right_direction_epoch_ns, "right_direction_epoch_ns"),
         ):
             if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{name} must be non-negative integer or None")
@@ -425,6 +439,11 @@ class WheelActuatorController:
             item.key: item.value for item in checkpoint.last_feedback.values
         }
         for side in ("left", "right"):
+            direction = getattr(checkpoint, f"{side}_requested_direction")
+            if type(direction) is not int or direction not in (-1, 0, 1):
+                raise ValueError("invalid requested wheel direction")
+            setattr(self, f"_{side}_requested_direction", direction)
+            setattr(self, f"_{side}_direction_epoch_ns", getattr(checkpoint, f"{side}_direction_epoch_ns"))
             seen = getattr(checkpoint, f"{side}_motion_feedback_seen")
             if seen is None:
                 # Older capture checkpoints predate this diagnostic state.
@@ -453,9 +472,17 @@ class WheelActuatorController:
             self._right_pi.reset()
 
         if abs(wheels.left_mps) <= 1e-12 and abs(wheels.right_mps) <= 1e-12:
-            feedback = self._last_feedback
-            self.reset()
-            self._last_feedback = feedback
+            if wheels.motion_revoked:
+                feedback = self._last_feedback
+                self.reset()
+                self._last_feedback = feedback
+            else:
+                # An ordinary zero target during a reversal is not a new
+                # actuation episode. Preserve the original uncertainty budget.
+                self._left_pi.reset()
+                self._right_pi.reset()
+                self._last_context = wheels.context
+                self._left_requested_direction = self._right_requested_direction = 0
             return ActuatorRequest(wheels.context, 0.0, 0.0)
 
         feedback = self._last_feedback
@@ -485,6 +512,11 @@ class WheelActuatorController:
         required_left = abs(wheels.left_mps) > 1e-9
         required_right = abs(wheels.right_mps) > 1e-9
         for side, required in (("left", required_left), ("right", required_right)):
+            target = getattr(wheels, f"{side}_mps")
+            direction = (1 if target > 0 else -1) if required else 0
+            if direction != getattr(self, f"_{side}_requested_direction"):
+                setattr(self, f"_{side}_direction_epoch_ns", wheels.context.monotonic_ns)
+                setattr(self, f"_{side}_requested_direction", direction)
             if not required:
                 setattr(self, f"_{side}_motion_started_ns", None)
             elif getattr(self, f"_{side}_motion_started_ns") is None:
@@ -497,8 +529,8 @@ class WheelActuatorController:
         )
 
         # Counter integrity/timebase above is independent of velocity-fit
-        # reliability. Enter/leave PI at the encoder's configured confidence
-        # boundaries; in between scale the correction and freeze the integral.
+        # reliability. Only a fully qualified velocity fit enters PI. Physical
+        # signed-edge liveness independently permits feed-forward below it.
         feedback_values = {field.key: field.value for field in feedback.values}
         left_motion_live = required_left and self._fresh_signed_motion(
             feedback_values, "left", wheels.left_mps, wheels.context.monotonic_ns)
@@ -541,10 +573,10 @@ class WheelActuatorController:
             quality = 0.0 if measured is None else velocity_quality(
                 measured, self._config.minimum_reliable_speed_mps, self._config.velocity_unreliable_below_mps)
             ready = getattr(self, f"_{side}_velocity_feedback_ready")
-            if not required or quality <= 0.0:
-                ready = False
-            elif quality >= 1.0:
-                ready = True
+            # The uncertainty band describes fit confidence, not partial PI
+            # authority. Never apply proportional or learned integral bias
+            # below the reliable floor, even if the wheel was previously ready.
+            ready = required and quality >= 1.0
             setattr(self, f"_{side}_velocity_feedback_ready", ready)
         if required_left and not self._left_velocity_feedback_ready:
             left_measured = None
@@ -557,16 +589,12 @@ class WheelActuatorController:
         left_uncertain = required_left and left_measured is None and not left_motion_live
         right_uncertain = required_right and right_measured is None and not right_motion_live
 
-        self._left_uncertain_since_ns = self._evidence_uncertainty_start(
-            self._left_uncertain_since_ns,
-            wheels.context.monotonic_ns,
-            active=left_uncertain,
-        )
-        self._right_uncertain_since_ns = self._evidence_uncertainty_start(
-            self._right_uncertain_since_ns,
-            wheels.context.monotonic_ns,
-            active=right_uncertain,
-        )
+        for side, required, uncertain_side in (("left", required_left, left_uncertain),
+                                               ("right", required_right, right_uncertain)):
+            if required:
+                setattr(self, f"_{side}_uncertain_since_ns", self._evidence_uncertainty_start(
+                    getattr(self, f"_{side}_uncertain_since_ns"),
+                    wheels.context.monotonic_ns, active=uncertain_side))
 
         uncertain = left_uncertain or right_uncertain
         # Once a wheel has proved motion, losing its accepted edges spends the
@@ -639,8 +667,9 @@ class WheelActuatorController:
                 return ActuatorRequest(wheels.context, 0.0, 0.0)
         else:
             self._transient_stale_ticks = 0
-            self._feedback_uncertain_since_ns = None
-            self._feedback_transition_until_ns = None
+            if self._left_uncertain_since_ns is None and self._right_uncertain_since_ns is None:
+                self._feedback_uncertain_since_ns = None
+                self._feedback_transition_until_ns = None
 
         # Only the uncertain wheel loses PI state. Both wheels share the same
         # finite watchdog above; alternating uncertainty cannot renew it.
@@ -778,6 +807,7 @@ class WheelActuatorController:
                                else f"{side}_estimation_pulse_delta")
         confirmed = values.get(f"{side}_confirmed_direction")
         started_ns = getattr(self, f"_{side}_motion_started_ns")
+        direction_epoch_ns = getattr(self, f"_{side}_direction_epoch_ns")
         return (
             values.get("measurement_stale") is False
             and values.get("measurement_timing_valid") is True
@@ -788,6 +818,7 @@ class WheelActuatorController:
             and 0 <= now_ns - edge_ns < min(self._config.max_feedback_age_ns,
                                            self._config.max_feedback_uncertainty_ns)
             and (not native or (started_ns is not None and edge_ns >= started_ns))
+            and (not native or direction_epoch_ns is None or edge_ns >= direction_epoch_ns)
             and type(direction) is int and direction * target_mps > 0.0
             and type(confirmed) is int and confirmed in (-1, 1)
             and (direction == confirmed if native else direction * confirmed > 0)
@@ -842,16 +873,29 @@ class WheelActuatorController:
                 deadline_ns = (self._feedback_transition_until_ns
                                if self._feedback_transition_until_ns is not None
                                else wheels.velocity_transition_until_ns)
-                if deadline_ns is None or deadline_reached(now_ns, deadline_ns):
-                    return False
+                epoch_ns = getattr(self, f"_{side}_direction_epoch_ns")
+                if (type(edge_ns) is int and 0 <= now_ns-edge_ns < self._config.max_feedback_uncertainty_ns
+                        and type(direction) is int and direction in (-1, 1)
+                        and direction == values.get(f"{side}_confirmed_direction")
+                        and direction*target > 0.0
+                        and epoch_ns is not None and edge_ns < epoch_ns):
+                    # Restart/flip-back still needs a post-epoch edge. Finite
+                    # feed-forward can obtain it; the old matching edge never
+                    # closes or renews the shared uncertainty episode.
+                    continue
                 if (not getattr(self, f"_{side}_motion_feedback_seen")
                         and (edge_ns is None or (type(edge_ns) is int
                                                   and started_ns is not None and edge_ns < started_ns))):
-                    continue
+                    if deadline_ns is not None and not deadline_reached(now_ns, deadline_ns):
+                        continue
+                    return False
                 if (type(edge_ns) is int and 0 <= now_ns - edge_ns < self._config.max_feedback_uncertainty_ns
                         and type(direction) is int and direction in (-1, 1)
                         and direction == values.get(f"{side}_confirmed_direction")
                         and direction * target < 0.0):
+                    # An above-floor reversal may have no L9 ramp deadline.
+                    # The ordinary, non-renewable uncertainty watchdog below
+                    # still bounds feed-forward until the new physical edge.
                     continue
                 return False
 
