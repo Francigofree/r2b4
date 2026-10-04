@@ -65,6 +65,9 @@ class SignedPulseCounterSnapshot:
     last_a_timestamp_ns: int | None = None
     last_b_timestamp_ns: int | None = None
     last_b_level: int | None = None
+    last_callback_received_ns: int | None = None
+    last_callback_latency_ns: int | None = None
+    max_callback_latency_ns: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.pulse_count, int) or isinstance(self.pulse_count, bool):
@@ -84,6 +87,9 @@ class SignedPulseCounterSnapshot:
         for value, name in (
             (self.last_a_timestamp_ns, "last_a_timestamp_ns"),
             (self.last_b_timestamp_ns, "last_b_timestamp_ns"),
+            (self.last_callback_received_ns, "last_callback_received_ns"),
+            (self.last_callback_latency_ns, "last_callback_latency_ns"),
+            (self.max_callback_latency_ns, "max_callback_latency_ns"),
         ):
             if value is not None:
                 _nonnegative_int(value, name)
@@ -443,6 +449,12 @@ class NativeCounterEncoderBackend:
             right_last_b_timestamp_ns=current.right.last_b_timestamp_ns,
             left_last_b_level=current.left.last_b_level,
             right_last_b_level=current.right.last_b_level,
+            left_last_callback_received_ns=current.left.last_callback_received_ns,
+            right_last_callback_received_ns=current.right.last_callback_received_ns,
+            left_last_callback_latency_ns=current.left.last_callback_latency_ns,
+            right_last_callback_latency_ns=current.right.last_callback_latency_ns,
+            left_max_callback_latency_ns=current.left.max_callback_latency_ns,
+            right_max_callback_latency_ns=current.right.max_callback_latency_ns,
         )
 
     def _stationary_estimate(

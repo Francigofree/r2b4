@@ -206,6 +206,9 @@ class _CounterState:
     direction_change_candidates: int = 0
     direction_changes_confirmed: int = 0
     diagnostic_events: deque[QuadratureAlertEvent] | None = None
+    last_callback_received_ns: int | None = None
+    last_callback_latency_ns: int | None = None
+    max_callback_latency_ns: int | None = None
 
 
 class _CounterView:
@@ -449,10 +452,12 @@ class NativeGpioSignedCounterPair:
         expected_pin: int,
     ) -> Callable[[int, int, int, int], None]:
         def handle(chip: int, gpio: int, level: int, tick: int) -> None:
+            received_ns = self._callback_receipt_ns()
             with self._lock:
                 if self._closed:
                     return
                 state = self._states[side]
+                self._record_callback_delivery(state, tick, received_ns)
                 if (
                     not self._valid_alert(chip, gpio, expected_pin)
                     or not isinstance(level, int)
@@ -611,10 +616,12 @@ class NativeGpioSignedCounterPair:
         channel: GpioCounterChannelConfig,
     ) -> Callable[[int, int, int, int], None]:
         def handle(chip: int, gpio: int, level: int, tick: int) -> None:
+            received_ns = self._callback_receipt_ns()
             with self._lock:
                 if not self._running:
                     return
                 state = self._states[side]
+                self._record_callback_delivery(state, tick, received_ns)
                 if (
                     not self._valid_alert(chip, gpio, channel.pin_a)
                     or not isinstance(level, int)
@@ -669,6 +676,26 @@ class NativeGpioSignedCounterPair:
                 )
 
         return handle
+
+    def _callback_receipt_ns(self) -> int | None:
+        # Passive delivery evidence uses the injected production clock. It must
+        # neither rewrite the physical lgpio timestamp nor break a callback.
+        if self._clock is None:
+            return None
+        try:
+            return self._clock()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _record_callback_delivery(state: _CounterState, tick: int, received_ns: int | None) -> None:
+        if (type(tick) is not int or type(received_ns) is not int
+                or tick < 0 or received_ns < tick):
+            return
+        latency_ns = received_ns - tick
+        state.last_callback_received_ns = received_ns
+        state.last_callback_latency_ns = latency_ns
+        state.max_callback_latency_ns = max(state.max_callback_latency_ns or 0, latency_ns)
 
     @property
     def left_counter(self) -> _CounterView:
@@ -728,6 +755,9 @@ class NativeGpioSignedCounterPair:
             last_a_timestamp_ns=state.last_a_timestamp_ns,
             last_b_timestamp_ns=state.last_b_timestamp_ns,
             last_b_level=state.last_b_level,
+            last_callback_received_ns=state.last_callback_received_ns,
+            last_callback_latency_ns=state.last_callback_latency_ns,
+            max_callback_latency_ns=state.max_callback_latency_ns,
         )
 
     def diagnostic_events(self, side: str) -> tuple[QuadratureAlertEvent, ...]:

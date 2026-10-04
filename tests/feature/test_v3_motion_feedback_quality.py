@@ -116,3 +116,72 @@ def test_motion_low_speed_feedback_blends_recovers_and_preserves_watchdogs():
             if speed == below:
                 assert output == restored(wheels, frame)
                 assert correction == pytest.approx(0.0)
+
+    # Clean initial standstill can acquire motion within the ordinary budget.
+    # Losing already observed edges holds BOTH wheels, even when acquisitions
+    # remain fresh and alternating sides would otherwise renew the watchdog.
+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+    restored = None
+    fault_tick = None
+    for tick in range(24):
+        f = _feedback(tick, reliable)
+        values = {v.key: v.value for v in f.accepted[0].values}
+        if tick < 2:
+            sides = ("left", "right")
+        elif tick == 2:
+            sides = ()
+        else:
+            sides = ("left",) if tick % 2 else ("right",)
+        for side in sides:
+            values[f"{side}_mps"] = 0.0
+            values[f"{side}_estimation_timebase"] = "TICK_SNAPSHOT"
+        if tick == 1:
+            # First raw pulses can have a GPIO timebase without a qualified
+            # fit. This is startup fill, not loss of previously trusted motion.
+            values.update(trust=0.0, left_measurement_trust=0.0,
+                          right_measurement_trust=0.0,
+                          left_estimation_timebase=None,
+                          right_estimation_timebase="GPIO_EDGE_HISTORY")
+        f = replace(f, accepted=(replace(f.accepted[0], values=tuple(
+            DataField(k, v) for k, v in values.items())),))
+        wheels = WheelVelocitySetpoint(f.context, .19, .19,
+                                       velocity_transition_until_ns=1_800_000_000)
+        try:
+            output = controller(wheels, f)
+        except ValueError as exc:
+            assert "MISSING_EDGE:" in str(exc)
+            with pytest.raises(ValueError, match="MISSING_EDGE:"):
+                restored(wheels, f)
+            fault_tick = tick
+            break
+        if restored is not None:
+            assert restored(wheels, f) == output
+        if tick < 2:
+            assert output.left_normalized > 0 and output.right_normalized > 0
+        elif tick > 2:
+            assert output.left_normalized == output.right_normalized == 0.0
+        if tick == 5:
+            restored = WheelActuatorController(config.speed_map, config.wheel_pi)
+            restored.restore(controller.checkpoint())
+    assert fault_tick is not None
+    assert (fault_tick - 3) * 20_000_000 < 800_000_000
+
+    # The live failure changed from weak fit to edge loss after spending the
+    # ordinary budget. Do not forgive that time or label the healthy wheel lost.
+    controller = WheelActuatorController(config.speed_map, config.wheel_pi)
+    for tick in range(19):
+        f = _feedback(tick, below)
+        values = {v.key: v.value for v in f.accepted[0].values}
+        values['right_mps'] = reliable
+        if tick == 18:
+            values.update(left_mps=0.0, left_estimation_timebase="TICK_SNAPSHOT")
+        f = replace(f, accepted=(replace(f.accepted[0], values=tuple(
+            DataField(k, v) for k, v in values.items())),))
+        wheels = WheelVelocitySetpoint(f.context, .19, .19,
+                                       velocity_transition_until_ns=1_800_000_000)
+        if tick == 18:
+            with pytest.raises(ValueError, match="MISSING_EDGE:left$"):
+                controller(wheels, f)
+        else:
+            controller(wheels, f)
+    assert controller(replace(wheels, left_mps=0.0, right_mps=0.0), f).left_normalized == 0.0

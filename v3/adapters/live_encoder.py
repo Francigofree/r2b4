@@ -154,6 +154,12 @@ class EncoderEdgeDiagnostics:
     right_last_b_timestamp_ns: int | None = None
     left_last_b_level: int | None = None
     right_last_b_level: int | None = None
+    left_last_callback_received_ns: int | None = None
+    right_last_callback_received_ns: int | None = None
+    left_last_callback_latency_ns: int | None = None
+    right_last_callback_latency_ns: int | None = None
+    left_max_callback_latency_ns: int | None = None
+    right_max_callback_latency_ns: int | None = None
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -269,6 +275,12 @@ class EncoderEdgeDiagnostics:
             (self.right_last_a_timestamp_ns, "right_last_a_timestamp_ns"),
             (self.left_last_b_timestamp_ns, "left_last_b_timestamp_ns"),
             (self.right_last_b_timestamp_ns, "right_last_b_timestamp_ns"),
+            (self.left_last_callback_received_ns, "left_last_callback_received_ns"),
+            (self.right_last_callback_received_ns, "right_last_callback_received_ns"),
+            (self.left_last_callback_latency_ns, "left_last_callback_latency_ns"),
+            (self.right_last_callback_latency_ns, "right_last_callback_latency_ns"),
+            (self.left_max_callback_latency_ns, "left_max_callback_latency_ns"),
+            (self.right_max_callback_latency_ns, "right_max_callback_latency_ns"),
         ):
             _optional_integer(value, name)
         for value, name in (
@@ -563,6 +575,12 @@ class NativeEncoderSource:
             DataField("right_last_b_timestamp_ns", diagnostics.right_last_b_timestamp_ns),
             DataField("left_last_b_level", diagnostics.left_last_b_level),
             DataField("right_last_b_level", diagnostics.right_last_b_level),
+            DataField("left_last_callback_received_ns", diagnostics.left_last_callback_received_ns),
+            DataField("right_last_callback_received_ns", diagnostics.right_last_callback_received_ns),
+            DataField("left_last_callback_latency_ns", diagnostics.left_last_callback_latency_ns),
+            DataField("right_last_callback_latency_ns", diagnostics.right_last_callback_latency_ns),
+            DataField("left_max_callback_latency_ns", diagnostics.left_max_callback_latency_ns),
+            DataField("right_max_callback_latency_ns", diagnostics.right_max_callback_latency_ns),
         )
 
 

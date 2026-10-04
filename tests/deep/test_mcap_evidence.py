@@ -193,7 +193,7 @@ def test_atomic_publication_interruption_and_legacy_protection(tmp_path, monkeyp
         verify(output)
 
 
-def test_capture_process_shutdown_has_no_evidence_dependency(tmp_path):
+def test_capture_process_shutdown_has_no_evidence_dependency(tmp_path, monkeypatch):
     from v3.interface_cli import _execute, _parser
     from v3.interface_adapters import build_adapters
     from v3.launcher_cli import command_catalog
@@ -247,6 +247,51 @@ def test_capture_process_shutdown_has_no_evidence_dependency(tmp_path):
         ticks.append([payload for _, payload in McapReader(path).iter_json_messages(topics=['/r2b4/tick'])])
         assert not path.with_suffix('.evidence').exists()
     assert len(ticks[0]) == 1 and ticks[0] == ticks[1]
+
+    # The production LiDAR publication loop must seal its direct raw lane
+    # before a slow driver/matcher cleanup. Use real sidecar transport with
+    # a device-free producer; no serial driver is opened by this test.
+    import queue
+    import sys
+    import threading
+    from v3.adapters import process_lidar_port
+    entered, release = threading.Event(), threading.Event()
+    class SlowCleanupPort:
+        def get_raw_scan_snapshot(self): return None
+        def get_matcher_result(self): return None
+        def get_runtime_status(self): return {'running': True}
+        def stop(self):
+            entered.set()
+            release.wait(10)
+    monkeypatch.setitem(sys.modules, 'serial', SimpleNamespace(Serial=None))
+    monkeypatch.setattr(process_lidar_port, 'open_native_lidar_port',
+                        lambda *args, **kwargs: SlowCleanupPort())
+    resolved = resolved_config()
+    session = ProcessMcapCaptureSession('raw-close', tmp_path / 'raw-close.mcap',
+        configuration={}, project_root=tmp_path, expect_raw_lidar_end=True,
+        config=McapCaptureConfig(mode='append_only', tick_sample_hz=50,
+                                 require_raw_lidar_transport_end=True))
+    session.start()
+    stop = threading.Event()
+    stop.set()
+    producer = threading.Thread(target=process_lidar_port._lidar_owner_process_main,
+        args=(resolved.lidar, None, None, None, None, queue.Queue(2),
+              session.raw_lidar_queue, threading.Event(), stop, None, None, False,
+              .08, 3., 96, resolved.edges.lidar_process))
+    producer.start()
+    try:
+        assert entered.wait(2), 'producer did not begin cleanup'
+        session.observe(record)
+        path = session.finalize(SimpleNamespace(status=0))
+        integrity = McapReader(path).capture_integrity()['integrity']
+        assert integrity['raw_transport_end'] is True
+        assert integrity['raw_transport_produced_count'] == integrity['raw_transport_superseded_count'] == 0
+        assert 'RAW_LIDAR_TRANSPORT_END_MISSING' not in integrity['raw_integrity_reasons']
+        assert not release.is_set() and producer.is_alive()
+    finally:
+        release.set()
+        producer.join(5)
+    assert not producer.is_alive()
 
 
 def test_compressed_chunk_lineage_and_decoder_failure(tmp_path):

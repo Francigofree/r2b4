@@ -49,6 +49,86 @@ _TICK_NS = 20_000_000  # 50 Hz canonical control-step used by existing tests.
 _EPS = 1e-12
 
 
+def test_escape_preserves_rejected_forward_evidence_and_revokes_braking_origin():
+    import time
+    from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
+    config = resolved_config().runtime.composition.live_control.control
+    manager = MissionManager(config.mission)
+    direct_config = replace(config.async_l6, enabled=False, completion_inputs=False)
+    navigator = TrajectoryNavigator(config.navigation, async_config=direct_config)
+    selector = MotionSelector(config.motion_selection)
+    realizer = MotionRealizer(config.motion_realization)
+    limiter = OperationalConstraintLayer(config.operational_constraints)
+    for tick in range(8):
+        estimate, world = _scene(tick, local_sigma_m=.01, local_state=QualityState.GOOD)
+        world = replace(world, obstacle_tracks=())
+        command = CommandRequest(estimate.context, 'escape-boundary', CommandMode.NAVIGATE,
+            (DataField('x_m', 1.0), DataField('y_m', 0.0), DataField('frame_id', LOCAL_FRAME_ID)), tick)
+        mission = manager.evaluate(command)
+        plan = navigator.evaluate(mission, estimate, world)
+        objective = selector.evaluate(plan)
+        allowed = limiter.evaluate(realizer.evaluate(objective, estimate, world), estimate)
+    assert objective.trajectory.v_mps > 0 and allowed.allowed_v_mps > 0
+    old_id = objective.trajectory.candidate_id
+    previous_selection = selector.checkpoint()
+
+    estimate, world = _scene(8, local_sigma_m=.01, local_state=QualityState.GOOD)
+    world = replace(world, obstacle_tracks=(ObstacleTrack('wall', .5, 0., .15, 0., 0., 1.),))
+    mission = manager.evaluate(replace(command, context=estimate.context, expiry_tick=8))
+    direct = TrajectoryNavigator(config.navigation, async_config=direct_config)
+    plan = direct.evaluate(mission, estimate, world)
+    pending = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
+    pending.evaluate(mission, estimate, world)
+    request = pending.pending_rollout_request
+    computed = TrajectoryRolloutComputer(config.navigation).compute(request)
+    assert computed.trajectory_candidates == plan.trajectory_candidates
+    rejected = next(c for c in plan.trajectory_candidates if c.candidate_id == old_id)
+    assert rejected.collision or not rejected.progress_viable
+    selected = selector.evaluate(plan)
+    assert selected.trajectory.candidate_id.startswith('escape-')
+    assert not selected.transition_allowed
+    allowed = limiter.evaluate(realizer.evaluate(selected, estimate, world), estimate)
+    assert allowed.allowed_v_mps <= 0.0
+    assert all(len(c.samples) == 1 for c in computed.trajectory_candidates
+               if c.candidate_id.startswith('trajectory-'))
+
+    # The same evidence and source identity survive a real spawned planner.
+    resolved = resolved_config()
+    backend = ProcessTrajectoryRolloutBackend(config.navigation, ready_timeout_s=5.,
+                                             process_config=resolved.edges.planner_process)
+    try:
+        request_id = backend.submit(request)
+        completion = None
+        deadline = time.monotonic() + 5.
+        while completion is None and time.monotonic() < deadline:
+            completion = backend.take_completion(request_id)
+            if completion is None:
+                time.sleep(.002)
+        assert completion is not None and completion.error is None
+        assert completion.result == computed
+        assert completion.identity.source_context == request.context
+    finally:
+        backend.close()
+
+    # Near-equivalent, freshly viable escape choices should avoid a linear
+    # reversal when a bounded pivot can open the path. Clearance remains gated.
+    alternative_world = replace(world, obstacle_tracks=(
+        ObstacleTrack('wall', .55, 0., .15, 0., 0., 1.),))
+    alternatives = TrajectoryRolloutComputer(config.navigation).compute(
+        replace(request, world=alternative_world)).trajectory_candidates
+    pivot = next(c for c in alternatives if not c.collision and c.progress_viable
+                 and c.v_mps == 0 and c.omega_rad_s > 0)
+    reverse = next(c for c in alternatives if not c.collision and c.progress_viable
+                   and c.v_mps < 0)
+    clearance = min(pivot.min_clearance_m, reverse.min_clearance_m)
+    pivot = replace(pivot, total_score=0., min_clearance_m=clearance)
+    reverse = replace(reverse, total_score=config.motion_selection.continuity_score_band / 2,
+                      min_clearance_m=clearance)
+    selector.restore(previous_selection)
+    fresh_plan = replace(plan, trajectory_candidates=(pivot, reverse))
+    assert selector.evaluate(fresh_plan).trajectory.candidate_id == pivot.candidate_id
+
+
 def _scene(tick: int, *, local_sigma_m: float, local_state: QualityState):
     """Deterministic local-frame scene with valid robot-relative geometry."""
     context = TickContext(tick, 1_000_000_000 + tick * _TICK_NS)

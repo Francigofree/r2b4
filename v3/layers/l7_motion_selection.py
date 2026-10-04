@@ -276,9 +276,10 @@ def _command_continuity_key(
     candidate_omega = candidate.omega_rad_s
     # A meaningful steering sign reversal is the strongest chatter signal.
     reversal = int(
-        previous_omega * candidate_omega < 0.0
-        and abs(previous_omega) >= reversal_min_omega_rad_s
-        and abs(candidate_omega) >= reversal_min_omega_rad_s
+        (previous_omega * candidate_omega < 0.0
+         and abs(previous_omega) >= reversal_min_omega_rad_s
+         and abs(candidate_omega) >= reversal_min_omega_rad_s)
+        or state.last_v_mps * candidate.v_mps < 0.0
     )
     return (
         reversal,

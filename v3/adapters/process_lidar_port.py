@@ -446,19 +446,25 @@ def _lidar_owner_process_main(
         _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
         ready_event.set()
     finally:
-        if port is not None:
-            try:
-                port.stop()
-            except BaseException as exc:
-                _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
-        if raw_queue is not None:
-            _put_raw_end(
-                raw_queue,
-                last_revision=last_raw_revision,
-                produced_count=raw_produced_count,
-                timeout_s=process_config.raw_end_timeout_s,
-                superseded_count=raw_superseded_count,
-            )
+        # The publication loop is closed. Seal this evidence lane before
+        # driver/matcher cleanup can exhaust the parent's bounded stop budget.
+        # No raw scan is published after this marker, even while the driver
+        # finishes acquiring internally.
+        try:
+            if raw_queue is not None:
+                _put_raw_end(
+                    raw_queue,
+                    last_revision=last_raw_revision,
+                    produced_count=raw_produced_count,
+                    timeout_s=process_config.raw_end_timeout_s,
+                    superseded_count=raw_superseded_count,
+                )
+        finally:
+            if port is not None:
+                try:
+                    port.stop()
+                except BaseException as exc:
+                    _put_latest(state_queue, ("error", type(exc).__name__, str(exc)))
 
 
 class ProcessLidarPort:

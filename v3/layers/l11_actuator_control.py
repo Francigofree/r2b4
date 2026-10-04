@@ -247,6 +247,8 @@ class WheelActuatorStateCheckpoint:
     left_feedback_gain: float = 0.0
     right_feedback_gain: float = 0.0
     feedback_transition_until_ns: int | None = None
+    left_motion_feedback_seen: bool | None = None
+    right_motion_feedback_seen: bool | None = None
 
 
 class _PIState:
@@ -320,6 +322,7 @@ class WheelActuatorController:
         "_feedback_transition_until_ns",
         "_last_feedback",
         "_left_velocity_feedback_ready", "_right_velocity_feedback_ready",
+        "_left_motion_feedback_seen", "_right_motion_feedback_seen",
     )
 
     def __init__(self, speed_map: WheelSpeedMap, config: WheelPiConfig) -> None:
@@ -335,6 +338,7 @@ class WheelActuatorController:
         self._feedback_transition_until_ns: int | None = None
         self._last_feedback: Observation | None = None
         self._left_velocity_feedback_ready = self._right_velocity_feedback_ready = False
+        self._left_motion_feedback_seen = self._right_motion_feedback_seen = False
 
     def reset(self) -> None:
         self._left_pi.reset()
@@ -347,6 +351,7 @@ class WheelActuatorController:
         self._feedback_transition_until_ns = None
         self._last_feedback = None
         self._left_velocity_feedback_ready = self._right_velocity_feedback_ready = False
+        self._left_motion_feedback_seen = self._right_motion_feedback_seen = False
 
     def checkpoint(self) -> WheelActuatorStateCheckpoint:
         return WheelActuatorStateCheckpoint(
@@ -363,6 +368,7 @@ class WheelActuatorController:
             self._left_velocity_feedback_ready, self._right_velocity_feedback_ready,
             self._left_pi._feedback_gain, self._right_pi._feedback_gain,
             self._feedback_transition_until_ns,
+            self._left_motion_feedback_seen, self._right_motion_feedback_seen,
         )
 
     def restore(self, checkpoint: WheelActuatorStateCheckpoint) -> None:
@@ -407,6 +413,18 @@ class WheelActuatorController:
         self._right_velocity_feedback_ready = checkpoint.right_velocity_feedback_ready
         self._left_pi._feedback_gain = checkpoint.left_feedback_gain
         self._right_pi._feedback_gain = checkpoint.right_feedback_gain
+        values = {} if checkpoint.last_feedback is None else {
+            item.key: item.value for item in checkpoint.last_feedback.values
+        }
+        for side in ("left", "right"):
+            seen = getattr(checkpoint, f"{side}_motion_feedback_seen")
+            if seen is None:
+                # Older capture checkpoints predate this diagnostic state.
+                seen = (checkpoint.last_context is not None
+                        and values.get(f"{side}_estimation_timebase") == "GPIO_EDGE_HISTORY")
+            if type(seen) is not bool:
+                raise ValueError("wheel motion feedback state must be bool")
+            setattr(self, f"_{side}_motion_feedback_seen", seen)
 
     def __call__(
         self,
@@ -467,9 +485,20 @@ class WheelActuatorController:
         # Counter integrity/timebase above is independent of velocity-fit
         # reliability. Enter/leave PI at the encoder's configured confidence
         # boundaries; in between scale the correction and freeze the integral.
-        missing_edge_feedback = ((required_left and left_measured is None)
-                                 or (required_right and right_measured is None))
+        missing_edge_sides = tuple(
+            side for side, required, measured in (
+                ("left", required_left, left_measured),
+                ("right", required_right, right_measured),
+            ) if required and measured is None
+        )
+        missing_edge_feedback = bool(missing_edge_sides)
         feedback_values = {field.key: field.value for field in feedback.values}
+        for side, required, measured in (("left", required_left, left_measured),
+                                         ("right", required_right, right_measured)):
+            if not required:
+                setattr(self, f"_{side}_motion_feedback_seen", False)
+            elif measured is not None:
+                setattr(self, f"_{side}_motion_feedback_seen", True)
         bounded_edge_reacquisition = (
             missing_edge_feedback
             and self._missing_feedback_is_bounded_edge_reacquisition(
@@ -513,6 +542,15 @@ class WheelActuatorController:
         transition_feedback_bounded = (
             not missing_edge_feedback or bounded_edge_reacquisition
         )
+        feedback_reason = "VELOCITY_QUALITY"
+        if feedback_values.get("measurement_stale") is True:
+            feedback_reason = "STALE"
+        elif not transition_feedback_bounded:
+            feedback_reason = ";".join(
+                ("MISSING_EDGE" if feedback_values.get(f"{side}_estimation_timebase") == "TICK_SNAPSHOT"
+                 else "UNQUALIFIED_EDGE_FIT") + f":{side}"
+                for side in missing_edge_sides
+            )
         if uncertain:
             # The measured wheel follows the command with delay. Keep the
             # original finite L9 deadline until feedback catches up; never
@@ -533,12 +571,22 @@ class WheelActuatorController:
                     if transition_feedback_bounded
                     else None
                 ),
+                reason=feedback_reason,
             )
             self._transient_stale_ticks += 1
-            if any(field.key == "measurement_stale" and field.value is True for field in feedback.values):
+            if (feedback_values.get("measurement_stale") is True or
+                    (not transition_feedback_bounded and any(
+                        getattr(self, f"_{side}_motion_feedback_seen")
+                        for side in missing_edge_sides
+                    ))):
+                # A fresh acquisition with no motion evidence cannot authorize
+                # feed-forward. Keep the existing non-renewable watchdog; do
+                # not restart its budget when a weak fit becomes edge loss.
+                # Initial clean standstill retains only the ordinary startup
+                # budget so feed-forward can acquire its first physical edge.
                 self._left_pi.reset()
                 self._right_pi.reset()
-                self._last_context = wheels.context
+                self._last_context = None
                 return ActuatorRequest(wheels.context, 0.0, 0.0)
         else:
             self._transient_stale_ticks = 0
@@ -590,6 +638,7 @@ class WheelActuatorController:
         started_ns: int | None,
         now_ns: int,
         *, transition_until_ns: int | None = None,
+        reason: str = "VELOCITY_QUALITY",
     ) -> int:
         if started_ns is None:
             return now_ns
@@ -602,7 +651,7 @@ class WheelActuatorController:
         )
         if deadline_reached(now_ns, deadline):
             if side == "feedback":
-                raise ValueError("L11 feedback remained uncertain too long")
+                raise ValueError(f"L11 feedback remained uncertain too long: {reason}")
             raise ValueError(f"L11 {side} wheel feedback remained uncertain too long")
         return started_ns
 
@@ -622,6 +671,7 @@ class WheelActuatorController:
     def _stale_hold(self, context: TickContext) -> ActuatorRequest:
         self._feedback_uncertain_since_ns = self._bounded_uncertainty_start(
             "feedback", self._feedback_uncertain_since_ns, context.monotonic_ns,
+            reason="STALE",
         )
         self._transient_stale_ticks += 1
         self._left_pi.reset()

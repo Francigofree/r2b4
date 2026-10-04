@@ -811,9 +811,7 @@ def run_native_hardware_resident_control(
             readiness_observer=readiness_observer,
             record_observer=record_observer,
             record_observer_hz=record_observer_hz,
-            timing_enabled=bool(
-                affinity_config is not None and affinity_config.enabled
-            ),
+            timing_enabled=True,
             trajectory_rollout_backend=rollout_backend,
             enable_multirate_inputs=enable_multirate_inputs,
             multirate_config=runtime_edges.multirate if runtime_edges is not None else None,

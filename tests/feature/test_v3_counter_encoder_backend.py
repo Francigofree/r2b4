@@ -83,6 +83,39 @@ def test_signed_delta_uses_the_same_read_api_baseline_and_tick_time():
     assert second.diagnostics.raw_left_distance_m == pytest.approx(.020)
     assert second.diagnostics.raw_right_distance_m == pytest.approx(.020)
 
+    # Delayed Python callbacks preserve their physical GPIO event time. Only
+    # bounded scalar delivery evidence crosses the native/process input edge.
+    from rig import resolved_config
+    from v3_test_fixtures import FakeGpio
+    from v3.adapters.gpio_counter import NativeGpioSignedCounterPair
+    inputs = resolved_config().runtime.sensor_inputs.inputs
+    gpio = FakeGpio()
+    clock_ns = [1_000_000_000]
+    pair = NativeGpioSignedCounterPair(gpio, inputs.encoder_counter,
+                                      monotonic_ns=lambda: clock_ns[0])
+    source = NativeEncoderSource(NativeCounterEncoderBackend(
+        pair.left_counter, pair.right_counter, inputs.encoder_backend,
+        snapshot_pair=pair.snapshot_pair), inputs.encoder_source)
+    try:
+        source.read(TickContext(0, clock_ns[0]))
+        channel = inputs.encoder_counter.left
+        physical_ns = 1_020_000_000
+        event_ns = physical_ns + channel.a_debounce_micros * 1_000
+        clock_ns[0] = 1_070_000_000
+        gpio.emit(channel.pin_a, 1, event_ns, chip=inputs.encoder_counter.gpio_chip)
+        values = _sample_values(source.read(TickContext(1, clock_ns[0])))
+        assert values['left_last_a_timestamp_ns'] == physical_ns
+        assert values['left_last_callback_received_ns'] == clock_ns[0]
+        assert values['left_last_callback_latency_ns'] == clock_ns[0] - event_ns
+        assert values['left_max_callback_latency_ns'] == clock_ns[0] - event_ns
+        clock_ns[0] += 20_000_000
+        held = _sample_values(source.read(TickContext(2, clock_ns[0])))
+        assert held['left_last_callback_received_ns'] == values['left_last_callback_received_ns']
+        assert held['left_max_callback_latency_ns'] == values['left_max_callback_latency_ns']
+        assert all(isinstance(v, (str, int, float, bool, type(None))) for v in held.values())
+    finally:
+        pair.close()
+
 def test_short_callback_gap_keeps_physical_edge_velocity_until_delayed_batch():
     initial_edges = tuple((SignedPulseEdge(timestamp_ns, pulse_count) for pulse_count, timestamp_ns in enumerate(range(910000000, 1000000001, 10000000), start=1)))
     delayed_edges = initial_edges + tuple((SignedPulseEdge(timestamp_ns, pulse_count) for pulse_count, timestamp_ns in enumerate(range(1010000000, 1050000001, 10000000), start=11)))

@@ -2454,7 +2454,11 @@ class TrajectoryNavigator:
         ):
             return tuple(evaluations)
 
-        evaluations = []
+        # Preserve the rejected forward commands as explicit L7 invalidation
+        # evidence. Escape selection must not keep one as a braking origin.
+        # Rejected paths need only their terminal sample, not a second raw
+        # rollout family on the worker-to-control transport.
+        evaluations = [replace(c, samples=(c.samples[-1],)) for c in evaluations]
         reverse_limit_mps = min(self._config.local_escape_reverse_max_v_mps, max_v_mps)
         for linear_index in range(self._config.rollout_linear_samples):
             v_mps = -self._config.wheel_limits.linear_sample(
@@ -2711,7 +2715,9 @@ class TrajectoryRolloutComputer:
             not candidate.collision and candidate.progress_viable
             for candidate in evaluations
         ):
-            evaluations = []
+            # L7 needs the rejected forward family when revoking its previous
+            # objective. These results are already computed in the worker.
+            evaluations = [replace(c, samples=(c.samples[-1],)) for c in evaluations]
             reverse_limit_mps = min(
                 config.local_escape_reverse_max_v_mps,
                 request.max_v_mps,
