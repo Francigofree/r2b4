@@ -375,8 +375,9 @@ class ConfigResolver:
         resolved_speed_map = WheelSpeedMap.from_mapping(speed_map)
         minimum_speed = resolved_speed_map.minimum_continuous_speed_mps
         wheel_limits = dict(track_width_m=p["nyomtav_szelesseg_m"], minimum_mps=minimum_speed,
-                            maximum_mps=min(curve.points[-1].speed_mps for curve in resolved_speed_map.curves))
-        recovery_omega = _typed(WheelMotionLimits, wheel_limits, "wheel_limits").minimum_center_spin_rad_s
+                            maximum_mps=min(curve.points[-1].speed_mps for curve in resolved_speed_map.curves),
+                            target_minimum_mps=layers["operational_constraints"]["minimum_target_wheel_speed_mps"])
+        recovery_omega = _typed(WheelMotionLimits, wheel_limits, "wheel_limits").target_center_spin_rad_s
         layers["estimation"] = {**layers["estimation"], "track_width_m":p["nyomtav_szelesseg_m"], "frame_id":POSE_FRAME_ID,
                                 "minimum_reliable_wheel_speed_mps":policy.encoder_minimum_reliable_speed_mps,
                                 "wheel_velocity_unreliable_below_mps":policy.encoder_velocity_unreliable_below_mps}

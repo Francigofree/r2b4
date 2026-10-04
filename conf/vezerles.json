@@ -1,15 +1,15 @@
 {
   "behavior": {
     "roomcruise": {
-      "max_v_mps": 0.4,
-      "max_omega_rad_s": 0.9,
+      "max_v_mps": 0.45,
+      "max_omega_rad_s": 1.4,
       "preferences": {
         "explore_local_goal_distance_weight": 0.05,
         "explore_local_goal_max_distance_m": 0.55,
         "explore_local_goal_min_distance_m": 0.40,
         "local_goal_clearance_weight": 0.35,
-        "local_goal_forward_weight": 0.07,
-        "local_goal_novelty_weight": 0.15
+        "local_goal_forward_weight": 0.0,
+        "local_goal_novelty_weight": 0.10
       }
     }
   },
@@ -335,7 +335,7 @@
     "mission": {
       "default_constraints": {
         "max_v_mps": 0.45,
-        "max_omega_rad_s": 0.84,
+        "max_omega_rad_s": 1.4,
         "corridor_radius_m": 0.3,
         "goal_tolerance_m": 0.08,
         "yaw_tolerance_rad": 0.1
@@ -388,7 +388,7 @@
       "planning_bucket_size_m": 0.3,
       "local_escape_trigger_clearance_m": 0.12,
       "local_escape_reverse_max_v_mps": 0.25,
-      "minimum_planning_speed_mps": 0.15,
+      "minimum_planning_speed_mps": 0.19,
       "localization_recovery_timeout_ns": 5000000000,
       "localization_degraded_speed_scale": 0.4,
       "localization_inflation_sigma": 2.0,
@@ -425,12 +425,13 @@
     },
     "operational_constraints": {
       "max_v_mps": 0.45,
-      "max_omega_rad_s": 0.84,
+      "max_omega_rad_s": 1.4,
       "max_acceleration_mps2": 0.6,
       "max_angular_acceleration_rad_s2": 2.5,
-      "max_curvature_rad_per_m": 4.0,
+      "max_curvature_rad_per_m": 32.0,
       "degraded_velocity_scale": 0.4,
-      "degraded_acceleration_scale": 0.3
+      "degraded_acceleration_scale": 0.3,
+      "minimum_target_wheel_speed_mps": 0.19
     },
     "wheel_pi": {
       "kp": 0.25,
@@ -563,7 +564,7 @@
       "maximum_ttl_ns": 250000000,
       "maximum_future_skew_ns": 5000000,
       "maximum_linear_speed_mps": 0.5,
-      "maximum_angular_speed_rad_s": 1.2,
+      "maximum_angular_speed_rad_s": 1.5,
       "maximum_file_bytes": 4096,
       "reader_poll_s": 0.005,
       "reader_stop_timeout_s": 1.0

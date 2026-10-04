@@ -155,6 +155,17 @@ legalább 0,15 m/s-os realizálható tartós haladást vagy háttérkorrekciót 
 Valós lokális evidence-vesztés, akadály, célhoz érkezés, explicit STOP és safety
 korlát továbbra is indokolhat megállást. A 0–0,15 m/s közötti indulás/fékezés
 véges átmenet; a kis sebességű encoder-fit nem megbízható sebesség-authority.
+Friss, ép és a kért irányú signed encoder-élek mellett a pontatlan vagy
+0,15 m/s alatti sebességbecslés elfogadott állapot: a kalibrált feed-forward
+folytatható, a bizonytalan sebességből PI-korrekció nem készülhet. Ez nem
+helyettesíti a kerékenkénti motion-liveness, freshness és safety igazolását.
+
+Room Cruise közben az egyenes nem privilegizált. Az enyhe, közepes és szűk
+ívek, az egykerekezős forduló és a pivot normál lokális lehetőségek; DEGRADED
+állapotban is meg kell maradnia a mission capen belüli realizálható fordulásnak.
+A jól járható bejárt terület újra használható; az új terület preferenciája nem
+előzheti meg a járhatóságot. Reverse/escape csak a normál biztonságos,
+értelmes manőverek kimerülése után recovery.
 
 A jelenlegi implementációs coupling nem válhat automatikusan rendszerszintű követelménnyé.
 

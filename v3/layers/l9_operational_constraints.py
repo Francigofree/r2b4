@@ -27,6 +27,7 @@ class OperationalConstraintsConfig:
     degraded_velocity_scale: float
     degraded_acceleration_scale: float
     wheel_limits: WheelMotionLimits = WheelMotionLimits()
+    minimum_target_wheel_speed_mps: float | None = None
 
     def __post_init__(self) -> None:
         values = (
@@ -42,6 +43,12 @@ class OperationalConstraintsConfig:
             raise ValueError("degraded limits cannot amplify motion")
         if any(not math.isfinite(value) or value <= 0.0 for value in values):
             raise ValueError("operational limits must be finite and positive")
+        if self.minimum_target_wheel_speed_mps is not None and (
+            isinstance(self.minimum_target_wheel_speed_mps, bool)
+            or not math.isfinite(self.minimum_target_wheel_speed_mps)
+            or not self.wheel_limits.minimum_mps <= self.minimum_target_wheel_speed_mps <= self.wheel_limits.maximum_mps
+        ):
+            raise ValueError("minimum target wheel speed must stay inside calibration")
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +126,10 @@ class OperationalConstraintLayer:
             self._config.max_v_mps, self._config.max_omega_rad_s, speed_scale,
         ) if degraded else self._config.max_v_mps)
         platform_v = _clamp(allowed_v_mps, linear_cap)
-        platform_omega = _clamp(allowed_omega_rad_s, self._config.max_omega_rad_s * speed_scale)
+        angular_cap = self._config.wheel_limits.degraded_angular_cap(
+            self._config.max_omega_rad_s, speed_scale,
+        ) if degraded else self._config.max_omega_rad_s
+        platform_omega = _clamp(allowed_omega_rad_s, angular_cap)
         if platform_v != allowed_v_mps or platform_omega != allowed_omega_rad_s:
             codes.append(ConstraintCode.SPEED_LIMIT)
         allowed_v_mps = platform_v
@@ -180,7 +190,10 @@ class OperationalConstraintLayer:
             if self._velocity_transition_started_ns is None:
                 self._velocity_transition_started_ns = motion.context.monotonic_ns
             # One bounded episode, not a deadline renewed by each angular edit.
-            duration_ns = math.ceil(2 * self._config.wheel_limits.minimum_mps /
+            # A slow inner wheel can stay below the floor until its faster
+            # partner finishes the coupled ramp. Bound the whole calibrated
+            # wheel reversal, not just two minimum-speed crossings.
+            duration_ns = math.ceil(2 * self._config.wheel_limits.maximum_mps /
                 (self._config.max_acceleration_mps2 * self._config.degraded_acceleration_scale) * 1e9)
             transition_until = self._velocity_transition_started_ns + duration_ns
             if motion.context.monotonic_ns >= transition_until:

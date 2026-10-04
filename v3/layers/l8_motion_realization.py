@@ -241,6 +241,16 @@ class MotionRealizer:
             + self._config.angular_velocity_gain * (omega_rad_s - estimate.omega_rad_s),
             self._config.max_tracking_correction_rad_s,
         )
+        wheels = self._config.wheel_limits.wheels(v_mps, omega_rad_s)
+        if abs(v_mps) > 1e-12 and wheels[0] * wheels[1] <= 1e-12:
+            # Preserve one-wheel and counter-rotating tight circles. An
+            # independent omega correction would silently turn it into an
+            # infeasible small counter-rotation and lose the maneuver in L9.
+            scale = max(0.0, min(1.0, (omega_rad_s + correction) / omega_rad_s))
+            if scale > 0.0:
+                moving_min = min(abs(w) for w in wheels if abs(w) > 1e-12)
+                scale = max(scale, min(1.0, self._config.wheel_limits.minimum_mps / moving_min))
+            return v_mps * scale, omega_rad_s * scale
         # Spatial tracking does not integrate distance against wall time: a
         # speed/acceleration limit cannot leave a runaway position reference.
         linear = v_mps * max(0.0, math.cos(heading_error))

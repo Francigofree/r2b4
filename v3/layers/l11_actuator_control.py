@@ -493,6 +493,10 @@ class WheelActuatorController:
         )
         missing_edge_feedback = bool(missing_edge_sides)
         feedback_values = {field.key: field.value for field in feedback.values}
+        left_motion_live = required_left and self._fresh_signed_motion(
+            feedback_values, "left", wheels.left_mps, wheels.context.monotonic_ns)
+        right_motion_live = required_right and self._fresh_signed_motion(
+            feedback_values, "right", wheels.right_mps, wheels.context.monotonic_ns)
         for side, required, measured in (("left", required_left, left_measured),
                                          ("right", required_right, right_measured)):
             if not required:
@@ -525,8 +529,11 @@ class WheelActuatorController:
         if required_right and not self._right_velocity_feedback_ready:
             right_measured = None
 
-        left_uncertain = required_left and left_measured is None
-        right_uncertain = required_right and right_measured is None
+        # A poor velocity fit is not missing motion evidence. Fresh, clean
+        # signed edges allow calibrated feed-forward without a PI correction;
+        # each wheel still has to prove liveness in the requested direction.
+        left_uncertain = required_left and left_measured is None and not left_motion_live
+        right_uncertain = required_right and right_measured is None and not right_motion_live
 
         self._left_uncertain_since_ns = self._evidence_uncertainty_start(
             self._left_uncertain_since_ns,
@@ -714,6 +721,30 @@ class WheelActuatorController:
         # already-admitted trusted test input. Production encoder samples carry
         # both global and per-wheel trust explicitly.
         return 1.0
+
+    def _fresh_signed_motion(
+        self, values: Mapping[str, object], side: str, target_mps: float, now_ns: int,
+    ) -> bool:
+        """Separate live rotation from the accuracy of its scalar speed fit.
+
+        Only accepted GPIO edges renew this evidence. Snapshot publication,
+        callbacks, rejected pulses and the other wheel cannot renew it.
+        """
+        edge_ns = values.get(f"{side}_estimation_end_edge_timestamp_ns")
+        pulses = values.get(f"{side}_estimation_pulse_delta")
+        direction = values.get(f"{side}_confirmed_direction")
+        return (
+            values.get("measurement_stale") is False
+            and values.get("measurement_timing_valid") is True
+            and values.get("rejection_code") == "NONE"
+            and self._counter_diagnostics_are_clean(values)
+            and values.get(f"{side}_counter_running") is True
+            and self._per_wheel_trust(values, side) >= 1.0 - _FULL_TRUST_EPSILON
+            and values.get(f"{side}_estimation_timebase") == "GPIO_EDGE_HISTORY"
+            and type(edge_ns) is int and 0 <= now_ns - edge_ns <= self._config.max_feedback_age_ns
+            and type(pulses) is int and pulses * target_mps > 0.0
+            and type(direction) is int and direction in (-1, 1) and direction * target_mps > 0.0
+        )
 
     def _missing_feedback_is_bounded_edge_reacquisition(
         self,

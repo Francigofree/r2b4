@@ -13,6 +13,8 @@ class WheelMotionLimits:
     track_width_m: float = 0.3557
     minimum_mps: float = 0.15
     maximum_mps: float = 0.582
+    # Operating reserve, independent of calibration and encoder-fit quality.
+    target_minimum_mps: float | None = None
 
     def __post_init__(self) -> None:
         for value in (self.track_width_m, self.minimum_mps, self.maximum_mps):
@@ -20,6 +22,12 @@ class WheelMotionLimits:
                 raise ValueError("wheel motion limits must be finite and positive")
         if self.minimum_mps > self.maximum_mps:
             raise ValueError("wheel minimum exceeds calibrated maximum")
+        if self.target_minimum_mps is not None and (
+            isinstance(self.target_minimum_mps, bool)
+            or not math.isfinite(self.target_minimum_mps)
+            or not self.minimum_mps <= self.target_minimum_mps <= self.maximum_mps
+        ):
+            raise ValueError("wheel target minimum must stay inside calibration")
 
     def wheels(self, v: float, omega: float) -> tuple[float, float]:
         turn = omega * self.track_width_m * 0.5
@@ -30,38 +38,74 @@ class WheelMotionLimits:
         """Derived realizable spin floor; never a separately tuned parameter."""
         return 2 * self.minimum_mps / self.track_width_m
 
+    @property
+    def target_floor_mps(self) -> float:
+        return self.minimum_mps if self.target_minimum_mps is None else self.target_minimum_mps
+
+    @property
+    def target_center_spin_rad_s(self) -> float:
+        return 2 * self.target_floor_mps / self.track_width_m
+
     def linear_sample(self, index: int, count: int, maximum: float,
                       minimum_planning_mps: float = 0.0) -> float:
         """Keep the zero candidate and spend the other samples above the floor."""
-        minimum = max(self.minimum_mps, minimum_planning_mps)
+        minimum = max(self.target_floor_mps, minimum_planning_mps)
         if index == 0 or maximum < minimum:
             return 0.0
         if count == 2:
             return maximum
         return minimum + (maximum-minimum) * (index-1) / (count-2)
 
-    def constrain(self, v: float, omega: float) -> tuple[float, float]:
+    def constrain(self, v: float, omega: float, *, planning: bool = False) -> tuple[float, float]:
         """Reduce a steady target to its feasible envelope; never amplify it.
 
         Ordinary translation keeps both wheels rolling. Exact one-wheel pivots
         and spins are allowed when their moving wheels are themselves feasible.
         A target below the floor becomes zero; L9 owns the finite transition.
         """
+        minimum = self.target_floor_mps if planning else self.minimum_mps
         left, right = self.wheels(v, omega)
         scale = min(1.0, self.maximum_mps / max(abs(left), abs(right), 1e-12))
         v, omega = v * scale, omega * scale
         left, right = self.wheels(v, omega)
-        if all(abs(w) < 1e-12 or abs(w) >= self.minimum_mps - 1e-12 for w in (left, right)):
+        if all(abs(w) < 1e-12 or abs(w) >= minimum - 1e-12 for w in (left, right)):
             return v, omega
-        if abs(v) < self.minimum_mps - 1e-12:
+        if abs(v) < minimum - 1e-12:
             return 0.0, 0.0
-        turn_limit = max(0.0, 2 * (abs(v) - self.minimum_mps) / self.track_width_m)
+        turn_limit = max(0.0, 2 * (abs(v) - minimum) / self.track_width_m)
         return v, math.copysign(min(abs(omega), turn_limit), omega)
 
     def degraded_linear_cap(self, v: float, omega: float, scale: float) -> float:
         # Reserve room for steering at the reduced angular cap. The caller's
         # original envelope is always the upper bound, even below the floor.
-        return min(v, max(v * scale, self.minimum_mps + omega * scale * self.track_width_m / 2))
+        return min(v, max(v * scale, self.target_floor_mps + omega * scale * self.track_width_m / 2))
+
+    def degraded_angular_cap(self, omega: float, scale: float) -> float:
+        """Retain the slowest realizable turn inside the original hard cap."""
+        return min(omega, max(omega * scale, self.target_center_spin_rad_s))
+
+    def normal_samples(self, linear_count: int, angular_count: int, max_v: float,
+                       max_omega: float, planning_minimum: float):
+        """Bounded family with rolling arcs, one-wheel turns and tight arcs.
+
+        Reserved cells replace duplicate/infeasible grid commands; the family
+        size and stable indices do not grow on the worker-to-control transport.
+        """
+        single_max = min(self.maximum_mps, 2 * max_v, max_omega * self.track_width_m)
+        for linear_index in range(linear_count):
+            nominal_v = self.linear_sample(linear_index, linear_count, max_v, planning_minimum)
+            for angular_index in range(angular_count):
+                omega = max_omega * (2 * angular_index / (angular_count - 1) - 1)
+                v = nominal_v
+                if angular_index in (0, angular_count - 1):
+                    direction = -1 if angular_index == 0 else 1
+                    if linear_index in (1, 2) and single_max >= self.target_floor_mps:
+                        moving = self.target_floor_mps if linear_index == 1 else single_max
+                        v, omega = moving / 2, direction * moving / self.track_width_m
+                    elif linear_index == 3 and max_omega > self.target_center_spin_rad_s:
+                        v = min(max_v, (max_omega * self.track_width_m - 2 * self.target_floor_mps) / 2)
+                        omega = direction * 2 * (v + self.target_floor_mps) / self.track_width_m
+                yield linear_index, angular_index, v, omega
 
 
 def velocity_quality(speed_mps: float, minimum_mps: float = 0.15,

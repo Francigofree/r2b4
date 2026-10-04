@@ -1878,11 +1878,15 @@ class TrajectoryNavigator:
         ):
             scene: _LocalPlanningScene | None = None
             goal_selected_ns: int | None = None
+            approach_speed = 0.0
+            if goal is not None:
+                bearing = math.atan2(goal.y_m - estimate.y_m, goal.x_m - estimate.x_m)
+                approach_speed = max(0.0, estimate.v_mps * math.cos(bearing - estimate.yaw_rad))
             if (
                 goal is None
                 or math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
                 <= (self._config.local_goal_tolerance_m
-                    + mission.constraints.max_v_mps * self._config.rollout_horizon_ns / 1e9)
+                    + approach_speed * self._config.rollout_horizon_ns / 1e9)
                 or (self._trajectory_candidates and not any(
                     not candidate.collision and candidate.progress_viable
                     for candidate in self._trajectory_candidates
@@ -1891,10 +1895,9 @@ class TrajectoryNavigator:
                 >= self._config.local_goal_max_age_ns
             ):
                 # EXPLORE waypoints guide continuous travel, not arrival stops.
-                # Replace them one rollout before arrival: near the old goal,
-                # the wheel floor and heading score can reject every forward
-                # arc while the mission cap also makes an in-place turn
-                # infeasible. Waiting for goal age would strand the robot.
+                # Replace one rollout before actual arrival. A stationary turn
+                # must keep its waypoint instead of chasing a new bearing at
+                # every replan merely because the mission speed cap is high.
                 scene = self._build_planning_scene(world)
                 goal = self._choose_local_goal(estimate, costmap, scene, mission.explore_preferences)
                 goal_selected_ns = mission.context.monotonic_ns
@@ -1908,6 +1911,7 @@ class TrajectoryNavigator:
                 mission.constraints.max_omega_rad_s,
                 scene=scene,
                 goal_selected_ns=goal_selected_ns,
+                allow_exploration_detour=True,
             )
         if disposition is _RolloutDisposition.HOLD or self._cached_plan_stale(mission.context):
             return (self._local_continuation(mission, estimate, world)
@@ -1980,11 +1984,14 @@ class TrajectoryNavigator:
         if quality.local_translation is QualityState.DEGRADED or quality.heading is QualityState.DEGRADED:
             v_cap = self._config.wheel_limits.degraded_linear_cap(
                 v_cap, omega_cap, self._config.localization_degraded_speed_scale)
-            omega_cap *= self._config.localization_degraded_speed_scale
+            omega_cap = self._config.wheel_limits.degraded_angular_cap(
+                omega_cap, self._config.localization_degraded_speed_scale)
         if v_cap < max(self._config.wheel_limits.minimum_mps, self._config.minimum_planning_speed_mps):
             return None
         proposals = tuple(c for c in self._trajectory_candidates
-                          if not c.collision and c.progress_viable and c.v_mps > 0)
+                          if not c.collision and c.progress_viable
+                          and (c.v_mps > 0 or (abs(c.v_mps) <= _MOTION_EPSILON
+                                               and abs(c.omega_rad_s) > _MOTION_EPSILON)))
         if proposals:
             proposal = max(proposals, key=lambda c: (c.total_score, c.candidate_id))
             v = min(v_cap, proposal.v_mps)
@@ -1992,12 +1999,11 @@ class TrajectoryNavigator:
         else:
             heading_error = _wrapped_angle(math.atan2(goal.y_m-estimate.y_m,
                                                        goal.x_m-estimate.x_m)-estimate.yaw_rad)
-            if abs(heading_error) > math.pi / 4:
-                return None
-            v = v_cap
-            omega = max(-omega_cap, min(omega_cap, heading_error))
+            v = 0.0 if abs(heading_error) > math.pi / 4 else v_cap
+            omega = (math.copysign(omega_cap, heading_error) if v == 0.0
+                     else max(-omega_cap, min(omega_cap, heading_error)))
         v, omega = self._config.wheel_limits.constrain(v, omega)
-        if v <= 0:
+        if abs(v) <= _MOTION_EPSILON and abs(omega) <= _MOTION_EPSILON:
             return None
         # One horizon, one candidate, using the existing bounded spatial index.
         # The full horizon is checked, not just the robot's current footprint.
@@ -2009,6 +2015,9 @@ class TrajectoryNavigator:
                                              goal, v_cap, omega_cap, clearance)
         if candidate.collision:
             return self._inactive(mission, NavigationStatus.INVALIDATED, "LOCAL_PATH_BLOCKED")
+        if not candidate.progress_viable and mission.mode is CommandMode.EXPLORE:
+            candidate = _exploration_detours(
+                [candidate], estimate, world, scene, self._config, v_cap, clearance)[0]
         if not candidate.progress_viable:
             return None
         # Leave braking room before the committed local goal. A global mission
@@ -2089,12 +2098,14 @@ class TrajectoryNavigator:
         *,
         scene: _LocalPlanningScene | None = None,
         goal_selected_ns: int | None = None,
+        allow_exploration_detour: bool = False,
     ) -> None:
         if estimate.localization_quality.local_translation is QualityState.DEGRADED or estimate.localization_quality.heading is QualityState.DEGRADED:
             max_v_mps = self._config.wheel_limits.degraded_linear_cap(
                 max_v_mps, max_omega_rad_s, self._config.localization_degraded_speed_scale,
             )
-            max_omega_rad_s *= self._config.localization_degraded_speed_scale
+            max_omega_rad_s = self._config.wheel_limits.degraded_angular_cap(
+                max_omega_rad_s, self._config.localization_degraded_speed_scale)
         backend = self._rollout_backend
         # Every new mission gets one synchronous seed. This avoids an ACTIVE
         # planner-warmup STOP and moves all recurring heavy replans off CPU3.
@@ -2107,6 +2118,7 @@ class TrajectoryNavigator:
                 goal,
                 max_v_mps,
                 max_omega_rad_s,
+                allow_exploration_detour=allow_exploration_detour,
             )
             if goal_selected_ns is not None:
                 self._goal_selected_ns = goal_selected_ns
@@ -2132,6 +2144,7 @@ class TrajectoryNavigator:
                     self._coverage.items()
                 )
             ),
+            allow_exploration_detour=allow_exploration_detour,
         )
         if self._completion_inputs:
             self._pending_rollout_id = context.tick_id + 1
@@ -2410,6 +2423,7 @@ class TrajectoryNavigator:
         goal: Waypoint,
         max_v_mps: float,
         max_omega_rad_s: float,
+        *, allow_exploration_detour: bool = False,
     ) -> tuple[TrajectoryEvaluation, ...]:
         scene = replace(scene, uncertainty_m=self._config.localization_inflation_sigma * estimate.localization_quality.local_sigma_m)
         start_clearance_m = _footprint_clearance(
@@ -2421,30 +2435,28 @@ class TrajectoryNavigator:
             scene,
         )
         evaluations: list[TrajectoryEvaluation] = []
-        for linear_index in range(self._config.rollout_linear_samples):
-            v_mps = self._config.wheel_limits.linear_sample(
-                linear_index, self._config.rollout_linear_samples, max_v_mps,
-                self._config.minimum_planning_speed_mps)
-            for angular_index in range(self._config.rollout_angular_samples):
-                angular_ratio = (
-                    2.0 * angular_index / (self._config.rollout_angular_samples - 1) - 1.0
+        for linear_index, angular_index, v_mps, omega_rad_s in self._config.wheel_limits.normal_samples(
+            self._config.rollout_linear_samples, self._config.rollout_angular_samples,
+            max_v_mps, max_omega_rad_s, self._config.minimum_planning_speed_mps,
+        ):
+            evaluations.append(
+                self._evaluate_trajectory(
+                    linear_index,
+                    angular_index,
+                    v_mps,
+                    omega_rad_s,
+                    estimate,
+                    world,
+                    scene,
+                    goal,
+                    max_v_mps,
+                    max_omega_rad_s,
+                    start_clearance_m,
                 )
-                omega_rad_s = max_omega_rad_s * angular_ratio
-                evaluations.append(
-                    self._evaluate_trajectory(
-                        linear_index,
-                        angular_index,
-                        v_mps,
-                        omega_rad_s,
-                        estimate,
-                        world,
-                        scene,
-                        goal,
-                        max_v_mps,
-                        max_omega_rad_s,
-                        start_clearance_m,
-                    )
-                )
+            )
+        if allow_exploration_detour:
+            evaluations = _exploration_detours(
+                evaluations, estimate, world, scene, self._config, max_v_mps, start_clearance_m)
         # Normal navigation is useful only if at least one collision-free
         # candidate can improve distance or heading toward the local goal. Keep the
         # full 54-candidate family for diagnostics/L7 ranking once that invariant holds.
@@ -2525,7 +2537,7 @@ class TrajectoryNavigator:
         max_omega_rad_s: float,
         start_clearance_m: float,
     ) -> TrajectoryEvaluation:
-        v_mps, omega_rad_s = self._config.wheel_limits.constrain(v_mps, omega_rad_s)
+        v_mps, omega_rad_s = self._config.wheel_limits.constrain(v_mps, omega_rad_s, planning=True)
         step_ns = self._config.rollout_horizon_ns // self._config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
@@ -2686,31 +2698,29 @@ class TrajectoryRolloutComputer:
             scene,
         )
         evaluations: list[TrajectoryEvaluation] = []
-        for linear_index in range(config.rollout_linear_samples):
-            v_mps = config.wheel_limits.linear_sample(
-                linear_index, config.rollout_linear_samples, request.max_v_mps,
-                config.minimum_planning_speed_mps)
-            for angular_index in range(config.rollout_angular_samples):
-                angular_ratio = (
-                    2.0 * angular_index / (config.rollout_angular_samples - 1) - 1.0
+        for linear_index, angular_index, v_mps, omega_rad_s in config.wheel_limits.normal_samples(
+            config.rollout_linear_samples, config.rollout_angular_samples,
+            request.max_v_mps, request.max_omega_rad_s, config.minimum_planning_speed_mps,
+        ):
+            evaluations.append(
+                self._evaluate_candidate(
+                    linear_index,
+                    angular_index,
+                    v_mps,
+                    omega_rad_s,
+                    estimate,
+                    world,
+                    scene,
+                    goal,
+                    request.max_v_mps,
+                    request.max_omega_rad_s,
+                    start_clearance_m,
+                    coverage,
                 )
-                omega_rad_s = request.max_omega_rad_s * angular_ratio
-                evaluations.append(
-                    self._evaluate_candidate(
-                        linear_index,
-                        angular_index,
-                        v_mps,
-                        omega_rad_s,
-                        estimate,
-                        world,
-                        scene,
-                        goal,
-                        request.max_v_mps,
-                        request.max_omega_rad_s,
-                        start_clearance_m,
-                        coverage,
-                    )
-                )
+            )
+        if request.allow_exploration_detour:
+            evaluations = _exploration_detours(
+                evaluations, estimate, world, scene, config, request.max_v_mps, start_clearance_m)
         if not any(
             not candidate.collision and candidate.progress_viable
             for candidate in evaluations
@@ -2788,7 +2798,7 @@ class TrajectoryRolloutComputer:
         coverage: dict[tuple[int, int], int],
     ) -> TrajectoryEvaluation:
         config = self._config
-        v_mps, omega_rad_s = config.wheel_limits.constrain(v_mps, omega_rad_s)
+        v_mps, omega_rad_s = config.wheel_limits.constrain(v_mps, omega_rad_s, planning=True)
         step_ns = config.rollout_horizon_ns // config.rollout_step_count
         samples: list[TrajectoryPose] = []
         x_m, y_m, yaw_rad = estimate.x_m, estimate.y_m, estimate.yaw_rad
@@ -2952,6 +2962,52 @@ def _trajectory_progress_potential(
     return _clamp_signed(distance_progress_score + heading_progress)
 
 
+def _exploration_detours(
+    candidates: list[TrajectoryEvaluation], estimate: RobotEstimate,
+    world: WorldSnapshot, scene: _LocalPlanningScene, config: NavigationConfig,
+    max_v_mps: float, start_clearance_m: float,
+) -> list[TrajectoryEvaluation]:
+    """A local exploration waypoint cannot veto proven normal travel.
+
+    Only after goal progress is exhausted, use safe forward displacement as
+    exploration progress. A stationary pivot must open a footprint-checked
+    forward next step; spinning alone is not exploration progress.
+    """
+    if any(not c.collision and c.progress_viable for c in candidates):
+        return candidates
+    horizon_s = config.rollout_horizon_ns / 1e9
+    probe_speed = max(config.wheel_limits.target_floor_mps, config.minimum_planning_speed_mps)
+    if probe_speed > max_v_mps:
+        probe_speed = 0.0
+    result = []
+    for candidate in candidates:
+        if candidate.collision:
+            result.append(candidate)
+            continue
+        end = candidate.samples[-1]
+        potential = 0.0
+        if candidate.v_mps > _MOTION_EPSILON:
+            potential = min(1.0, math.hypot(end.x_m - estimate.x_m, end.y_m - estimate.y_m)
+                            / max(max_v_mps * horizon_s, 1e-9))
+        elif abs(candidate.omega_rad_s) > _MOTION_EPSILON:
+            reachable_goal = Waypoint(
+                end.x_m + probe_speed * horizon_s * math.cos(end.yaw_rad),
+                end.y_m + probe_speed * horizon_s * math.sin(end.yaw_rad),
+            )
+            potential = _escape_unlock_potential(
+                end, reachable_goal, start_clearance_m, probe_speed,
+                world, config, scene, forward_only=True,
+            )
+        if potential > _MOTION_EPSILON and potential + 1e-12 >= config.progress_viability_floor:
+            candidate = replace(
+                candidate, progress_potential_score=potential, progress_viable=True,
+                total_score=candidate.total_score
+                + config.progress_weight * (potential - candidate.progress_potential_score),
+            )
+        result.append(candidate)
+    return result
+
+
 def _escape_unlock_potential(
     pivot_end: TrajectoryPose,
     goal: Waypoint,
@@ -2960,6 +3016,7 @@ def _escape_unlock_potential(
     world: WorldSnapshot,
     config: NavigationConfig,
     scene: _LocalPlanningScene,
+    *, forward_only: bool = False,
 ) -> float:
     """Prove that a safe pivot opens one bounded translational next step.
 
@@ -2977,7 +3034,7 @@ def _escape_unlock_potential(
     step_ns = config.rollout_horizon_ns // config.rollout_step_count
     best_potential = 0.0
 
-    for direction in (1.0, -1.0):
+    for direction in ((1.0,) if forward_only else (1.0, -1.0)):
         probe_v_mps = direction * probe_speed_mps
         x_m, y_m, yaw_rad = pivot_end.x_m, pivot_end.y_m, pivot_end.yaw_rad
         min_clearance_m = _footprint_clearance(

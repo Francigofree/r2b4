@@ -19,12 +19,15 @@ class TrajectoryRolloutRequest:
     max_v_mps: float
     max_omega_rad_s: float
     coverage: tuple[tuple[int, int, int], ...]
+    allow_exploration_detour: bool = False
 
     def __post_init__(self) -> None:
         if self.estimate.context != self.context or self.world.context != self.context:
             raise ValueError("rollout request inputs must share one TickContext")
         if not isinstance(self.goal, Waypoint):
             raise TypeError("goal must be Waypoint")
+        if type(self.allow_exploration_detour) is not bool:
+            raise TypeError("allow_exploration_detour must be bool")
         for name in ("max_v_mps", "max_omega_rad_s"):
             value = getattr(self, name)
             if (
