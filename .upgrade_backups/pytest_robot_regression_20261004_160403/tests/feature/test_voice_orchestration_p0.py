@@ -143,6 +143,13 @@ def build_service(*, running: bool, clock: Clock):
     return service, interface, tts, playback
 
 
+def test_contract_defaults_are_robot_figyelek_and_ten_seconds() -> None:
+    config = VoiceServiceConfig()
+    assert config.keyword == "robot"
+    assert config.ready_text == "figyelek"
+    assert config.session_silence_s == 10.0
+
+
 def test_continuous_speech_refreshes_silence_from_pcm_time(monkeypatch):
     clock = Clock()
     service, interface, _, _ = build_service(running=True, clock=clock)

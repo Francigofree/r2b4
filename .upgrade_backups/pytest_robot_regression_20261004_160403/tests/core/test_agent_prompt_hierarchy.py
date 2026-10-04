@@ -95,8 +95,27 @@ def _assert_stale_prompt_rejected(tmp_path: Path) -> None:
         raise AssertionError("stale prompt version must fail closed")
 
 
-def test_agent_prompt_hierarchy_contract(tmp_path: Path) -> None:
+def _assert_embodied_observation_and_multistep_contract() -> None:
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "conf" / "r2b4_agent_system.md").read_text(encoding="utf-8")
+
+    required = (
+        "Te az R2B4 fizikai robot vagy a felhasználó felé.",
+        "TELJES FELADAT ÉS TÖBBLÉPÉSES REASONING",
+        "FIZIKAI KÖRNYEZET ÉS ÉRZÉKELÉS",
+        "Ne értelmezd automatikusan internetes vagy műsorújság-kérdésként",
+        "ne zárd le a feladatot pusztán az első rész-actionnel",
+        "preview módot camera=true és tools=false",
+        "stream módot camera=true és tools=true",
+        "vision.observe capabilityt",
+    )
+    for phrase in required:
+        assert phrase in text
+
+
+def test_agent_prompt_hierarchy_and_observation_authority_contract(tmp_path: Path) -> None:
     for scenario in (_assert_prompt_core_and_runtime_data, _assert_self_knowledge_data_layer, _assert_stale_prompt_rejected):
         scenario_root = tmp_path / scenario.__name__
         scenario_root.mkdir()
         scenario(scenario_root)
+    _assert_embodied_observation_and_multistep_contract()

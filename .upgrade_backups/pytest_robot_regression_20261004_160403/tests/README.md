@@ -64,7 +64,3 @@ python -m pytest -q
 A célzott pytest nem helyettesíti a szükséges evidence-t. Async/process módosításnál szükség szerint replay kell; timing/GIL javításnál mérési bizonyíték is kell. Fizikai robotmozgást pytest nem indíthat automatikusan. A teljes regresszió közös contract, TickEngine/execution boundary, composition root, aktív config, L12/motor-edge vagy több réteg érintésekor indokolt.
 
 A tesztfájlok canonical helye `tests/core/`, `tests/feature/` és `tests/deep/`. A teljes fa hard capje 200 collected case, az endurance változatot is beleszámítva. A tesztkiválasztás authorityja a launcher és a policy; az esetszámot a collector számolja.
-## Karbantartási elv
-
-A regressziós suite robot-szintű szerződéseket véd. Nem tartunk külön pytestet csak azért, hogy egy privát helper, CLI-help szöveg, fájlnév, provider/model default vagy lezárt migrációs lépés változatlan maradjon. Ha ugyanazt a kockázatot egy publikus L5-L12, sensor→state, host→runtime, replay vagy evidence scenario már bizonyítja, az alacsonyabb szintű duplikátum törlendő.
-

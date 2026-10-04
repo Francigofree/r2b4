@@ -6,6 +6,10 @@ from pathlib import Path
 import pytest
 
 from v3.config import ConfigResolver
+from v3.contracts import TrajectoryEvaluation, TrajectoryPose
+from v3.layers import l6_navigation as l6
+from v3.layers import l7_motion_selection as l7
+from v3.replay import _migrate_legacy_resolved_config_snapshot
 
 ROOT = next(
     (
@@ -24,6 +28,29 @@ def _documents():
         for name in ("hardver.json", "fizika.json", "speed_map.json", "vezerles.json")
     ]
     return documents
+
+
+def _resolved():
+    return ConfigResolver.from_documents(*_documents())
+
+
+def _candidate(candidate_id: str, *, clearance: float, score: float) -> TrajectoryEvaluation:
+    horizon_ns = 100_000_000
+    return TrajectoryEvaluation(
+        candidate_id=candidate_id,
+        v_mps=0.3,
+        omega_rad_s=0.0,
+        horizon_ns=horizon_ns,
+        samples=(TrajectoryPose(0.03, 0.0, 0.0, horizon_ns),),
+        collision=False,
+        min_clearance_m=clearance,
+        progress_score=0.5,
+        progress_potential_score=0.5,
+        progress_viable=True,
+        smoothness_score=0.5,
+        novelty_score=0.5,
+        total_score=score,
+    )
 
 
 def test_production_route_tuning_is_explicit_config_authority():
@@ -132,6 +159,75 @@ def test_roomcruise_profile_crosses_canonical_interface_cli_gateway_and_mission(
     (conf / 'vezerles.json').write_text('{}')
     assert control_cli.main(['stop']) == 0
     assert json.loads(command_path.read_text())['mode'] == 'STOP'
+
+
+def test_speed_clearance_soft_barrier_penalizes_fast_tight_path_first():
+    nav = _resolved().runtime.composition.live_control.control.navigation
+    clearance = nav.speed_clearance_low_m
+    slow_score = l6._trajectory_clearance_score(clearance, 0.2, nav)
+    fast_score = l6._trajectory_clearance_score(clearance, 0.4, nav)
+    slow_penalty = l6._trajectory_clearance_penalty(slow_score, 0.2, nav)
+    fast_penalty = l6._trajectory_clearance_penalty(fast_score, 0.4, nav)
+    assert slow_score == 1.0
+    assert 0.0 <= fast_score < slow_score
+    assert slow_penalty == 0.0
+    assert fast_penalty > 0.0
+    assert l6._trajectory_clearance_score(nav.speed_clearance_high_m, 0.4, nav) == 1.0
+
+
+def test_l7_continuity_guard_does_not_keep_materially_tighter_near_best_path():
+    tight = _candidate("tight", clearance=0.30, score=1.0)
+    wide = _candidate("wide", clearance=0.45, score=0.99)
+    guarded = l7._clearance_guarded_near_best((tight, wide), 0.04)
+    assert guarded == (wide,)
+    assert l7._clearance_guarded_near_best((tight, wide), 1_000_000.0) == (tight, wide)
+
+
+def test_historical_capture_migration_disables_new_route_policy():
+    old_l7 = _migrate_legacy_resolved_config_snapshot(
+        {"__type__": "MotionSelectionConfig", "continuity_score_band": 0.005}
+    )
+    assert old_l7["reversal_min_omega_rad_s"] == 0.05
+    assert old_l7["continuity_clearance_drop_tolerance_m"] == 1_000_000.0
+
+    old_l6 = _migrate_legacy_resolved_config_snapshot(
+        {"__type__": "NavigationConfig", "local_goal_distance_m": 0.6}
+    )
+    assert old_l6["speed_clearance_enabled"] is False
+    assert old_l6["speed_clearance_penalty_weight"] == 0.0
+    assert old_l6["explore_local_goal_min_distance_m"] == 0.6
+    assert old_l6["explore_local_goal_max_distance_m"] == 0.6
+    assert old_l6["explore_local_goal_distance_samples"] == 1
+
+    # Complete pre-refactor document captures retain their exact execution
+    # configuration after moving only ownership and removing equal duplicates.
+    from v3.replay import _compat_control_config_from_documents, _decode_production_value
+    from v3.config import ResolvedRobotConfig
+    documents = _documents()
+    expected = ConfigResolver.from_documents(*documents)
+    control = documents[-1]
+    profile = control.pop('behavior')['roomcruise']
+    control['layers']['navigation'].update(profile['preferences'])
+    control['layers']['motion_realization']['max_world_freshness_ns'] = control['layers']['navigation']['max_world_freshness_ns']
+    control['lidar_runtime']['matcher_max_result_age_s'] = control['sensor_policy']['lidar_maximum_result_age_ns'] / 1e9
+    hardware, physics, speed_map, _ = documents
+    migrated = _compat_control_config_from_documents(physics, speed_map, hardware, (), control)
+    assert migrated == expected.runtime.composition.live_control.control
+    snapshot = expected.as_dict()
+    snapshot.pop('roomcruise')
+    historical = _decode_production_value(_migrate_legacy_resolved_config_snapshot(snapshot), ResolvedRobotConfig, 'historical.config')
+    assert historical.roomcruise is None
+    assert historical.runtime == expected.runtime
+
+    # Historical document authority also preserves the old recovery HOLD.
+    control['layers']['navigation']['localization_recovery_omega_rad_s'] = .2
+    migrated = _compat_control_config_from_documents(physics, speed_map, hardware, (), control)
+    assert migrated.navigation.localization_recovery_omega_rad_s == .2
+    assert migrated.navigation.wheel_limits.constrain(0, .2) == (0, 0)
+    control['layers']['navigation']['localization_recovery_omega_rad_s'] = None
+    from v3.replay import V3ReplayError
+    with pytest.raises(V3ReplayError):
+        _compat_control_config_from_documents(physics, speed_map, hardware, (), control)
 
 
 def test_recovery_speed_is_derived_from_calibration_and_rejects_second_authority():

@@ -89,9 +89,3 @@ The launcher forwards pytest options, reports the five slowest calls above
 0.5 s in non-gate runs and disables unrelated plugin autoloading. Explicit `-p`
 plugins and `PYTEST_DISABLE_PLUGIN_AUTOLOAD=0` remain available. Raw pytest uses
 the same default endurance exclusion; `-m endurance` opts into long scenarios.
-## Robot-level maintenance rule
-
-The curated regression suite protects externally meaningful robot contracts and failure boundaries, not implementation history. Prefer one public-path scenario that crosses the owning boundary over several tests of private helpers. Provider/model defaults, CLI help/completion text, artifact filenames, private `_foo` helpers, and retired config/capture migration steps are not regression contracts unless they are explicitly declared supported compatibility surfaces.
-
-When a lower-level unit assertion duplicates a public L5-L12, sensor-to-state, host-to-runtime, replay, or evidence scenario, keep the public scenario and remove the duplicate. Historical replay compatibility that must remain supported requires an explicit named replay fixture/evidence artifact; otherwise it does not stay in the permanent pytest gate.
-

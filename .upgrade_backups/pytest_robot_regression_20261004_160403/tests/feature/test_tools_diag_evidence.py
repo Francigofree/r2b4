@@ -9,7 +9,7 @@ import pytest
 
 from tools.diag.context import DiagEvidenceError, resolve_evidence
 from tools.diag.contracts import AnalyzerContract, AnalyzerOutput
-from tools.diag.registry import AnalyzerRegistry
+from tools.diag.registry import AnalyzerRegistry, build_default_registry
 from tools.mcap_evidence.index import DDL
 from tools.mcap_evidence.reader import EvidenceBundle
 
@@ -83,6 +83,31 @@ def test_resolve_evidence_defaults_to_latest_bundle(tmp_path: Path):
         resolve_evidence(tmp_path, capture_dir / "x.mcap")
 
 
+def test_default_registry_is_explicit_full_diag_order():
+    assert build_default_registry().ids() == (
+        "evidence_health",
+        "execution_chain",
+        "safety",
+        "recovery",
+        "navigation",
+        "localization",
+        "drive",
+        "world_model",
+        "lineage",
+        "lifecycle",
+    )
+
+
+def test_tools_diag_has_no_mcap_reader_dependency():
+    diag_dir = Path(__file__).resolve().parents[2] / "tools" / "diag"
+    for path in diag_dir.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        assert "from v3.mcap_reader" not in text
+        assert "import v3.mcap_reader" not in text
+        assert "McapReader(" not in text
+
+
+
 def test_registry_rejects_prescriptive_output_keys():
     registry = AnalyzerRegistry()
     contract = AnalyzerContract(analyzer_id="x", description="x")
@@ -94,6 +119,35 @@ def test_registry_rejects_prescriptive_output_keys():
     )
     with pytest.raises(RuntimeError, match="prescriptive DIAG output key"):
         registry.run("x", context)
+
+
+def test_localization_profiles_only_relevant_sensor_views():
+    from tools.diag.analyzers.localization import _localization_sensor_views
+
+    views = (
+        "sensors/imu_abc",
+        "sensors/encoder_left_def",
+        "sensors/camera_rgb_ghi",
+        "sensors/lidar_raw_jkl",
+        "layers/L3",
+    )
+    assert _localization_sensor_views(views) == (
+        "sensors/imu_abc",
+        "sensors/encoder_left_def",
+    )
+
+def test_launcher_routes_diag_to_tools_diag_and_evidence_help():
+    from v3 import host_cli, launcher_extras
+
+    usage, description = host_cli.COMMAND_HELP["diag"]
+    assert "EVIDENCE" in usage
+    assert "evidence" in description.lower()
+    source = Path(host_cli.__file__).read_text(encoding="utf-8")
+    assert '"-m", "tools.diag"' in source
+    assert "with hardware_guard(root):" in source
+    completion_source = Path(launcher_extras.__file__).read_text(encoding="utf-8")
+    assert "from tools.diag.registry import build_default_registry" in completion_source
+    assert 'glob("*.evidence")' in completion_source
 
 
 def test_diag_cli_no_args_means_full_latest(monkeypatch, tmp_path: Path, capsys):

@@ -97,3 +97,17 @@ def test_diag_no_save_is_explicit_ephemeral_mode(monkeypatch, tmp_path: Path, ca
     assert json.loads(captured.out)["schema"] == "R2B4_DIAG_FULL_REPORT_V1"
     assert "diag artifact:" not in captured.err
     assert not (tmp_path / "runtime" / "diag").exists()
+
+
+def test_launcher_surface_exposes_persistence_controls(tmp_path: Path):
+    from v3 import host_cli, launcher_cli, launcher_extras
+
+    usage, description = host_cli.COMMAND_HELP["diag"]
+    assert "--no-save" in usage
+    assert "runtime/diag" in description
+
+    hint, candidates = launcher_extras._host_completion("diag", [], "--", tmp_path)
+    assert "--no-save" in candidates
+    assert "--json" in candidates
+    assert "runtime/diag" in hint
+    assert "runtime/diag" in Path(launcher_cli.__file__).read_text(encoding="utf-8")
