@@ -16,6 +16,7 @@ from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from enum import Enum
+from types import MappingProxyType
 from typing import Protocol
 
 
@@ -40,6 +41,35 @@ class BehaviorLifecycle(str, Enum):
 
 
 _RUNNING = frozenset({BehaviorLifecycle.STARTING, BehaviorLifecycle.ACTIVE})
+
+
+def _parameters(raw: Mapping[str, object] | None) -> dict[str, object]:
+    if raw is not None and not isinstance(raw, Mapping):
+        raise ValueError("behavior parameters must be a bounded object")
+    result = {}
+    for key, value in (raw or {}).items():
+        if not isinstance(key, str) or not key or len(key) > 96:
+            raise ValueError("behavior parameter keys must be bounded strings")
+        if isinstance(value, (tuple, list)):
+            if len(value) > 32 or any(not isinstance(item, str) or len(item) > 256 for item in value):
+                raise ValueError("behavior parameter sequences must contain bounded strings")
+            value = tuple(value)
+        elif isinstance(value, str):
+            if len(value) > 256:
+                raise ValueError("behavior string parameters must be bounded")
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            try:
+                finite = math.isfinite(value)
+            except OverflowError:
+                finite = False
+            if not finite:
+                raise ValueError("behavior numeric parameters must be finite")
+        elif value is not None and not isinstance(value, bool):
+            raise ValueError("behavior parameters must be semantic scalars or string sequences")
+        result[key] = value
+        if len(result) > 64:
+            raise ValueError("behavior parameter count exceeded its bound")
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +102,8 @@ class BehaviorSnapshot:
             "observation_time_ns": self.observation_time_ns,
             "updated_ns": self.observation_time_ns,
             "revision": self.revision,
-            "parameters": dict(self.parameters),
+            "parameters": {key: list(value) if isinstance(value, tuple) else value
+                           for key, value in self.parameters},
             "confidence": 1.0,
             "source": "host.behavior_system",
             "lineage": {"behavior_id": self.behavior_id, "command_id": self.command_id,
@@ -278,9 +309,7 @@ class BehaviorSystem:
         if (not isinstance(max_duration_s, (float, int)) or isinstance(max_duration_s, bool)
                 or not math.isfinite(max_duration_s) or not 0 < max_duration_s <= 3600):
             raise ValueError("max_duration_s must be finite and in (0, 3600]")
-        params = dict(parameters or {})
-        if any(not isinstance(key, str) for key in params):
-            raise ValueError("behavior parameters must have string keys")
+        params = _parameters(parameters)
         watchdog_s = params.get("session_watchdog_s")
         if watchdog_s is not None:
             if (not isinstance(watchdog_s, (float, int)) or isinstance(watchdog_s, bool)
@@ -313,7 +342,7 @@ class BehaviorSystem:
                 if generation != self._generation or self._state.lifecycle not in _RUNNING:
                     return self._state
                 self._program = program
-            handle = program.start(_ProgramPort(self, generation), params)
+            handle = program.start(_ProgramPort(self, generation), MappingProxyType(params))
             if isinstance(handle, BehaviorUpdate):
                 if handle.lifecycle in _RUNNING:
                     raise ValueError("start without an action identity must be terminal")

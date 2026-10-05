@@ -32,8 +32,9 @@ V3 nem importálja a felső owner implementációját. A régi `v3.command.explo
 A behavior által injektált RobotInterface a meglévő V3 execution primitive-et
 hívja, így nem jön létre rekurzív behavior-indítás.
 
-L4 továbbra is a friss operational local world, a lokális navigation/tracking,
-coverage/progress, recovery és feasibility ownere. Room Cruise hostoldali
+L4 továbbra is a friss operational local world és tracked entity-k ownere.
+L6 birtokolja a lokális navigationt, coverage/progress, recovery és feasibility
+döntéseket. Room Cruise hostoldali
 életciklusa és kért profilja ezen felül él; a lokális EXPLORE algoritmus
 megmarad. Follow Person ugyanezt az életciklust használja, az aktuális fizikai
 személytrack kezelése pedig V3 feladat. A szemantikus SearchPerson a publikus
@@ -139,6 +140,16 @@ Matching mission completion után a program vision observationt kér, majd
 bounded ideig vár friss semantic identity evidence-re és szükség esetén a
 következő területet választja. Minden mozgást a V3 realizál és helyi akadály
 esetén megtagadhat.
+
+A jelenlegi V3 frame-ek runtime-sessionhöz kötöttek. Navigálható helyhez
+`location.value.runtime_pid` is szükséges; ezt a publikus navigate admission
+az operator transition alatt ellenőrzi. A keresés örökli az aktív capture
+módot/frekvenciát és `capture=False` értéket használ, ezért nem re-armolhat
+capture-t és nem indíthat új frame epochot a kiválasztott koordináta után.
+Leállított V3 vagy régi sessionből származó helyadat esetén a keresés fail
+closed; tartós térkép és új frame közötti szemantikai relokalizáció nincs
+hozzáadva. Aktív FULL capture tovább rögzít; ALAP per-move capture trigger
+helyett a keresés host decision evidence-je áll rendelkezésre.
 
 A „megtaláltam” eredményhez a kért entitás friss, megfelelő confidence-ű,
 source/lineage-dzsel rendelkező `person_position/location` observationje kell.

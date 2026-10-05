@@ -119,14 +119,14 @@ class RobotInterface:
         return adapter.read(resource)
 
     def execute(self, action: str, **parameters: object) -> object:
+        if action == "v3.command.stop":
+            if parameters:
+                raise ValueError("STOP accepts no parameters")
+            return self.stop()
         if self._public_robot is not None:
             if action in {"v3.command.explore", "v3.command.follow_person"}:
                 behavior = "behavior.room_cruise" if action.endswith("explore") else "behavior.follow_person"
                 return self.execute(behavior, **parameters)
-            if action == "v3.command.stop":
-                if parameters:
-                    raise ValueError("STOP accepts no parameters")
-                return self.stop()
             if (action.startswith("v3.command.") or action in {
                 "operator.runtime.start", "operator.runtime.stop", "operator.shutdown", "operator.panic", "operator.proba",
             }):

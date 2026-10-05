@@ -120,6 +120,22 @@ def test_default_robot_context_distinguishes_public_knowledge_from_local_world(c
     assert context.host["robot_state"]["active_behavior"] == composed.behavior
 
 
+def test_live_behavior_capabilities_reflect_runtime_and_vision_failure(monkeypatch, composed):
+    composed.controller.status_value["safety_decision"] = "FAULT"
+    capabilities = composed.interface.capabilities()["capabilities"]
+    assert capabilities["behavior.room_cruise"]["available"] is False
+    assert capabilities["v3.command.explore"]["available"] is False
+    assert capabilities["world.snapshot"]["available"] is True
+    composed.controller.status_value["safety_decision"] = "STOP"
+    monkeypatch.setattr(VisionClient, "status", lambda client: {"camera_state": "FAILED"})
+    capabilities = composed.interface.capabilities()["capabilities"]
+    assert capabilities["behavior.room_cruise"]["available"] is True
+    assert capabilities["behavior.follow_person"]["available"] is False
+    assert capabilities["v3.command.follow_person"]["available"] is False
+    assert capabilities["behavior.search_person"]["available"] is False
+    assert composed.controller.calls == []
+
+
 def test_conversation_reuses_the_same_public_robot_adapters(monkeypatch, composed):
     import r2b4_voice.conversation_interface as conversation
     import v3.operator_controller as operator

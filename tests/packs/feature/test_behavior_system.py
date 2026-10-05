@@ -237,3 +237,30 @@ def test_evidence_sink_failure_cannot_prevent_canonical_stop():
     assert event["schema"] == "R2B4_BEHAVIOR_EVENT_V1"
     assert event["behavior_id"] == cancelled.behavior_id
     assert event["mission_id"] == cancelled.mission_id
+
+
+def test_caller_parameter_mutation_cannot_change_behavior_state_or_evidence():
+    _, robot, system = setup_system()
+    received = []
+
+    class Program:
+        def start(self, port, parameters):
+            received.append(parameters["candidate_places"])
+            return port.execute("v3.command.explore")
+
+        def step(self, port, state, status):
+            return None
+
+    system.register("places", Program)
+    places = ["room:lounge", "room:kitchen"]
+    parameters = {"candidate_places": places}
+    state = system.start("places", parameters)
+    original = state.to_jsonable()
+    event = system.history()[0].to_jsonable()
+    places.append("room:hall")
+    parameters["candidate_places"] = ["room:garage"]
+    assert system.snapshot().to_jsonable() == original
+    assert system.history()[0].to_jsonable() == event
+    assert original["parameters"]["candidate_places"] == ["room:lounge", "room:kitchen"]
+    assert received == [("room:lounge", "room:kitchen")]
+    assert len(robot.actions) == 1

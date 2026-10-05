@@ -166,14 +166,13 @@ class PublicRobotRuntime:
         self.clock_ns = clock_ns
         self.world = world or PublicWorldModel(clock_ns=clock_ns)
         self._state_lock = threading.RLock()
+        self._storage_lock = threading.Lock()
         self._action_lock = threading.Lock()
         self._generation = 0
         self._last_status_identity = None
-        self._last_status = None
         self._last_persist_ns = 0
         self._health_error = None
         self._persisted_revision = -1
-        self._last_behavior = None
         self._evidence_queue = deque(maxlen=256)
         self._evidence_lock = threading.Lock()
         self._world_evidence_pending = 0
@@ -203,7 +202,7 @@ class PublicRobotRuntime:
             return
         directory = self.root / "runtime" / "public_world"
         directory.mkdir(parents=True, exist_ok=True)
-        record = {"schema": SCHEMA, "kind": kind, "observation_time_ns": self.clock_ns(),
+        record = {"schema": SCHEMA, "kind": kind, "publication_time_ns": self.clock_ns(),
                   "clock_epoch": self.world.clock_epoch, "value": _jsonable(value)}
         with (directory / "events.ndjson").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(record, allow_nan=False, separators=(",", ":")) + "\n")
@@ -248,7 +247,6 @@ class PublicRobotRuntime:
         if identity == self._last_status_identity:
             return
         self._last_status_identity = identity
-        self._last_status = dict(status)
         now = self.clock_ns()
         if stamp > now:
             return
@@ -290,8 +288,7 @@ class PublicRobotRuntime:
                     {"x_m": track.get("x_m"), "y_m": track.get("y_m"),
                      "frame_id": local.get("frame_id"), "runtime_pid": runtime_pid,
                      "track_id": track_id}, domain="person_position",
-                    **{**common, "measurement_time_ns": measured, "confidence": confidence,
-                       "sequence": measured})
+                    **{**common, "measurement_time_ns": measured, "confidence": confidence})
 
     def poll(self) -> None:
         try:
@@ -320,8 +317,10 @@ class PublicRobotRuntime:
             now = self.clock_ns()
             self.world.observe("robot", "behavior", behavior, domain="behavior_state",
                                measurement_time_ns=now, confidence=1.0,
-                               source="behavior_system", lineage=(str(behavior.get("behavior_id")),))
-            self._persist()
+                               source="behavior_system", lineage=(f"host_pid:{os.getpid()}",
+                                   f"behavior:{behavior.get('behavior_id') or 'IDLE'}",
+                                   f"revision:{behavior.get('revision')}"))
+        self._persist()
         self._flush_evidence()
 
     def poll_safely(self) -> None:
@@ -336,6 +335,12 @@ class PublicRobotRuntime:
                     pass
 
     def _persist(self, *, force: bool = False) -> None:
+        # Storage serialization is separate from intent revocation. Slow disk
+        # cannot retain the state lock needed by STOP and public state reads.
+        with self._storage_lock:
+            self._persist_snapshot(force=force)
+
+    def _persist_snapshot(self, *, force: bool = False) -> None:
         if self.root is None:
             return
         now = self.clock_ns()
@@ -406,9 +411,12 @@ class PublicRobotRuntime:
         if action == "world.observe":
             with self._state_lock:
                 event = self.world.observe(**params)
-                self._evidence("observation", event)
-                self._persist(force=True)
-                return _jsonable(event)
+            with self._evidence_lock:
+                if len(self._evidence_queue) == self._evidence_queue.maxlen:
+                    self._health_error = "OBSERVATION_EVIDENCE_OVERFLOW"
+                self._evidence_queue.append(("observation", event))
+            self._persist(force=True)
+            return _jsonable(event)
         if action == "behavior.cancel":
             reason = params.pop("reason", "USER_CANCEL")
             if params or not isinstance(reason, str) or not reason:
@@ -477,6 +485,12 @@ class PublicRobotInterfaceAdapter:
             if isinstance(status, Mapping) and (status.get("fault_layer") or status.get("safety_decision") == "FAULT"):
                 for name in ("behavior.room_cruise", "behavior.follow_person", "behavior.search_person", "behavior.start"):
                     result[name].update(available=False, ready=False, reason="RUNTIME_FAULT")
+            from v3.adapters.vision_media_socket import VisionClient
+            camera = VisionClient(root=self.controller.root).status()
+            if camera.get("camera_state") == "FAILED":
+                for name in ("behavior.follow_person", "behavior.search_person"):
+                    if result[name]["available"]:
+                        result[name].update(available=False, ready=False, reason="VISION_UNAVAILABLE")
         return result
 
     def read(self, resource: str) -> object:

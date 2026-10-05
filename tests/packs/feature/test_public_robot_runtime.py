@@ -152,7 +152,7 @@ def test_person_knowledge_retains_physical_measurement_time_across_prediction():
     fact = runtime.world.read("person:123:person-7", "location").to_jsonable()
     assert fact["measurement_time_ns"] == measured
     assert fact["observation_time_ns"] == clock.now
-    assert fact["sequence"] == measured
+    assert fact["sequence"] == status["tick_id"]  # The producer is completed V3 status.
     assert fact["lineage"] == ["runtime:123", "tick:1"]
     assert fact["value"]["frame_id"] == "R2B4_ODOM_LOCAL"
     clock.now += 1_000_000_000
@@ -333,3 +333,100 @@ def test_oversized_public_request_is_rejected_before_socket_or_process_start(mon
     client = PublicRobotClient(tmp_path)
     with pytest.raises(ValueError, match="exceeded its bound"):
         client.request("execute", action="world.observe", parameters={"raw": "x" * MAX_REQUEST_BYTES})
+
+
+def test_storage_stall_cannot_block_active_behavior_revocation(monkeypatch):
+    clock, backend, runtime = setup_runtime()
+    runtime.execute("behavior.room_cruise", {})
+    storing, release, stopped = threading.Event(), threading.Event(), threading.Event()
+    errors, results = [], []
+
+    def storage_stall(**_kwargs):
+        storing.set()
+        assert release.wait(2.0)
+
+    def observe():
+        try:
+            runtime.execute("world.observe", {
+                "entity_id": "cup", "attribute": "location", "value": "table",
+                "domain": "object_position", "measurement_time_ns": clock.now,
+                "confidence": 0.9, "source": "semantic_vision", "lineage": ["frame:9"],
+            })
+        except Exception as exc:
+            errors.append(exc)
+
+    def stop():
+        try:
+            results.append(runtime.preempt("STOP"))
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            stopped.set()
+
+    monkeypatch.setattr(runtime, "_persist", storage_stall)
+    writer, stopper = threading.Thread(target=observe), threading.Thread(target=stop)
+    writer.start()
+    try:
+        assert storing.wait(1.0)
+        stopper.start()
+        assert stopped.wait(0.5), "STOP waited for public world storage"
+    finally:
+        release.set()
+        writer.join(2.0)
+        if stopper.ident is not None:
+            stopper.join(2.0)
+    assert errors == []
+    assert results[0]["lifecycle"] == "CANCELLED"
+    assert backend.operations[-1] == "STOP"
+
+
+def test_search_person_uses_runtime_injected_public_world_through_real_facade():
+    clock = Clock()
+    backend = Backend(clock)
+    world = PublicWorldModel(clock_ns=clock, clock_epoch="test-boot")
+    world.observe("room:lounge", "location",
+                  {"frame_id": "R2B4_BOOT_ROBOT_MAP", "runtime_pid": 123, "x_m": 1.0, "y_m": 0.0},
+                  domain="room_topology", measurement_time_ns=1, confidence=1.0,
+                  source="room_map", lineage=("map:7",))
+
+    class PublicBackendAdapter(LocalAdapter):
+        capability_names = LocalAdapter.capability_names | frozenset({
+            "operator.status", "v3.status", "v3.command.navigate", "vision.observe",
+        })
+
+        def capabilities(self):
+            return {name: {"kind": "read" if name in {"operator.status", "v3.status"} else "action",
+                           "available": True, "supported": True} for name in self.capability_names}
+
+        def read(self, resource):
+            if resource == "operator.status":
+                return {"runtime_running": True, "runtime_pid": 123, "capture_mode": "full", "capture_hz": 10}
+            return backend.read(resource)
+
+        def execute(self, action, **parameters):
+            if action == "vision.observe":
+                backend.operations.append("EXECUTE:vision.observe")
+                world.observe("person:laci", "location", {"place_id": "room:lounge"},
+                              domain="person_position", measurement_time_ns=clock.now,
+                              confidence=0.95, source="semantic_vision", lineage=("camera:18", "identity:4"))
+                return object()
+            return super().execute(action, **parameters)
+
+    facade = RobotInterface(controller=backend, adapters=(PublicBackendAdapter(backend),), upper_runtime=False)
+    runtime = PublicRobotRuntime(facade, world=world, clock_ns=clock)
+    starting = runtime.execute("behavior.start", {"name": "search_person", "entity_id": "person:laci"})
+    assert starting["lifecycle"] == "STARTING"
+    assert backend.actions[0][0] == "v3.command.navigate"
+    assert backend.actions[0][1]["expected_runtime_pid"] == 123
+    backend.status["navigation"]["status"] = "COMPLETE"
+    backend.status.update(safety_decision="STOP", safety_reason="NOT_ACTIVE")
+    runtime.poll()
+    completed = runtime.read("behavior.state")
+    assert completed["lifecycle"] == "COMPLETED"
+    assert "TARGET_OBSERVED:person:laci" in completed["reason"]
+    assert "EXECUTE:vision.observe" in backend.operations
+    assert backend.operations[-1] == "STOP"
+    intent = next(event for event in runtime.read("behavior.history") if event["kind"] == "BEHAVIOR_INTENT")
+    assert intent["world_revision"] is not None
+    assert intent["clock_epoch"] == "test-boot"
+    assert runtime.world.read("person:laci", "location").to_jsonable()["measurement_time_ns"] == clock.now

@@ -197,10 +197,10 @@ def test_search_step_budget_is_bounded_while_navigation_is_pending():
 
 def test_candidate_bound_is_rejected_before_navigation():
     _, _, robot, system = setup_search()
-    result = system.start("search_person", {"entity_id": "person:laci", "candidate_places": ["room:lounge"] * 33})
-    assert result.lifecycle is BehaviorLifecycle.FAILED
+    with pytest.raises(ValueError, match="bounded strings"):
+        system.start("search_person", {"entity_id": "person:laci", "candidate_places": ["room:lounge"] * 33})
     assert robot.actions == []
-    assert robot.stops == 1
+    assert robot.stops == 0
 
 
 def test_integral_float_limits_from_voice_are_accepted_but_fractional_limits_are_not():
