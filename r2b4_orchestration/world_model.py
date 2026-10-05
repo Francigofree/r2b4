@@ -15,7 +15,7 @@ import time
 import uuid
 from collections import OrderedDict, deque
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -83,6 +83,8 @@ DEFAULT_FRESHNESS_POLICIES: Mapping[str, FreshnessPolicy] = MappingProxyType({
     "robot_state": FreshnessPolicy(1_000_000_000),
     "behavior_state": FreshnessPolicy(1_000_000_000),
     "mission_state": FreshnessPolicy(1_000_000_000),
+    "mission_outcome": FreshnessPolicy(None),
+    "navigation_outcome": FreshnessPolicy(None),
     "health": FreshnessPolicy(1_000_000_000),
     "person_position": FreshnessPolicy(3_000_000_000),
     "observation": FreshnessPolicy(10_000_000_000),
@@ -149,6 +151,80 @@ def _fact_size(observation: WorldObservation, conflicts: tuple[WorldObservation,
 
 
 @dataclass(frozen=True, slots=True)
+class ValidityScope:
+    """The spatial/session context required to use evidence as current knowledge."""
+
+    frame_id: str | None = None
+    runtime_pid: int | None = None
+    map_revision: int | str | None = None
+
+    def __post_init__(self) -> None:
+        if self.frame_id is not None:
+            object.__setattr__(self, "frame_id", _text(self.frame_id, "frame_id"))
+        if self.runtime_pid is not None and _integer(self.runtime_pid, "runtime_pid") == 0:
+            raise ValueError("runtime_pid must be positive")
+        if self.map_revision is not None:
+            if isinstance(self.map_revision, str):
+                object.__setattr__(self, "map_revision", _text(self.map_revision, "map_revision"))
+            else:
+                _integer(self.map_revision, "map_revision")
+
+    def matches(self, context: ValidityScope | Mapping[str, object] | None) -> bool:
+        if isinstance(context, Mapping):
+            context = self.from_jsonable(context)
+        if context is not None and not isinstance(context, ValidityScope):
+            raise ValueError("scope context must be a ValidityScope")
+        return all(value is None or (context is not None and value == getattr(context, name))
+                   for name in self.__dataclass_fields__ if (value := getattr(self, name)) is not None)
+
+    def to_jsonable(self) -> dict[str, object]:
+        return {name: getattr(self, name) for name in self.__dataclass_fields__}
+
+    @classmethod
+    def from_jsonable(cls, value: Mapping[str, object]) -> ValidityScope:
+        if not isinstance(value, Mapping) or set(value) - set(cls.__dataclass_fields__):
+            raise ValueError("invalid validity scope")
+        return cls(**value)
+
+
+@dataclass(frozen=True, slots=True)
+class WorldLocation:
+    """A semantic place or finite coordinates in an explicitly named frame."""
+
+    place_id: str | None = None
+    x_m: float | None = None
+    y_m: float | None = None
+    frame_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.place_id is not None:
+            object.__setattr__(self, "place_id", _text(self.place_id, "place_id"))
+        if self.frame_id is not None:
+            object.__setattr__(self, "frame_id", _text(self.frame_id, "frame_id"))
+        coordinates = self.x_m is not None or self.y_m is not None
+        if coordinates:
+            if self.frame_id is None:
+                raise ValueError("world coordinates require a frame_id")
+            for name in ("x_m", "y_m"):
+                value = getattr(self, name)
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ValueError("world coordinates require a finite x_m/y_m pair")
+                object.__setattr__(self, name, float(value))
+        if self.place_id is None and not coordinates:
+            raise ValueError("world location requires a place_id or coordinates")
+
+    def to_jsonable(self) -> dict[str, object]:
+        return {name: getattr(self, name) for name in self.__dataclass_fields__}
+
+    @classmethod
+    def from_jsonable(cls, value: object) -> WorldLocation:
+        if not isinstance(value, Mapping):
+            raise ValueError("world location must be semantic JSON")
+        return cls(place_id=value.get("place_id"), x_m=value.get("x_m"),
+                   y_m=value.get("y_m"), frame_id=value.get("frame_id"))
+
+
+@dataclass(frozen=True, slots=True)
 class WorldObservation:
     entity_id: str
     attribute: str
@@ -162,6 +238,7 @@ class WorldObservation:
     clock_epoch: str
     sequence: int | None = None
     revision: int | str | None = None
+    validity_scope: ValidityScope | Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         for name in ("entity_id", "attribute", "domain", "source", "clock_epoch"):
@@ -180,9 +257,24 @@ class WorldObservation:
         object.__setattr__(self, "confidence", _confidence(self.confidence))
         object.__setattr__(self, "value", _freeze(self.value))
         object.__setattr__(self, "lineage", _freeze(self.lineage))
+        scope = self.validity_scope
+        if isinstance(scope, Mapping):
+            scope = ValidityScope.from_jsonable(scope)
+        if scope is None and self.attribute in {"location", "pose"} and self.domain in {
+                "person_position", "object_position", "room_topology", "pose", "map"}:
+            if isinstance(self.value, Mapping):
+                fields = {name: self.value[name] for name in ValidityScope.__dataclass_fields__
+                          if self.value.get(name) is not None}
+                if fields:
+                    scope = ValidityScope.from_jsonable(fields)
+        if scope is not None and not isinstance(scope, ValidityScope):
+            raise ValueError("validity_scope must be a ValidityScope or semantic JSON")
+        object.__setattr__(self, "validity_scope", scope)
 
     def to_jsonable(self) -> dict[str, object]:
-        return {name: _jsonable(getattr(self, name)) for name in self.__dataclass_fields__}
+        result = {name: _jsonable(getattr(self, name)) for name in self.__dataclass_fields__}
+        result["validity_scope"] = self.validity_scope.to_jsonable() if self.validity_scope is not None else None
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +296,17 @@ class WorldFact:
     def confidence(self) -> float:
         return self.observation.confidence if self.observation is not None else 0.0
 
+    @property
+    def domain(self) -> str | None:
+        return self.observation.domain if self.observation is not None else None
+
+    @property
+    def location(self) -> WorldLocation | None:
+        try:
+            return WorldLocation.from_jsonable(self.value)
+        except ValueError:
+            return None
+
     def to_jsonable(self) -> dict[str, object]:
         result = self.observation.to_jsonable() if self.observation is not None else {
             "entity_id": self.entity_id, "attribute": self.attribute, "value": None,
@@ -215,6 +318,25 @@ class WorldFact:
                       world_revision=self.world_revision,
                       conflicts=[item.to_jsonable() for item in self.conflicts])
         return result
+
+    @classmethod
+    def from_jsonable(cls, value: Mapping[str, object]) -> WorldFact:
+        if not isinstance(value, Mapping):
+            raise ValueError("world fact must be semantic JSON")
+        observation = None
+        if value.get("domain") is not None:
+            observation = WorldObservation(**{name: value[name] for name in WorldObservation.__dataclass_fields__
+                                              if name in value})
+        raw_conflicts = value.get("conflicts", ())
+        if not isinstance(raw_conflicts, (list, tuple)) or len(raw_conflicts) > 4:
+            raise ValueError("invalid fact conflicts")
+        age = value.get("age_ns")
+        if age is not None and (not isinstance(age, int) or isinstance(age, bool)):
+            raise ValueError("age_ns must be an integer or None")
+        return cls(_text(value.get("entity_id"), "entity_id"), _text(value.get("attribute"), "attribute"),
+                   KnowledgeState(value.get("state")), _text(value.get("freshness"), "freshness"), age,
+                   observation, tuple(WorldObservation(**item) for item in raw_conflicts),
+                   _integer(value.get("world_revision", 0), "world_revision"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +356,27 @@ class WorldEvent:
                 "accepted": self.accepted, "reason": self.reason,
                 "evicted": list(self.evicted) if self.evicted is not None else None,
                 "evicted_facts": [list(key) for key in self.evicted_facts]}
+
+    @classmethod
+    def from_jsonable(cls, value: Mapping[str, object]) -> WorldEvent:
+        if not isinstance(value, Mapping) or type(value.get("accepted")) is not bool:
+            raise ValueError("invalid world event")
+        raw_evicted = value.get("evicted")
+        raw_evictions = value.get("evicted_facts", [raw_evicted] if raw_evicted is not None else [])
+        if not isinstance(raw_evictions, (list, tuple)) or len(raw_evictions) > 256:
+            raise ValueError("invalid event eviction list")
+
+        def key(item: object) -> tuple[str, str]:
+            if not isinstance(item, (list, tuple)) or len(item) != 2:
+                raise ValueError("invalid event eviction identity")
+            return (_text(item[0], "evicted"), _text(item[1], "evicted"))
+
+        return cls(_text(value.get("event_id"), "event_id", 512),
+                   _integer(value.get("event_sequence"), "event_sequence"),
+                   _integer(value.get("world_revision"), "world_revision"),
+                   WorldObservation(**value["observation"]), value["accepted"],
+                   _text(value.get("reason"), "reason"), key(raw_evicted) if raw_evicted is not None else None,
+                   tuple(key(item) for item in raw_evictions))
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +399,111 @@ class WorldSnapshot:
                 "history_dropped": self.history_dropped, "facts_evicted": self.facts_evicted}
 
 
+@dataclass(frozen=True, slots=True)
+class WorldQuery:
+    """An exact, bounded semantic query; scope qualifies fact usability."""
+
+    entity_id: str | None = None
+    attribute: str | None = None
+    domain: str | None = None
+    limit: int = 32
+    require_current: bool = False
+    scope: ValidityScope | None = None
+    kind: str = "facts"
+    after_sequence: int = 0
+
+    def __post_init__(self) -> None:
+        for name in ("entity_id", "attribute", "domain"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _text(value, name))
+        if not 1 <= _integer(self.limit, "limit") <= 64:
+            raise ValueError("query limit must be in 1..64")
+        if type(self.require_current) is not bool:
+            raise ValueError("require_current must be boolean")
+        if self.scope is not None and not isinstance(self.scope, ValidityScope):
+            raise ValueError("query scope must be a ValidityScope")
+        if self.kind not in {"facts", "episodes"}:
+            raise ValueError("query kind must be facts or episodes")
+        _integer(self.after_sequence, "after_sequence")
+
+    def to_jsonable(self) -> dict[str, object]:
+        result = {name: getattr(self, name) for name in self.__dataclass_fields__}
+        result["scope"] = self.scope.to_jsonable() if self.scope is not None else None
+        return result
+
+    @classmethod
+    def from_jsonable(cls, value: Mapping[str, object]) -> WorldQuery:
+        if not isinstance(value, Mapping) or set(value) - set(cls.__dataclass_fields__):
+            raise ValueError("invalid world query")
+        parameters = dict(value)
+        if parameters.get("scope") is not None:
+            parameters["scope"] = ValidityScope.from_jsonable(parameters["scope"])
+        return cls(**parameters)
+
+
+@dataclass(frozen=True, slots=True)
+class WorldQueryResult:
+    revision: int
+    observation_time_ns: int
+    clock_epoch: str
+    query: WorldQuery
+    facts: tuple[WorldFact, ...] = ()
+    events: tuple[WorldEvent, ...] = ()
+    history_first_sequence: int | None = None
+    history_last_sequence: int | None = None
+    history_dropped: int = 0
+    facts_evicted: int = 0
+    truncated: bool = False
+    history_gap: bool = False
+
+    def __post_init__(self) -> None:
+        for name in ("revision", "observation_time_ns", "history_dropped", "facts_evicted"):
+            _integer(getattr(self, name), name)
+        for name in ("history_first_sequence", "history_last_sequence"):
+            if getattr(self, name) is not None:
+                _integer(getattr(self, name), name)
+        object.__setattr__(self, "clock_epoch", _text(self.clock_epoch, "clock_epoch"))
+        if not isinstance(self.query, WorldQuery):
+            raise ValueError("query result requires a WorldQuery")
+        for name, item_type in (("facts", WorldFact), ("events", WorldEvent)):
+            items = getattr(self, name)
+            if not isinstance(items, (tuple, list)) or len(items) > self.query.limit or any(
+                    not isinstance(item, item_type) for item in items):
+                raise ValueError("query result exceeds bounded typed capacity")
+            object.__setattr__(self, name, tuple(items))
+        if (self.query.kind == "facts" and self.events) or (self.query.kind == "episodes" and self.facts):
+            raise ValueError("query result does not match query kind")
+        if type(self.truncated) is not bool or type(self.history_gap) is not bool:
+            raise ValueError("query result loss indicators must be boolean")
+
+    def to_jsonable(self) -> dict[str, object]:
+        return {"schema": WORLD_MODEL_SCHEMA, "revision": self.revision,
+                "observation_time_ns": self.observation_time_ns, "clock_epoch": self.clock_epoch,
+                "query": self.query.to_jsonable(), "facts": [fact.to_jsonable() for fact in self.facts],
+                "events": [event.to_jsonable() for event in self.events],
+                "history_first_sequence": self.history_first_sequence,
+                "history_last_sequence": self.history_last_sequence,
+                "history_dropped": self.history_dropped, "facts_evicted": self.facts_evicted,
+                "truncated": self.truncated, "history_gap": self.history_gap}
+
+    @classmethod
+    def from_jsonable(cls, value: Mapping[str, object]) -> WorldQueryResult:
+        if not isinstance(value, Mapping) or value.get("schema") != WORLD_MODEL_SCHEMA:
+            raise ValueError("invalid world query result schema")
+        query = WorldQuery.from_jsonable(value.get("query"))
+        facts, events = value.get("facts", []), value.get("events", [])
+        if (not isinstance(facts, (tuple, list)) or not isinstance(events, (tuple, list))
+                or len(facts) > query.limit or len(events) > query.limit):
+            raise ValueError("query result exceeds bounded capacity")
+        return cls(value.get("revision"), value.get("observation_time_ns"), value.get("clock_epoch"), query,
+                   tuple(WorldFact.from_jsonable(item) for item in facts),
+                   tuple(WorldEvent.from_jsonable(item) for item in events),
+                   value.get("history_first_sequence"), value.get("history_last_sequence"),
+                   value.get("history_dropped", 0), value.get("facts_evicted", 0),
+                   value.get("truncated", False), value.get("history_gap", False))
+
+
 class PublicWorldModel:
     """Single host-owned semantic snapshot plus a bounded observation history."""
 
@@ -264,7 +512,8 @@ class PublicWorldModel:
                  policies: Mapping[str, FreshnessPolicy] | None = None,
                  max_facts: int = 256, history_capacity: int = 512,
                  max_facts_bytes: int = DEFAULT_FACTS_BYTES,
-                 max_history_bytes: int = DEFAULT_HISTORY_BYTES) -> None:
+                 max_history_bytes: int = DEFAULT_HISTORY_BYTES,
+                 event_sink: Callable[[WorldEvent], None] | None = None) -> None:
         for name, value in (("max_facts", max_facts), ("history_capacity", history_capacity),
                             ("max_facts_bytes", max_facts_bytes), ("max_history_bytes", max_history_bytes)):
             if _integer(value, name) == 0:
@@ -294,17 +543,32 @@ class PublicWorldModel:
         self._history_sizes: deque[int] = deque()
         self._history_bytes = 0
         self._lock = threading.RLock()
+        self._event_sink_errors = 0
+        self.set_event_sink(event_sink)
+
+    def set_event_sink(self, sink: Callable[[WorldEvent], None] | None) -> None:
+        """Attach the host's single passive observation consumer."""
+        if sink is not None and not callable(sink):
+            raise ValueError("event sink must be callable")
+        with self._lock:
+            self._event_sink = sink
+
+    @property
+    def event_sink_errors(self) -> int:
+        with self._lock:
+            return self._event_sink_errors
 
     def observe(self, entity_id: str, attribute: str, value: object, *, domain: str,
                 measurement_time_ns: int, confidence: float, source: str,
                 observation_time_ns: int | None = None, lineage: object = (),
                 sequence: int | None = None, revision: int | str | None = None,
-                clock_epoch: str | None = None) -> WorldEvent:
+                clock_epoch: str | None = None,
+                validity_scope: ValidityScope | Mapping[str, object] | None = None) -> WorldEvent:
         host_now = _integer(self._clock_ns(), "clock_ns")
         observation = WorldObservation(entity_id, attribute, domain, value, measurement_time_ns,
                                        host_now if observation_time_ns is None else observation_time_ns,
                                        confidence, source, lineage, clock_epoch or self.clock_epoch,
-                                       sequence, revision)
+                                       sequence, revision, validity_scope)
         if observation.domain not in self.policies:
             raise ValueError(f"no freshness policy for domain: {observation.domain}")
         if observation.clock_epoch != self.clock_epoch:
@@ -326,7 +590,8 @@ class PublicWorldModel:
                     accepted, reason = False, "OUT_OF_ORDER_SEQUENCE"
                 elif observation.measurement_time_ns == old.measurement_time_ns:
                     if observation == old or (observation.source == old.source and observation.revision == old.revision and
-                                              observation.value == old.value and observation.confidence == old.confidence):
+                                              observation.value == old.value and observation.confidence == old.confidence and
+                                              observation.validity_scope == old.validity_scope):
                         accepted, reason = False, "DUPLICATE"
                     elif observation.value != old.value:
                         reason, conflicts = "SAME_TIME_CONFLICT", (old, *prior_conflicts)[:4]
@@ -377,7 +642,16 @@ class PublicWorldModel:
             self._history.append(event)
             self._history_sizes.append(event_size)
             self._history_bytes += event_size
-            return event
+            sink = self._event_sink
+        # Completed evidence is delivered after mutation and outside the model
+        # lock. Capture failure can never roll back or change semantic truth.
+        if sink is not None:
+            try:
+                sink(event)
+            except Exception:
+                with self._lock:
+                    self._event_sink_errors += 1
+        return event
 
     def _fact(self, key: tuple[str, str], now_ns: int) -> WorldFact:
         stored = self._facts.get(key)
@@ -419,6 +693,53 @@ class PublicWorldModel:
         _integer(after_sequence, "after_sequence")
         with self._lock:
             return tuple(event for event in self._history if event.event_sequence > after_sequence)
+
+    def query(self, query: WorldQuery, *, now_ns: int | None = None) -> WorldQueryResult:
+        """Read qualified facts or original episodic evidence without renewing it."""
+        if not isinstance(query, WorldQuery):
+            raise ValueError("public world query must be a WorldQuery")
+        if query.domain is not None and query.domain not in self.policies:
+            raise ValueError(f"no freshness policy for domain: {query.domain}")
+        now = _integer(self._clock_ns() if now_ns is None else now_ns, "now_ns")
+
+        def selected(observation: WorldObservation) -> bool:
+            return ((query.entity_id is None or observation.entity_id == query.entity_id)
+                    and (query.attribute is None or observation.attribute == query.attribute)
+                    and (query.domain is None or observation.domain == query.domain))
+
+        with self._lock:
+            facts, events = [], []
+            truncated = False
+            if query.kind == "facts":
+                for key in sorted(self._facts):
+                    if not selected(self._facts[key][0]):
+                        continue
+                    fact = self._fact(key, now)
+                    scope = fact.observation.validity_scope
+                    if scope is not None and not scope.matches(query.scope):
+                        fact = replace(fact, state=KnowledgeState.UNKNOWN, freshness="SCOPE_MISMATCH")
+                    if query.require_current and (fact.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
+                                                  or fact.freshness != "FRESH"):
+                        continue
+                    if len(facts) == query.limit:
+                        truncated = True
+                        break
+                    facts.append(fact)
+            else:
+                # Episodes retain rejected observations and their original scope;
+                # they are evidence, not qualified current motion goals.
+                for event in self._history:
+                    if event.event_sequence <= query.after_sequence or not selected(event.observation):
+                        continue
+                    if len(events) == query.limit:
+                        truncated = True
+                        break
+                    events.append(event)
+            first = self._history[0].event_sequence if self._history else None
+            last = self._history[-1].event_sequence if self._history else None
+            gap = query.kind == "episodes" and first is not None and query.after_sequence < first - 1
+            return WorldQueryResult(self._revision, now, self.clock_epoch, query, tuple(facts), tuple(events),
+                                    first, last, self._history_dropped, self._facts_evicted, truncated, gap)
 
     def export_state(self) -> dict[str, object]:
         """Return bounded durable evidence; the caller owns all storage I/O."""
@@ -526,6 +847,6 @@ class PublicWorldModel:
         return model
 
 
-__all__ = ["DEFAULT_FRESHNESS_POLICIES", "FreshnessPolicy", "KnowledgeState", "PublicWorldModel",
+__all__ = ["DEFAULT_FRESHNESS_POLICIES", "FreshnessPolicy", "KnowledgeState", "PublicWorldModel", "ValidityScope",
            "WORLD_MODEL_SCHEMA", "WORLD_MODEL_STATE_SCHEMA", "WorldEvent", "WorldFact",
-           "WorldObservation", "WorldSnapshot", "host_clock_epoch"]
+           "WorldLocation", "WorldObservation", "WorldQuery", "WorldQueryResult", "WorldSnapshot", "host_clock_epoch"]

@@ -23,6 +23,7 @@ from v3.capture_behavior import project_behavior_record
 from v3.hri_evidence import HRI_EVENT_TOPIC, load_hri_events_for_capture
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
+from v3.public_runtime_evidence import PublicRuntimeEventFollower
 from v3.runtime_performance import CpuSet, normalize_cpus, apply_process_cpuset, temporary_current_affinity
 from v3.resident_status import (
     RESIDENT_PROCESS_STATUS_SCHEMA,
@@ -83,9 +84,6 @@ def _capture_sidecar_main(
             "capture-process",
             capacity=_CAPTURE_LOCAL_CAPACITY,
             required=True,
-            topics=("v3.capture_record", "v3.capture_transport", HRI_EVENT_TOPIC) + (
-                ("v3.raw_lidar", "v3.raw_lidar_transport") if config.sensor_debug else ()
-            ),
         )
         consumer = McapCaptureConsumer(
             capture_id,
@@ -96,6 +94,8 @@ def _capture_sidecar_main(
             config=config,
         )
         consumer.start()
+        public_events = PublicRuntimeEventFollower(project_root)
+        public_events.start()
         capture_started_ns = time.monotonic_ns()
         expander = CaptureCoreExpander()
         ready_event.set()
@@ -106,6 +106,8 @@ def _capture_sidecar_main(
         raw_end_deadline: float | None = None
         running = True
         while running:
+            for topic, payload in public_events.drain():
+                hub.publish(payload, topic=topic)
             # The LiDAR producer sends full scans directly here. The control
             # interpreter never unpickles/rebuilds/re-pickles raw geometry.
             for _ in range(_RAW_LIDAR_DRAIN_BATCH if raw_lidar_queue is not None else 0):
@@ -171,6 +173,9 @@ def _capture_sidecar_main(
                     Path(project_root), capture_started_ns, time.monotonic_ns()
                 ):
                     hub.publish(hri_event, topic=HRI_EVENT_TOPIC)
+                for batch in public_events.finish():
+                    for topic, payload in batch:
+                        hub.publish(payload, topic=topic)
                 hub.close()
                 result = consumer.finish(finish_request[0], terminal=finish_request[1])
                 result_path = str(result.path) if result is not None else None
@@ -201,6 +206,9 @@ def _capture_sidecar_main(
         except BaseException:
             pass
         ready_event.set()
+    finally:
+        if "public_events" in locals():
+            public_events.close()
 
 
 def _status_sidecar_main(

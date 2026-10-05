@@ -19,6 +19,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Protocol
 
+from r2b4_orchestration.world_model import WorldQuery, WorldQueryResult
+
 
 BEHAVIOR_SCHEMA = "R2B4_BEHAVIOR_STATE_V1"
 BEHAVIOR_EVENT_SCHEMA = "R2B4_BEHAVIOR_EVENT_V1"
@@ -27,6 +29,7 @@ BEHAVIOR_EVENT_SCHEMA = "R2B4_BEHAVIOR_EVENT_V1"
 class RobotOperations(Protocol):
     def capabilities(self) -> Mapping[str, object]: ...
     def read(self, resource: str) -> object: ...
+    def query(self, query: WorldQuery) -> WorldQueryResult: ...
     def execute(self, action: str, **parameters: object) -> object: ...
     def stop(self) -> object: ...
 
@@ -112,6 +115,24 @@ class BehaviorSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class BehaviorWorldQueryReference:
+    """Join an intent to its completed public input without copying fact values."""
+
+    query: WorldQuery
+    world_revision: int
+    observation_time_ns: int
+    clock_epoch: str
+    fact_revisions: tuple[tuple[str, str, int], ...]
+    event_sequences: tuple[int, ...]
+
+    def to_jsonable(self) -> dict[str, object]:
+        return {"query": self.query.to_jsonable(), "world_revision": self.world_revision,
+                "observation_time_ns": self.observation_time_ns, "clock_epoch": self.clock_epoch,
+                "fact_revisions": [list(item) for item in self.fact_revisions],
+                "event_sequences": list(self.event_sequences)}
+
+
+@dataclass(frozen=True, slots=True)
 class BehaviorEvent:
     sequence: int
     kind: str
@@ -120,11 +141,13 @@ class BehaviorEvent:
     action_parameters: tuple[tuple[str, object], ...] = ()
     world_revision: int | None = None
     clock_epoch: str | None = None
+    world_queries: tuple[BehaviorWorldQueryReference, ...] = ()
 
     def to_jsonable(self) -> dict[str, object]:
         return {"sequence": self.sequence, "kind": self.kind, **self.state.to_jsonable(),
                 "action": self.action, "action_parameters": dict(self.action_parameters),
                 "world_revision": self.world_revision, "clock_epoch": self.clock_epoch,
+                "world_queries": [query.to_jsonable() for query in self.world_queries],
                 "schema": BEHAVIOR_EVENT_SCHEMA}
 
 
@@ -214,6 +237,28 @@ class _ProgramPort:
                     self._owner._world_epoch = epoch if isinstance(epoch, str) else None
         return result
 
+    def query(self, query: WorldQuery) -> WorldQueryResult:
+        if not isinstance(query, WorldQuery):
+            raise ValueError("behavior requires a typed public world query")
+        result = self._check().query(query)
+        if not isinstance(result, WorldQueryResult) or result.query != query:
+            raise ValueError("behavior requires the completed typed public world query result")
+        reference = BehaviorWorldQueryReference(
+            result.query, result.revision, result.observation_time_ns, result.clock_epoch,
+            tuple((fact.entity_id, fact.attribute, fact.world_revision) for fact in result.facts),
+            tuple(event.event_sequence for event in result.events),
+        )
+        with self._owner._lock:
+            if (self._owner._generation != self._generation
+                    or self._owner._state.lifecycle not in _RUNNING):
+                raise RuntimeError("behavior has been revoked")
+            if len(self._owner._world_queries) >= 8:
+                raise ValueError("behavior callback exceeded its public world query bound")
+            self._owner._world_revision = result.revision
+            self._owner._world_epoch = result.clock_epoch
+            self._owner._world_queries.append(reference)
+        return result
+
     def execute(self, action: str, **parameters: object) -> object:
         if action not in {"v3.command.navigate", "v3.command.move_relative", "v3.command.turn_by",
                           "v3.command.explore", "v3.command.follow_person", "v3.command.face_person",
@@ -271,6 +316,7 @@ class BehaviorSystem:
         self._state = BehaviorSnapshot(measurement_time_ns=now, observation_time_ns=now)
         self._generation = self._sequence = 0
         self._world_revision = self._world_epoch = None
+        self._world_queries: list[BehaviorWorldQueryReference] = []
         self._program: BehaviorProgram | None = None
         self._factories: dict[str, Callable[[], BehaviorProgram]] = {
             "room_cruise": lambda: _MissionProgram("v3.command.explore", "EXPLORE"),
@@ -325,6 +371,7 @@ class BehaviorSystem:
             self._generation += 1
             generation = self._generation
             self._world_revision = self._world_epoch = None
+            self._world_queries.clear()
             factory = self._factories[name]
             self._program = None
             self._state = BehaviorSnapshot(
@@ -387,6 +434,10 @@ class BehaviorSystem:
             if matching and (status.get("fault_layer") or status.get("state") != "RUNNING"
                              or status.get("safety_decision") == "FAULT"):
                 return self._finish(BehaviorLifecycle.FAILED, "RUNTIME_FAULT", generation=generation, stop=True)
+            with self._lock:
+                if generation != self._generation or self._state.lifecycle not in _RUNNING:
+                    return self._state
+                self._world_queries.clear()
             update = program.step(_ProgramPort(self, generation), state, status)
         except Exception as exc:
             return self._finish(BehaviorLifecycle.FAILED, "STATUS_ERROR:" + type(exc).__name__,
@@ -405,6 +456,8 @@ class BehaviorSystem:
             command_id = update.command_id or self._state.command_id
             changed = (update.lifecycle, update.reason, command_id) != (
                 self._state.lifecycle, self._state.reason, self._state.command_id)
+            if not changed and stamp == self._state.measurement_time_ns:
+                return self._state
             self._state = replace(self._state, lifecycle=update.lifecycle, reason=update.reason,
                                   command_id=command_id, mission_id=f"mission-{command_id}",
                                   measurement_time_ns=stamp, observation_time_ns=now,
@@ -446,7 +499,7 @@ class BehaviorSystem:
                 action_parameters: tuple[tuple[str, object], ...] = ()) -> BehaviorEvent:
         self._sequence += 1
         event = BehaviorEvent(self._sequence, kind, self._state, action, action_parameters,
-                              self._world_revision, self._world_epoch)
+                              self._world_revision, self._world_epoch, tuple(self._world_queries))
         self._history.append(event)
         return event
 
@@ -459,4 +512,5 @@ class BehaviorSystem:
 
 
 __all__ = ["BEHAVIOR_SCHEMA", "BehaviorEvent", "BehaviorLifecycle", "BehaviorProgram",
-           "BehaviorSnapshot", "BehaviorSystem", "BehaviorUpdate", "RobotOperations"]
+           "BehaviorSnapshot", "BehaviorSystem", "BehaviorUpdate", "BehaviorWorldQueryReference",
+           "RobotOperations"]

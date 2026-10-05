@@ -15,6 +15,17 @@ from r2b4_orchestration.behavior_system import (
     BehaviorUpdate,
     RobotOperations,
 )
+from r2b4_orchestration.world_model import (
+    KnowledgeState,
+    ValidityScope,
+    WorldFact,
+    WorldLocation,
+    WorldQuery,
+    WorldQueryResult,
+)
+
+
+_LOCAL_FRAMES = ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL")
 
 
 class SearchPerson:
@@ -22,71 +33,95 @@ class SearchPerson:
 
     def __init__(self) -> None:
         self.entity_id = ""
-        self._places: list[tuple[str, dict[str, object]]] = []
+        self._places: list[tuple[str, WorldLocation]] = []
         self._index = self._wait_steps = self._steps = 0
         self._phase = "NAVIGATING"
         self._observation_steps = 5
         self._max_steps = 2048
         self._observation_timeout_s = 1.0
         self._parameters: dict[str, object] = {}
+        self._query_time_ns = 0
 
     @staticmethod
-    def _facts(world: object) -> tuple[Mapping[str, object], ...]:
-        if not isinstance(world, Mapping):
-            raise ValueError("search requires a public world snapshot")
-        facts = world.get("facts")
-        if not isinstance(facts, (tuple, list)) or len(facts) > 512:
-            raise ValueError("search requires bounded public world facts")
-        return tuple(fact for fact in facts if isinstance(fact, Mapping))
+    def _runtime(robot: RobotOperations) -> Mapping[str, object]:
+        runtime = robot.read("operator.status")
+        if not isinstance(runtime, Mapping):
+            raise ValueError("search requires the public runtime context")
+        return runtime
 
     @staticmethod
-    def _target(fact: Mapping[str, object]) -> dict[str, object] | None:
-        value = fact.get("value")
-        if not isinstance(value, Mapping) or value.get("frame_id") not in {
-            "R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL",
-        }:
+    def _scope(runtime: Mapping[str, object], frame_id: str) -> ValidityScope | None:
+        pid = runtime.get("runtime_pid")
+        if runtime.get("runtime_running") is not True or type(pid) is not int or pid <= 0:
             return None
-        target: dict[str, object] = {"frame_id": value["frame_id"]}
-        for name in ("x_m", "y_m"):
-            number = value.get(name)
-            if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number):
-                return None
-            target[name] = number
-        return target
+        status = runtime.get("status")
+        world = status.get("world") if isinstance(status, Mapping) else None
+        revision = world.get("map_revision") if isinstance(world, Mapping) else None
+        if not (type(revision) is int and revision >= 0 or isinstance(revision, str) and revision):
+            revision = None
+        return ValidityScope(frame_id=frame_id, runtime_pid=pid, map_revision=revision)
 
-    def _person(self, facts: tuple[Mapping[str, object], ...]) -> Mapping[str, object] | None:
-        return next((fact for fact in facts if fact.get("entity_id") == self.entity_id
-                     and fact.get("attribute") == "location" and fact.get("domain") == "person_position"), None)
+    @staticmethod
+    def _target(location: WorldLocation | None) -> dict[str, object] | None:
+        if (location is None or location.frame_id not in _LOCAL_FRAMES
+                or location.x_m is None or location.y_m is None):
+            return None
+        return {"frame_id": location.frame_id, "x_m": location.x_m, "y_m": location.y_m}
 
-    def _found(self, facts: tuple[Mapping[str, object], ...]) -> BehaviorUpdate | None:
-        person = self._person(facts)
-        if person is None:
+    def _person_query(self, robot: RobotOperations, *, current: bool,
+                      scope: ValidityScope | None = None) -> WorldQueryResult:
+        result = robot.query(WorldQuery(entity_id=self.entity_id, attribute="location",
+                                       domain="person_position", require_current=current,
+                                       scope=scope, limit=1))
+        self._query_time_ns = result.observation_time_ns
+        return result
+
+    def _found_fact(self, person: WorldFact) -> BehaviorUpdate | None:
+        observation, location = person.observation, person.location
+        if (person.entity_id != self.entity_id or person.attribute != "location"
+                or observation is None or observation.domain != "person_position"
+                or person.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
+                or person.freshness != "FRESH" or not observation.source or not observation.lineage):
             return None
-        if (person.get("state") not in {"KNOWN", "LIKELY"} or person.get("freshness") != "FRESH"
-                or not person.get("source") or not person.get("lineage")
-                or type(person.get("measurement_time_ns")) is not int
-                or type(person.get("observation_time_ns")) is not int):
+        if location is None or not (location.place_id or self._target(location)):
             return None
-        value = person.get("value")
-        if not isinstance(value, Mapping) or not (value.get("place_id") or self._target(person)):
+        if (not location.place_id and (observation.validity_scope is None
+                                       or observation.validity_scope.runtime_pid is None)):
             return None
-        source = str(person["source"])[:96]
+        source = observation.source[:96]
         return BehaviorUpdate(BehaviorLifecycle.COMPLETED,
-                              f"TARGET_OBSERVED:{self.entity_id}:source={source}:measurement={person['measurement_time_ns']}")
+                              f"TARGET_OBSERVED:{self.entity_id}:source={source}:measurement={observation.measurement_time_ns}")
+
+    def _found(self, robot: RobotOperations, *, runtime: Mapping[str, object] | None = None) -> BehaviorUpdate | None:
+        result = self._person_query(robot, current=True)
+        for fact in result.facts:
+            found = self._found_fact(fact)
+            if found is not None:
+                return found
+        runtime = self._runtime(robot) if runtime is None else runtime
+        for frame_id in _LOCAL_FRAMES:
+            scope = self._scope(runtime, frame_id)
+            if scope is not None:
+                for fact in self._person_query(robot, current=True, scope=scope).facts:
+                    found = self._found_fact(fact)
+                    if found is not None:
+                        return found
+        return None
 
     def _navigate(self, robot: RobotOperations) -> object:
-        place, _ = self._places[self._index]
-        fact = next((fact for fact in self._facts(robot.read("world.snapshot"))
-                     if fact.get("entity_id") == place and fact.get("attribute") == "location"
-                     and fact.get("domain") == "room_topology"), None)
-        target = self._target(fact) if fact is not None else None
-        if target is None or fact.get("state") not in {"KNOWN", "LIKELY"} or fact.get("freshness") != "FRESH":
-            raise ValueError("candidate place location is no longer available")
-        runtime = robot.read("operator.status")
-        expected_pid = fact["value"].get("runtime_pid")
-        if (not isinstance(runtime, Mapping) or type(expected_pid) is not int or expected_pid <= 0
-                or runtime.get("runtime_running") is not True or runtime.get("runtime_pid") != expected_pid):
+        place, previous_location = self._places[self._index]
+        runtime = self._runtime(robot)
+        scope = self._scope(runtime, previous_location.frame_id)
+        if scope is None:
             raise ValueError("candidate place coordinates do not belong to the current V3 runtime")
+        facts = robot.query(WorldQuery(entity_id=place, attribute="location", domain="room_topology",
+                                       require_current=True, scope=scope, limit=1)).facts
+        fact = facts[0] if facts else None
+        target = self._target(fact.location) if fact is not None else None
+        if (target is None or fact.observation.validity_scope is None
+                or fact.observation.validity_scope.runtime_pid != scope.runtime_pid):
+            raise ValueError("candidate place location is no longer available in the current runtime scope")
+        expected_pid = scope.runtime_pid
         mode, hz = runtime.get("capture_mode"), runtime.get("capture_hz")
         if mode not in {"alap", "full", "nincs"} or type(hz) is not int or hz <= 0:
             raise ValueError("current runtime capture identity is unavailable")
@@ -97,7 +132,7 @@ class SearchPerson:
         if mode == "alap" and params.get("capture") is True:
             raise ValueError("a fresh bounded capture slot can restart the world-bound runtime")
         params.update(capture=False, capture_mode=mode, capture_hz=hz, expected_runtime_pid=expected_pid)
-        self._places[self._index] = (place, target)
+        self._places[self._index] = (place, fact.location)
         return robot.execute("v3.command.navigate", **target, **params)
 
     @staticmethod
@@ -128,31 +163,39 @@ class SearchPerson:
         if set(params) - allowed:
             raise ValueError("unsupported search parameter")
         self._parameters = params
-        world = robot.read("world.snapshot")
-        facts = self._facts(world)
-        found = self._found(facts)
+        found = self._found(robot)
         if found is not None:
             return found
-        locations = {}
-        for fact in facts:
-            if (fact.get("attribute") == "location" and fact.get("domain") == "room_topology"
-                    and fact.get("state") in {"KNOWN", "LIKELY"} and fact.get("freshness") == "FRESH"):
-                target = self._target(fact)
-                place_id = fact.get("entity_id")
-                if target is not None and isinstance(place_id, str):
-                    locations[place_id] = target
+        runtime = self._runtime(robot)
+        locations: dict[str, WorldLocation] = {}
+        for frame_id in _LOCAL_FRAMES:
+            scope = self._scope(runtime, frame_id)
+            if scope is None:
+                continue
+            result = robot.query(WorldQuery(attribute="location", domain="room_topology",
+                                            require_current=True, scope=scope, limit=64))
+            for fact in result.facts:
+                if (self._target(fact.location) is not None
+                        and fact.observation.validity_scope is not None
+                        and fact.observation.validity_scope.runtime_pid == scope.runtime_pid):
+                    locations[fact.entity_id] = fact.location
         names = sorted(locations)[:32] if requested is None else list(dict.fromkeys(requested))
         if not names or any(name not in locations for name in names):
             raise ValueError("search requires known candidate place locations")
-        last = self._person(facts)
-        last_value = last.get("value") if last is not None else None
-        last_place = last_value.get("place_id") if isinstance(last_value, Mapping) else None
-        last_target = self._target(last) if last is not None else None
+        last_facts = self._person_query(robot, current=False).facts
+        last = last_facts[0] if last_facts else None
+        last_location = last.location if last is not None and not last.conflicts else None
+        last_place = last_location.place_id if last_location is not None else None
+        last_target = self._target(last_location)
+        last_scope = last.observation.validity_scope if last is not None and last.observation else None
+        if (last_scope is None or last_scope.runtime_pid != runtime.get("runtime_pid")
+                or not last_scope.matches(self._scope(runtime, last_location.frame_id))):
+            last_target = None
 
         def rank(name: str):
             target = locations[name]
-            distance = (math.hypot(target["x_m"] - last_target["x_m"], target["y_m"] - last_target["y_m"])
-                        if last_target is not None and target["frame_id"] == last_target["frame_id"] else math.inf)
+            distance = (math.hypot(target.x_m - last_target["x_m"], target.y_m - last_target["y_m"])
+                        if last_target is not None and target.frame_id == last_target["frame_id"] else math.inf)
             return (name != last_place, distance, names.index(name))
 
         names = sorted(names, key=rank)
@@ -170,9 +213,7 @@ class SearchPerson:
             if state.lifecycle is BehaviorLifecycle.ACTIVE:
                 return BehaviorUpdate(BehaviorLifecycle.CANCELLED, "MISSION_PREEMPTED")
             return None
-        world = robot.read("world.snapshot")
-        facts = self._facts(world)
-        found = self._found(facts)
+        found = self._found(robot)
         if found is not None:
             return found
         if mission.get("mode") != "NAVIGATE":
@@ -191,14 +232,12 @@ class SearchPerson:
         if self._phase == "NAVIGATING":
             if nav_status != "COMPLETE":
                 return BehaviorUpdate(BehaviorLifecycle.ACTIVE, "SEARCH_NAVIGATING:" + place)
-            observed_ns = world.get("observation_time_ns")
-            if type(observed_ns) is not int:
-                raise ValueError("public snapshot observation time is unavailable")
+            observed_ns = self._query_time_ns
             deadline = min(state.deadline_ns / 1e9, observed_ns / 1e9 + self._observation_timeout_s)
             # JPEG content is deliberately not assigned semantic identity here.
             robot.execute("vision.observe", stream="lores", deadline=deadline)
             self._phase, self._wait_steps = "WAITING", 0
-            found = self._found(self._facts(robot.read("world.snapshot")))
+            found = self._found(robot)
             return found or BehaviorUpdate(BehaviorLifecycle.ACTIVE, "SEARCH_OBSERVING:" + place)
         self._wait_steps += 1
         if self._wait_steps < self._observation_steps:

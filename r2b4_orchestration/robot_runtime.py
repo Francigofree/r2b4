@@ -20,17 +20,20 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from collections.abc import Mapping
 from collections import deque
 from pathlib import Path
 
 from r2b4_orchestration.behavior_system import BehaviorSystem
-from r2b4_orchestration.world_model import PublicWorldModel
+from r2b4_orchestration.world_model import PublicWorldModel, WorldQuery, WorldQueryResult
+from r2b4_orchestration.semantic_projector import SemanticProjector
 
 SCHEMA = "R2B4_PUBLIC_ROBOT_RUNTIME_V1"
 MAX_REQUEST_BYTES = 65_536
 MAX_REPLY_BYTES = 1_048_576
 READS = frozenset({"robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history"})
+QUERIES = frozenset({"world.query"})
 ACTIONS = frozenset({"world.observe", "behavior.room_cruise", "behavior.follow_person",
                      "behavior.search_person", "behavior.start", "behavior.cancel"})
 
@@ -134,6 +137,11 @@ class PublicRobotClient:
             self._terminate_unresponsive_owner()
             raise
 
+    def query(self, query: WorldQuery) -> WorldQueryResult:
+        if not isinstance(query, WorldQuery):
+            raise TypeError("public world query must be a WorldQuery")
+        return WorldQueryResult.from_jsonable(self.request("query", query=query.to_jsonable()))
+
     def revoke(self, reason: str) -> object:
         try:
             return self.request("revoke", launch=False, timeout_s=0.5, reason=reason)
@@ -169,13 +177,19 @@ class PublicRobotRuntime:
         self._storage_lock = threading.Lock()
         self._action_lock = threading.Lock()
         self._generation = 0
-        self._last_status_identity = None
         self._last_persist_ns = 0
         self._health_error = None
         self._persisted_revision = -1
         self._evidence_queue = deque(maxlen=256)
         self._evidence_lock = threading.Lock()
+        self._evidence_write_lock = threading.Lock()
+        self._evidence_sequence = 0
+        self._evidence_dropped = 0
+        self._reported_evidence_dropped = 0
+        self._evidence_producer_id = str(uuid.uuid4())
         self._world_evidence_pending = 0
+        self.world.set_event_sink(self._world_event)
+        self.projector = SemanticProjector(self.world, clock_ns=clock_ns)
         self._caller_pid = None
         program_interface = interface
         if hasattr(interface, "adapters"):
@@ -197,98 +211,67 @@ class PublicRobotRuntime:
                 except (OSError, TypeError, ValueError, KeyError) as exc:
                     self._health_error = f"WORLD_RESTORE_FAILED:{type(exc).__name__}:{exc}"
 
-    def _evidence(self, kind: str, value: object) -> None:
+    def _evidence(self, record: Mapping[str, object]) -> None:
         if self.root is None:
             return
         directory = self.root / "runtime" / "public_world"
         directory.mkdir(parents=True, exist_ok=True)
-        record = {"schema": SCHEMA, "kind": kind, "publication_time_ns": self.clock_ns(),
-                  "clock_epoch": self.world.clock_epoch, "value": _jsonable(value)}
         with (directory / "events.ndjson").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(record, allow_nan=False, separators=(",", ":")) + "\n")
 
+    def _event_record(self, kind: str, value: object) -> dict[str, object]:
+        self._evidence_sequence += 1
+        return {"schema": SCHEMA, "kind": kind, "publication_time_ns": self.clock_ns(),
+                "clock_epoch": self.world.clock_epoch, "value": _jsonable(value),
+                "producer_id": self._evidence_producer_id, "event_sequence": self._evidence_sequence,
+                "evidence_dropped": self._evidence_dropped}
+
+    def _queue_evidence(self, kind: str, value: object, *, world_input: bool = False) -> None:
+        with self._evidence_lock:
+            if (len(self._evidence_queue) == self._evidence_queue.maxlen
+                    or world_input and self._world_evidence_pending >= 4):
+                self._evidence_sequence += 1
+                self._evidence_dropped += 1
+                self._health_error = "PUBLIC_RUNTIME_EVIDENCE_OVERFLOW"
+                return
+            self._evidence_queue.append(self._event_record(kind, value))
+            if world_input:
+                self._world_evidence_pending += 1
+
+    def _world_event(self, event: object) -> None:
+        self._queue_evidence("observation", event)
+
     def _behavior_event(self, event: object) -> None:
         # Revocation and STOP never wait for filesystem evidence writes.
-        with self._evidence_lock:
-            if len(self._evidence_queue) == self._evidence_queue.maxlen:
-                self._health_error = "BEHAVIOR_EVIDENCE_OVERFLOW"
-            self._evidence_queue.append(("behavior", event))
+        self._queue_evidence("behavior", event)
 
     def world_input_evidence(self, snapshot: Mapping[str, object]) -> None:
         # Only behavior inputs are recorded here; ordinary UI state reads do not
         # generate repeated evidence. Keep the public, compact semantic snapshot
         # so an intent's world revision remains reconstructable after supersede.
-        with self._evidence_lock:
-            if self._world_evidence_pending >= 4 or len(self._evidence_queue) == self._evidence_queue.maxlen:
-                self._health_error = "WORLD_INPUT_EVIDENCE_OVERFLOW"
-                return
-            self._evidence_queue.append(("world_input", snapshot))
-            self._world_evidence_pending += 1
+        self._queue_evidence("world_input", snapshot, world_input=True)
 
     def _flush_evidence(self) -> None:
-        with self._evidence_lock:
-            events = tuple(self._evidence_queue)
-            self._evidence_queue.clear()
-            self._world_evidence_pending = 0
-        for kind, event in events:
-            try:
-                self._evidence(kind, event)
-            except (OSError, ValueError) as exc:
-                self._health_error = f"EVIDENCE_WRITE_FAILED:{type(exc).__name__}:{exc}"
-                break
+        with self._evidence_write_lock:
+            with self._evidence_lock:
+                events = list(self._evidence_queue)
+                self._evidence_queue.clear()
+                self._world_evidence_pending = 0
+                if self._evidence_dropped != self._reported_evidence_dropped:
+                    events.append(self._event_record("evidence_loss", {"dropped": self._evidence_dropped}))
+                    self._reported_evidence_dropped = self._evidence_dropped
+            for index, event in enumerate(events):
+                try:
+                    self._evidence(event)
+                except (OSError, ValueError) as exc:
+                    with self._evidence_lock:
+                        self._evidence_dropped += len(events) - index
+                    self._health_error = f"EVIDENCE_WRITE_FAILED:{type(exc).__name__}:{exc}"
+                    break
 
     def ingest_status(self, status: Mapping[str, object], *, runtime_pid: object = None) -> None:
         """Consume completed status; preserve source times, frame and session."""
-        stamp = status.get("monotonic_ns")
-        tick = status.get("tick_id")
-        if type(stamp) is not int or stamp < 0 or type(tick) is not int or tick < 0:
-            return
-        identity = (runtime_pid, tick, stamp)
-        if identity == self._last_status_identity:
-            return
-        self._last_status_identity = identity
-        now = self.clock_ns()
-        if stamp > now:
-            return
-        source = f"v3:{runtime_pid}"
-        lineage = (f"runtime:{runtime_pid}", f"tick:{tick}")
-        common = dict(measurement_time_ns=stamp, observation_time_ns=now,
-                      confidence=1.0, source=source, lineage=lineage, sequence=tick)
-        for attribute, value, domain in (
-            ("mission", status.get("mission"), "robot_state"),
-            ("health", status.get("source_health"), "health"),
-            ("safety", {key: status.get(key) for key in (
-                "state", "safety_decision", "safety_reason", "fault_layer", "enabled")}, "robot_state"),
-        ):
-            self.world.observe("robot", attribute, value, domain=domain, **common)
-        estimate = status.get("estimate")
-        if isinstance(estimate, Mapping):
-            quality = estimate.get("localization_quality")
-            quality = quality if isinstance(quality, Mapping) else {}
-            confidence = {"GOOD": 1.0, "DEGRADED": 0.5, "LOST": 0.0}.get(quality.get("global_position"), 0.0)
-            self.world.observe("robot", "pose", dict(estimate), domain="pose",
-                               **{**common, "confidence": confidence,
-                                  "lineage": (*lineage, "L3:estimate_reference_time")})
-        local = status.get("world")
-        if isinstance(local, Mapping):
-            for track in local.get("person_tracks", ()):
-                if not isinstance(track, Mapping):
-                    continue
-                measured = track.get("measurement_monotonic_ns")
-                # A predicted publication is never a new physical measurement.
-                if type(measured) is not int or not 0 <= measured <= stamp:
-                    continue
-                track_id = track.get("track_id")
-                if not isinstance(track_id, str):
-                    continue
-                confidence = track.get("confidence", 0.0)
-                if track.get("estimate_status") != "OBSERVED":
-                    continue
-                self.world.observe(f"person:{runtime_pid}:{track_id}", "location",
-                    {"x_m": track.get("x_m"), "y_m": track.get("y_m"),
-                     "frame_id": local.get("frame_id"), "runtime_pid": runtime_pid,
-                     "track_id": track_id}, domain="person_position",
-                    **{**common, "measurement_time_ns": measured, "confidence": confidence})
+        self.projector.completed_status(status, runtime_pid=runtime_pid)
 
     def poll(self) -> None:
         try:
@@ -313,13 +296,7 @@ class PublicRobotRuntime:
             except ProcessLookupError:
                 self.preempt("REQUEST_OWNER_EXITED")
         with self._state_lock:
-            behavior = self.behaviors.snapshot().to_jsonable()
-            now = self.clock_ns()
-            self.world.observe("robot", "behavior", behavior, domain="behavior_state",
-                               measurement_time_ns=now, confidence=1.0,
-                               source="behavior_system", lineage=(f"host_pid:{os.getpid()}",
-                                   f"behavior:{behavior.get('behavior_id') or 'IDLE'}",
-                                   f"revision:{behavior.get('revision')}"))
+            self.projector.completed_behavior(self.behaviors.snapshot())
         self._persist()
         self._flush_evidence()
 
@@ -387,6 +364,10 @@ class PublicRobotRuntime:
                                    "reason": self._health_error}}
         raise KeyError(resource)
 
+    def query(self, query: WorldQuery) -> WorldQueryResult:
+        with self._state_lock:
+            return self.world.query(query)
+
     def preempt(self, reason: str) -> object:
         self.revoke(reason)
         try:
@@ -411,10 +392,6 @@ class PublicRobotRuntime:
         if action == "world.observe":
             with self._state_lock:
                 event = self.world.observe(**params)
-            with self._evidence_lock:
-                if len(self._evidence_queue) == self._evidence_queue.maxlen:
-                    self._health_error = "OBSERVATION_EVIDENCE_OVERFLOW"
-                self._evidence_queue.append(("observation", event))
             self._persist(force=True)
             return _jsonable(event)
         if action == "behavior.cancel":
@@ -463,7 +440,7 @@ class PublicRobotRuntime:
 
 class PublicRobotInterfaceAdapter:
     name = "public_robot"
-    capability_names = READS | ACTIONS
+    capability_names = READS | QUERIES | ACTIONS
 
     def __init__(self, client: PublicRobotClient, controller: object | None = None):
         self.client = client
@@ -471,9 +448,9 @@ class PublicRobotInterfaceAdapter:
 
     def capabilities(self):
         from v3.action_catalog import action_descriptor
-        result = {name: {"kind": "read" if name in READS else "action", "supported": True,
+        result = {name: {"kind": "read" if name in READS | QUERIES else "action", "supported": True,
                        "available": True, "ready": True, "owner": "host",
-                       "reason": "V3_INDEPENDENT_PUBLIC_STATE" if name in READS or name == "world.observe"
+                       "reason": "V3_INDEPENDENT_PUBLIC_STATE" if name in READS | QUERIES or name == "world.observe"
                        else "CANONICAL_V3_EXECUTION",}
                 for name in self.capability_names}
         for name, item in result.items():
@@ -496,6 +473,11 @@ class PublicRobotInterfaceAdapter:
     def read(self, resource: str) -> object:
         return self.client.request("read", resource=resource)
 
+    def query(self, query: WorldQuery) -> WorldQueryResult:
+        if not isinstance(query, WorldQuery):
+            raise TypeError("public world query must be a WorldQuery")
+        return WorldQueryResult.from_jsonable(self.client.request("query", query=query.to_jsonable()))
+
     def execute(self, action: str, **parameters: object) -> object:
         return self.client.request("execute", action=action, parameters=parameters)
 
@@ -503,19 +485,24 @@ class PublicRobotInterfaceAdapter:
 class PublicRobotStateAdapter:
     """The behavior's injected RobotInterface reads the same owned world state."""
     name = "public_world_state"
-    capability_names = READS
+    capability_names = READS | QUERIES
 
     def __init__(self, runtime: PublicRobotRuntime):
         self.runtime = runtime
 
     def capabilities(self):
         return {name: {"kind": "read", "supported": True, "available": True, "ready": True}
-                for name in READS}
+                for name in self.capability_names}
 
     def read(self, resource: str):
         result = self.runtime.read(resource)
         if resource == "world.snapshot":
             self.runtime.world_input_evidence(result)
+        return result
+
+    def query(self, query: WorldQuery) -> WorldQueryResult:
+        result = self.runtime.query(query)
+        self.runtime._queue_evidence("world_query", result)
         return result
 
     def execute(self, action: str, **parameters: object):
@@ -553,6 +540,8 @@ def serve(root: Path, socket_path: Path) -> int:
                     operation = request.get("operation")
                     if operation == "read" and request.get("resource") in READS:
                         result = runtime.read(request["resource"])
+                    elif operation == "query":
+                        result = runtime.query(WorldQuery.from_jsonable(request.get("query"))).to_jsonable()
                     elif operation == "execute" and request.get("action") in ACTIONS:
                         result = runtime.execute(request["action"], request.get("parameters", {}))
                     elif operation == "preempt":

@@ -25,6 +25,7 @@ from v3.capture_rate import CAPTURE_HZ_VALUES, CONTROL_CAPTURE_HZ, DEFAULT_CAPTU
 from v3.capture_behavior import project_behavior_record
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
+from v3.public_runtime_evidence import PublicRuntimeEventFollower
 from v3.adapters.native_lidar_port import (
     TimedPoseReference,
     NativeLidarPortConfig,
@@ -212,16 +213,19 @@ class McapCaptureSession:
 
     def __init__(self, capture_id: str, output_path: Path, *,
                  configuration: Mapping[str, object], metadata: Mapping[str, object] | None = None,
-                 config: McapCaptureConfig | None = None, capacity: int = 256) -> None:
+                 config: McapCaptureConfig | None = None, capacity: int = 256,
+                 project_root: str | Path | None = None) -> None:
         self.hub = ObservationHub()
         self.config = config or McapCaptureConfig()
         self.subscription = self.hub.subscribe_reliable(
             "capture", capacity=capacity, required=True,
-            topics=("v3.capture_record",) + (("v3.raw_lidar",) if self.config.sensor_debug else ()),
         )
         self.worker = McapCaptureConsumer(capture_id, output_path,
                                          subscription=self.subscription,
                                          configuration=configuration, metadata=metadata, config=self.config)
+        self._public_events = PublicRuntimeEventFollower(project_root) if project_root is not None else None
+        self._public_stop = threading.Event()
+        self._public_thread = None
 
     @property
     def failed(self) -> bool:
@@ -229,6 +233,22 @@ class McapCaptureSession:
 
     def start(self) -> None:
         self.worker.start()
+        if self._public_events is not None:
+            self._public_events.start()
+            self._public_thread = threading.Thread(target=self._follow_public_events,
+                name="v3-public-runtime-evidence", daemon=False)
+            self._public_thread.start()
+
+    def _follow_public_events(self) -> None:
+        try:
+            while not self._public_stop.wait(0.01):
+                for topic, payload in self._public_events.drain():
+                    self.hub.publish(payload, topic=topic)
+            for batch in self._public_events.finish():
+                for topic, payload in batch:
+                    self.hub.publish(payload, topic=topic)
+        finally:
+            self._public_events.close()
 
     def observe(self, record: CaptureRecord) -> None:
         if self.hub.has_subscribers("v3.capture_record"):
@@ -242,6 +262,11 @@ class McapCaptureSession:
 
     def finalize(self, report: ResidentRuntimeReport | None, *, error: BaseException | None = None) -> Path | None:
         # Called after hardware ownership and every producer have returned.
+        self._public_stop.set()
+        if self._public_thread is not None:
+            self._public_thread.join(timeout=5.0)
+            if self._public_thread.is_alive():
+                raise RuntimeError("public runtime evidence collector did not stop")
         self.hub.close()
         status = "PASS" if error is None and report is not None and report.status == 0 else "FAULT"
         result = self.worker.finish(status, terminal=True)

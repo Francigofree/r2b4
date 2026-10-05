@@ -10,7 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from r2b4_orchestration.world_model import WorldQuery, WorldQueryResult
 
 from v3.action_catalog import ACTION_CATALOG_SCHEMA, action_catalog_jsonable
 from v3.interface_adapters import build_adapters
@@ -117,6 +120,13 @@ class RobotInterface:
             reason = capability.get("reason") or "UNAVAILABLE"
             raise RobotInterfaceError(f"resource unavailable: {resource}: {reason}")
         return adapter.read(resource)
+
+    def query(self, query: WorldQuery) -> WorldQueryResult:
+        """Read typed host knowledge without granting V3 state authority."""
+        adapter, capability = self._resolve("world.query", expected_kind="read")
+        if capability.get("supported") is not True or capability.get("available") is not True:
+            raise RobotInterfaceError("public world query unavailable: " + str(capability.get("reason") or "UNAVAILABLE"))
+        return adapter.query(query)
 
     def execute(self, action: str, **parameters: object) -> object:
         if action == "v3.command.stop":

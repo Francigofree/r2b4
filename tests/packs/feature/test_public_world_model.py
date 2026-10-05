@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+from dataclasses import FrozenInstanceError
+from threading import Thread
 
 import pytest
 
-from r2b4_orchestration.world_model import FreshnessPolicy, KnowledgeState, PublicWorldModel
+from r2b4_orchestration.world_model import (
+    FreshnessPolicy, KnowledgeState, PublicWorldModel, ValidityScope,
+    WorldLocation, WorldQuery, WorldQueryResult,
+)
 
 
 SECOND = 1_000_000_000
@@ -249,3 +254,142 @@ def test_repeat_physical_measurement_does_not_rewrite_measurement_lineage_on_new
     assert fact.observation.sequence == 10
     assert fact.observation.observation_time_ns == 2 * SECOND
     assert fact.age_ns == 2 * SECOND
+
+
+def test_typed_query_roundtrip_is_immutable_exact_and_does_not_renew_evidence():
+    now = [2 * SECOND]
+    model = model_at(now)
+    person(model, {"place_id": "room:kitchen"})
+    model.observe("room:kitchen", "topology", {"door": "hall"}, domain="room_topology",
+                  measurement_time_ns=SECOND, confidence=1.0, source="mapper")
+    query = WorldQuery(entity_id="person:laci", attribute="last_observed_location",
+                       domain="person_position", limit=1, require_current=True)
+    assert WorldQuery.from_jsonable(json.loads(json.dumps(query.to_jsonable()))) == query
+    result = model.query(query)
+    restored = WorldQueryResult.from_jsonable(json.loads(json.dumps(result.to_jsonable())))
+    assert restored == result
+    assert result.facts[0].location == WorldLocation(place_id="room:kitchen")
+    assert result.facts[0].domain == "person_position"
+    with pytest.raises(FrozenInstanceError):
+        restored.query.limit = 2
+    with pytest.raises(TypeError):
+        restored.facts[0].value["place_id"] = "room:hall"
+    now[0] += 2 * SECOND
+    assert not model.query(query).facts
+    evidence = model.query(WorldQuery(entity_id="person:laci")).facts[0]
+    assert evidence.observation.measurement_time_ns == SECOND
+    assert evidence.observation.observation_time_ns == 2 * SECOND
+    assert evidence.age_ns == 3 * SECOND
+    with pytest.raises(ValueError, match="policy"):
+        model.query(WorldQuery(domain="unregistered"))
+    with pytest.raises(ValueError, match="limit"):
+        WorldQuery(limit=65)
+
+
+def test_spatial_queries_require_all_declared_scope_fields_and_reject_previous_runtime():
+    now = [2 * SECOND]
+    model = model_at(now)
+    model.observe("room:kitchen", "location",
+                  {"x_m": 1.0, "y_m": 2.0, "frame_id": "map", "runtime_pid": 7, "map_revision": 3},
+                  domain="room_topology", measurement_time_ns=SECOND, confidence=1.0, source="mapper")
+    scope = ValidityScope(frame_id="map", runtime_pid=7, map_revision=3)
+    fact = model.query(WorldQuery(entity_id="room:kitchen", scope=scope)).facts[0]
+    assert fact.observation.validity_scope == scope
+    assert fact.state is KnowledgeState.KNOWN
+    assert fact.location == WorldLocation(x_m=1, y_m=2, frame_id="map")
+    for invalid_context in (None, ValidityScope(runtime_pid=7),
+                            ValidityScope(frame_id="map", runtime_pid=8, map_revision=3),
+                            ValidityScope(frame_id="map", runtime_pid=7, map_revision=4)):
+        query = WorldQuery(entity_id="room:kitchen", scope=invalid_context)
+        invalid = model.query(query).facts[0]
+        assert invalid.state is KnowledgeState.UNKNOWN
+        assert invalid.freshness == "SCOPE_MISMATCH"
+        assert invalid.observation == fact.observation
+        assert not model.query(WorldQuery(entity_id="room:kitchen", scope=invalid_context,
+                                          require_current=True)).facts
+    assert WorldQueryResult.from_jsonable(model.query(WorldQuery(scope=scope)).to_jsonable()).facts == (fact,)
+    state = model.export_state()
+    restored = PublicWorldModel.from_state(state, clock_ns=lambda: now[0], clock_epoch="boot-a")
+    assert restored.query(WorldQuery(scope=scope)).facts == (fact,)
+    # Old durable records carry their session/frame in the value rather than a
+    # typed scope. Reading them must enforce the same qualification boundary.
+    for raw in state["facts"]:
+        raw["observation"].pop("validity_scope")
+    for raw in state["history"]:
+        raw["observation"].pop("validity_scope")
+    legacy = PublicWorldModel.from_state(state, clock_ns=lambda: now[0], clock_epoch="boot-a")
+    assert legacy.query(WorldQuery(scope=scope)).facts[0].state is KnowledgeState.KNOWN
+    assert legacy.query(WorldQuery()).facts[0].freshness == "SCOPE_MISMATCH"
+
+
+def test_explicit_scope_is_detached_and_locations_reject_partial_or_invalid_coordinates():
+    now = [SECOND]
+    model = model_at(now)
+    scope = {"runtime_pid": 9}
+    event = person(model, {"place_id": "room:kitchen"}, validity_scope=scope)
+    scope["runtime_pid"] = 10
+    assert event.observation.validity_scope == ValidityScope(runtime_pid=9)
+    assert not model.query(WorldQuery(require_current=True)).facts
+    assert model.query(WorldQuery(scope=ValidityScope(runtime_pid=9), require_current=True)).facts
+    for value in ({"x_m": 1, "frame_id": "map"}, {"x_m": 1, "y_m": 2},
+                  {"x_m": True, "y_m": 2, "frame_id": "map"},
+                  {"x_m": float("nan"), "y_m": 2, "frame_id": "map"}):
+        with pytest.raises(ValueError):
+            WorldLocation.from_jsonable(value)
+    person(model, {"x_m": 1, "frame_id": "map"}, measurement_time_ns=SECOND,
+           sequence=2, revision="new")
+    assert model.query(WorldQuery()).facts[0].location is None
+
+
+def test_episodic_queries_preserve_rejections_and_report_cursor_gap_and_truncation():
+    now = [3 * SECOND]
+    model = model_at(now, history_capacity=3)
+    person(model, "hall", measurement_time_ns=2 * SECOND)
+    person(model, "kitchen", measurement_time_ns=SECOND)
+    person(model, "hall", measurement_time_ns=2 * SECOND)
+    person(model, "garden", measurement_time_ns=3 * SECOND, sequence=2)
+    query = WorldQuery(kind="episodes", entity_id="person:laci", limit=2)
+    result = model.query(query)
+    assert result.history_dropped == 1
+    assert result.history_first_sequence == 2
+    assert result.history_last_sequence == 4
+    assert result.history_gap and result.truncated
+    assert [event.reason for event in result.events] == ["OUT_OF_ORDER", "DUPLICATE"]
+    assert all(not event.accepted for event in result.events)
+    assert WorldQueryResult.from_jsonable(json.loads(json.dumps(result.to_jsonable()))) == result
+    next_result = model.query(WorldQuery(kind="episodes", after_sequence=3))
+    assert [event.event_sequence for event in next_result.events] == [4]
+    assert not next_result.history_gap and not next_result.truncated
+    model.observe("room:kitchen", "topology", "hall", domain="room_topology",
+                  measurement_time_ns=SECOND, confidence=1.0, source="mapper")
+    assert model.query(WorldQuery(limit=1)).truncated
+
+
+def test_passive_sink_receives_every_committed_event_outside_lock_and_restore_is_silent():
+    now = [2 * SECOND]
+    received = []
+    visible = []
+    model = model_at(now)
+
+    def sink(event):
+        received.append(event)
+        reader = Thread(target=lambda: visible.append(model.history()[-1].event_sequence))
+        reader.start()
+        reader.join(timeout=1.0)
+        assert not reader.is_alive(), "model lock must be released before passive evidence delivery"
+        raise OSError("capture unavailable")
+
+    model.set_event_sink(sink)
+    person(model)
+    person(model)
+    person(model, "hall", measurement_time_ns=0)
+    assert [event.reason for event in received] == ["NEW", "DUPLICATE", "OUT_OF_ORDER"]
+    assert visible == [1, 2, 3]
+    assert model.event_sink_errors == 3
+    assert model.read("person:laci", "last_observed_location").value == "kitchen"
+    model.restore(model.export_state())
+    assert len(received) == 3
+    model.set_event_sink(None)
+    person(model, "hall", measurement_time_ns=2 * SECOND, sequence=2)
+    assert model.read("person:laci", "last_observed_location").value == "hall"
+    assert model.event_sink_errors == 3

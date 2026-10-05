@@ -32,6 +32,7 @@ from .capture_rate import CONTROL_CAPTURE_HZ, validate_capture_hz
 from .capture_behavior import BehaviorCaptureRecord, encode_behavior_record, project_behavior_record
 from .capture_ipc import IPC_CHECKPOINT_KEY, IPC_TRIGGER_REASON_KEY
 from .hri_evidence import HRI_EVENT_TOPIC
+from .public_runtime_evidence import PUBLIC_RUNTIME_EVENT_TOPIC
 from .capture_encoding import (
     CaptureEncodingError,
     encode_capture_record,
@@ -533,7 +534,11 @@ class McapCaptureConsumer:
             if isinstance(payload, Mapping):
                 drops = payload.get("drop_count", 0)
                 if isinstance(drops, int) and not isinstance(drops, bool) and drops > 0:
-                    self._integrity_reasons.add("CORE_TRANSPORT_LOSS")
+                    reason = payload.get("integrity_reason")
+                    self._integrity_reasons.add(
+                        reason if isinstance(reason, str) and reason.startswith("PUBLIC_RUNTIME_")
+                        else "CORE_TRANSPORT_LOSS"
+                    )
             return
         if not _looks_like_raw_lidar_transport_topic(item.topic):
             return
@@ -686,18 +691,23 @@ class McapCaptureConsumer:
             )
 
         event = encode_value(payload)
+        event_time = item.published_monotonic_ns
+        event_sequence = item.sequence
+        if item.topic == PUBLIC_RUNTIME_EVENT_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("publication_time_ns"), "public event publication_time_ns")
+            event_sequence = _non_negative_int(payload.get("event_sequence"), "public event sequence")
         return (
             EncodedRecord(
                 hub_sequence=item.sequence,
                 published_monotonic_ns=item.published_monotonic_ns,
                 source_topic=item.topic,
                 mcap_topic=EVENT_TOPIC,
-                monotonic_ns=item.published_monotonic_ns,
-                sequence=item.sequence,
+                monotonic_ns=event_time,
+                sequence=event_sequence,
                 payload=_json_bytes(
                     {
                         "source_topic": item.topic,
-                        "monotonic_ns": item.published_monotonic_ns,
+                        "monotonic_ns": event_time,
                         "payload": event,
                     }
                 ),
