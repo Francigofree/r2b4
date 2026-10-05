@@ -55,14 +55,22 @@ def _receipt(status: str, executed: bool) -> str:
     return "A robotművelet nem indult el."
 
 
-def run_agent_prompt(prompt: str, *, project_root: str | Path, wait_s: float = 90.0) -> AgentRunResult:
+def run_agent_prompt(
+    prompt: str,
+    *,
+    project_root: str | Path,
+    wait_s: float = 90.0,
+    developer_mode: bool = False,
+) -> AgentRunResult:
     root = Path(project_root).expanduser().resolve()
     env = _load_env(root)
     provider = resolve_llm_provider(_setting(env, "R2B4_LLM_PROVIDER"))
     model = _setting(env, "R2B4_LLM_MODEL") or default_model_for(provider)
     key_name = api_key_env_for(provider)
     key = _setting(env, key_name)
-    with build_voice_interface(root, api_key=key, provider=provider, model=model) as bundle:
+    with build_voice_interface(
+        root, api_key=key, provider=provider, model=model, developer_mode=developer_mode,
+    ) as bundle:
         accepted = bundle.interface.execute("conversation.submit_text", text=prompt, source="launcher")
         turn_id = accepted.get("turn_id") if isinstance(accepted, Mapping) else None
         if not isinstance(turn_id, str):

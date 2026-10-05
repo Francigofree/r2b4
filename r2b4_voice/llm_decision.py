@@ -26,7 +26,7 @@ def _catalog_items(action_catalog: Sequence[Mapping[str, object]] | None) -> tup
         if not isinstance(item, Mapping):
             continue
         name = item.get("name")
-        if not isinstance(name, str) or not name.startswith("v3.command."):
+        if not isinstance(name, str) or not name.startswith(("v3.command.", "behavior.")):
             continue
         if item.get("voice_exposed") is False:
             continue
@@ -48,7 +48,15 @@ def build_decision_schema(action_catalog: Sequence[Mapping[str, object]] | None 
         for name, raw in parameters.items():
             if not isinstance(name, str) or not isinstance(raw, Mapping):
                 continue
-            slot = merged.setdefault(name, {"type": ["number", "null"]})
+            value_type = raw.get("type", "number")
+            if value_type not in {"number", "string", "array"}:
+                raise DecisionParseError(f"unsupported catalog parameter type: {name}")
+            slot = merged.setdefault(name, {"type": [value_type, "null"]})
+            if slot["type"] != [value_type, "null"]:
+                raise DecisionParseError(f"inconsistent catalog parameter type: {name}")
+            for constraint in ("minLength", "maxLength", "minItems", "maxItems", "items"):
+                if constraint in raw:
+                    slot[constraint] = raw[constraint]
             minimum = raw.get("minimum")
             maximum = raw.get("maximum")
             if isinstance(minimum, (int, float)) and not isinstance(minimum, bool):
@@ -125,23 +133,31 @@ def parse_llm_decision(
         selected = by_name[action_name]
         selected_params = selected.get("parameters")
         selected_params = selected_params if isinstance(selected_params, Mapping) else {}
-        params: list[tuple[str, float]] = []
+        params: list[tuple[str, object]] = []
         for key, value in params_raw.items():
             if value is None:
                 continue
             if key not in selected_params:
                 raise DecisionParseError(f"parameter is not valid for {action_name}: {key}")
-            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
-                raise DecisionParseError(f"{key} must be a finite number or null")
             spec = selected_params[key]
+            value_type = spec.get("type", "number") if isinstance(spec, Mapping) else "number"
+            if value_type == "string":
+                if not isinstance(value, str) or not value.strip() or len(value) > 256:
+                    raise DecisionParseError(f"{key} must be a bounded nonempty string")
+            elif value_type == "array":
+                if (not isinstance(value, (tuple, list)) or not 1 <= len(value) <= 32
+                        or any(not isinstance(item, str) or not item.strip() or len(item) > 256 for item in value)):
+                    raise DecisionParseError(f"{key} must be a bounded string array")
+            elif not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                raise DecisionParseError(f"{key} must be a finite number or null")
             if isinstance(spec, Mapping):
                 minimum = spec.get("minimum")
                 maximum = spec.get("maximum")
-                if isinstance(minimum, (int, float)) and value < minimum:
+                if value_type == "number" and isinstance(minimum, (int, float)) and value < minimum:
                     raise DecisionParseError(f"{key} is below minimum")
-                if isinstance(maximum, (int, float)) and value > maximum:
+                if value_type == "number" and isinstance(maximum, (int, float)) and value > maximum:
                     raise DecisionParseError(f"{key} exceeds maximum")
-            params.append((str(key), float(value)))
+            params.append((str(key), value))
         for key, spec in selected_params.items():
             if isinstance(spec, Mapping) and spec.get("required") is True and params_raw.get(key) is None:
                 raise DecisionParseError(f"missing required action parameter: {key}")

@@ -10,7 +10,7 @@ from v3.action_catalog import action_descriptor
 from .conversation_contracts import RobotContextSnapshot
 
 
-ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V4"
+ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V5"
 
 
 class RobotReadInterface(Protocol):
@@ -36,7 +36,9 @@ class RobotContextBuilder:
 
         status = self._read_if_available(caps, "v3.status")
         environment: dict[str, object] = {
-            "world": None,
+            "world": self._mapping_or_none(self._read_if_available(caps, "world.snapshot")),
+            "local_world": None,
+            "behavior": self._mapping_or_none(self._read_if_available(caps, "behavior.state")),
             "person": {"available": False, "detected": None, "tracks": []},
             "mission": None,
             "navigation": None,
@@ -45,7 +47,7 @@ class RobotContextBuilder:
             world = self._mapping_or_none(status.get("world"))
             mission = self._mapping_or_none(status.get("mission"))
             navigation = self._mapping_or_none(status.get("navigation"))
-            environment["world"] = world
+            environment["local_world"] = world
             environment["mission"] = mission
             environment["navigation"] = navigation
             if world is not None and isinstance(world.get("person_tracks"), list):
@@ -65,6 +67,7 @@ class RobotContextBuilder:
                 else "UNKNOWN"
             ),
             "environment": environment,
+            "robot_state": self._mapping_or_none(self._read_if_available(caps, "robot.state")),
         }
 
         if isinstance(status, Mapping):

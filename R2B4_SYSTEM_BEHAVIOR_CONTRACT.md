@@ -1,6 +1,6 @@
 # R2B4 robotrendszer — legfelső szintű működési contract
 
-**Contract:** `R2B4_SYSTEM_BEHAVIOR_CONTRACT_V1`
+**Contract:** `R2B4_SYSTEM_BEHAVIOR_CONTRACT_V2`
 
 **Szerep:** az R2B4 teljes robotrendszerének legfelső szintű, felhasználó felől értelmezett működési iránya. A dokumentum azt rögzíti, **minek kell a robotrendszer egészének lennie és hogyan kell viselkednie**, nem azt, hogy ezt pillanatnyilag melyik osztály, processz, thread vagy parancs valósítja meg.
 
@@ -35,7 +35,7 @@ Az **R2B4 robotrendszer több, mint a V3**.
 
 A RoomCruise karaktere és kért sebességprofilja a robot magasabb szintű viselkedésének része. A felső réteg a RobotInterface-en át ad intentet, constraintet és preferenciát; a determinisztikus, fizikailag realizálható és biztonságos végrehajtás határát a `STRUKTURALIS_RETEGEK_V3.md` „V3 CLOSED” contractja rögzíti.
 
-A **V3** ebben a dokumentumban a teljes production mozgási/control környezetet jelenti: azt a futó rendszert, amely a robot fizikai mozgatásához szükséges perifériákat, world modelt, control- és safety-rétegeket, valamint a canonical végrehajtási útvonalat biztosítja.
+A **V3** ebben a dokumentumban a teljes production mozgási/control környezetet jelenti: azt a futó rendszert, amely a robot fizikai mozgatásához szükséges perifériákat, lokális operational worldöt, control- és safety-rétegeket, valamint a canonical végrehajtási útvonalat biztosítja. A Public World Model külön felső felelősség; nem V3-előfeltétel.
 
 A V3 számítás- és energiaigényes komponens. Ezért **nem kell folyamatosan futnia csak azért, hogy a robot megszólítható vagy megfigyelésre képes legyen**.
 
@@ -418,3 +418,64 @@ Ajánlott authority-sorrend:
 3. `ASZINKRON_RUNTIME_CONTRACT_V3.md` — async/process elhelyezési szabályok;
 4. domain-specifikus dokumentációk;
 5. aktuális source + config az implementáció tényleges állapotához.
+
+---
+
+## 14. Közös robotvilág, idő és felső viselkedések
+
+Az R2B4 egy robot, több felülettel. Ember, CLI, voice, LLM/Agent és behavior
+ugyanazon canonical RobotInterface `capabilities`, `read`, `execute`, `stop`
+felszínét használja. A capability aktuális rendelkezésre állást és tulajdonost
+jelent, nem pusztán statikus API-listát.
+
+A V3 azt dönti el, mi biztonságosan végrehajtható most. A Public World Model
+azt tartja nyilván, mit tud vagy feltételez a robot önmagáról, helyekről,
+személyekről, objektumokról és kapcsolataikról. A Behavior System a következő
+intentet választja. Az Agent értelmez és használja ezeket; safety-, motor-,
+lokális obstacle- vagy localization-authorityt egyik felső komponens sem kap.
+
+V3/sensor → completed observations → Public World Model az alapirány.
+Visszafelé csak cél, régió, waypoint, constraint vagy preferencia kérhető a
+canonical command úton. A tartós szemantikai tudás nem írhatja felül a friss
+lokális geometriát vagy safety döntést. World Model-, behavior-, LLM-, hálózat-,
+globális lokalizáció- vagy memóriahiba mellett a V3 önállóan tud lokális
+műveletet biztonságosan végrehajtani, megtagadni és STOP-ot végrehajtani.
+
+Minden releváns állításnak van értéke, mérési és megfigyelési ideje, clock
+provenance-e, age/freshness jelentése, confidence-e, forrása és lineage-e.
+Az estimate referenciaideje és a fizikai measurement ideje külön jelentés;
+publikálás, polling és prediction nem újítja meg a fizikai measurementet.
+Új clock epoch nem tehet régi adatot frissé. A freshness domainenkénti policy;
+nincs globális TTL. A robot explicit KNOWN, LIKELY, STALE, UNKNOWN és
+CONFLICTING állapotot tud közölni. Aktuális snapshot és observation history
+együtt magyarázza a robot világképét; bounded történetvesztés megfigyelhető.
+
+A RobotState, WorldState, ActiveBehavior, ActiveMission, Capabilities és Health
+szemantikai SSOT. Fizikai centralizáció nem követelmény, egymással versengő
+robotképek és rejtett felső motion owner-ek viszont nem megengedettek.
+
+A Behavior System vékony, normál programlogikát futtató host felelősség.
+Room Cruise, Follow Person és új behavior ugyanazon IDLE → STARTING → ACTIVE
+→ COMPLETED / FAILED / CANCELLED külső lifecycle-t használja. A behavior
+publikus state/world olvasást és canonical robotműveletet kap; közvetlen motor-,
+GPIO-, layer-state- és hardverhandle-t nem. L6 lokális coverage/progress,
+tracking, recovery és feasibility továbbra is fizikai execution, a V3 contract
+szerint. Új magasabb célválasztó behavior hozzáadása nem igényel V3-módosítást.
+
+Egyszerre egy aktív fizikai mission lehet. Preemption megfigyelhető cancellation;
+korábbi vagy sorban álló felső intent STOP után nem éledhet újra. STOP
+rendszerszintű prioritás: felső intent-revocation és canonical V3 STOP,
+world/readiness/LLM rendelkezésre állásától függetlenül.
+
+Normál Agent-turn read/reason/existing-capability használat. Source/config
+módosítás és behavior-generálás külön, explicit fejlesztői mód. Futó beszélgetés
+nem emelheti saját authorityját fejlesztőire, és generált kódot nem aktiválhat
+automatikusan. A program publikus interfésszel szimulálható, bounded és
+leállítható; a production telepítés fejlesztői felelősség.
+
+A world observation, behavior intent, preemption és action eredmény idővel,
+identityvel és lineage-dzsel rekonstruálható evidence. Kép vagy általános
+person detection önmagában nem bizonyít név szerinti személyazonosságot vagy
+feladat-sikert. Raw kép/scan és LLM-munka nem kerül a control interpreterbe.
+
+Konkrét API és implementációs állapot: `docs/PUBLIC_ROBOT_SYSTEM.md` és source.

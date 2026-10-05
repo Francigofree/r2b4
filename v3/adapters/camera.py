@@ -12,14 +12,20 @@ from v3.operator_controller import OperatorController
 class CameraInterfaceAdapter:
     name = "camera"
     capability_names = frozenset({
-        "camera.status", "camera.on", "camera.off", "camera.photo", "camera.video",
+        "camera.status", "camera.on", "camera.off", "camera.photo", "camera.video", "vision.observe",
     })
 
-    def __init__(self, controller: OperatorController) -> None:
+    def __init__(self, controller: OperatorController, *, vision_client: VisionClient | None = None) -> None:
         self.controller = controller
+        self.vision_client = vision_client
+
+    def _client(self, *, timeout_s: float | None = None) -> VisionClient:
+        if self.vision_client is not None:
+            return self.vision_client
+        return VisionClient(root=self.controller.root, **({} if timeout_s is None else {"timeout_s": timeout_s}))
 
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
-        status = VisionClient(root=self.controller.root).status()
+        status = self._client().status()
         ready = status.get("camera_state") == "ON"
         failed = status.get("camera_state") == "FAILED"
         return {
@@ -35,14 +41,29 @@ class CameraInterfaceAdapter:
 
     def read(self, resource: str) -> object:
         if resource == "camera.status":
-            return VisionClient(root=self.controller.root).status()
+            return self._client().status()
         raise KeyError(resource)
 
     def execute(self, action: str, **parameters: object) -> object:
         params = dict(parameters)
+        if action == "vision.observe":
+            stream = params.pop("stream", "lores")
+            deadline = params.pop("deadline", None)
+            cancel_event = params.pop("cancel_event", None)
+            timeout_s = params.pop("timeout_s", None)
+            self._reject_unknown(params)
+            if stream not in {"lores", "main"}:
+                raise ValueError("stream must be lores or main")
+            if timeout_s is not None and (type(timeout_s) not in (int, float) or not 0.1 <= timeout_s <= 30):
+                raise ValueError("timeout_s must be within [0.1, 30]")
+            # The image travels directly from its independent owner to the
+            # requesting host consumer, never through the V3 control process.
+            return self._client(timeout_s=timeout_s).observe(
+                stream_name=stream, deadline=deadline, cancel_event=cancel_event,
+            )
         if action in {"camera.on", "camera.off"}:
             self._reject_unknown(params)
-            return VisionClient(root=self.controller.root).set_manual_demand(action == "camera.on")
+            return self._client().set_manual_demand(action == "camera.on")
         if action == "camera.photo":
             output = self._required(params, "output")
             self._reject_unknown(params)

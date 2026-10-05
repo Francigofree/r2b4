@@ -103,7 +103,7 @@ def run_er2_task(
             image_bytes = None
             if camera:
                 remaining()
-                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s).observe_sync(deadline=deadline, cancel_event=cancel_event)
+                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s, interface=interface).observe_sync(deadline=deadline, cancel_event=cancel_event)
                 image_bytes = observation.image_bytes
                 evidence.emit("ER2_CAMERA_OBSERVATION", lineage=observation.metadata.to_jsonable())
             result = Er2PreviewClient(cfg, evidence=evidence).run(
@@ -122,7 +122,7 @@ def run_er2_task(
             )
             return Er2ExecutionResult(mode="preview", text=text)
 
-        media = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s)
+        media = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s, interface=interface)
         chunks: list[str] = []
 
         def on_text(chunk: str) -> None:

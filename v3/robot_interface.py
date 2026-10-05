@@ -52,6 +52,7 @@ class RobotInterface:
         event_sink: Callable[[OperatorEvent], None] | None = None,
         controller: OperatorController | None = None,
         adapters: Sequence[InterfaceAdapter] | None = None,
+        upper_runtime: bool = True,
     ) -> None:
         root = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
         self.root = root.resolve()
@@ -59,9 +60,20 @@ class RobotInterface:
             project_root=self.root,
             event_sink=event_sink,
         )
-        self._adapters: tuple[InterfaceAdapter, ...] = tuple(
-            adapters if adapters is not None else build_adapters(self.controller, self.root)
-        )
+        composed = list(adapters if adapters is not None else build_adapters(self.controller, self.root))
+        self._public_robot = None
+        if adapters is None and upper_runtime:
+            from r2b4_orchestration.robot_runtime import PublicRobotClient, PublicRobotInterfaceAdapter
+            composed.append(PublicRobotInterfaceAdapter(PublicRobotClient(self.root), self.controller))
+        for adapter in composed:
+            if adapter.name == "public_robot":
+                self._public_robot = adapter
+        self._adapters: tuple[InterfaceAdapter, ...] = tuple(composed)
+
+    @property
+    def adapters(self) -> tuple[InterfaceAdapter, ...]:
+        """Reuse this composition when adding a conversation or UI adapter."""
+        return self._adapters
 
     def capabilities(self) -> dict[str, object]:
         """Return the current live external surface, with duplicate names rejected."""
@@ -81,7 +93,15 @@ class RobotInterface:
                 item.setdefault("available", True)
                 item.setdefault("ready", bool(item["available"]))
                 item["adapter"] = adapter.name
+                if self._public_robot is not None and name in {"v3.command.explore", "v3.command.follow_person"}:
+                    item["execution_owner"] = "behavior_system"
+                    item["behavior"] = "room_cruise" if name.endswith("explore") else "follow_person"
                 items[name] = item
+        for legacy, behavior in (("v3.command.explore", "behavior.room_cruise"),
+                                 ("v3.command.follow_person", "behavior.follow_person")):
+            if self._public_robot is not None and legacy in items and behavior in items:
+                for key in ("available", "ready", "reason"):
+                    items[legacy][key] = items[behavior][key]
         return {
             "schema": ROBOT_INTERFACE_SCHEMA,
             "action_catalog_schema": ACTION_CATALOG_SCHEMA,
@@ -99,6 +119,18 @@ class RobotInterface:
         return adapter.read(resource)
 
     def execute(self, action: str, **parameters: object) -> object:
+        if self._public_robot is not None:
+            if action in {"v3.command.explore", "v3.command.follow_person"}:
+                behavior = "behavior.room_cruise" if action.endswith("explore") else "behavior.follow_person"
+                return self.execute(behavior, **parameters)
+            if action == "v3.command.stop":
+                if parameters:
+                    raise ValueError("STOP accepts no parameters")
+                return self.stop()
+            if (action.startswith("v3.command.") or action in {
+                "operator.runtime.start", "operator.runtime.stop", "operator.shutdown", "operator.panic", "operator.proba",
+            }):
+                self._preempt_upper("PREEMPTED_BY:" + action)
         adapter, capability = self._resolve(action, expected_kind="action")
         if capability.get("supported") is not True:
             raise RobotInterfaceError(f"action is not supported: {action}")
@@ -113,7 +145,32 @@ class RobotInterface:
     def stop(self) -> object:
         """First-class fail-safe external STOP request."""
 
-        return self.execute("v3.command.stop")
+        # Revocation does not read world state/capabilities. Regardless of host
+        # service availability, deliver the existing canonical V3 STOP.
+        owners = [adapter for adapter in self._adapters if "v3.command.stop" in adapter.capability_names]
+        if len(owners) != 1:
+            raise RobotInterfaceError("canonical STOP must have exactly one adapter owner")
+        if self._public_robot is not None:
+            try:
+                self._public_robot.client.revoke("STOP")
+            except (OSError, RuntimeError, ValueError, TimeoutError):
+                pass
+        try:
+            return owners[0].execute("v3.command.stop")
+        finally:
+            # The physical STOP above has priority over host-side draining/waiting.
+            # Wait for any earlier submission to unwind and stop again there, so a
+            # late STARTING action cannot outlive the completed STOP request.
+            self._preempt_upper("STOP")
+
+    def _preempt_upper(self, reason: str) -> None:
+        if self._public_robot is not None:
+            try:
+                self._public_robot.client.preempt(reason)
+            except (OSError, RuntimeError, ValueError, TimeoutError):
+                # Public knowledge/behavior availability is never a prerequisite
+                # for stopping or admitting an ordinary local V3 operation.
+                self.controller.stop()
 
     def _resolve(
         self,

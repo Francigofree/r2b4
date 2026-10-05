@@ -120,6 +120,9 @@ def _tick_status(
                 "vx_mps": track.vx_mps,
                 "vy_mps": track.vy_mps,
                 "confidence": track.confidence,
+                "measurement_monotonic_ns": track.measurement_monotonic_ns,
+                "prediction_valid_until_ns": track.prediction_valid_until_ns,
+                "estimate_status": track.estimate_status.value,
             }
             for track in world.obstacle_tracks
             if track.track_id.startswith("person-")
@@ -204,4 +207,3 @@ def _tick_status(
         "mission": mission_payload,
         "navigation": navigation_payload,
     }
-

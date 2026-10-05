@@ -51,24 +51,36 @@ class UserTextTurn:
 @dataclass(frozen=True, slots=True)
 class RobotAction:
     name: str
-    parameters: tuple[tuple[str, float], ...] = ()
+    parameters: tuple[tuple[str, object], ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _nonempty(self.name, "RobotAction.name"))
         keys: list[str] = []
-        normalized: list[tuple[str, float]] = []
+        normalized: list[tuple[str, object]] = []
         for key, value in self.parameters:
             key = _nonempty(key, "RobotAction.parameter key")
             if key in keys:
                 raise ConversationContractError(f"duplicate RobotAction parameter: {key}")
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise ConversationContractError(f"RobotAction parameter {key} must be numeric")
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                value = float(value)
+            elif isinstance(value, str):
+                value = _nonempty(value, f"RobotAction parameter {key}")
+                if len(value) > 256:
+                    raise ConversationContractError(f"RobotAction parameter {key} exceeds 256 characters")
+            elif isinstance(value, (list, tuple)):
+                if not 1 <= len(value) <= 32:
+                    raise ConversationContractError(f"RobotAction parameter {key} requires 1..32 strings")
+                value = tuple(_nonempty(item, f"RobotAction parameter {key} item") for item in value)
+                if any(len(item) > 256 for item in value):
+                    raise ConversationContractError(f"RobotAction parameter {key} item exceeds 256 characters")
+            else:
+                raise ConversationContractError(f"RobotAction parameter {key} must be a number, string or bounded string array")
             keys.append(key)
-            normalized.append((key, float(value)))
+            normalized.append((key, value))
         object.__setattr__(self, "parameters", tuple(normalized))
 
-    def as_dict(self) -> dict[str, float]:
-        return dict(self.parameters)
+    def as_dict(self) -> dict[str, object]:
+        return {key: list(value) if isinstance(value, tuple) else value for key, value in self.parameters}
 
 
 @dataclass(frozen=True, slots=True)

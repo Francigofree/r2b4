@@ -125,7 +125,7 @@ def _value(mapping: object, key: str, default: object = None) -> object:
 def _status_payload(interface: RobotInterface, cfg: Er2Config) -> dict[str, object]:
     operator = _safe_read(interface, "operator.status")
     v3_status = _safe_read(interface, "v3.status")
-    media = VisionMediaClient(project_root=interface.root, timeout_s=cfg.media_timeout_s)
+    media = VisionMediaClient(project_root=interface.root, timeout_s=cfg.media_timeout_s, interface=interface)
     media_probe = _probe_media(media)
     return {
         "preview_model": cfg.preview_model,
@@ -202,7 +202,7 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
             if args.image is not None:
                 image_bytes = args.image.read_bytes()
             elif args.camera:
-                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s).observe_sync()
+                observation = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s, interface=interface).observe_sync()
                 image_bytes = observation.image_bytes
                 evidence.emit("ER2_CAMERA_OBSERVATION", lineage=observation.metadata.to_jsonable())
             result = Er2PreviewClient(cfg, evidence=evidence).run(
@@ -221,7 +221,7 @@ def main(argv: Sequence[str] | None = None, *, project_root: str | Path | None =
             return 0
 
         if args.command == "stream":
-            media = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s)
+            media = VisionMediaClient(project_root=root, timeout_s=cfg.media_timeout_s, interface=interface)
             text_chunks: list[str] = []
 
             def on_text(chunk: str) -> None:

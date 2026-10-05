@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import time
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,11 +31,17 @@ def _observation() -> VisionJpeg:
 
 
 def _assert_native_agent_image_without_text_payload(monkeypatch, tmp_path: Path) -> None:
-    from v3.adapters.vision_media_socket import VisionClient
     observation = _observation()
     requests = []
     events = []
-    monkeypatch.setattr(VisionClient, "observe", lambda self, **kwargs: observation)
+    robot_calls = []
+
+    class Interface:
+        def execute(self, action, **parameters):
+            assert action == "vision.observe"
+            assert parameters == {"stream": "lores"}
+            robot_calls.append(action)
+            return observation
 
     replies = [
         {"kind": "tool", "spoken_text": None, "tool_name": "vision.observe", "tool_arguments_json": "{}", "action_name": None, "action_parameters": {}},
@@ -56,7 +63,7 @@ def _assert_native_agent_image_without_text_payload(monkeypatch, tmp_path: Path)
             return io.BytesIO(json.dumps({"candidates": [{"content": {"parts": [{"text": reply}]}}]}).encode())
 
         model = OpenAIResponsesChatClient(api_key="test", urlopen=urlopen) if provider == "openai" else GeminiStructuredChatClient(api_key="test", urlopen=urlopen)
-        broker = AgentToolBroker(build_default_agent_tools(tmp_path))
+        broker = AgentToolBroker(build_default_agent_tools(tmp_path, interface=Interface()))
         result = AgentCore(model, broker).run(
             [{"role": "user", "content": "Mit látsz?"}], (),
             event_sink=lambda name, payload: events.append((name, payload)),
@@ -83,6 +90,7 @@ def _assert_native_agent_image_without_text_payload(monkeypatch, tmp_path: Path)
         tool_result = broker.execute(AgentToolRequest("vision.observe", {}))
         assert "image_bytes" not in json.dumps(tool_result.to_jsonable())
         assert "canonical-camera-image" not in repr(tool_result)
+    assert robot_calls == ["vision.observe"] * 4
 
 
 def _assert_camera_only_er2_never_starts_v3(monkeypatch, tmp_path: Path) -> None:
@@ -151,3 +159,72 @@ def test_camera_observation_native_provider_attachments_and_v3_independence(monk
         _assert_native_agent_image_without_text_payload(patch, tmp_path / "agent")
     with monkeypatch.context() as patch:
         _assert_camera_only_er2_never_starts_v3(patch, tmp_path / "er2")
+
+
+def test_agent_camera_observation_uses_canonical_robot_interface(monkeypatch, tmp_path: Path) -> None:
+    from v3.adapters.camera import CameraInterfaceAdapter
+    from v3.adapters.vision_media_socket import VisionClient
+    from v3.robot_interface import RobotInterface
+
+    observation = _observation()
+    monkeypatch.setattr(VisionClient, "status", lambda self: {"camera_state": "OFF"})
+    monkeypatch.setattr(VisionClient, "observe", lambda self, **parameters: observation)
+    controller = SimpleNamespace(root=tmp_path)
+    interface = RobotInterface(
+        project_root=tmp_path, controller=controller, adapters=(CameraInterfaceAdapter(controller),),
+    )
+    broker = AgentToolBroker(build_default_agent_tools(tmp_path, interface=interface))
+    result = broker.execute(AgentToolRequest("vision.observe", {"stream": "main"}))
+    assert result.status == "COMPLETED"
+    assert result.images == (observation,)
+    assert result.data["lineage"] == observation.metadata.to_jsonable()
+    assert "image_bytes" not in json.dumps(result.to_jsonable())
+
+
+def test_er2_vision_reads_canonical_interface_with_turn_controls(tmp_path: Path) -> None:
+    from r2b4_er2.media import VisionMediaClient
+    observation = _observation()
+    calls = []
+    cancel = threading.Event()
+    deadline = time.monotonic() + 3.0
+
+    class Interface:
+        def read(self, resource):
+            calls.append(("read", resource))
+            assert resource == "camera.status"
+            return {"camera_state": "OFF"}
+        def execute(self, action, **parameters):
+            calls.append(("execute", action))
+            assert action == "vision.observe"
+            assert parameters == {"stream": "main", "deadline": deadline, "cancel_event": cancel, "timeout_s": 2.0}
+            return observation
+
+    media = VisionMediaClient(project_root=tmp_path, timeout_s=2.0, interface=Interface())
+    assert media.status() == {"camera_state": "OFF"}
+    assert media.observe_sync(stream_name="main", deadline=deadline, cancel_event=cancel) is observation
+    assert calls == [("read", "camera.status"), ("execute", "vision.observe")]
+
+
+def test_er2_custom_vision_socket_is_camera_adapter_dependency(monkeypatch, tmp_path: Path) -> None:
+    import r2b4_er2.media as media_module
+    observation = _observation()
+    custom = tmp_path / "custom-vision.sock"
+    calls = []
+
+    class Client:
+        def __init__(self, socket_path, **parameters):
+            assert socket_path == custom
+            assert parameters == {"root": tmp_path, "timeout_s": 2.0}
+        def status(self):
+            return {"camera_state": "OFF"}
+        def observe(self, **parameters):
+            calls.append(parameters)
+            return observation
+
+    monkeypatch.setattr(media_module, "VisionClient", Client)
+    media = media_module.VisionMediaClient(custom, project_root=tmp_path, timeout_s=2.0)
+    assert media.socket_path == custom
+    assert media.status()["camera_state"] == "OFF"
+    assert media.observe_sync() is observation
+    assert len(calls) == 1
+    assert calls[0]["stream_name"] == "lores"

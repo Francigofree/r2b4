@@ -46,9 +46,20 @@ class RobotActionValidator:
             if spec.required and name not in params:
                 return ActionValidation(False, f"MISSING_REQUIRED_PARAMETER:{name}")
         for name, value in params.items():
+            spec = specs[name]
+            if spec.value_type == "string":
+                if not isinstance(value, str) or not value.strip() or len(value) > 256:
+                    return ActionValidation(False, f"PARAMETER_TYPE_INVALID:{name}")
+                continue
+            if spec.value_type == "array":
+                if (not isinstance(value, list) or not 1 <= len(value) <= 32
+                        or any(not isinstance(item, str) or not item.strip() or len(item) > 256 for item in value)):
+                    return ActionValidation(False, f"PARAMETER_TYPE_INVALID:{name}")
+                continue
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return ActionValidation(False, f"PARAMETER_TYPE_INVALID:{name}")
             if not math.isfinite(float(value)):
                 return ActionValidation(False, f"PARAMETER_NOT_FINITE:{name}")
-            spec = specs[name]
             if spec.minimum is not None and value < spec.minimum:
                 return ActionValidation(False, f"PARAMETER_OUT_OF_RANGE:{name}")
             if spec.maximum is not None and value > spec.maximum:

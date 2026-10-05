@@ -1,7 +1,7 @@
 """Canonical machine-readable R2B4 robot action catalog.
 
 This module is the single source of truth for the static contract of canonical
-``v3.command.*`` actions exposed through :class:`v3.robot_interface.RobotInterface`.
+V3 actions and host behaviors exposed through :class:`v3.robot_interface.RobotInterface`.
 It owns no runtime state and no actuation authority. Live ``available``, ``ready``
 and ``reason`` values remain owned by the interface adapters.
 """
@@ -35,7 +35,7 @@ class ActionParameterDescriptor:
     value_type: str = "number"
 
     def __post_init__(self) -> None:
-        if self.value_type not in ("number", "string"):
+        if self.value_type not in ("number", "string", "array"):
             raise ValueError("unsupported action parameter type")
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("parameter name must be non-empty")
@@ -57,7 +57,7 @@ class ActionParameterDescriptor:
             raise ValueError(f"{self.name}: required parameter must not define a default")
 
     def to_jsonable(self) -> dict[str, object]:
-        return {
+        result = {
             "type": self.value_type,
             "description": self.description,
             "required": self.required,
@@ -65,6 +65,11 @@ class ActionParameterDescriptor:
             "maximum": self.maximum,
             "default": self.default,
         }
+        if self.value_type == "string":
+            result.update(minLength=1, maxLength=256)
+        elif self.value_type == "array":
+            result.update(minItems=1, maxItems=32, items={"type": "string", "minLength": 1, "maxLength": 256})
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,8 +83,8 @@ class ActionDescriptor:
     completion_required: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not self.name.startswith("v3.command."):
-            raise ValueError("action name must be canonical v3.command.*")
+        if not isinstance(self.name, str) or not self.name.startswith(("v3.command.", "behavior.")):
+            raise ValueError("action name must be canonical v3.command.* or behavior.*")
         if not isinstance(self.description, str) or not self.description.strip():
             raise ValueError(f"action description must be non-empty: {self.name}")
         if type(self.voice_exposed) is not bool:
@@ -120,6 +125,36 @@ def _p(name: str, description: str, *, required: bool = False,
 
 # Voice exposure is opt-in; finite relative goals hide frame/pose arithmetic.
 _DESCRIPTORS = (
+    ActionDescriptor(
+        "behavior.search_person",
+        "Search known places for a named person through the host Behavior System and canonical V3 navigation.",
+        (
+            _p("entity_id", "Required known person entity identifier.", required=True, value_type="string"),
+            _p("candidate_places", "Optional ordered known place identifiers; stale knowledge is only a search hint.", value_type="array"),
+            _p("max_observation_steps", "Maximum observation attempts.", minimum=1, maximum=32, default=5),
+            _p("max_duration_s", "Maximum behavior duration in seconds.", minimum=0.1, maximum=3600),
+            _p("max_v_mps", "Requested navigation linear cap.", minimum=0.01, maximum=0.50),
+            _p("max_omega_rad_s", "Requested navigation angular cap.", minimum=0.01, maximum=1.20),
+        ),
+        voice_exposed=True,
+        session_watchdog=True,
+    ),
+    ActionDescriptor(
+        "behavior.room_cruise", "Start the canonical host Room Cruise behavior.",
+        (
+            _p("max_duration_s", "Maximum behavior duration in seconds.", minimum=0.1, maximum=3600),
+            _p("max_v_mps", "Requested linear cap.", minimum=0.01, maximum=0.50),
+            _p("max_omega_rad_s", "Requested angular cap.", minimum=0.01, maximum=1.20),
+        ), voice_exposed=True, session_watchdog=True,
+    ),
+    ActionDescriptor(
+        "behavior.follow_person", "Start the canonical host Follow Person behavior.",
+        (
+            _p("max_duration_s", "Maximum behavior duration in seconds.", minimum=0.1, maximum=3600),
+            _p("max_v_mps", "Requested linear cap.", minimum=0.01, maximum=0.50),
+            _p("max_omega_rad_s", "Requested angular cap.", minimum=0.01, maximum=1.20),
+        ), voice_exposed=True, session_watchdog=True, requirements=("person_target",),
+    ),
     ActionDescriptor(
         "v3.command.stop",
         "Stop current robot motion through the canonical fail-safe command path.",
@@ -196,7 +231,7 @@ _DESCRIPTORS = (
             _p("left_mps", "Left wheel target speed in metres per second.", required=True, minimum=-0.50, maximum=0.50),
             _p("right_mps", "Right wheel target speed in metres per second.", required=True, minimum=-0.50, maximum=0.50),
         ),
-        voice_exposed=True,
+        voice_exposed=False,
         session_watchdog=True,
     ),
     ActionDescriptor(

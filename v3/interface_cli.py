@@ -179,6 +179,11 @@ def _parser() -> argparse.ArgumentParser:
     add_command("status", help="Rövid robot- és runtime-állapot.")
     add_command("diag", help="Részletes diagnosztika.")
     add_command("caps", help="Élő RobotInterface-képességek.")
+    public_read = add_command("read", help="Publikus robot-, world- vagy behavior-állapot lekérdezése.")
+    public_read.add_argument("resource")
+    public_execute = add_command("execute", help="Canonical RobotInterface-képesség végrehajtása.")
+    public_execute.add_argument("action")
+    public_execute.add_argument("--parameters", default="{}", help="paraméterek JSON-objektumként")
     add_command("stop", help="Mozgás STOP; a runtime futva marad, ha jelen van.")
     add_command("shutdown", help="STOP + capture-finalizálás + runtime-leállítás.")
     add_command("panic", help="Fail-safe STOP és runtime-leállítás.")
@@ -450,6 +455,17 @@ def _execute(
             _print_json(output)
     elif command == "caps":
         output = interface.capabilities()
+        if not args.json:
+            _print_json(output)
+    elif command == "read":
+        output = interface.read(args.resource)
+        if not args.json:
+            _print_json(output)
+    elif command == "execute":
+        parameters = json.loads(args.parameters)
+        if not isinstance(parameters, dict):
+            raise ValueError("--parameters must be a JSON object")
+        output = interface.execute(args.action, **parameters)
         if not args.json:
             _print_json(output)
     elif command == "stop":

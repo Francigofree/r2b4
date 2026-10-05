@@ -63,6 +63,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--interactive", action="store_true", help="interactive text-only conversation")
     parser.add_argument("--provider", choices=SUPPORTED_LLM_PROVIDERS)
     parser.add_argument("--model")
+    parser.add_argument("--developer-mode", action="store_true", help="explicitly enable source/evidence/config development tools for this host session")
     return parser
 
 
@@ -110,7 +111,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        with build_voice_interface(root, api_key=key, provider=provider, model=model) as bundle:
+        with build_voice_interface(
+            root, api_key=key, provider=provider, model=model, developer_mode=args.developer_mode,
+        ) as bundle:
             interface = bundle.interface
             if args.text:
                 accepted = interface.execute("conversation.submit_text", text=args.text, source=args.source)

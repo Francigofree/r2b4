@@ -82,6 +82,20 @@ class VoiceActionExecutor:
         if action is None:
             return VoiceActionExecution("NONE", None, False)
 
+        # STOP revokes upper intents even when observation/capability state or
+        # V3 health is unavailable. It must never wait behind a positive-action
+        # admission check or depend on World Model readiness.
+        if action.name == "v3.command.stop":
+            if action.parameters:
+                return VoiceActionExecution("REJECTED:UNKNOWN_PARAMETER", action.name, False)
+            if self._mode == "shadow":
+                return VoiceActionExecution("SHADOW_ACCEPTED", action.name, False)
+            raw_result = self._interface.execute("v3.command.stop")
+            command_id, mission_id = self._correlation_ids(raw_result)
+            return VoiceActionExecution(
+                "EXECUTED", action.name, True, command_id=command_id, mission_id=mission_id,
+            )
+
         # Never act on the context captured before the network/LLM roundtrip.
         fresh = self._context.build()
         validation = self._validator.validate(action, fresh)
@@ -163,13 +177,11 @@ class VoiceActionExecutor:
         parameters = proposal.get("parameters", {})
         if not isinstance(name, str) or not isinstance(parameters, Mapping):
             raise ValueError("voice action proposal has invalid shape")
-        normalized: list[tuple[str, float]] = []
+        normalized: list[tuple[str, object]] = []
         for key, value in parameters.items():
             if not isinstance(key, str):
                 raise ValueError("voice action parameter name must be a string")
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise ValueError(f"voice action parameter {key} must be numeric")
-            normalized.append((key, float(value)))
+            normalized.append((key, value))
         return RobotAction(name=name, parameters=tuple(sorted(normalized)))
 
 

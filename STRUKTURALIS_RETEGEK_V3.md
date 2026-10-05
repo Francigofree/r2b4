@@ -288,6 +288,12 @@ Encoder acquisition-idő és friss snapshot nem igazol lezárt fizikai pulse-pre
 
 ### V3 CLOSED — execution és behavior határ
 
+A L4 `WorldSnapshot` a V3 lokális operational worldje, nem a Public World
+Model. A felső szemantikai világmodell, tartós személy-/helymemória és behavior
+orchestration a `R2B4_SYSTEM_BEHAVIOR_CONTRACT.md` szerinti host felelősség.
+Completed observationt fogyasztanak, canonical intentet kérhetnek; V3 nem
+importálja őket, nem vár rájuk és safety/control működése nem függ tőlük.
+
 A V3 bemenete canonical command/mission intent, kért constraint és opcionális immutable behavior-preferencia vagy lokális cél. A caller a szándékot és a preferenciát adja; nem injektálhat trajectory-, kerék-, PWM- vagy safety-döntést downstream rétegbe. A profil egy logical command identity része, heartbeat közben nem változhat ugyanazon ID alatt.
 
 A V3 a lezárt inputból és saját owned state-ből bounded, determinisztikus mozgást vagy explicit HOLD/STOP/FAULT eredményt ad. A fizikai realizálhatóságot, lokalizációs és gyorsulási korlátokat, final safetyt és motor-realizációt a canonical L0–L12 lánc érvényesíti; a completed eredmény és lineage passzív evidence-ként megfigyelhető. Nem garantálhat pozitív mozgást vagy a behavior cél teljesülését elégtelen evidence vagy fizikailag lehetetlen kérés esetén.

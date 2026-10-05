@@ -24,8 +24,9 @@ class ConversationInterfaceAdapter:
         "conversation.last_turn",
     })
 
-    def __init__(self, service: ConversationService) -> None:
+    def __init__(self, service: ConversationService, *, developer_mode: bool = False) -> None:
         self.service = service
+        self.developer_mode = developer_mode
 
     def capabilities(self) -> Mapping[str, Mapping[str, object]]:
         status = self.service.status()
@@ -39,6 +40,7 @@ class ConversationInterfaceAdapter:
                 "reason": None if running else "CONVERSATION_SERVICE_NOT_RUNNING",
                 "description": "Submit one user text turn into the R2B4 Agent Core conversation orchestrator.",
                 "parameters": {"text": "string", "source": "string=stt"},
+                "agent_mode": "DEVELOPER" if self.developer_mode else "RUNTIME",
             },
             "conversation.status": {
                 "kind": "read",
@@ -76,7 +78,10 @@ class ConversationInterfaceAdapter:
         if not isinstance(source, str):
             raise ValueError("source must be a string")
         turn_id = self.service.submit_text(text, source=source)
-        return {"status": "ACCEPTED", "turn_id": turn_id, "action_mode": "PROPOSAL_ONLY"}
+        return {
+            "status": "ACCEPTED", "turn_id": turn_id, "action_mode": "PROPOSAL_ONLY",
+            "agent_mode": "DEVELOPER" if self.developer_mode else "RUNTIME",
+        }
 
 
 @dataclass(slots=True)
@@ -100,6 +105,7 @@ def build_voice_interface(
     api_key: str | None = None,
     provider: str | None = None,
     model: str | None = None,
+    developer_mode: bool = False,
     service_config: ConversationServiceConfig = ConversationServiceConfig(),
 ) -> VoiceInterfaceBundle:
     """Build one RobotInterface facade plus provider-neutral bounded Agent Core.
@@ -108,18 +114,20 @@ def build_voice_interface(
     motor/GPIO/runtime handle. Robot actions remain proposals for the existing
     fresh-state VoiceActionExecutor gate.
     """
-    from v3.interface_adapters import build_adapters
     from v3.operator_controller import OperatorController
     from v3.robot_interface import RobotInterface
 
     root = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
     root = root.resolve()
+    if type(developer_mode) is not bool:
+        raise TypeError("developer_mode must be a boolean")
     controller = OperatorController(project_root=root)
-    core_adapters = build_adapters(controller, root)
-    core_interface = RobotInterface(project_root=root, controller=controller, adapters=core_adapters)
+    core_interface = RobotInterface(project_root=root, controller=controller)
 
     llm = build_llm_client(provider=provider, api_key=api_key, model=model, project_root=root)
-    broker = AgentToolBroker(build_default_agent_tools(root))
+    broker = AgentToolBroker(build_default_agent_tools(
+        root, interface=core_interface, developer_mode=developer_mode,
+    ))
     agent = AgentCore(llm, broker, max_tool_rounds=4)
     prompt = PromptAssembler(
         root / "conf" / "r2b4_agent_system.md",
@@ -138,7 +146,7 @@ def build_voice_interface(
         self_knowledge=None,
         config=service_config,
     )
-    public_adapters = tuple(core_adapters) + (ConversationInterfaceAdapter(service),)
+    public_adapters = core_interface.adapters + (ConversationInterfaceAdapter(service, developer_mode=developer_mode),)
     public_interface = RobotInterface(project_root=root, controller=controller, adapters=public_adapters)
     return VoiceInterfaceBundle(public_interface, service)
 

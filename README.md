@@ -54,6 +54,9 @@ mellett a tényleges `/proc` affinity-layoutot auditálja.
 
 ## Használat
 
+Publikus world/behavior API, időszemantika, shared host ownership és a
+személykeresés aktuális bizonyítási határa: [PUBLIC_ROBOT_SYSTEM.md](docs/PUBLIC_ROBOT_SYSTEM.md).
+
 Az egyetlen ajánlott ember/agent belépő a gyökér `r` launcher. A `r` nem robotikai
 authority: a robotparancsokat változtatás nélkül a `v3.interface_cli` felé delegálja,
 a host/developer segédek pedig külön launcher-infrastruktúrában maradnak.
