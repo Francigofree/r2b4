@@ -82,14 +82,30 @@ class SearchPerson:
         target = self._target(fact) if fact is not None else None
         if target is None or fact.get("state") not in {"KNOWN", "LIKELY"} or fact.get("freshness") != "FRESH":
             raise ValueError("candidate place location is no longer available")
+        runtime = robot.read("operator.status")
+        expected_pid = fact["value"].get("runtime_pid")
+        if (not isinstance(runtime, Mapping) or type(expected_pid) is not int or expected_pid <= 0
+                or runtime.get("runtime_running") is not True or runtime.get("runtime_pid") != expected_pid):
+            raise ValueError("candidate place coordinates do not belong to the current V3 runtime")
+        mode, hz = runtime.get("capture_mode"), runtime.get("capture_hz")
+        if mode not in {"alap", "full", "nincs"} or type(hz) is not int or hz <= 0:
+            raise ValueError("current runtime capture identity is unavailable")
+        params = dict(self._parameters)
+        if ("capture_mode" in params and params["capture_mode"] != mode
+                or "capture_hz" in params and params["capture_hz"] != hz):
+            raise ValueError("search cannot change capture identity in a bound localization frame")
+        if mode == "alap" and params.get("capture") is True:
+            raise ValueError("a fresh bounded capture slot can restart the world-bound runtime")
+        params.update(capture=False, capture_mode=mode, capture_hz=hz, expected_runtime_pid=expected_pid)
         self._places[self._index] = (place, target)
-        return robot.execute("v3.command.navigate", **target, **self._parameters)
+        return robot.execute("v3.command.navigate", **target, **params)
 
     @staticmethod
     def _integer(value: object, name: str, maximum: int) -> int:
-        if type(value) is not int or not 0 < value <= maximum:
+        if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+                or int(value) != value or not 0 < value <= maximum):
             raise ValueError(f"{name} must be an integer in 1..{maximum}")
-        return value
+        return int(value)
 
     def start(self, robot: RobotOperations, parameters: Mapping[str, object]) -> object:
         params = dict(parameters)

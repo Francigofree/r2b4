@@ -21,6 +21,7 @@ class Robot:
         self.actions = []
         self.stops = 0
         self.on_observe = None
+        self.runtime_pid = 123
         self.status = {}
 
     def capabilities(self):
@@ -31,6 +32,9 @@ class Robot:
             return self.world.snapshot().to_jsonable()
         if resource == "v3.status":
             return self.status
+        if resource == "operator.status":
+            return {"runtime_running": True, "runtime_pid": self.runtime_pid,
+                    "capture_mode": "full", "capture_hz": 10}
         raise KeyError(resource)
 
     def execute(self, action, **parameters):
@@ -68,7 +72,7 @@ def setup_search():
     clock = Clock()
     world = PublicWorldModel(clock_ns=clock, clock_epoch="search-boot")
     for name, x in (("room:kitchen", 5.0), ("room:lounge", 1.0)):
-        world.observe(name, "location", {"frame_id": "R2B4_BOOT_ROBOT_MAP", "x_m": x, "y_m": 0.0},
+        world.observe(name, "location", {"frame_id": "R2B4_BOOT_ROBOT_MAP", "x_m": x, "y_m": 0.0, "runtime_pid": 123},
                       domain="room_topology", measurement_time_ns=1, confidence=0.9,
                       source="room_mapping", lineage=("map:7", name))
     robot = Robot(clock, world)
@@ -94,6 +98,9 @@ def test_stale_last_known_place_ranks_search_then_named_evidence_completes():
     })
     assert robot.actions[0][0] == "v3.command.navigate"
     assert robot.actions[0][1]["x_m"] == 1.0  # Stale knowledge is only a search preference.
+    assert robot.actions[0][1]["expected_runtime_pid"] == robot.runtime_pid
+    assert robot.actions[0][1]["capture"] is False
+    assert robot.actions[0][1]["capture_mode"] == "full"
     robot.advance()
     assert system.step().lifecycle is BehaviorLifecycle.ACTIVE
     robot.advance(complete=True)
@@ -193,4 +200,38 @@ def test_candidate_bound_is_rejected_before_navigation():
     result = system.start("search_person", {"entity_id": "person:laci", "candidate_places": ["room:lounge"] * 33})
     assert result.lifecycle is BehaviorLifecycle.FAILED
     assert robot.actions == []
+    assert robot.stops == 1
+
+
+def test_integral_float_limits_from_voice_are_accepted_but_fractional_limits_are_not():
+    _, _, robot, system = setup_search()
+    state = system.start("search_person", {"entity_id": "person:laci", "max_steps": 5.0,
+                                          "max_observation_steps": 2.0})
+    assert state.lifecycle is BehaviorLifecycle.STARTING
+    assert robot.actions[0][0] == "v3.command.navigate"
+    _, _, robot, system = setup_search()
+    failed = system.start("search_person", {"entity_id": "person:laci", "max_steps": 2.5})
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert robot.actions == []
+
+
+def test_prior_runtime_place_coordinates_cannot_create_navigation_intent():
+    _, _, robot, system = setup_search()
+    robot.runtime_pid = 456
+    failed = system.start("search_person", {"entity_id": "person:laci"})
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert robot.actions == []
+    assert robot.stops == 1
+
+
+def test_runtime_change_before_next_region_fails_without_navigation():
+    _, _, robot, system = setup_search()
+    system.start("search_person", {"entity_id": "person:laci", "max_observation_steps": 1})
+    robot.advance(complete=True)
+    system.step()
+    robot.runtime_pid = 456
+    robot.advance()
+    failed = system.step()
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert len(robot.actions) == 2  # Only first region and its camera observation.
     assert robot.stops == 1
