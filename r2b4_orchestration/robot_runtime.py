@@ -204,9 +204,12 @@ class PublicRobotRuntime:
         program_interface = interface
         if hasattr(interface, "adapters"):
             from v3.robot_interface import RobotInterface
+            if isinstance(interface, RobotInterface):
+                interface.set_observation_sink(self._interface_event, clock_ns=clock_ns)
             program_interface = RobotInterface(
                 project_root=root, controller=interface.controller,
                 adapters=(*interface.adapters, PublicRobotStateAdapter(self)), upper_runtime=False,
+                observation_sink=self._interface_event, clock_ns=clock_ns,
             )
         self.behaviors = BehaviorSystem(program_interface, clock_ns=clock_ns, event_sink=self._behavior_event)
         from r2b4_orchestration.search_person import SearchPerson, SearchAnyPerson
@@ -269,6 +272,9 @@ class PublicRobotRuntime:
 
     def _brain_event(self, event: object) -> None:
         self._queue_evidence("brain", event)
+
+    def _interface_event(self, event: object) -> None:
+        self._queue_evidence("interface", event)
 
     def world_input_evidence(self, snapshot: Mapping[str, object]) -> None:
         # Only behavior inputs are recorded here; ordinary UI state reads do not

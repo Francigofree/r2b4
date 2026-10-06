@@ -536,7 +536,7 @@ class McapCaptureConsumer:
                 if isinstance(drops, int) and not isinstance(drops, bool) and drops > 0:
                     reason = payload.get("integrity_reason")
                     self._integrity_reasons.add(
-                        reason if isinstance(reason, str) and reason.startswith("PUBLIC_RUNTIME_")
+                        reason if isinstance(reason, str) and reason.startswith(("PUBLIC_RUNTIME_", "HRI_"))
                         else "CORE_TRANSPORT_LOSS"
                     )
             return
@@ -696,6 +696,8 @@ class McapCaptureConsumer:
         if item.topic == PUBLIC_RUNTIME_EVENT_TOPIC and isinstance(payload, Mapping):
             event_time = _non_negative_int(payload.get("publication_time_ns"), "public event publication_time_ns")
             event_sequence = _non_negative_int(payload.get("event_sequence"), "public event sequence")
+        elif item.topic == HRI_EVENT_TOPIC and isinstance(payload, Mapping):
+            event_time = _non_negative_int(payload.get("monotonic_ns"), "HRI event monotonic_ns")
         return (
             EncodedRecord(
                 hub_sequence=item.sequence,
@@ -708,6 +710,8 @@ class McapCaptureConsumer:
                     {
                         "source_topic": item.topic,
                         "monotonic_ns": event_time,
+                        "hub_sequence": item.sequence,
+                        "published_monotonic_ns": item.published_monotonic_ns,
                         "payload": event,
                     }
                 ),

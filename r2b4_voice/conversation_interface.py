@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+import queue
+import threading
+import time
 
 from r2b4_orchestration.agent_core import AgentCore, AgentToolBroker
 from r2b4_orchestration.agent_tools import build_default_agent_tools
@@ -88,15 +91,82 @@ class ConversationInterfaceAdapter:
 class VoiceInterfaceBundle:
     interface: object
     conversation: ConversationService
+    observation: "_AgentObservationJournal | None" = None
 
     def close(self) -> None:
-        self.conversation.close()
+        try:
+            self.conversation.close()
+        finally:
+            if self.observation is not None:
+                self.observation.close()
 
     def __enter__(self) -> "VoiceInterfaceBundle":
         return self
 
     def __exit__(self, _exc_type, _exc, _tb) -> None:
         self.close()
+
+
+class _AgentObservationJournal:
+    """Small host journal writer; Agent publication only offers scalar rows."""
+
+    def __init__(self, journal) -> None:
+        self._journal = journal
+        self._queue = queue.Queue(maxsize=256)
+        self._closed = threading.Event()
+        self._admission_lock = threading.Lock()
+        self._last_fields = None
+        self._offer_dropped = 0
+        self._write_dropped = 0
+        self._thread = threading.Thread(target=self._run, name="r2b4-agent-evidence", daemon=True)
+        self._thread.start()
+
+    def offer(self, event: str, fields: Mapping[str, object]) -> None:
+        with self._admission_lock:
+            if self._closed.is_set():
+                raise RuntimeError("agent observation journal is closed")
+            self._last_fields = fields
+            try:
+                self._queue.put_nowait((event, fields))
+            except queue.Full:
+                self._offer_dropped += 1
+                raise
+
+    def _run(self) -> None:
+        while True:
+            try:
+                event, fields = self._queue.get(timeout=0.05)
+            except queue.Empty:
+                if self._closed.is_set():
+                    self._finish_loss()
+                    return
+                continue
+            try:
+                self._journal.append(event, **{
+                    **fields, "evidence_dropped": int(fields.get("evidence_dropped", 0)) + self._write_dropped,
+                })
+            except Exception:
+                self._write_dropped += 1
+            finally:
+                self._queue.task_done()
+
+    def close(self) -> None:
+        with self._admission_lock:
+            self._closed.set()
+        self._thread.join(timeout=2.0)
+
+    def _finish_loss(self) -> None:
+        fields = self._last_fields
+        if fields is None or not (self._offer_dropped or self._write_dropped):
+            return
+        try:
+            self._journal.append("AGENT_EVIDENCE_LOSS", **{
+                **fields, "monotonic_ns": time.monotonic_ns(),
+                "event_sequence": int(fields["event_sequence"]) + 1,
+                "evidence_dropped": self._offer_dropped + self._write_dropped,
+            })
+        except Exception:
+            pass
 
 
 def build_voice_interface(
@@ -116,6 +186,7 @@ def build_voice_interface(
     """
     from v3.operator_controller import OperatorController
     from v3.robot_interface import RobotInterface
+    from v3.hri_evidence import default_hri_journal
 
     root = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
     root = root.resolve()
@@ -134,6 +205,7 @@ def build_voice_interface(
         max_history_turns=service_config.max_history_turns,
     )
     journal = ConversationJournal(root / "runtime" / "conversations")
+    observation = _AgentObservationJournal(default_hri_journal(root))
     service = ConversationService(
         llm=llm,
         agent=agent,
@@ -146,10 +218,11 @@ def build_voice_interface(
         self_knowledge=None,
         config=service_config,
         brain_interface=core_interface,
+        observation_sink=observation.offer,
     )
     public_adapters = core_interface.adapters + (ConversationInterfaceAdapter(service, developer_mode=developer_mode),)
     public_interface = RobotInterface(project_root=root, controller=controller, adapters=public_adapters)
-    return VoiceInterfaceBundle(public_interface, service)
+    return VoiceInterfaceBundle(public_interface, service, observation)
 
 
 __all__ = ["ConversationInterfaceAdapter", "VoiceInterfaceBundle", "build_voice_interface"]

@@ -94,6 +94,7 @@ class ConversationService:
         config: ConversationServiceConfig = ConversationServiceConfig(),
         monotonic_ns=time.monotonic_ns,
         brain_interface: object | None = None,
+        observation_sink: Callable[[str, Mapping[str, object]], None] | None = None,
     ) -> None:
         if not callable(getattr(llm, "complete", None)):
             raise TypeError("llm must provide complete()")
@@ -111,6 +112,10 @@ class ConversationService:
         self._config = config
         self._monotonic_ns = monotonic_ns
         self._brain_interface = brain_interface
+        self._observation_sink = observation_sink
+        self._observation_producer_id = uuid.uuid4().hex
+        self._observation_sequence = 0
+        self._observation_dropped = 0
         self._queue: queue.Queue[_PendingTurn | None] = queue.Queue(maxsize=config.queue_size)
         self._pending: dict[str, _PendingTurn] = {}
         self._history: list[ConversationMemoryTurn] = []
@@ -216,6 +221,7 @@ class ConversationService:
                 "completed_turns_cached": len(self._completed),
                 "completion_cache_capacity": self._config.completion_cache_size,
                 "last_error": self._last_error,
+                "observation_dropped": self._observation_dropped,
                 "action_mode": "PROPOSAL_ONLY",
                 "model": self.model,
                 "agent_core": self._agent is not None,
@@ -293,7 +299,7 @@ class ConversationService:
                         self._pending.pop(item.turn.turn_id, None)
                 self._queue.task_done()
 
-    def _store_result(self, result: ConversationTurnResult, *, error: str | None) -> None:
+    def _store_result(self, result: ConversationTurnResult, *, error: str | None) -> ConversationTurnResult:
         with self._condition:
             pending = self._pending.get(result.turn_id)
             if result.error is None and (self._closed or (pending is not None and (
@@ -313,6 +319,7 @@ class ConversationService:
             while len(self._completed) > self._config.completion_cache_size:
                 self._completed.popitem(last=False)
             self._condition.notify_all()
+            return result
 
     def _process(self, pending: _PendingTurn) -> None:
         turn = pending.turn
@@ -321,6 +328,7 @@ class ConversationService:
                 raise TimeoutError("CONVERSATION_TURN_CANCELLED_OR_EXPIRED")
         try:
             check_active()
+            self._observe_agent("AGENT_TURN_STARTED", pending, {"source": turn.source})
             context = self._context.build()
             knowledge: Mapping[str, object] | None = None
             if self._self_knowledge is not None:
@@ -362,6 +370,7 @@ class ConversationService:
             if self._agent is not None:
                 def emit(event: str, payload: Mapping[str, object]) -> None:
                     self._journal.append(event, {"turn_id": turn.turn_id, **dict(payload)})
+                    self._observe_agent(event.upper(), pending, payload)
 
                 decision = self._agent.run(messages, context.available_actions, event_sink=emit,
                                            cancel_event=pending.cancelled, deadline=pending.deadline)
@@ -394,7 +403,12 @@ class ConversationService:
                 proposed_plan=decision.goal_plan,
             )
             self._journal.append("assistant", result.to_jsonable())
-            self._store_result(result, error=None)
+            result = self._store_result(result, error=None)
+            self._observe_agent("AGENT_TURN_FAILED" if result.error else "AGENT_TURN_COMPLETED", pending, {
+                "status": result.action_status,
+                "error": result.error,
+                "action_name": result.proposed_action.name if result.proposed_action is not None else None,
+            })
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             try:
@@ -412,7 +426,42 @@ class ConversationService:
                 goal_id=pending.goal_id,
             )
             self._journal.append("error", result.to_jsonable())
-            self._store_result(result, error=error)
+            result = self._store_result(result, error=error)
+            self._observe_agent("AGENT_TURN_FAILED", pending, {
+                "status": "ERROR", "error": type(exc).__name__,
+            })
+
+    def _observe_agent(self, event: str, pending: _PendingTurn, fields: Mapping[str, object]) -> None:
+        """Compact host evidence; storage failure never changes a turn or proposal.
+
+        The sink is a bounded enqueue callback; the composition's collector
+        owns journal I/O. Tool arguments, results, images and provider messages
+        never enter the flight recorder.
+        """
+        if self._observation_sink is None:
+            return
+        self._observation_sequence += 1
+        row: dict[str, object] = {
+            "observation_topic": "r2b4.agent",
+            "monotonic_ns": self._monotonic_ns(),
+            "request_time_ns": pending.turn.monotonic_ns,
+            "session_id": self.session_id,
+            "turn_id": pending.turn.turn_id,
+            "goal_id": pending.goal_id,
+            "producer_id": self._observation_producer_id,
+            "event_sequence": self._observation_sequence,
+            "evidence_dropped": self._observation_dropped,
+        }
+        for key in ("source", "round", "tool", "status", "error", "action_name"):
+            value = fields.get(key)
+            if value is None or type(value) in (bool, int):
+                row[key] = value
+            elif isinstance(value, str):
+                row[key] = value[:256]
+        try:
+            self._observation_sink(event, row)
+        except Exception:
+            self._observation_dropped += 1
 
 
 __all__ = [

@@ -1,8 +1,8 @@
 """Host-side human/robot interaction evidence for R2B4.
 
 This module has no command, mission, safety, runtime or motor authority. Voice
-writes a tiny append-only journal; the passive capture sidecar imports a bounded
-recent slice as ``v3.hri_event`` observations. MCAP remains the evidence
+writes a tiny append-only journal; the passive capture sidecar follows a bounded
+recent slice and live ``v3.hri_event`` observations. MCAP remains the evidence
 authority used by Test Hub.
 """
 
@@ -11,9 +11,10 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import stat
 import threading
 import time
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -26,6 +27,12 @@ HRI_SUMMARY_NAME = "hri_summary.json"
 DEFAULT_LOOKBACK_NS = 60_000_000_000
 DEFAULT_MAX_IMPORT_EVENTS = 512
 DEFAULT_MAX_JOURNAL_BYTES = 8 * 1024 * 1024
+MAX_HRI_EVENT_BYTES = 65_536
+_HRI_READ_BATCH_BYTES = 262_144
+_HRI_EVENT_BATCH_COUNT = 64
+_HRI_READ_CHUNK_BYTES = 65_536
+_HRI_MAX_SESSION_EVENTS = 100_000
+_HRI_MAX_PRODUCERS = 64
 
 
 def _json_value(value: object) -> object:
@@ -329,6 +336,280 @@ def default_hri_journal(project_root: str | Path) -> HriEventJournal:
     return HriEventJournal(root / "runtime" / HRI_JOURNAL_NAME)
 
 
+class HriEventFollower:
+    """Read-only capture edge with bounded lookback, live reads and close drain.
+
+    The newest lookback rows retain the journal's existing identity/time fields.
+    Each drain bounds bytes and rows, and finish freezes the readable EOF so an
+    active voice producer cannot keep capture finalization open indefinitely.
+    Malformed historical rows remain outside the imported lookback; lost or
+    malformed live evidence is an explicit capture-integrity observation.
+    """
+
+    def __init__(self, project_root: str | Path, *,
+                 lookback_ns: int = DEFAULT_LOOKBACK_NS,
+                 max_events: int = DEFAULT_MAX_IMPORT_EVENTS) -> None:
+        if type(lookback_ns) is not int or lookback_ns < 0:
+            raise ValueError("lookback_ns must be a non-negative integer")
+        if type(max_events) is not int or max_events <= 0:
+            raise ValueError("max_events must be a positive integer")
+        self.path = Path(project_root).resolve() / "runtime" / HRI_JOURNAL_NAME
+        self._lookback_ns = lookback_ns
+        self._max_events = max_events
+        self._stream = None
+        self._identity = None
+        self._started_ns = None
+        self._history_end = None
+        self._history = deque(maxlen=max_events)
+        self._history_dropped = 0
+        self._ready = deque()
+        self._pending = b""
+        self._discard_line = False
+        self._disabled = False
+        self._final_offset = None
+        self._live_rows_read = 0
+        self._previous: dict[str, tuple[int, int]] = {}
+        self._read_tail = b""
+        self._read_tail_offset = 0
+
+    def _loss(self, reason: str, *, count: int = 1) -> tuple[str, object]:
+        return "v3.capture_transport", {
+            "event_type": "hri_evidence_loss", "integrity_reason": reason,
+            "drop_count": count, "monotonic_ns": time.monotonic_ns(),
+        }
+
+    def _open(self, *, history: bool) -> None:
+        try:
+            descriptor = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            os.close(descriptor)
+            raise OSError("HRI event journal must be a regular file")
+        self._stream = os.fdopen(descriptor, "rb")
+        self._identity = info.st_dev, info.st_ino
+        if history:
+            self._history_end = info.st_size
+            start = max(0, info.st_size - DEFAULT_MAX_JOURNAL_BYTES)
+            self._stream.seek(start)
+            if start:
+                self._discard_line = True
+                self._ready.append(self._loss("HRI_JOURNAL_BYTE_LIMIT"))
+
+    def start(self) -> None:
+        if self._started_ns is not None:
+            return
+        self._started_ns = time.monotonic_ns()
+        try:
+            self._open(history=True)
+        except OSError:
+            self._disabled = True
+            self._ready.append(self._loss("HRI_JOURNAL_UNREADABLE"))
+
+    @staticmethod
+    def _decode(line: bytes) -> dict[str, object]:
+        def invalid_constant(_):
+            raise ValueError("non-finite HRI event value")
+
+        def object_fields(pairs):
+            row = {}
+            for key, value in pairs:
+                if key in row:
+                    raise ValueError("duplicate HRI event field")
+                row[key] = value
+            return row
+
+        row = json.loads(line, parse_constant=invalid_constant, object_pairs_hook=object_fields)
+        if not isinstance(row, dict) or row.get("schema") != HRI_EVENT_SCHEMA:
+            raise ValueError("invalid HRI event schema")
+        event_type = row.get("event_type")
+        if not isinstance(event_type, str) or not event_type or len(event_type) > 256:
+            raise ValueError("HRI event_type must be bounded non-empty text")
+        if _event_time(row) is None:
+            raise ValueError("HRI monotonic_ns must be a non-negative integer")
+        counters = ("producer_id", "event_sequence", "evidence_dropped")
+        if any(name in row for name in counters):
+            producer = row.get("producer_id")
+            if not isinstance(producer, str) or not producer or len(producer) > 256:
+                raise ValueError("HRI producer_id must be bounded non-empty text")
+            for name in counters[1:]:
+                if type(row.get(name)) is not int or row[name] < 0:
+                    raise ValueError("HRI producer counters must be non-negative integers")
+            if row["event_sequence"] == 0:
+                raise ValueError("HRI event_sequence must be positive")
+        return row
+
+    def _producer_losses(self, row: Mapping[str, object], *, history: bool):
+        producer = row.get("producer_id")
+        if producer is None:
+            return []
+        previous = self._previous.get(producer)
+        if previous is None and len(self._previous) >= _HRI_MAX_PRODUCERS:
+            self._disabled = True
+            return [self._loss("HRI_PRODUCER_LIMIT")]
+        losses = []
+        if not history:
+            if previous is not None:
+                if row["event_sequence"] != previous[0] + 1:
+                    losses.append(self._loss("HRI_EVENT_SEQUENCE_GAP"))
+                if row["evidence_dropped"] != previous[1]:
+                    losses.append(self._loss("HRI_PRODUCER_LOSS"))
+            elif row["evidence_dropped"]:
+                losses.append(self._loss("HRI_PRODUCER_LOSS"))
+        self._previous[producer] = row["event_sequence"], row["evidence_dropped"]
+        return losses
+
+    def _finish_history(self) -> None:
+        if self._history_dropped:
+            self._ready.append(self._loss("HRI_LOOKBACK_EVENT_LIMIT", count=self._history_dropped))
+        self._ready.extend((HRI_EVENT_TOPIC, row) for row in self._history)
+        self._history.clear()
+        self._history_end = None
+
+    def drain(self) -> tuple[tuple[str, object], ...]:
+        if self._started_ns is None:
+            self.start()
+        result = []
+        while self._ready and len(result) < _HRI_EVENT_BATCH_COUNT:
+            result.append(self._ready.popleft())
+        if self._disabled or self._ready:
+            return tuple(result)
+        try:
+            if self._stream is None:
+                self._open(history=False)
+                if self._stream is None:
+                    return tuple(result)
+            info = self.path.stat(follow_symlinks=False)
+            changed = ((info.st_dev, info.st_ino) != self._identity
+                       or info.st_size < self._stream.tell()
+                       or (self._history_end is not None and info.st_size < self._history_end))
+            if self._read_tail and not changed:
+                # Journal compaction truncates/replaces content in the same inode.
+                # A short anchor also catches rewrite followed by rapid regrowth.
+                changed = os.pread(self._stream.fileno(), len(self._read_tail), self._read_tail_offset) != self._read_tail
+            if changed:
+                self._disabled = True
+                result.append(self._loss("HRI_JOURNAL_CHANGED"))
+                return tuple(result)
+            remaining = _HRI_READ_BATCH_BYTES
+            lines = 0
+            lower = max(0, self._started_ns - self._lookback_ns)
+            while lines < _HRI_EVENT_BATCH_COUNT and len(result) < _HRI_EVENT_BATCH_COUNT:
+                newline = self._pending.find(b"\n")
+                if newline >= 0:
+                    line, self._pending = self._pending[:newline], self._pending[newline + 1:]
+                    lines += 1
+                    if self._discard_line:
+                        self._discard_line = False
+                        continue
+                    history = self._history_end is not None
+                    if not history:
+                        self._live_rows_read += 1
+                        if self._live_rows_read > _HRI_MAX_SESSION_EVENTS:
+                            self._disabled = True
+                            result.append(self._loss("HRI_SESSION_EVENT_LIMIT"))
+                            break
+                    reason = "HRI_EVENT_OVERSIZED" if len(line) > MAX_HRI_EVENT_BYTES else None
+                    if reason is None:
+                        try:
+                            row = self._decode(line)
+                        except (ValueError, UnicodeError, RecursionError):
+                            reason = "HRI_EVENT_INVALID"
+                    if reason is not None:
+                        if not history:
+                            result.append(self._loss(reason))
+                        continue
+                    stamp = row["monotonic_ns"]
+                    upper = (self._started_ns if history else time.monotonic_ns()) + 1_000_000_000
+                    if stamp > upper:
+                        if not history:
+                            result.append(self._loss("HRI_EVENT_FUTURE_TIME"))
+                        continue
+                    if stamp < lower:
+                        continue
+                    producer_losses = self._producer_losses(row, history=history)
+                    self._ready.extend(producer_losses)
+                    if self._disabled:
+                        while self._ready and len(result) < _HRI_EVENT_BATCH_COUNT:
+                            result.append(self._ready.popleft())
+                        break
+                    if history:
+                        if len(self._history) == self._max_events:
+                            self._history_dropped += 1
+                        self._history.append(row)
+                    else:
+                        self._ready.append((HRI_EVENT_TOPIC, row))
+                        while self._ready and len(result) < _HRI_EVENT_BATCH_COUNT:
+                            result.append(self._ready.popleft())
+                        if self._ready:
+                            break
+                    continue
+                if self._history_end is not None and self._stream.tell() >= self._history_end:
+                    self._finish_history()
+                    while self._ready and len(result) < _HRI_EVENT_BATCH_COUNT:
+                        result.append(self._ready.popleft())
+                    if self._ready:
+                        break
+                    continue
+                if len(self._pending) > MAX_HRI_EVENT_BYTES:
+                    if not self._discard_line and self._history_end is None:
+                        result.append(self._loss("HRI_EVENT_OVERSIZED"))
+                    self._pending = b""
+                    self._discard_line = True
+                if remaining <= 0:
+                    break
+                size = min(_HRI_READ_CHUNK_BYTES, remaining)
+                for limit in (self._history_end, self._final_offset):
+                    if limit is not None:
+                        size = min(size, limit - self._stream.tell())
+                if size <= 0:
+                    break
+                data = self._stream.read(size)
+                if not data:
+                    break
+                remaining -= len(data)
+                self._pending += data
+                self._read_tail = data[-64:]
+                self._read_tail_offset = self._stream.tell() - len(self._read_tail)
+        except OSError:
+            self._disabled = True
+            result.append(self._loss("HRI_JOURNAL_UNREADABLE"))
+        return tuple(result)
+
+    def finish(self):
+        """Yield bounded batches to close-time EOF, then release the reader."""
+        if self._started_ns is None:
+            self.start()
+        try:
+            if self._stream is None and not self._disabled:
+                self._open(history=False)
+            if self._stream is not None:
+                self._final_offset = os.fstat(self._stream.fileno()).st_size
+            while True:
+                before = (self._stream.tell() if self._stream is not None else None,
+                          len(self._pending), len(self._ready), self._history_end)
+                batch = self.drain()
+                if batch:
+                    yield batch
+                if self._disabled or self._stream is None:
+                    break
+                after = (self._stream.tell(), len(self._pending), len(self._ready), self._history_end)
+                if before == after:
+                    break
+            if not self._disabled and (self._pending or self._discard_line):
+                yield (self._loss("HRI_EVENT_PARTIAL"),)
+        except OSError:
+            yield (self._loss("HRI_JOURNAL_UNREADABLE"),)
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
+
+
 def load_hri_events_for_capture(
     project_root: str | Path,
     capture_started_ns: int,
@@ -549,6 +830,7 @@ __all__ = [
     "HRI_TIMELINE_NAME",
     "HriBehaviorObserver",
     "HriEventJournal",
+    "HriEventFollower",
     "build_hri_evidence",
     "default_hri_journal",
     "load_hri_events_for_capture",

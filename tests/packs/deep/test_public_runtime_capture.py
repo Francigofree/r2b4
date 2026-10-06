@@ -79,6 +79,11 @@ def test_public_events_direct_process_equivalent_and_final_drain(tmp_path):
     finally:
         outputs = [session.finalize(SimpleNamespace(status=0)) for session in sessions]
     captured = [public_rows(output) for output in outputs]
+    for rows in captured:
+        assert len(rows) == 1
+        envelope = rows[0][1]
+        assert type(envelope.pop("hub_sequence")) is int
+        assert envelope.pop("published_monotonic_ns") >= row["publication_time_ns"]
     assert captured[0] == captured[1] == [(row["publication_time_ns"], {
         "source_topic": PUBLIC_RUNTIME_EVENT_TOPIC,
         "monotonic_ns": row["publication_time_ns"], "payload": row,

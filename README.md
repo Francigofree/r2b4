@@ -158,26 +158,63 @@ Közvetlen command kliens:
 python3 -m v3.control_cli --help
 ```
 
-## Passzív observation és MCAP capture
+## Passzív observation / flight recorder és MCAP capture
 
 A production eredményekből passzív, data-blind `ObservationHub` fan-out készül:
 
 ```text
-V3 completed objects
-        |
-        v
- ObservationHub
-   |        |
-   |        +--> telemetry / GUI: LATEST
-   |
-   +--> capture: RELIABLE, bounded, required
+HRI / Agent ── host journal ──────────┐
+Brain / Public World / Behavior ──────┤
+RobotInterface request/result/error ─┤
+V3 L0–L12 / command / mission ────────┤──► ObservationHub
+Safety / health / actuator output ───┘       ├──► telemetry / GUI: LATEST
+                                            └──► flight recorder: RELIABLE
+                                                     │
+                                                     ▼
+                                                    MCAP
+                                                     │
+                                                     ▼
+                                               EVI / DIAG / replay
 ```
 
 A felső host runtime saját ObservationHubja V3 és capture nélkül is él.
 `r2b4.brain` és `r2b4.behavior` immutable eventjei goal/subtask/decision és
 command/mission identity szerint kapcsolódnak. A meglévő passzív journal
 follower ugyanezt a lineage-et `v3.public_runtime_event` témán viszi MCAP-ba.
+Az `r2b4.interface` request/result/error eventek egy request identityhoz kötik
+a kért és a feloldott akciót, valamint az elérhető goal/subtask/decision,
+behavior/command/mission identityt. Az alias egyetlen végrehajtást jelent;
+a STOP megfigyelése a fizikai STOP után történik.
 Observation-, capture- és journal-hiba nem módosítja a Brain végrehajtását.
+
+A capture-sidecar a HRI-journalt már futás közben követi `v3.hri_event` témán,
+induláskor legfeljebb 60 másodperc / 512 esemény előzménnyel. Az Agent turn- és
+tool-eseményei ugyanitt, `observation_topic=r2b4.agent` jelöléssel jelennek meg.
+A külön bounded host writer kompakt scalar lineage-et ír; tool argumentum,
+teljes eredmény, kép és provider-transcript nem kerül ezen az élen a recorderbe.
+A live journal sérülése, compactionje, producer sequence-gapje és jelzett
+adatvesztése explicit capture-integrity hiba. A close az elfogadott eseményeket
+draineli, új journal-adatból csak a lezáráskor látott EOF-ig olvas.
+
+Az MCAP event envelope megőrzi a `source_topic`, `hub_sequence` és
+`published_monotonic_ns` adatokat az eredeti payload mellett. HRI/public runtime
+source idő és hub publication idő külön marad; a measurement idő, domain
+sequence/revision és lineage továbbra is a source payload saját adata.
+
+A recorder a meglévő V3 capture-sessiont bővíti. `c alap` bounded trigger-ablak,
+`c full` a teljes session rögzítése; `c nincs` kikapcsolja a capture-t.
+A host események V3 nélkül is keletkeznek, de külön, folyamatosan futó
+MCAP-szolgáltatás nincs. Teljes session evidence-hez például:
+
+```bash
+./r rt start c full c 10
+./r cap status
+./r rt stop
+./r evi runtime/captures/<capture>.mcap --output /tmp/flight.evidence
+```
+
+A runtime indítása önmagában nem mozgatja a robotot. Az 1/5/10 Hz-es recorder
+állapot- és eseményevidence; exact motor-döntési replayhez `c 50` szükséges.
 
 A normál voice és természetes nyelvű CLI-kérés a Brainhez kerül; az Agent
 csak tervet javasol. A `brain.adopt` gyors STARTING/ACTIVE választ ad, és az

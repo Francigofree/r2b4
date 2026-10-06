@@ -20,7 +20,7 @@ from v3.adapters.process_lidar_port import _unwire_raw
 from v3.execution import CaptureRecord
 from v3.capture_ipc import CaptureCoreExpander
 from v3.capture_behavior import project_behavior_record
-from v3.hri_evidence import HRI_EVENT_TOPIC, load_hri_events_for_capture
+from v3.hri_evidence import HriEventFollower
 from v3.mcap_capture import McapCaptureConfig, McapCaptureConsumer
 from v3.observation import ObservationHub
 from v3.public_runtime_evidence import PublicRuntimeEventFollower
@@ -96,7 +96,8 @@ def _capture_sidecar_main(
         consumer.start()
         public_events = PublicRuntimeEventFollower(project_root)
         public_events.start()
-        capture_started_ns = time.monotonic_ns()
+        hri_events = HriEventFollower(project_root)
+        hri_events.start()
         expander = CaptureCoreExpander()
         ready_event.set()
 
@@ -107,6 +108,8 @@ def _capture_sidecar_main(
         running = True
         while running:
             for topic, payload in public_events.drain():
+                hub.publish(payload, topic=topic)
+            for topic, payload in hri_events.drain():
                 hub.publish(payload, topic=topic)
             # The LiDAR producer sends full scans directly here. The control
             # interpreter never unpickles/rebuilds/re-pickles raw geometry.
@@ -169,13 +172,10 @@ def _capture_sidecar_main(
                         {"event_type": "capture_core_transport_loss", "drop_count": finish_request[3]},
                         topic="v3.capture_transport",
                     )
-                for hri_event in load_hri_events_for_capture(
-                    Path(project_root), capture_started_ns, time.monotonic_ns()
-                ):
-                    hub.publish(hri_event, topic=HRI_EVENT_TOPIC)
-                for batch in public_events.finish():
-                    for topic, payload in batch:
-                        hub.publish(payload, topic=topic)
+                for follower in (public_events, hri_events):
+                    for batch in follower.finish():
+                        for topic, payload in batch:
+                            hub.publish(payload, topic=topic)
                 hub.close()
                 result = consumer.finish(finish_request[0], terminal=finish_request[1])
                 result_path = str(result.path) if result is not None else None
@@ -209,6 +209,8 @@ def _capture_sidecar_main(
     finally:
         if "public_events" in locals():
             public_events.close()
+        if "hri_events" in locals():
+            hri_events.close()
 
 
 def _status_sidecar_main(

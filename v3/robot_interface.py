@@ -9,8 +9,11 @@ itself.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass
 from pathlib import Path
+import time
 from typing import TYPE_CHECKING, Any, Protocol
+import uuid
 
 if TYPE_CHECKING:
     from r2b4_orchestration.world_model import WorldQuery, WorldQueryResult
@@ -21,6 +24,36 @@ from v3.operator_controller import OperatorController, OperatorEvent
 
 
 ROBOT_INTERFACE_SCHEMA = "R2B4_ROBOT_INTERFACE_V2"
+_OBSERVATION_TEXT_LIMIT = 256
+
+
+@dataclass(frozen=True, slots=True)
+class RobotInterfaceEvent:
+    """Compact action evidence; request time is independent of publication time."""
+
+    kind: str
+    request_id: str
+    action: str
+    resolved_action: str
+    measurement_time_ns: int
+    observation_time_ns: int
+    goal_id: str | None = None
+    subtask_id: str | None = None
+    decision_id: str | None = None
+    behavior_id: str | None = None
+    command_id: str | None = None
+    mission_id: str | None = None
+    runtime_pid: int | None = None
+    status: str | None = None
+    reason: str | None = None
+    error_type: str | None = None
+
+    def to_jsonable(self) -> dict[str, object]:
+        return {"schema": "R2B4_ROBOT_INTERFACE_EVENT_V1", **asdict(self)}
+
+
+def _observation_text(value: object) -> str | None:
+    return value[:_OBSERVATION_TEXT_LIMIT] if isinstance(value, str) and value else None
 
 
 class RobotInterfaceError(RuntimeError):
@@ -56,6 +89,8 @@ class RobotInterface:
         controller: OperatorController | None = None,
         adapters: Sequence[InterfaceAdapter] | None = None,
         upper_runtime: bool = True,
+        observation_sink: Callable[[RobotInterfaceEvent], None] | None = None,
+        clock_ns: Callable[[], int] = time.monotonic_ns,
     ) -> None:
         root = Path(project_root) if project_root is not None else Path(__file__).resolve().parents[1]
         self.root = root.resolve()
@@ -72,6 +107,23 @@ class RobotInterface:
             if adapter.name == "public_robot":
                 self._public_robot = adapter
         self._adapters: tuple[InterfaceAdapter, ...] = tuple(composed)
+        self._observation_sink = observation_sink
+        self._clock_ns = clock_ns
+
+    def set_observation_sink(
+        self,
+        sink: Callable[[RobotInterfaceEvent], None] | None,
+        *,
+        clock_ns: Callable[[], int] | None = None,
+    ) -> None:
+        """Attach a bounded enqueue callback during host-runtime composition.
+
+        The callback must not perform storage or consumer work. Its failure is
+        passive evidence failure and never changes an action or STOP result.
+        """
+        self._observation_sink = sink
+        if clock_ns is not None:
+            self._clock_ns = clock_ns
 
     @property
     def adapters(self) -> tuple[InterfaceAdapter, ...]:
@@ -129,14 +181,36 @@ class RobotInterface:
         return adapter.query(query)
 
     def execute(self, action: str, **parameters: object) -> object:
+        return self._execute_observed(action, parameters)
+
+    def _execute_observed(self, action: str, parameters: Mapping[str, object]) -> object:
+        resolved = action
+        if self._public_robot is not None and action in {"v3.command.explore", "v3.command.follow_person"}:
+            resolved = "behavior.room_cruise" if action.endswith("explore") else "behavior.follow_person"
+        request = None
+        if self._observation_sink is not None:
+            try:
+                request = (uuid.uuid4().hex, self._clock_ns())
+            except Exception:
+                pass
+        # STOP reaches its physical owner before any observation callback.
+        if resolved != "v3.command.stop":
+            self._observe_action(request, "ACTION_REQUESTED", action, resolved, parameters)
+        try:
+            result = self._execute_action(resolved, parameters)
+        except Exception as exc:
+            self._observe_action(request, "ACTION_ERROR", action, resolved, parameters,
+                                 error_type=type(exc).__name__)
+            raise
+        self._observe_action(request, "ACTION_RESULT", action, resolved, parameters, result=result)
+        return result
+
+    def _execute_action(self, action: str, parameters: Mapping[str, object]) -> object:
         if action == "v3.command.stop":
             if parameters:
                 raise ValueError("STOP accepts no parameters")
-            return self.stop()
+            return self._stop()
         if self._public_robot is not None:
-            if action in {"v3.command.explore", "v3.command.follow_person"}:
-                behavior = "behavior.room_cruise" if action.endswith("explore") else "behavior.follow_person"
-                return self.execute(behavior, **parameters)
             if (action.startswith("v3.command.") or action in {
                 "operator.runtime.start", "operator.runtime.stop", "operator.shutdown", "operator.panic", "operator.proba",
             }):
@@ -154,6 +228,9 @@ class RobotInterface:
 
     def stop(self) -> object:
         """First-class fail-safe external STOP request."""
+        return self._execute_observed("v3.command.stop", {})
+
+    def _stop(self) -> object:
 
         # Revocation does not read world state/capabilities. Regardless of host
         # service availability, deliver the existing canonical V3 STOP.
@@ -172,6 +249,43 @@ class RobotInterface:
             # Wait for any earlier submission to unwind and stop again there, so a
             # late STARTING action cannot outlive the completed STOP request.
             self._preempt_upper("STOP")
+
+    def _observe_action(
+        self,
+        request: tuple[str, int] | None,
+        kind: str,
+        action: str,
+        resolved_action: str,
+        parameters: Mapping[str, object],
+        *,
+        result: object = None,
+        error_type: str | None = None,
+    ) -> None:
+        sink = self._observation_sink
+        if request is None or sink is None:
+            return
+        try:
+            def field(name: str) -> object:
+                value = result.get(name) if isinstance(result, Mapping) else getattr(result, name, None)
+                return parameters.get(name) if value is None else value
+
+            identities = {name: _observation_text(field(name)) for name in (
+                "goal_id", "subtask_id", "decision_id", "behavior_id", "command_id", "mission_id",
+            )}
+            runtime_pid = field("runtime_pid")
+            status = _observation_text(field("status")) or _observation_text(field("lifecycle"))
+            sink(RobotInterfaceEvent(
+                kind=kind, request_id=request[0], action=_observation_text(action) or "",
+                resolved_action=_observation_text(resolved_action) or "",
+                measurement_time_ns=request[1], observation_time_ns=self._clock_ns(),
+                **identities,
+                runtime_pid=runtime_pid if type(runtime_pid) is int and runtime_pid > 0 else None,
+                status=status, reason=_observation_text(field("reason")),
+                error_type=_observation_text(error_type),
+            ))
+        except Exception:
+            # No serialization, filesystem I/O or action-result rewriting here.
+            pass
 
     def _preempt_upper(self, reason: str) -> None:
         if self._public_robot is not None:
@@ -210,5 +324,6 @@ __all__ = [
     "InterfaceAdapter",
     "ROBOT_INTERFACE_SCHEMA",
     "RobotInterface",
+    "RobotInterfaceEvent",
     "RobotInterfaceError",
 ]
