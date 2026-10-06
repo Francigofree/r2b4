@@ -120,9 +120,10 @@ class V3ControlInterfaceAdapter:
         if action in {"v3.command.move_relative", "v3.command.turn_by"}:
             cancel_event = params.pop("cancel_event", None)
             finite_timeout_s = params.pop("finite_timeout_s", None)
+            admission_sink = params.pop("admission_sink", None)
             return FiniteNavigationExecutor(self.controller).execute(
                 action, params, cancel_event=cancel_event, finite_timeout_s=finite_timeout_s, capture=capture,
-                capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                capture_mode=capture_mode, capture_hz=capture_hz, admission_sink=admission_sink, **session,
             )
         if action == "v3.command.forward":
             speed = params.pop("speed_mps", 0.15)
@@ -156,9 +157,10 @@ class V3ControlInterfaceAdapter:
                     raise ValueError("expected_runtime_pid is supported for nonblocking world-goal navigation")
                 cancel_event = params.pop("cancel_event", None)
                 finite_timeout_s = params.pop("finite_timeout_s", None)
+                admission_sink = params.pop("admission_sink", None)
                 return FiniteNavigationExecutor(self.controller).execute(
                     action, params, cancel_event=cancel_event, finite_timeout_s=finite_timeout_s, capture=capture,
-                    capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                    capture_mode=capture_mode, capture_hz=capture_hz, admission_sink=admission_sink, **session,
                 )
             frame_id = params.pop("frame_id", "R2B4_BOOT_ROBOT_MAP")
             x = self._required(params, "x_m")
@@ -197,20 +199,46 @@ class V3ControlInterfaceAdapter:
             return self.controller.roomcruise(capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **envelope, **session)
         if action == "v3.command.face_person":
             max_omega = params.pop("max_omega_rad_s", 0.50)
+            expected_pid = params.pop("expected_runtime_pid", None)
+            if expected_pid is not None and (type(expected_pid) is not int or expected_pid <= 0):
+                raise ValueError("expected_runtime_pid must be a positive integer")
             self._reject_unknown(params, set())
-            return self.controller.faceperson(
-                max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
-            )
+            transaction = self.controller.operator_transition() if expected_pid is not None else nullcontext()
+            with transaction:
+                if expected_pid is not None:
+                    if self.controller.snapshot().runtime_pid != expected_pid:
+                        raise RuntimeError("person acquisition runtime session changed before admission")
+                    if (capture or self.controller.current_capture_mode() != capture_mode
+                            or self.controller.current_capture_hz() != capture_hz):
+                        raise RuntimeError("bound person acquisition requires the current capture session without re-arm")
+                return self.controller.faceperson(
+                    max_omega_rad_s=max_omega, capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                )
         if action == "v3.command.follow_person":
             max_v = params.pop("max_v_mps", FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
             max_omega = params.pop(
                 "max_omega_rad_s", FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S
             )
+            target = params.pop("target_track_id", None)
+            expected_pid = params.pop("expected_runtime_pid", None)
+            if target is not None and (type(expected_pid) is not int or expected_pid <= 0):
+                raise ValueError("bound follow requires expected_runtime_pid")
+            if expected_pid is not None and (type(expected_pid) is not int or expected_pid <= 0):
+                raise ValueError("expected_runtime_pid must be a positive integer")
             self._reject_unknown(params, set())
-            return self.controller.followperson(
-                max_v_mps=max_v, max_omega_rad_s=max_omega,
-                capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
-            )
+            transaction = self.controller.operator_transition() if expected_pid is not None else nullcontext()
+            with transaction:
+                if expected_pid is not None:
+                    if self.controller.snapshot().runtime_pid != expected_pid:
+                        raise RuntimeError("person target runtime session changed before admission")
+                    if (capture or self.controller.current_capture_mode() != capture_mode
+                            or self.controller.current_capture_hz() != capture_hz):
+                        raise RuntimeError("bound follow requires the current capture session without re-arm")
+                bound = {"target_track_id": target} if target is not None else {}
+                return self.controller.followperson(
+                    max_v_mps=max_v, max_omega_rad_s=max_omega, **bound,
+                    capture=capture, capture_mode=capture_mode, capture_hz=capture_hz, **session,
+                )
         raise KeyError(action)
 
     @staticmethod

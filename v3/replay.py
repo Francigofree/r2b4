@@ -1242,6 +1242,9 @@ def _expanded_expected_layers(
         # Historical absence means no caller profile, not today's RoomCruise
         # default. Normalize only this additive field for exact comparison.
         expanded["L5"] = {**mission, "explore_preferences": None}
+    mission = expanded.get("L5")
+    if isinstance(mission, Mapping) and mission.get("__type__") == "MissionIntent" and "target_track_id" not in mission:
+        expanded["L5"] = {**mission, "target_track_id": None}
     inputs = tick.get("inputs")
     if not isinstance(inputs, Mapping):
         return expanded

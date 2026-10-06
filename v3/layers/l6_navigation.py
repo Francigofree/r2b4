@@ -1578,6 +1578,7 @@ class TrajectoryNavigator:
             track
             for track in world.obstacle_tracks
             if track.track_id.startswith("person-")
+            and (mission.target_track_id is None or track.track_id == mission.target_track_id)
             and track.usable_at(mission.context.monotonic_ns)
             and track.confidence >= (
                 retention_confidence

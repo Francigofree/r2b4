@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import math
+import json
 from collections.abc import Mapping, Sequence
 
 from v3.action_catalog import voice_action_descriptors
 
-from .conversation_contracts import LLMDecision, RobotAction
+from .conversation_contracts import LLMDecision, RobotAction, goal_plan_copy
 
 
 class DecisionParseError(ValueError):
@@ -70,6 +71,7 @@ def build_decision_schema(action_catalog: Sequence[Mapping[str, object]] | None 
         "type": "object",
         "properties": {
             "spoken_text": {"type": ["string", "null"]},
+            "plan_json": {"type": ["string", "null"]},
             "action_name": {"type": ["string", "null"], "enum": [None, *names]},
             "action_parameters": {
                 "type": "object",
@@ -80,7 +82,7 @@ def build_decision_schema(action_catalog: Sequence[Mapping[str, object]] | None 
                 "additionalProperties": False,
             },
         },
-        "required": ["spoken_text", "action_name", "action_parameters"],
+        "required": ["spoken_text", "action_name", "action_parameters", "plan_json"],
         "additionalProperties": False,
     }
 
@@ -97,12 +99,23 @@ def parse_llm_decision(
     if not isinstance(raw, Mapping):
         raise DecisionParseError("LLM decision is not an object")
     allowed_keys = {"spoken_text", "action_name", "action_parameters"}
-    if set(raw) != allowed_keys:
+    if set(raw) not in (allowed_keys, allowed_keys | {"plan_json"}):
         raise DecisionParseError("LLM decision has unexpected fields")
 
     spoken_text = raw.get("spoken_text")
     if spoken_text is not None and not isinstance(spoken_text, str):
         raise DecisionParseError("spoken_text must be string or null")
+    plan_raw = raw.get("plan_json")
+    plan = None
+    if plan_raw is not None:
+        if not isinstance(plan_raw, str) or len(plan_raw.encode()) > 32_768:
+            raise DecisionParseError("plan_json must be a bounded JSON string")
+        if raw.get("action_name") is not None:
+            raise DecisionParseError("plan and action are mutually exclusive")
+        try:
+            plan = goal_plan_copy(json.loads(plan_raw))
+        except (ValueError, TypeError) as exc:
+            raise DecisionParseError("invalid goal plan") from exc
 
     items = _catalog_items(action_catalog)
     by_name = {str(item["name"]): item for item in items}
@@ -164,7 +177,7 @@ def parse_llm_decision(
         action = RobotAction(action_name, tuple(sorted(params)))
 
     try:
-        return LLMDecision(spoken_text, action, model)
+        return LLMDecision(spoken_text, action, model, plan)
     except ValueError as exc:
         raise DecisionParseError(str(exc)) from exc
 

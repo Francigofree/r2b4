@@ -16,6 +16,7 @@ from v3.contracts import (
     VelocityTarget,
     Waypoint,
 )
+from v3.contracts.base import require_token
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +85,7 @@ class MissionManager:
             values = _field_values(command.goal)
             constraints = _constraints(values, self._config.default_constraints)
             explore_preferences = None
+            target_track_id = None
             if command.mode is CommandMode.NAVIGATE:
                 _require_keys(
                     values,
@@ -142,8 +144,16 @@ class MissionManager:
                 _require_keys(
                     values,
                     required=frozenset(),
-                    optional=frozenset({"max_v_mps", "max_omega_rad_s"}),
+                    optional=frozenset({"max_v_mps", "max_omega_rad_s", "target_track_id"}),
                 )
+                target_track_id = values.get("target_track_id")
+                if target_track_id is not None:
+                    require_token(target_track_id, "target_track_id")
+                if target_track_id is not None and (
+                    not target_track_id.startswith("person-")
+                    or len(target_track_id) > 256
+                ):
+                    raise ValueError("invalid bound person track")
                 target_pose = None
                 velocity_target = None
             else:
@@ -163,6 +173,7 @@ class MissionManager:
             lifecycle=MissionLifecycle.ACTIVE,
             target_frame_id=values.get("frame_id", GLOBAL_FRAME_ID),
             explore_preferences=explore_preferences,
+            target_track_id=target_track_id,
         )
 
     def _stopped(

@@ -77,6 +77,7 @@ class _PendingTurn:
     turn: UserTextTurn
     cancelled: threading.Event
     deadline: float
+    goal_id: str | None = None
 
 
 class ConversationService:
@@ -92,6 +93,7 @@ class ConversationService:
         self_knowledge: SelfKnowledgePort | None = None,
         config: ConversationServiceConfig = ConversationServiceConfig(),
         monotonic_ns=time.monotonic_ns,
+        brain_interface: object | None = None,
     ) -> None:
         if not callable(getattr(llm, "complete", None)):
             raise TypeError("llm must provide complete()")
@@ -108,6 +110,7 @@ class ConversationService:
         self._self_knowledge = self_knowledge
         self._config = config
         self._monotonic_ns = monotonic_ns
+        self._brain_interface = brain_interface
         self._queue: queue.Queue[_PendingTurn | None] = queue.Queue(maxsize=config.queue_size)
         self._pending: dict[str, _PendingTurn] = {}
         self._history: list[ConversationMemoryTurn] = []
@@ -152,21 +155,52 @@ class ConversationService:
             {"turn_id": turn.turn_id, "source": turn.source, "text": turn.text},
             monotonic_ns=turn.monotonic_ns,
         )
+        goal_id = None
+        if self._brain_interface is not None:
+            accepted = self._brain_interface.execute(
+                "brain.submit", text=turn.text,
+                source="AUTONOMOUS" if source.upper() == "AUTONOMOUS" else "HUMAN",
+                request_id=turn.turn_id,
+            )
+            goal_id = accepted.get("goal_id") if isinstance(accepted, Mapping) else None
+            if not isinstance(goal_id, str) or not goal_id:
+                raise RuntimeError("Brain admission returned no goal_id")
         try:
             with self._lock:
                 if self._closed:
                     raise RuntimeError("conversation service is closed")
-                pending = _PendingTurn(turn, threading.Event(), time.monotonic() + self._config.turn_timeout_s)
+                pending = _PendingTurn(turn, threading.Event(), time.monotonic() + self._config.turn_timeout_s, goal_id)
                 self._queue.put_nowait(pending)
                 self._pending[turn.turn_id] = pending
         except queue.Full as exc:
+            self._finish_brain(goal_id, "CONVERSATION_QUEUE_FULL")
             self._journal.append(
                 "user_rejected",
                 {"turn_id": turn.turn_id, "source": turn.source, "text": turn.text, "reason": "QUEUE_FULL"},
                 monotonic_ns=turn.monotonic_ns,
             )
             raise ConversationBusyError("conversation queue is full") from exc
+        except RuntimeError:
+            self._cancel_brain_goals((goal_id,) if goal_id else (), "CONVERSATION_CLOSED")
+            raise
         return turn.turn_id
+
+    def _finish_brain(self, goal_id: str | None, reason: str) -> None:
+        if goal_id is not None and self._brain_interface is not None:
+            self._brain_interface.execute("brain.fail", goal_id=goal_id, reason=reason, pending_only=True)
+
+    def _cancel_brain_goals(self, goal_ids: tuple[str, ...], reason: str) -> None:
+        if not goal_ids or self._brain_interface is None:
+            return
+        def finish() -> None:
+            for goal_id in goal_ids:
+                try:
+                    self._finish_brain(goal_id, reason)
+                except Exception:
+                    pass
+        # STOP only sets local cancellation flags; socket availability cannot
+        # delay delivery of its canonical physical command.
+        threading.Thread(target=finish, name="r2b4-pending-goal-cancel", daemon=True).start()
 
     def status(self) -> dict[str, object]:
         with self._lock:
@@ -209,24 +243,33 @@ class ConversationService:
                     pending = self._pending.get(turn_id)
                     if pending is not None:
                         pending.cancelled.set()
-                    return None
+                    goal_id = pending.goal_id if pending is not None else None
+                    break
                 self._condition.wait(timeout=remaining)
+        self._cancel_brain_goals((goal_id,) if goal_id else (), "CONVERSATION_TIMEOUT")
+        return None
 
     def cancel_pending_turns(self) -> None:
         """Revoke queued/running host intents, including in-flight delegates."""
         with self._condition:
+            goal_ids = tuple(pending.goal_id for pending in self._pending.values()
+                             if pending.goal_id is not None and not pending.cancelled.is_set())
             for pending in self._pending.values():
                 pending.cancelled.set()
             self._condition.notify_all()
+        self._cancel_brain_goals(goal_ids, "CONVERSATION_CANCELLED")
 
     def close(self, timeout_s: float = 2.0) -> None:
         with self._condition:
             if self._closed:
                 return
             self._closed = True
+            goal_ids = tuple(pending.goal_id for pending in self._pending.values()
+                             if pending.goal_id is not None and not pending.cancelled.is_set())
             for pending in self._pending.values():
                 pending.cancelled.set()
             self._condition.notify_all()
+        self._cancel_brain_goals(goal_ids, "CONVERSATION_CLOSED")
         try:
             self._queue.put_nowait(None)
         except queue.Full:
@@ -257,7 +300,8 @@ class ConversationService:
                 pending.cancelled.is_set() or time.monotonic() >= pending.deadline
             ))):
                 error = "CONVERSATION_TURN_CANCELLED_OR_EXPIRED"
-                result = replace(result, spoken_text=None, proposed_action=None, action_status="ERROR", error=error)
+                result = replace(result, spoken_text=None, proposed_action=None, proposed_plan=None,
+                                 action_status="ERROR", error=error)
             if result.error is None and result.spoken_text:
                 self._history.append(ConversationMemoryTurn(result.user_text, result.spoken_text))
                 if len(self._history) > self._config.max_history_turns:
@@ -308,6 +352,12 @@ class ConversationService:
                 messages = self._prompt.build_messages(turn, context, history, self_knowledge=knowledge)
             else:
                 messages = self._prompt.build_messages(turn, context, history)
+            if pending.goal_id is not None:
+                messages = list(messages)
+                user_index = next((index for index in range(len(messages) - 1, -1, -1)
+                                   if messages[index].get("role") == "user"), len(messages))
+                messages.insert(user_index, {"role": "system", "content":
+                    "PROMPT_LAYER_KIND=UNTRUSTED_RUNTIME_DATA\nBRAIN_PENDING_GOAL_ID=" + pending.goal_id})
 
             if self._agent is not None:
                 def emit(event: str, payload: Mapping[str, object]) -> None:
@@ -327,6 +377,10 @@ class ConversationService:
             if decision.robot_action is not None:
                 validation = self._validator.validate(decision.robot_action, context)
                 action_status = validation.reason if validation.accepted else f"REJECTED:{validation.reason}"
+            elif decision.goal_plan is not None:
+                action_status = "PLAN_PROPOSED"
+            else:
+                self._finish_brain(pending.goal_id, "ANSWERED")
 
             result = ConversationTurnResult(
                 turn_id=turn.turn_id,
@@ -336,11 +390,17 @@ class ConversationService:
                 action_status=action_status,
                 error=None,
                 model=decision.model,
+                goal_id=pending.goal_id,
+                proposed_plan=decision.goal_plan,
             )
             self._journal.append("assistant", result.to_jsonable())
             self._store_result(result, error=None)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
+            try:
+                self._finish_brain(pending.goal_id, "INTERPRETATION_FAILED:" + type(exc).__name__)
+            except Exception:
+                pass
             result = ConversationTurnResult(
                 turn_id=turn.turn_id,
                 user_text=turn.text,
@@ -349,6 +409,7 @@ class ConversationService:
                 action_status="ERROR",
                 error=error,
                 model=self.model,
+                goal_id=pending.goal_id,
             )
             self._journal.append("error", result.to_jsonable())
             self._store_result(result, error=error)

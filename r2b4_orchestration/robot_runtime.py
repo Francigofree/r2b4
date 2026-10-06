@@ -26,16 +26,19 @@ from collections import deque
 from pathlib import Path
 
 from r2b4_orchestration.behavior_system import BehaviorSystem
+from r2b4_orchestration.brain_core import BrainCore
 from r2b4_orchestration.world_model import PublicWorldModel, WorldQuery, WorldQueryResult
 from r2b4_orchestration.semantic_projector import SemanticProjector
 
 SCHEMA = "R2B4_PUBLIC_ROBOT_RUNTIME_V1"
 MAX_REQUEST_BYTES = 65_536
 MAX_REPLY_BYTES = 1_048_576
-READS = frozenset({"robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history"})
+READS = frozenset({"robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history",
+                   "brain.state", "brain.history"})
 QUERIES = frozenset({"world.query"})
 ACTIONS = frozenset({"world.observe", "behavior.room_cruise", "behavior.follow_person",
-                     "behavior.search_person", "behavior.start", "behavior.cancel"})
+                     "behavior.search_person", "behavior.search_any_person", "behavior.start", "behavior.cancel",
+                     "brain.submit", "brain.adopt", "brain.fail", "brain.cancel"})
 
 
 def socket_path_for(root: Path) -> Path:
@@ -168,14 +171,15 @@ class PublicRobotRuntime:
     """One host state owner; all physical realization stays in the backend."""
 
     def __init__(self, interface: object, *, root: Path | None = None,
-                 world: PublicWorldModel | None = None, clock_ns=time.monotonic_ns):
+                 world: PublicWorldModel | None = None, clock_ns=time.monotonic_ns,
+                 observation_hub=None):
         self.interface = interface
         self.root = root
         self.clock_ns = clock_ns
         self.world = world or PublicWorldModel(clock_ns=clock_ns)
         self._state_lock = threading.RLock()
         self._storage_lock = threading.Lock()
-        self._action_lock = threading.Lock()
+        self._action_lock = threading.RLock()
         self._generation = 0
         self._last_persist_ns = 0
         self._health_error = None
@@ -188,6 +192,11 @@ class PublicRobotRuntime:
         self._reported_evidence_dropped = 0
         self._evidence_producer_id = str(uuid.uuid4())
         self._world_evidence_pending = 0
+        # The host observation plane exists without V3 or capture. Publication
+        # only enqueues immutable references; unavailable consumers never own
+        # the Brain's lifecycle or determine whether a command can run.
+        from v3.observation import ObservationHub
+        self.observation_hub = observation_hub if observation_hub is not None else ObservationHub()
         self.world.set_event_sink(self._world_event)
         self.projector = SemanticProjector(self.world, clock_ns=clock_ns)
         self._caller_pid = None
@@ -199,15 +208,21 @@ class PublicRobotRuntime:
                 adapters=(*interface.adapters, PublicRobotStateAdapter(self)), upper_runtime=False,
             )
         self.behaviors = BehaviorSystem(program_interface, clock_ns=clock_ns, event_sink=self._behavior_event)
-        from r2b4_orchestration.search_person import SearchPerson
+        from r2b4_orchestration.search_person import SearchPerson, SearchAnyPerson
         self.behaviors.register("search_person", SearchPerson)
+        self.behaviors.register("search_any_person", SearchAnyPerson)
+        self.brain = BrainCore(program_interface, self.behaviors, self.world, clock_ns=clock_ns,
+                               event_sink=self._brain_event, execution_lock=self._action_lock)
         if root is not None:
             path = root / "runtime" / "public_world" / "state.json"
             if path.exists():
                 try:
                     if path.stat().st_size > MAX_REPLY_BYTES:
                         raise ValueError("saved world exceeded its bound")
-                    self.world.restore(json.loads(path.read_text()))
+                    saved = json.loads(path.read_text())
+                    self.world.restore(saved)
+                    if "brain" in saved and self.brain.restore(saved["brain"]):
+                        self.interface.stop()
                 except (OSError, TypeError, ValueError, KeyError) as exc:
                     self._health_error = f"WORLD_RESTORE_FAILED:{type(exc).__name__}:{exc}"
 
@@ -227,6 +242,12 @@ class PublicRobotRuntime:
                 "evidence_dropped": self._evidence_dropped}
 
     def _queue_evidence(self, kind: str, value: object, *, world_input: bool = False) -> None:
+        # Publish independently of journal/capture storage. The generic hub
+        # neither serializes the payload nor invokes consumers synchronously.
+        try:
+            self.observation_hub.publish(value, topic="r2b4." + kind)
+        except Exception:
+            pass
         with self._evidence_lock:
             if (len(self._evidence_queue) == self._evidence_queue.maxlen
                     or world_input and self._world_evidence_pending >= 4):
@@ -244,6 +265,9 @@ class PublicRobotRuntime:
     def _behavior_event(self, event: object) -> None:
         # Revocation and STOP never wait for filesystem evidence writes.
         self._queue_evidence("behavior", event)
+
+    def _brain_event(self, event: object) -> None:
+        self._queue_evidence("brain", event)
 
     def world_input_evidence(self, snapshot: Mapping[str, object]) -> None:
         # Only behavior inputs are recorded here; ordinary UI state reads do not
@@ -288,9 +312,15 @@ class PublicRobotRuntime:
             if isinstance(status, Mapping):
                 self.ingest_status(status, runtime_pid=runtime_pid)
         # No host lock around execution/waits: STOP must revoke STARTING too.
-        with self._action_lock:
-            self.behaviors.step()
-        if self.behaviors.active and self._caller_pid is not None:
+        # Finite RobotInterface actions can wait in the dispatcher. Observation,
+        # memory persistence and evidence drain keep running during that wait.
+        if self._action_lock.acquire(blocking=False):
+            try:
+                self.behaviors.step()
+                self.brain.step()
+            finally:
+                self._action_lock.release()
+        if self.behaviors.active and self._caller_pid is not None and not self.behaviors.snapshot().goal_id:
             try:
                 os.kill(self._caller_pid, 0)
             except ProcessLookupError:
@@ -305,7 +335,8 @@ class PublicRobotRuntime:
             self.poll()
         except Exception as exc:
             self._health_error = f"PUBLIC_POLL_FAILED:{type(exc).__name__}:{exc}"
-            if self.behaviors.active:
+            primary = self.brain.snapshot()["primary_goal"]
+            if self.behaviors.active or isinstance(primary, Mapping) and primary.get("lifecycle") in {"STARTING", "ACTIVE"}:
                 try:
                     self.preempt("HOST_STEP_FAILED")
                 except Exception:
@@ -325,7 +356,9 @@ class PublicRobotRuntime:
             return
         self._last_persist_ns = now
         state = self.world.export_state()
-        revision = (state.get("world_revision", state.get("revision")), state.get("event_sequence"))
+        state["brain"] = self.brain.export_state()
+        revision = (state.get("world_revision", state.get("revision")), state.get("event_sequence"),
+                    state["brain"]["revision"])
         if revision == self._persisted_revision:
             return
         directory = self.root / "runtime" / "public_world"
@@ -355,9 +388,14 @@ class PublicRobotRuntime:
                 return self.behaviors.snapshot().to_jsonable()
             if resource == "behavior.history":
                 return _jsonable(self.behaviors.history())
+            if resource == "brain.state":
+                return self.brain.snapshot()
+            if resource == "brain.history":
+                return _jsonable(self.brain.history())
             if resource == "robot.state":
                 return {"schema": SCHEMA, "observation_time_ns": self.clock_ns(),
                         "world": self.world.snapshot().to_jsonable(),
+                        "brain": self.brain.snapshot(),
                         "active_behavior": self.behaviors.snapshot().to_jsonable(),
                         "active_mission": self.world.read("robot", "mission").to_jsonable(),
                         "health": {"public_runtime": "DEGRADED" if self._health_error else "AVAILABLE",
@@ -384,11 +422,25 @@ class PublicRobotRuntime:
     def revoke(self, reason: str) -> object:
         with self._state_lock:
             self._generation += 1
+            self.brain.revoke(reason)
             self.behaviors.revoke(reason)
             return self.behaviors.snapshot().to_jsonable()
 
     def execute(self, action: str, parameters: Mapping[str, object]) -> object:
         params = dict(parameters)
+        if action.startswith("brain."):
+            allowed = {"brain.submit": {"text", "source", "request_id"},
+                       "brain.adopt": {"goal_id", "plan"},
+                       "brain.fail": {"goal_id", "reason", "pending_only"}, "brain.cancel": {"reason"}}
+            if action not in allowed or set(params) - allowed[action]:
+                raise ValueError("unknown Brain parameters")
+            if action == "brain.submit":
+                return self.brain.submit(**params)
+            if action == "brain.adopt":
+                return self.brain.adopt(**params, asynchronous=True)
+            if action == "brain.fail":
+                return self.brain.fail(**params)
+            return self.preempt(params.get("reason", "USER_CANCEL"))
         if action == "world.observe":
             with self._state_lock:
                 event = self.world.observe(**params)
@@ -400,7 +452,7 @@ class PublicRobotRuntime:
                 raise ValueError("behavior.cancel accepts only a nonempty reason")
             return self.preempt(reason)
         names = {"behavior.room_cruise": "room_cruise", "behavior.follow_person": "follow_person",
-                 "behavior.search_person": "search_person"}
+                 "behavior.search_person": "search_person", "behavior.search_any_person": "search_any_person"}
         if action == "behavior.start":
             name = params.pop("name", None)
             if name not in self.behaviors.names:
@@ -421,6 +473,7 @@ class PublicRobotRuntime:
             # invalidates every previously queued request as well as ACTIVE.
             self._generation += 1
             generation = self._generation
+            self.brain.revoke("PREEMPTED_BY:" + names[action])
             self.behaviors.revoke("PREEMPTED_BY:" + names[action])
         self.interface.stop()
         with self._action_lock:
@@ -460,12 +513,12 @@ class PublicRobotInterfaceAdapter:
         if self.controller is not None:
             status = self.controller.live_runtime_status()
             if isinstance(status, Mapping) and (status.get("fault_layer") or status.get("safety_decision") == "FAULT"):
-                for name in ("behavior.room_cruise", "behavior.follow_person", "behavior.search_person", "behavior.start"):
+                for name in ("behavior.room_cruise", "behavior.follow_person", "behavior.search_person", "behavior.search_any_person", "behavior.start"):
                     result[name].update(available=False, ready=False, reason="RUNTIME_FAULT")
             from v3.adapters.vision_media_socket import VisionClient
             camera = VisionClient(root=self.controller.root).status()
             if camera.get("camera_state") == "FAILED":
-                for name in ("behavior.follow_person", "behavior.search_person"):
+                for name in ("behavior.follow_person", "behavior.search_person", "behavior.search_any_person"):
                     if result[name]["available"]:
                         result[name].update(available=False, ready=False, reason="VISION_UNAVAILABLE")
         return result

@@ -3,7 +3,7 @@
 Data path:
     NativeUsbMicrophone -> local energy utterance gate -> Groq STT
     -> RobotInterface conversation.submit_text -> ChatGPT OAuth/OpenAI API key/Gemini/Groq LLM
-    -> LLMDecision proposal -> fresh VoiceActionExecutor gate -> canonical RobotInterface
+    -> Agent proposal -> Brain admission/lifecycle -> canonical RobotInterface
     -> local Piper TTS (Gemini optional) -> Linux/PipeWire speaker.
 
 The service is host-side orchestration only.  It never writes motor/GPIO state; optional
@@ -31,6 +31,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
+from r2b4_orchestration.brain_hri import BrainGoalObserver, adopt_brain_result
 from r2b4_orchestration.execution_mode import (
     ExecutionMode,
     ExecutionModeSelector,
@@ -244,6 +245,9 @@ class VoiceConversationService:
         self._behavior_observer = HriBehaviorObserver(
             conversation_interface, hri_journal, feedback_sink=self._queue_behavior_feedback,
         )
+        self._goal_observer = BrainGoalObserver(
+            conversation_interface, feedback_sink=self._queue_behavior_feedback, event_sink=self._hri_event,
+        )
         self._interaction_counter = 0
         self._interrupt_enabled = threading.Event()
         self._stop_interrupt_latched = threading.Event()
@@ -295,6 +299,7 @@ class VoiceConversationService:
         finally:
             self._interrupt_enabled.clear()
             self._behavior_observer.close()
+            self._goal_observer.close()
             self._stop_event.set()
             if self._interrupt_thread.is_alive():
                 self._interrupt_thread.join(timeout=1.0)
@@ -463,65 +468,43 @@ class VoiceConversationService:
 
         self._last_action_status = str(result.get("action_status")) if result.get("action_status") is not None else None
         action_spoken: str | None = None
-        proposed = result.get("proposed_action")
+        proposed = result.get("proposed_plan") or result.get("proposed_action")
         if proposed is not None:
             self._hri_event(
                 "INTENT_PROPOSED", interaction_id=interaction_id, turn_id=turn_id,
-                proposal=proposed, phase=self._state.value,
+                goal_id=result.get("goal_id"), proposal=proposed, phase=self._state.value,
             )
             if self._stop_interrupt_latched.is_set():
                 self._last_action_status = "REJECTED:INTERRUPTED_BY_STOP"
                 self._hri_event(
                     "ACTION_REJECTED", interaction_id=interaction_id, turn_id=turn_id,
-                    action_status=self._last_action_status, reason="INTERRUPTED_BY_STOP",
+                    goal_id=result.get("goal_id"), action_status=self._last_action_status,
+                    reason="INTERRUPTED_BY_STOP",
                 )
-                proposed = None
-        if proposed is not None:
-            mode = self._action_executor.mode.upper() if self._action_executor is not None else "PROPOSAL_ONLY"
-            print(
-                f"voice: intent[{mode}]=" + json.dumps(proposed, ensure_ascii=False, sort_keys=True),
-                flush=True,
-            )
-            if self._action_executor is not None:
+            else:
                 try:
-                    execution = self._action_executor.execute_proposal(proposed)
-                    self._last_action_status = execution.status
-                    action_spoken = _action_receipt_text(
-                        status=execution.status,
-                        executed=execution.executed,
-                        action_name=execution.action_name,
-                    )
+                    execute = self._action_executor is not None and self._action_executor.mode == "execute"
+                    adoption = adopt_brain_result(self._conversation_interface, result, execute=execute)
+                    self._last_action_status, action_spoken = adoption.status, adoption.text
                     self._hri_event(
-                        "ACTION_EXECUTED" if execution.executed else "ACTION_REJECTED",
-                        interaction_id=interaction_id, turn_id=turn_id,
-                        action_name=execution.action_name, action_status=execution.status,
-                        command_id=execution.command_id, mission_id=execution.mission_id,
+                        "BRAIN_PLAN_ADOPTED" if adoption.status in {"ACTIVE", "COMPLETED"} else "ACTION_REJECTED",
+                        interaction_id=interaction_id, turn_id=turn_id, goal_id=adoption.goal_id,
+                        action_status=adoption.status, command_id=adoption.command_id,
+                        mission_id=adoption.mission_id,
                     )
-                    if (
-                        execution.executed and execution.status != "COMPLETED"
-                        and execution.action_name != "v3.command.stop"
-                        and execution.command_id and execution.mission_id
-                    ):
-                        self._behavior_observer.observe(
-                            interaction_id=interaction_id, turn_id=turn_id,
+                    if adoption.status == "ACTIVE" and adoption.goal_id:
+                        self._goal_observer.observe(
+                            adoption.goal_id, interaction_id=interaction_id, turn_id=turn_id,
                             session_id=self._conversation.session_id,
-                            action_name=execution.action_name, command_id=execution.command_id,
-                            mission_id=execution.mission_id,
                         )
-                    print(
-                        f"voice: action={execution.action_name} status={execution.status} command_id={execution.command_id} mission_id={execution.mission_id}",
-                        flush=True,
-                    )
                 except Exception as exc:
-                    # Fail closed: executor failure never falls back to a direct action path.
-                    self._last_action_status = "REJECTED:EXECUTOR_ERROR"
-                    action_spoken = _action_receipt_text(
-                        status=self._last_action_status, executed=False, action_name=None
-                    )
-                    self._last_error = f"voice action {type(exc).__name__}: {exc}"
+                    self._last_action_status = "REJECTED:BRAIN_ADMISSION_ERROR"
+                    action_spoken = "A feladatot most nem tudom végrehajtani."
+                    self._last_error = f"Brain admission {type(exc).__name__}: {exc}"
                     self._hri_event(
                         "ACTION_REJECTED", interaction_id=interaction_id, turn_id=turn_id,
-                        action_status=self._last_action_status, reason=self._last_error,
+                        goal_id=result.get("goal_id"), action_status=self._last_action_status,
+                        reason=self._last_error,
                     )
                     print(f"voice: {self._last_error}", file=sys.stderr, flush=True)
 
@@ -807,9 +790,9 @@ class VoiceConversationService:
         if self._hri_journal is None:
             return
         try:
+            fields.setdefault("session_id", self._conversation.session_id)
             self._hri_journal.append(
                 event_type,
-                session_id=self._conversation.session_id,
                 **fields,
             )
         except Exception:

@@ -589,9 +589,16 @@ class MissionIntent:
     stop_reason: str | None = None
     target_frame_id: str = "R2B4_BOOT_ROBOT_MAP"
     explore_preferences: ExplorePreferences | None = None
+    target_track_id: str | None = None
 
     def __post_init__(self) -> None:
         require_token(self.mission_id, "MissionIntent.mission_id")
+        if self.target_track_id is not None:
+            require_token(self.target_track_id, "MissionIntent.target_track_id")
+            if (self.mode is not CommandMode.FOLLOW_PERSON
+                    or not self.target_track_id.startswith("person-")
+                    or len(self.target_track_id) > 256):
+                raise ContractValidationError("only FOLLOW_PERSON may bind a bounded person track")
         if self.explore_preferences is not None and (
             self.mode is not CommandMode.EXPLORE
             or not isinstance(self.explore_preferences, ExplorePreferences)

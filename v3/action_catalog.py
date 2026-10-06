@@ -126,6 +126,16 @@ def _p(name: str, description: str, *, required: bool = False,
 # Voice exposure is opt-in; finite relative goals hide frame/pose arithmetic.
 _DESCRIPTORS = (
     ActionDescriptor(
+        "behavior.search_any_person",
+        "Search a bounded sequence of camera viewpoints using canonical facing and yaw-only navigation; returns a runtime-bound anonymous person track.",
+        (
+            _p("max_duration_s", "Maximum acquisition duration in seconds.", minimum=0.1, maximum=3600),
+            _p("max_omega_rad_s", "Maximum canonical facing rotation speed.", minimum=0.01, maximum=1.20),
+            _p("max_views", "Maximum viewpoints in one full bounded scan.", minimum=1, maximum=8, default=4),
+            _p("acquisition_duration_s", "Maximum person acquisition wait per viewpoint in seconds.", minimum=0.1, maximum=30, default=5),
+        ), voice_exposed=True, session_watchdog=True,
+    ),
+    ActionDescriptor(
         "behavior.search_person",
         "Search known places for a named person through the host Behavior System and canonical V3 navigation.",
         (
@@ -150,6 +160,8 @@ _DESCRIPTORS = (
     ActionDescriptor(
         "behavior.follow_person", "Start the canonical host Follow Person behavior.",
         (
+            _p("target_track_id", "Optional exact V3 person track; requires its expected_runtime_pid.", value_type="string"),
+            _p("expected_runtime_pid", "Runtime identity of the bound person track; a restart rejects the request.", minimum=1),
             _p("max_duration_s", "Maximum behavior duration in seconds.", minimum=0.1, maximum=3600),
             _p("max_v_mps", "Requested linear cap.", minimum=0.01, maximum=0.50),
             _p("max_omega_rad_s", "Requested angular cap.", minimum=0.01, maximum=1.20),
@@ -258,6 +270,8 @@ _DESCRIPTORS = (
         "v3.command.follow_person",
         "Follow the currently tracked person using the canonical navigation stack.",
         (
+            _p("target_track_id", "Optional exact V3 person track; requires its expected_runtime_pid and never selects another person.", value_type="string"),
+            _p("expected_runtime_pid", "Runtime identity of the bound person track; a restart rejects the request.", minimum=1),
             _p("max_v_mps", "Maximum following linear speed.", minimum=0.01, maximum=0.50, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS),
             _p("max_omega_rad_s", "Maximum following angular speed.", minimum=0.01, maximum=1.20, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S),
         ),

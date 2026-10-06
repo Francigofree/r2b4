@@ -27,6 +27,9 @@ class Robot:
     def capabilities(self):
         return {"capabilities": {}}
 
+    def query(self, query):
+        return self.world.query(query)
+
     def read(self, resource):
         if resource == "world.snapshot":
             return self.world.snapshot().to_jsonable()

@@ -68,6 +68,7 @@ class RobotContextBuilder:
             ),
             "environment": environment,
             "robot_state": self._mapping_or_none(self._read_if_available(caps, "robot.state")),
+            "brain": self._mapping_or_none(self._read_if_available(caps, "brain.state")),
         }
 
         if isinstance(status, Mapping):

@@ -145,6 +145,7 @@ def build_voice_interface(
         # compatibility callers; do not inject stale evidence into new turns.
         self_knowledge=None,
         config=service_config,
+        brain_interface=core_interface,
     )
     public_adapters = core_interface.adapters + (ConversationInterfaceAdapter(service, developer_mode=developer_mode),)
     public_interface = RobotInterface(project_root=root, controller=controller, adapters=public_adapters)

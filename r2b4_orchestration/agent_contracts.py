@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from r2b4_voice.conversation_contracts import LLMDecision, RobotAction
+from r2b4_voice.conversation_contracts import LLMDecision, RobotAction, goal_plan_copy
 from r2b4_voice.llm_decision import build_decision_schema, parse_llm_decision
 from v3.adapters.vision_media_contracts import VisionJpeg
 
@@ -94,16 +94,19 @@ class AgentModelReply:
     spoken_text: str | None = None
     tool_request: AgentToolRequest | None = None
     robot_action: RobotAction | None = None
+    goal_plan: Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
-        selected = sum(item is not None for item in (self.spoken_text, self.tool_request, self.robot_action))
+        selected = sum(item is not None for item in (self.spoken_text, self.tool_request, self.robot_action, self.goal_plan))
         if selected != 1:
             raise ValueError("agent reply must contain exactly one final, tool request or robot action")
+        if self.goal_plan is not None:
+            object.__setattr__(self, "goal_plan", goal_plan_copy(self.goal_plan))
 
     def to_decision(self) -> LLMDecision:
         if self.tool_request is not None:
             raise ValueError("tool request is not a final LLM decision")
-        return LLMDecision(self.spoken_text, self.robot_action, self.model)
+        return LLMDecision(self.spoken_text, self.robot_action, self.model, self.goal_plan)
 
 
 def build_agent_step_schema(
@@ -120,7 +123,7 @@ def build_agent_step_schema(
     return {
         "type": "object",
         "properties": {
-            "kind": {"type": "string", "enum": ["final", "tool", "action"]},
+            "kind": {"type": "string", "enum": ["final", "tool", "action", "plan"]},
             "spoken_text": {"type": ["string", "null"]},
             "tool_name": {"type": ["string", "null"], "enum": [None, *tool_names]},
             # Keeping arguments as a JSON string preserves a strict closed outer
@@ -128,10 +131,11 @@ def build_agent_step_schema(
             "tool_arguments_json": {"type": ["string", "null"]},
             "action_name": properties["action_name"],
             "action_parameters": properties["action_parameters"],
+            "plan_json": {"type": ["string", "null"]},
         },
         "required": [
             "kind", "spoken_text", "tool_name", "tool_arguments_json",
-            "action_name", "action_parameters",
+            "action_name", "action_parameters", "plan_json",
         ],
         "additionalProperties": False,
     }
@@ -150,10 +154,10 @@ def parse_agent_model_reply(
         "kind", "spoken_text", "tool_name", "tool_arguments_json",
         "action_name", "action_parameters",
     }
-    if set(raw) != expected:
+    if set(raw) not in (expected, expected | {"plan_json"}):
         raise ValueError("agent reply has unexpected fields")
     kind = raw.get("kind")
-    if kind not in {"final", "tool", "action"}:
+    if kind not in {"final", "tool", "action", "plan"}:
         raise ValueError("invalid agent reply kind")
 
     tool_names = {
@@ -164,6 +168,23 @@ def parse_agent_model_reply(
     spoken = raw.get("spoken_text")
     tool_name = raw.get("tool_name")
     tool_args_raw = raw.get("tool_arguments_json")
+    plan_raw = raw.get("plan_json")
+    if kind != "plan" and plan_raw is not None:
+        raise ValueError("non-plan reply contains plan_json")
+
+    if kind == "plan":
+        if spoken is not None or tool_name is not None or tool_args_raw is not None or raw.get("action_name") is not None:
+            raise ValueError("plan reply contains text, tool or action fields")
+        params = raw.get("action_parameters")
+        if not isinstance(params, Mapping) or any(value is not None for value in params.values()):
+            raise ValueError("plan reply must have null action parameters")
+        if not isinstance(plan_raw, str) or len(plan_raw.encode()) > 32_768:
+            raise ValueError("plan_json must be a bounded JSON string")
+        try:
+            plan = json.loads(plan_raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("plan_json is not valid JSON") from exc
+        return AgentModelReply(model=model, goal_plan=goal_plan_copy(plan))
 
     if kind == "final":
         if not isinstance(spoken, str) or not spoken.strip():

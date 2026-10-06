@@ -54,7 +54,7 @@ mellett a tényleges `/proc` affinity-layoutot auditálja.
 
 ## Használat
 
-Publikus world/behavior API, időszemantika, shared host ownership és a
+Publikus Brain/world/behavior API, időszemantika, shared host ownership és a
 személykeresés aktuális bizonyítási határa: [PUBLIC_ROBOT_SYSTEM.md](docs/PUBLIC_ROBOT_SYSTEM.md).
 
 Az egyetlen ajánlott ember/agent belépő a gyökér `r` launcher. A `r` nem robotikai
@@ -172,6 +172,18 @@ V3 completed objects
    |
    +--> capture: RELIABLE, bounded, required
 ```
+
+A felső host runtime saját ObservationHubja V3 és capture nélkül is él.
+`r2b4.brain` és `r2b4.behavior` immutable eventjei goal/subtask/decision és
+command/mission identity szerint kapcsolódnak. A meglévő passzív journal
+follower ugyanezt a lineage-et `v3.public_runtime_event` témán viszi MCAP-ba.
+Observation-, capture- és journal-hiba nem módosítja a Brain végrehajtását.
+
+A normál voice és természetes nyelvű CLI-kérés a Brainhez kerül; az Agent
+csak tervet javasol. A `brain.adopt` gyors STARTING/ACTIVE választ ad, és az
+egyetlen host dispatcher a Brainnél tartott tervet hajtja végre. A valódi
+eredmény `read("brain.state")` és `read("brain.history")` útján olvasható;
+az elfogadás még nem jelenti a feladat teljesülését.
 
 A capture consumer nem része a control authoritynak. A required capture delivery
 adatvesztése explicit integrity failure; ilyen artifact nem nevezhető teljesnek és

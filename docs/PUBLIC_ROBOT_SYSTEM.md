@@ -6,17 +6,20 @@ Ez a dokumentum a megvalósított felszínt és annak bizonyítási határát í
 ## Tulajdonosok és adatút
 
 ```text
-CLI / Voice / ER2 / Agent
+Human / CLI / Voice / autonomous event
+          │
+       HRI gate ── STOP ──► canonical STOP + upper revocation
           │
           ▼
-    RobotInterface ──────► kamera/vision owner (közvetlen képút)
+ PublicRobotRuntime: BrainCore + PublicWorldModel + BehaviorSystem
+          │             │
+     Agent proposal ◄── Brain goal owner
+          │             │
+          └─────► Brain admission / subtask lifecycle
+                        │
+                 RobotInterface ──────► kamera/vision owner
           │
-          ├──► PublicRobotRuntime: PublicWorldModel + BehaviorSystem
-          │             │                         │
-          │             ▲                         ▼
-          │       compact V3 status         publikus robot intent
-          │                                       │
-          └──────────► OperatorController ◄────────┘
+          └──────────► OperatorController
                               │
                          CommandGateway
                               │
@@ -26,7 +29,7 @@ CLI / Voice / ER2 / Agent
 `v3.robot_interface.RobotInterface` a canonical host felszín. A normál
 production kompozíció ugyanahhoz a projektazonosítóhoz tartozó host ownerhez
 kapcsolja a külön CLI/voice/agent processzeket. A host owner első publikus
-world/behavior kérésre indul; ettől sem V3, sem kamera, sem motor nem indul.
+world/behavior/Brain kérésre indul; ettől sem V3, sem kamera, sem motor nem indul.
 V3 nem importálja a felső owner implementációját. A régi `v3.command.explore`
 és `v3.command.follow_person` külső nevek a canonical host behaviorhoz vezetnek.
 A behavior által injektált RobotInterface a meglévő V3 execution primitive-et
@@ -50,11 +53,18 @@ világmodellből választ következő területet, és a publikus navigációt ha
 | `read("world.history")` | Bounded observation history; loss/eviction a snapshotban explicit |
 | `read("behavior.state")` | Canonical lifecycle, deadline, command/mission identity, reason |
 | `read("behavior.history")` | Intentek, állapotváltások, preemption, eredmény |
+| `read("brain.state")` | R2B4 identity/RUNTIME role, egy primary goal, pending és background goalok |
+| `read("brain.history")` | Bounded Brain-döntések, részfeladat-, behavior- és command lineage |
+| `execute("brain.submit", text=..., source=...)` | PENDING input HUMAN/AUTONOMOUS/SAFETY prioritással; még nincs fizikai preemption |
+| `execute("brain.adopt", goal_id=..., plan=...)` | Constraint/capability-validáció, priority/preemption és bounded terv indítása |
+| `execute("brain.fail", goal_id=..., reason=..., pending_only=True)` | Lezáratlan értelmezési input lezárása; ANSWERED válasz, egyéb ok failure |
+| `execute("brain.cancel", reason=...)` | Goal és felső intent visszavonása, canonical STOP |
 | `read("v3.status")` | Friss, élő V3 execution státusz; nem public world authority |
 | `execute("world.observe", ...)` | Explicit semantic observation, saját measurement/source/lineage |
 | `execute("behavior.room_cruise", ...)` | Bounded host Room Cruise |
 | `execute("behavior.follow_person", ...)` | Bounded host Follow Person |
 | `execute("behavior.search_person", ...)` | Névhez/entitáshoz kötött, világmodellből dolgozó keresés |
+| `execute("behavior.search_any_person", ...)` | Friss anonim személytrack keresése, korrelált target eredménnyel |
 | `execute("behavior.start", name=..., ...)` | Telepített, regisztrált normál Python behavior indítása |
 | `execute("behavior.cancel", reason=...)` | Explicit cancellation és canonical STOP |
 | `execute("vision.observe", stream="lores")` | Kalibrált JPEG és eredeti producer metadata, V3 nélkül |
@@ -77,8 +87,13 @@ Példa robotműveletet kérő használatra, kizárólag operátori mozgásenged�
 ./r x
 ```
 
-Normál Agent-turn publikus state/vision és deklarált robot capabilityk
-használója. Source/config/evidence fejlesztőtool csak explicit
+Normál HRI-turn a Brainnél PENDING inputot hoz létre, majd az Agent publikus
+state/vision adatból action vagy bounded terv javaslatot ad. A HRI ezt a
+`brain.adopt` capabilitynek adja vissza; a Brain birtokolja a célt és Agent
+periodikus hívása nélkül lépteti a részfeladatokat. Tisztán beszélgetési turn
+nem preemptál aktív fizikai goalt. ER2 explicit triggerrel engedélyezett,
+`tools=false` reasoning specialist; normál canonical feladat nem igényli.
+Source/config/evidence fejlesztőtool csak explicit
 `python -m r2b4_voice.conversation_cli --developer-mode --text ...` módban érhető
 el. A runtime turn és a provider nem változtathatja meg ezt a módot.
 Keréksebesség-parancs nem Voice/Agent capability; az operátori CLI meglévő
@@ -113,7 +128,22 @@ módosít. Evidence fájlba írás a host observation oldalon történik; STOP n
 vár ilyen fájlírásra. A behavior world-input snapshotjai és intentjei
 revision/epoch alapján összekapcsolhatók.
 
+Brain döntés és downstream behavior/command esemény az ObservationHubon
+passzívan látható. Goal/subtask/decision/behavior/command/mission identity
+kapcsolja össze a lineage-et. Az observation sink, capture, MCAP és helyi
+evidence-írás rendelkezésre állása nem előfeltétele Brain adoptionnek,
+lifecycle-léptetésnek vagy STOP-nak. Raw kép és sensor payload nem kerül a
+Brain döntési eventjébe vagy a V3 control interpreterbe.
+
 ## Behavior és STOP
+
+A Brain egyszerre egy primary fizikai goalt birtokol. Normál prioritás
+SAFETY > HUMAN > AUTONOMOUS; háttér/maintenance metadata nem kap önálló
+fizikai dispatch authorityt. Egy terv legfeljebb 16 részfeladatból áll,
+retry legfeljebb 2; safety/stale/crash/identity failure nem retryolható
+automatikusan. Explicit időtartam nem rövidülhet csendben caller watchdogra.
+Időzített Room Cruise/Follow csak a kért időtartam bizonyított elérésével
+complete; általános hard deadline exhaustion failure marad.
 
 `BehaviorSystem` egy aktív programot kezel. A program publikus robot/world
 interfészt kap, normál `start` és bounded `step` metódussal. Nincs DSL, behavior
@@ -130,6 +160,12 @@ meggátolja a késő visszatérésből származó újraaktiválást. A physical 
 host drain-várás előtt megkapja prioritását. World/capability olvasás nem
 előfeltétel. Host transport hiba esetén a saját, ellenőrzött owner leállítható;
 az autonóm command producer ezt a PID-t és saját időbudgetjét figyeli.
+
+Brain/runtime restart után a world memory visszatölthető, a korábbi aktív
+goal INTERRUPTED lesz; fizikai terv nem folytatódik automatikusan. A
+runtime owner/process és command watchdog elvesztése a canonical fail-safe
+útra vezet. A pending HRI értelmezések cancel/timeout/close esetén lezáródnak;
+késő model proposal nem adhat új fizikai authorityt.
 
 ## Személykeresés és bizonyítási határ
 
@@ -157,8 +193,13 @@ Kamerakép és név nélküli detector-track nem személyazonosítás. A jelenle
 detector nem tanulja meg automatikusan Laci arcát; a névhez kötött semantic
 observationhez külön azonosító producer vagy explicit külső observation kell.
 Keresési exhaustion, camera hiba, stale status és invalid navigation explicit
-FAILED/STOP. Behavior siker a közös állapotban és evidence-ben jelenik meg;
-automatikus új beszélgetési turn/TTS értesítés nincs hozzáadva.
+FAILED/STOP. SearchAnyPerson friss anonim személytrackből adhat target
+identityt; név szerinti azonosságot továbbra sem bizonyít. A Brain ezt a
+runtime/sessionhez kötött targetet adja a következő follow részfeladatnak;
+idegen track nem helyettesítheti csendben. A voice a Brain teljes goal
+eredményét passzív observerrel közli. Kamera-JPEG megszerzése observation
+evidence; önmagában nem bizonyít például egy lámpa állapotára vonatkozó
+szemantikai következtetést.
 
 Szoftveres evidence: idő/clock/sequence/conflict/storage bounds, facade-egység,
 preemption/STOP race, runtime/developer határ és többterületes SearchPerson

@@ -546,6 +546,12 @@ class PublicWorldModel:
         self._event_sink_errors = 0
         self.set_event_sink(event_sink)
 
+    @property
+    def revision(self) -> int:
+        """Compact lineage reference without copying the semantic world."""
+        with self._lock:
+            return self._revision
+
     def set_event_sink(self, sink: Callable[[WorldEvent], None] | None) -> None:
         """Attach the host's single passive observation consumer."""
         if sink is not None and not callable(sink):

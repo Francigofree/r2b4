@@ -89,6 +89,12 @@ class BehaviorSnapshot:
     observation_time_ns: int | None = None
     revision: int = 0
     parameters: tuple[tuple[str, object], ...] = ()
+    goal_id: str | None = None
+    subtask_id: str | None = None
+    decision_id: str | None = None
+    completion_on_duration: bool = False
+    result: tuple[tuple[str, object], ...] = ()
+    execution_started_ns: int | None = None
 
     def to_jsonable(self) -> dict[str, object]:
         return {
@@ -107,10 +113,19 @@ class BehaviorSnapshot:
             "revision": self.revision,
             "parameters": {key: list(value) if isinstance(value, tuple) else value
                            for key, value in self.parameters},
+            "goal_id": self.goal_id,
+            "subtask_id": self.subtask_id,
+            "decision_id": self.decision_id,
+            "completion_on_duration": self.completion_on_duration,
+            "result": {key: list(value) if isinstance(value, tuple) else value
+                       for key, value in self.result},
+            "execution_started_ns": self.execution_started_ns,
             "confidence": 1.0,
             "source": "host.behavior_system",
             "lineage": {"behavior_id": self.behavior_id, "command_id": self.command_id,
-                        "mission_id": self.mission_id, "revision": self.revision},
+                        "mission_id": self.mission_id, "revision": self.revision,
+                        "goal_id": self.goal_id, "subtask_id": self.subtask_id,
+                        "decision_id": self.decision_id},
         }
 
 
@@ -142,12 +157,18 @@ class BehaviorEvent:
     world_revision: int | None = None
     clock_epoch: str | None = None
     world_queries: tuple[BehaviorWorldQueryReference, ...] = ()
+    action_command_id: str | None = None
+    action_mission_id: str | None = None
+    action_error: str | None = None
 
     def to_jsonable(self) -> dict[str, object]:
         return {"sequence": self.sequence, "kind": self.kind, **self.state.to_jsonable(),
                 "action": self.action, "action_parameters": dict(self.action_parameters),
                 "world_revision": self.world_revision, "clock_epoch": self.clock_epoch,
                 "world_queries": [query.to_jsonable() for query in self.world_queries],
+                "action_command_id": self.action_command_id,
+                "action_mission_id": self.action_mission_id,
+                "action_error": self.action_error,
                 "schema": BEHAVIOR_EVENT_SCHEMA}
 
 
@@ -158,12 +179,15 @@ class BehaviorUpdate:
     lifecycle: BehaviorLifecycle
     reason: str | None = None
     command_id: str | None = None
+    result: tuple[tuple[str, object], ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.lifecycle, BehaviorLifecycle) or self.lifecycle is BehaviorLifecycle.IDLE:
             raise ValueError("program update requires a canonical non-idle lifecycle")
         if self.command_id is not None and (not isinstance(self.command_id, str) or not self.command_id):
             raise ValueError("program command identity must be nonempty")
+        raw = self.result if isinstance(self.result, Mapping) else dict(self.result)
+        object.__setattr__(self, "result", tuple(sorted(_parameters(raw).items())))
 
 
 class BehaviorProgram(Protocol):
@@ -286,7 +310,29 @@ class _ProgramPort:
             event = self._owner._record("BEHAVIOR_INTENT", action=action,
                                         action_parameters=tuple(sorted(evidence.items())))
         self._owner._emit(event)
-        return self._check().execute(action, **parameters)
+        try:
+            result = self._check().execute(action, **parameters)
+        except Exception as exc:
+            with self._owner._lock:
+                completed = self._owner._record(
+                    "BEHAVIOR_ACTION_FAILED", action=action,
+                    action_parameters=event.action_parameters, state=event.state, intent=event,
+                    action_error=type(exc).__name__,
+                )
+            self._owner._emit(completed)
+            raise
+        command_id = (result.get("command_id") if isinstance(result, Mapping)
+                      else getattr(result, "command_id", None))
+        command_id = command_id if isinstance(command_id, str) and command_id else None
+        with self._owner._lock:
+            completed = self._owner._record(
+                "BEHAVIOR_ACTION_RESULT", action=action,
+                action_parameters=event.action_parameters, state=event.state, intent=event,
+                action_command_id=command_id,
+                action_mission_id=f"mission-{command_id}" if command_id else None,
+            )
+        self._owner._emit(completed)
+        return result
 
     def stop(self) -> object:
         return self._check().stop()
@@ -350,17 +396,29 @@ class BehaviorSystem:
             return tuple(self._history)
 
     def start(self, name: str, parameters: Mapping[str, object] | None = None,
-              *, max_duration_s: float = 300.0) -> BehaviorSnapshot:
+              *, max_duration_s: float = 300.0, completion_on_duration: bool = False,
+              lineage: Mapping[str, object] | None = None) -> BehaviorSnapshot:
         name = name.removeprefix("behavior.") if isinstance(name, str) else ""
         if (not isinstance(max_duration_s, (float, int)) or isinstance(max_duration_s, bool)
                 or not math.isfinite(max_duration_s) or not 0 < max_duration_s <= 3600):
             raise ValueError("max_duration_s must be finite and in (0, 3600]")
+        if type(completion_on_duration) is not bool:
+            raise ValueError("completion_on_duration must be a boolean")
+        if lineage is not None and not isinstance(lineage, Mapping):
+            raise ValueError("behavior lineage must be a bounded object")
+        identity = dict(lineage or {})
+        if (set(identity) - {"goal_id", "subtask_id", "decision_id"}
+                or any(not isinstance(value, str) or not value or len(value) > 256
+                       for value in identity.values())):
+            raise ValueError("behavior lineage requires bounded goal/subtask/decision identities")
         params = _parameters(parameters)
         watchdog_s = params.get("session_watchdog_s")
         if watchdog_s is not None:
             if (not isinstance(watchdog_s, (float, int)) or isinstance(watchdog_s, bool)
                     or not math.isfinite(watchdog_s) or watchdog_s <= 0):
                 raise ValueError("session_watchdog_s must be finite and positive")
+            if watchdog_s < max_duration_s:
+                completion_on_duration = False
             max_duration_s = min(max_duration_s, watchdog_s)
         with self._lock:
             if name not in self._factories:
@@ -380,6 +438,7 @@ class BehaviorSystem:
                 started_ns=now, deadline_ns=now + int(max_duration_s * 1e9),
                 measurement_time_ns=now, observation_time_ns=now, revision=self._state.revision + 1,
                 parameters=tuple(sorted(params.items())),
+                completion_on_duration=completion_on_duration, **identity,
             )
             event = self._record("BEHAVIOR_STARTING")
         self._emit(event)
@@ -394,7 +453,8 @@ class BehaviorSystem:
                 if handle.lifecycle in _RUNNING:
                     raise ValueError("start without an action identity must be terminal")
                 return self._finish(handle.lifecycle, handle.reason, generation=generation,
-                                    stop=handle.lifecycle is not BehaviorLifecycle.CANCELLED)
+                                    stop=handle.lifecycle is not BehaviorLifecycle.CANCELLED,
+                                    result=handle.result)
             command_id = handle.get("command_id") if isinstance(handle, Mapping) else getattr(handle, "command_id", None)
             if not isinstance(command_id, str) or not command_id:
                 raise ValueError("behavior action returned no canonical command identity")
@@ -417,10 +477,13 @@ class BehaviorSystem:
             state, generation, program = self._state, self._generation, self._program
         if state.lifecycle not in _RUNNING:
             return state
-        if now >= state.deadline_ns:
+        duration_reached = now >= state.deadline_ns
+        if duration_reached and not state.completion_on_duration:
             return self._finish(BehaviorLifecycle.FAILED, "DURATION_LIMIT", generation=generation, stop=True)
         # start() may still be waiting for the public execution boundary.
         if state.command_id is None:
+            if duration_reached:
+                return self._finish(BehaviorLifecycle.FAILED, "DURATION_LIMIT", generation=generation, stop=True)
             return state
         try:
             status = self._robot.read("v3.status")
@@ -443,25 +506,55 @@ class BehaviorSystem:
             return self._finish(BehaviorLifecycle.FAILED, "STATUS_ERROR:" + type(exc).__name__,
                                 generation=generation, stop=True)
         if update is None:
+            if duration_reached:
+                return self._finish(BehaviorLifecycle.FAILED, "MISSION_NOT_ACKNOWLEDGED",
+                                    generation=generation, stop=True)
             if now - state.observation_time_ns >= self._start_timeout_ns:
                 return self._finish(BehaviorLifecycle.FAILED, "MISSION_NOT_ACKNOWLEDGED", generation=generation, stop=True)
             return state
         if update.lifecycle not in _RUNNING:
             # Replacing mission identity belongs to the newer public caller.
             return self._finish(update.lifecycle, update.reason, generation=generation,
-                                stop=update.lifecycle is not BehaviorLifecycle.CANCELLED, measurement_ns=stamp)
+                                stop=update.lifecycle is not BehaviorLifecycle.CANCELLED,
+                                measurement_ns=stamp, result=update.result)
+        execution_started_ns = state.execution_started_ns
+        deadline_ns = state.deadline_ns
+        if state.completion_on_duration and execution_started_ns is None:
+            navigation = status.get("navigation")
+            meaningful = (isinstance(navigation, Mapping)
+                          and navigation.get("mission_id") == state.mission_id
+                          and (navigation.get("status") == "ACTIVE"
+                               or state.name == "follow_person"
+                               and navigation.get("reason") == "PERSON_DISTANCE_HOLD"))
+            if meaningful and update.lifecycle is BehaviorLifecycle.ACTIVE:
+                execution_started_ns = stamp
+                deadline_ns = stamp + (state.deadline_ns - state.started_ns)
+                duration_reached = now >= deadline_ns
+        if duration_reached:
+            navigation = status.get("navigation")
+            if (update.lifecycle is not BehaviorLifecycle.ACTIVE or execution_started_ns is None
+                    or state.name == "follow_person" and isinstance(navigation, Mapping)
+                    and navigation.get("reason") == "PERSON_TARGET_NOT_AVAILABLE"):
+                return self._finish(BehaviorLifecycle.FAILED, "REQUESTED_EXECUTION_UNPROVEN",
+                                    generation=generation, stop=True)
+            return self._finish(BehaviorLifecycle.COMPLETED, "REQUESTED_DURATION_REACHED",
+                                generation=generation, stop=True, measurement_ns=stamp,
+                                result=update.result or state.result)
         with self._lock:
             if generation != self._generation or self._state.lifecycle not in _RUNNING:
                 return self._state
             command_id = update.command_id or self._state.command_id
-            changed = (update.lifecycle, update.reason, command_id) != (
-                self._state.lifecycle, self._state.reason, self._state.command_id)
+            result = update.result or self._state.result
+            changed = (update.lifecycle, update.reason, command_id, result, execution_started_ns) != (
+                self._state.lifecycle, self._state.reason, self._state.command_id,
+                self._state.result, self._state.execution_started_ns)
             if not changed and stamp == self._state.measurement_time_ns:
                 return self._state
             self._state = replace(self._state, lifecycle=update.lifecycle, reason=update.reason,
                                   command_id=command_id, mission_id=f"mission-{command_id}",
                                   measurement_time_ns=stamp, observation_time_ns=now,
-                                  revision=self._state.revision + 1)
+                                  revision=self._state.revision + 1, result=result,
+                                  execution_started_ns=execution_started_ns, deadline_ns=deadline_ns)
             event = self._record("BEHAVIOR_OBSERVED") if changed else None
         if event is not None:
             self._emit(event)
@@ -476,7 +569,8 @@ class BehaviorSystem:
 
     def _finish(self, lifecycle: BehaviorLifecycle, reason: str | None, *,
                 generation: int | None = None, stop: bool,
-                measurement_ns: int | None = None) -> BehaviorSnapshot:
+                measurement_ns: int | None = None,
+                result: tuple[tuple[str, object], ...] | None = None) -> BehaviorSnapshot:
         with self._lock:
             if (generation is not None and generation != self._generation
                     or self._state.lifecycle not in _RUNNING):
@@ -485,21 +579,46 @@ class BehaviorSystem:
             now = self._clock_ns()
             self._state = replace(self._state, lifecycle=lifecycle, reason=reason,
                                   measurement_time_ns=now if measurement_ns is None else measurement_ns,
-                                  observation_time_ns=now, revision=self._state.revision + 1)
-            event = self._record("BEHAVIOR_" + lifecycle.value)
+                                  observation_time_ns=now, revision=self._state.revision + 1,
+                                  result=self._state.result if result is None else result)
+            completed = self._state if stop and lifecycle is BehaviorLifecycle.COMPLETED else None
+            context = BehaviorEvent(0, "BEHAVIOR_COMPLETED", self._state,
+                                    world_revision=self._world_revision, clock_epoch=self._world_epoch,
+                                    world_queries=tuple(self._world_queries)) if completed is not None else None
+            event = None if completed is not None else self._record("BEHAVIOR_" + lifecycle.value)
         # A passive sink cannot delay the canonical stop owned by this call.
         try:
             if stop:
                 self._robot.stop()
+        except Exception as exc:
+            if completed is not None:
+                with self._lock:
+                    failed = replace(completed, lifecycle=BehaviorLifecycle.FAILED,
+                                     reason="CANONICAL_STOP_FAILED:" + type(exc).__name__,
+                                     observation_time_ns=self._clock_ns(), revision=completed.revision + 1)
+                    if self._state is completed:
+                        self._state = failed
+                    event = self._record("BEHAVIOR_FAILED", state=failed, intent=context)
+            raise
         finally:
+            if event is None:
+                with self._lock:
+                    event = self._record("BEHAVIOR_COMPLETED", state=completed, intent=context)
             self._emit(event)
         return self.snapshot()
 
     def _record(self, kind: str, *, action: str | None = None,
-                action_parameters: tuple[tuple[str, object], ...] = ()) -> BehaviorEvent:
+                action_parameters: tuple[tuple[str, object], ...] = (),
+                state: BehaviorSnapshot | None = None, action_command_id: str | None = None,
+                action_mission_id: str | None = None, action_error: str | None = None,
+                intent: BehaviorEvent | None = None) -> BehaviorEvent:
         self._sequence += 1
-        event = BehaviorEvent(self._sequence, kind, self._state, action, action_parameters,
-                              self._world_revision, self._world_epoch, tuple(self._world_queries))
+        event = BehaviorEvent(self._sequence, kind, self._state if state is None else state,
+                              action, action_parameters,
+                              self._world_revision if intent is None else intent.world_revision,
+                              self._world_epoch if intent is None else intent.clock_epoch,
+                              tuple(self._world_queries) if intent is None else intent.world_queries,
+                              action_command_id, action_mission_id, action_error)
         self._history.append(event)
         return event
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
+import json
 
 
 class ConversationContractError(ValueError):
@@ -28,6 +29,28 @@ def _optional_text(value: str | None, name: str) -> str | None:
         raise ConversationContractError(f"{name} must be a string or None")
     value = value.strip()
     return value or None
+
+
+def goal_plan_copy(value: object) -> dict[str, object]:
+    """Detach a bounded proposal; capability admission remains Brain-owned."""
+    if not isinstance(value, Mapping):
+        raise ConversationContractError("goal_plan must be an object")
+    try:
+        payload = json.dumps(dict(value), allow_nan=False, separators=(",", ":"))
+    except (TypeError, ValueError) as exc:
+        raise ConversationContractError("goal_plan must contain finite JSON values") from exc
+    if len(payload.encode()) > 32_768:
+        raise ConversationContractError("goal_plan exceeds its bound")
+    detached = json.loads(payload)
+    steps = detached.get("steps")
+    if not isinstance(steps, list) or not 1 <= len(steps) <= 16:
+        raise ConversationContractError("goal_plan requires 1..16 steps")
+    if any(not isinstance(step, dict) or not isinstance(step.get("action"), str)
+           or not isinstance(step.get("parameters", {}), dict) for step in steps):
+        raise ConversationContractError("goal_plan step requires action and parameters")
+    if not isinstance(detached.get("constraints", {}), dict):
+        raise ConversationContractError("goal_plan constraints must be an object")
+    return detached
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,13 +111,18 @@ class LLMDecision:
     spoken_text: str | None
     robot_action: RobotAction | None
     model: str
+    goal_plan: Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "spoken_text", _optional_text(self.spoken_text, "spoken_text"))
         if self.robot_action is not None and not isinstance(self.robot_action, RobotAction):
             raise ConversationContractError("robot_action must be RobotAction or None")
         object.__setattr__(self, "model", _nonempty(self.model, "model"))
-        if self.spoken_text is None and self.robot_action is None:
+        if self.goal_plan is not None:
+            object.__setattr__(self, "goal_plan", goal_plan_copy(self.goal_plan))
+            if self.robot_action is not None:
+                raise ConversationContractError("goal_plan and robot_action are mutually exclusive")
+        if self.spoken_text is None and self.robot_action is None and self.goal_plan is None:
             raise ConversationContractError("LLMDecision must contain spoken_text and/or robot_action")
 
 
@@ -154,6 +182,8 @@ class ConversationTurnResult:
     action_status: str
     error: str | None
     model: str | None
+    goal_id: str | None = None
+    proposed_plan: Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "turn_id", _nonempty(self.turn_id, "turn_id"))
@@ -164,6 +194,9 @@ class ConversationTurnResult:
         object.__setattr__(self, "action_status", _nonempty(self.action_status, "action_status"))
         object.__setattr__(self, "error", _optional_text(self.error, "error"))
         object.__setattr__(self, "model", _optional_text(self.model, "model"))
+        object.__setattr__(self, "goal_id", _optional_text(self.goal_id, "goal_id"))
+        if self.proposed_plan is not None:
+            object.__setattr__(self, "proposed_plan", goal_plan_copy(self.proposed_plan))
 
     def to_jsonable(self) -> dict[str, object]:
         action = None
@@ -180,6 +213,8 @@ class ConversationTurnResult:
             "action_status": self.action_status,
             "error": self.error,
             "model": self.model,
+            "goal_id": self.goal_id,
+            "proposed_plan": None if self.proposed_plan is None else goal_plan_copy(self.proposed_plan),
         }
 
 

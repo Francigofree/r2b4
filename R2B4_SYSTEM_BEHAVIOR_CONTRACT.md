@@ -1,6 +1,6 @@
 # R2B4 robotrendszer — legfelső szintű működési contract
 
-**Contract:** `R2B4_SYSTEM_BEHAVIOR_CONTRACT_V2`
+**Contract:** `R2B4_SYSTEM_BEHAVIOR_CONTRACT_V3`
 
 **Szerep:** az R2B4 teljes robotrendszerének legfelső szintű, felhasználó felől értelmezett működési iránya. A dokumentum azt rögzíti, **minek kell a robotrendszer egészének lennie és hogyan kell viselkednie**, nem azt, hogy ezt pillanatnyilag melyik osztály, processz, thread vagy parancs valósítja meg.
 
@@ -234,7 +234,67 @@ teszi elérhetetlenné; vision-függő mozgás ilyenkor biztonságosan megáll.
 
 ---
 
-## 7. A végrehajtási mód kiválasztása
+## 7. Brain, Agent és a végrehajtási út kiválasztása
+
+Normál runtime-ban **egy robot, egy Brain, egy aktív primary goal és egy
+publikus fizikai execution boundary** van. A folyamatosan élő, könnyű Brain
+nem LLM: a szemantikus goal, prioritás, current subtask, lifecycle, eredmény,
+event handling, identity és role ownere. A normál prioritás
+`SAFETY > HUMAN > AUTONOMOUS`. Több background/maintenance goal tartható,
+de nem hozhatnak létre párhuzamos fizikai authorityt.
+
+Normál input először a Brainnél lesz PENDING feladat. Az Agent on-demand
+értelmező/tervező szolgáltatás: választ vagy bounded Goal/Plan proposal-t ad.
+A Brain validálja a capabilityt és az explicit user constraintet, elfogadja
+vagy elutasítja a tervet, majd saját lifecycle szerint hajtja végre.
+Az Agent nem goal-owner és nem indíthat önálló fizikai robotfeladatot.
+A Brain nem hív periodikusan LLM-et: csak új kérés vagy indokolt cognitive
+esemény igényelhet értelmezést, tervezést vagy replant.
+
+A hosszabb részfeladatot a BehaviorSystem hajtja végre a Brain megbízásán
+belül, saját bounded state machine-nel és local recoveryvel. Nem hozhat
+létre top-level robotcélt. Egyszerű canonical actionhöz nem kötelező behavior.
+Mindkét út kizárólag RobotInterface-en keresztül kérhet fizikai műveletet.
+A V3 lokális world, navigation, trajectory, recovery, constraint, hard safety
+és motor-realizáció authorityja változatlan; szemantikus goal-owner nem lesz.
+
+```text
+Human / Voice / CLI / autonomous event
+  → HRI → Brain input → Agent proposal → Brain admission
+  → canonical action / Behavior → RobotInterface → V3 → hardware
+  → completed state / result / event → Brain → HRI
+STOP → canonical immediate STOP + felső intent revocation
+```
+
+`COMMAND ACCEPTED`, `MISSION COMPLETE`, `BEHAVIOR COMPLETE` és
+`USER GOAL COMPLETE` külön állítások. Sikert csak az adott felhasználói cél
+összes szükséges részfeladatának korrelált evidence-e bizonyíthat. Kért
+időtartam igazolt executiontől számít; watchdog nem rövidítheti le csendben.
+Failure után bounded retry/replan vagy whole-goal failure megengedett;
+safety-, stale-, crash- vagy identity-hiba nem indokol automatikus újraindítást.
+
+Lényeges explicit feltétel nem dobható el capability-hiány miatt: ilyenkor
+más pontos terv vagy explicit `constraint unsupported` eredmény szükséges.
+Keresés után a követés ugyanahhoz a targethez és runtime/session identityhez
+kötődik; eltérő személy csak explicit reacquisition-szabállyal választható.
+
+A Brain közös memóriája a Public World Model: személyek, helyek, tárgyak,
+tények, current/stale observation, preference és task/goal history.
+Agent, Behavior és ER2 nem tart fenn párhuzamos szemantikus robotvilágot.
+A V3 lokális operational worldje továbbra is külön execution-world.
+
+Brain/runtime crash esetén a fizikai command authority megszűnik a canonical
+fail-safe úton. Restart után memória visszatölthető, de a régi aktív goal
+INTERRUPTED/CANCELLED: korábbi fizikai terv nem folytatódik automatikusan.
+Identity `R2B4`, normál role `RUNTIME`; kommunikációs profile/personality nem
+változtat authorityt. CONFIG és BEHAVIOR_DEV későbbi explicit mellékágak.
+
+Minden robotikai jelentőségű Brain-döntés és downstream Behavior/command
+lineage passzívan megfigyelhető az ObservationHubon. Goal/subtask/decision,
+behavior/command/mission identity, measurement idő, world revision és epoch
+megmarad. Publication bounded; consumer, capture, MCAP vagy journal hibája,
+hiánya és túlcsordulása nem lehet Brain-döntési input vagy execution-feltétel.
+Az evidence-loss explicit diagnosztikai állapot, nem robotikai authority.
 
 A felhasználói vagy agent-kérés után a rendszernek egy **végrehajtási mód választó** felelősséget kell alkalmaznia.
 
@@ -242,7 +302,7 @@ Feladata annak eldöntése, hogy az adott intent:
 
 - egyszerű beszélgetési / információs válasz;
 - read-only host vagy observation capability;
-- ER2-t igénylő magasabb szintű robotikai reasoning;
+- explicit engedélyezett ER2 specialistát igénylő magasabb szintű reasoning;
 - közvetlen canonical robot action;
 - vagy más, később definiált végrehajtási mód
 
@@ -255,8 +315,7 @@ Normál beszélgetési kérésnél az **alapértelmezett beszélgető partner a 
 Ez nem kizárólagos backend. A **végrehajtási mód választó** az intent és a szükséges capability alapján választhat más végrehajtási módot is, többek között:
 
 - **Gemini fallback**;
-- **ER2 stream**;
-- **ER2 preview**;
+- explicit triggerrel **ER2 specialist** (stream vagy preview provider);
 - később bármely más, a publikus capability boundary mögé szabályosan integrált beszélgetési, reasoning- vagy robotikai végrehajtási módot.
 
 A ChatGPT/OpenAI provider, a Gemini, az ER2 stream és az ER2 preview nem külön robotikai authority-k. A kiválasztás azt határozza meg, hogy melyik magasabb szintű végrehajtó/partner dolgozza fel a kérést; robotmozgás esetén a tényleges actuation ettől függetlenül a canonical V3 command- és safety-úton történik.
@@ -290,30 +349,16 @@ Feladata a szükséges végrehajtási út, partner és capability kiválasztása
 
 ER2, voice/LLM, CLI, GUI vagy más külső komponens **nem külön robotikai authority**.
 
-Mindegyik külső kérés ugyanahhoz az elvhez igazodik:
+Normál felhasználói kérés a 7. pont Brain-lifecycle-ját követi. Explicit
+operátori vagy diagnosztikai kliens a RobotInterface-en át kérhet canonical
+műveletet, szükség szerinti V3 readiness és ugyanazon CommandGateway/safety
+boundary mellett; ezzel a Brain korábbi fizikai intentje preemptálódik.
 
-```text
-felhasználó / agent / ER2
-        ↓
-publikus robot-interface / capability boundary
-        ↓
-végrehajtási mód választó
-        ↓
-szükséges capability / partner
-        ├─ ChatGPT/OpenAI / conversation
-        ├─ Gemini / fallback conversation
-        ├─ ER2 stream / ER2 preview
-        ├─ read / host / observation
-        └─ robot action
-               ↓
-        ha kell: V3 readiness
-               ↓
-        canonical command ingress
-               ↓
-        production V3 control + safety
-```
-
-Az ER2 feladata lehet magas szintű döntés, reasoning vagy robotfeladat kezdeményezése, de a tényleges robotmozgást ugyanazon canonical control/safety úton kell kérnie, mint bármely más külső kliensnek.
+Normál runtime-ban ER2 opcionális Agent-specialista, nem második agy és nem
+runtime mode vagy goal-owner. Explicit triggerrel reasoning eredményt ad
+vissza az Agent/Brainnek; canonical feladatokhoz nem szükséges. A külön,
+explicit operátori ER2 belépő is csak a RobotInterface és a canonical V3
+command/safety úton kérhet fizikai műveletet.
 
 LLM vagy ER2 nem kaphat közvetlen motor-, GPIO-, layer-state-, safety- vagy belső V3-authority handle-t.
 
@@ -359,7 +404,7 @@ A jövőbeli fejlesztések akkor illeszkednek ehhez a rendszerszintű irányhoz,
 
 1. **A robot megszólíthatósága nem azonos a V3 futásával.**
 2. **Wake felismerés önmagában nem indít robotmozgást és nem indítja el a V3-at.**
-3. **A felhasználói kérés után a végrehajtási mód választó dönti el, milyen végrehajtó/partner és capability szükséges.**
+3. **A Brain birtokolja a felhasználói célt; az Agent javasol partnert, capabilityt és tervet, amelyet a Brain validál és adoptál.**
 4. **Mozgatási intent esetén a V3 szükség szerint elindul, teljes readinessig bootol, majd IDLE/ready állapotból hajtja végre a mozgást.**
 5. **Nem actuation-jellegű capability nem köthető szükségtelenül a V3-hoz.**
 6. **Minimum a mikrofon és a kamera V3 nélkül is használható capability.**
@@ -370,7 +415,7 @@ A jövőbeli fejlesztések akkor illeszkednek ehhez a rendszerszintű irányhoz,
 11. **A wake phrase konfigurálható; alapértéke `robot`.**
 12. **A wake utáni ready-visszajelzés konfigurálható; alapértéke `figyelek`.**
 13. **A beszélgetési session 10 másodperc folyamatos csend után lezárható.**
-14. **Az alapértelmezett beszélgető partner ChatGPT/OpenAI; LLM-hibánál a hitelesített fallback-lánc automatikusan válthat OpenAI API key, Gemini vagy Groq providerre; ER2 stream/preview továbbra is külön végrehajtási mód.**
+14. **Az alapértelmezett beszélgető partner ChatGPT/OpenAI; LLM-hibánál a hitelesített fallback-lánc automatikusan válthat OpenAI API key, Gemini vagy Groq providerre; ER2 normál runtime-ban explicit engedélyezett specialist.**
 15. **A hallható válaszok alapértelmezett beszédszintézise a lokális TTS.**
 16. **A beszélgető/reasoning partner kiválasztása és a TTS-kimenet külön felelősség.**
 17. **A V3 technikai implementációja változhat anélkül, hogy a felhasználó felől látható rendszerszemantika megváltozna.**
@@ -401,7 +446,12 @@ Ezek source-first implementációs vagy külön contract-kérdések.
 
 A fenti részletek megváltozhatnak. A rendszerszintű cél közben változatlan marad:
 
-> **A robot legyen folyamatosan megszólítható; normál beszélgetésnél alapértelmezetten ChatGPT/OpenAI OAuth-pal dolgozzon, LLM-hibánál automatikusan válthasson a konfigurált fallback providerre, és szükség esetén a végrehajtási mód választó külön ER2 streamre vagy ER2 preview-ra válthasson; a hallható válasz alapértelmezetten lokális TTS-en szólaljon meg; és a V3 csak akkor induljon el, amikor tényleges robotmozgás vagy más production controlt igénylő feladat szükséges.**
+> **A robot legyen folyamatosan megszólítható; a Brain birtokolja a célját és
+> lifecycle-ját, az Agent on-demand értelmez és tervez, ER2 explicit
+> specialistaként segíthet. A RobotInterface az egyetlen fizikai kapu; V3 csak
+> valódi control-igényre indul, és determinisztikusan, biztonságosan realizál.
+> A beszélgetés alapértelmezett providere ChatGPT/OpenAI, konfigurált
+> fallbackkel; a hallható válasz alapértelmezett útja lokális TTS.**
 
 ---
 
@@ -430,8 +480,9 @@ jelent, nem pusztán statikus API-listát.
 
 A V3 azt dönti el, mi biztonságosan végrehajtható most. A Public World Model
 azt tartja nyilván, mit tud vagy feltételez a robot önmagáról, helyekről,
-személyekről, objektumokról és kapcsolataikról. A Behavior System a következő
-intentet választja. Az Agent értelmez és használja ezeket; safety-, motor-,
+személyekről, objektumokról és kapcsolataikról. A Brain birtokolja a szemantikus
+goalt; a Behavior System a rábízott részfeladaton belül választ következő
+intentet. Az Agent értelmez és tervez; safety-, motor-,
 lokális obstacle- vagy localization-authorityt egyik felső komponens sem kap.
 
 V3/sensor → completed observations → Public World Model az alapirány.

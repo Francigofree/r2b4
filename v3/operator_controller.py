@@ -685,6 +685,7 @@ class OperatorController:
         *,
         max_v_mps: float = FOLLOW_PERSON_DEFAULT_MAX_V_MPS,
         max_omega_rad_s: float = FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S,
+        target_track_id: str | None = None,
         capture: bool = True,
         capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ,
@@ -702,6 +703,12 @@ class OperatorController:
             self.python, "-m", "v3.control_cli", "followperson", "--command-id", command_id,
             "--max-v-mps", str(max_v), "--max-omega-rad-s", str(max_omega),
         ]
+        if target_track_id is not None:
+            from v3.contracts.base import require_token
+            require_token(target_track_id, "target_track_id")
+            if not target_track_id.startswith("person-") or len(target_track_id) > 256:
+                raise OperatorError("invalid bound person track")
+            args.extend(["--target-track-id", target_track_id])
         pid, mode = self._start_motion(
             "followperson", capture, capture_mode, args, require_real_motion=False,
             capture_hz=capture_hz, session_owner_pid=session_owner_pid,

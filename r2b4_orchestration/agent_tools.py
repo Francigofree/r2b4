@@ -24,6 +24,7 @@ class AgentRobotInterface(Protocol):
 
 _ROBOT_READ_RESOURCES = frozenset({
     "robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history",
+    "brain.state", "brain.history",
     "operator.status", "v3.status", "v3.pose", "v3.health", "v3.safety", "camera.status",
 })
 
@@ -39,7 +40,7 @@ def _robot_capabilities(interface: AgentRobotInterface, value: Mapping[str, obje
         descriptor = action_descriptor(name)
         if (name in _ROBOT_READ_RESOURCES or name == "vision.observe"
                 or name in {"behavior.room_cruise", "behavior.follow_person", "behavior.cancel"}
-                or (descriptor is not None and descriptor.voice_exposed)):
+                or (descriptor is not None and name != "v3.command.wheels")):
             items[name] = dict(capability)
     return {"schema": raw.get("schema"), "capabilities": items}
 
@@ -73,9 +74,11 @@ def _er2_delegate(root: Path, value: Mapping[str, object], *,
     if mode not in {"preview", "stream"}:
         raise ValueError("mode must be preview or stream")
     camera = args.get("camera", True)
-    tools_enabled = args.get("tools", mode == "stream")
+    tools_enabled = args.get("tools", False)
     if type(camera) is not bool or type(tools_enabled) is not bool:
         raise ValueError("camera and tools must be booleans")
+    if tools_enabled:
+        raise ValueError("ER2_SPECIALIST_HAS_NO_PHYSICAL_AUTHORITY")
     duration = args.get("duration_s")
     if duration is None and mode == "stream":
         duration = 20.0
@@ -177,14 +180,14 @@ def build_default_agent_tools(
     tools.append((
         AgentToolSpec(
             "er2.delegate",
-            "Delegate an explicit visual/spatial/complex robot task to canonical ER2 with a required reason. Use one canonical action whenever it represents the entire request, including metric move/turn. ER2 still executes only through ExternalRobotGateway -> RobotInterface -> V3 safety. Do not use for hypothetical/explanatory requests.",
+            "Use ER2 as a reasoning specialist only after an explicit ER2 trigger in the current user request. Return reasoning to Agent/Brain; physical tools are disabled. Prefer a canonical action or Brain plan for ordinary robot tasks.",
             "ROBOTICS",
             {
                 "task": "required explicit robot task text",
                 "reason": "required visual_observation|multi_step_physical|continuous_feedback|open_ended_spatial; a single canonical motion is not an ER2 reason",
                 "mode": "optional preview|stream; stream for physical robotics",
                 "camera": "optional boolean, default true",
-                "tools": "optional boolean, default true for stream",
+                "tools": "optional false; physical tools are forbidden",
                 "duration_s": "optional bounded 1..30 seconds; stream default 20",
             },
         ),

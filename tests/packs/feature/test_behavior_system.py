@@ -86,7 +86,7 @@ def test_room_cruise_uses_public_action_and_correlated_completed_status():
     assert completed.measurement_time_ns == robot.status["monotonic_ns"]
     assert robot.stops == 1
     assert [event.kind for event in system.history()] == [
-        "BEHAVIOR_STARTING", "BEHAVIOR_INTENT", "BEHAVIOR_ACTION_ACCEPTED",
+        "BEHAVIOR_STARTING", "BEHAVIOR_INTENT", "BEHAVIOR_ACTION_RESULT", "BEHAVIOR_ACTION_ACCEPTED",
         "BEHAVIOR_OBSERVED", "BEHAVIOR_COMPLETED",
     ]
 
@@ -196,7 +196,11 @@ def test_stop_revokes_starting_program_before_late_action_returns():
     assert system.snapshot().reason == "STOP"
     assert system.snapshot().command_id is None
     assert robot.stops == 1
-    assert len(system.history()) == 3
+    assert len(system.history()) == 4
+    result = system.history()[-1]
+    assert result.kind == "BEHAVIOR_ACTION_RESULT"
+    assert result.state.behavior_id == system.snapshot().behavior_id
+    assert result.action_command_id == "command-1"
 
 
 def test_new_program_uses_public_operations_and_cannot_use_wheel_action():
@@ -264,3 +268,141 @@ def test_caller_parameter_mutation_cannot_change_behavior_state_or_evidence():
     assert original["parameters"]["candidate_places"] == ["room:lounge", "room:kitchen"]
     assert received == [("room:lounge", "room:kitchen")]
     assert len(robot.actions) == 1
+
+
+def test_brain_lineage_and_every_program_command_are_observable_and_immutable():
+    clock, robot, system = setup_system()
+
+    class Visit:
+        def start(self, port, parameters):
+            return port.execute("v3.command.navigate", x_m=1.0, y_m=2.0)
+
+        def step(self, port, state, status):
+            result = port.execute("v3.command.navigate", x_m=3.0, y_m=4.0)
+            return BehaviorUpdate(BehaviorLifecycle.ACTIVE, "NEXT_PLACE", result["command_id"])
+
+    system.register("visit", Visit)
+    lineage = {"goal_id": "goal-1", "subtask_id": "subtask-2", "decision_id": "decision-3"}
+    state = system.start("visit", lineage=lineage)
+    lineage["goal_id"] = "mutated"
+    robot.observe(state, mode="NAVIGATE")
+    system.step()
+    results = [event.to_jsonable() for event in system.history()
+               if event.kind == "BEHAVIOR_ACTION_RESULT"]
+    assert [event["action_command_id"] for event in results] == ["command-1", "command-2"]
+    assert [event["action_mission_id"] for event in results] == ["mission-command-1", "mission-command-2"]
+    assert all(event["lineage"]["goal_id"] == "goal-1" for event in results)
+    assert all(event["subtask_id"] == "subtask-2" and event["decision_id"] == "decision-3"
+               for event in results)
+    assert system.snapshot().command_id == "command-2"
+
+
+@pytest.mark.parametrize("name, mode", [("room_cruise", "EXPLORE"), ("follow_person", "FOLLOW_PERSON")])
+def test_explicit_requested_duration_completes_only_with_current_execution(name, mode):
+    clock, robot, system = setup_system()
+    state = system.start(name, max_duration_s=50, completion_on_duration=True)
+    robot.observe(state, mode=mode)
+    system.step()
+    clock.now = state.deadline_ns
+    robot.observe(state, mode=mode)
+    completed = system.step()
+    assert completed.lifecycle is BehaviorLifecycle.COMPLETED
+    assert completed.reason == "REQUESTED_DURATION_REACHED"
+    assert completed.measurement_time_ns == robot.status["monotonic_ns"]
+    assert robot.stops == 1
+
+
+def test_watchdog_and_missing_execution_never_prove_requested_duration():
+    clock, robot, system = setup_system()
+    state = system.start("room_cruise", {"session_watchdog_s": 2},
+                         max_duration_s=50, completion_on_duration=True)
+    clock.now = state.deadline_ns
+    assert system.step().lifecycle is BehaviorLifecycle.FAILED
+    assert system.snapshot().reason == "DURATION_LIMIT"
+
+    clock, robot, system = setup_system()
+    state = system.start("room_cruise", max_duration_s=50, completion_on_duration=True)
+    robot.observe(state)
+    system.step()
+    clock.now = state.deadline_ns
+    assert system.step().reason == "STATUS_STALE"
+    assert system.snapshot().lifecycle is BehaviorLifecycle.FAILED
+    assert robot.stops == 1
+
+
+def test_program_terminal_result_is_preserved_without_parallel_mutable_world():
+    _, robot, system = setup_system()
+    result = {"target_track_id": "person-7", "target_entity_id": "person:123:person-7",
+              "runtime_pid": 123, "measurement_time_ns": 12345}
+
+    class Search:
+        def start(self, port, parameters):
+            return BehaviorUpdate(BehaviorLifecycle.COMPLETED, "PERSON_FOUND", result=result)
+
+        def step(self, port, state, status):
+            raise AssertionError("completed search must not step")
+
+    system.register("search_any", Search)
+    completed = system.start("search_any")
+    result["target_track_id"] = "person-8"
+    assert completed.to_jsonable()["result"]["target_track_id"] == "person-7"
+    assert system.history()[-1].to_jsonable()["result"]["runtime_pid"] == 123
+    assert robot.actions == []
+
+
+def test_program_action_error_remains_passive_correlated_evidence():
+    _, robot, system = setup_system(event_sink=lambda event: (_ for _ in ()).throw(OSError("hub gone")))
+
+    def failed_action(action, **parameters):
+        raise RuntimeError("canonical operation failed")
+
+    robot.execute = failed_action
+    state = system.start("room_cruise", lineage={"goal_id": "goal-1"})
+    assert state.lifecycle is BehaviorLifecycle.FAILED
+    errors = [event.to_jsonable() for event in system.history() if event.kind == "BEHAVIOR_ACTION_FAILED"]
+    assert errors[0]["action"] == "v3.command.explore"
+    assert errors[0]["action_error"] == "RuntimeError"
+    assert errors[0]["goal_id"] == "goal-1"
+    assert robot.stops == 1
+
+
+def test_requested_duration_never_reports_success_when_canonical_stop_fails():
+    clock, robot, system = setup_system()
+    state = system.start("room_cruise", max_duration_s=50, completion_on_duration=True)
+    robot.observe(state)
+    state = system.step()
+    clock.now = state.deadline_ns
+    robot.observe(state)
+
+    def failed_stop():
+        raise RuntimeError("canonical STOP failed")
+
+    robot.stop = failed_stop
+    with pytest.raises(RuntimeError, match="canonical STOP failed"):
+        system.step()
+    assert system.snapshot().lifecycle is BehaviorLifecycle.FAILED
+    assert system.snapshot().reason == "CANONICAL_STOP_FAILED:RuntimeError"
+    assert all(event.kind != "BEHAVIOR_COMPLETED" for event in system.history())
+    assert system.history()[-1].kind == "BEHAVIOR_FAILED"
+
+
+def test_follow_duration_starts_with_target_execution_and_cannot_finish_without_acquisition():
+    clock, robot, system = setup_system()
+    state = system.start("follow_person", max_duration_s=50, completion_on_duration=True)
+    robot.observe(state, mode="FOLLOW_PERSON", navigation="INVALIDATED", reason="PERSON_TARGET_NOT_AVAILABLE")
+    assert system.step().execution_started_ns is None
+    clock.now = state.deadline_ns
+    robot.observe(state, mode="FOLLOW_PERSON", navigation="INVALIDATED", reason="PERSON_TARGET_NOT_AVAILABLE")
+    assert system.step().reason == "REQUESTED_EXECUTION_UNPROVEN"
+    assert system.snapshot().lifecycle is BehaviorLifecycle.FAILED
+
+    clock, robot, system = setup_system()
+    state = system.start("follow_person", max_duration_s=50, completion_on_duration=True)
+    clock.now += 2_000_000_000  # Acquisition time is not requested follow time.
+    robot.observe(state, mode="FOLLOW_PERSON", navigation="IDLE", reason="PERSON_DISTANCE_HOLD")
+    active = system.step()
+    assert active.execution_started_ns == robot.status["monotonic_ns"]
+    assert active.deadline_ns == active.execution_started_ns + 50_000_000_000
+    clock.now = state.deadline_ns
+    robot.observe(active, mode="FOLLOW_PERSON", navigation="IDLE", reason="PERSON_DISTANCE_HOLD")
+    assert system.step().lifecycle is BehaviorLifecycle.ACTIVE

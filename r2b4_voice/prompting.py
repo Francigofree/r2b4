@@ -9,7 +9,7 @@ from pathlib import Path
 from .conversation_contracts import ConversationMemoryTurn, RobotContextSnapshot, UserTextTurn
 
 
-PROMPT_VERSION = "R2B4_AGENT_SYSTEM_V2"
+PROMPT_VERSION = "R2B4_AGENT_SYSTEM_V3"
 PROMPT_HIERARCHY_VERSION = "R2B4_PROMPT_HIERARCHY_V1"
 
 

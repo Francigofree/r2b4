@@ -249,6 +249,7 @@ def _parser() -> argparse.ArgumentParser:
         help="heartbeat FOLLOW_PERSON: safely follow the selected person",
     )
     followperson.add_argument("--command-id")
+    followperson.add_argument("--target-track-id")
     followperson.add_argument("--max-v-mps", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_V_MPS)
     followperson.add_argument("--max-omega-rad-s", type=float, default=FOLLOW_PERSON_DEFAULT_MAX_OMEGA_RAD_S)
     return parser
@@ -344,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_v_mps=args.max_v_mps,
                 max_omega_rad_s=args.max_omega_rad_s,
                 ttl_ns=ttl_ns,
+                target_track_id=args.target_track_id,
             )
         return _run_active(
             client,

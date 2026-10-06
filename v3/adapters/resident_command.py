@@ -258,6 +258,8 @@ class AtomicResidentCommandGateway:
         )
         if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(payload):
             expected_keys |= ExplorePreferences.field_names()
+        if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in payload:
+            expected_keys.add("target_track_id")
         if set(payload) != expected_keys:
             raise ValueError("command mailbox fields do not match its mode")
 
@@ -336,6 +338,12 @@ class AtomicResidentCommandGateway:
                     {key: payload[key] for key in ExplorePreferences.field_names()}
                 )
                 preference_fields = preferences.as_fields()
+            if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in payload:
+                target = payload["target_track_id"]
+                require_token(target, "target_track_id")
+                if not target.startswith("person-") or len(target) > 256:
+                    raise ValueError("invalid bound person track")
+                preference_fields = (DataField("target_track_id", target),)
             return CommandRequest(
                 context=context,
                 command_id=command_id,
@@ -535,6 +543,7 @@ class ResidentCommandClient:
         max_v_mps: float,
         max_omega_rad_s: float,
         ttl_ns: int,
+        target_track_id: str | None = None,
     ) -> int:
         return self._publish(
             command_id,
@@ -542,6 +551,7 @@ class ResidentCommandClient:
             {
                 "max_v_mps": max_v_mps,
                 "max_omega_rad_s": max_omega_rad_s,
+                **({"target_track_id": target_track_id} if target_track_id is not None else {}),
             },
             ttl_ns,
         )
@@ -610,9 +620,18 @@ class ResidentCommandClient:
         if mode is CommandMode.EXPLORE and ExplorePreferences.field_names().intersection(values):
             expected |= ExplorePreferences.field_names()
             ExplorePreferences.from_mapping({key: values[key] for key in ExplorePreferences.field_names() if key in values})
+        if mode is CommandMode.FOLLOW_PERSON and "target_track_id" in values:
+            expected.add("target_track_id")
         if set(values) != expected:
             raise ValueError("client command values do not match its mode")
-        normalized = {key: _finite(value, key) for key, value in values.items() if key != "frame_id"}
+        normalized = {key: _finite(value, key) for key, value in values.items()
+                      if key not in {"frame_id", "target_track_id"}}
+        if "target_track_id" in values:
+            target = values["target_track_id"]
+            require_token(target, "target_track_id")
+            if not target.startswith("person-") or len(target) > 256:
+                raise ValueError("invalid bound person track")
+            normalized["target_track_id"] = target
         if "frame_id" in values:
             if values["frame_id"] not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
                 raise ValueError("unsupported navigation frame")

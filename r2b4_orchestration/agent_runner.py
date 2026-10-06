@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
 
-from r2b4_voice.action_executor import VoiceActionExecutor
+from .brain_hri import adopt_brain_result
 from r2b4_voice.conversation_interface import build_voice_interface
 from r2b4_voice.llm_provider import api_key_env_for, default_model_for, resolve_llm_provider
 
@@ -81,9 +81,9 @@ def run_agent_prompt(
         if result.get("error"):
             raise RuntimeError(str(result["error"]))
         proposed = result.get("proposed_action")
-        if proposed is not None:
-            execution = VoiceActionExecutor(bundle.interface, mode="execute").execute_proposal(proposed)
-            return AgentRunResult(_receipt(execution.status, execution.executed), execution.status)
+        if proposed is not None or result.get("proposed_plan") is not None:
+            adoption = adopt_brain_result(bundle.interface, result)
+            return AgentRunResult(adoption.text, adoption.status)
         text = result.get("spoken_text")
         if not isinstance(text, str) or not text.strip():
             raise RuntimeError("Agent Core returned no final text")

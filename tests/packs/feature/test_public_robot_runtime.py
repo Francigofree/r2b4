@@ -299,6 +299,7 @@ def test_public_poll_failure_revokes_active_behavior_and_stops_without_retry(mon
         raise RuntimeError("world storage unavailable")
 
     monkeypatch.setattr(runtime.world, "observe", failed_observation)
+    backend.status["tick_id"] += 1  # A new completed status reaches the projector.
     runtime.poll_safely()
     state = runtime.read("behavior.state")
     assert state["lifecycle"] == "CANCELLED"

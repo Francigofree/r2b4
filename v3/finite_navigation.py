@@ -11,7 +11,7 @@ import math
 import os
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from v3.action_catalog import ACTION_CATALOG
 from v3.capture_rate import DEFAULT_CAPTURE_HZ
@@ -45,6 +45,7 @@ class FiniteNavigationExecutor:
         capture: bool = True, capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ, session_owner_pid: int | None = None,
         session_watchdog_s: float | None = None,
+        admission_sink: Callable[[Mapping[str, object]], None] | None = None,
     ) -> dict[str, object]:
         started = self._monotonic()
         command_id = mission_id = None
@@ -152,6 +153,19 @@ class FiniteNavigationExecutor:
                                 raise RuntimeError("navigation returned no command identity")
                             mission_id = f"mission-{command_id}"
                 if mission_id is not None and preparation is not None:
+                    # A finite action can wait for much longer than admission.
+                    # Publish the canonical identities before that wait, using
+                    # only the completed pose source's compact provenance.
+                    if admission_sink is not None:
+                        try:
+                            admission_sink({
+                                "command_id": command_id, "mission_id": mission_id,
+                                "frame_id": frame_id, "runtime_pid": preparation.runtime_pid,
+                                "localization_generation": start_generation,
+                                "pose_status_monotonic_ns": start_status.get("monotonic_ns"),
+                            })
+                        except Exception:
+                            pass  # Passive evidence cannot affect execution.
                     final, reason = self._wait(
                         mission_id,
                         frame_id,

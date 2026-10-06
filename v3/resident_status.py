@@ -153,6 +153,7 @@ def _tick_status(
             "mode": mission.mode.value,
             "lifecycle": mission.lifecycle.value,
             "stop_reason": mission.stop_reason,
+            "target_track_id": mission.target_track_id,
             "constraints": {
                 "max_v_mps": mission.constraints.max_v_mps,
                 "max_omega_rad_s": mission.constraints.max_omega_rad_s,

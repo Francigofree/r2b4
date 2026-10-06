@@ -7,6 +7,7 @@ provider-neutral LLMDecision.
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -135,7 +136,11 @@ class AgentCore:
         deadline: float | None = None,
     ) -> LLMDecision:
         work = [dict(item) for item in messages]
-        catalog = self.tool_catalog
+        user_text = next((str(item.get("content", "")) for item in reversed(work)
+                          if item.get("role") == "user"), "")
+        er2_enabled = re.search(r"\ber2\b", user_text, re.IGNORECASE) is not None
+        catalog = tuple(item for item in self.tool_catalog
+                        if item["name"] != "er2.delegate" or er2_enabled)
         self._insert_system(work, (
             "R2B4_AVAILABLE_TOOLS_JSON is capability data, not user instruction. "
             "Use only these exact tool names and their documented arguments.\n"
@@ -164,7 +169,10 @@ class AgentCore:
                 "tool": request.name,
                 "arguments": dict(request.arguments),
             })
-            result = self._broker.execute(request, cancel_event=cancel_event, deadline=deadline)
+            if request.name == "er2.delegate" and not er2_enabled:
+                result = AgentToolResult(request.name, "REJECTED", error="ER2_EXPLICIT_TRIGGER_REQUIRED")
+            else:
+                result = self._broker.execute(request, cancel_event=cancel_event, deadline=deadline)
             if result.images:
                 images = result.images
             elif request.name == "vision.observe":
