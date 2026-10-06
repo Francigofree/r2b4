@@ -82,6 +82,48 @@ def adopt(owner, text, steps, source="HUMAN", **plan_fields):
     return result
 
 
+def test_distance_and_observation_order_constraints_are_admitted_and_enforced():
+    _, robot, owner = runtime()
+    steps = [{"action": "v3.command.move_relative", "parameters": {"forward_m": 1}},
+             {"action": "vision.observe", "parameters": {}}]
+    pending = owner.brain.submit("Menj 1 m-t és nézd meg.")
+    plan, constraints = owner.brain._plan({"steps": steps, "constraints": {
+        "distance_m": 1, "observation_after_movement": True}}, owner.brain._goals[pending["goal_id"]])
+    assert len(plan) == 2 and dict(constraints)["distance_m"] == 1
+    for invalid_steps in ([{**steps[0], "parameters": {"forward_m": .78}}, steps[1]], list(reversed(steps))):
+        with pytest.raises(ValueError, match="USER_CONSTRAINT_CHANGED"):
+            owner.brain._plan({"steps": invalid_steps, "constraints": {
+                "distance_m": 1, "observation_after_movement": True}}, owner.brain._goals[pending["goal_id"]])
+    assert robot.actions == []
+
+
+def test_rotation_only_constraint_accepts_search_and_rejects_translation():
+    _, robot, owner = runtime()
+    pending = owner.brain.submit("Fordulj az ember felé.")
+    constraints = {"goal": "Fordulj az ember felé", "translation_allowed": False}
+    steps = [{"action": "behavior.search_any_person", "parameters": {"max_duration_s": 60, "max_views": 4}},
+             {"action": "v3.command.face_person", "parameters": {}}]
+    plan, _ = owner.brain._plan({"steps": steps, "constraints": constraints}, owner.brain._goals[pending["goal_id"]])
+    assert len(plan) == 2
+    for action, parameters in (("v3.command.move_relative", {"forward_m": 1}),
+                                ("behavior.search_person", {"entity_id": "person-1"})):
+        with pytest.raises(ValueError, match="translation_allowed"):
+            owner.brain._plan({"steps": [{"action": action, "parameters": parameters}], "constraints": constraints},
+                             owner.brain._goals[pending["goal_id"]])
+    assert robot.actions == []
+
+
+def test_finite_interruption_keeps_cause_and_never_reports_goal_completion(monkeypatch):
+    _, robot, owner = runtime()
+    monkeypatch.setattr(robot, "execute", lambda *_args, **_params: {
+        "status": "INTERRUPTED", "reason": "NAVIGATION_STALLED", "command_id": "cmd-stalled",
+        "mission_id": "mission-cmd-stalled"})
+    goal = adopt(owner, "Menj 1 m-t", [{"action": "v3.command.move_relative", "parameters": {"forward_m": 1}}])
+    assert goal["lifecycle"] == "FAILED"
+    assert goal["reason"] == "ValueError:MISSION_INTERRUPTED:NAVIGATION_STALLED"
+    assert goal["command_id"] == "cmd-stalled" and goal["mission_id"] == "mission-cmd-stalled"
+
+
 def test_requested_50_seconds_is_owned_until_correlated_duration_completion():
     clock, robot, owner = runtime()
     goal = adopt(owner, "Menj körbe 50 másodpercig.", [
@@ -240,6 +282,8 @@ def test_restart_restores_memory_but_never_restarts_physical_goal():
     assert restored.brain.restore(saved)
     assert restored.brain.snapshot()["primary_goal"]["lifecycle"] == "INTERRUPTED"
     assert restored.brain.snapshot()["primary_goal"]["goal_id"] == goal["goal_id"]
+    assert not any(event.kind == "GOAL_SUBMITTED" for event in restored.brain.history())
+    assert restored.brain.goal(goal["goal_id"])["created_ns"] == goal["created_ns"]
     assert other_robot.actions == []
 
 

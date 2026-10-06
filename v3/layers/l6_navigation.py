@@ -963,7 +963,7 @@ class TrajectoryNavigator:
                         self._person_capability_failed_mission_id = mission.mission_id
                     self._clear_trajectory_plan()
                     return self._inactive(mission, NavigationStatus.INVALIDATED, "PERSON_CAPABILITY_FAILED")
-                if world.person_detection_state is DeviceHealthState.UNKNOWN:
+                if world.person_detection_state in {DeviceHealthState.UNKNOWN, DeviceHealthState.DEGRADED}:
                     self._clear_trajectory_plan()
                     return self._inactive(mission, NavigationStatus.IDLE, "PERSON_CAPABILITY_UNAVAILABLE")
             recovery = self._localization_plan(mission, estimate, world)
@@ -2692,13 +2692,16 @@ class TrajectoryNavigator:
             collision = True
 
         start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
-        final_distance = math.hypot(goal.x_m - x_m, goal.y_m - y_m)
+        approach_scoring = start_distance <= abs(v_mps) * self._config.rollout_horizon_ns / 1e9
+        score_x, score_y, score_yaw = _goal_progress_pose(estimate, goal, samples, approach_scoring=approach_scoring)
+        final_distance = math.hypot(goal.x_m - score_x, goal.y_m - score_y)
         progress = _clamp_signed(
             (start_distance - final_distance) / max(start_distance, 1e-9)
         )
         progress_potential = _trajectory_progress_potential(
-            estimate, goal, x_m, y_m, yaw_rad, progress,
+            estimate, goal, score_x, score_y, score_yaw, progress,
             max_omega_rad_s * self._config.rollout_horizon_ns / 1e9,
+            approach_scoring=approach_scoring,
         )
         progress_viable = (
             progress_potential + 1e-12 >= self._config.progress_viability_floor
@@ -2960,13 +2963,16 @@ class TrajectoryRolloutComputer:
             collision = True
 
         start_distance = math.hypot(goal.x_m - estimate.x_m, goal.y_m - estimate.y_m)
-        final_distance = math.hypot(goal.x_m - x_m, goal.y_m - y_m)
+        approach_scoring = start_distance <= abs(v_mps) * config.rollout_horizon_ns / 1e9
+        score_x, score_y, score_yaw = _goal_progress_pose(estimate, goal, samples, approach_scoring=approach_scoring)
+        final_distance = math.hypot(goal.x_m - score_x, goal.y_m - score_y)
         progress = _clamp_signed(
             (start_distance - final_distance) / max(start_distance, 1e-9)
         )
         progress_potential = _trajectory_progress_potential(
-            estimate, goal, x_m, y_m, yaw_rad, progress,
+            estimate, goal, score_x, score_y, score_yaw, progress,
             max_omega_rad_s * config.rollout_horizon_ns / 1e9,
+            approach_scoring=approach_scoring,
         )
         progress_viable = (
             progress_potential + 1e-12 >= config.progress_viability_floor
@@ -3024,6 +3030,37 @@ class TrajectoryRolloutComputer:
         )
 
 
+def _goal_progress_pose(estimate: RobotEstimate, goal: Waypoint,
+                        samples: list[TrajectoryPose], *, approach_scoring: bool) -> tuple[float, float, float]:
+    """Score the approach before overshoot, retaining the full safety rollout.
+
+    Receding-horizon execution can complete at the goal before the last predicted
+    pose. At the realizable wheel-speed floor a one-second rollout often crosses
+    a nearby goal; its reversed goal bearing must not veto the approach. Chord
+    projections use the existing bounded samples, with interpolated heading.
+    Equal-distance stationary pivots retain their final heading improvement.
+    """
+    final = samples[-1]
+    best = (final.x_m, final.y_m, final.yaw_rad)
+    if not approach_scoring:
+        return best  # Preserve distant-goal scoring and its constant-time cost.
+    best_distance = math.hypot(goal.x_m - final.x_m, goal.y_m - final.y_m)
+    previous = (estimate.x_m, estimate.y_m, estimate.yaw_rad)
+    for sample in samples:
+        dx, dy = sample.x_m - previous[0], sample.y_m - previous[1]
+        length_squared = dx * dx + dy * dy
+        if length_squared > 1e-18:
+            fraction = max(0.0, min(1.0, ((goal.x_m - previous[0]) * dx
+                                        + (goal.y_m - previous[1]) * dy) / length_squared))
+            x, y = previous[0] + fraction * dx, previous[1] + fraction * dy
+            distance = math.hypot(goal.x_m - x, goal.y_m - y)
+            if distance + 1e-12 < best_distance:
+                yaw = previous[2] + fraction * _wrapped_angle(sample.yaw_rad - previous[2])
+                best, best_distance = (x, y, yaw), distance
+        previous = (sample.x_m, sample.y_m, sample.yaw_rad)
+    return best
+
+
 def _goal_heading_error(
     x_m: float,
     y_m: float,
@@ -3047,14 +3084,16 @@ def _trajectory_progress_potential(
     final_yaw_rad: float,
     distance_progress_score: float,
     angular_travel_rad: float,
+    *, approach_scoring: bool = False,
 ) -> float:
     """Combine signed distance and heading improvement toward the local goal.
 
     Normalize heading by the initial error or one horizon's angular travel,
     whichever is larger. This keeps small errors bounded without diluting a
-    speed-limited turn by a full half-circle. Heading deterioration must offset
-    distance gain; taking their maximum would reward driving past the target.
-    Straight progress and productive in-place pivots remain admissible.
+    speed-limited turn by a full half-circle. Heading deterioration offsets
+    distance gain, weighted by the remaining range: at a closest approach the
+    bearing is singular even for a tiny lateral miss. Stationary pivots retain
+    the full heading criterion; only actual approach reduces that penalty.
     """
 
     start_heading_error = _goal_heading_error(
@@ -3073,6 +3112,8 @@ def _trajectory_progress_potential(
         (start_heading_error - final_heading_error)
         / max(start_heading_error, angular_travel_rad, 1e-9)
     )
+    if approach_scoring and heading_progress < 0 and distance_progress_score > 0:
+        heading_progress *= 1.0 - distance_progress_score
     return _clamp_signed(distance_progress_score + heading_progress)
 
 

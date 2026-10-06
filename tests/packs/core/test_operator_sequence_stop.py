@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,30 @@ from v3.operator_controller import OperatorController, OperatorError
 
 
 pytestmark = [pytest.mark.contract, pytest.mark.control]
+
+
+@pytest.mark.parametrize("termination", ["SHUTDOWN_SAFE_LOW", "FAULT_SAFE_LOW"])
+def test_finite_stop_racing_runtime_shutdown_requires_verified_clean_close(tmp_path, monkeypatch, termination):
+    controller = OperatorController(tmp_path)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: 123)
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: {
+        "state": "STOPPED", "monotonic_ns": time.monotonic_ns(),
+        "report": {"status": "PASS" if termination == "SHUTDOWN_SAFE_LOW" else "FAULT",
+                   "termination_class": termination, "fault_layer": None}})
+    if termination == "SHUTDOWN_SAFE_LOW":
+        controller.wait_idle()
+    else:
+        with pytest.raises(OperatorError, match="inactive outputs"):
+            controller.wait_idle()
+
+
+def test_runtime_disappearance_during_stop_cannot_hide_unverified_close(tmp_path, monkeypatch):
+    controller = OperatorController(tmp_path)
+    pids = iter((123, None))
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: next(pids))
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: None)
+    with pytest.raises(OperatorError, match="without verified output-owner close"):
+        controller.wait_idle()
 
 
 @pytest.mark.parametrize("replace_command", [False, True])

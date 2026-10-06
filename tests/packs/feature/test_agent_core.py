@@ -62,6 +62,29 @@ def test_agent_core_bounded_tool_loop_and_unregistered_tool_rejection() -> None:
     assert result.error == "TOOL_NOT_REGISTERED"
 
 
+def test_failed_inference_has_a_terminal_event_and_cannot_dispatch_a_tool():
+    class BrokenModel:
+        model = "configured"
+        def complete_agent_step(self, *_args, **_options):
+            raise RuntimeError("provider unavailable")
+    events = []
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        AgentCore(BrokenModel(), AgentToolBroker(())).run([], (), event_sink=lambda kind, row: events.append((kind, row)))
+    assert [kind for kind, _ in events] == ["agent_llm_started", "agent_llm_failed"]
+    assert events[0][1]["inference_id"] == events[1][1]["inference_id"]
+    assert events[1][1]["error"] == "RuntimeError"
+
+
+def test_unfulfilled_reply_is_explicit_and_preserves_explanation():
+    from r2b4_orchestration.agent_contracts import parse_agent_model_reply
+    reply = parse_agent_model_reply({"kind": "unfulfilled", "spoken_text": "Nincs megfelelő képesség.",
+        "tool_name": None, "tool_arguments_json": None, "action_name": None, "action_parameters": {},
+        "plan_json": None}, model="actual", tool_catalog=(), action_catalog=())
+    decision = reply.to_decision()
+    assert decision.unfulfilled and decision.spoken_text == "Nincs megfelelő képesség."
+    assert decision.robot_action is None and decision.goal_plan is None
+
+
 def test_runtime_agent_catalog_cannot_elevate_to_developer_tools(tmp_path) -> None:
     interface = FakeRobotInterface()
     runtime = AgentToolBroker(build_default_agent_tools(tmp_path, interface=interface))

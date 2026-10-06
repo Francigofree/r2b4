@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+import math
 import time
 from typing import TYPE_CHECKING, Any, Protocol
 import uuid
@@ -47,6 +48,11 @@ class RobotInterfaceEvent:
     status: str | None = None
     reason: str | None = None
     error_type: str | None = None
+    error_message: str | None = None
+    error_cause_type: str | None = None
+    distance_requested_m: float | None = None
+    distance_executed_m: float | None = None
+    distance_remaining_m: float | None = None
 
     def to_jsonable(self) -> dict[str, object]:
         return {"schema": "R2B4_ROBOT_INTERFACE_EVENT_V1", **asdict(self)}
@@ -200,7 +206,9 @@ class RobotInterface:
             result = self._execute_action(resolved, parameters)
         except Exception as exc:
             self._observe_action(request, "ACTION_ERROR", action, resolved, parameters,
-                                 error_type=type(exc).__name__)
+                                 result=getattr(exc, "identity", None),
+                                 error_type=type(exc).__name__, error_message=str(exc),
+                                 error_cause_type=type(exc.__cause__).__name__ if exc.__cause__ is not None else None)
             raise
         self._observe_action(request, "ACTION_RESULT", action, resolved, parameters, result=result)
         return result
@@ -260,6 +268,8 @@ class RobotInterface:
         *,
         result: object = None,
         error_type: str | None = None,
+        error_message: str | None = None,
+        error_cause_type: str | None = None,
     ) -> None:
         sink = self._observation_sink
         if request is None or sink is None:
@@ -273,6 +283,10 @@ class RobotInterface:
                 "goal_id", "subtask_id", "decision_id", "behavior_id", "command_id", "mission_id",
             )}
             runtime_pid = field("runtime_pid")
+            distances = {}
+            for name in ("distance_requested_m", "distance_executed_m", "distance_remaining_m"):
+                value = field(name)
+                distances[name] = value if type(value) in {int, float} and math.isfinite(value) and value >= 0 else None
             status = _observation_text(field("status")) or _observation_text(field("lifecycle"))
             sink(RobotInterfaceEvent(
                 kind=kind, request_id=request[0], action=_observation_text(action) or "",
@@ -282,6 +296,8 @@ class RobotInterface:
                 runtime_pid=runtime_pid if type(runtime_pid) is int and runtime_pid > 0 else None,
                 status=status, reason=_observation_text(field("reason")),
                 error_type=_observation_text(error_type),
+                error_message=_observation_text(error_message),
+                error_cause_type=_observation_text(error_cause_type), **distances,
             ))
         except Exception:
             # No serialization, filesystem I/O or action-result rewriting here.

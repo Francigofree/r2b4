@@ -61,6 +61,7 @@ def test_unowned_proposal_cannot_fall_back_to_direct_execution():
 
 @pytest.mark.parametrize("decision", [
     LLMDecision("A válasz.", None, "fake"),
+    LLMDecision("Nem tudtam teljesíteni.", None, "fake", unfulfilled=True),
     LLMDecision(None, RobotAction("behavior.room_cruise", (("max_duration_s", 50),)), "fake"),
 ])
 def test_conversation_submits_pending_before_model_and_never_executes_proposal(tmp_path, decision):
@@ -92,7 +93,10 @@ def test_conversation_submits_pending_before_model_and_never_executes_proposal(t
             assert len(calls) == 1
             assert result["proposed_action"]["parameters"]["max_duration_s"] == 50
         else:
-            assert calls[1] == ("brain.fail", {"goal_id": "goal-1", "reason": "ANSWERED", "pending_only": True})
+            assert calls[1] == ("brain.fail", {"goal_id": "goal-1", "reason":
+                "REQUEST_UNFULFILLED" if decision.unfulfilled else "ANSWERED", "pending_only": True})
+            if decision.unfulfilled:
+                assert result["action_status"] == "FAILED:REQUEST_UNFULFILLED"
     finally:
         service.close()
 

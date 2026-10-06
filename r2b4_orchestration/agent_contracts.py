@@ -95,6 +95,8 @@ class AgentModelReply:
     tool_request: AgentToolRequest | None = None
     robot_action: RobotAction | None = None
     goal_plan: Mapping[str, object] | None = None
+    unfulfilled: bool = False
+    inference_metadata: tuple[tuple[str, object], ...] = ()
 
     def __post_init__(self) -> None:
         selected = sum(item is not None for item in (self.spoken_text, self.tool_request, self.robot_action, self.goal_plan))
@@ -102,11 +104,13 @@ class AgentModelReply:
             raise ValueError("agent reply must contain exactly one final, tool request or robot action")
         if self.goal_plan is not None:
             object.__setattr__(self, "goal_plan", goal_plan_copy(self.goal_plan))
+        if type(self.unfulfilled) is not bool or self.unfulfilled and self.spoken_text is None:
+            raise ValueError("unfulfilled requires a final textual explanation")
 
     def to_decision(self) -> LLMDecision:
         if self.tool_request is not None:
             raise ValueError("tool request is not a final LLM decision")
-        return LLMDecision(self.spoken_text, self.robot_action, self.model, self.goal_plan)
+        return LLMDecision(self.spoken_text, self.robot_action, self.model, self.goal_plan, self.unfulfilled)
 
 
 def build_agent_step_schema(
@@ -123,7 +127,7 @@ def build_agent_step_schema(
     return {
         "type": "object",
         "properties": {
-            "kind": {"type": "string", "enum": ["final", "tool", "action", "plan"]},
+            "kind": {"type": "string", "enum": ["final", "unfulfilled", "tool", "action", "plan"]},
             "spoken_text": {"type": ["string", "null"]},
             "tool_name": {"type": ["string", "null"], "enum": [None, *tool_names]},
             # Keeping arguments as a JSON string preserves a strict closed outer
@@ -157,7 +161,7 @@ def parse_agent_model_reply(
     if set(raw) not in (expected, expected | {"plan_json"}):
         raise ValueError("agent reply has unexpected fields")
     kind = raw.get("kind")
-    if kind not in {"final", "tool", "action", "plan"}:
+    if kind not in {"final", "unfulfilled", "tool", "action", "plan"}:
         raise ValueError("invalid agent reply kind")
 
     tool_names = {
@@ -186,7 +190,7 @@ def parse_agent_model_reply(
             raise ValueError("plan_json is not valid JSON") from exc
         return AgentModelReply(model=model, goal_plan=goal_plan_copy(plan))
 
-    if kind == "final":
+    if kind in {"final", "unfulfilled"}:
         if not isinstance(spoken, str) or not spoken.strip():
             raise ValueError("final agent reply requires spoken_text")
         if tool_name is not None or tool_args_raw is not None or raw.get("action_name") is not None:
@@ -194,7 +198,7 @@ def parse_agent_model_reply(
         params = raw.get("action_parameters")
         if not isinstance(params, Mapping) or any(value is not None for value in params.values()):
             raise ValueError("final agent reply must have null action parameters")
-        return AgentModelReply(model=model, spoken_text=spoken.strip())
+        return AgentModelReply(model=model, spoken_text=spoken.strip(), unfulfilled=kind == "unfulfilled")
 
     if kind == "tool":
         if spoken is not None or raw.get("action_name") is not None:

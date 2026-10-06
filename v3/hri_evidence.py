@@ -17,6 +17,8 @@ import time
 from collections import Counter, deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from functools import lru_cache
+import uuid
 
 HRI_EVENT_SCHEMA = "R2B4_HRI_EVENT_V1"
 HRI_TEST_HUB_SCHEMA = "R2B4_TEST_HUB_HRI_V1"
@@ -33,6 +35,18 @@ _HRI_EVENT_BATCH_COUNT = 64
 _HRI_READ_CHUNK_BYTES = 65_536
 _HRI_MAX_SESSION_EVENTS = 100_000
 _HRI_MAX_PRODUCERS = 64
+
+
+@lru_cache(maxsize=1)
+def hri_clock_epoch() -> str:
+    """Qualify persisted monotonic timestamps with the Linux boot identity."""
+    try:
+        value = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        if value:
+            return value
+    except OSError:
+        pass
+    return "process-" + uuid.uuid4().hex
 
 
 def _json_value(value: object) -> object:
@@ -76,6 +90,8 @@ class HriEventJournal:
             "schema": HRI_EVENT_SCHEMA,
             "event_type": normalized,
             "monotonic_ns": monotonic_ns,
+            "clock_epoch": hri_clock_epoch(),
+            "recorded_wall_time_ns": time.time_ns(),
         }
         for key, value in fields.items():
             if not isinstance(key, str) or not key:
@@ -359,6 +375,7 @@ class HriEventFollower:
         self._stream = None
         self._identity = None
         self._started_ns = None
+        self._clock_epoch = hri_clock_epoch()
         self._history_end = None
         self._history = deque(maxlen=max_events)
         self._history_dropped = 0
@@ -521,6 +538,12 @@ class HriEventFollower:
                             result.append(self._loss(reason))
                         continue
                     stamp = row["monotonic_ns"]
+                    if row.get("clock_epoch") != self._clock_epoch:
+                        # Old/legacy boot history has no comparable monotonic age.
+                        # Live producers must supply the epoch; loss is explicit.
+                        if not history:
+                            result.append(self._loss("HRI_CLOCK_EPOCH_UNQUALIFIED"))
+                        continue
                     upper = (self._started_ns if history else time.monotonic_ns()) + 1_000_000_000
                     if stamp > upper:
                         if not history:
@@ -644,6 +667,8 @@ def load_hri_events_for_capture(
                 except json.JSONDecodeError:
                     continue
                 if not isinstance(value, Mapping) or value.get("schema") != HRI_EVENT_SCHEMA:
+                    continue
+                if value.get("clock_epoch") != hri_clock_epoch():
                     continue
                 stamp = _event_time(value)
                 if stamp is None or not lower <= stamp <= upper:

@@ -70,6 +70,17 @@ def _assert_native_agent_image_without_text_payload(monkeypatch, tmp_path: Path)
         )
         assert result.spoken_text == "Látom a képet."
         assert len(requests) == 2
+        started = [payload for event, payload in events if event == "agent_llm_started"]
+        completed = [payload for event, payload in events if event == "agent_llm_completed"]
+        assert len(started) == len(completed) == 2
+        assert [row["inference_id"] for row in started] == [row["inference_id"] for row in completed]
+        assert [row["purpose"] for row in started] == ["initial_interpretation", "tool_result_interpretation"]
+        assert [row["image_count"] for row in completed] == [0, 1]
+        assert all(row["actual_model"] == result.model and row["elapsed_ns"] > 0 for row in completed)
+        evidence = next(payload for event, payload in events if event == "agent_tool_completed")
+        assert evidence["source_sequence"] == observation.metadata.source_sequence
+        assert evidence["measurement_time_ns"] == observation.metadata.measurement_monotonic_ns
+        assert evidence["calibration_id"] == observation.metadata.calibration_id
         second = requests[1]
         if provider == "openai":
             parts = second["input"][-1]["content"]

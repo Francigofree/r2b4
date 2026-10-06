@@ -168,6 +168,95 @@ def _scene(tick: int, *, local_sigma_m: float, local_state: QualityState):
     return estimate, world
 
 
+@pytest.mark.parametrize("start_x", [0.0, .856735, .90])
+@pytest.mark.parametrize("target_y", [0., .0015])
+def test_finite_goal_is_reached_without_minimum_speed_deadlock(start_x, target_y):
+    config = resolved_config().runtime.composition.live_control.control
+    manager = MissionManager(config.mission)
+    navigator = TrajectoryNavigator(config.navigation,
+        async_config=replace(config.async_l6, enabled=False, completion_inputs=False))
+    selector = MotionSelector(config.motion_selection)
+    realizer = MotionRealizer(config.motion_realization)
+    limiter = OperationalConstraintLayer(config.operational_constraints)
+    x, y, yaw, v, omega = start_x, 0., 0., 0., 0.
+    for tick in range(400):
+        estimate, world = _scene(tick, local_sigma_m=.01, local_state=QualityState.GOOD)
+        estimate = replace(estimate, x_m=x, y_m=y, yaw_rad=yaw, v_mps=v, omega_rad_s=omega)
+        world = replace(world, obstacle_tracks=())
+        mission = manager.evaluate(CommandRequest(estimate.context, "finite-goal", CommandMode.NAVIGATE,
+            (DataField("x_m", 1.), DataField("y_m", target_y), DataField("frame_id", LOCAL_FRAME_ID),
+             DataField("max_v_mps", .2), DataField("max_omega_rad_s", .6)), tick))
+        plan = navigator.evaluate(mission, estimate, world)
+        objective = selector.evaluate(plan)
+        allowed = limiter.evaluate(realizer.evaluate(objective, estimate, world), estimate)
+        if plan.status is NavigationStatus.COMPLETE:
+            assert math.hypot(1 - x, target_y-y) <= mission.constraints.goal_tolerance_m
+            assert allowed.allowed_v_mps == allowed.allowed_omega_rad_s == 0
+            return
+        assert objective.trajectory is not None and objective.trajectory.progress_viable
+        v, omega = allowed.allowed_v_mps, allowed.allowed_omega_rad_s
+        x += v * .02 * math.cos(yaw + omega * .01)
+        y += v * .02 * math.sin(yaw + omega * .01)
+        yaw += omega * .02
+    pytest.fail(f"finite goal stalled at {x}, {y}")
+
+
+@pytest.mark.parametrize("captured_pose", [False, True])
+def test_goal_approach_worker_matches_direct_and_keeps_full_collision_horizon(captured_pose):
+    import time
+    from v3.adapters.l6_planner_process import ProcessTrajectoryRolloutBackend
+    resolved = resolved_config()
+    config = resolved.runtime.composition.live_control.control
+    estimate, world = _scene(0, local_sigma_m=.01, local_state=QualityState.GOOD)
+    estimate = replace(estimate, x_m=.856735)
+    target = (1., 0.)
+    if captured_pose:
+        # Retained terminal local pose from the 22:37 finite action. This tests
+        # scoring on that pose; historical collision geometry is unavailable.
+        estimate = replace(estimate, x_m=-.8546632865995861, y_m=-.05954359102778628,
+                           yaw_rad=-3.0732469)
+        target = (-.997564, -.069757)
+    world = replace(world, obstacle_tracks=())
+    manager = MissionManager(config.mission)
+    mission = manager.evaluate(CommandRequest(estimate.context, "near-goal", CommandMode.NAVIGATE,
+        (DataField("x_m", target[0]), DataField("y_m", target[1]), DataField("frame_id", LOCAL_FRAME_ID),
+         DataField("max_v_mps", .2), DataField("max_omega_rad_s", .6)), 0))
+    direct = TrajectoryNavigator(config.navigation,
+        async_config=replace(config.async_l6, enabled=False, completion_inputs=False))
+    plan = direct.evaluate(mission, estimate, world)
+    pending = TrajectoryNavigator(config.navigation, async_config=config.async_l6)
+    pending.evaluate(mission, estimate, world)
+    request = pending.pending_rollout_request
+    computer = TrajectoryRolloutComputer(config.navigation)
+    result = computer.compute(request)
+    assert result.trajectory_candidates == plan.trajectory_candidates
+    approaching = next(c for c in result.trajectory_candidates if c.v_mps > 0 and c.omega_rad_s == 0)
+    assert approaching.progress_viable and not approaching.collision
+    assert len(approaching.samples) == config.navigation.rollout_step_count
+    assert approaching.progress_potential_score > config.navigation.progress_viability_floor
+    # Put an obstacle beyond the goal, intersecting the retained horizon.
+    blocked_world = replace(world, obstacle_tracks=(ObstacleTrack("beyond-goal",
+        target[0] + .3*math.cos(estimate.yaw_rad), target[1] + .3*math.sin(estimate.yaw_rad),
+        .01, 0., 0., 1.),))
+    blocked = computer.compute(replace(request, world=blocked_world))
+    assert next(c for c in blocked.trajectory_candidates if c.candidate_id == approaching.candidate_id).collision
+    backend = ProcessTrajectoryRolloutBackend(config.navigation, ready_timeout_s=5.,
+                                             process_config=resolved.edges.planner_process)
+    try:
+        request_id = backend.submit(request)
+        completion = None
+        deadline = time.monotonic() + 5.
+        while completion is None and time.monotonic() < deadline:
+            completion = backend.take_completion(request_id)
+            if completion is None:
+                time.sleep(.002)
+        assert completion is not None and completion.error is None
+        assert completion.result == result
+        assert completion.identity.source_context == request.context
+    finally:
+        backend.close()
+
+
 def _soft_quality(tick: int) -> tuple[float, QualityState]:
     """Cross the live-observed quality bucket without creating true LOST state."""
     phase = tick % 12

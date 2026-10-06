@@ -16,7 +16,7 @@ import os
 import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Protocol
 
 from r2b4_orchestration.agent_contracts import (
@@ -248,7 +248,7 @@ def _iter_sse_json(response: object):
                 yield value
 
 
-def _consume_response_stream(response: object) -> str:
+def _consume_response_stream(response: object, metadata: dict | None = None) -> str:
     chunks: list[str] = []
     completed_response: Mapping[str, object] | None = None
     completed = False
@@ -264,6 +264,16 @@ def _consume_response_stream(response: object) -> str:
             candidate = event.get("response")
             if isinstance(candidate, Mapping):
                 completed_response = candidate
+                if metadata is not None:
+                    for source, target in (("id", "response_id"), ("model", "actual_model")):
+                        value = candidate.get(source)
+                        if isinstance(value, str):
+                            metadata[target] = value[:256]
+                    usage = candidate.get("usage")
+                    if isinstance(usage, Mapping):
+                        for key in ("input_tokens", "output_tokens"):
+                            if type(usage.get(key)) is int:
+                                metadata[key] = usage[key]
             continue
         if event_type in {"response.failed", "response.incomplete", "error"}:
             code, message = _error_fields(event)
@@ -312,6 +322,7 @@ class _OpenAITransport:
         self._config = config
         self._urlopen = urlopen
         self._resolved_model: str | None = None
+        self.last_request_metadata: dict[str, object] = {}
 
     @property
     def auth_mode(self) -> str:
@@ -365,7 +376,9 @@ class _OpenAITransport:
     def post(self, body: Mapping[str, object]) -> str:
         # One forced token renewal on OAuth 401. Other retry decisions belong to
         # the provider-level failover policy, not this transport.
+        self.last_request_metadata = {"actual_model": body.get("model")}
         for auth_attempt in range(2):
+            self.last_request_metadata["transport_attempt_count"] = auth_attempt + 1
             force = auth_attempt == 1
             try:
                 token = self._auth.get_access_token(force_refresh=force)
@@ -386,7 +399,11 @@ class _OpenAITransport:
             )
             try:
                 response = self._urlopen(request, timeout=self._config.timeout_s)
-                return _consume_response_stream(response)
+                headers = getattr(response, "headers", {})
+                request_id = headers.get("x-request-id")
+                if isinstance(request_id, str):
+                    self.last_request_metadata["provider_request_id"] = request_id[:256]
+                return _consume_response_stream(response, self.last_request_metadata)
             except urllib.error.HTTPError as exc:
                 error = _http_error(exc)
                 if error.status_code == 401 and self.auth_mode == "oauth" and auth_attempt == 0:
@@ -459,12 +476,14 @@ class OpenAIResponsesChatClient:
     ) -> AgentModelReply:
         raw, used_model = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step", images=images)
         try:
-            return parse_agent_model_reply(
+            reply = parse_agent_model_reply(
                 raw,
                 model=used_model,
                 tool_catalog=tool_catalog,
                 action_catalog=action_catalog,
             )
+            return replace(reply, model=str(self._transport.last_request_metadata.get("actual_model") or used_model),
+                           inference_metadata=tuple(self._transport.last_request_metadata.items()))
         except (ValueError, DecisionParseError) as exc:
             raise OpenAIRequestError(f"OpenAI Agent step failed R2B4 schema validation: {exc}") from exc
 

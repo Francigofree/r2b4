@@ -18,7 +18,7 @@ def _check_revoked_conversation_cannot_dispatch_late_default_robot_tool(tmp_path
 
     entered, release, finished, dispatched = (threading.Event() for _ in range(4))
     now = [100.0]
-    clock = SimpleNamespace(monotonic=lambda: now[0])
+    clock = SimpleNamespace(monotonic=lambda: now[0], monotonic_ns=lambda: int(now[0] * 1e9))
     monkeypatch.setattr(agent_core, "time", clock)
     monkeypatch.setattr(conversation_service, "time", clock)
     monkeypatch.setattr(agent_tools, "_er2_delegate", lambda *a, **kw: dispatched.set())

@@ -10,7 +10,7 @@ import re
 import queue
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 
@@ -211,6 +211,7 @@ class FailoverLLMClient:
         failures: list[dict[str, object]] = []
         now = self._monotonic()
         attempted = 0
+        inference_attempt_count = 0
         for candidate in self._candidates:
             remaining()
             method = getattr(candidate.client, method_name, None)
@@ -232,10 +233,17 @@ class FailoverLLMClient:
             while True:
                 remaining()
                 attempt += 1
+                inference_attempt_count += 1
                 try:
                     result = request(method)
                     self._last_provider = candidate.name
                     self._cooldown_until.pop(candidate.name, None)
+                    if method_name == "complete_agent_step":
+                        from r2b4_orchestration.agent_contracts import AgentModelReply
+                        if isinstance(result, AgentModelReply):
+                            metadata = dict(result.inference_metadata)
+                            metadata.update(provider=candidate.name, attempt_count=inference_attempt_count)
+                            result = replace(result, inference_metadata=tuple(metadata.items()))
                     return result
                 except Exception as exc:
                     remaining()

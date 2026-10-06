@@ -147,6 +147,10 @@ def _request_constraints(text: str) -> dict[str, object]:
         distance = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:méter|met(?:er|re)s?|m\b)", folded)
         if distance:
             result["follow_distance_m"] = float(distance.group(1).replace(",", "."))
+    elif re.search(r"\b(?:menj|haladj|move|go)\b", folded):
+        distance = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:méter|met(?:er|re)s?|m\b)", folded)
+        if distance:
+            result["distance_m"] = float(distance.group(1).replace(",", "."))
     if re.search(r"ég-e|be van-e kapcsolva|whether .*(?:light|lamp)|(?:check|see) if .*(?:light|lamp)", folded):
         # A calibrated frame is not evidence of an arbitrary visual predicate.
         # Keep the requested semantic conclusion explicit until a published
@@ -196,6 +200,11 @@ class BrainCore:
             return tuple(self._history)
 
     def submit(self, text: str, source: str = "HUMAN", request_id: str | None = None):
+        with self._lock:
+            goal = self._register_goal(text, source, request_id)
+            return self._change(goal.goal_id, "GOAL_SUBMITTED").to_jsonable()
+
+    def _register_goal(self, text, source, request_id):
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise ValueError("Brain request text must contain 1..4000 characters")
         source = source.upper() if isinstance(source, str) else ""
@@ -222,7 +231,7 @@ class BrainCore:
             self._goals[goal_id] = goal
             self._input_sequence += 1
             self._input_orders[goal_id] = self._input_sequence
-            return self._change(goal_id, "GOAL_SUBMITTED").to_jsonable()
+            return goal
 
     def _change(self, goal_id, kind, **changes):
         # Caller owns _lock; passive publication never controls this transition.
@@ -369,6 +378,35 @@ class BrainCore:
                 if not any(step.target_entity_id == value or dict(step.parameters).get("entity_id") == value
                            for step in steps):
                     raise ValueError("CONSTRAINT_UNSUPPORTED:target_entity_id")
+            elif name == "distance_m":
+                translations = [dict(step.parameters) for step in steps
+                                if step.action == "v3.command.move_relative"]
+                if (type(value) not in {int, float} or not math.isfinite(value) or value <= 0
+                        or len(translations) != 1
+                        or not math.isclose(math.hypot(translations[0].get("forward_m", 0),
+                                                      translations[0].get("left_m", 0)), value,
+                                            rel_tol=0, abs_tol=1e-9)):
+                    raise ValueError("USER_CONSTRAINT_CHANGED:distance_m")
+            elif name == "translation_allowed":
+                if type(value) is not bool:
+                    raise ValueError("INVALID_CONSTRAINT:translation_allowed")
+                rotation_only = {"v3.command.turn_by", "v3.command.face_person",
+                                 "behavior.search_any_person", "vision.observe", "v3.command.stop"}
+                if not value and any(step.action not in rotation_only for step in steps):
+                    raise ValueError("USER_CONSTRAINT_CHANGED:translation_allowed")
+            elif name == "observation_after_movement":
+                if type(value) is not bool:
+                    raise ValueError("INVALID_CONSTRAINT:observation_after_movement")
+                motion = [index for index, step in enumerate(steps) if step.action != "vision.observe"]
+                observations = [index for index, step in enumerate(steps) if step.action == "vision.observe"]
+                if value and (not motion or not observations or min(observations) <= max(motion)):
+                    raise ValueError("USER_CONSTRAINT_CHANGED:observation_after_movement")
+            elif name == "goal":
+                # Legacy proposals used the request text as descriptive metadata.
+                # It cannot replace or reinterpret the submitted user goal.
+                normalize = lambda text: " ".join(text.casefold().split()).rstrip(".!? ")
+                if not isinstance(value, str) or normalize(value) != normalize(goal.text):
+                    raise ValueError("USER_CONSTRAINT_CHANGED:goal")
             else:
                 raise ValueError("CONSTRAINT_UNSUPPORTED:" + name)
         return tuple(steps), tuple(sorted(constraints.items()))
@@ -637,6 +675,10 @@ class BrainCore:
             elif descriptor is not None and descriptor.completion_required:
                 if (not isinstance(result, Mapping) or result.get("status") != "COMPLETED"
                         or result.get("reason") != "COMPLETE" or not command or not mission):
+                    if isinstance(result, Mapping) and result.get("status") == "INTERRUPTED":
+                        reason = result.get("reason")
+                        if isinstance(reason, str) and reason:
+                            raise ValueError("MISSION_INTERRUPTED:" + reason[:256])
                     raise ValueError("MISSION_COMPLETION_UNPROVEN")
                 self._advance(generation, "MISSION_COMPLETED")
             elif not command:
@@ -828,7 +870,9 @@ class BrainCore:
         for row in rows:
             if not isinstance(row, Mapping):
                 raise ValueError("invalid saved Brain goal")
-            goal = self.submit(row.get("text"), row.get("source"), request_id=row.get("goal_id"))
+            with self._lock:
+                restored = self._register_goal(row.get("text"), row.get("source"), row.get("goal_id"))
+            goal = restored.to_jsonable()
             old_lifecycle = GoalLifecycle(row.get("lifecycle"))
             was_active = old_lifecycle in _RUNNING
             interrupted = interrupted or was_active
@@ -852,6 +896,7 @@ class BrainCore:
                     command_id=row.get("command_id"), mission_id=row.get("mission_id"),
                     behavior_id=row.get("behavior_id"), step_index=row.get("step_index", 0),
                     world_target=world_target,
+                    created_ns=row.get("created_ns", restored.created_ns),
                     reason="RUNTIME_RESTART" if was_active else row.get("reason"))
         return interrupted
 

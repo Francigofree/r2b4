@@ -389,7 +389,9 @@ class ConversationService:
             elif decision.goal_plan is not None:
                 action_status = "PLAN_PROPOSED"
             else:
-                self._finish_brain(pending.goal_id, "ANSWERED")
+                self._finish_brain(pending.goal_id, "REQUEST_UNFULFILLED" if decision.unfulfilled else "ANSWERED")
+                if decision.unfulfilled:
+                    action_status = "FAILED:REQUEST_UNFULFILLED"
 
             result = ConversationTurnResult(
                 turn_id=turn.turn_id,
@@ -452,7 +454,11 @@ class ConversationService:
             "event_sequence": self._observation_sequence,
             "evidence_dropped": self._observation_dropped,
         }
-        for key in ("source", "round", "tool", "status", "error", "action_name"):
+        for key in ("source", "round", "tool", "status", "error", "action_name", "inference_id",
+                    "configured_model", "actual_model", "purpose", "elapsed_ns", "image_count",
+                    "provider", "attempt_count", "transport_attempt_count", "response_id", "provider_request_id",
+                    "input_tokens", "output_tokens", "source_sequence", "measurement_time_ns",
+                    "owner_generation", "calibration_id", "stream"):
             value = fields.get(key)
             if value is None or type(value) in (bool, int):
                 row[key] = value

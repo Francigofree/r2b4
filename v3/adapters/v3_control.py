@@ -111,8 +111,12 @@ class V3ControlInterfaceAdapter:
             return {"status": "STOPPED"}
 
         capture = bool(params.pop("capture", True))
-        capture_mode = str(params.pop("capture_mode", DEFAULT_CAPTURE_MODE))
-        capture_hz = validate_capture_hz(params.pop("capture_hz", DEFAULT_CAPTURE_HZ))
+        # Unspecified settings inherit the operator's current recording session.
+        # A finite action must not silently restart FULL as a bounded ALAP slot.
+        current_mode = self.controller.current_capture_mode() or DEFAULT_CAPTURE_MODE
+        current_hz = self.controller.current_capture_hz() or DEFAULT_CAPTURE_HZ
+        capture_mode = str(params.pop("capture_mode", current_mode))
+        capture_hz = validate_capture_hz(params.pop("capture_hz", current_hz))
         session = {
             "session_owner_pid": params.pop("session_owner_pid", None),
             "session_watchdog_s": params.pop("session_watchdog_s", None),

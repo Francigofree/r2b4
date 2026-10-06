@@ -831,20 +831,42 @@ class OperatorController:
         if path is None:
             return {"state": "NOT_ARMED", "mode": mode, "hz": hz, "path": None}
         if path.is_file():
+            integrity_error = None
             try:
                 final = self._verified_capture_final(path)
                 complete = True
-            except (OSError, ValueError, McapReadError):
+            except (OSError, ValueError, McapReadError) as exc:
                 final = {}
                 complete = False
+                integrity_error = str(exc)[:512]
+                # A finalized FAIL is evidence of an incomplete capture, not a
+                # recording that is still in progress. Preserve its native claim.
+                try:
+                    reader = McapReader(path)
+                    if reader.inspect(verify_chunks=True).valid:
+                        for _, row in reader.iter_json_messages(topics=["/r2b4/event"]):
+                            if isinstance(row, Mapping) and row.get("event_type") == "capture_finalized":
+                                final = row
+                except (OSError, ValueError, McapReadError):
+                    pass
+            integrity = final.get("integrity", {})
+            integrity = integrity if isinstance(integrity, Mapping) else {}
             return {
-                "state": "FINALIZED" if complete else "RECORDING_OR_FINALIZING",
+                "state": "FINALIZED" if complete else "FINALIZED_INCOMPLETE" if final else "RECORDING_OR_FINALIZING",
                 "mode": mode,
+                "hz": hz,
                 "path": str(path),
                 "status": final.get("status"),
                 "ticks": final.get("captured_tick_count"),
                 "trigger": final.get("trigger_reason"),
                 "complete": complete,
+                "integrity_error": integrity_error,
+                "raw_evidence_complete": integrity.get("raw_evidence_complete", False),
+                "sample_complete": integrity.get("sample_complete", False),
+                "raw_evidence_requested": integrity.get("raw_evidence_requested", False),
+                "replay_core_complete": integrity.get("replay_complete", False),
+                "integrity_warnings": integrity.get("integrity_warnings", []),
+                "integrity_reasons": integrity.get("replay_integrity_reasons", []),
             }
         if mode == "full":
             state = "RECORDING"
@@ -1348,6 +1370,14 @@ class OperatorController:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             status = self._read_status_optional()
+            report = status.get("report") if status is not None else None
+            if (status is not None and status.get("state") == "STOPPED" and status_is_fresh(status)
+                    and isinstance(report, Mapping) and report.get("status") == "PASS"
+                    and report.get("termination_class") == "SHUTDOWN_SAFE_LOW"
+                    and report.get("fault_layer") is None):
+                return  # The resident has already verified output-owner close.
+            if self._runtime_pid() is None:
+                raise OperatorError("runtime exited without verified output-owner close")
             if status is None:
                 self._transition_sleep(0.05)
                 continue

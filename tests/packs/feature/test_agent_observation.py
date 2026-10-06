@@ -59,7 +59,14 @@ def test_agent_turn_tool_and_goal_lineage_reaches_live_hri_edge(tmp_path, fail):
         turn_id = conversation.submit_text("Körülnézés", source="launcher")
         result = conversation.wait_for_turn(turn_id, timeout_s=2)
         assert result["goal_id"] == "goal-recorder"
-        rows = [payload for topic, payload in follower.drain() if topic == HRI_EVENT_TOPIC]
+        # The result wakes its client before passive terminal publication.
+        rows = []
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            rows.extend(payload for topic, payload in follower.drain() if topic == HRI_EVENT_TOPIC)
+            if any(row["event_type"] in {"AGENT_TURN_FAILED", "AGENT_TURN_COMPLETED"} for row in rows):
+                break
+            time.sleep(.001)
         assert [row["event_type"] for row in rows] == [
             "AGENT_TURN_STARTED", "AGENT_TOOL_REQUESTED", "AGENT_TOOL_COMPLETED",
             "AGENT_TURN_FAILED" if fail else "AGENT_TURN_COMPLETED",

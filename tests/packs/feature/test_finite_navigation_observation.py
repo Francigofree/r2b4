@@ -23,11 +23,18 @@ class Controller:
     def status(self):
         return {"runtime_running": True}
 
+    def current_capture_mode(self):
+        return "full"
+
+    def current_capture_hz(self):
+        return 10
+
     def snapshot(self):
         return SimpleNamespace(runtime_pid=123)
 
     @contextmanager
     def finite_motion_transaction(self, **parameters):
+        self.capture_parameters = parameters
         self.locked = True
         try:
             yield SimpleNamespace(runtime_pid=123)
@@ -58,6 +65,9 @@ class Controller:
                 navigation={"mission_id": "mission-finite-1", "status": "COMPLETE", "reason": "COMPLETE"},
                 safety_decision="STOP", safety_reason="NOT_ACTIVE",
             )
+            if self.navigate_parameters is not None:
+                status["estimate"]["local_pose"].update({key: self.navigate_parameters[key]
+                    for key in ("x_m", "y_m", "yaw_rad") if key in self.navigate_parameters})
         return status
 
     def stop(self):
@@ -97,6 +107,9 @@ def test_real_finite_execution_publishes_early_compact_lineage_and_tolerates_sin
     assert result["frame_provenance"]["pose_status_monotonic_ns"] == admission["pose_status_monotonic_ns"]
     assert "admission_sink" not in controller.navigate_parameters
     assert "admission_sink" not in result["requested"]
+    assert result["distance_remaining_m"] == 0
+    assert controller.capture_parameters["capture_mode"] == "full"
+    assert controller.capture_parameters["capture_hz"] == 10
 
 
 def test_pre_admission_cancellation_never_claims_a_command_identity():
@@ -110,3 +123,56 @@ def test_pre_admission_cancellation_never_claims_a_command_identity():
     assert result["command_id"] is None
     assert controller.observations == []
     assert controller.order == ["STOP"]
+
+
+def test_stalled_navigation_is_bounded_and_never_completed(monkeypatch):
+    from v3.finite_navigation import FiniteNavigationExecutor
+    controller = Controller()
+    controller.admitted = True
+    controller.observations.append({})
+    status = controller.live_runtime_status()
+    status.update(safety_decision="ALLOW", safety_reason="ALLOW")
+    status["mission"]["lifecycle"] = "ACTIVE"
+    status["navigation"].update(status="ACTIVE", reason="NO_PROGRESS_VIABLE_TRAJECTORY")
+    monkeypatch.setattr(controller, "live_runtime_status", lambda: status)
+    clock = [0.0]
+    executor = FiniteNavigationExecutor(controller, monotonic=lambda: clock[0],
+        sleep=lambda dt: clock.__setitem__(0, clock[0] + dt), progress_timeout_s=.2)
+    result = executor.execute("v3.command.move_relative", {"forward_m": 1})
+    assert result["reason"] == "NAVIGATION_STALLED" and result["status"] == "INTERRUPTED"
+    assert result["elapsed_s"] < .3
+    assert controller.order[-1] == "STOP"
+
+
+def test_stop_error_preserves_command_identity_and_original_error(monkeypatch):
+    from v3.finite_navigation import FiniteNavigationSafetyError
+    controller = Controller()
+    events = []
+    robot = RobotInterface(controller=controller, adapters=(V3ControlInterfaceAdapter(controller),),
+                           upper_runtime=False, observation_sink=events.append)
+    def broken_stop():
+        raise RuntimeError("IDLE confirmation failed")
+    monkeypatch.setattr(controller, "stop", broken_stop)
+    with pytest.raises(FiniteNavigationSafetyError, match="IDLE confirmation failed"):
+        robot.execute("v3.command.move_relative", forward_m=1, admission_sink=controller.observations.append)
+    error = events[-1]
+    assert error.kind == "ACTION_ERROR"
+    assert error.command_id == "finite-1" and error.mission_id == "mission-finite-1"
+    assert error.runtime_pid == 123 and error.status == "INTERRUPTED"
+    assert error.error_cause_type == "RuntimeError"
+    assert "IDLE confirmation failed" in error.error_message
+
+
+def test_frame_generation_change_never_produces_comparable_distance_evidence():
+    class ChangedFrameController(Controller):
+        def live_runtime_status(self):
+            status = super().live_runtime_status()
+            if self.admitted:
+                status["estimate"]["localization_quality"]["generation"] = 8
+            return status
+    controller = ChangedFrameController()
+    robot = RobotInterface(controller=controller, adapters=(V3ControlInterfaceAdapter(controller),), upper_runtime=False)
+    result = robot.execute("v3.command.move_relative", forward_m=.5, admission_sink=controller.observations.append)
+    assert result["status"] == "INTERRUPTED" and result["reason"] == "LOCALIZATION_FRAME_CHANGED"
+    assert result["distance_requested_m"] == .5
+    assert result["distance_executed_m"] is result["distance_remaining_m"] is None

@@ -22,6 +22,10 @@ from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 class FiniteNavigationSafetyError(RuntimeError):
     """The finite action could not confirm its final canonical STOP."""
 
+    def __init__(self, message, *, identity=None):
+        super().__init__(message)
+        self.identity = dict(identity or {})
+
 
 def _finite(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
@@ -33,11 +37,26 @@ def _wrap_yaw(value: float) -> float:
     return (value + math.pi) % (2.0 * math.pi) - math.pi
 
 
+def _pose_distance(first, second):
+    if not isinstance(first, Mapping) or not isinstance(second, Mapping):
+        return None
+    if not first.get("frame_id") or first.get("frame_id") != second.get("frame_id"):
+        return None
+    values = tuple(row.get(name) for row in (first, second) for name in ("x_m", "y_m"))
+    if not all(type(value) in {int, float} and math.isfinite(value) for value in values):
+        return None
+    return math.hypot(values[2] - values[0], values[3] - values[1])
+
+
 class FiniteNavigationExecutor:
-    def __init__(self, controller: OperatorController, *, sleep=time.sleep, monotonic=time.monotonic):
+    def __init__(self, controller: OperatorController, *, sleep=time.sleep, monotonic=time.monotonic,
+                 progress_timeout_s: float = 10.0):
         self.controller = controller
         self._sleep = sleep
         self._monotonic = monotonic
+        self._progress_timeout_s = _finite(progress_timeout_s, "progress_timeout_s")
+        if self._progress_timeout_s <= 0:
+            raise ValueError("progress_timeout_s must be positive")
 
     def execute(
         self, action: str, parameters: Mapping[str, object], *,
@@ -53,6 +72,7 @@ class FiniteNavigationExecutor:
         final: Mapping[str, object] = {}
         target: dict[str, object] = {}
         reason = "CANCELLED"
+        preparation = None
         requested = dict(parameters)
         try:
             params = dict(parameters)
@@ -107,7 +127,6 @@ class FiniteNavigationExecutor:
                     raise ValueError("finite_timeout_s must be positive")
                 timeout = min(timeout, requested_timeout)
             deadline = started + timeout
-            preparation = None
             start_status: Mapping[str, object] = {}
             start_generation: object = None
             if cancel_event is None or not cancel_event.is_set():
@@ -180,15 +199,25 @@ class FiniteNavigationExecutor:
             try:
                 self.controller.stop()
             except Exception as exc:
-                raise FiniteNavigationSafetyError(f"robot STOP failed: {exc}") from exc
+                raise FiniteNavigationSafetyError(f"robot STOP failed: {exc}", identity={
+                    "command_id": command_id, "mission_id": mission_id,
+                    "runtime_pid": None if preparation is None else preparation.runtime_pid,
+                    "status": "INTERRUPTED", "reason": reason,
+                }) from exc
 
         navigation = final.get("navigation")
         navigation = navigation if isinstance(navigation, Mapping) else {}
+        final_pose = self._pose(final, target.get("frame_id", LOCAL_FRAME_ID))
+        comparable = (reason not in {"LOCALIZATION_FRAME_CHANGED", "RUNTIME_SESSION_CHANGED"}
+                      and (frame_id != LOCAL_FRAME_ID or self._generation(final) == start_generation))
         return {
             "status": "COMPLETED" if reason == "COMPLETE" else "INTERRUPTED",
             "reason": reason, "command_id": command_id, "mission_id": mission_id,
             "requested": requested, "start_pose": dict(pose) if pose is not None else None,
-            "target_pose": target, "final_pose": self._pose(final, target.get("frame_id", LOCAL_FRAME_ID)),
+            "target_pose": target, "final_pose": final_pose,
+            "distance_requested_m": _pose_distance(pose, target),
+            "distance_executed_m": _pose_distance(pose, final_pose) if comparable else None,
+            "distance_remaining_m": _pose_distance(final_pose, target) if comparable else None,
             "frame_provenance": {
                 "frame_id": target.get("frame_id", frame_id),
                 "runtime_pid": None if preparation is None else preparation.runtime_pid,
@@ -246,6 +275,8 @@ class FiniteNavigationExecutor:
         deadline: float, cancel_event: threading.Event | None, *, runtime_pid: int,
     ) -> tuple[Mapping[str, object], str]:
         final: Mapping[str, object] = {}
+        progress_at = self._monotonic()
+        progress_pose = None
         while True:
             if cancel_event is not None and cancel_event.is_set():
                 return final, "CANCELLED"
@@ -288,4 +319,12 @@ class FiniteNavigationExecutor:
                 return final, str(nav_status)
             if nav_status not in {"ACTIVE", "PENDING", "IDLE"}:
                 return final, "NAVIGATION_STATUS_UNAVAILABLE"
+            current_pose = tuple(estimate.get(name) for name in ("x_m", "y_m", "yaw_rad"))
+            if all(type(value) in {int, float} and math.isfinite(value) for value in current_pose):
+                if (progress_pose is None
+                        or math.hypot(current_pose[0] - progress_pose[0], current_pose[1] - progress_pose[1]) >= .01
+                        or abs(_wrap_yaw(current_pose[2] - progress_pose[2])) >= .02):
+                    progress_pose, progress_at = current_pose, self._monotonic()
+            if self._monotonic() - progress_at >= self._progress_timeout_s:
+                return final, "NAVIGATION_STALLED"
             self._sleep(min(0.05, remaining))

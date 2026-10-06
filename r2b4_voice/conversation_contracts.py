@@ -112,8 +112,12 @@ class LLMDecision:
     robot_action: RobotAction | None
     model: str
     goal_plan: Mapping[str, object] | None = None
+    unfulfilled: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.unfulfilled) is not bool or self.unfulfilled and (
+                self.spoken_text is None or self.robot_action is not None or self.goal_plan is not None):
+            raise ConversationContractError("unfulfilled requires a final textual explanation")
         object.__setattr__(self, "spoken_text", _optional_text(self.spoken_text, "spoken_text"))
         if self.robot_action is not None and not isinstance(self.robot_action, RobotAction):
             raise ConversationContractError("robot_action must be RobotAction or None")

@@ -35,7 +35,8 @@ def test_oauth_compatible_streaming_structured_request() -> None:
             [
                 {"type": "response.output_text.delta", "delta": text[:10]},
                 {"type": "response.output_text.delta", "delta": text[10:]},
-                {"type": "response.completed", "response": {"status": "completed", "output": []}},
+                {"type": "response.completed", "response": {"status": "completed", "output": [],
+                    "id": "resp-offline-1", "model": "resolved-model", "usage": {"input_tokens": 10, "output_tokens": 5}}},
             ]
         )
 
@@ -50,6 +51,9 @@ def test_oauth_compatible_streaming_structured_request() -> None:
         (),
     )
     assert reply.spoken_text == "rendben"
+    assert reply.model == "resolved-model"
+    assert dict(reply.inference_metadata) == {"actual_model": "resolved-model", "transport_attempt_count": 1,
+        "response_id": "resp-offline-1", "input_tokens": 10, "output_tokens": 5}
     body = seen["body"]
     assert body["store"] is False
     assert body["stream"] is True

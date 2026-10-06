@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from r2b4_orchestration.agent_config_tools import AgentConfigError, AgentConfigService
+from rig import ROOT
 
 
 def test_agent_config_authority_and_canonical_patch_without_runtime(tmp_path: Path) -> None:
-    root = Path(__file__).resolve().parents[2]
-    shutil.copytree(root / "conf", tmp_path / "conf", ignore=shutil.ignore_patterns(".wake.env"))
+    shutil.copytree(ROOT / "conf", tmp_path / "conf", ignore=shutil.ignore_patterns(".wake.env"))
     service = AgentConfigService(tmp_path)
     policy = service.policy({})
     assert "hardver.json" in policy["not_writable"]

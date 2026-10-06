@@ -10,7 +10,7 @@ import pytest
 
 from v3.hri_evidence import (
     DEFAULT_LOOKBACK_NS, HRI_EVENT_SCHEMA, HRI_EVENT_TOPIC, HRI_JOURNAL_NAME,
-    MAX_HRI_EVENT_BYTES, HriEventFollower,
+    MAX_HRI_EVENT_BYTES, HriEventFollower, hri_clock_epoch,
 )
 from v3.mcap_capture import EVENT_TOPIC, McapCaptureConfig
 from v3.mcap_reader import McapReader, McapReadError
@@ -29,9 +29,36 @@ def event(event_type="INTENT_ACCEPTED", **fields):
     return {
         "schema": HRI_EVENT_SCHEMA, "event_type": event_type,
         "monotonic_ns": time.monotonic_ns(), "interaction_id": "speech:42",
+        "clock_epoch": hri_clock_epoch(),
         "turn_id": "turn:8", "command_id": "command:12", "mission_id": "mission:6",
         **fields,
     }
+
+
+def test_historical_boot_collision_and_legacy_rows_are_not_current_events(tmp_path):
+    from v3.hri_evidence import HriEventJournal, load_hri_events_for_capture
+    path = journal(tmp_path)
+    current = event("CURRENT")
+    old = event("OLD_BOOT", clock_epoch="previous-boot")
+    legacy = event("LEGACY")
+    legacy.pop("clock_epoch")
+    for row in (old, legacy, current):
+        append(path, row)
+    follower = HriEventFollower(tmp_path)
+    follower.start()
+    try:
+        assert [row for topic, row in follower.drain() if topic == HRI_EVENT_TOPIC] == [current]
+        assert load_hri_events_for_capture(tmp_path, current["monotonic_ns"], time.monotonic_ns()) == (current,)
+        emitted = HriEventJournal(path).append("LIVE")
+        assert emitted["clock_epoch"] == hri_clock_epoch()
+        assert emitted["recorded_wall_time_ns"] > 0
+        append(path, legacy)
+        rows = follower.drain()
+        assert [row for topic, row in rows if topic == HRI_EVENT_TOPIC] == [emitted]
+        assert any(row["integrity_reason"] == "HRI_CLOCK_EPOCH_UNQUALIFIED"
+                   for topic, row in rows if topic == "v3.capture_transport")
+    finally:
+        follower.close()
 
 
 def append(path, row):
@@ -77,6 +104,26 @@ def final_integrity(path):
         reader.capture_integrity()
     return next(payload["integrity"] for _, payload in reader.iter_json_messages(topics=[EVENT_TOPIC])
                 if payload.get("event_type") == "capture_finalized")
+
+
+def test_capture_status_preserves_failed_final_claim_and_replay_limits(tmp_path):
+    from v3.operator_controller import OperatorController
+    path = journal(tmp_path)
+    session = McapCaptureSession("incomplete", tmp_path / "incomplete.mcap", configuration={},
+        project_root=tmp_path, config=McapCaptureConfig(mode="append_only", tick_sample_hz=10))
+    session.start()
+    append(path, {"schema": HRI_EVENT_SCHEMA, "event_type": "BROKEN_LIVE", "monotonic_ns": "bad"})
+    session.observe(record())
+    output = session.finalize(SimpleNamespace(status=0))
+    class Controller(OperatorController):
+        def current_capture_mode(self): return "full"
+        def current_capture_hz(self): return 10
+        def current_capture_path(self): return output
+    status = Controller(tmp_path).capture_status()
+    assert status["state"] == "FINALIZED_INCOMPLETE"
+    assert status["status"] == "FAULT" and status["complete"] is False
+    assert "HRI_EVENT_INVALID" in status["integrity_reasons"]
+    assert status["replay_core_complete"] is False and status["raw_evidence_complete"] is False
 
 
 def test_live_hri_direct_process_equivalent_with_lookback_and_final_drain(tmp_path):
