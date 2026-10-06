@@ -14,11 +14,13 @@ from .agent_contracts import AgentToolResult, AgentToolSpec
 from .agent_config_tools import build_config_tools
 from .agent_evidence_tools import build_evidence_tools
 from .agent_source_tools import build_source_tools
+from .world_model import WorldQuery, WorldQueryResult
 
 
 class AgentRobotInterface(Protocol):
     def capabilities(self) -> Mapping[str, object]: ...
     def read(self, resource: str) -> object: ...
+    def query(self, query: WorldQuery) -> WorldQueryResult: ...
     def execute(self, action: str, **parameters: object) -> object: ...
 
 
@@ -38,7 +40,7 @@ def _robot_capabilities(interface: AgentRobotInterface, value: Mapping[str, obje
         if not isinstance(name, str) or not isinstance(capability, Mapping):
             continue
         descriptor = action_descriptor(name)
-        if (name in _ROBOT_READ_RESOURCES or name == "vision.observe"
+        if (name in _ROBOT_READ_RESOURCES or name in {"vision.observe", "world.query"}
                 or name in {"behavior.room_cruise", "behavior.follow_person", "behavior.cancel"}
                 or (descriptor is not None and name != "v3.command.wheels")):
             items[name] = dict(capability)
@@ -51,6 +53,14 @@ def _robot_read(interface: AgentRobotInterface, value: Mapping[str, object]) -> 
     if not isinstance(resource, str) or resource not in _ROBOT_READ_RESOURCES:
         raise ValueError("resource must be a published robot/world/behavior state resource")
     return interface.read(resource)
+
+
+def _world_query(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:
+    query = WorldQuery.from_jsonable(value)
+    result = interface.query(query)
+    if not isinstance(result, WorldQueryResult):
+        raise TypeError("world.query must return a canonical WorldQueryResult")
+    return result.to_jsonable()
 
 
 def _strict(value: Mapping[str, object], allowed: set[str]) -> dict[str, object]:
@@ -164,6 +174,24 @@ def build_default_agent_tools(
                 {"resource": "required " + "|".join(sorted(_ROBOT_READ_RESOURCES))},
             ),
             lambda args: _robot_read(interface, args),
+        ),
+        (
+            AgentToolSpec(
+                "world.query",
+                "Read exact bounded semantic facts or task/observation episodes from the Brain's shared Public World Model without starting V3. Preserve returned freshness, uncertainty, scope, measurement time and lineage; a historical fact never authorizes motion.",
+                "READ",
+                {
+                    "entity_id": "optional exact semantic entity ID",
+                    "attribute": "optional exact fact attribute",
+                    "domain": "optional published freshness domain",
+                    "limit": "optional integer 1..64, default 32",
+                    "require_current": "optional boolean, default false; true excludes stale, conflicting, unknown and scope-mismatched facts",
+                    "scope": "optional object with current frame_id, runtime_pid and map_revision; all declared fact scope fields must match",
+                    "kind": "optional facts|episodes, default facts; episodes are original evidence, not current execution targets",
+                    "after_sequence": "optional non-negative integer episode cursor, default 0; inspect history_gap and truncated before claiming complete history",
+                },
+            ),
+            lambda args: _world_query(interface, args),
         ),
         (
             AgentToolSpec(

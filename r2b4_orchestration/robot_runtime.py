@@ -192,6 +192,7 @@ class PublicRobotRuntime:
         self._reported_evidence_dropped = 0
         self._evidence_producer_id = str(uuid.uuid4())
         self._world_evidence_pending = 0
+        self._brain_memory_sequence = 0
         # The host observation plane exists without V3 or capture. Publication
         # only enqueues immutable references; unavailable consumers never own
         # the Brain's lifecycle or determine whether a command can run.
@@ -314,12 +315,7 @@ class PublicRobotRuntime:
         # No host lock around execution/waits: STOP must revoke STARTING too.
         # Finite RobotInterface actions can wait in the dispatcher. Observation,
         # memory persistence and evidence drain keep running during that wait.
-        if self._action_lock.acquire(blocking=False):
-            try:
-                self.behaviors.step()
-                self.brain.step()
-            finally:
-                self._action_lock.release()
+        self.brain.step(asynchronous=True)
         if self.behaviors.active and self._caller_pid is not None and not self.behaviors.snapshot().goal_id:
             try:
                 os.kill(self._caller_pid, 0)
@@ -327,6 +323,7 @@ class PublicRobotRuntime:
                 self.preempt("REQUEST_OWNER_EXITED")
         with self._state_lock:
             self.projector.completed_behavior(self.behaviors.snapshot())
+        self._project_goal_history()
         self._persist()
         self._flush_evidence()
 
@@ -341,6 +338,23 @@ class PublicRobotRuntime:
                     self.preempt("HOST_STEP_FAILED")
                 except Exception:
                     pass
+
+    def _project_goal_history(self) -> None:
+        # Read executive history directly. Passive hub/journal loss must never
+        # turn command acceptance into success or erase shared task memory.
+        history = self.brain.history()
+        if history and history[0].sequence > self._brain_memory_sequence + 1:
+            self._health_error = "BRAIN_MEMORY_HISTORY_GAP"
+        for event in history:
+            if event.sequence <= self._brain_memory_sequence:
+                continue
+            try:
+                self.projector.completed_goal(event)
+            except Exception as exc:
+                # Memory availability is neither physical authority nor a gate
+                # for independent local actions or STOP.
+                self._health_error = "BRAIN_MEMORY_PROJECTION_FAILED:" + type(exc).__name__
+            self._brain_memory_sequence = event.sequence
 
     def _persist(self, *, force: bool = False) -> None:
         # Storage serialization is separate from intent revocation. Slow disk

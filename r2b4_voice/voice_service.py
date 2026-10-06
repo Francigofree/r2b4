@@ -397,13 +397,20 @@ class VoiceConversationService:
             return
         self._last_transcript = transcript.strip()
         self._last_error = None
-        self._publish_status()
-        print(f"voice: user={self._last_transcript!r}", flush=True)
+        transcript_ns = self._monotonic_ns()
         interaction_id = self._next_interaction_id()
         self._stop_interrupt_latched.clear()
+        stop_executed = None
+        if is_stop_intent(self._last_transcript):
+            # Once recognized, STOP precedes status and evidence filesystem I/O.
+            stop_executed = self._execute_voice_stop(
+                interaction_id=interaction_id, source="FAST_PATH", transcript=self._last_transcript
+            )
+        self._publish_status()
+        print(f"voice: user={self._last_transcript!r}", flush=True)
         self._hri_event(
             "STT_RESULT", interaction_id=interaction_id, text=self._last_transcript,
-            phase=self._state.value,
+            phase=self._state.value, monotonic_ns=transcript_ns,
         )
 
         plan = self._mode_selector.select(self._last_transcript, source="voice")
@@ -420,13 +427,10 @@ class VoiceConversationService:
 
         # Deterministic STOP bypasses the LLM/action-proposal path after STT.
         # It still enters only through the canonical RobotInterface command path.
-        if is_stop_intent(self._last_transcript):
-            executed = self._execute_voice_stop(
-                interaction_id=interaction_id, source="FAST_PATH", transcript=self._last_transcript
-            )
+        if stop_executed is not None:
             self._route_evidence.emit(
                 "ROUTE_EXECUTION_COMPLETE", plan, interaction_id=interaction_id,
-                executed=executed, action_status=self._last_action_status,
+                executed=stop_executed, action_status=self._last_action_status,
             )
             self._settle_and_discard()
             self._resume_session_timeout()
@@ -803,16 +807,13 @@ class VoiceConversationService:
         self, *, interaction_id: str, source: str, transcript: str | None = None
     ) -> bool:
         self._stop_interrupt_latched.set()
+        requested_ns = self._monotonic_ns()
         cancel = getattr(self._conversation, "cancel_pending_turns", None)
         if callable(cancel):
-            cancel()
-        self._hri_event(
-            "STOP_REQUESTED",
-            interaction_id=interaction_id,
-            source=source,
-            transcript=transcript,
-            phase=self._state.value,
-        )
+            try:
+                cancel()
+            except Exception:
+                pass  # Canonical STOP still revokes upper intent independently.
         try:
             self._conversation_interface.execute("v3.command.stop")
             status = (
@@ -822,6 +823,10 @@ class VoiceConversationService:
             )
             self._last_action_status = status
             self._last_error = None
+            self._hri_event(
+                "STOP_REQUESTED", interaction_id=interaction_id, source=source,
+                transcript=transcript, phase=self._state.value, monotonic_ns=requested_ns,
+            )
             self._hri_event(
                 "INTERRUPT_STOP_EXECUTED" if source == "INTERRUPT" else "STOP_EXECUTED",
                 interaction_id=interaction_id,
@@ -835,6 +840,10 @@ class VoiceConversationService:
         except Exception as exc:
             self._last_action_status = "STOP_FAILED"
             self._last_error = f"voice STOP {type(exc).__name__}: {exc}"
+            self._hri_event(
+                "STOP_REQUESTED", interaction_id=interaction_id, source=source,
+                transcript=transcript, phase=self._state.value, monotonic_ns=requested_ns,
+            )
             self._hri_event(
                 "INTERRUPT_STOP_FAILED" if source == "INTERRUPT" else "STOP_FAILED",
                 interaction_id=interaction_id,
@@ -852,17 +861,20 @@ class VoiceConversationService:
         if not normalized or not is_stop_intent(normalized):
             return False
         interaction_id = self._next_interaction_id()
+        detected_ns = self._monotonic_ns()
+        executed = self._execute_voice_stop(
+            interaction_id=interaction_id,
+            source="INTERRUPT",
+            transcript=normalized,
+        )
         self._hri_event(
             "INTERRUPT_STOP_DETECTED",
             interaction_id=interaction_id,
             transcript=normalized,
             phase=phase,
+            monotonic_ns=detected_ns,
         )
-        return self._execute_voice_stop(
-            interaction_id=interaction_id,
-            source="INTERRUPT",
-            transcript=normalized,
-        )
+        return executed
 
     def _interrupt_stop_loop(self) -> None:
         builder = EnergyUtteranceBuilder(self._activity_config)

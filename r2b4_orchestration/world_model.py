@@ -85,6 +85,7 @@ DEFAULT_FRESHNESS_POLICIES: Mapping[str, FreshnessPolicy] = MappingProxyType({
     "mission_state": FreshnessPolicy(1_000_000_000),
     "mission_outcome": FreshnessPolicy(None),
     "navigation_outcome": FreshnessPolicy(None),
+    "task_outcome": FreshnessPolicy(None),
     "health": FreshnessPolicy(1_000_000_000),
     "person_position": FreshnessPolicy(3_000_000_000),
     "observation": FreshnessPolicy(10_000_000_000),

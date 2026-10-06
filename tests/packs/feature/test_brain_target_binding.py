@@ -216,6 +216,9 @@ def test_one_agent_proposal_searches_binds_and_follows_300_seconds_in_same_brain
     assert robot.actions[-1][0] == "v3.command.face_person"
     robot.publish(tracks=(_person(robot.clock),))
     owner.poll()
+    deadline = time.monotonic() + 2
+    while owner.brain.goal(pending["goal_id"])["step_index"] == 0 and time.monotonic() < deadline:
+        threading.Event().wait(.001)
     following = owner.brain.goal(pending["goal_id"])
     assert following["lifecycle"] == "ACTIVE" and following["step_index"] == 1
     assert following["target"]["target_track_id"] == "person-7"
@@ -226,15 +229,24 @@ def test_one_agent_proposal_searches_binds_and_follows_300_seconds_in_same_brain
     assert parameters["capture_hz"] == 10
     robot.publish(tracks=(_person(robot.clock),))
     owner.poll()  # Correlated physical following starts the 300 second duration.
+    deadline = time.monotonic() + 2
+    while owner.behaviors.snapshot().execution_started_ns is None and time.monotonic() < deadline:
+        threading.Event().wait(.001)
     execution = owner.behaviors.snapshot().execution_started_ns
     assert execution is not None
     robot.clock.now = execution + 299_000_000_000
     robot.publish(tracks=(_person(robot.clock),))
     owner.poll()
+    deadline = time.monotonic() + 2
+    while owner.behaviors.snapshot().measurement_time_ns != robot.clock.now and time.monotonic() < deadline:
+        threading.Event().wait(.001)
     assert owner.brain.goal(pending["goal_id"])["lifecycle"] == "ACTIVE"
     robot.clock.now = execution + 300_000_000_000
     robot.publish(tracks=(_person(robot.clock),))
     owner.poll()
+    deadline = time.monotonic() + 2
+    while owner.brain.goal(pending["goal_id"])["lifecycle"] == "ACTIVE" and time.monotonic() < deadline:
+        threading.Event().wait(.001)
     completed = owner.brain.goal(pending["goal_id"])
     assert completed["lifecycle"] == "COMPLETED" and completed["reason"] == "REQUESTED_DURATION_REACHED"
     assert completed["goal_id"] == pending["goal_id"]

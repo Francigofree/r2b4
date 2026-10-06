@@ -21,6 +21,7 @@ from enum import Enum
 from v3.action_catalog import action_descriptor
 from v3.adapters.vision_media_contracts import VisionJpeg
 from .behavior_system import BehaviorLifecycle, BehaviorSystem, _parameters
+from .world_model import ValidityScope, WorldFact, WorldQuery
 
 
 class GoalLifecycle(str, Enum):
@@ -39,6 +40,19 @@ _ALIASES = {"v3.command.explore": "behavior.room_cruise",
             "v3.command.follow_person": "behavior.follow_person"}
 
 
+def _world_target_evidence(fact: WorldFact | None):
+    if fact is None:
+        return None
+    evidence = fact.to_jsonable()
+    # Preserve the exact observation identity/provenance and the admitted
+    # location; unrelated semantic descriptions remain in the shared world.
+    location = fact.location
+    if location is None:
+        raise ValueError("WORLD_TARGET_LOCATION_UNQUALIFIED")
+    evidence["value"] = location.to_jsonable()
+    return evidence
+
+
 @dataclass(frozen=True, slots=True)
 class PlanStep:
     action: str
@@ -47,11 +61,13 @@ class PlanStep:
     bind_target: bool = False
     use_bound_target: bool = False
     max_retries: int = 0
+    target_entity_id: str | None = None
 
     def to_jsonable(self):
         return {"action": self.action, "parameters": dict(self.parameters),
                 "completion": self.completion, "bind_target": self.bind_target,
-                "use_bound_target": self.use_bound_target, "max_retries": self.max_retries}
+                "use_bound_target": self.use_bound_target, "max_retries": self.max_retries,
+                "target_entity_id": self.target_entity_id}
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +90,7 @@ class GoalSnapshot:
     mission_id: str | None = None
     target: tuple[tuple[str, object], ...] = ()
     result: tuple[tuple[str, object], ...] = ()
+    world_target: WorldFact | None = None
 
     @property
     def subtask_id(self):
@@ -90,7 +107,8 @@ class GoalSnapshot:
                 "subtask_id": self.subtask_id, "attempt": self.attempt,
                 "decision_id": self.decision_id, "behavior_id": self.behavior_id,
                 "command_id": self.command_id, "mission_id": self.mission_id,
-                "target": dict(self.target), "result": dict(self.result)}
+                "target": dict(self.target), "result": dict(self.result),
+                "world_target": _world_target_evidence(self.world_target)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +167,8 @@ class BrainCore:
         self._lock = threading.RLock()
         self._execution_lock = execution_lock or threading.RLock()
         self._goals: dict[str, GoalSnapshot] = {}
+        self._input_sequence = 0
+        self._input_orders: dict[str, int] = {}
         self._primary_id: str | None = None
         self._background: dict[str, GoalSnapshot] = {}
         self._history = deque(maxlen=128)
@@ -157,6 +177,7 @@ class BrainCore:
         self._dispatch_event = threading.Event()
         self._dispatch_thread = None
         self._admissions_inflight = 0
+        self._advance_pending = False
         self._cancel_event = threading.Event()
 
     def snapshot(self):
@@ -192,12 +213,15 @@ class BrainCore:
                 if len(self._goals) < 32:
                     break
                 del self._goals[key]
+                del self._input_orders[key]
             if len(self._goals) >= 32:
                 raise RuntimeError("BRAIN_PENDING_INPUT_LIMIT")
             now = self.clock_ns()
             goal = GoalSnapshot(goal_id, text.strip(), source, GoalLifecycle.PENDING, now, now,
                                 constraints=tuple(sorted(_request_constraints(text).items())))
             self._goals[goal_id] = goal
+            self._input_sequence += 1
+            self._input_orders[goal_id] = self._input_sequence
             return self._change(goal_id, "GOAL_SUBMITTED").to_jsonable()
 
     def _change(self, goal_id, kind, **changes):
@@ -259,13 +283,23 @@ class BrainCore:
         bound = False
         searched = False
         for row in rows:
-            if not isinstance(row, Mapping) or set(row) - {"action", "parameters", "completion", "bind_target", "use_bound_target", "max_retries"}:
+            if not isinstance(row, Mapping) or set(row) - {"action", "parameters", "completion", "bind_target", "use_bound_target", "max_retries", "target_entity_id"}:
                 raise ValueError("invalid Brain plan step")
             action = row.get("action")
             if not isinstance(action, str):
                 raise ValueError("Brain step requires a canonical action")
             action = _ALIASES.get(action, action)
+            if action == "v3.command.wheels":
+                raise ValueError("CAPABILITY_UNSUPPORTED:" + action)
             params = _parameters(row.get("parameters", {}))
+            entity = row.get("target_entity_id")
+            if entity is not None:
+                if (action != "v3.command.navigate" or not isinstance(entity, str)
+                        or not entity.strip() or len(entity) > 256):
+                    raise ValueError("WORLD_TARGET_UNSUPPORTED")
+                entity = entity.strip()
+                if set(params) & {"x_m", "y_m", "frame_id"}:
+                    raise ValueError("WORLD_TARGET_COORDINATES_CONFLICT")
             use = row.get("use_bound_target", False)
             bind = row.get("bind_target", False)
             if type(use) is not bool or type(bind) is not bool or use and not bound:
@@ -276,7 +310,8 @@ class BrainCore:
                 raise ValueError("TARGET_BINDING_REQUIRED")
             if bind and action not in {"behavior.search_any_person", "behavior.search_person"}:
                 raise ValueError("TARGET_BINDING_UNSUPPORTED")
-            self._validate_parameters(action, params, bound=use)
+            validation_params = {**params, "x_m": 0.0, "y_m": 0.0} if entity is not None else params
+            self._validate_parameters(action, validation_params, bound=use)
             default_completion = ("person_found" if "search_" in action else
                                   "duration" if action.startswith("behavior.") and "max_duration_s" in params else
                                   "observation" if action == "vision.observe" else "mission")
@@ -296,7 +331,7 @@ class BrainCore:
             if type(retries) is not int or not 0 <= retries <= 2:
                 raise ValueError("Brain retries must be within 0..2")
             # A safety, identity or transport failure is never retried implicitly.
-            steps.append(PlanStep(action, tuple(sorted(params.items())), completion, bind, use, retries))
+            steps.append(PlanStep(action, tuple(sorted(params.items())), completion, bind, use, retries, entity))
             bound = bound or bind
             searched = searched or action in {"behavior.search_any_person", "behavior.search_person"}
         constraints = dict(goal.constraints)
@@ -331,7 +366,8 @@ class BrainCore:
                 # The current V3 follow distance is fixed, not a caller parameter.
                 raise ValueError("CONSTRAINT_UNSUPPORTED:follow_distance_m")
             elif name == "target_entity_id":
-                if not any(dict(step.parameters).get("entity_id") == value for step in steps):
+                if not any(step.target_entity_id == value or dict(step.parameters).get("entity_id") == value
+                           for step in steps):
                     raise ValueError("CONSTRAINT_UNSUPPORTED:target_entity_id")
             else:
                 raise ValueError("CONSTRAINT_UNSUPPORTED:" + name)
@@ -347,6 +383,10 @@ class BrainCore:
             except (ValueError, TypeError) as exc:
                 return self._change(goal_id, "PLAN_REJECTED", lifecycle=GoalLifecycle.FAILED, reason=str(exc)).to_jsonable()
             current = self._goals.get(self._primary_id)
+            if (current is not None and _PRIORITY[goal.source] == _PRIORITY[current.source]
+                    and self._input_orders[goal_id] < self._input_orders[current.goal_id]):
+                return self._change(goal_id, "PROPOSAL_SUPERSEDED", lifecycle=GoalLifecycle.CANCELLED,
+                                    reason="SUPERSEDED_BY:" + current.goal_id).to_jsonable()
             if current is not None and current.lifecycle in _RUNNING:
                 if _PRIORITY[goal.source] < _PRIORITY[current.source]:
                     return self._change(goal_id, "PRIORITY_REJECTED", lifecycle=GoalLifecycle.FAILED,
@@ -379,25 +419,61 @@ class BrainCore:
             # A finite physical action can outlive the socket's request budget.
             # One host worker dispatches only the current admitted generation;
             # preempted requests never accumulate workers or execution backlog.
-            with self._lock:
-                if self._dispatch_thread is None:
-                    self._dispatch_thread = threading.Thread(target=self._dispatch_loop,
-                        name="r2b4-brain-dispatch", daemon=True)
-                    self._dispatch_thread.start()
-                self._dispatch_event.set()
+            self._wake_dispatcher()
         else:
             self._dispatch(self._generation)
         return self.goal(goal_id)
 
+    def _wake_dispatcher(self):
+        with self._lock:
+            if self._dispatch_thread is None:
+                self._dispatch_thread = threading.Thread(target=self._dispatch_loop,
+                    name="r2b4-brain-dispatch", daemon=True)
+                self._dispatch_thread.start()
+            self._dispatch_event.set()
+
     def _dispatch_loop(self):
         while self._dispatch_event.wait():
             self._dispatch_event.clear()
+            generation = behavior_id = None
             try:
-                self._dispatch(self._generation)
+                with self._execution_lock:
+                    with self._lock:
+                        generation = self._generation
+                        behavior_id = self.behaviors.snapshot().behavior_id
+                    self._dispatch(generation)
+                    with self._lock:
+                        advance = self._advance_pending
+                        self._advance_pending = False
+                    if advance:
+                        try:
+                            self.behaviors.step()
+                        finally:
+                            # A failed STOP can raise after terminalizing the
+                            # behavior. Preserve the correlated whole-goal failure.
+                            self.step()
+            except Exception as exc:
+                self._dispatch_failure(generation, behavior_id, exc)
+
+    def _dispatch_failure(self, generation, behavior_id, error):
+        """Unexpected advancement failure revokes only its captured authority."""
+        reason = "DISPATCHER_FAILED:" + type(error).__name__[:128]
+        with self._execution_lock:
+            with self._lock:
+                if generation is None or generation != self._generation:
+                    return
+                goal = self._current(generation)
+                state = self.behaviors.snapshot()
+                unowned_behavior = (goal is None and state.behavior_id == behavior_id
+                                    and state.goal_id is None and self.behaviors.active)
+            try:
+                if goal is not None:
+                    self.fail(goal.goal_id, reason)
+                elif unowned_behavior:
+                    self.behaviors.cancel(reason)
             except Exception:
-                # A failed canonical STOP has already terminalized the goal.
-                # Keep the sole dispatcher available for later explicit input;
-                # never retry the failed physical task automatically.
+                # Failure/cancellation revokes authority before canonical STOP.
+                # A STOP transport failure must not kill the sole dispatcher.
                 pass
 
     def _dispatch(self, generation):
@@ -421,12 +497,52 @@ class BrainCore:
             goal = self._goals.get(self._primary_id)
             return goal if generation == self._generation and goal is not None and goal.lifecycle in _RUNNING else None
 
+    def _world_navigation_target(self, entity_id):
+        """Resolve a semantic place at dispatch, preserving its execution scope."""
+        runtime = self.robot.read("operator.status")
+        pid = runtime.get("runtime_pid") if isinstance(runtime, Mapping) else None
+        if (not isinstance(runtime, Mapping) or runtime.get("runtime_running") is not True
+                or type(pid) is not int or pid <= 0):
+            raise ValueError("WORLD_RUNTIME_SCOPE_UNAVAILABLE")
+        mode, hz = runtime.get("capture_mode"), runtime.get("capture_hz")
+        if mode not in {"alap", "full", "nincs"} or type(hz) is not int or hz <= 0:
+            raise ValueError("WORLD_CAPTURE_IDENTITY_UNAVAILABLE")
+        status = runtime.get("status")
+        local = status.get("world") if isinstance(status, Mapping) else None
+        map_revision = local.get("map_revision") if isinstance(local, Mapping) else None
+        for frame_id in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
+            scope = ValidityScope(frame_id=frame_id, runtime_pid=pid, map_revision=map_revision)
+            facts = self.memory.query(WorldQuery(entity_id=entity_id, attribute="location",
+                domain="room_topology", require_current=True, scope=scope, limit=1)).facts
+            if not facts:
+                continue
+            fact = facts[0]
+            observation, location = fact.observation, fact.location
+            if (observation is None or location is None or location.x_m is None or location.y_m is None
+                    or location.frame_id != frame_id or not observation.source or not observation.lineage
+                    or observation.validity_scope is None or observation.validity_scope.runtime_pid != pid):
+                continue
+            if len(json.dumps(_world_target_evidence(fact), allow_nan=False).encode()) > 4096:
+                raise ValueError("WORLD_TARGET_EVIDENCE_EXCEEDS_BOUND")
+            return fact, {"x_m": location.x_m, "y_m": location.y_m, "frame_id": location.frame_id,
+                          "expected_runtime_pid": pid, "capture": False,
+                          "capture_mode": mode, "capture_hz": hz}
+        raise ValueError("WORLD_PLACE_LOCATION_UNQUALIFIED:" + entity_id)
+
     def _start(self, generation):
         goal = self._current(generation)
         if goal is None:
             return
         step = goal.steps[goal.step_index]
         params = dict(step.parameters)
+        world_target = None
+        if step.target_entity_id is not None:
+            try:
+                world_target, target_params = self._world_navigation_target(step.target_entity_id)
+                params.update(target_params)
+            except Exception as exc:
+                self.fail(goal.goal_id, f"WORLD_TARGET_UNAVAILABLE:{type(exc).__name__}:{exc}")
+                return
         if step.use_bound_target:
             target = dict(goal.target)
             track = target.get("target_track_id")
@@ -450,7 +566,8 @@ class BrainCore:
                 if self._current(generation) is None:
                     return
                 goal = self._change(goal.goal_id, "SUBTASK_DISPATCHED", lifecycle=GoalLifecycle.STARTING,
-                                    behavior_id=None, command_id=None, mission_id=None, reason="ACTION_STARTING")
+                                    behavior_id=None, command_id=None, mission_id=None, reason="ACTION_STARTING",
+                                    world_target=world_target)
                 cancel_event = self._cancel_event
             if step.action.startswith("behavior."):
                 duration = params.pop("max_duration_s", 300.0)
@@ -534,8 +651,13 @@ class BrainCore:
             if self._current(generation) is not None:
                 self.fail(goal.goal_id, f"{type(exc).__name__}:{exc}")
 
-    def step(self):
-        """Consume completed execution events; never invokes the Agent."""
+    def step(self, *, asynchronous=False):
+        """Advance completed execution; production callers only schedule work."""
+        if asynchronous:
+            with self._lock:
+                self._advance_pending = True
+            self._wake_dispatcher()
+            return
         with self._execution_lock:
             generation = self._generation
             goal = self._current(generation)
@@ -715,16 +837,21 @@ class BrainCore:
             if not isinstance(rows_steps, list) or len(rows_steps) > 16:
                 raise ValueError("invalid saved Brain plan")
             steps = tuple(PlanStep(step["action"], tuple(sorted(_parameters(step.get("parameters", {})).items())),
-                                   step.get("completion", "mission")) for step in rows_steps)
+                                   step.get("completion", "mission"), target_entity_id=step.get("target_entity_id"))
+                          for step in rows_steps)
+            world_target = WorldFact.from_jsonable(row["world_target"]) if row.get("world_target") else None
+            if world_target is not None and len(json.dumps(_world_target_evidence(world_target), allow_nan=False).encode()) > 4096:
+                raise ValueError("saved world target exceeded its bound")
             with self._lock:
                 if isinstance(primary, Mapping) and primary.get("goal_id") == goal["goal_id"]:
                     self._primary_id = goal["goal_id"]
-                self._change(goal["goal_id"], "GOAL_RESTORED",
+                self._change(goal["goal_id"], "GOAL_INTERRUPTED" if was_active else "GOAL_RESTORED",
                     lifecycle=GoalLifecycle.INTERRUPTED if was_active else old_lifecycle,
                     steps=steps, result=tuple(sorted(_parameters(row.get("result", {})).items())),
                     target=tuple(sorted(_parameters(row.get("target", {})).items())),
                     command_id=row.get("command_id"), mission_id=row.get("mission_id"),
                     behavior_id=row.get("behavior_id"), step_index=row.get("step_index", 0),
+                    world_target=world_target,
                     reason="RUNTIME_RESTART" if was_active else row.get("reason"))
         return interrupted
 

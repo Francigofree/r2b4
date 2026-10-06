@@ -64,6 +64,13 @@ def runtime():
     return clock, robot, owner
 
 
+def wait_for(predicate):
+    deadline = time.monotonic() + 2
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert predicate()
+
+
 def adopt(owner, text, steps, source="HUMAN", **plan_fields):
     pending = owner.execute("brain.submit", {"text": text, "source": source})
     result = owner.execute("brain.adopt", {"goal_id": pending["goal_id"],
@@ -84,13 +91,16 @@ def test_requested_50_seconds_is_owned_until_correlated_duration_completion():
     assert owner.behaviors.snapshot().goal_id == goal["goal_id"]
     assert owner.behaviors.snapshot().decision_id
     owner.poll()  # First correlated physical execution acknowledgement.
+    wait_for(lambda: owner.behaviors.snapshot().execution_started_ns is not None)
     clock.now += 49_000_000_000
     robot.status["monotonic_ns"] = clock.now
     owner.poll()
+    wait_for(lambda: owner.behaviors.snapshot().measurement_time_ns == clock.now)
     assert owner.brain.goal(goal["goal_id"])["lifecycle"] == "ACTIVE"
     clock.now += 1_000_000_000
     robot.status["monotonic_ns"] = clock.now
     owner.poll()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "COMPLETED")
     assert owner.brain.goal(goal["goal_id"])["lifecycle"] == "COMPLETED"
     assert owner.brain.goal(goal["goal_id"])["reason"] == "REQUESTED_DURATION_REACHED"
 
@@ -103,6 +113,7 @@ def test_navigation_acceptance_does_not_complete_observation_goal():
     assert goal["lifecycle"] == "ACTIVE" and goal["step_index"] == 0
     robot.status["mission"]["lifecycle"] = "COMPLETED"
     owner.poll()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED")
     final = owner.brain.goal(goal["goal_id"])
     assert final["step_index"] == 1
     assert final["lifecycle"] == "FAILED"  # Fake camera supplied no calibrated evidence.
@@ -115,6 +126,7 @@ def test_mission_that_ends_early_does_not_prove_requested_duration():
         {"action": "behavior.room_cruise", "parameters": {"max_duration_s": 50}}])
     robot.status["mission"]["lifecycle"] = "COMPLETED"
     owner.poll()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED")
     assert owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED"
     assert owner.brain.goal(goal["goal_id"])["reason"] == "REQUESTED_DURATION_UNPROVEN"
 
@@ -163,6 +175,22 @@ def test_general_question_does_not_preempt_physical_goal():
     assert robot.stops == before
 
 
+@pytest.mark.parametrize("steps", [
+    [{"action": "behavior.follow_person"}],
+    [{"action": "v3.command.move_relative", "parameters": {"forward_m": .5}}],
+])
+def test_delayed_older_equal_priority_proposal_cannot_replace_newer_goal(steps):
+    _, robot, owner = runtime()
+    older = owner.brain.submit("Explore")
+    newer = adopt(owner, "Newer goal", steps)
+    before = len(robot.actions)
+    rejected = owner.brain.adopt(older["goal_id"], {"steps": [{"action": "behavior.room_cruise"}]})
+    assert rejected["lifecycle"] == "CANCELLED"
+    assert rejected["reason"] == "SUPERSEDED_BY:" + newer["goal_id"]
+    assert len(robot.actions) == before
+    assert owner.brain.snapshot()["primary_goal"]["goal_id"] == newer["goal_id"]
+
+
 def test_stop_revokes_plan_waiting_on_canonical_execution_and_stops_late_return():
     _, robot, owner = runtime()
     entered, release = threading.Event(), threading.Event()
@@ -199,6 +227,7 @@ def test_stale_status_at_requested_duration_is_failure_without_retry():
         "parameters": {"max_duration_s": 50}, "max_retries": 2}])
     clock.now += 50_000_000_000
     owner.poll()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED")
     assert owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED"
     assert len(robot.actions) == 1
 
@@ -277,6 +306,44 @@ def test_metadata_poll_does_not_wait_behind_finite_action_dispatch():
     release.set()
 
 
+def test_completed_behavior_dispatches_next_finite_action_on_same_worker_without_blocking_poll():
+    clock, robot, owner = runtime()
+    entered, release = threading.Event(), threading.Event()
+    threads = []
+    original = robot.execute
+
+    def execute(action, **params):
+        threads.append(threading.current_thread())
+        if action == "v3.command.move_relative":
+            entered.set()
+            assert release.wait(2)
+        return original(action, **params)
+
+    robot.execute = execute
+    goal = adopt(owner, "Explore then move", [
+        {"action": "behavior.room_cruise", "parameters": {"max_duration_s": 1}},
+        {"action": "v3.command.move_relative", "parameters": {"forward_m": .5}},
+    ])
+    robot.status["tick_id"] = 1
+    owner.poll()
+    wait_for(lambda: owner.behaviors.snapshot().execution_started_ns is not None)
+    clock.now = owner.behaviors.snapshot().deadline_ns
+    robot.status["monotonic_ns"] = clock.now
+    robot.status["tick_id"] = 2
+    started = time.monotonic()
+    owner.poll()
+    assert time.monotonic() - started < .5
+    assert entered.wait(1)
+    # Status/world ingestion also remains available during the second step.
+    started = time.monotonic()
+    owner.poll()
+    assert time.monotonic() - started < .5
+    assert owner.world.read("robot", "mission").to_jsonable()["measurement_time_ns"] == clock.now
+    assert len(threads) == 2 and threads[0] is threads[1]
+    release.set()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "COMPLETED")
+
+
 def test_stop_failure_cannot_kill_dispatcher_or_create_success():
     _, robot, owner = runtime()
     stop = robot.stop
@@ -294,6 +361,117 @@ def test_stop_failure_cannot_kill_dispatcher_or_create_success():
     second = adopt(owner, "Move", [{"action": "v3.command.move_relative", "parameters": {"forward_m": 1}}])
     assert second["lifecycle"] == "COMPLETED"
     assert owner.brain._dispatch_thread.is_alive()
+
+
+def test_behavior_completion_stop_failure_terminalizes_whole_goal_without_retry():
+    clock, robot, owner = runtime()
+    goal = adopt(owner, "Explore for 1 second", [
+        {"action": "behavior.room_cruise", "parameters": {"max_duration_s": 1}, "max_retries": 2}])
+    owner.poll()
+    wait_for(lambda: owner.behaviors.snapshot().execution_started_ns is not None)
+    clock.now = owner.behaviors.snapshot().deadline_ns
+    robot.status["monotonic_ns"] = clock.now
+
+    def broken():
+        raise RuntimeError("canonical STOP unavailable")
+
+    robot.stop = broken
+    owner.poll()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED")
+    assert owner.brain.goal(goal["goal_id"])["reason"] == "CANONICAL_STOP_FAILED:RuntimeError"
+    assert len(robot.actions) == 1
+    assert owner.brain._dispatch_thread.is_alive()
+
+
+def test_unexpected_dispatcher_advancement_error_revokes_goal_and_stops_without_retry(monkeypatch):
+    _, robot, owner = runtime()
+    goal = adopt(owner, "Explore", [{"action": "behavior.room_cruise", "max_retries": 2}])
+    advance = owner.behaviors.step
+    before = robot.stops
+
+    def broken():
+        raise RuntimeError("unbounded diagnostic " * 200)
+
+    monkeypatch.setattr(owner.behaviors, "step", broken)
+    owner.poll()
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "FAILED"
+             and not owner.behaviors.active and robot.stops > before)
+    assert owner.brain.goal(goal["goal_id"])["reason"] == "DISPATCHER_FAILED:RuntimeError"
+    assert not owner.behaviors.active and robot.stops > before
+    assert len(robot.actions) == 1
+    monkeypatch.setattr(owner.behaviors, "step", advance)
+    replacement = adopt(owner, "Move", [{"action": "v3.command.move_relative", "parameters": {"forward_m": .5}}])
+    assert replacement["lifecycle"] == "COMPLETED"
+
+
+def test_unexpected_dispatcher_error_stops_same_unowned_behavior(monkeypatch):
+    _, robot, owner = runtime()
+    initial = owner.execute("behavior.room_cruise", {})
+    before = robot.stops
+
+    def broken():
+        raise RuntimeError("unexpected behavior advancement error")
+
+    monkeypatch.setattr(owner.behaviors, "step", broken)
+    owner.poll()
+    wait_for(lambda: not owner.behaviors.active and robot.stops > before)
+    ended = owner.behaviors.snapshot()
+    assert ended.behavior_id == initial["behavior_id"]
+    assert ended.lifecycle.value == "CANCELLED" and ended.reason == "DISPATCHER_FAILED:RuntimeError"
+    assert owner.brain.snapshot()["primary_goal"] is None
+    assert robot.stops > before and len(robot.actions) == 1
+
+
+def test_old_dispatcher_error_cannot_revoke_newer_adopted_goal(monkeypatch):
+    _, robot, owner = runtime()
+    old = adopt(owner, "Explore", [{"action": "behavior.room_cruise"}])
+    entered, release = threading.Event(), threading.Event()
+    advance = owner.behaviors.step
+
+    def broken():
+        entered.set()
+        assert release.wait(2)
+        raise RuntimeError("late failure from revoked behavior")
+
+    monkeypatch.setattr(owner.behaviors, "step", broken)
+    owner.poll()
+    assert entered.wait(1)
+    pending = owner.brain.submit("Follow")
+    owner.execute("brain.adopt", {"goal_id": pending["goal_id"],
+        "plan": {"steps": [{"action": "behavior.follow_person"}]}})
+    monkeypatch.setattr(owner.behaviors, "step", advance)
+    release.set()
+    wait_for(lambda: owner.brain.goal(pending["goal_id"])["lifecycle"] == "ACTIVE")
+    assert owner.brain.goal(old["goal_id"])["lifecycle"] == "CANCELLED"
+    assert owner.behaviors.snapshot().goal_id == pending["goal_id"]
+    assert [name for name, _ in robot.actions] == ["v3.command.explore", "v3.command.follow_person"]
+
+
+def test_dispatcher_error_does_not_cancel_changed_unowned_behavior_identity(monkeypatch):
+    _, robot, owner = runtime()
+    initial = owner.execute("behavior.room_cruise", {})
+    handled = threading.Event()
+    handler = owner.brain._dispatch_failure
+
+    def replaced():
+        owner.behaviors.revoke("REPLACED")
+        owner.behaviors.start("follow_person")
+        raise RuntimeError("failure belonged to the earlier behavior")
+
+    def observe_failure(*args):
+        try:
+            return handler(*args)
+        finally:
+            handled.set()
+
+    monkeypatch.setattr(owner.behaviors, "step", replaced)
+    monkeypatch.setattr(owner.brain, "_dispatch_failure", observe_failure)
+    owner.poll()
+    assert handled.wait(1)
+    current = owner.behaviors.snapshot()
+    assert current.behavior_id != initial["behavior_id"] and current.name == "follow_person"
+    assert owner.behaviors.active
+    assert robot.actions[-1][0] == "v3.command.follow_person"
 
 
 def test_revoked_behavior_cannot_install_after_stop_or_preempting_plan(monkeypatch):

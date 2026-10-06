@@ -275,11 +275,13 @@ def test_typed_query_roundtrip_is_immutable_exact_and_does_not_renew_evidence():
     with pytest.raises(TypeError):
         restored.facts[0].value["place_id"] = "room:hall"
     now[0] += 2 * SECOND
+    assert model.query(query).facts  # At the inclusive domain age budget.
+    now[0] += 1
     assert not model.query(query).facts
     evidence = model.query(WorldQuery(entity_id="person:laci")).facts[0]
     assert evidence.observation.measurement_time_ns == SECOND
     assert evidence.observation.observation_time_ns == 2 * SECOND
-    assert evidence.age_ns == 3 * SECOND
+    assert evidence.age_ns == 3 * SECOND + 1
     with pytest.raises(ValueError, match="policy"):
         model.query(WorldQuery(domain="unregistered"))
     with pytest.raises(ValueError, match="limit"):

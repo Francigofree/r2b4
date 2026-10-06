@@ -1,4 +1,4 @@
-"""Human-friendly CLI adapter for :mod:`v3.operator_controller`."""
+"""Legacy operator CLI over the public :mod:`v3.robot_interface` boundary."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from v3.operator_controller import (
     OperatorError,
     OperatorEvent,
 )
+from v3.robot_interface import RobotInterface
 
 
 def _event_printer(event: OperatorEvent) -> None:
@@ -147,8 +148,8 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _print_status(controller: OperatorController, *, diagnostic: bool) -> None:
-    data = controller.diagnostics() if diagnostic else controller.status()
+def _print_status(interface: RobotInterface, *, diagnostic: bool) -> None:
+    data = interface.read("operator.diagnostics" if diagnostic else "operator.status")
     status = data.get("status")
     running = bool(data.get("runtime_running"))
     print(f"runtime: {'RUNNING' if running else 'STOPPED'}")
@@ -213,50 +214,55 @@ def main(argv: list[str] | None = None) -> int:
         args = _parser().parse_args(clean)
         from v3.runtime_performance import apply_host_affinity
         apply_host_affinity(Path(__file__).resolve().parents[1], "operator")
-        controller = OperatorController(event_sink=_event_printer)
-
         if args.command == "__runtime-session":
+            # This private process entry is part of the canonical backend,
+            # rather than a new public request to preempt the upper owner.
+            controller = OperatorController(event_sink=_event_printer)
             return controller.run_runtime_session(
                 Path(args.capture_path), args.capture_mode, args.capture_hz
             )
 
+        interface = RobotInterface(event_sink=_event_printer)
         if args.command == "status":
-            _print_status(controller, diagnostic=False)
+            _print_status(interface, diagnostic=False)
         elif args.command == "diag":
-            _print_status(controller, diagnostic=True)
+            _print_status(interface, diagnostic=True)
         elif args.command == "start":
-            controller.runtime_start(capture_mode)
+            interface.execute("operator.runtime.start", capture_mode=capture_mode)
         elif args.command == "stop":
-            controller.stop()
+            interface.stop()
             print("robot: IDLE (runtime kept running if present)")
         elif args.command == "shutdown":
-            controller.shutdown()
+            interface.execute("operator.shutdown")
         elif args.command == "panic":
-            controller.panic()
+            interface.execute("operator.panic")
             if not args.quiet:
                 print("robot: STOP + runtime shutdown requested")
         elif args.command == "runtime":
             if args.operation == "start":
-                controller.runtime_start(capture_mode)
+                interface.execute("operator.runtime.start", capture_mode=capture_mode)
             elif args.operation == "stop":
-                controller.runtime_stop()
+                interface.execute("operator.runtime.stop")
             elif args.operation == "status":
-                _print_status(controller, diagnostic=False)
+                _print_status(interface, diagnostic=False)
             else:
-                _print_status(controller, diagnostic=True)
+                _print_status(interface, diagnostic=True)
         elif args.command == "capture":
             if args.operation == "start":
-                controller.capture_start(capture_mode if capture_explicit else None)
+                interface.execute("capture.start", capture_mode=capture_mode if capture_explicit else None)
             elif args.operation == "stop":
-                _print_capture_status(controller.capture_stop())
+                _print_capture_status(interface.execute("capture.stop"))
             else:
-                _print_capture_status(controller.capture_status())
+                _print_capture_status(interface.read("capture.status"))
         elif args.command == "forward":
-            controller.forward(args.speed, capture=not args.no_trigger, capture_mode=capture_mode)
+            interface.execute("v3.command.forward", speed_mps=args.speed,
+                              capture=not args.no_trigger, capture_mode=capture_mode)
         elif args.command == "backward":
-            controller.backward(args.speed, capture=not args.no_trigger, capture_mode=capture_mode)
+            interface.execute("v3.command.backward", speed_mps=args.speed,
+                              capture=not args.no_trigger, capture_mode=capture_mode)
         elif args.command == "teleop":
-            controller.start_teleop(
+            interface.execute(
+                "v3.command.teleop",
                 v_mps=args.v,
                 omega_rad_s=args.omega,
                 max_v_mps=args.max_v,
@@ -265,17 +271,20 @@ def main(argv: list[str] | None = None) -> int:
                 capture_mode=capture_mode,
             )
         elif args.command in {"wheels", "mozog"}:
-            controller.wheels(args.left, args.right, capture=not args.no_trigger, capture_mode=capture_mode)
+            interface.execute("v3.command.wheels", left_mps=args.left, right_mps=args.right,
+                              capture=not args.no_trigger, capture_mode=capture_mode)
         elif args.command in {"roomcruise", "explore"}:
-            controller.roomcruise(capture=not args.no_trigger, capture_mode=capture_mode)
+            interface.execute("v3.command.explore", capture=not args.no_trigger, capture_mode=capture_mode)
         elif args.command == "faceperson":
-            controller.faceperson(
+            interface.execute(
+                "v3.command.face_person",
                 max_omega_rad_s=args.max_omega,
                 capture=not args.no_trigger,
                 capture_mode=capture_mode,
             )
         elif args.command == "followperson":
-            controller.followperson(
+            interface.execute(
+                "v3.command.follow_person",
                 max_v_mps=args.max_v,
                 max_omega_rad_s=args.max_omega,
                 capture=not args.no_trigger,
@@ -289,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
 
             signal.signal(signal.SIGTERM, interrupt)
             try:
-                controller.run_proba(capture_mode=capture_mode)
+                interface.execute("operator.proba", capture_mode=capture_mode)
             finally:
                 signal.signal(signal.SIGTERM, old_term)
         else:  # pragma: no cover - argparse guarantees this

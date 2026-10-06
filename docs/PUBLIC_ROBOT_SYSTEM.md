@@ -51,6 +51,7 @@ világmodellből választ következő területet, és a publikus navigációt ha
 | `read("robot.state")` | Közös temporal world, active behavior, mission és felső health |
 | `read("world.snapshot")` | Immutable szemantikai facts, confidence, kor, freshness, lineage |
 | `read("world.history")` | Bounded observation history; loss/eviction a snapshotban explicit |
+| `query(WorldQuery(...))` / Agent `world.query` | Exact, bounded facts/episodes lekérdezés freshness- és scope-minősítéssel |
 | `read("behavior.state")` | Canonical lifecycle, deadline, command/mission identity, reason |
 | `read("behavior.history")` | Intentek, állapotváltások, preemption, eredmény |
 | `read("brain.state")` | R2B4 identity/RUNTIME role, egy primary goal, pending és background goalok |
@@ -99,6 +100,30 @@ el. A runtime turn és a provider nem változtathatja meg ezt a módot.
 Keréksebesség-parancs nem Voice/Agent capability; az operátori CLI meglévő
 kinematikai diagnosztikája továbbra is a canonical command úton működik.
 
+A Brain a névhez kötött helycélt közvetlenül a közös memóriából oldja fel.
+A tervlépés például:
+
+```json
+{"steps":[{"action":"v3.command.navigate","target_entity_id":"konyha","parameters":{"max_v_mps":0.2}}]}
+```
+
+A `target_entity_id` kizárólag navigate tervlépésen használható, külön
+`x_m`, `y_m` vagy `frame_id` nélkül. A Brain minden ilyen részfeladat dispatchja
+előtt aktuális `room_topology/location` factet kér a futó V3 runtime scope-jában.
+A frissesség, confidence, source/lineage és frame/session kötés megmarad a
+goal `world_target` mezőjében; a canonical navigate admission ugyanabban a
+runtime- és capture-sessionben ellenőrzi a fizikai kérést. A publikus target
+evidence csak a typed locationt és eredeti provenance-t tartalmazza; a nagy
+helyleírás a world factben marad. Túl nagy lineage explicit failure, nem
+csendes truncation. Hiányzó vagy
+minősítetlen helyadat explicit failure. Leállított V3-hoz tartozó régi
+koordináta nem indít új runtime-ot vagy automatikus relokalizációt.
+
+Az Agent `world.query` toolja ugyanezen memória exact, legfeljebb 64 factből
+vagy observation episode-ból álló eredményét olvassa. A `require_current` és
+`scope` mező minősíti az aktuális használhatóságot; a history gap és truncation
+explicit marad. A lekérdezés nem indít V3-at és nem hajt végre fizikai feladatot.
+
 ## Idő, bizonytalanság és memória
 
 A `PublicWorldModel.observe` érték mellett domaint, measurement/observation
@@ -135,6 +160,18 @@ evidence-írás rendelkezésre állása nem előfeltétele Brain adoptionnek,
 lifecycle-léptetésnek vagy STOP-nak. Raw kép és sensor payload nem kerül a
 Brain döntési eventjébe vagy a V3 control interpreterbe.
 
+A terminális Brain-goalok `goal:<goal_id>/outcome` factként a `task_outcome`
+domainbe kerülnek, eredeti outcome-idővel, decision/subtask/command/mission
+lineage-dzsel. A projection közvetlenül a bounded Brain historyt olvassa;
+ObservationHub- vagy journal-hiba nem teheti a command acceptance-et sikeres
+goal-eredménnyé. Projection-hiba vagy feldolgozás előtti history loss explicit
+DEGRADED diagnosztika, és nem akadályozza a független lokális executiont vagy
+STOP-ot. Az outcome enduring tudás; a bounded world fact/history budgetje
+és az epoch-szabályai erre is érvényesek.
+Restore nem új observation: a korábbi terminális outcome ideje, forrása és
+epochja megmarad. Egy korábban futó goal restart miatti INTERRUPTED állapota
+új megszakítási evidence; korábbi fizikai siker nem állítható elő újra.
+
 ## Behavior és STOP
 
 A Brain egyszerre egy primary fizikai goalt birtokol. Normál prioritás
@@ -144,6 +181,14 @@ retry legfeljebb 2; safety/stale/crash/identity failure nem retryolható
 automatikusan. Explicit időtartam nem rövidülhet csendben caller watchdogra.
 Időzített Room Cruise/Follow csak a kért időtartam bizonyított elérésével
 complete; általános hard deadline exhaustion failure marad.
+
+Az initial dispatch, a Behavior léptetése, a bounded retry és minden következő
+részfeladat ugyanazon egyetlen host Brain dispatcher szálon fut. A runtime poll
+csak coalesced előrelépést kér, így a véges fizikai actionre várás nem állítja
+meg a world projectiont, persistence-et és evidence-drain-t. Régebbi, azonos
+prioritású Agent proposal nem preemptálhat újabb adoptált goalt, annak
+befejeződése után sem. A publikus legacy operator CLI is RobotInterface-kliens;
+a canonical STOP a route journal fájlműveletei előtt elindul.
 
 `BehaviorSystem` egy aktív programot kezel. A program publikus robot/world
 interfészt kap, normál `start` és bounded `step` metódussal. Nincs DSL, behavior

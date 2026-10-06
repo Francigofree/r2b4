@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import struct
+from types import SimpleNamespace
 
 import pytest
 
@@ -141,6 +142,48 @@ def build_service(*, running: bool, clock: Clock):
         monotonic_ns=clock.monotonic_ns,
     )
     return service, interface, tts, playback
+
+
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_voice_stop_precedes_failing_evidence_and_status_io(monkeypatch, tmp_path, interrupt):
+    from r2b4_orchestration.execution_mode import RouteEvidenceJournal
+
+    service, interface, _, _ = build_service(running=False, clock=Clock())
+    service._transcriber.text = "stop"
+    service._open_session()
+    order = []
+    original_execute = interface.execute
+    def execute(action, **parameters):
+        order.append(action)
+        return original_execute(action, **parameters)
+    monkeypatch.setattr(interface, "execute", execute)
+    def append(event, **fields):
+        order.append(event)
+        raise OSError("HRI journal unavailable")
+    service._hri_journal = SimpleNamespace(append=append)
+    (tmp_path / "runtime").write_text("not a directory")
+    service._route_evidence = RouteEvidenceJournal(tmp_path)
+    def publish_status():
+        if service._last_transcript == "stop":
+            order.append("STATUS_IO")
+    monkeypatch.setattr(service, "_publish_status", publish_status)
+    monkeypatch.setattr(service, "_read_utterance", lambda: object())
+    monkeypatch.setattr(service, "_settle_and_discard", lambda: None)
+    def cancel():
+        raise RuntimeError("conversation cleanup unavailable")
+    monkeypatch.setattr(service._conversation, "cancel_pending_turns", cancel, raising=False)
+
+    if interrupt:
+        assert service._handle_interrupt_transcript("stop", phase="THINKING") is True
+        assert service._last_action_status == "EXECUTED:VOICE_STOP_INTERRUPT"
+    else:
+        service._conversation_cycle()
+        assert service._last_action_status == "EXECUTED:VOICE_STOP_FAST_PATH"
+        assert service._route_evidence.evidence_dropped == 2
+    assert order[0] == "v3.command.stop"
+    assert interface.executed == [("v3.command.stop", {})]
+    assert "STOP_REQUESTED" in order
+    assert service._last_error is None
 
 
 def test_continuous_speech_refreshes_silence_from_pcm_time(monkeypatch):

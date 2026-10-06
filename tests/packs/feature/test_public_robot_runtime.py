@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 import pytest
 
@@ -122,6 +123,13 @@ def setup_runtime():
     return clock, backend, runtime
 
 
+def wait_behavior(runtime, lifecycle):
+    deadline = time.monotonic() + 2
+    while runtime.behaviors.snapshot().lifecycle.value != lifecycle and time.monotonic() < deadline:
+        time.sleep(.001)
+    assert runtime.behaviors.snapshot().lifecycle.value == lifecycle
+
+
 def test_independent_public_facades_share_behavior_mission_and_world():
     clock, backend, runtime = setup_runtime()
     client = SharedClient(runtime)
@@ -132,6 +140,7 @@ def test_independent_public_facades_share_behavior_mission_and_world():
     assert agent.read("behavior.state")["behavior_id"] == starting["behavior_id"]
     assert backend.actions[0][0] == "v3.command.explore"
     runtime.poll()
+    wait_behavior(runtime, "ACTIVE")
     state = agent.read("robot.state")
     assert state["active_behavior"]["lifecycle"] == "ACTIVE"
     assert state["active_mission"]["value"]["mission_id"] == starting["mission_id"]
@@ -422,6 +431,7 @@ def test_search_person_uses_runtime_injected_public_world_through_real_facade():
     backend.status["navigation"]["status"] = "COMPLETE"
     backend.status.update(safety_decision="STOP", safety_reason="NOT_ACTIVE")
     runtime.poll()
+    wait_behavior(runtime, "COMPLETED")
     completed = runtime.read("behavior.state")
     assert completed["lifecycle"] == "COMPLETED"
     assert "TARGET_OBSERVED:person:laci" in completed["reason"]

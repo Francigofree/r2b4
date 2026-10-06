@@ -178,3 +178,87 @@ def test_cli_reads_and_executes_the_public_robot_surface(monkeypatch, composed, 
     assert any(operation == "execute" and arguments["parameters"] == {"max_duration_s": 5}
                for _, operation, arguments in composed.calls)
     assert composed.controller.calls == []
+
+
+def test_legacy_operator_stop_revokes_upper_intent_without_observation(monkeypatch, composed):
+    from v3 import operator_cli
+
+    monkeypatch.setattr(operator_cli, "RobotInterface", lambda **_kwargs: composed.interface)
+    def unavailable():
+        raise AssertionError("STOP must not read readiness or world state")
+    monkeypatch.setattr(composed.controller, "status", unavailable)
+    monkeypatch.setattr(composed.controller, "live_runtime_status", unavailable)
+
+    assert operator_cli.main(["stop"]) == 0
+    assert composed.controller.calls == [("stop", {})]
+    assert [(operation, arguments["reason"]) for _, operation, arguments in composed.calls] == [
+        ("revoke", "STOP"), ("preempt", "STOP"),
+    ]
+
+
+def test_legacy_operator_motion_preempts_brain_before_canonical_action(monkeypatch, composed):
+    from v3 import operator_cli
+
+    monkeypatch.setattr(operator_cli, "RobotInterface", lambda **_kwargs: composed.interface)
+    assert operator_cli.main(["forward", "start", "0.15", "c", "nincs", "nocapture"]) == 0
+    assert [(operation, arguments) for _, operation, arguments in composed.calls] == [
+        ("preempt", {"reason": "PREEMPTED_BY:v3.command.forward"}),
+    ]
+    assert composed.controller.calls[0][0] == "forward"
+    assert composed.controller.calls[0][1]["speed"] == 0.15
+    assert composed.controller.calls[0][1]["capture"] is False
+    assert composed.controller.calls[0][1]["capture_mode"] == "nincs"
+
+
+@pytest.mark.parametrize("command, action", [
+    ("roomcruise", "behavior.room_cruise"),
+    ("explore", "behavior.room_cruise"),
+    ("followperson", "behavior.follow_person"),
+])
+def test_legacy_operator_behaviors_use_the_shared_owner(monkeypatch, composed, command, action):
+    from v3 import operator_cli
+
+    monkeypatch.setattr(operator_cli, "RobotInterface", lambda **_kwargs: composed.interface)
+    assert operator_cli.main([command, "c", "nincs"]) == 0
+    assert composed.controller.calls == []
+    assert len(composed.calls) == 1
+    _, operation, arguments = composed.calls[0]
+    assert operation == "execute" and arguments["action"] == action
+
+
+@pytest.mark.parametrize("arguments, action, method", [
+    (["shutdown"], "operator.shutdown", "runtime_stop"),
+    (["runtime", "stop"], "operator.runtime.stop", "runtime_stop"),
+    (["panic", "--quiet"], "operator.panic", "panic"),
+    (["proba", "c", "nincs"], "operator.proba", "run_proba"),
+])
+def test_legacy_operator_lifecycle_and_test_preempt_upper_owner(monkeypatch, composed, arguments, action, method):
+    from v3 import operator_cli
+
+    monkeypatch.setattr(operator_cli, "RobotInterface", lambda **_kwargs: composed.interface)
+    monkeypatch.setattr(composed.controller, method,
+                        lambda **parameters: composed.controller.calls.append((method, parameters)), raising=False)
+    assert operator_cli.main(arguments) == 0
+    assert [(operation, values) for _, operation, values in composed.calls] == [
+        ("preempt", {"reason": "PREEMPTED_BY:" + action}),
+    ]
+    assert len(composed.controller.calls) == 1 and composed.controller.calls[0][0] == method
+
+
+def test_private_runtime_session_keeps_its_backend_entry(monkeypatch, tmp_path):
+    from v3 import operator_cli
+
+    calls = []
+    class WorkerController:
+        def run_runtime_session(self, *arguments):
+            calls.append(arguments)
+            return 0
+    monkeypatch.setattr(operator_cli, "OperatorController", lambda **_kwargs: WorkerController())
+    def no_public_request(**_kwargs):
+        raise AssertionError("The runtime worker must not preempt the task that launched it")
+    monkeypatch.setattr(operator_cli, "RobotInterface", no_public_request)
+    path = tmp_path / "capture.mcap"
+    assert operator_cli.main([
+        "__runtime-session", "--capture-path", str(path), "--capture-mode", "nincs", "--capture-hz", "10",
+    ]) == 0
+    assert calls == [(path, "nincs", 10)]

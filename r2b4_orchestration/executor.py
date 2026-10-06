@@ -72,8 +72,13 @@ def _agent_return_code(action_status: str | None) -> int:
 def execute_plan(plan: ExecutionPlan, *, project_root: str | Path) -> int:
     root = Path(project_root).expanduser().resolve()
     evidence = RouteEvidenceJournal(root)
-    evidence.emit("ROUTE_EXECUTION_START", plan)
     try:
+        if plan.mode is ExecutionMode.DIRECT_V3 and plan.action_name == "v3.command.stop":
+            # Exact STOP is delivered before any journal, console or TTS I/O.
+            from v3.robot_interface import RobotInterface
+            RobotInterface(project_root=root).execute("v3.command.stop")
+            evidence.emit("ROUTE_SELECTED", plan)
+        evidence.emit("ROUTE_EXECUTION_START", plan)
         if plan.mode is ExecutionMode.AGENT:
             from .agent_runner import run_agent_prompt
             result = run_agent_prompt(plan.text, project_root=root)
@@ -109,14 +114,13 @@ def execute_plan(plan: ExecutionPlan, *, project_root: str | Path) -> int:
             return 0
 
         if plan.mode is ExecutionMode.DIRECT_V3:
-            from v3.robot_interface import RobotInterface
-            interface = RobotInterface(project_root=root)
             if plan.action_name == "v3.command.stop":
-                interface.execute("v3.command.stop")
                 text = "Megálltam."
                 print(text, flush=True); speak_text(text, project_root=root)
                 evidence.emit("ROUTE_EXECUTION_COMPLETE", plan, return_code=0, action_status="EXECUTED")
                 return 0
+            from v3.robot_interface import RobotInterface
+            interface = RobotInterface(project_root=root)
             from r2b4_voice.action_executor import VoiceActionExecutor
             execution = VoiceActionExecutor(interface, mode="execute", session_owner_pid=os.getpid(), session_watchdog_s=30.0).execute_proposal({
                 "name": plan.action_name, "parameters": dict(plan.action_parameters),
@@ -134,7 +138,8 @@ def execute_plan(plan: ExecutionPlan, *, project_root: str | Path) -> int:
 def execute_text(text: str, *, project_root: str | Path, source: str = "launcher") -> int:
     root = Path(project_root).expanduser().resolve()
     plan = ExecutionModeSelector().select(text, source=source)
-    RouteEvidenceJournal(root).emit("ROUTE_SELECTED", plan)
+    if plan.mode is not ExecutionMode.DIRECT_V3 or plan.action_name != "v3.command.stop":
+        RouteEvidenceJournal(root).emit("ROUTE_SELECTED", plan)
     return execute_plan(plan, project_root=root)
 
 

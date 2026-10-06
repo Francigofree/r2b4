@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -123,24 +124,39 @@ class RouteEvidenceJournal:
     def __init__(self, project_root: Path | str) -> None:
         root = Path(project_root).expanduser().resolve()
         self.path = root / "runtime" / "execution_routes.ndjson"
+        self.evidence_dropped = 0
+        self.last_error: str | None = None
 
     def emit(self, event: str, plan: ExecutionPlan, **extra: object) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "schema": "R2B4_EXECUTION_ROUTE_EVENT_V2",
-            "event": event,
-            "wall_time_ns": time.time_ns(),
-            "monotonic_ns": time.monotonic_ns(),
-            "pid": os.getpid(),
-            "plan": plan.to_jsonable(),
-            **extra,
-        }
-        line = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
-        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         try:
-            os.write(fd, line.encode("utf-8"))
-        finally:
-            os.close(fd)
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "schema": "R2B4_EXECUTION_ROUTE_EVENT_V2",
+                "event": event,
+                "wall_time_ns": time.time_ns(),
+                "monotonic_ns": time.monotonic_ns(),
+                "pid": os.getpid(),
+                "plan": plan.to_jsonable(),
+                "evidence_dropped": self.evidence_dropped,
+                **extra,
+            }
+            line = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+            fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            try:
+                if os.write(fd, line) != len(line):
+                    raise OSError("incomplete route evidence write")
+            finally:
+                os.close(fd)
+        except Exception as exc:
+            # Route evidence has no execution authority. Keep loss explicit,
+            # including on recovery, without vetoing STOP or a Brain request.
+            self.evidence_dropped += 1
+            self.last_error = f"ROUTE_EVIDENCE_WRITE_FAILED:{type(exc).__name__}:{exc}"
+            if self.evidence_dropped == 1:
+                try:
+                    print(f"route evidence: {self.last_error}", file=sys.stderr, flush=True)
+                except OSError:
+                    pass
 
 
 __all__ = [

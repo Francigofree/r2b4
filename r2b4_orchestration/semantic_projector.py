@@ -110,3 +110,32 @@ class SemanticProjector:
                            source="behavior_system", revision=snapshot.revision,
                            lineage=(f"behavior:{snapshot.behavior_id or 'IDLE'}", f"revision:{snapshot.revision}"))
         self._last_behavior_revision = snapshot.revision
+
+    def completed_goal(self, event) -> None:
+        """Remember terminal executive truth, never command acceptance as success."""
+        goal = event.state
+        if event.kind == "GOAL_RESTORED" or goal.lifecycle.value not in {"COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"}:
+            return
+        value = {"goal_id": goal.goal_id, "text": goal.text, "source": goal.source,
+                 "lifecycle": goal.lifecycle.value, "reason": goal.reason,
+                 "created_ns": goal.created_ns, "updated_ns": goal.updated_ns,
+                 "step_index": goal.step_index, "step_count": len(goal.steps),
+                 "subtask_id": goal.subtask_id, "decision_id": goal.decision_id,
+                 "behavior_id": goal.behavior_id, "command_id": goal.command_id,
+                 "mission_id": goal.mission_id, "target": dict(goal.target), "result": dict(goal.result)}
+        lineage = [f"goal:{goal.goal_id}", f"subtask:{goal.subtask_id}",
+                   f"decision:{goal.decision_id}"]
+        for name in ("behavior_id", "command_id", "mission_id"):
+            identity = getattr(goal, name)
+            if identity is not None:
+                lineage.append(f"{name}:{identity}")
+        if goal.world_target is not None:
+            fact = goal.world_target
+            value["world_target"] = {"entity_id": fact.entity_id, "world_revision": fact.world_revision,
+                "clock_epoch": fact.observation.clock_epoch,
+                "measurement_time_ns": fact.observation.measurement_time_ns,
+                "validity_scope": fact.observation.validity_scope.to_jsonable()}
+        self.world.observe(f"goal:{goal.goal_id}", "outcome", value, domain="task_outcome",
+                           measurement_time_ns=event.measurement_time_ns, observation_time_ns=self.clock_ns(),
+                           confidence=1.0, source=f"brain:{event.producer_id}", sequence=event.sequence,
+                           revision=goal.revision, lineage=lineage)
