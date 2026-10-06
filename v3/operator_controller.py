@@ -471,8 +471,16 @@ class OperatorController:
                 capture = self.current_capture_path()
                 if capture and capture.is_file():
                     self._emit("info", f"capture: {self._display_path(capture)}")
+                    try:
+                        final = self._verified_capture_final(capture)
+                    except (OSError, ValueError, McapReadError) as exc:
+                        self._emit("warning", f"capture integrity failed after runtime shutdown: {exc}")
+                    else:
+                        self._emit("info", f"capture: finalized, integrity PASS (runtime status {final.get('status')})")
                 elif mode == "nincs":
                     self._emit("info", "capture: OFF")
+                else:
+                    self._emit("warning", "capture was not finalized after runtime shutdown")
                 return
             self._transition_sleep(0.05)
         raise OperatorError(f"runtime did not exit after shutdown (PID {pid})")
@@ -1351,14 +1359,16 @@ class OperatorController:
         if self.current_capture_mode() != "alap":
             return
         path = self.current_capture_path()
-        if path is None or not self.capture_used_file.exists() or self._capture_ready(path):
+        if path is None or not self.capture_used_file.exists() or path.is_file():
             return
-        self._emit("info", "capture: waiting for 2 s post-event tail/finalization")
+        self._emit("info", "capture: waiting for 2 s post-event tail")
+        # The native consumer finalizes only after publishers close and the
+        # required backlog drains. Before SIGTERM, allow the post-event window
+        # and existing delivery margin; verify the final artifact after exit.
         for _ in range(70):
-            if self._capture_ready(path):
+            if path.is_file():
                 return
             self._transition_sleep(0.05)
-        self._emit("warning", "bounded capture was not finalized before runtime shutdown; native finalizer will finish it")
 
     # ------------------------------------------------------------------
     # Runtime/status internals

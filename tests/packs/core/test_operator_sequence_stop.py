@@ -1,15 +1,65 @@
 from __future__ import annotations
 
 import os
+import signal
 import time
 from types import SimpleNamespace
 
 import pytest
 
 from v3.operator_controller import OperatorController, OperatorError
+from v3.mcap_reader import McapReadError
 
 
 pytestmark = [pytest.mark.contract, pytest.mark.control]
+
+
+@pytest.mark.parametrize("capture_result", ["PASS", "FAULT", "INCOMPLETE", "MISSING"])
+def test_shutdown_allows_tail_then_verifies_capture_after_native_close(tmp_path, monkeypatch, capture_result):
+    import v3.operator_controller as module
+
+    events, stopped, verified = [], [], []
+    clock = [0.0]
+    running = [True]
+    controller = OperatorController(tmp_path, event_sink=events.append)
+    capture = tmp_path / "bounded.mcap"
+    controller.capture_used_file.parent.mkdir(parents=True, exist_ok=True)
+    controller.capture_used_file.write_text("origin=movement-stop\n")
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(controller, "stop", lambda **kw: stopped.append("STOP"))
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: 123)
+    monkeypatch.setattr(controller, "_pid_matches", lambda *a: running[0])
+    monkeypatch.setattr(controller, "current_capture_mode", lambda: "alap")
+    monkeypatch.setattr(controller, "current_capture_path", lambda: capture)
+
+    def shutdown(pid, sig):
+        assert stopped == ["STOP"] and sig == signal.SIGTERM
+        assert 2.0 <= clock[0] <= 4.0
+        assert not capture.exists() and not verified
+        assert not any(event.kind == "warning" for event in events)
+        running[0] = False
+        if capture_result != "MISSING":
+            capture.write_bytes(b"native finalized artifact")
+
+    def verify(path):
+        assert not running[0]
+        verified.append(path)
+        if capture_result == "INCOMPLETE":
+            raise McapReadError("CAPTURE_INCOMPLETE: POST_WINDOW_INCOMPLETE")
+        return {"status": capture_result}
+
+    monkeypatch.setattr(module.os, "kill", shutdown)
+    monkeypatch.setattr(controller, "_verified_capture_final", verify)
+    controller.runtime_stop()
+    warnings = [event.message for event in events if event.kind == "warning"]
+    if capture_result in {"PASS", "FAULT"}:
+        assert not warnings and verified == [capture]
+        assert any(f"runtime status {capture_result}" in event.message for event in events)
+    elif capture_result == "INCOMPLETE":
+        assert len(warnings) == 1 and "POST_WINDOW_INCOMPLETE" in warnings[0]
+    else:
+        assert len(warnings) == 1 and "not finalized after runtime shutdown" in warnings[0]
 
 
 @pytest.mark.parametrize("termination", ["SHUTDOWN_SAFE_LOW", "FAULT_SAFE_LOW"])

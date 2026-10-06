@@ -18,6 +18,7 @@ fizikai minimuma és a konfigurált 8 cm-es véges céltolerancia változatlan.
 | P1 | Korábbi boot HRI eseményei az azonos monotonic tartomány miatt aktuális parancsnak látszottak. Restore friss GOAL_SUBMITTED eseményt is generált. | A journal boot epochot és falióra-rögzítési időt ad. Import csak az aktuális epochból; régi/epoch nélküli történet kimarad, minősítetlen live sor explicit evidence loss. Restore megőrzi a created_ns értéket, és csak restore/interruption eseményt ad. |
 | P1 | Nem volt külön LLM-körszám, tényleges modell, provider-attempt vagy vision lineage; a STOP-hiba eredeti szövege elveszett. | LLM STARTED/COMPLETED/FAILED körönként, inference ID, cél, időtartam, configured/actual model, provider-attempt szám. OpenAI esetén elérhető response/request ID és token usage is. Visionnél kompakt mérési lineage; STOP-hibánál exception/cause és command/mission identity. A finite eredményben és interface evidence-ben kért/elért/hátralévő eltolás; frame/generation váltáskor nincs összehasonlítható távolság. Nyers kép és nagy payload nem kerül a control interpreterbe. |
 | P1 | A lezárt hiányos capture állapota „még rögzít” volt; az EVI export teljessége összekeverhető a capture/replay teljességével. | FINALIZED_INCOMPLETE és a natív hibák megőrzése; külön sample, raw és replay státusz. Az Evidence Compiler COMPLETE továbbra is az export teljességét jelenti. |
+| P1 | A shutdown a még futó publisher mellett várt végleges capture-fájlt, ezért ép felvételnél is figyelmeztetett. | A SIGTERM előtti bounded várás az utóablaknak és a delivery marginnak szól. A natív recorder a publisher lezárása és backlog drain után véglegesít; a host a runtime kilépése után ellenőrzi az MCAP-integritást. Hiányzó vagy hibás végleges artifact ekkor külön figyelmeztetés. |
 
 ## Validáció és korlátok
 
@@ -53,3 +54,26 @@ Fizikai robotmozgás, valódi cloud LLM kérés, commit és push nem történt.
 Futó robotfolyamatot ez az offline javítás nem indított újra.
 Az eredeti capture-ek és logok változatlanok; a történeti 10 Hz-es, hiányos
 felvételekből a refaktor nem készít utólag teljes replay evidence-t.
+
+## Új élő evidence: 2026-10-06 23:47–23:48
+
+A felhasználó által futtatott „menj 1 m-t előre” kéréshez a
+`v3_20261006_234748_20434_capture.mcap` teljes mozgásszakaszt tartalmaz.
+A canonical navigáció COMPLETE, a Brain MISSION_COMPLETED eredményt publikált.
+A megállt lokális póz eltolása kb. 0,935 m, a cél maradéktávolsága 0,06466 m:
+a befejezés a konfigurált 0,08 m-es tolerancia szerint történt. A felhasználó
+kb. 0,91 m-t mért; ez továbbra sem pontosan 1 m-es fizikai teljesítés, és egy
+közelítő mérésből nem állapítható meg kalibrációs szorzó.
+
+A natív container/CRC/digest és sample-integrity PASS, az elő- és utóablak
+teljes, required delivery loss nincs. Az explicit offline Evidence Compiler
+345 üzenettel COMPLETE, a verifier PASS, 0 karantén. A 10 Hz-es scope nyers
+szenzoradatot és checkpointot nem kér, ezért exact replay nem bizonyítható.
+Az LLM egyszer, a kérés értelmezésére hívódott: 7,578 s, egy provider- és
+transport-attempt; configured Luna, actual Astra. Ez az esemény a capture
+8 s-os előablakán kívül van, a conversation/HRI journal bizonyítja.
+
+A tartós host owner (PID 20434) 22:40:42 óta futott, a host source-ok később
+változtak. A régi hostmodulok újratöltése nélkül az új interface-diagnosztika
+nem validált élőben; a friss V3 process navigációs javítása viszont lefutott.
+E vizsgálat nem indított mozgást és nem indította újra a szolgáltatást.
