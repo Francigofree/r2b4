@@ -294,3 +294,76 @@ def test_stop_failure_cannot_kill_dispatcher_or_create_success():
     second = adopt(owner, "Move", [{"action": "v3.command.move_relative", "parameters": {"forward_m": 1}}])
     assert second["lifecycle"] == "COMPLETED"
     assert owner.brain._dispatch_thread.is_alive()
+
+
+def test_revoked_behavior_cannot_install_after_stop_or_preempting_plan(monkeypatch):
+    _, robot, owner = runtime()
+    entered, release = threading.Event(), threading.Event()
+    start = owner.behaviors.start
+
+    def delayed_start(*args, **kwargs):
+        entered.set()
+        assert release.wait(2)
+        return start(*args, **kwargs)
+
+    monkeypatch.setattr(owner.behaviors, "start", delayed_start)
+    pending = owner.brain.submit("Explore")
+    old_results = []
+    worker = threading.Thread(target=lambda: old_results.append(owner.brain.adopt(
+        pending["goal_id"], {"steps": [{"action": "behavior.room_cruise"}]})))
+    worker.start()
+    assert entered.wait(1)
+    # Admission has passed the Brain check, but has not installed a Behavior.
+    replacement = owner.brain.submit("Follow")
+    owner.execute("brain.adopt", {"goal_id": replacement["goal_id"],
+        "plan": {"steps": [{"action": "behavior.follow_person"}]}})
+    assert owner.brain.goal(pending["goal_id"])["lifecycle"] == "CANCELLED"
+    release.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    deadline = time.monotonic() + 2
+    while owner.brain.goal(replacement["goal_id"])["lifecycle"] == "STARTING" and time.monotonic() < deadline:
+        time.sleep(0.001)
+    assert old_results[0]["lifecycle"] == "CANCELLED"
+    assert owner.brain.goal(replacement["goal_id"])["lifecycle"] == "ACTIVE"
+    assert owner.behaviors.snapshot().goal_id == replacement["goal_id"]
+    assert [action for action, _ in robot.actions] == ["v3.command.follow_person"]
+
+
+def test_finite_admission_lineage_is_visible_before_completion_and_stop_cancels_wait(monkeypatch):
+    _, robot, owner = runtime()
+    observer = owner.observation_hub.subscribe_reliable("finite-lineage", capacity=64, topics={"r2b4.brain"})
+    entered, release = threading.Event(), threading.Event()
+    cancellations = []
+
+    def delayed_action(action, **params):
+        assert action == "v3.command.move_relative"
+        cancellations.append(params["cancel_event"])
+        params["admission_sink"]({"command_id": "finite-1", "mission_id": "mission-finite-1",
+            "runtime_pid": 123, "pose_status_monotonic_ns": robot.clock.now})
+        entered.set()
+        assert release.wait(2)
+        # Even an incorrectly late success cannot reactivate a revoked goal.
+        return {"command_id": "finite-1", "mission_id": "mission-finite-1",
+                "status": "COMPLETED", "reason": "COMPLETE"}
+
+    monkeypatch.setattr(robot, "execute", delayed_action)
+    pending = owner.brain.submit("Move")
+    owner.execute("brain.adopt", {"goal_id": pending["goal_id"], "plan": {"steps": [
+        {"action": "v3.command.move_relative", "parameters": {"forward_m": .5}}]}})
+    assert entered.wait(1)
+    admission = next(frame.payload for frame in observer.drain() if frame.payload.kind == "ACTION_ACCEPTED")
+    assert admission.state.goal_id == pending["goal_id"]
+    assert admission.state.command_id == "finite-1"
+    assert admission.state.mission_id == "mission-finite-1"
+    assert admission.state.lifecycle.value == "STARTING"
+    stopper = threading.Thread(target=lambda: owner.preempt("STOP"))
+    stopper.start()
+    assert cancellations[0].wait(1)
+    release.set()
+    stopper.join(2)
+    assert not stopper.is_alive()
+    assert owner.brain.goal(pending["goal_id"])["lifecycle"] == "CANCELLED"
+    late = next(frame.payload for frame in observer.drain() if frame.payload.kind == "ACTION_RESULT_AFTER_REVOCATION")
+    assert late.state.lifecycle.value == "CANCELLED"
+    assert late.state.command_id == admission.state.command_id

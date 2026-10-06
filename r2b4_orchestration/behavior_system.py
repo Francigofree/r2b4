@@ -397,7 +397,8 @@ class BehaviorSystem:
 
     def start(self, name: str, parameters: Mapping[str, object] | None = None,
               *, max_duration_s: float = 300.0, completion_on_duration: bool = False,
-              lineage: Mapping[str, object] | None = None) -> BehaviorSnapshot:
+              lineage: Mapping[str, object] | None = None,
+              cancel_event: threading.Event | None = None) -> BehaviorSnapshot:
         name = name.removeprefix("behavior.") if isinstance(name, str) else ""
         if (not isinstance(max_duration_s, (float, int)) or isinstance(max_duration_s, bool)
                 or not math.isfinite(max_duration_s) or not 0 < max_duration_s <= 3600):
@@ -421,6 +422,11 @@ class BehaviorSystem:
                 completion_on_duration = False
             max_duration_s = min(max_duration_s, watchdog_s)
         with self._lock:
+            # The owning Brain can revoke admission before this behavior has
+            # installed STARTING. Check under the same lock as that install so
+            # either admission observes cancellation or revoke sees the state.
+            if cancel_event is not None and cancel_event.is_set():
+                return self._state
             if name not in self._factories:
                 raise ValueError(f"unknown behavior: {name}")
             if self._state.lifecycle in _RUNNING:

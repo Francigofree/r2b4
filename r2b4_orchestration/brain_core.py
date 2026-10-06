@@ -451,13 +451,15 @@ class BrainCore:
                     return
                 goal = self._change(goal.goal_id, "SUBTASK_DISPATCHED", lifecycle=GoalLifecycle.STARTING,
                                     behavior_id=None, command_id=None, mission_id=None, reason="ACTION_STARTING")
+                cancel_event = self._cancel_event
             if step.action.startswith("behavior."):
                 duration = params.pop("max_duration_s", 300.0)
                 params.update(session_owner_pid=os.getpid(), session_watchdog_s=duration + 5.0)
                 state = self.behaviors.start(step.action, params, max_duration_s=duration,
                                             completion_on_duration=step.completion == "duration",
                                             lineage={"goal_id": goal.goal_id, "subtask_id": goal.subtask_id,
-                                                     "decision_id": goal.decision_id})
+                                                     "decision_id": goal.decision_id},
+                                            cancel_event=cancel_event)
                 with self._lock:
                     if self._current(generation) is None:
                         return
@@ -524,6 +526,8 @@ class BrainCore:
                 raise ValueError("COMMAND_IDENTITY_UNAVAILABLE")
             else:
                 with self._lock:
+                    if self._current(generation) is None:
+                        return
                     self._change(goal.goal_id, "COMMAND_ACCEPTED", lifecycle=GoalLifecycle.ACTIVE,
                                  reason="AWAITING_MISSION_COMPLETION")
         except Exception as exc:
@@ -588,6 +592,8 @@ class BrainCore:
                 return
             result = dict(getattr(state, "result", ()))
             with self._lock:
+                if self._current(generation) is None:
+                    return
                 self._change(goal.goal_id, "BEHAVIOR_RESULT", result=tuple(sorted(result.items())))
             if step.completion == "person_found" and not (result.get("target_track_id") or str(state.reason).startswith("TARGET_OBSERVED:")):
                 self.fail(goal.goal_id, "PERSON_COMPLETION_UNPROVEN")
@@ -597,6 +603,8 @@ class BrainCore:
                     self.fail(goal.goal_id, "TARGET_BINDING_UNAVAILABLE")
                     return
                 with self._lock:
+                    if self._current(generation) is None:
+                        return
                     self._change(goal.goal_id, "TARGET_BOUND", target=tuple(sorted(result.items())))
             self._advance(generation, state.reason or "BEHAVIOR_COMPLETED")
         elif state.lifecycle is BehaviorLifecycle.FAILED:
@@ -605,6 +613,8 @@ class BrainCore:
             # safety, transport, crash and identity failures remain terminal.
             if goal.attempt < step.max_retries and str(state.reason).startswith("SEARCH_PLACES_EXHAUSTED:"):
                 with self._lock:
+                    if self._current(generation) is None:
+                        return
                     self._change(goal.goal_id, "BOUNDED_RETRY", attempt=goal.attempt + 1,
                                  lifecycle=GoalLifecycle.STARTING, reason=state.reason)
                 self._start(generation)
