@@ -963,7 +963,7 @@ class TrajectoryNavigator:
                         self._person_capability_failed_mission_id = mission.mission_id
                     self._clear_trajectory_plan()
                     return self._inactive(mission, NavigationStatus.INVALIDATED, "PERSON_CAPABILITY_FAILED")
-                if world.person_detection_state in (DeviceHealthState.UNKNOWN, DeviceHealthState.DEGRADED):
+                if world.person_detection_state is DeviceHealthState.UNKNOWN:
                     self._clear_trajectory_plan()
                     return self._inactive(mission, NavigationStatus.IDLE, "PERSON_CAPABILITY_UNAVAILABLE")
             recovery = self._localization_plan(mission, estimate, world)
