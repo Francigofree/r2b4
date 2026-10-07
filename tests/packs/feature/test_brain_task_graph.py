@@ -34,7 +34,8 @@ def test_graph_finite_actions_use_node_lineage_and_preserve_all_distances():
     assert all(params["finite_timeout_s"] > 0 for _, params in robot.actions)
 
 
-def test_world_event_wakes_wait_but_stale_or_trigger_payload_does_not_decide():
+@pytest.mark.parametrize("evidence_failure", [False, True])
+def test_world_event_wakes_wait_but_stale_or_trigger_payload_does_not_decide(evidence_failure, monkeypatch):
     clock, robot, owner = runtime()
     result = graph_goal(owner, [
         {"node_id": "ready", "kind": "world_wait", "timeout_s": 5,
@@ -47,6 +48,10 @@ def test_world_event_wakes_wait_but_stale_or_trigger_payload_does_not_decide():
     owner.brain.notify("PERSON_FOUND")
     owner.brain.step()
     assert robot.actions == []
+    if evidence_failure:
+        def broken_sink(*args, **kwargs):
+            raise OSError("passive evidence unavailable")
+        monkeypatch.setattr(owner, "_queue_evidence", broken_sink)
     owner.world.observe("door", "open", True, domain="door_state", source="test",
                         measurement_time_ns=clock.now, confidence=1, lineage=("door-observation:1",))
     wait_for(lambda: owner.brain.goal(result["goal_id"])["lifecycle"] == "COMPLETED")

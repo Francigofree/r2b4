@@ -273,17 +273,17 @@ class PublicRobotRuntime:
                 self._world_evidence_pending += 1
 
     def _world_event(self, event: object) -> None:
-        self._queue_evidence("observation", event)
         brain = getattr(self, "brain", None)
         if brain is not None:
             brain.notify("WORLD_FACT_UPDATED")
+        self._queue_evidence("observation", event)
 
     def _behavior_event(self, event: object) -> None:
         # Revocation and STOP never wait for filesystem evidence writes.
-        self._queue_evidence("behavior", event)
         brain = getattr(self, "brain", None)
         if brain is not None:
             brain.notify("BEHAVIOR_UPDATED")
+        self._queue_evidence("behavior", event)
 
     def _brain_event(self, event: object) -> None:
         self._queue_evidence("brain", event)
