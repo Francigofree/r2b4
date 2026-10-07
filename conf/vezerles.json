@@ -223,7 +223,7 @@
   },
   "layers": {
     "admission": {
-      "max_sample_age_ns": 500000000,
+      "max_sample_age_ns": 250000000,
       "max_future_skew_ns": 10000000
     },
     "estimation": {
@@ -439,8 +439,8 @@
       "integrator_limit": 0.75,
       "max_normalized_output": 1.0,
       "max_control_gap_ns": 250000000,
-      "max_feedback_uncertainty_ns": 500000000,
-      "max_feedback_age_ns": 500000000
+      "max_feedback_uncertainty_ns": 250000000,
+      "max_feedback_age_ns": 250000000
     },
     "lidar_safety": {
       "minimum_clearance_m": 0.4,
