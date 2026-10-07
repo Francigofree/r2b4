@@ -391,6 +391,9 @@ def test_semantic_brain_goal_uses_real_public_navigation_session_transaction(adm
                             adapters=(OperatorInterfaceAdapter(controller), V3ControlInterfaceAdapter(controller)),
                             upper_runtime=False)
     owner = PublicRobotRuntime(facade, world=world, clock_ns=clock)
+    owner.ingest_status({"monotonic_ns": clock.now, "tick_id": 1,
+        "estimate": {"frame_id": "R2B4_BOOT_ROBOT_MAP", "localization_quality": {"generation": 1}},
+        "world": {"frame_id": "R2B4_BOOT_ROBOT_MAP"}}, runtime_pid=123)
     pending = owner.brain.submit("Menj a konyhába.")
     goal = owner.brain.adopt(pending["goal_id"], plan())
     if admission_pid == 123:

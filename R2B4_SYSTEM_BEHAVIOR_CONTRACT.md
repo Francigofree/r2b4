@@ -260,7 +260,8 @@ A V3 lokális world, navigation, trajectory, recovery, constraint, hard safety
 
 ```text
 Human / Voice / CLI / autonomous event
-  → HRI → Brain input → Agent proposal → Brain admission
+  → HRI → Brain goal ownership → Local Task Planner
+  → optional Agent proposal → validated TaskGraph → Brain executive
   → canonical action / Behavior → RobotInterface → V3 → hardware
   → completed state / result / event → Brain → HRI
 STOP → canonical immediate STOP + felső intent revocation
@@ -282,6 +283,14 @@ A Brain közös memóriája a Public World Model: személyek, helyek, tárgyak,
 tények, current/stale observation, preference és task/goal history.
 Agent, Behavior és ER2 nem tart fenn párhuzamos szemantikus robotvilágot.
 A V3 lokális operational worldje továbbra is külön execution-world.
+
+A Local Task Planner a meglévő capabilitykből és deklarált skill methodokból
+stateless, hierarchikus TaskGraph-javaslatot készít. Egyszerű, lokálisan
+feloldható cél nem igényel LLM-et. Az Agent csak fel nem oldott nyelvi vagy
+szemantikai kérdésnél, indokolt replannél ad javaslatot; a Brain validálja és
+birtokolja a graph admissiont, feltételeket, lifecycle-t, deadline-t, bounded
+retryt és cancellationt. World- és behavior-változás közvetlenül ébresztheti
+az executive-et; passzív evidence fogyasztó nem lesz execution-feltétel.
 
 Brain/runtime crash esetén a fizikai command authority megszűnik a canonical
 fail-safe úton. Restart után memória visszatölthető, de a régi aktív goal
@@ -485,7 +494,28 @@ goalt; a Behavior System a rábízott részfeladaton belül választ következő
 intentet. Az Agent értelmez és tervez; safety-, motor-,
 lokális obstacle- vagy localization-authorityt egyik felső komponens sem kap.
 
-V3/sensor → completed observations → Public World Model az alapirány.
+A **Spatial Service / persistent Global Spatial Model** hivatalos, külön
+host subsystem, amely RobotInterface-en át olvasható és lekérdezhető.
+Nem része a V3 L0–L12 láncnak és nem a Local Task Planner tulajdona.
+A meglévő L3 lokalizációs és L4 operational-world eredményekből, valamint a
+Public World elfogadott tényeiből származtatott tartós hely-, entity-location-
+és explicit topológiai indexet tart fenn. Nem új szemantikus világ, saját
+szenzorpipeline, SLAM, costmap, localization vagy navigation authority.
+Brain, planner, Agent és behavior ugyanazt a származtatott modellt kérdezheti;
+Spatial Service nem ír vissza konkurrens tényt a Public Worldbe.
+
+A tartós térbeli evidence megőrzi az eredeti measurement/observation időt,
+clock epochot, source sequence/revisiont, Public World revisiont, frame/runtime
+scope-ot, lokalizációs generationt és lineage-et. Polling, indexépítés és
+restore nem friss measurement. Stale vagy korábbi runtime/frame/generation
+adat név- és keresési hipotézisként megőrizhető, de aktuális koordinátának
+nem minősíthető új, korrelált source-evidence nélkül. Restart nem folytat
+korábbi motiont; a fizikai cél elfogadása és a friss lokális geometria továbbra
+is a canonical RobotInterface/V3 execution határán dől el.
+
+V3 L3/L4 → completed observations → Public World Model → Spatial Service
+a térbeli tudás alapiránya; a Spatial Service completed L3/L4 contextet is
+olvashat a származtatott evidence érvényességének minősítéséhez.
 Visszafelé csak cél, régió, waypoint, constraint vagy preferencia kérhető a
 canonical command úton. A tartós szemantikai tudás nem írhatja felül a friss
 lokális geometriát vagy safety döntést. World Model-, behavior-, LLM-, hálózat-,

@@ -424,6 +424,12 @@ def test_search_person_uses_runtime_injected_public_world_through_real_facade():
 
     facade = RobotInterface(controller=backend, adapters=(PublicBackendAdapter(backend),), upper_runtime=False)
     runtime = PublicRobotRuntime(facade, world=world, clock_ns=clock)
+    # Real resident status includes both pose frames and localization generation.
+    # A semantic navigation request needs a completed current spatial context.
+    backend.status["estimate"]["localization_quality"]["generation"] = 0
+    backend.status["estimate"]["global_pose"] = {
+        "frame_id": "R2B4_BOOT_ROBOT_MAP", "x_m": 1.0, "y_m": 2.0, "yaw_rad": 0.2}
+    runtime.ingest_status(backend.status, runtime_pid=123)
     starting = runtime.execute("behavior.start", {"name": "search_person", "entity_id": "person:laci"})
     assert starting["lifecycle"] == "STARTING"
     assert backend.actions[0][0] == "v3.command.navigate"

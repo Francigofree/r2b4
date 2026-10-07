@@ -20,6 +20,7 @@ from types import MappingProxyType
 from typing import Protocol
 
 from r2b4_orchestration.world_model import WorldQuery, WorldQueryResult
+from r2b4_orchestration.spatial_service import SpatialQuery, SpatialQueryResult
 
 
 BEHAVIOR_SCHEMA = "R2B4_BEHAVIOR_STATE_V1"
@@ -30,6 +31,7 @@ class RobotOperations(Protocol):
     def capabilities(self) -> Mapping[str, object]: ...
     def read(self, resource: str) -> object: ...
     def query(self, query: WorldQuery) -> WorldQueryResult: ...
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult: ...
     def execute(self, action: str, **parameters: object) -> object: ...
     def stop(self) -> object: ...
 
@@ -281,6 +283,15 @@ class _ProgramPort:
             self._owner._world_revision = result.revision
             self._owner._world_epoch = result.clock_epoch
             self._owner._world_queries.append(reference)
+        return result
+
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult:
+        if not isinstance(query, SpatialQuery):
+            raise ValueError("behavior requires a typed spatial query")
+        result = self._check().spatial_query(query)
+        if not isinstance(result, SpatialQueryResult) or result.query != query:
+            raise ValueError("behavior requires the completed typed spatial query result")
+        self._check()  # A revoked callback cannot use a late query result.
         return result
 
     def execute(self, action: str, **parameters: object) -> object:

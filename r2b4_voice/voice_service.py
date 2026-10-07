@@ -1226,7 +1226,6 @@ def main(argv: list[str] | None = None) -> int:
         groq_key = _setting(project_env, "GROQ_API_KEY")
         gemini_key = _setting(project_env, "GEMINI_API_KEY")
         provider, model, llm_key = _resolved_llm(project_env)
-        auth = llm_auth_summary(root, project_env=project_env)
         action_mode = (args.action_mode or _setting(project_env, "R2B4_VOICE_ACTION_MODE") or DEFAULT_ACTION_MODE).strip().lower()
         if action_mode not in {"shadow", "execute"}:
             raise RuntimeError("R2B4_VOICE_ACTION_MODE must be shadow or execute")
@@ -1236,8 +1235,6 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("voice action watchdog must be within [1, 600] seconds")
         if not groq_key:
             raise RuntimeError("GROQ_API_KEY is required for STT")
-        if auth.get("llm_ready") is not True:
-            raise RuntimeError("no usable LLM authentication; run ./r chatgpt login or configure a fallback API key")
         transcriber = GroqWakeTranscriber(api_key=groq_key)
         tts = build_tts_client(
             root,

@@ -1,9 +1,9 @@
 """Minimal system entry routing for natural-language R2B4 requests.
 
-Human language is no longer classified into detailed execution modes with a
-large regex grammar.  Exact STOP remains a deterministic local fast-path;
-everything else goes to the provider-neutral Agent Core, which may answer, use
-R2B4 tools, propose a canonical action or delegate to ER2.
+Exact STOP remains an immediate deterministic fast-path. Other requests enter
+the Brain-owned conversation service, whose stateless Local Task Planner first
+resolves known capabilities. Unresolved semantics reach the provider-neutral
+Agent Core as bounded proposals or answers.
 
 Legacy mode enum members remain for compatibility with explicit/internal plans.
 """
@@ -84,11 +84,11 @@ def is_stop_intent(text: str) -> bool:
 
 
 class ExecutionModeSelector:
-    """Deterministic entry gate: exact STOP or Agent Core.
+    """Deterministic entry gate: exact STOP or Brain conversation ingress.
 
     This component intentionally does not try to understand open-ended human
-    language. Semantic routing is an Agent Core/provider responsibility; actual
-    capabilities remain enforced by local R2B4 code.
+    language. Local task resolution and specialist escalation happen inside the
+    conversation service; actual admission remains Brain-owned.
     """
 
     def select(self, text: str, *, source: str = "human") -> ExecutionPlan:

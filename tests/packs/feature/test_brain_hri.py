@@ -85,10 +85,10 @@ def test_conversation_submits_pending_before_model_and_never_executes_proposal(t
         journal=ConversationJournal(tmp_path / "journal"), brain_interface=Brain(),
     )
     try:
-        turn = service.submit_text("Menj körbe 50 másodpercig.", source="launcher")
+        turn = service.submit_text("Indítsd el a szoba felfedezését 50 másodpercig.", source="launcher")
         result = service.wait_for_turn(turn, timeout_s=2)
         assert result["goal_id"] == "goal-1"
-        assert calls[0][1]["text"] == "Menj körbe 50 másodpercig."
+        assert calls[0][1]["text"] == "Indítsd el a szoba felfedezését 50 másodpercig."
         if decision.robot_action:
             assert len(calls) == 1
             assert result["proposed_action"]["parameters"]["max_duration_s"] == 50

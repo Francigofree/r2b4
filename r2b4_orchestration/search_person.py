@@ -24,6 +24,7 @@ from r2b4_orchestration.world_model import (
     WorldQuery,
     WorldQueryResult,
 )
+from r2b4_orchestration.spatial_service import SpatialQuery
 
 
 _LOCAL_FRAMES = ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL")
@@ -132,6 +133,13 @@ class SearchPerson:
         if (target is None or fact.observation.validity_scope is None
                 or fact.observation.validity_scope.runtime_pid != scope.runtime_pid):
             raise ValueError("candidate place location is no longer available in the current runtime scope")
+        spatial = robot.spatial_query(SpatialQuery(entity_id=place, require_current=True, limit=1))
+        if not any(entity.entity_id == place and any(candidate.attribute == "location"
+                   and candidate.observation == fact.observation
+                   and candidate.state in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
+                   and candidate.freshness == "FRESH" for candidate in entity.facts)
+                   for entity in spatial.entities):
+            raise ValueError("STALE_WORLD:candidate place has no current spatial evidence")
         expected_pid = scope.runtime_pid
         mode, hz = runtime.get("capture_mode"), runtime.get("capture_hz")
         if mode not in {"alap", "full", "nincs"} or type(hz) is not int or hz <= 0:

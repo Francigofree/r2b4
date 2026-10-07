@@ -6,6 +6,13 @@ from dataclasses import dataclass
 import threading
 import time
 
+from .local_task_planner import LocalResolution, LocalTaskPlanner
+
+
+def resolve_brain_request(interface: object, text: str, *, goal_id: str | None = None) -> LocalResolution:
+    """Resolve a pending request locally; the result is still only a proposal."""
+    return LocalTaskPlanner().resolve(text, interface, goal_id=goal_id)
+
 
 @dataclass(frozen=True, slots=True)
 class BrainAdoption:
@@ -162,4 +169,4 @@ class BrainGoalObserver:
                 continue
 
 
-__all__ = ["BrainAdoption", "BrainGoalObserver", "adopt_brain_result", "wait_for_brain_goal"]
+__all__ = ["BrainAdoption", "BrainGoalObserver", "adopt_brain_result", "resolve_brain_request", "wait_for_brain_goal"]

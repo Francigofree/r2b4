@@ -18,6 +18,7 @@ import uuid
 
 if TYPE_CHECKING:
     from r2b4_orchestration.world_model import WorldQuery, WorldQueryResult
+    from r2b4_orchestration.spatial_service import SpatialQuery, SpatialQueryResult
 
 from v3.action_catalog import ACTION_CATALOG_SCHEMA, action_catalog_jsonable
 from v3.interface_adapters import build_adapters
@@ -252,6 +253,13 @@ class RobotInterface:
         if capability.get("supported") is not True or capability.get("available") is not True:
             raise RobotInterfaceError("public world query unavailable: " + str(capability.get("reason") or "UNAVAILABLE"))
         return adapter.query(query)
+
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult:
+        """Read the independent host spatial subsystem's derived knowledge."""
+        adapter, capability = self._resolve("spatial.query", expected_kind="read")
+        if capability.get("supported") is not True or capability.get("available") is not True:
+            raise RobotInterfaceError("spatial query unavailable: " + str(capability.get("reason") or "UNAVAILABLE"))
+        return adapter.spatial_query(query)
 
     def execute(self, action: str, **parameters: object) -> object:
         return self._execute_observed(action, parameters)

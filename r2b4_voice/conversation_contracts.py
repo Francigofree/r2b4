@@ -42,12 +42,23 @@ def goal_plan_copy(value: object) -> dict[str, object]:
     if len(payload.encode()) > 32_768:
         raise ConversationContractError("goal_plan exceeds its bound")
     detached = json.loads(payload)
-    steps = detached.get("steps")
-    if not isinstance(steps, list) or not 1 <= len(steps) <= 16:
-        raise ConversationContractError("goal_plan requires 1..16 steps")
-    if any(not isinstance(step, dict) or not isinstance(step.get("action"), str)
-           or not isinstance(step.get("parameters", {}), dict) for step in steps):
-        raise ConversationContractError("goal_plan step requires action and parameters")
+    if "nodes" in detached:
+        if "steps" in detached:
+            raise ConversationContractError("goal_plan cannot mix steps and nodes")
+        # The authoritative graph parser and Brain admission validate node
+        # semantics; conversation only detaches the bounded proposal envelope.
+        nodes = detached["nodes"]
+        if (not isinstance(nodes, list) or not 1 <= len(nodes) <= 32
+                or any(not isinstance(node, dict) for node in nodes)
+                or not isinstance(detached.get("entry"), str)):
+            raise ConversationContractError("goal_plan requires 1..32 nodes and an entry")
+    else:
+        steps = detached.get("steps")
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 16:
+            raise ConversationContractError("goal_plan requires 1..16 steps")
+        if any(not isinstance(step, dict) or not isinstance(step.get("action"), str)
+               or not isinstance(step.get("parameters", {}), dict) for step in steps):
+            raise ConversationContractError("goal_plan step requires action and parameters")
     if not isinstance(detached.get("constraints", {}), dict):
         raise ConversationContractError("goal_plan constraints must be an object")
     return detached

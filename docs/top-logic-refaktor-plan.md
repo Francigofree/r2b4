@@ -2,6 +2,41 @@
 
 
 
+## Elfogadott célarchitektúra-kiegészítés
+
+A Spatial Service / persistent Global Spatial Model a célarchitektúra
+hivatalos, külön host subsystemje, amely a RobotInterface-en át érhető el.
+Nem kerül a V3-ba vagy a Local Task Plannerbe. A meglévő completed L3/L4
+eredményekből és Public World-tényekből származtat tartós hely-, entity-location-
+és explicit topológiai modellt: nem épít új világot vagy szenzorpipeline-t.
+A Public World marad a tények authorityja, V3 a friss operational geometry és
+a fizikai végrehajtás authorityja. Régi runtime/frame/generation evidence
+megmaradhat térbeli emlékként, de friss source revalidation nélkül nem ad
+aktuális koordinátát vagy motion-authorityt.
+
+A célok útja: Brain goal ownership → Local Task Planner → szükség esetén
+Agent proposal → validált TaskGraph → event-driven Brain executive.
+A Spatial Service a planner és a Brain által lekérdezhető subsystem; nem
+új executive-réteg. A konkrét host API: `spatial.snapshot` és typed
+`RobotInterface.spatial_query(SpatialQuery(...))`, V3-tól függetlenül.
+
+Az implementált lokális módszerek a canonical motiont, ismert helyhez/tárgyhoz
+navigációt, körülnézést, bounded keresést, pontos search→follow bindingot,
+NO_PATH recoveryt és a rögzített goal-originhez visszatérést komponálják.
+A helyenkénti keresés egy tervben legfeljebb hat ismert helyet jár be; nagyobb
+vagy kétértelmű kérést nem csonkít csendben. A lokális nyelvi feloldás deklarált
+magyar/angol mintákra korlátozott; a feloldatlan szemantika specialistához megy,
+a hiányzó vagy többértelmű navigációs referens tisztázást igényel.
+
+A körülnézés öt friss, külön frame-et és a köztes négy canonical fordulást
+igazolja, az eredeti kamera- és completed L3 pose-reference lineage-ével.
+A még végre nem hajtott scan jövőbeli képeinek VLM-elemzése külön, jelenleg
+nem publikált capability; puszta megfigyelés nem bizonyít vizuális állítást.
+A részben végrehajtott relatív move/turn teljes távval történő automatikus
+újrakezdése tiltott; progress-aware remaining-target recovery nincs bevezetve.
+Élő hardveres, hálózati provider- és performance evidence külön validációt
+igényel; a host refaktor szoftveres tesztjei ezeket nem helyettesítik.
+
 ┌──────────────────────────────────────────────┐
 │                 GOAL INPUT                   │
 │                                              │
@@ -713,8 +748,8 @@ Ez jelenleg az R2B4 legnagyobb kihasználatlan potenciálja.
         RobotInterface
         /      |      \
        /       |       \
- Public     Spatial      V3
- World      Service    Runtime
+Public     Spatial      V3
+World      Service    Runtime
               │          │
               │          ▼
               │      Local World
@@ -723,8 +758,4 @@ Ez jelenleg az R2B4 legnagyobb kihasználatlan potenciálja.
               │      Safety
               │
               ▲
-        passive V3 evidence
-
-
-
-        
+        completed L3/L4 + Public World evidence

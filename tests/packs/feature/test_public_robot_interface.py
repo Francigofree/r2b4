@@ -31,6 +31,9 @@ class Controller:
     def current_capture_mode(self):
         return "nincs"
 
+    def current_capture_hz(self):
+        return 10
+
     def current_capture_path(self):
         return None
 

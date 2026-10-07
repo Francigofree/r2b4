@@ -294,6 +294,14 @@ orchestration a `R2B4_SYSTEM_BEHAVIOR_CONTRACT.md` szerinti host felelősség.
 Completed observationt fogyasztanak, canonical intentet kérhetnek; V3 nem
 importálja őket, nem vár rájuk és safety/control működése nem függ tőlük.
 
+A Spatial Service / persistent Global Spatial Model RobotInterface-en
+elérhető külön host subsystem a rendszerszintű behavior contract szerint.
+Nem kerül V3-ba vagy a Local Task Plannerbe. A meglévő completed L3/L4
+eredmény és Public World evidence származtatott, tartós térbeli indexe;
+nincs saját szenzor-, SLAM-, lokális world-, navigation- vagy motion-authorityja.
+Eredeti measurement/epoch/frame/runtime/generation/revision lineage-et őriz;
+régi térbeli memória nem minősíthető friss lokális motion-evidence-nek.
+
 A V3 bemenete canonical command/mission intent, kért constraint és opcionális immutable behavior-preferencia vagy lokális cél. A caller a szándékot és a preferenciát adja; nem injektálhat trajectory-, kerék-, PWM- vagy safety-döntést downstream rétegbe. A profil egy logical command identity része, heartbeat közben nem változhat ugyanazon ID alatt.
 
 A V3 a lezárt inputból és saját owned state-ből bounded, determinisztikus mozgást vagy explicit HOLD/STOP/FAULT eredményt ad. A fizikai realizálhatóságot, lokalizációs és gyorsulási korlátokat, final safetyt és motor-realizációt a canonical L0–L12 lánc érvényesíti; a completed eredmény és lineage passzív evidence-ként megfigyelhető. Nem garantálhat pozitív mozgást vagy a behavior cél teljesülését elégtelen evidence vagy fizikailag lehetetlen kérés esetén.

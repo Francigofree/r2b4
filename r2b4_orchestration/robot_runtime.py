@@ -29,13 +29,14 @@ from r2b4_orchestration.behavior_system import BehaviorSystem
 from r2b4_orchestration.brain_core import BrainCore
 from r2b4_orchestration.world_model import PublicWorldModel, WorldQuery, WorldQueryResult
 from r2b4_orchestration.semantic_projector import SemanticProjector
+from r2b4_orchestration.spatial_service import SpatialQuery, SpatialQueryResult, SpatialService
 
 SCHEMA = "R2B4_PUBLIC_ROBOT_RUNTIME_V1"
 MAX_REQUEST_BYTES = 65_536
 MAX_REPLY_BYTES = 1_048_576
 READS = frozenset({"robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history",
-                   "brain.state", "brain.history"})
-QUERIES = frozenset({"world.query"})
+                   "brain.state", "brain.history", "spatial.snapshot"})
+QUERIES = frozenset({"world.query", "spatial.query"})
 ACTIONS = frozenset({"world.observe", "behavior.room_cruise", "behavior.follow_person",
                      "behavior.search_person", "behavior.search_any_person", "behavior.start", "behavior.cancel",
                      "brain.submit", "brain.adopt", "brain.fail", "brain.cancel"})
@@ -145,6 +146,11 @@ class PublicRobotClient:
             raise TypeError("public world query must be a WorldQuery")
         return WorldQueryResult.from_jsonable(self.request("query", query=query.to_jsonable()))
 
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult:
+        if not isinstance(query, SpatialQuery):
+            raise TypeError("spatial query must be a SpatialQuery")
+        return SpatialQueryResult.from_jsonable(self.request("spatial_query", query=query.to_jsonable()))
+
     def revoke(self, reason: str) -> object:
         try:
             return self.request("revoke", launch=False, timeout_s=0.5, reason=reason)
@@ -177,6 +183,7 @@ class PublicRobotRuntime:
         self.root = root
         self.clock_ns = clock_ns
         self.world = world or PublicWorldModel(clock_ns=clock_ns)
+        self.spatial = SpatialService(self.world, clock_ns=clock_ns)
         self._state_lock = threading.RLock()
         self._storage_lock = threading.Lock()
         self._action_lock = threading.RLock()
@@ -225,6 +232,8 @@ class PublicRobotRuntime:
                         raise ValueError("saved world exceeded its bound")
                     saved = json.loads(path.read_text())
                     self.world.restore(saved)
+                    if "spatial" in saved:
+                        self.spatial.restore(saved["spatial"])
                     if "brain" in saved and self.brain.restore(saved["brain"]):
                         self.interface.stop()
                 except (OSError, TypeError, ValueError, KeyError) as exc:
@@ -265,10 +274,16 @@ class PublicRobotRuntime:
 
     def _world_event(self, event: object) -> None:
         self._queue_evidence("observation", event)
+        brain = getattr(self, "brain", None)
+        if brain is not None:
+            brain.notify("WORLD_FACT_UPDATED")
 
     def _behavior_event(self, event: object) -> None:
         # Revocation and STOP never wait for filesystem evidence writes.
         self._queue_evidence("behavior", event)
+        brain = getattr(self, "brain", None)
+        if brain is not None:
+            brain.notify("BEHAVIOR_UPDATED")
 
     def _brain_event(self, event: object) -> None:
         self._queue_evidence("brain", event)
@@ -302,7 +317,9 @@ class PublicRobotRuntime:
 
     def ingest_status(self, status: Mapping[str, object], *, runtime_pid: object = None) -> None:
         """Consume completed status; preserve source times, frame and session."""
+        self.spatial.completed_status(status, runtime_pid=runtime_pid)
         self.projector.completed_status(status, runtime_pid=runtime_pid)
+        self.spatial.sync_world()
 
     def poll(self) -> None:
         try:
@@ -377,8 +394,9 @@ class PublicRobotRuntime:
         self._last_persist_ns = now
         state = self.world.export_state()
         state["brain"] = self.brain.export_state()
+        state["spatial"] = self.spatial.export_state()
         revision = (state.get("world_revision", state.get("revision")), state.get("event_sequence"),
-                    state["brain"]["revision"])
+                    state["brain"]["revision"], state["spatial"]["revision"])
         if revision == self._persisted_revision:
             return
         directory = self.root / "runtime" / "public_world"
@@ -404,6 +422,8 @@ class PublicRobotRuntime:
                 return self.world.snapshot().to_jsonable()
             if resource == "world.history":
                 return _jsonable(self.world.history())
+            if resource == "spatial.snapshot":
+                return self.spatial.snapshot()
             if resource == "behavior.state":
                 return self.behaviors.snapshot().to_jsonable()
             if resource == "behavior.history":
@@ -415,6 +435,7 @@ class PublicRobotRuntime:
             if resource == "robot.state":
                 return {"schema": SCHEMA, "observation_time_ns": self.clock_ns(),
                         "world": self.world.snapshot().to_jsonable(),
+                        "spatial": self.spatial.snapshot(),
                         "brain": self.brain.snapshot(),
                         "active_behavior": self.behaviors.snapshot().to_jsonable(),
                         "active_mission": self.world.read("robot", "mission").to_jsonable(),
@@ -425,6 +446,10 @@ class PublicRobotRuntime:
     def query(self, query: WorldQuery) -> WorldQueryResult:
         with self._state_lock:
             return self.world.query(query)
+
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult:
+        with self._state_lock:
+            return self.spatial.query(query)
 
     def preempt(self, reason: str) -> object:
         self.revoke(reason)
@@ -551,6 +576,11 @@ class PublicRobotInterfaceAdapter:
             raise TypeError("public world query must be a WorldQuery")
         return WorldQueryResult.from_jsonable(self.client.request("query", query=query.to_jsonable()))
 
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult:
+        if not isinstance(query, SpatialQuery):
+            raise TypeError("spatial query must be a SpatialQuery")
+        return SpatialQueryResult.from_jsonable(self.client.request("spatial_query", query=query.to_jsonable()))
+
     def execute(self, action: str, **parameters: object) -> object:
         return self.client.request("execute", action=action, parameters=parameters)
 
@@ -576,6 +606,11 @@ class PublicRobotStateAdapter:
     def query(self, query: WorldQuery) -> WorldQueryResult:
         result = self.runtime.query(query)
         self.runtime._queue_evidence("world_query", result)
+        return result
+
+    def spatial_query(self, query: SpatialQuery) -> SpatialQueryResult:
+        result = self.runtime.spatial_query(query)
+        self.runtime._queue_evidence("spatial_query", result)
         return result
 
     def execute(self, action: str, **parameters: object):
@@ -615,6 +650,8 @@ def serve(root: Path, socket_path: Path) -> int:
                         result = runtime.read(request["resource"])
                     elif operation == "query":
                         result = runtime.query(WorldQuery.from_jsonable(request.get("query"))).to_jsonable()
+                    elif operation == "spatial_query":
+                        result = runtime.spatial_query(SpatialQuery.from_jsonable(request.get("query"))).to_jsonable()
                     elif operation == "execute" and request.get("action") in ACTIONS:
                         result = runtime.execute(request["action"], request.get("parameters", {}))
                     elif operation == "preempt":

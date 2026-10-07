@@ -5,6 +5,7 @@ import pytest
 
 from r2b4_orchestration.behavior_system import BehaviorLifecycle, BehaviorSystem
 from r2b4_orchestration.search_person import SearchPerson
+from r2b4_orchestration.spatial_service import SpatialService
 from r2b4_orchestration.world_model import PublicWorldModel
 
 
@@ -22,6 +23,9 @@ class Robot:
         self.stops = 0
         self.on_observe = None
         self.runtime_pid = 123
+        self.localization_generation = 1
+        self.spatial = SpatialService(world, clock_ns=clock)
+        self.spatial.completed_status(self.spatial_status(), runtime_pid=self.runtime_pid)
         self.status = {}
 
     def capabilities(self):
@@ -29,6 +33,16 @@ class Robot:
 
     def query(self, query):
         return self.world.query(query)
+
+    def spatial_status(self):
+        return {"monotonic_ns": self.clock.now, "tick_id": self.clock.now,
+                "estimate": {"frame_id": "R2B4_BOOT_ROBOT_MAP",
+                             "localization_quality": {"generation": self.localization_generation}},
+                "world": {"frame_id": "R2B4_BOOT_ROBOT_MAP"}}
+
+    def spatial_query(self, query):
+        self.spatial.completed_status(self.spatial_status(), runtime_pid=self.runtime_pid)
+        return self.spatial.query(query)
 
     def read(self, resource):
         if resource == "world.snapshot":
@@ -237,4 +251,31 @@ def test_runtime_change_before_next_region_fails_without_navigation():
     failed = system.step()
     assert failed.lifecycle is BehaviorLifecycle.FAILED
     assert len(robot.actions) == 2  # Only first region and its camera observation.
+    assert robot.stops == 1
+
+
+def test_localization_generation_change_before_next_region_does_not_reuse_persistent_coordinates():
+    _, _, robot, system = setup_search()
+    system.start("search_person", {"entity_id": "person:laci", "max_observation_steps": 1})
+    robot.advance(complete=True)
+    system.step()
+    robot.localization_generation += 1
+    robot.advance()
+    failed = system.step()
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert len(robot.actions) == 2  # Initial navigation and one observation.
+    assert robot.stops == 1
+
+
+def test_restored_spatial_coordinates_cannot_start_search_in_same_runtime():
+    _, world, robot, system = setup_search()
+    robot.spatial.sync_world()
+    saved = robot.spatial.export_state()
+    restored = SpatialService(world, clock_ns=robot.clock)
+    restored.restore(saved)
+    restored.completed_status(robot.spatial_status(), runtime_pid=robot.runtime_pid)
+    robot.spatial = restored
+    failed = system.start("search_person", {"entity_id": "person:laci"})
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert robot.actions == []
     assert robot.stops == 1

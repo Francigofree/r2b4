@@ -1,4 +1,4 @@
-"""RobotInterface adapter and composition for host-side R2B4 Agent Core conversation."""
+"""RobotInterface composition for local task planning and on-demand specialists."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from r2b4_orchestration.agent_tools import build_default_agent_tools
 
 from .conversation_journal import ConversationJournal
 from .conversation_service import ConversationService, ConversationServiceConfig
-from .llm_provider import build_llm_client
+from .llm_provider import build_llm_client, default_model_for, resolve_llm_provider
 from .prompting import PromptAssembler
 from .robot_context import RobotContextBuilder
 
@@ -41,7 +41,7 @@ class ConversationInterfaceAdapter:
                 "available": running,
                 "ready": running,
                 "reason": None if running else "CONVERSATION_SERVICE_NOT_RUNNING",
-                "description": "Submit one user text turn into the R2B4 Agent Core conversation orchestrator.",
+                "description": "Submit one Brain-owned text request for local planning or specialist interpretation.",
                 "parameters": {"text": "string", "source": "string=stt"},
                 "agent_mode": "DEVELOPER" if self.developer_mode else "RUNTIME",
             },
@@ -85,6 +85,30 @@ class ConversationInterfaceAdapter:
             "status": "ACCEPTED", "turn_id": turn_id, "action_mode": "PROPOSAL_ONLY",
             "agent_mode": "DEVELOPER" if self.developer_mode else "RUNTIME",
         }
+
+
+class _OnDemandLLM:
+    """Authentication/provider initialization belongs to specialist escalation."""
+
+    def __init__(self, **settings):
+        self._settings = settings
+        self._client = None
+        self._configured_model = settings.get("model") or default_model_for(resolve_llm_provider(settings.get("provider")))
+
+    @property
+    def model(self):
+        return self._client.model if self._client is not None else self._configured_model
+
+    def _get(self):
+        if self._client is None:
+            self._client = build_llm_client(**self._settings)
+        return self._client
+
+    def complete(self, messages):
+        return self._get().complete(messages)
+
+    def complete_agent_step(self, *args, **kwargs):
+        return self._get().complete_agent_step(*args, **kwargs)
 
 
 @dataclass(slots=True)
@@ -178,11 +202,11 @@ def build_voice_interface(
     developer_mode: bool = False,
     service_config: ConversationServiceConfig = ConversationServiceConfig(),
 ) -> VoiceInterfaceBundle:
-    """Build one RobotInterface facade plus provider-neutral bounded Agent Core.
+    """Build one RobotInterface facade with local planning before Agent Core.
 
     The model receives only typed capability descriptions/results. It never gets a
-    motor/GPIO/runtime handle. Robot actions remain proposals for the existing
-    fresh-state VoiceActionExecutor gate.
+    motor/GPIO/runtime handle. Local and specialist plans remain proposals for
+    Brain admission and execution through the canonical RobotInterface.
     """
     from v3.operator_controller import OperatorController
     from v3.robot_interface import RobotInterface
@@ -195,7 +219,7 @@ def build_voice_interface(
     controller = OperatorController(project_root=root)
     core_interface = RobotInterface(project_root=root, controller=controller)
 
-    llm = build_llm_client(provider=provider, api_key=api_key, model=model, project_root=root)
+    llm = _OnDemandLLM(provider=provider, api_key=api_key, model=model, project_root=root)
     broker = AgentToolBroker(build_default_agent_tools(
         root, interface=core_interface, developer_mode=developer_mode,
     ))
