@@ -64,7 +64,8 @@ def _agent_return_code(action_status: str | None) -> int:
     # Keep pure conversation successful, but expose physical action failure to shell/automation.
     if action_status is None or action_status in {"NONE", "COMPLETED", "EXECUTED"}:
         return 0
-    if action_status.startswith("FAILED:") or action_status.startswith("REJECTED:"):
+    if (action_status.startswith(("FAILED:", "REJECTED:", "CANCELLED:", "INTERRUPTED:"))
+            or action_status == "ACTIVE:GOAL_RESULT_UNCONFIRMED"):
         return 2
     return 0
 

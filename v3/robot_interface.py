@@ -26,6 +26,60 @@ from v3.operator_controller import OperatorController, OperatorEvent
 
 ROBOT_INTERFACE_SCHEMA = "R2B4_ROBOT_INTERFACE_V2"
 _OBSERVATION_TEXT_LIMIT = 256
+_FINITE_RESULT_MAP_FIELDS = {
+    "requested": ("forward_m", "left_m", "final_yaw_rad", "angle_deg", "x_m", "y_m", "yaw_rad",
+                  "frame_id", "max_v_mps", "max_omega_rad_s"),
+    "start_pose": ("frame_id", "x_m", "y_m", "yaw_rad"),
+    "target_pose": ("frame_id", "x_m", "y_m", "yaw_rad"),
+    "final_pose": ("frame_id", "x_m", "y_m", "yaw_rad"),
+    "frame_provenance": ("frame_id", "runtime_pid", "localization_generation",
+                         "pose_status_monotonic_ns", "config_snapshot_id"),
+}
+_FINITE_RESULT_FIELDS = (
+    "status", "reason", "command_id", "mission_id", "runtime_pid", "elapsed_s", "progress",
+    "navigation_reason", "safety_reason", "completion_status_monotonic_ns",
+    "distance_requested_m", "distance_executed_m", "distance_remaining_m",
+    "angle_requested_rad", "angle_executed_rad", "angle_remaining_rad",
+)
+
+
+def _compact_finite_fields(value: object, names: tuple[str, ...]) -> tuple[tuple[str, object], ...] | None:
+    if not isinstance(value, Mapping):
+        return None
+    fields = []
+    for name in names:
+        if name not in value:
+            continue
+        field = value[name]
+        if isinstance(field, str):
+            field = field[:_OBSERVATION_TEXT_LIMIT]
+        elif type(field) in {int, float}:
+            try:
+                finite = math.isfinite(field)
+            except OverflowError:
+                finite = False
+            if not finite:
+                continue
+        elif field is not None and type(field) is not bool:
+            continue
+        fields.append((name, field))
+    return tuple(fields)
+
+
+def _compact_finite_result(value: object) -> tuple[tuple[str, object], ...]:
+    """Preserve finite execution evidence without status/world/raw payloads."""
+    if not isinstance(value, Mapping):
+        return ()
+    result = dict(_compact_finite_fields(value, _FINITE_RESULT_FIELDS) or ())
+    for name, fields in _FINITE_RESULT_MAP_FIELDS.items():
+        if name in value:
+            result[name] = _compact_finite_fields(value[name], fields)
+    return tuple(sorted(result.items()))
+
+
+def _finite_result_jsonable(value: tuple[tuple[str, object], ...]) -> dict[str, object]:
+    return {name: dict(field) if name in _FINITE_RESULT_MAP_FIELDS and isinstance(field, tuple) else field
+            for name, field in value}
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +92,7 @@ class RobotInterfaceEvent:
     resolved_action: str
     measurement_time_ns: int
     observation_time_ns: int
+    request_time_ns: int | None = None
     goal_id: str | None = None
     subtask_id: str | None = None
     decision_id: str | None = None
@@ -53,9 +108,21 @@ class RobotInterfaceEvent:
     distance_requested_m: float | None = None
     distance_executed_m: float | None = None
     distance_remaining_m: float | None = None
+    angle_requested_rad: float | None = None
+    angle_executed_rad: float | None = None
+    angle_remaining_rad: float | None = None
+    completion_status_monotonic_ns: int | None = None
+    requested: tuple[tuple[str, object], ...] | None = None
+    start_pose: tuple[tuple[str, object], ...] | None = None
+    target_pose: tuple[tuple[str, object], ...] | None = None
+    final_pose: tuple[tuple[str, object], ...] | None = None
+    frame_provenance: tuple[tuple[str, object], ...] | None = None
 
     def to_jsonable(self) -> dict[str, object]:
-        return {"schema": "R2B4_ROBOT_INTERFACE_EVENT_V1", **asdict(self)}
+        value = asdict(self)
+        for name in _FINITE_RESULT_MAP_FIELDS:
+            value[name] = None if value[name] is None else dict(value[name])
+        return {"schema": "R2B4_ROBOT_INTERFACE_EVENT_V1", **value}
 
 
 def _observation_text(value: object) -> str | None:
@@ -283,21 +350,36 @@ class RobotInterface:
                 "goal_id", "subtask_id", "decision_id", "behavior_id", "command_id", "mission_id",
             )}
             runtime_pid = field("runtime_pid")
-            distances = {}
+            compact = dict(_compact_finite_result(result))
+            provenance = compact.get("frame_provenance")
+            if runtime_pid is None and isinstance(provenance, tuple):
+                runtime_pid = dict(provenance).get("runtime_pid")
+            metrics = {}
             for name in ("distance_requested_m", "distance_executed_m", "distance_remaining_m"):
                 value = field(name)
-                distances[name] = value if type(value) in {int, float} and math.isfinite(value) and value >= 0 else None
+                metrics[name] = value if type(value) in {int, float} and math.isfinite(value) and value >= 0 else None
+            for name in ("angle_requested_rad", "angle_executed_rad", "angle_remaining_rad"):
+                value = field(name)
+                metrics[name] = value if type(value) in {int, float} and math.isfinite(value) else None
+            completion_stamp = field("completion_status_monotonic_ns")
+            if type(completion_stamp) is not int or completion_stamp < 0:
+                completion_stamp = None
+            maps = {name: compact.get(name) for name in _FINITE_RESULT_MAP_FIELDS}
+            if maps["requested"] is None:
+                maps["requested"] = _compact_finite_fields(parameters, _FINITE_RESULT_MAP_FIELDS["requested"])
             status = _observation_text(field("status")) or _observation_text(field("lifecycle"))
             sink(RobotInterfaceEvent(
                 kind=kind, request_id=request[0], action=_observation_text(action) or "",
                 resolved_action=_observation_text(resolved_action) or "",
-                measurement_time_ns=request[1], observation_time_ns=self._clock_ns(),
+                measurement_time_ns=completion_stamp if kind == "ACTION_RESULT" and completion_stamp is not None else request[1],
+                observation_time_ns=self._clock_ns(), request_time_ns=request[1],
                 **identities,
                 runtime_pid=runtime_pid if type(runtime_pid) is int and runtime_pid > 0 else None,
                 status=status, reason=_observation_text(field("reason")),
                 error_type=_observation_text(error_type),
                 error_message=_observation_text(error_message),
-                error_cause_type=_observation_text(error_cause_type), **distances,
+                error_cause_type=_observation_text(error_cause_type),
+                completion_status_monotonic_ns=completion_stamp, **metrics, **maps,
             ))
         except Exception:
             # No serialization, filesystem I/O or action-result rewriting here.

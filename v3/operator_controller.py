@@ -1375,18 +1375,22 @@ class OperatorController:
     # ------------------------------------------------------------------
 
     def wait_idle(self, timeout: float = 3.0) -> None:
-        if self._runtime_pid() is None:
+        runtime_pid = self._runtime_pid()
+        if runtime_pid is None:
             return
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             status = self._read_status_optional()
+            current_pid = self._runtime_pid()
+            if current_pid is not None and current_pid != runtime_pid:
+                raise OperatorError("runtime session changed while waiting for IDLE")
             report = status.get("report") if status is not None else None
             if (status is not None and status.get("state") == "STOPPED" and status_is_fresh(status)
                     and isinstance(report, Mapping) and report.get("status") == "PASS"
                     and report.get("termination_class") == "SHUTDOWN_SAFE_LOW"
                     and report.get("fault_layer") is None):
                 return  # The resident has already verified output-owner close.
-            if self._runtime_pid() is None:
+            if current_pid is None:
                 raise OperatorError("runtime exited without verified output-owner close")
             if status is None:
                 self._transition_sleep(0.05)
@@ -1526,7 +1530,8 @@ class OperatorController:
         except subprocess.TimeoutExpired as exc:
             raise OperatorError("control_cli STOP timed out") from exc
         if result.returncode != 0:
-            raise OperatorError(f"control_cli STOP failed: {result.stderr.strip() or result.stdout.strip()}")
+            detail = result.stderr.strip() or result.stdout.strip() or "no output"
+            raise OperatorError(f"control_cli STOP failed (returncode {result.returncode}): {detail}")
 
     def _stop_command_producers(self) -> None:
         sequence_owner = self._proba_owner()
@@ -1553,8 +1558,8 @@ class OperatorController:
 
     def _stop_control_cli_only(self) -> None:
         pid = self._read_pid_file(self.command_pid_file)
-        if pid is None or not self._pid_matches(pid, ("v3.control_cli",)):
-            pid = self._find_pid(("v3.control_cli",))
+        if pid is None or not self._command_producer_pid_matches(pid):
+            pid = self._find_command_producer_pid()
         while pid is not None:
             if pid != os.getpid():
                 try:
@@ -1564,7 +1569,44 @@ class OperatorController:
                 if not self._wait_gone(pid, 1.0):
                     raise OperatorError(f"command heartbeat did not stop (PID {pid})")
             self._unlink(self.command_pid_file)
-            pid = self._find_pid(("v3.control_cli",))
+            pid = self._find_command_producer_pid()
+
+    def _find_command_producer_pid(self) -> int | None:
+        proc = Path("/proc")
+        if not proc.is_dir():
+            return None
+        for entry in proc.iterdir():
+            if entry.name.isdigit() and self._command_producer_pid_matches(int(entry.name)):
+                return int(entry.name)
+        return None
+
+    def _command_producer_pid_matches(self, pid: int) -> bool:
+        argv = self._pid_argv(pid)
+        if argv is None or argv[1:3] != ["-m", "v3.control_cli"]:
+            return False
+        # STOP and passive clients may run concurrently with producer cleanup.
+        # Match the operation, not a token in --command-id or an option value.
+        arguments = iter(argv[3:])
+        command_path = self.command_file
+        for argument in arguments:
+            if not argument.startswith("--"):
+                return (
+                    argument in {"teleop", "navigate", "explore", "faceperson", "followperson"}
+                    and command_path == self.command_file
+                )
+            option, separator, value = argument.partition("=")
+            if option not in {
+                "--command-path", "--status-path", "--owner-pid", "--max-runtime-s",
+                "--ttl-ms", "--heartbeat-ms",
+            }:
+                return False
+            if not separator:
+                value = next(arguments, None)
+            if value is None:
+                return False
+            if option == "--command-path":
+                command_path = (self.root / value).resolve()
+        return False
 
     def _runtime_kill(self) -> None:
         pid = self._runtime_pid()
@@ -1593,18 +1635,21 @@ class OperatorController:
         return None
 
     def _pid_matches(self, pid: int, required_args: tuple[str, ...]) -> bool:
+        argv = self._pid_argv(pid)
+        return argv is not None and all(token in argv for token in required_args)
+
+    def _pid_argv(self, pid: int) -> list[str] | None:
         if pid <= 0:
-            return False
+            return None
         proc = Path("/proc") / str(pid)
         try:
             cwd = Path(os.readlink(proc / "cwd")).resolve()
             raw = (proc / "cmdline").read_bytes()
         except OSError:
-            return False
+            return None
         if cwd != self.root:
-            return False
-        argv = [part.decode("utf-8", "replace") for part in raw.split(b"\0") if part]
-        return all(token in argv for token in required_args)
+            return None
+        return [part.decode("utf-8", "replace") for part in raw.split(b"\0") if part]
 
     def _wait_gone(self, pid: int, timeout: float) -> bool:
         deadline = time.monotonic() + timeout

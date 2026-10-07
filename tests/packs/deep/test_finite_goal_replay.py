@@ -23,7 +23,7 @@ from v3.observation import ObservationHub
 from v3.replay import replay_capture
 
 
-def test_one_meter_finite_navigation_native_mcap_replay_and_evidence(tmp_path):
+def test_one_meter_then_right_turn_native_mcap_replay_and_evidence(tmp_path):
     resolved = resolved_config()
     production = resolved.runtime.composition.live_control.control
     config = replace(production, async_l6=replace(production.async_l6, enabled=False, completion_inputs=False))
@@ -39,8 +39,10 @@ def test_one_meter_finite_navigation_native_mcap_replay_and_evidence(tmp_path):
     health = tuple(DeviceHealth(name, DeviceHealthState.OK)
                    for name in sorted(set(config.critical_device_ids) | {"ENCODER", "IMU", "RPLIDAR_C1"}))
     reached = False
+    turn_target = None
+    turn_ticks = 0
     try:
-        for tick in range(450):
+        for tick in range(750):
             x += v * .02 * math.cos(yaw + omega * .01)
             y += v * .02 * math.sin(yaw + omega * .01)
             yaw += omega * .02
@@ -87,25 +89,41 @@ def test_one_meter_finite_navigation_native_mcap_replay_and_evidence(tmp_path):
                                 sample("RPLIDAR_C1", "lidar_local_points", **fields)))
                 if relative is not None:
                     samples.append(sample("RPLIDAR_C1", "lidar_relative_motion", **relative))
+            fields = (DataField("x_m", 1.), DataField("y_m", 0.)) if turn_target is None else (
+                DataField("x_m", turn_target[0]), DataField("y_m", turn_target[1]),
+                DataField("yaw_rad", turn_target[2]),
+            )
             inputs = composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
-                CommandRequest(context, "finite-one-meter", CommandMode.NAVIGATE,
-                    (DataField("x_m", 1.), DataField("y_m", 0.), DataField("frame_id", "R2B4_ODOM_LOCAL"),
-                     DataField("max_v_mps", .2), DataField("max_omega_rad_s", .6)), tick), LifecycleState.ACTIVE))
+                CommandRequest(context, "finite-one-meter" if turn_target is None else "finite-right-turn", CommandMode.NAVIGATE,
+                    (*fields, DataField("frame_id", "R2B4_ODOM_LOCAL"), DataField("max_v_mps", .2),
+                     DataField("max_omega_rad_s", config.motion_realization.wheel_limits.target_center_spin_rad_s)),
+                    tick), LifecycleState.ACTIVE))
             result = composition.run_tick(inputs)
             assert result.trace.fault_layer is None
             hub.publish(ExecutionRecord(inputs, result), topic="v3.capture_record")
             layers = {row.layer: row.output for row in result.trace.layers}
             v, omega = layers["L9"].allowed_v_mps, layers["L9"].allowed_omega_rad_s
+            if turn_target is not None and layers["L6"].status.value == "ACTIVE":
+                assert layers["L6"].progress < 1.
+                assert layers["L8"].requested_v_mps == 0.
+                assert layers["L8"].requested_omega_rad_s < 0.
+                turn_ticks += 1
             if layers["L6"].status.value == "COMPLETE":
-                assert math.hypot(1-x, y) <= layers["L5"].constraints.goal_tolerance_m
                 assert result.final_actuation.left_output == result.final_actuation.right_output == 0
+                if turn_target is None:
+                    assert math.hypot(1-x, y) <= layers["L5"].constraints.goal_tolerance_m
+                    pose = layers["L3"].in_local_frame()
+                    turn_target = pose.x_m, pose.y_m, pose.yaw_rad - math.pi / 2
+                    continue
+                error = math.atan2(math.sin(turn_target[2] - yaw), math.cos(turn_target[2] - yaw))
+                assert abs(error) <= layers["L5"].constraints.yaw_tolerance_rad
                 reached = True
                 break
     finally:
         composition.close()
         hub.close()
         capture = consumer.finish()
-    assert reached, f"finite navigation stalled at {x}, {y}"
+    assert reached and turn_ticks > 0, f"finite navigation/turn stalled at {x}, {y}, {yaw}"
     assert capture.complete and capture.replay_complete
     replay = replay_capture(capture.path, project_root=ROOT)
     assert replay["status"] == "MATCH", replay["diagnostics"]
@@ -115,4 +133,5 @@ def test_one_meter_finite_navigation_native_mcap_replay_and_evidence(tmp_path):
     verified = verify(compiled["output"], source=capture.path)
     assert verified["status"] == "PASS" and verified["quarantined"] == 0
     (tmp_path / "result.json").write_text(json.dumps({"ticks": tick+1, "distance_m": math.hypot(x, y),
+        "yaw_rad": yaw, "turn_ticks": turn_ticks,
         "replay": replay["status"], "evidence": verified["status"]}, indent=2))

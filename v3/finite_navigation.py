@@ -17,6 +17,7 @@ from v3.action_catalog import ACTION_CATALOG
 from v3.capture_rate import DEFAULT_CAPTURE_HZ
 from v3.contracts.localization import GLOBAL_FRAME_ID, LOCAL_FRAME_ID
 from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
+from v3.wheel_motion import WheelMotionLimits
 
 
 class FiniteNavigationSafetyError(RuntimeError):
@@ -46,6 +47,44 @@ def _pose_distance(first, second):
     if not all(type(value) in {int, float} and math.isfinite(value) for value in values):
         return None
     return math.hypot(values[2] - values[0], values[3] - values[1])
+
+
+def _pose_angle(first, second):
+    if not isinstance(first, Mapping) or not isinstance(second, Mapping):
+        return None
+    if not first.get("frame_id") or first.get("frame_id") != second.get("frame_id"):
+        return None
+    values = first.get("yaw_rad"), second.get("yaw_rad")
+    if not all(type(value) in {int, float} and math.isfinite(value) for value in values):
+        return None
+    return _wrap_yaw(values[1] - values[0])
+
+
+def _navigation_envelope(status: Mapping[str, object]):
+    """Read only the running session's small motion-policy leaves at the host edge."""
+    try:
+        resolved = status["effective_config"]
+        control = resolved["runtime"]["composition"]["live_control"]["control"]
+        raw = control["motion_realization"]["wheel_limits"]
+        wheels = WheelMotionLimits(**{key: raw[key] for key in (
+            "track_width_m", "minimum_mps", "maximum_mps", "target_minimum_mps",
+        )})
+        omega_cap = min(_finite(value, "runtime angular limit") for value in (
+            1.20, control["motion_realization"]["max_requested_omega_rad_s"],
+            control["operational_constraints"]["max_omega_rad_s"],
+            control["mission"]["default_constraints"]["max_omega_rad_s"],
+            resolved["edges"]["command_ingress"]["maximum_angular_speed_rad_s"],
+            2 * wheels.maximum_mps / wheels.track_width_m,
+        ))
+        constraints = control["mission"]["default_constraints"]
+        yaw_tolerance = _finite(constraints["yaw_tolerance_rad"], "runtime yaw tolerance")
+        goal_tolerance = _finite(constraints["goal_tolerance_m"], "runtime goal tolerance")
+        heading_stop = _finite(control["motion_realization"]["heading_stop_threshold_rad"], "runtime heading stop")
+        if omega_cap <= 0 or yaw_tolerance < 0 or goal_tolerance < 0 or heading_stop <= 0:
+            raise ValueError("invalid runtime motion envelope")
+        return wheels, omega_cap, yaw_tolerance, goal_tolerance, heading_stop
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("RUNTIME_MOTION_CONFIG_UNAVAILABLE") from exc
 
 
 class FiniteNavigationExecutor:
@@ -86,8 +125,9 @@ class FiniteNavigationExecutor:
                 if item.required and item.name not in params:
                     raise ValueError(f"missing required parameter: {item.name}")
             max_v = _finite(params.pop("max_v_mps", 0.20), "max_v_mps")
-            max_omega = _finite(params.pop("max_omega_rad_s", 0.60), "max_omega_rad_s")
-            if not 0.01 <= max_v <= 0.50 or not 0.01 <= max_omega <= 1.20:
+            max_omega = (_finite(params.pop("max_omega_rad_s"), "max_omega_rad_s")
+                         if "max_omega_rad_s" in params else None)
+            if not 0.01 <= max_v <= 0.50 or (max_omega is not None and not 0.01 <= max_omega <= 1.20):
                 raise ValueError("navigation speed limits must be within v=[0.01, 0.50], omega=[0.01, 1.20]")
             if action == "v3.command.move_relative":
                 forward = _finite(params.pop("forward_m"), "forward_m")
@@ -155,10 +195,21 @@ class FiniteNavigationExecutor:
                                 target["yaw_rad"] = _wrap_yaw(yaw + yaw_delta)
                         target["frame_id"] = frame_id
                         start_generation = self._generation(start_status) if frame_id == LOCAL_FRAME_ID else None
+                        wheels, runtime_cap, yaw_tolerance, goal_tolerance, heading_stop = _navigation_envelope(start_status)
+                        if max_omega is None:
+                            max_omega = min(runtime_cap, wheels.target_center_spin_rad_s)
+                        distance = _pose_distance(pose, target)
+                        yaw_error = _pose_angle(pose, target)
+                        needs_spin = yaw_error is not None and abs(yaw_error) > yaw_tolerance
+                        if distance is not None and distance > goal_tolerance:
+                            bearing = math.atan2(target["y_m"] - pose["y_m"], target["x_m"] - pose["x_m"])
+                            needs_spin |= abs(_wrap_yaw(bearing - pose["yaw_rad"])) >= heading_stop
                         if cancel_event is not None and cancel_event.is_set():
                             reason = "CANCELLED"
                         elif self._monotonic() >= deadline:
                             reason = "TIMEOUT"
+                        elif needs_spin and min(max_omega, runtime_cap) < wheels.minimum_center_spin_rad_s - 1e-12:
+                            reason = "ANGULAR_LIMIT_UNREALIZABLE"
                         else:
                             handle = self.controller.navigate(
                                 **target,
@@ -218,11 +269,18 @@ class FiniteNavigationExecutor:
             "distance_requested_m": _pose_distance(pose, target),
             "distance_executed_m": _pose_distance(pose, final_pose) if comparable else None,
             "distance_remaining_m": _pose_distance(final_pose, target) if comparable else None,
+            "angle_requested_rad": _pose_angle(pose, target),
+            "angle_executed_rad": (_pose_angle(pose, final_pose)
+                                   if comparable and target.get("yaw_rad") is not None else None),
+            "angle_remaining_rad": _pose_angle(final_pose, target) if comparable else None,
+            "runtime_pid": None if preparation is None else preparation.runtime_pid,
+            "completion_status_monotonic_ns": final.get("monotonic_ns"),
             "frame_provenance": {
                 "frame_id": target.get("frame_id", frame_id),
                 "runtime_pid": None if preparation is None else preparation.runtime_pid,
                 "localization_generation": start_generation,
                 "pose_status_monotonic_ns": start_status.get("monotonic_ns"),
+                "config_snapshot_id": start_status.get("config_snapshot_id"),
             },
             "elapsed_s": max(0.0, self._monotonic() - started),
             "progress": navigation.get("progress"), "navigation_reason": navigation.get("reason"),

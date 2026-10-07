@@ -97,6 +97,7 @@ class GoalSnapshot:
         return f"{self.goal_id}:step:{self.step_index + 1}"
 
     def to_jsonable(self):
+        from v3.robot_interface import _finite_result_jsonable
         return {"goal_id": self.goal_id, "text": self.text, "source": self.source,
                 "priority": self.source, "lifecycle": self.lifecycle.value,
                 "created_ns": self.created_ns, "updated_ns": self.updated_ns,
@@ -107,7 +108,7 @@ class GoalSnapshot:
                 "subtask_id": self.subtask_id, "attempt": self.attempt,
                 "decision_id": self.decision_id, "behavior_id": self.behavior_id,
                 "command_id": self.command_id, "mission_id": self.mission_id,
-                "target": dict(self.target), "result": dict(self.result),
+                "target": dict(self.target), "result": _finite_result_jsonable(self.result),
                 "world_target": _world_target_evidence(self.world_target)}
 
 
@@ -645,16 +646,23 @@ class BrainCore:
             if self._current(generation) is None:
                 return
             result = self.robot.execute(step.action, **params)
+            from v3.robot_interface import _compact_finite_result
+            try:
+                result_evidence = (_compact_finite_result(result)
+                                   if descriptor is not None and descriptor.completion_required else ())
+            except Exception:
+                result_evidence = ()  # Passive evidence failure cannot change execution.
             command = result.get("command_id") if isinstance(result, Mapping) else getattr(result, "command_id", None)
             mission = result.get("mission_id") if isinstance(result, Mapping) else getattr(result, "mission_id", None)
             with self._lock:
                 if self._current(generation) is None:
                     if goal.goal_id in self._goals:
                         self._change(goal.goal_id, "ACTION_RESULT_AFTER_REVOCATION",
-                                     command_id=command, mission_id=mission)
+                                     command_id=command, mission_id=mission, result=result_evidence)
                     return
                 self._change(goal.goal_id, "ACTION_RESULT", command_id=command,
-                             mission_id=mission or ("mission-" + command if command else None))
+                             mission_id=mission or ("mission-" + command if command else None),
+                             result=result_evidence)
             if step.action == "vision.observe":
                 if not isinstance(result, VisionJpeg):
                     raise ValueError("OBSERVATION_EVIDENCE_UNAVAILABLE")

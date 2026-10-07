@@ -44,14 +44,16 @@ def test_exact_stop_stays_direct_v3(monkeypatch, tmp_path) -> None:
     assert seen == [("v3.command.stop", {})]
 
 
-def test_agent_action_failure_returns_nonzero(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("status", ["FAILED:TIMEOUT", "CANCELLED:STOP", "INTERRUPTED:RUNTIME_RESTART",
+                                    "ACTIVE:GOAL_RESULT_UNCONFIRMED"])
+def test_agent_action_failure_returns_nonzero(monkeypatch, tmp_path, status) -> None:
     from r2b4_orchestration.execution_mode import ExecutionModeSelector
     from r2b4_orchestration import executor
 
     module = types.ModuleType("r2b4_orchestration.agent_runner")
     module.run_agent_prompt = lambda *args, **kwargs: types.SimpleNamespace(
         text="A kért robotművelet nem fejeződött be.",
-        action_status="FAILED:TIMEOUT",
+        action_status=status,
     )
     monkeypatch.setitem(sys.modules, "r2b4_orchestration.agent_runner", module)
     monkeypatch.setattr(executor, "speak_text", lambda *args, **kwargs: None)

@@ -9,7 +9,7 @@ import pytest
 from r2b4_orchestration.agent_contracts import AgentModelReply, AgentToolRequest, parse_agent_model_reply
 from r2b4_orchestration.agent_core import AgentCore, AgentToolBroker
 from r2b4_orchestration.agent_tools import build_default_agent_tools
-from r2b4_orchestration.brain_hri import BrainGoalObserver, adopt_brain_result
+from r2b4_orchestration.brain_hri import BrainAdoption, BrainGoalObserver, adopt_brain_result, wait_for_brain_goal
 from r2b4_voice.conversation_contracts import LLMDecision, RobotAction, RobotContextSnapshot
 from r2b4_voice.conversation_journal import ConversationJournal
 from r2b4_voice.conversation_service import ConversationService
@@ -177,6 +177,78 @@ def test_goal_feedback_waits_for_same_goal_completion_not_navigation_result():
     assert feedback == [("A feladat befejeződött.", {
         "turn_id": "turn-1", "goal_id": "goal-1", "lifecycle": "COMPLETED", "reason": "PLAN_COMPLETED",
     })]
+
+
+@pytest.mark.parametrize("lifecycle,reason", [("COMPLETED", "MISSION_COMPLETED"),
+                                             ("FAILED", "MISSION_INTERRUPTED:NAVIGATION_STALLED")])
+def test_cli_finite_goal_waits_past_first_subtask_until_correlated_whole_goal(lifecycle, reason):
+    class Interface:
+        count = 0
+        def read(self, resource):
+            assert resource == "brain.state"
+            self.count += 1
+            return {"primary_goal": {"goal_id": "goal-1", "step_index": 1,
+                    "lifecycle": "ACTIVE" if self.count == 1 else lifecycle,
+                    "reason": "MISSION_COMPLETED" if self.count == 1 else reason,
+                    "command_id": "turn-1", "mission_id": "mission-turn-1"}}
+    interface = Interface()
+    result = wait_for_brain_goal(interface, BrainAdoption("ACTIVE", "Elfogadtam", "goal-1"), timeout_s=1)
+    assert interface.count == 2
+    assert result.status == ("COMPLETED" if lifecycle == "COMPLETED" else "FAILED:" + reason)
+    assert result.command_id == "turn-1" and result.mission_id == "mission-turn-1"
+    if lifecycle == "COMPLETED":
+        assert result.text == "A feladat befejeződött."
+    else:
+        assert reason in result.text
+
+
+def test_cli_wait_uses_history_identity_when_unrelated_goal_is_primary():
+    calls = []
+    class Interface:
+        def read(self, resource):
+            calls.append(resource)
+            if resource == "brain.state":
+                return {"primary_goal": {"goal_id": "other", "lifecycle": "COMPLETED"}}
+            return [{"goal_id": "goal-1", "lifecycle": "FAILED", "reason": "RUNTIME_FAULT"},
+                    {"goal_id": "other", "lifecycle": "COMPLETED"}]
+    result = wait_for_brain_goal(Interface(), BrainAdoption("ACTIVE", "Elfogadtam", "goal-1"), timeout_s=1)
+    assert result.status == "FAILED:RUNTIME_FAULT"
+    assert calls == ["brain.state", "brain.history"]
+
+
+def test_cli_missing_result_is_bounded_and_cannot_claim_success(monkeypatch):
+    import r2b4_orchestration.brain_hri as hri
+    now = [0.0]
+    monkeypatch.setattr(hri.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(hri.time, "sleep", lambda delay: now.__setitem__(0, now[0] + delay))
+    class Interface:
+        def read(self, resource):
+            raise OSError("observation unavailable")
+    result = wait_for_brain_goal(Interface(), BrainAdoption("ACTIVE", "Elfogadtam", "goal-1"), timeout_s=.2)
+    assert result.status == "ACTIVE:GOAL_RESULT_UNCONFIRMED"
+    assert now[0] == .2
+
+
+@pytest.mark.parametrize("finite", [True, False])
+def test_one_shot_runner_waits_only_for_finite_plan(monkeypatch, tmp_path, finite):
+    from contextlib import nullcontext
+    import r2b4_orchestration.agent_runner as runner
+    action = "v3.command.turn_by" if finite else "behavior.room_cruise"
+    parameters = {"angle_deg": -90} if finite else {"max_duration_s": 50}
+    calls = []
+    class Interface:
+        def execute(self, name, **fields):
+            calls.append(name)
+            return {"turn_id": "turn-1"} if name == "conversation.submit_text" else {"lifecycle": "ACTIVE"}
+        def read(self, resource):
+            calls.append(resource)
+            return {"primary_goal": {"goal_id": "goal-1", "lifecycle": "FAILED", "reason": "NAVIGATION_STALLED"}}
+    bundle = SimpleNamespace(interface=Interface(), conversation=SimpleNamespace(wait_for_turn=lambda *a, **k: {
+        "goal_id": "goal-1", "proposed_plan": {"steps": [{"action": action, "parameters": parameters}]}}))
+    monkeypatch.setattr(runner, "build_voice_interface", lambda *a, **k: nullcontext(bundle))
+    result = runner.run_agent_prompt("Kérés", project_root=tmp_path, wait_s=1)
+    assert result.action_status == ("FAILED:NAVIGATION_STALLED" if finite else "ACTIVE")
+    assert calls == ["conversation.submit_text", "brain.adopt", *(["brain.state"] if finite else [])]
 
 
 @pytest.mark.parametrize("operation", ["cancel", "close"])

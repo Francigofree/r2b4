@@ -76,6 +76,36 @@ def test_action_intent_and_result_preserve_identity_time_and_compact_payload(tmp
         events[1].status = "changed"
 
 
+def test_finite_result_preserves_signed_turn_pose_provenance_and_source_time(tmp_path):
+    class RawPayload:
+        def __repr__(self):
+            raise AssertionError("raw payload must never be inspected")
+    raw = RawPayload()
+    result = {"status": "COMPLETED", "reason": "COMPLETE", "command_id": "turn-1", "mission_id": "mission-turn-1",
+              "requested": {"angle_deg": -90, "max_omega_rad_s": 1.0, "raw": raw},
+              "start_pose": {"frame_id": "odom", "x_m": 1.0, "y_m": 0.0, "yaw_rad": 0.0, "world": raw},
+              "target_pose": {"frame_id": "odom", "x_m": 1.0, "y_m": 0.0, "yaw_rad": -1.57},
+              "final_pose": {"frame_id": "odom", "x_m": 1.0, "y_m": 0.0, "yaw_rad": -1.52},
+              "frame_provenance": {"frame_id": "odom", "runtime_pid": 123, "localization_generation": 4,
+                                   "pose_status_monotonic_ns": 105, "config_snapshot_id": "config-1", "raw": raw},
+              "angle_requested_rad": -1.57, "angle_executed_rad": -1.52, "angle_remaining_rad": -.05,
+              "completion_status_monotonic_ns": 190, "world": raw}
+    events = []
+    clock = iter((100, 110, 200))
+    robot = interface(tmp_path, Adapter(result=result), events.append, clock_ns=lambda: next(clock))
+    assert robot.execute("x.action", angle_deg=-90) is result
+    event = events[-1]
+    assert event.runtime_pid == 123
+    assert (event.request_time_ns, event.measurement_time_ns, event.observation_time_ns) == (100, 190, 200)
+    assert (event.angle_requested_rad, event.angle_executed_rad, event.angle_remaining_rad) == (-1.57, -1.52, -.05)
+    encoded = event.to_jsonable()
+    assert encoded["requested"] == {"angle_deg": -90, "max_omega_rad_s": 1.0}
+    assert encoded["frame_provenance"]["config_snapshot_id"] == "config-1"
+    assert "raw" not in json.dumps(encoded, allow_nan=False)
+    result["final_pose"]["yaw_rad"] = 9
+    assert event.to_jsonable()["final_pose"]["yaw_rad"] == -1.52
+
+
 def test_legacy_alias_records_one_request_and_one_dispatch(tmp_path):
     class PublicAdapter(Adapter):
         name = "public_robot"

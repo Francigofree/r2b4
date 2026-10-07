@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import threading
+import time
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +14,49 @@ class BrainAdoption:
     goal_id: str | None = None
     command_id: str | None = None
     mission_id: str | None = None
+
+
+def _goal_snapshot(interface: object, goal_id: str) -> Mapping[str, object] | None:
+    """Read this goal even after another goal becomes primary."""
+    state = interface.read("brain.state")
+    if isinstance(state, Mapping):
+        candidates = [state, *(value for value in state.values() if isinstance(value, Mapping))]
+        snapshot = next((value for value in candidates if value.get("goal_id") == goal_id), None)
+        if snapshot is not None:
+            return snapshot
+    history = interface.read("brain.history")
+    if isinstance(history, (tuple, list)):
+        for event in reversed(history):
+            if isinstance(event, Mapping):
+                value = event.get("goal", event.get("snapshot", event))
+                if isinstance(value, Mapping) and value.get("goal_id") == goal_id:
+                    return value
+    return None
+
+
+def wait_for_brain_goal(interface: object, adoption: BrainAdoption, *, timeout_s: float) -> BrainAdoption:
+    """Bounded, read-only CLI feedback; goal execution remains asynchronous."""
+    deadline = time.monotonic() + max(0.0, timeout_s)
+    while time.monotonic() < deadline:
+        try:
+            snapshot = _goal_snapshot(interface, adoption.goal_id)
+            if snapshot is not None:
+                lifecycle = snapshot.get("lifecycle")
+                reason = str(snapshot.get("reason") or lifecycle)
+                if lifecycle in {"COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"}:
+                    status = "COMPLETED" if lifecycle == "COMPLETED" else str(lifecycle) + ":" + reason
+                    text = ("A feladat befejeződött." if lifecycle == "COMPLETED"
+                            else "A feladat megszakadt: " + reason + "." if lifecycle in {"CANCELLED", "INTERRUPTED"}
+                            else "A feladat nem teljesült: " + reason + ".")
+                    return BrainAdoption(status, text, adoption.goal_id,
+                                         snapshot.get("command_id"), snapshot.get("mission_id"))
+        except Exception:
+            # Missing observation cannot become success or revoke execution.
+            pass
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+    return BrainAdoption("ACTIVE:GOAL_RESULT_UNCONFIRMED",
+                         "A feladat végeredményét a várakozási időn belül nem tudtam igazolni.",
+                         adoption.goal_id, adoption.command_id, adoption.mission_id)
 
 
 def adopt_brain_result(interface: object, result: Mapping[str, object], *,
@@ -90,20 +134,7 @@ class BrainGoalObserver:
                 if generation != self._generation:
                     return
             try:
-                state = self._interface.read("brain.state")
-                candidates = []
-                if isinstance(state, Mapping):
-                    candidates = [state, *(value for value in state.values() if isinstance(value, Mapping))]
-                snapshot = next((value for value in candidates if value.get("goal_id") == goal_id), None)
-                if snapshot is None:
-                    history = self._interface.read("brain.history")
-                    if isinstance(history, (tuple, list)):
-                        for event in reversed(history):
-                            if isinstance(event, Mapping):
-                                value = event.get("goal", event.get("snapshot", event))
-                                if isinstance(value, Mapping) and value.get("goal_id") == goal_id:
-                                    snapshot = value
-                                    break
+                snapshot = _goal_snapshot(self._interface, goal_id)
                 if snapshot is None:
                     continue
                 lifecycle = snapshot.get("lifecycle")
@@ -131,4 +162,4 @@ class BrainGoalObserver:
                 continue
 
 
-__all__ = ["BrainAdoption", "BrainGoalObserver", "adopt_brain_result"]
+__all__ = ["BrainAdoption", "BrainGoalObserver", "adopt_brain_result", "wait_for_brain_goal"]

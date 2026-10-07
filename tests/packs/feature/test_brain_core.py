@@ -124,6 +124,45 @@ def test_finite_interruption_keeps_cause_and_never_reports_goal_completion(monke
     assert goal["command_id"] == "cmd-stalled" and goal["mission_id"] == "mission-cmd-stalled"
 
 
+def test_finite_goal_preserves_each_correlated_compact_result_and_final_failure(monkeypatch):
+    _, robot, owner = runtime()
+    class RawPayload:
+        def __repr__(self):
+            raise AssertionError("raw payload must never be inspected")
+    raw = RawPayload()
+    first = {"status": "COMPLETED", "reason": "COMPLETE", "command_id": "move-1", "mission_id": "mission-move-1",
+             "requested": {"forward_m": 1.0, "raw": raw},
+             "start_pose": {"frame_id": "odom", "x_m": 0., "y_m": 0., "yaw_rad": 0.},
+             "target_pose": {"frame_id": "odom", "x_m": 1., "y_m": 0.},
+             "final_pose": {"frame_id": "odom", "x_m": .94, "y_m": 0., "yaw_rad": 0., "raw": raw},
+             "distance_executed_m": .94, "runtime_pid": 123, "completion_status_monotonic_ns": 200,
+             "frame_provenance": {"frame_id": "odom", "runtime_pid": 123, "localization_generation": 4,
+                                  "pose_status_monotonic_ns": 100, "config_snapshot_id": "config-1"}, "world": raw}
+    second = {**first, "status": "INTERRUPTED", "reason": "NAVIGATION_STALLED", "command_id": "turn-1",
+              "mission_id": "mission-turn-1", "requested": {"angle_deg": -90},
+              "angle_requested_rad": -1.57, "angle_executed_rad": -.2, "angle_remaining_rad": -1.37,
+              "completion_status_monotonic_ns": 300}
+    responses = iter((first, second))
+    monkeypatch.setattr(robot, "execute", lambda *_a, **_p: next(responses))
+    final = adopt(owner, "Menj 1 m-t, majd fordulj jobbra.", [
+        {"action": "v3.command.move_relative", "parameters": {"forward_m": 1}},
+        {"action": "v3.command.turn_by", "parameters": {"angle_deg": -90}},
+    ])
+    assert final["lifecycle"] == "FAILED" and final["step_index"] == 1
+    assert final["result"]["reason"] == "NAVIGATION_STALLED"
+    assert final["result"]["angle_remaining_rad"] == -1.37
+    assert final["result"]["completion_status_monotonic_ns"] == 300
+    results = [event.to_jsonable() for event in owner.brain.history() if event.kind == "ACTION_RESULT"]
+    assert [(event["subtask_id"], event["result"]["command_id"]) for event in results] == [
+        (final["goal_id"] + ":step:1", "move-1"), (final["goal_id"] + ":step:2", "turn-1")]
+    assert results[0]["result"]["frame_provenance"]["pose_status_monotonic_ns"] == 100
+    assert results[0]["result"]["requested"] == {"forward_m": 1.0}
+    first["final_pose"]["x_m"] = 99
+    final["result"]["frame_provenance"]["runtime_pid"] = 999
+    assert owner.brain.goal(final["goal_id"])["result"]["frame_provenance"]["runtime_pid"] == 123
+    assert [event.to_jsonable() for event in owner.brain.history() if event.kind == "ACTION_RESULT"][0]["result"]["final_pose"]["x_m"] == .94
+
+
 def test_requested_50_seconds_is_owned_until_correlated_duration_completion():
     clock, robot, owner = runtime()
     goal = adopt(owner, "Menj körbe 50 másodpercig.", [

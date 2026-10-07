@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import signal
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -12,6 +13,84 @@ from v3.mcap_reader import McapReadError
 
 
 pytestmark = [pytest.mark.contract, pytest.mark.control]
+
+
+def test_stop_cleanup_preserves_concurrent_stop_and_passive_clients(tmp_path, monkeypatch):
+    import v3.operator_controller as module
+
+    controller = OperatorController(tmp_path)
+    controller.runtime_dir.mkdir()
+    proc = tmp_path / "proc"
+    proc.mkdir()
+    processes = {
+        101: ["stop", "--command-id", "navigate"],
+        102: ["status"],
+        103: ["config"],
+        104: ["--status-path", "navigate", "stop", "--command-id", "teleop"],
+        105: ["--owner-pid", "700", "--max-runtime-s=30", "navigate"],
+        106: ["teleop"],
+        107: ["explore"],
+        108: ["faceperson"],
+        109: ["followperson"],
+        110: ["--command-path", "other_command.json", "navigate"],
+        111: ["--command-path=runtime/v3_command.json", "navigate"],
+    }
+    for pid, arguments in processes.items():
+        directory = proc / str(pid)
+        directory.mkdir()
+        (directory / "cwd").symlink_to(tmp_path, target_is_directory=True)
+        (directory / "cmdline").write_bytes(
+            b"\0".join(part.encode() for part in ["python", "-m", "v3.control_cli", *arguments])
+        )
+    # A stale owner record points at the concurrent STOP client. It is never a
+    # command heartbeat, even when its command-id names a producer operation.
+    controller.command_pid_file.write_text("101")
+    monkeypatch.setattr(module, "Path", lambda path: proc if str(path) == "/proc" else Path(path))
+    killed = []
+
+    def kill(pid, sig):
+        assert sig == signal.SIGTERM
+        killed.append(pid)
+        (proc / str(pid) / "cmdline").write_bytes(b"")
+
+    monkeypatch.setattr(module.os, "kill", kill)
+    monkeypatch.setattr(controller, "_wait_gone", lambda *args: True)
+    controller._stop_control_cli_only()
+
+    assert set(killed) == {105, 106, 107, 108, 109, 111}
+    assert len(killed) == 6
+    assert not controller.command_pid_file.exists()
+
+
+def test_stop_still_preempts_before_waiting_for_operator_lock(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    controller = OperatorController(tmp_path)
+    events = []
+
+    @contextmanager
+    def transition():
+        assert events == ["cleanup", "STOP"]
+        events.append("locked")
+        yield
+
+    monkeypatch.setattr(controller, "operator_transition", transition)
+    monkeypatch.setattr(controller, "_stop_command_producers", lambda: events.append("cleanup"))
+    monkeypatch.setattr(controller, "_publish_stop", lambda: events.append("STOP"))
+    monkeypatch.setattr(controller, "_trigger_movement_capture_if_needed", lambda: None)
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: None)
+    controller.stop()
+    assert events == ["cleanup", "STOP", "locked", "cleanup", "STOP"]
+
+
+def test_stop_signal_failure_reports_returncode_even_without_output(tmp_path, monkeypatch):
+    import v3.operator_controller as module
+
+    controller = OperatorController(tmp_path)
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(
+        returncode=-signal.SIGTERM, stderr="", stdout=""))
+    with pytest.raises(OperatorError, match=r"returncode -15.*no output"):
+        controller._publish_stop()
 
 
 @pytest.mark.parametrize("capture_result", ["PASS", "FAULT", "INCOMPLETE", "MISSING"])
@@ -83,6 +162,21 @@ def test_runtime_disappearance_during_stop_cannot_hide_unverified_close(tmp_path
     monkeypatch.setattr(controller, "_runtime_pid", lambda: next(pids))
     monkeypatch.setattr(controller, "_read_status_optional", lambda: None)
     with pytest.raises(OperatorError, match="without verified output-owner close"):
+        controller.wait_idle()
+
+
+@pytest.mark.parametrize("state", ["RUNNING", "STOPPED"])
+def test_idle_confirmation_cannot_cross_runtime_session(tmp_path, monkeypatch, state):
+    controller = OperatorController(tmp_path)
+    pids = iter((123, 456))
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: next(pids))
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: {
+        "state": state, "monotonic_ns": time.monotonic_ns(),
+        "safety_decision": "STOP", "enabled": False,
+        "left_output": 0, "right_output": 0, "ready_for_active": True,
+        "report": {"status": "PASS", "termination_class": "SHUTDOWN_SAFE_LOW", "fault_layer": None},
+    })
+    with pytest.raises(OperatorError, match="runtime session changed"):
         controller.wait_idle()
 
 

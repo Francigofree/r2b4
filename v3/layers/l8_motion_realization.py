@@ -162,6 +162,19 @@ class MotionRealizer:
                 self._config.heading_gain * heading_error,
                 self._config.max_requested_omega_rad_s,
             )
+            if distance_m <= objective.constraints.goal_tolerance_m:
+                # Proportional terminal alignment must not disappear into the
+                # calibrated wheel deadband before the yaw tolerance is met.
+                # Keep both hard caps: an infeasible cap still projects to STOP.
+                if min(self._config.max_requested_omega_rad_s,
+                       objective.constraints.max_omega_rad_s) < self._config.wheel_limits.minimum_center_spin_rad_s:
+                    return self._stopped(objective, "TERMINAL_YAW_UNREALIZABLE")
+                requested_omega_rad_s = math.copysign(
+                    min(self._config.max_requested_omega_rad_s, max(
+                        abs(requested_omega_rad_s),
+                        self._config.wheel_limits.minimum_center_spin_rad_s,
+                    )), heading_error,
+                )
             if abs(heading_error) >= self._config.heading_stop_threshold_rad:
                 requested_v_mps = 0.0
             else:

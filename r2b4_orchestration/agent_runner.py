@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
 
-from .brain_hri import adopt_brain_result
+from .brain_hri import adopt_brain_result, wait_for_brain_goal
+from v3.action_catalog import action_descriptor
 from r2b4_voice.conversation_interface import build_voice_interface
 from r2b4_voice.llm_provider import api_key_env_for, default_model_for, resolve_llm_provider
 
@@ -55,6 +56,29 @@ def _receipt(status: str, executed: bool) -> str:
     return "A robotművelet nem indult el."
 
 
+def _finite_plan(result: Mapping[str, object]) -> bool:
+    plan = result.get("proposed_plan")
+    if isinstance(plan, Mapping):
+        steps = plan.get("steps")
+    else:
+        action = result.get("proposed_action")
+        steps = [{"action": action.get("name")}] if isinstance(action, Mapping) else None
+    if not isinstance(steps, (list, tuple)) or not steps:
+        return False
+    has_finite_action = False
+    for step in steps:
+        if not isinstance(step, Mapping):
+            return False
+        name = step.get("action")
+        if name == "vision.observe":
+            continue
+        descriptor = action_descriptor(name) if isinstance(name, str) else None
+        if descriptor is None or not descriptor.completion_required:
+            return False
+        has_finite_action = True
+    return has_finite_action
+
+
 def run_agent_prompt(
     prompt: str,
     *,
@@ -83,6 +107,8 @@ def run_agent_prompt(
         proposed = result.get("proposed_action")
         if proposed is not None or result.get("proposed_plan") is not None:
             adoption = adopt_brain_result(bundle.interface, result)
+            if adoption.status == "ACTIVE" and _finite_plan(result):
+                adoption = wait_for_brain_goal(bundle.interface, adoption, timeout_s=wait_s)
             return AgentRunResult(adoption.text, adoption.status)
         text = result.get("spoken_text")
         if not isinstance(text, str) or not text.strip():

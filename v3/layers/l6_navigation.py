@@ -589,6 +589,7 @@ class NavigationStateCheckpoint:
     last_maneuver_direction: int = 0
     goal_selection_reason: str | None = None
     pending_goal_selection_reason: str | None = None
+    initial_yaw_error_rad: float = 0.0
 
 
 class TrajectoryRolloutBackend(Protocol):
@@ -729,6 +730,7 @@ class TrajectoryNavigator:
         "_coverage",
         "_goal_selected_ns",
         "_initial_distance_m",
+        "_initial_yaw_error_rad",
         "_last_replan_ns",
         "_last_replan_tick_id",
         "_local_goal",
@@ -804,6 +806,7 @@ class TrajectoryNavigator:
         self._mission_id: str | None = None
         self._person_capability_failed_mission_id: str | None = None
         self._initial_distance_m = 0.0
+        self._initial_yaw_error_rad = 0.0
         self._progress = 0.0
         self._completed = False
         self._coverage: dict[tuple[int, int], tuple[int, int]] = {}
@@ -868,6 +871,7 @@ class TrajectoryNavigator:
             self._person_capability_failed_mission_id,
             self._localization_recovery_direction, self._last_maneuver_direction,
             self._goal_selection_reason, self._pending_goal_selection_reason,
+            self._initial_yaw_error_rad,
         )
 
     def restore(self, checkpoint: NavigationStateCheckpoint) -> None:
@@ -885,6 +889,7 @@ class TrajectoryNavigator:
         self._abandon_pending_rollout()
         self._mission_id = checkpoint.mission_id
         self._initial_distance_m = checkpoint.initial_distance_m
+        self._initial_yaw_error_rad = checkpoint.initial_yaw_error_rad
         self._progress = checkpoint.progress
         self._completed = checkpoint.completed
         self._coverage = {
@@ -1246,19 +1251,30 @@ class TrajectoryNavigator:
                 )
             target = Waypoint(*estimate.map_to_odom.inverse().apply(target.x_m, target.y_m, target.yaw_rad))
         distance_m = math.hypot(target.x_m - estimate.x_m, target.y_m - estimate.y_m)
+        yaw_error_rad = (0.0 if target.yaw_rad is None else
+                         abs(_wrapped_angle(target.yaw_rad - estimate.yaw_rad)))
         if self._mission_id != mission.mission_id:
             self._reset()
             self._mission_id = mission.mission_id
             self._initial_distance_m = max(distance_m, mission.constraints.goal_tolerance_m)
+            self._initial_yaw_error_rad = max(yaw_error_rad, mission.constraints.yaw_tolerance_rad)
             self._progress = 0.0
             self._completed = False
         if self._completed:
             return self._complete_plan(mission)
-        progress = min(1.0, max(0.0, 1.0 - distance_m / self._initial_distance_m))
-        self._progress = max(self._progress, progress)
-        yaw_reached = target.yaw_rad is None or abs(
-            _wrapped_angle(target.yaw_rad - estimate.yaw_rad)
-        ) <= mission.constraints.yaw_tolerance_rad
+        progress = (1.0 if distance_m == 0.0 else
+                    max(0.0, 1.0 - distance_m / self._initial_distance_m)
+                    if self._initial_distance_m > 0.0 else 0.0)
+        if target.yaw_rad is not None:
+            initial_yaw_error_rad = max(self._initial_yaw_error_rad, mission.constraints.yaw_tolerance_rad)
+            yaw_progress = (1.0 if yaw_error_rad == 0.0 else
+                            max(0.0, 1.0 - yaw_error_rad / initial_yaw_error_rad)
+                            if initial_yaw_error_rad > 0.0 else 0.0)
+            progress = min(progress, yaw_progress)
+        # Only the explicit completion branch may report 100%; a rotation-only
+        # mission has positional arrival throughout its still-active yaw phase.
+        self._progress = min(math.nextafter(1.0, 0.0), max(self._progress, progress))
+        yaw_reached = yaw_error_rad <= mission.constraints.yaw_tolerance_rad
         if distance_m <= mission.constraints.goal_tolerance_m and yaw_reached:
             self._completed = True
             self._progress = 1.0
@@ -1385,6 +1401,7 @@ class TrajectoryNavigator:
         self._mission_id = None
         self._person_capability_failed_mission_id = None
         self._initial_distance_m = 0.0
+        self._initial_yaw_error_rad = 0.0
         self._progress = 0.0
         self._completed = False
         self._coverage.clear()
