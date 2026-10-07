@@ -184,7 +184,15 @@ class RobotContextSnapshot:
             "pose": None if self.pose is None else dict(self.pose),
             "safety": None if self.safety is None else dict(self.safety),
             "health": list(self.health),
-            "available_actions": [dict(item) for item in self.available_actions],
+            "available_actions": [
+                {
+                    "name": item.get("name"),
+                    "available": item.get("available") is True,
+                    "ready": item.get("ready") is True,
+                    "reason": item.get("reason") if isinstance(item.get("reason"), str) else None,
+                }
+                for item in self.available_actions
+            ],
         }
 
 

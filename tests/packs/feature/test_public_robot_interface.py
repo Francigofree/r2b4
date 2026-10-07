@@ -114,13 +114,17 @@ def test_default_interface_stop_does_not_read_capability_or_world_state(monkeypa
     assert all(arguments.get("reason") == "STOP" for _, _, arguments in composed.calls)
 
 
-def test_default_robot_context_distinguishes_public_knowledge_from_local_world(composed):
+def test_default_robot_context_keeps_public_memory_on_demand(composed):
+    before = len(composed.calls)
     context = RobotContextBuilder(composed.interface).build()
     environment = context.host["environment"]
-    assert environment["world"] == composed.world
+    assert "world" not in environment
     assert environment["local_world"] == composed.controller.status_value["world"]
     assert environment["behavior"] == composed.behavior
-    assert context.host["robot_state"]["active_behavior"] == composed.behavior
+    assert "robot_state" not in context.host
+    reads = [arguments["resource"] for _, operation, arguments in composed.calls[before:] if operation == "read"]
+    assert "world.snapshot" not in reads
+    assert "robot.state" not in reads
 
 
 def test_live_behavior_capabilities_reflect_runtime_and_vision_failure(monkeypatch, composed):

@@ -15,9 +15,12 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Protocol
 
 from r2b4_voice.conversation_contracts import LLMDecision
+from r2b4_voice.prompting import DEFAULT_PROVIDER_REQUEST_CHAR_LIMIT, prompt_size_telemetry
 from v3.adapters.vision_media_contracts import VisionJpeg
 
-from .agent_contracts import AgentModelReply, AgentToolRequest, AgentToolResult, AgentToolSpec
+from .agent_contracts import (
+    AgentModelReply, AgentToolRequest, AgentToolResult, AgentToolSpec, build_agent_step_schema,
+)
 
 
 def _check_turn(cancel_event: threading.Event | None, deadline: float | None) -> None:
@@ -110,14 +113,19 @@ class AgentCore:
         broker: AgentToolBroker,
         *,
         max_tool_rounds: int = 4,
+        max_provider_prompt_chars: int = DEFAULT_PROVIDER_REQUEST_CHAR_LIMIT,
     ) -> None:
         if not callable(getattr(model, "complete_agent_step", None)):
             raise TypeError("agent model must provide complete_agent_step()")
         if not isinstance(max_tool_rounds, int) or isinstance(max_tool_rounds, bool) or not 1 <= max_tool_rounds <= 12:
             raise ValueError("max_tool_rounds must be within [1, 12]")
+        if (not isinstance(max_provider_prompt_chars, int) or isinstance(max_provider_prompt_chars, bool)
+                or max_provider_prompt_chars < 4_000):
+            raise ValueError("max_provider_prompt_chars must be an integer >= 4000")
         self._model = model
         self._broker = broker
         self._max_tool_rounds = max_tool_rounds
+        self._max_provider_prompt_chars = max_provider_prompt_chars
 
     @property
     def model(self) -> str:
@@ -148,6 +156,16 @@ class AgentCore:
             "R2B4_AVAILABLE_TOOLS_JSON="
             + json.dumps(catalog, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         ))
+        response_schema_chars = len(json.dumps(
+            build_agent_step_schema(catalog, action_catalog), ensure_ascii=False,
+            sort_keys=True, separators=(",", ":"),
+        ))
+        tool_catalog_chars = len(json.dumps(
+            [dict(item) for item in catalog], ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ))
+        action_catalog_chars = len(json.dumps(
+            [dict(item) for item in action_catalog], ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ))
 
         images: tuple[VisionJpeg, ...] = ()
         for round_index in range(self._max_tool_rounds + 1):
@@ -157,13 +175,32 @@ class AgentCore:
             options = {"images": images} if images else {}
             if cancel_event is not None or deadline is not None:
                 options.update(cancel_event=cancel_event, deadline=deadline)
+            prompt_metrics = prompt_size_telemetry(work)
+            provider_request_chars = prompt_metrics["prompt_text_chars"] + response_schema_chars
+            size_fields = {
+                **prompt_metrics,
+                "response_schema_chars": response_schema_chars,
+                "tool_catalog_chars": tool_catalog_chars,
+                "action_catalog_chars": action_catalog_chars,
+                "provider_request_chars_estimate": provider_request_chars,
+                "provider_request_budget_chars": self._max_provider_prompt_chars,
+            }
+            if provider_request_chars > self._max_provider_prompt_chars:
+                self._emit(event_sink, "agent_prompt_rejected", {
+                    "round": round_index + 1, "configured_model": self.model,
+                    "purpose": "initial_interpretation" if round_index == 0 else "tool_result_interpretation",
+                    "image_count": len(images), "error": "PROMPT_BUDGET_EXCEEDED", **size_fields,
+                })
+                raise RuntimeError(
+                    f"AGENT_PROMPT_BUDGET_EXCEEDED:{provider_request_chars}>{self._max_provider_prompt_chars}"
+                )
             inference_id = uuid.uuid4().hex
             started_ns = time.monotonic_ns()
             inference_fields = {
                 "round": round_index + 1, "inference_id": inference_id,
                 "configured_model": self.model,
                 "purpose": "initial_interpretation" if round_index == 0 else "tool_result_interpretation",
-                "image_count": len(images),
+                "image_count": len(images), **size_fields,
             }
             self._emit(event_sink, "agent_llm_started", inference_fields)
             try:

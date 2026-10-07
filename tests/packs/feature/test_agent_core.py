@@ -112,13 +112,19 @@ def test_agent_reads_canonical_public_state_and_preserves_uncertainty(tmp_path) 
     assert "operator.shutdown" not in capabilities.data["capabilities"]
     assert broker.execute(AgentToolRequest("robot.read", {"resource": "source.read"})).status == "ERROR"
 
+    interface.reads.clear()
     context = RobotContextBuilder(interface).build()
     environment = context.host["environment"]
-    assert environment["world"] == interface.state["world.snapshot"]
+    assert "world" not in environment
     assert environment["local_world"] == {"blocked": True}
     assert environment["behavior"] == interface.state["behavior.state"]
-    assert context.host["robot_state"] == interface.state["robot.state"]
+    assert "robot_state" not in context.host
+    assert "world.snapshot" not in interface.reads
+    assert "robot.state" not in interface.reads
     assert "v3.command.wheels" not in {item["name"] for item in context.available_actions}
+    prompt_actions = context.to_jsonable()["available_actions"]
+    assert all(set(item) == {"name", "available", "ready", "reason"} for item in prompt_actions)
+    assert all("parameters" not in item and "description" not in item for item in prompt_actions)
 
 
 def test_stop_proposal_revokes_without_world_or_runtime_readiness() -> None:

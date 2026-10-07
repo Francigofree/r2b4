@@ -10,7 +10,7 @@ from v3.action_catalog import action_descriptor
 from .conversation_contracts import RobotContextSnapshot
 
 
-ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V5"
+ROBOT_CONTEXT_SCHEMA = "R2B4_ROBOT_CONTEXT_V6"
 
 
 class RobotReadInterface(Protocol):
@@ -35,8 +35,11 @@ class RobotContextBuilder:
             runtime_running = bool(operator_status.get("runtime_running"))
 
         status = self._read_if_available(caps, "v3.status")
+        # The default LLM turn carries only fresh execution-local state.  The
+        # persistent Public World Model is intentionally query-on-demand through
+        # world.query / robot.read; injecting its full snapshot made prompt size
+        # grow with robot history and duplicated robot.state.
         environment: dict[str, object] = {
-            "world": self._mapping_or_none(self._read_if_available(caps, "world.snapshot")),
             "local_world": None,
             "behavior": self._mapping_or_none(self._read_if_available(caps, "behavior.state")),
             "person": {"available": False, "detected": None, "tracks": []},
@@ -67,7 +70,9 @@ class RobotContextBuilder:
                 else "UNKNOWN"
             ),
             "environment": environment,
-            "robot_state": self._mapping_or_none(self._read_if_available(caps, "robot.state")),
+            # brain.state is small, current task authority data.  Do not add
+            # robot.state here: robot.state embeds world + brain + behavior and
+            # therefore duplicates the same state in the default LLM payload.
             "brain": self._mapping_or_none(self._read_if_available(caps, "brain.state")),
         }
 
@@ -109,8 +114,10 @@ class RobotContextBuilder:
             if not isinstance(raw, Mapping) or raw.get("kind") != "action" or raw.get("supported") is not True:
                 continue
             descriptor = action_descriptor(name)
-            # Only canonical catalog actions enter the LLM/robot-action context.
-            # Missing descriptor or missing exposure remains fail-closed.
+            # Keep the full canonical descriptor internally for validation and
+            # structured-output schema generation. RobotContextSnapshot serializes
+            # only live status fields, so the descriptor is not duplicated in the
+            # textual ROBOT_CONTEXT layer.
             if descriptor is None or descriptor.voice_exposed is not True:
                 continue
             ready = raw.get("ready") is True

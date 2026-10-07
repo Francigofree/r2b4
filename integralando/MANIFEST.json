@@ -1,0 +1,70 @@
+{
+  "base_commit": "66ef376e90f1d3b54028f9e8a28be2d28f84440a",
+  "expected_git_blobs": {
+    "conf/r2b4_agent_system.md": "e1e380936d0fb1149a60ee940a1e0bf85bc3635f",
+    "r2b4_orchestration/agent_core.py": "562c16ceb3ff6a50a7fdb243831e23051792fde4",
+    "r2b4_voice/conversation_contracts.py": "3c721a8f7c98994da9785786ddb1042d1dc33f3f",
+    "r2b4_voice/conversation_service.py": "a37263134a72b9718c72f0a35d13ad3d28750fca",
+    "r2b4_voice/prompting.py": "3c853a3d3615c677ae51af110734bb109a9928ac",
+    "r2b4_voice/robot_context.py": "ab7cf07fcd362b7c4b2c60d3ea93d4e59094e0e7",
+    "tests/packs/feature/test_agent_core.py": "ed681e00f33775b4647cb86c0052bfacc02472c5",
+    "tests/packs/feature/test_public_robot_interface.py": "dcf5d38b3e301f9d09c669dd0b6286f7b0e709f5"
+  },
+  "budgets_chars": {
+    "system_core": 24000,
+    "robot_context": 16000,
+    "self_knowledge": 16000,
+    "history": 16000,
+    "assembled_text": 48000,
+    "provider_request_estimate": 64000
+  },
+  "measured_reference": {
+    "conversation": "runtime/conversations/voice_20261007_153520_49387.ndjson",
+    "old_robot_context_chars": 143997,
+    "projected_robot_context_chars": 6685,
+    "reduction_chars": 137312,
+    "reduction_percent": 95.4
+  },
+  "package_files": [
+    {
+      "path": "CHANGELOG.md",
+      "size": 916,
+      "sha256": "351a8352d0357a6bb061a3e835cd097741032c89b1411cac3c06d16338f26412"
+    },
+    {
+      "path": "README.md",
+      "size": 2969,
+      "sha256": "45394ba1213e77146e07e0cbc71d3960da8354480f82845c1542b2a41f1ee090"
+    },
+    {
+      "path": "apply_upgrade.py",
+      "size": 12830,
+      "sha256": "c14bd6feb36c955b23264ce22f2ce313bee166ca402e79d1b2f9936fdc9e4339"
+    },
+    {
+      "path": "files/r2b4_orchestration/agent_core.py",
+      "size": 13379,
+      "sha256": "6e2f607e109863de9770202cb73d478e823278a9cc6ff9a9ec10bd57d44f1622"
+    },
+    {
+      "path": "files/r2b4_voice/prompting.py",
+      "size": 8398,
+      "sha256": "c361d8562a777c5b97450c72c1b170c94020f5c813703bc5ab066dc63799f4d6"
+    },
+    {
+      "path": "files/r2b4_voice/robot_context.py",
+      "size": 6956,
+      "sha256": "310d7877cf57c519a705d5fcaee90967c7b76cb9c68c85f55a02fa7ea35dc073"
+    },
+    {
+      "path": "files/tests/packs/core/test_prompt_budget_upgrade.py",
+      "size": 3653,
+      "sha256": "52df24e3ceffb7a0f1ea8917c8f41e80dfbf22d0dade7be82766e8c73c757202"
+    },
+    {
+      "path": "rollback_upgrade.py",
+      "size": 1176,
+      "sha256": "3560b2acfacfaa43166d07b0f127d2701755d1d951d452b47d72c5a390d245bd"
+    }
+  ]
+}
