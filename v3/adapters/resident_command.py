@@ -247,6 +247,7 @@ class AtomicResidentCommandGateway:
         expected_keys = common_keys | (
             {"x_m", "y_m"} | limit_keys | ({"yaw_rad"} if "yaw_rad" in payload else set())
             | ({"frame_id"} if "frame_id" in payload else set())
+            | ({"goal_tolerance_m", "yaw_tolerance_rad"} & payload.keys())
             if mode is CommandMode.NAVIGATE
             else motion_keys
             if mode is CommandMode.TELEOP
@@ -326,6 +327,11 @@ class AtomicResidentCommandGateway:
             keys = ("x_m", "y_m", "max_v_mps", "max_omega_rad_s")
             if "yaw_rad" in payload:
                 keys += ("yaw_rad",)
+            for name in ("goal_tolerance_m", "yaw_tolerance_rad"):
+                if name in payload:
+                    if _finite(payload[name], name) < 0.0:
+                        raise ValueError(f"{name} must be nonnegative")
+                    keys += (name,)
             return CommandRequest(
                 context=context, command_id=command_id, mode=mode,
                 goal=tuple(DataField(key, _finite(payload[key], key)) for key in keys)+(DataField("frame_id", frame_id),),
@@ -493,6 +499,7 @@ class ResidentCommandClient:
         max_v_mps: float, max_omega_rad_s: float, ttl_ns: int,
         yaw_rad: float | None = None,
         frame_id: str = "R2B4_BOOT_ROBOT_MAP",
+        goal_tolerance_m: float | None = None, yaw_tolerance_rad: float | None = None,
     ) -> int:
         if frame_id not in ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"):
             raise ValueError("unsupported navigation frame")
@@ -500,6 +507,9 @@ class ResidentCommandClient:
                   "max_omega_rad_s": max_omega_rad_s}
         if yaw_rad is not None:
             values["yaw_rad"] = yaw_rad
+        for name, value in (("goal_tolerance_m", goal_tolerance_m), ("yaw_tolerance_rad", yaw_tolerance_rad)):
+            if value is not None:
+                values[name] = value
         return self._publish(command_id, CommandMode.NAVIGATE, values, ttl_ns)
 
     def publish_explore(
@@ -608,6 +618,7 @@ class ResidentCommandClient:
             {"x_m", "y_m", "max_v_mps", "max_omega_rad_s"}
             | ({"yaw_rad"} if "yaw_rad" in values else set())
             | ({"frame_id"} if "frame_id" in values else set())
+            | ({"goal_tolerance_m", "yaw_tolerance_rad"} & values.keys())
             if mode is CommandMode.NAVIGATE
             else {"v_mps", "omega_rad_s", "max_v_mps", "max_omega_rad_s"}
             if mode is CommandMode.TELEOP
@@ -626,6 +637,9 @@ class ResidentCommandClient:
             raise ValueError("client command values do not match its mode")
         normalized = {key: _finite(value, key) for key, value in values.items()
                       if key not in {"frame_id", "target_track_id"}}
+        for name in ("goal_tolerance_m", "yaw_tolerance_rad"):
+            if name in normalized and normalized[name] < 0.0:
+                raise ValueError(f"{name} must be nonnegative")
         if "target_track_id" in values:
             target = values["target_track_id"]
             require_token(target, "target_track_id")

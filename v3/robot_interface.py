@@ -41,6 +41,7 @@ _FINITE_RESULT_FIELDS = (
     "navigation_reason", "safety_reason", "completion_status_monotonic_ns",
     "distance_requested_m", "distance_executed_m", "distance_remaining_m",
     "angle_requested_rad", "angle_executed_rad", "angle_remaining_rad",
+    "goal_tolerance_m", "yaw_tolerance_rad",
 )
 
 

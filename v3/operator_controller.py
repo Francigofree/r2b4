@@ -639,6 +639,7 @@ class OperatorController:
         self, *, x_m: float, y_m: float, yaw_rad: float | None = None,
         frame_id: str = "R2B4_BOOT_ROBOT_MAP",
         max_v_mps: float = 0.20, max_omega_rad_s: float = 0.60,
+        goal_tolerance_m: float | None = None, yaw_tolerance_rad: float | None = None,
         capture: bool = True, capture_mode: str = DEFAULT_CAPTURE_MODE,
         capture_hz: int = DEFAULT_CAPTURE_HZ,
         session_owner_pid: int | None = None,
@@ -662,6 +663,12 @@ class OperatorController:
         ]
         if yaw is not None:
             args += ["--yaw-rad", str(yaw)]
+        for name, value in (("goal_tolerance_m", goal_tolerance_m), ("yaw_tolerance_rad", yaw_tolerance_rad)):
+            if value is not None:
+                tolerance = self._finite(value, name)
+                if tolerance < 0.0:
+                    raise OperatorError(f"{name} must be nonnegative")
+                args += ["--" + name.replace("_", "-"), str(tolerance)]
         pid, mode = self._start_motion(
             "navigate", capture, capture_mode, args, require_real_motion=False,
             navigate_command_id=command_id, capture_hz=capture_hz,

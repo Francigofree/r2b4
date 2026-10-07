@@ -20,6 +20,11 @@ from v3.operator_controller import DEFAULT_CAPTURE_MODE, OperatorController
 from v3.wheel_motion import WheelMotionLimits
 
 
+# A finite relative request must not disappear into the room-navigation arrival
+# envelope. The running config remains the upper bound on accepted pose error.
+_RELATIVE_COMPLETION_ERROR_FRACTION = 0.10
+
+
 class FiniteNavigationSafetyError(RuntimeError):
     """The finite action could not confirm its final canonical STOP."""
 
@@ -112,6 +117,7 @@ class FiniteNavigationExecutor:
         target: dict[str, object] = {}
         reason = "CANCELLED"
         preparation = None
+        goal_tolerance = yaw_tolerance = None
         requested = dict(parameters)
         try:
             params = dict(parameters)
@@ -200,6 +206,11 @@ class FiniteNavigationExecutor:
                             max_omega = min(runtime_cap, wheels.target_center_spin_rad_s)
                         distance = _pose_distance(pose, target)
                         yaw_error = _pose_angle(pose, target)
+                        if action != "v3.command.navigate":
+                            if distance is not None and distance > 0.0:
+                                goal_tolerance = min(goal_tolerance, distance * _RELATIVE_COMPLETION_ERROR_FRACTION)
+                            if yaw_error is not None and abs(yaw_error) > 0.0:
+                                yaw_tolerance = min(yaw_tolerance, abs(yaw_error) * _RELATIVE_COMPLETION_ERROR_FRACTION)
                         needs_spin = yaw_error is not None and abs(yaw_error) > yaw_tolerance
                         if distance is not None and distance > goal_tolerance:
                             bearing = math.atan2(target["y_m"] - pose["y_m"], target["x_m"] - pose["x_m"])
@@ -215,6 +226,8 @@ class FiniteNavigationExecutor:
                                 **target,
                                 max_v_mps=max_v,
                                 max_omega_rad_s=max_omega,
+                                goal_tolerance_m=goal_tolerance,
+                                yaw_tolerance_rad=yaw_tolerance,
                                 preparation=preparation,
                                 **options,
                             )
@@ -243,6 +256,9 @@ class FiniteNavigationExecutor:
                         deadline,
                         cancel_event,
                         runtime_pid=preparation.runtime_pid,
+                        target=target,
+                        goal_tolerance_m=goal_tolerance,
+                        yaw_tolerance_rad=yaw_tolerance,
                     )
         except TimeoutError:
             reason = "CANCELLED" if cancel_event is not None and cancel_event.is_set() else "TIMEOUT"
@@ -273,6 +289,8 @@ class FiniteNavigationExecutor:
             "angle_executed_rad": (_pose_angle(pose, final_pose)
                                    if comparable and target.get("yaw_rad") is not None else None),
             "angle_remaining_rad": _pose_angle(final_pose, target) if comparable else None,
+            "goal_tolerance_m": goal_tolerance,
+            "yaw_tolerance_rad": yaw_tolerance,
             "runtime_pid": None if preparation is None else preparation.runtime_pid,
             "completion_status_monotonic_ns": final.get("monotonic_ns"),
             "frame_provenance": {
@@ -331,6 +349,7 @@ class FiniteNavigationExecutor:
     def _wait(
         self, mission_id: str, frame_id: str, generation: object,
         deadline: float, cancel_event: threading.Event | None, *, runtime_pid: int,
+        target: Mapping[str, object], goal_tolerance_m: float, yaw_tolerance_rad: float,
     ) -> tuple[Mapping[str, object], str]:
         final: Mapping[str, object] = {}
         progress_at = self._monotonic()
@@ -372,6 +391,12 @@ class FiniteNavigationExecutor:
             if mission.get("mode") != "NAVIGATE":
                 return final, "MISSION_INVALID"
             if nav_status == "COMPLETE":
+                distance = _pose_distance(estimate, target)
+                angle = _pose_angle(estimate, target)
+                if (distance is None or distance > goal_tolerance_m
+                        or target.get("yaw_rad") is not None
+                        and (angle is None or abs(angle) > yaw_tolerance_rad)):
+                    return final, "COMPLETION_OUTSIDE_TOLERANCE"
                 return final, "COMPLETE"
             if nav_status in {"NO_PATH", "INVALIDATED"}:
                 return final, str(nav_status)

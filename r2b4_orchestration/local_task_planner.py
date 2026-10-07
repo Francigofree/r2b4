@@ -445,6 +445,9 @@ class LocalTaskPlanner:
         if text in {"mi a feladat allapota", "feladat statusz", "task status", "what is the task status", "mit csinalsz", "what are you doing"}:
             state = interface.read("brain.state")
             active = state.get("primary_goal") if isinstance(state, Mapping) else None
+            if not isinstance(active, Mapping) or active.get("goal_id") == goal_id or active.get("reason") == "ANSWERED":
+                previous = self._task_outcomes(interface.read("brain.history"), goal_id)
+                active = previous[0] if previous else None
             if isinstance(active, Mapping) and active.get("goal_id") != goal_id:
                 running = active.get("lifecycle") in {"PENDING", "STARTING", "ACTIVE"}
                 label = "A jelenlegi feladat" if running else "Az utolsó feladat"
@@ -454,28 +457,27 @@ class LocalTaskPlanner:
         if text.startswith(("miert ", "why ")) and re.search(r"feladat|task|elozo|previous|nem talalt|didn.t find|stopp|allt", text):
             history = interface.read("brain.history")
             reference = re.search(r"(?:nem talaltad meg|didn.t (?:you )?find)\s+(.+)", text)
-            if isinstance(history, (tuple, list)):
-                for event in reversed(history):
-                    if not isinstance(event, Mapping):
-                        continue
-                    outcome = event.get("goal", event.get("snapshot", event))
-                    if (isinstance(outcome, Mapping) and outcome.get("goal_id") != goal_id
-                            and outcome.get("lifecycle") in {"FAILED", "CANCELLED", "INTERRUPTED", "COMPLETED"}):
-                        if reference and reference[1] not in _fold(str(outcome.get("text", ""))):
-                            continue
-                        reason = str(outcome.get("reason") or "nem ismert")
-                        from .task_graph import classify_failure
-                        failure_code = classify_failure(reason).value
-                        explanations = {
-                            "SEARCH_PLACES_EXHAUSTED": "A megismert keresési helyeket kimerítettem, de nem érkezett friss azonosítás a kért személyről.",
-                            "SEARCH_VIEWS_EXHAUSTED": "A keresési nézeteket végigellenőriztem, de nem volt friss személytalálat.",
-                            "NO_PATH": "Nem találtam járható útvonalat a célhoz.",
-                            "TARGET_LOST": "A korábban kiválasztott személyhez nem volt használható friss megfigyelés.",
-                        }
-                        explanation = (next((value for code, value in explanations.items() if code in reason), "")
-                                       if failure_code in {"NO_PATH", "TARGET_LOST"} else "")
-                        summary = self._history_summary(history, outcome.get("goal_id"))
-                        return f"A korábbi feladat: {str(outcome.get('text', outcome.get('goal_id')))[:256]}. Eredmény: {outcome.get('lifecycle')}; igazolt ok: {reason[:1024]}. {explanation} {summary}".strip()
+            for outcome in self._task_outcomes(history, goal_id):
+                if reference and not self._person_task_matches(outcome, reference[1], interface):
+                    continue
+                reason = str(outcome.get("reason") or "nem ismert")
+                from .task_graph import classify_failure
+                failure_code = classify_failure(reason).value
+                explanations = {
+                    "SEARCH_PLACES_EXHAUSTED": "A megismert keresési helyeket kimerítettem, de nem érkezett friss azonosítás a kért személyről.",
+                    "SEARCH_VIEWS_EXHAUSTED": "A keresési nézeteket végigellenőriztem, de nem volt friss személytalálat.",
+                    "NO_PATH": "Nem találtam járható útvonalat a célhoz.",
+                    "TARGET_LOST": "A korábban kiválasztott személyhez nem volt használható friss megfigyelés.",
+                }
+                explanation = (next((value for code, value in explanations.items() if code in reason), "")
+                               if failure_code in {"NO_PATH", "TARGET_LOST"} else "")
+                target = outcome.get("target")
+                if (isinstance(target, Mapping) and target.get("target_track_id")
+                        and type(target.get("runtime_pid")) is int
+                        and outcome.get("current_subtask") == "behavior.follow_person"):
+                    explanation = "A keresés személyt talált és rögzítette a követés célját; a hiba a követés részfeladatában történt."
+                summary = self._history_summary(history, outcome.get("goal_id"))
+                return f"A korábbi feladat: {str(outcome.get('text', outcome.get('goal_id')))[:256]}. Eredmény: {outcome.get('lifecycle')}; igazolt ok: {reason[:1024]}. {explanation} {summary}".strip()
             return "Nincs elérhető korábbi feladateredmény, amelyből az okot igazolhatnám."
         if text in {"milyen helyeket ismersz", "milyen szobakat ismersz", "list known places", "what places do you know"}:
             entities = self._entities(interface, "place_or_object")
@@ -498,6 +500,42 @@ class LocalTaskPlanner:
             qualifier = "Friss helyadat" if fact.get("freshness") == "FRESH" and fact.get("state") in {"KNOWN", "LIKELY"} else "Utolsó ismert helyadat; jelenlegi helyzete nem igazolt"
             return f"{entity}: {description}. {qualifier}."
         return None
+
+    @staticmethod
+    def _task_outcomes(history, goal_id):
+        """Latest terminal truth per task, excluding conversational answers.
+
+        Restored events arrive in storage order. Original request time, rather
+        than restore/publication time, determines which task was previous.
+        """
+        if not isinstance(history, (tuple, list)):
+            return []
+        latest = {}
+        for index, event in enumerate(history):
+            if not isinstance(event, Mapping):
+                continue
+            outcome = event.get("goal", event.get("snapshot", event))
+            if isinstance(outcome, Mapping) and isinstance(outcome.get("goal_id"), str):
+                latest[outcome["goal_id"]] = (index, outcome)
+        terminal = [(index, outcome) for identity, (index, outcome) in latest.items()
+                    if identity != goal_id and outcome.get("reason") != "ANSWERED"
+                    and outcome.get("lifecycle") in {"FAILED", "CANCELLED", "INTERRUPTED", "COMPLETED"}]
+        return [outcome for _, outcome in sorted(terminal, key=lambda row: (
+            row[1].get("created_ns") if type(row[1].get("created_ns")) is int else row[0], row[0]), reverse=True)]
+
+    def _person_task_matches(self, outcome, reference, interface):
+        reference = re.sub(r"^(?:a|az|the)\s+", "", reference)
+        steps = outcome.get("steps", ())
+        person_steps = [step for step in steps if isinstance(step, Mapping)
+                        and step.get("action") in {"behavior.search_any_person", "behavior.search_person", "behavior.follow_person"}]
+        if reference in {"embert", "ember", "szemelyt", "szemely", "valakit", "someone", "person", "the person"}:
+            return bool(person_steps)
+        if reference in _fold(str(outcome.get("text", ""))):
+            return True
+        entity = self._resolve_entity(interface, reference, kind="person")
+        return entity is not None and any(
+            isinstance(step.get("parameters"), Mapping) and step["parameters"].get("entity_id") == entity
+            for step in person_steps)
 
     @staticmethod
     def _history_summary(history, goal_id) -> str:
