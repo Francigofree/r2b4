@@ -27,12 +27,37 @@ _NUMBERS = {"fel": .5, "half": .5, "egy": 1, "one": 1, "ket": 2, "ketto": 2,
             "kilencven": 90, "ninety": 90}
 _NUMBER = r"(?:\d+(?:[.,]\d+)?|" + "|".join(_NUMBERS) + r")"
 _DISTANCE = r"(?:metert?|meter(?:s)?|metres?|m|centimetert?|centimeters?|cm)"
+_MOVE_VERB = r"(?:menj|haladj|indulj|move|go|drive)"
+_DIRECTION = r"(?:elore|hatra|forward|forwards|backward|backwards)"
+_METRIC_SUFFIX = r"(?:-?(?:t|rol|re|tol|nyi))?"
 _DURATION = re.compile(r"\s+(?:for\s+)?(" + _NUMBER + r")\s*(masodperc(?:ig)?|perc(?:ig)?|seconds?|minutes?|s)\s*$")
 _CLAUSES = re.compile(r"(?<!\d),(?!\d)|;|(?<!\d)\.(?!\d)|\b(?:azt[aá]n|majd|then|and then)\b|\s+(?:[eé]s|and)\s+(?=(?:menj|haladj|fordulj|n[eé]zz|keress|keresd|k[oö]vesd|k[oö]vess|move|go|turn|look|search|find|follow)\b)", re.IGNORECASE)
 
 
 def _number(raw: str) -> float:
     return _NUMBERS[raw] if raw in _NUMBERS else float(raw.replace(",", "."))
+
+
+def _motion_instruction(text: str) -> tuple[str, float] | None:
+    """Concrete motion grammar shared by local parsing and request admission."""
+    metric = r"(" + _NUMBER + r")\s*(" + _DISTANCE + r")" + _METRIC_SUFFIX
+    move = re.fullmatch(r"(?:" + _MOVE_VERB + r"\s+)?(?:(?:meg|tovabb|another)\s+)?(" + _DIRECTION + r")?\s*" + metric + r"(?:\s+(" + _DIRECTION + r"))?", text)
+    if move and (move[1] or move[4] or re.match(_MOVE_VERB + r"\b", text)):
+        direction = move[1] or move[4]
+        if move[1] and move[4] and move[1] != move[4]:
+            return None
+        distance = _number(move[2]) / (100 if move[3].startswith(("centi", "cm")) else 1)
+        return "move", -distance if direction in {"hatra", "backward", "backwards"} else distance
+    direction = re.fullmatch(r"(?:" + _MOVE_VERB + r"\s+)?(" + _DIRECTION + r")", text)
+    if direction:
+        return "direction", -1.0 if direction[1] in {"hatra", "backward", "backwards"} else 1.0
+    turn = re.fullmatch(r"(?:fordulj|turn)(?:\s+(?:to\s+the|the))?\s+(balra|jobbra|left|right)(?:\s+(" + _NUMBER + r")\s*(?:fok(?:ot)?|degrees?|deg)?)?", text)
+    reverse_turn = re.fullmatch(r"(?:fordulj|turn)\s+(" + _NUMBER + r")\s*(?:fok(?:ot)?|degrees?|deg)?\s+(balra|jobbra|left|right)", text)
+    if turn or reverse_turn:
+        direction, number = (turn[1], turn[2]) if turn else (reverse_turn[2], reverse_turn[1])
+        angle = _number(number) if number else 90.0
+        return "turn", -angle if direction in {"jobbra", "right"} else angle
+    return None
 
 
 def explicit_metric_constraints(text: str) -> dict[str, object]:
@@ -50,16 +75,36 @@ def explicit_metric_constraints(text: str) -> dict[str, object]:
         values = tuple(_number(number) * (60 if unit.startswith(("perc", "minute")) else 1)
                        for number, unit in durations)
         result["duration_s" if len(values) == 1 else "durations_s"] = values[0] if len(values) == 1 else values
-    moves, follows = [], []
+    moves, follows, motion = [], [], []
     previous_owner = None
     for clause in _CLAUSES.split(folded):
-        verbs = list(re.finditer(r"\b(menj|haladj|move|go|drive|koves\w*|follow)\b", clause))
+        instruction = _motion_instruction(clause.strip(" ,"))
+        if instruction is None and previous_owner in {"menj", "haladj", "indulj", "move", "go", "drive"} and re.match(r"\s*(?:meg|tovabb|another)\b", clause):
+            instruction = _motion_instruction("menj " + clause.strip())
+        if instruction is not None:
+            motion.append(instruction)
+        elif clause.strip(" ,") in {"nezz korul", "nezz korbe", "look around", "look round"}:
+            motion.extend([("turn", 90.0)] * 4)
+        else:
+            # Extra semantic words cannot erase a clearly stated motion. This
+            # scan extracts only the same small grammar, never provider text.
+            metric = _NUMBER + r"\s*" + _DISTANCE + _METRIC_SUFFIX
+            pattern = (r"\b" + _MOVE_VERB + r"\s+(?:(?:meg|tovabb|another)\s+)?(?:" + _DIRECTION + r"\s+)?" + metric + r"(?:\s+" + _DIRECTION + r")?"
+                       r"|\b(?:fordulj|turn)\s+(?:balra|jobbra|left|right)(?:\s+" + _NUMBER + r"\s*(?:fok(?:ot)?|degrees?|deg)?)?")
+            for match in re.finditer(pattern, clause):
+                item = _motion_instruction(match[0])
+                if item is not None:
+                    motion.append(item)
+        verbs = list(re.finditer(r"\b(menj|haladj|indulj|move|go|drive|koves\w*|follow)\b", clause))
         for metric in re.finditer(r"\b(" + _NUMBER + r")\s*(" + _DISTANCE + r")(?:-?(?:t|rol|re|tol|nyi))?\b", clause):
             owner = next((verb[1] for verb in reversed(verbs) if verb.start() < metric.start()), None)
             if owner is None and not verbs and re.match(r"\s*(?:meg|tovabb|another|" + _NUMBER + r")\b", clause):
                 owner = previous_owner
             if owner is None:
-                continue
+                if instruction is not None and instruction[0] == "move":
+                    owner = "move"
+                else:
+                    continue
             distance = _number(metric[1]) / (100 if metric[2].startswith(("centi", "cm")) else 1)
             (follows if owner.startswith(("koves", "follow")) else moves).append(distance)
         if verbs:
@@ -68,6 +113,8 @@ def explicit_metric_constraints(text: str) -> dict[str, object]:
         result["distance_m" if len(moves) == 1 else "distances_m"] = moves[0] if len(moves) == 1 else tuple(moves)
     if follows:
         result["follow_distance_m" if len(follows) == 1 else "follow_distances_m"] = follows[0] if len(follows) == 1 else tuple(follows)
+    if motion:
+        result["motion_sequence"] = tuple(motion)
     return result
 
 
@@ -137,6 +184,11 @@ class LocalTaskPlanner:
         unresolved: list[int] = []
         for index, clause in enumerate(clauses):
             normalized = _fold(clause)
+            instruction = _motion_instruction(normalized)
+            if instruction is not None and instruction[0] == "turn" and not 0 < abs(instruction[1]) <= 360:
+                return LocalResolution(spoken_text="Egy kérésben 0 és 360 fok közötti fordulást tudok végrehajtani.", unfulfilled=True)
+            if re.fullmatch(r"(?:(?:fordulj|turn)\s+)?" + _NUMBER + r"\s*(?:fok(?:ot)?|degrees?|deg)", normalized):
+                return LocalResolution(spoken_text="Melyik irányba forduljak: balra vagy jobbra?", unfulfilled=True)
             rows = self._method(normalized, interface)
             segments.append(rows)
             if rows is None:
@@ -255,26 +307,24 @@ class LocalTaskPlanner:
             for _ in range(4):
                 rows += [_step("v3.command.turn_by", angle_deg=90), _step("vision.observe")]
             return rows
-        if text in {"keszits kepet", "keszits egy kepet", "nezd meg", "take a picture", "observe", "look"} and duration is None:
+        if text in {"keszits kepet", "keszits egy kepet", "csinalj egy kepet", "csinalj kepet", "nezd meg", "take a picture", "observe", "look"} and duration is None:
             return [_step("vision.observe")]
         if text in {"gyere vissza", "terj vissza", "come back", "return", "return to origin"} and duration is None:
             return [{**_step("v3.command.navigate"), "return_to_origin": True}]
-        if text in {"menj korbe", "jarj korbe", "jarjad be a szobat", "jarj be a szobat", "barangolj", "room cruise", "cruise the room", "explore the room"}:
+        if text in {"menj korbe", "jarj korbe", "jarjad be a szobat", "jarj be a szobat", "szoba felfedezes", "barangolj", "room cruise", "cruise the room", "explore the room"}:
             return [_step("behavior.room_cruise", **({"max_duration_s": duration} if duration else {}))]
-        move = re.fullmatch(r"(?:menj|haladj|move|go|drive)\s+(?:(?:meg|tovabb|another)\s+)?(?:(elore|hatra|forward|forwards|backward|backwards)\s+)?(" + _NUMBER + r")\s*(" + _DISTANCE + r")", text)
-        if move and duration is None:
-            distance = _number(move[2]) / (100 if move[3].startswith(("centi", "cm")) else 1)
-            if not 0 < distance <= 100:
-                return None
-            return [_step("v3.command.move_relative", forward_m=-distance if move[1] in {"hatra", "backward", "backwards"} else distance)]
-        turn = re.fullmatch(r"(?:fordulj|turn)(?:\s+(?:to\s+the|the))?\s+(balra|jobbra|left|right)(?:\s+(" + _NUMBER + r")\s*(?:fokot?|degrees?|deg)?)?", text)
-        if turn and duration is None:
-            angle = _number(turn[2]) if turn[2] else 90.0
-            if not 0 < angle <= 180:
-                return None
-            return [_step("v3.command.turn_by", angle_deg=-angle if turn[1] in {"jobbra", "right"} else angle)]
-        if text in {"menj elore", "haladj elore", "go forward", "move forward", "menj hatra", "haladj hatra", "go backward", "move backward"} and duration is None:
-            return [_step("v3.command.backward" if "hatra" in text or "backward" in text else "v3.command.forward")]
+        motion = _motion_instruction(text)
+        if motion is not None and duration is None:
+            kind, value = motion
+            if kind == "move" and 0 < abs(value) <= 100:
+                return [_step("v3.command.move_relative", forward_m=value)]
+            if kind == "direction":
+                return [_step("v3.command.backward" if value < 0 else "v3.command.forward")]
+            if kind == "turn" and 0 < abs(value) <= 360:
+                # Each physical primitive obeys the existing V3 <=180 bound.
+                first = min(abs(value), 180) * (1 if value > 0 else -1)
+                return [_step("v3.command.turn_by", angle_deg=first)] + ([_step("v3.command.turn_by", angle_deg=value - first)] if value != first else [])
+            return None
         if text in {"keress valakit", "keress egy embert", "keress embert", "keress egy szemelyt", "keresd meg es kovesd", "find someone", "find a person", "search for someone", "search for a person", "find and follow someone"}:
             # The existing anonymous acquisition behavior performs a bounded scan.
             follow = text in {"keresd meg es kovesd", "find and follow someone"}
@@ -283,7 +333,7 @@ class LocalTaskPlanner:
                 search["bind_target"] = True
                 return [search, {**_step("behavior.follow_person", **({"max_duration_s": duration} if duration else {})), "use_bound_target": True}]
             return [search]
-        if text in {"kovess", "kovesd", "kovesd ot", "follow", "follow them", "follow him", "follow her", "follow the person"}:
+        if text in {"kovess", "kovesd", "kovesd ot", "kovesd az embert", "follow", "follow them", "follow him", "follow her", "follow the person"}:
             return [_step("behavior.follow_person", **({"max_duration_s": duration} if duration else {}))]
         search = re.fullmatch(r"(?:keresd meg|keress|find|search for)\s+(.+)", text)
         if search:
@@ -320,7 +370,8 @@ class LocalTaskPlanner:
         return LocalResolution(plan={"entry": "navigate", "nodes": [
             {**rows[0], "node_id": "navigate", "kind": "action", "on_failure": "refresh", "failure_on": ["NO_PATH"]},
             {"node_id": "refresh", "kind": "world_wait", "timeout_s": 5,
-             "condition": {"entity_id": target, "attribute": "location", "predicate": "exists", "require_current": True},
+             "condition": {"entity_id": target, "attribute": "location", "predicate": "exists", "require_current": True,
+                           "newer_than_node_entry": True},
              "on_success": "retry", "on_failure": "report", "failure_on": ["TIMEOUT"]},
             {**rows[0], "node_id": "retry", "kind": "action", "on_failure": "report", "failure_on": ["NO_PATH"]},
             {"node_id": "report", "kind": "report", "message": "A célhoz az újrapróbálás után sem találtam járható utat.", "failure_code": "NO_PATH"},
@@ -389,8 +440,11 @@ class LocalTaskPlanner:
         if text in {"mi a feladat allapota", "feladat statusz", "task status", "what is the task status", "mit csinalsz", "what are you doing"}:
             state = interface.read("brain.state")
             active = state.get("primary_goal") if isinstance(state, Mapping) else None
-            if isinstance(active, Mapping):
-                return f"A feladat: {active.get('text', active.get('goal_id'))}. Állapot: {active.get('lifecycle')}; ok: {active.get('reason') or 'nincs'}."
+            if isinstance(active, Mapping) and active.get("goal_id") != goal_id:
+                running = active.get("lifecycle") in {"PENDING", "STARTING", "ACTIVE"}
+                label = "A jelenlegi feladat" if running else "Az utolsó feladat"
+                subtask = f" Részfeladat: {active.get('current_subtask')}." if running and active.get("current_subtask") else ""
+                return f"{label}: {str(active.get('text', active.get('goal_id')))[:256]}. Állapot: {active.get('lifecycle')}; ok: {str(active.get('reason') or 'nincs')[:1024]}.{subtask}"
             return "Jelenleg nincs aktív feladat."
         if text.startswith(("miert ", "why ")) and re.search(r"feladat|task|elozo|previous|nem talalt|didn.t find|stopp|allt", text):
             history = interface.read("brain.history")
@@ -415,7 +469,8 @@ class LocalTaskPlanner:
                         }
                         explanation = (next((value for code, value in explanations.items() if code in reason), "")
                                        if failure_code in {"NO_PATH", "TARGET_LOST"} else "")
-                        return f"A korábbi feladat: {outcome.get('text', outcome.get('goal_id'))}. Eredmény: {outcome.get('lifecycle')}; igazolt ok: {reason}. {explanation}".strip()
+                        summary = self._history_summary(history, outcome.get("goal_id"))
+                        return f"A korábbi feladat: {str(outcome.get('text', outcome.get('goal_id')))[:256]}. Eredmény: {outcome.get('lifecycle')}; igazolt ok: {reason[:1024]}. {explanation} {summary}".strip()
             return "Nincs elérhető korábbi feladateredmény, amelyből az okot igazolhatnám."
         if text in {"milyen helyeket ismersz", "milyen szobakat ismersz", "list known places", "what places do you know"}:
             entities = self._entities(interface, "place_or_object")
@@ -438,6 +493,32 @@ class LocalTaskPlanner:
             qualifier = "Friss helyadat" if fact.get("freshness") == "FRESH" and fact.get("state") in {"KNOWN", "LIKELY"} else "Utolsó ismert helyadat; jelenlegi helyzete nem igazolt"
             return f"{entity}: {description}. {qualifier}."
         return None
+
+    @staticmethod
+    def _history_summary(history, goal_id) -> str:
+        """Only completed results carrying this goal/subtask identity count."""
+        rows = {}
+        for event in history:
+            if not isinstance(event, Mapping) or event.get("kind") not in {"ACTION_RESULT", "BEHAVIOR_RESULT", "OBSERVATION_RESULT"}:
+                continue
+            outcome = event.get("goal", event.get("snapshot", event))
+            if not isinstance(outcome, Mapping) or outcome.get("goal_id") != goal_id:
+                continue
+            result = outcome.get("result")
+            subtask = outcome.get("subtask_id")
+            if not isinstance(result, Mapping) or not isinstance(subtask, str):
+                continue
+            label = str(outcome.get("current_subtask") or subtask)[:96]
+            target = outcome.get("world_target")
+            if isinstance(target, Mapping) and target.get("entity_id"):
+                label += " → " + str(target["entity_id"])[:96]
+            status = result.get("status") or result.get("reason") or outcome.get("reason") or "rögzített eredmény"
+            rows[subtask] = f"{label}: {str(status)[:128]}"
+        if not rows:
+            return "Nincs elérhető korrelált részfeladat-eredmény."
+        details = list(rows.values())[-6:]
+        prefix = f"Utolsó 6 részfeladat ({len(rows)} rögzített): " if len(rows) > 6 else "Rögzített részfeladatok: "
+        return prefix + "; ".join(details) + "."
 
 
 __all__ = ["LocalResolution", "LocalTaskPlanner", "explicit_metric_constraints"]

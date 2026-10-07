@@ -10,8 +10,17 @@ import re
 import queue
 import threading
 import time
+import fcntl
+import hashlib
+import json
+import math
+import os
+import stat
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Callable
+
+from .prompting import PromptBudgetError
 
 
 class LLMFailoverError(RuntimeError):
@@ -48,12 +57,18 @@ def _http_status_from_text(text: str) -> int | None:
 
 
 def classify_llm_error(exc: Exception) -> _FailurePolicy:
+    # Size admission is request-specific. A large turn must not quarantine a
+    # provider that can still answer a smaller following turn.
+    if isinstance(exc, PromptBudgetError):
+        return _FailurePolicy(False, 0.0, "PROMPT_BUDGET")
     text = f"{type(exc).__name__}: {exc}".lower()
     status = getattr(exc, "status_code", None)
     if not isinstance(status, int):
         status = _http_status_from_text(text)
     code = getattr(exc, "code", None)
     code_text = str(code).lower() if code is not None else ""
+    if status == 413:
+        return _FailurePolicy(False, 0.0, "REQUEST_SIZE")
 
     quota_markers = (
         "subscription_sharing_usage_limit_exceeded",
@@ -123,6 +138,59 @@ def classify_llm_error(exc: Exception) -> _FailurePolicy:
     return _FailurePolicy(False, 15.0, "PROVIDER")
 
 
+def project_cooldown_path(project_root: Path) -> Path:
+    """Quota backoff only: no credentials, prompt data or robot authority."""
+    project = hashlib.sha256(str(project_root.resolve()).encode()).hexdigest()[:20]
+    # Monotonic deadlines are meaningful only within the same machine boot.
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+    boot_scope = hashlib.sha256(boot.encode()).hexdigest()[:20]
+    return Path("/tmp") / f"r2b4-llm-cooldowns-{os.getuid()}-{project}-{boot_scope}.json"
+
+
+class _ProviderCooldowns:
+    """Small same-user, locked host backoff record for one-shot launchers."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def deadline(self, key: str, now: float, *, update: float | None = None) -> float:
+        flags = os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW
+        if update is not None:
+            flags |= os.O_CREAT
+        try:
+            fd = os.open(self._path, flags, 0o600)
+            with os.fdopen(fd, "r+", encoding="ascii") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                        or stat.S_IMODE(info.st_mode) & 0o077 or info.st_size > 8192):
+                    return 0.0
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+                try:
+                    raw = json.loads(stream.read(8193) or "{}")
+                except (ValueError, UnicodeError):
+                    raw = {}
+                values = {
+                    name: float(value) for name, value in raw.items()
+                    if isinstance(raw, dict) and isinstance(name, str) and len(name) <= 256
+                    and isinstance(value, (int, float)) and not isinstance(value, bool)
+                    and math.isfinite(value) and now < value <= now + 301.0
+                } if isinstance(raw, dict) else {}
+                if update is not None:
+                    values[key] = max(values.get(key, 0.0), update)
+                    # The production chain has at most four providers. Bound
+                    # old model revisions as well, without copying diagnostics.
+                    values = dict(sorted(values.items(), key=lambda row: row[1], reverse=True)[:16])
+                    stream.seek(0)
+                    stream.write(json.dumps(values, separators=(",", ":")))
+                    stream.truncate()
+                    stream.flush()
+                return values.get(key, 0.0)
+        except OSError:
+            # Disk/permission trouble does not alter the normal provider chain;
+            # the client's in-memory backoff still applies.
+            return 0.0
+
+
 class FailoverLLMClient:
     """Expose the existing LLM client methods across an ordered provider chain."""
 
@@ -134,6 +202,7 @@ class FailoverLLMClient:
         retry_delay_s: float = 0.20,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
+        cooldown_path: Path | None = None,
     ) -> None:
         if not candidates:
             raise ValueError("at least one LLM provider candidate is required")
@@ -145,6 +214,7 @@ class FailoverLLMClient:
         self._monotonic = monotonic
         self._sleep = sleep
         self._cooldown_until: dict[str, float] = {}
+        self._shared_cooldowns = _ProviderCooldowns(cooldown_path) if cooldown_path is not None else None
         self._last_provider: str | None = None
         self._request_slot = threading.BoundedSemaphore(1)
 
@@ -209,7 +279,6 @@ class FailoverLLMClient:
                     raise value
                 return value
         failures: list[dict[str, object]] = []
-        now = self._monotonic()
         attempted = 0
         inference_attempt_count = 0
         for candidate in self._candidates:
@@ -217,7 +286,11 @@ class FailoverLLMClient:
             method = getattr(candidate.client, method_name, None)
             if not callable(method):
                 continue
-            cooldown = self._cooldown_until.get(candidate.name, 0.0)
+            now = self._monotonic()
+            cooldown_key = f"{candidate.name}:{candidate.model}"
+            cooldown = self._cooldown_until.get(cooldown_key, 0.0)
+            if self._shared_cooldowns is not None:
+                cooldown = max(cooldown, self._shared_cooldowns.deadline(cooldown_key, now))
             if cooldown > now:
                 failures.append(
                     {
@@ -237,7 +310,7 @@ class FailoverLLMClient:
                 try:
                     result = request(method)
                     self._last_provider = candidate.name
-                    self._cooldown_until.pop(candidate.name, None)
+                    self._cooldown_until.pop(cooldown_key, None)
                     if method_name == "complete_agent_step":
                         from r2b4_orchestration.agent_contracts import AgentModelReply
                         if isinstance(result, AgentModelReply):
@@ -267,7 +340,11 @@ class FailoverLLMClient:
                                 cancel_event.wait(delay)
                         continue
                     if policy.cooldown_s > 0:
-                        self._cooldown_until[candidate.name] = self._monotonic() + policy.cooldown_s
+                        now = self._monotonic()
+                        until = now + policy.cooldown_s
+                        self._cooldown_until[cooldown_key] = until
+                        if self._shared_cooldowns is not None:
+                            self._shared_cooldowns.deadline(cooldown_key, now, update=until)
                     break
         summary = "; ".join(
             f"{item['provider']}[{item.get('category')}]: {item.get('error', 'cooldown')}"
@@ -286,4 +363,5 @@ __all__ = [
     "LLMFailoverError",
     "LLMProviderCandidate",
     "classify_llm_error",
+    "project_cooldown_path",
 ]

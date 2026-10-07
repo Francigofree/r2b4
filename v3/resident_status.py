@@ -101,6 +101,7 @@ def _tick_status(
             "global_pose": encode_value(estimate.global_pose),
             "map_to_odom": encode_value(estimate.map_to_odom),
             "localization_quality": encode_value(estimate.localization_quality),
+            "transform_revision": estimate.transform_revision,
             "frame_id": estimate.frame_id,
             "x_m": estimate.x_m,
             "y_m": estimate.y_m,
@@ -137,7 +138,14 @@ def _tick_status(
                 None
                 if world.local_costmap is None
                 else {
+                    "frame_id": world.local_costmap.frame_id,
                     "revision": world.local_costmap.revision,
+                    "source_sequence": world.local_costmap.source_sequence,
+                    # Freshness belongs to the original L4 scan, not status
+                    # publication. Export only its compact lineage, no cells.
+                    "measurement_monotonic_ns": (
+                        world.context.monotonic_ns - world.local_costmap.freshness_ns
+                    ),
                     "occupied_cell_count": len(world.local_costmap.occupied_cells),
                     "freshness_ns": world.local_costmap.freshness_ns,
                     "radius_m": world.local_costmap.radius_m,

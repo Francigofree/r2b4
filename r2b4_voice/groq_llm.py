@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Mapping, Sequence
 
 from r2b4_orchestration.agent_contracts import (
@@ -17,6 +18,7 @@ from r2b4_orchestration.agent_contracts import (
 
 from .conversation_contracts import LLMDecision
 from .llm_decision import DECISION_SCHEMA, DecisionParseError, build_decision_schema, parse_llm_decision
+from .prompting import PromptBudgetError
 
 
 class LLMRequestError(RuntimeError):
@@ -28,6 +30,12 @@ class GroqChatConfig:
     endpoint: str = "https://api.groq.com/openai/v1/chat/completions"
     model: str = "openai/gpt-oss-20b"
     timeout_s: float = 20.0
+    # Per-request admission, not the account's remaining minute quota. The
+    # default matches the observed deployment's 8000 TPM tier and may be set
+    # independently for another model/account through llm_provider.
+    request_token_budget: int = 8000
+    max_completion_tokens: int = 1024
+    estimated_bytes_per_token: float = 3.0
 
     def __post_init__(self) -> None:
         if not self.endpoint.startswith("https://"):
@@ -36,6 +44,17 @@ class GroqChatConfig:
             raise ValueError("model must be non-empty")
         if self.timeout_s <= 0:
             raise ValueError("timeout_s must be positive")
+        for name in ("request_token_budget", "max_completion_tokens"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.max_completion_tokens + 128 >= self.request_token_budget:
+            raise ValueError("Groq completion budget leaves no prompt budget")
+        if (not isinstance(self.estimated_bytes_per_token, (int, float))
+                or isinstance(self.estimated_bytes_per_token, bool)
+                or not math.isfinite(self.estimated_bytes_per_token)
+                or not 1.0 <= self.estimated_bytes_per_token <= 4.0):
+            raise ValueError("estimated_bytes_per_token must be within [1, 4]")
 
 
 UrlOpen = Callable[..., object]
@@ -83,14 +102,15 @@ class GroqStructuredChatClient:
     ) -> AgentModelReply:
         if images:
             raise LLMRequestError("Groq text model cannot consume canonical image attachments")
-        raw = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step")
+        raw, size = self._structured(messages, build_agent_step_schema(tool_catalog, action_catalog), "r2b4_agent_step")
         try:
-            return parse_agent_model_reply(
+            reply = parse_agent_model_reply(
                 raw,
                 model=self._config.model,
                 tool_catalog=tool_catalog,
                 action_catalog=action_catalog,
             )
+            return replace(reply, inference_metadata=tuple(size.items()))
         except (ValueError, DecisionParseError) as exc:
             raise LLMRequestError(str(exc)) from exc
 
@@ -101,7 +121,7 @@ class GroqStructuredChatClient:
         action_catalog: Sequence[Mapping[str, object]] | None,
     ) -> LLMDecision:
         schema = build_decision_schema(action_catalog) if action_catalog is not None else DECISION_SCHEMA
-        raw = self._structured(messages, schema, "r2b4_llm_decision")
+        raw, _size = self._structured(messages, schema, "r2b4_llm_decision")
         try:
             return parse_llm_decision(raw, model=self._config.model, action_catalog=action_catalog)
         except DecisionParseError as exc:
@@ -112,12 +132,13 @@ class GroqStructuredChatClient:
         messages: Sequence[Mapping[str, str]],
         schema: Mapping[str, object],
         schema_name: str,
-    ) -> object:
+    ) -> tuple[object, dict[str, object]]:
         if not messages:
             raise ValueError("messages must not be empty")
         body = json.dumps(
             {
                 "model": self._config.model,
+                "max_completion_tokens": self._config.max_completion_tokens,
                 "messages": [dict(item) for item in messages],
                 "response_format": {
                     "type": "json_schema",
@@ -127,6 +148,18 @@ class GroqStructuredChatClient:
             ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")
+        # No model tokenizer is installed on the robot. The configured UTF-8
+        # bytes/token ratio estimates the compact text+JSON prompt; the default
+        # is below the 3.2..3.7 ratio measured on the failing deployment requests.
+        # not an exact token count or a guarantee about externally shared TPM.
+        # Preserve the full current user request, constraints, schema and tool
+        # results: refuse oversized requests instead of truncating their meaning.
+        token_estimate = (math.ceil(len(body) / self._config.estimated_bytes_per_token)
+                          + 128 + self._config.max_completion_tokens)
+        if token_estimate > self._config.request_token_budget:
+            raise PromptBudgetError(
+                f"GROQ_REQUEST_TOKEN_BUDGET_EXCEEDED:{token_estimate}>{self._config.request_token_budget}"
+            )
         request = urllib.request.Request(
             self._config.endpoint,
             data=body,
@@ -157,7 +190,20 @@ class GroqStructuredChatClient:
         try:
             decoded = json.loads(payload.decode("utf-8"))
             content = decoded["choices"][0]["message"]["content"]
-            return json.loads(content)
+            usage = decoded.get("usage")
+            size: dict[str, object] = {
+                "provider_request_utf8_bytes": len(body),
+                "provider_request_token_estimate": token_estimate,
+                "provider_request_token_budget": self._config.request_token_budget,
+                "max_completion_tokens": self._config.max_completion_tokens,
+                "token_estimate_method": f"utf8_bytes/{self._config.estimated_bytes_per_token:g}+128+max_completion_tokens",
+            }
+            if isinstance(usage, Mapping):
+                for wire, name in (("prompt_tokens", "input_tokens"), ("completion_tokens", "output_tokens")):
+                    value = usage.get(wire)
+                    if isinstance(value, int) and not isinstance(value, bool):
+                        size[name] = value
+            return json.loads(content), size
         except (UnicodeError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise LLMRequestError("Groq LLM returned an invalid structured response") from exc
 

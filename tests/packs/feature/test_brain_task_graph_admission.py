@@ -1,5 +1,8 @@
 """Failure edges cannot claim unmet goals or select another runtime target."""
+import pytest
+
 from tests.packs.feature.test_brain_core import runtime
+from r2b4_orchestration.local_task_planner import LocalTaskPlanner
 
 
 def adopt(owner, text, nodes):
@@ -79,3 +82,51 @@ def test_maximal_report_preserves_message_and_typed_failure():
     assert result["lifecycle"] == "FAILED" and result["failure_code"] == "NO_PATH"
     assert result["result"]["message"] == message
     assert robot.actions == []
+
+
+@pytest.mark.parametrize("graph", [False, True])
+@pytest.mark.parametrize("text,steps", [
+    ("Menj előre 1 métert", [{"action": "v3.command.move_relative", "parameters": {"forward_m": -1}}]),
+    ("Fordulj balra 185 fokot", [{"action": "v3.command.turn_by", "parameters": {"angle_deg": -30}}]),
+    ("Menj előre 1m, majd fordulj jobbra 90 fokot", [
+        {"action": "v3.command.turn_by", "parameters": {"angle_deg": -90}},
+        {"action": "v3.command.move_relative", "parameters": {"forward_m": 1}}]),
+    ("Menj előre 1m és nézd meg", [{"action": "v3.command.move_relative", "parameters": {"forward_m": -1}}]),
+])
+def test_signed_user_motion_and_order_cannot_be_reinterpreted_by_any_plan_path(graph, text, steps):
+    _, robot, owner = runtime()
+    pending = owner.brain.submit(text)
+    plan = {"steps": steps}
+    if graph:
+        nodes = [{**row, "node_id": str(index), "kind": "action",
+                  **({"on_success": str(index + 1)} if index + 1 < len(steps) else {})}
+                 for index, row in enumerate(steps)]
+        plan = {"entry": "0", "nodes": nodes}
+    result = owner.brain.adopt(pending["goal_id"], plan)
+    assert result["lifecycle"] == "FAILED"
+    assert "USER_CONSTRAINT_CHANGED" in result["reason"]
+    assert robot.actions == []
+
+
+@pytest.mark.parametrize("text", ["fordulj balra 185 fokot", "fordulj 195 fokot jobbra"])
+def test_correct_decomposed_turn_is_admitted_without_erasing_signed_request(text):
+    _, robot, owner = runtime()
+    plan = LocalTaskPlanner().resolve(text, owner).plan
+    pending = owner.brain.submit(text)
+    steps, constraints = owner.brain._plan(plan, owner.brain._goals[pending["goal_id"]])
+    assert len(steps) == 2
+    assert sum(dict(step.parameters)["angle_deg"] for step in steps) == dict(constraints)["motion_sequence"][0][1]
+    assert robot.actions == []
+
+
+def test_long_runtime_root_failure_survives_brain_without_secondary_reason_failure():
+    _, robot, owner = runtime()
+    def crash(*_args, **_params):
+        raise RuntimeError("PROCESS_CRASH:L3_BOOTSTRAP:" + "diagnostic " * 300)
+    robot.execute = crash
+    pending = owner.brain.submit("Menj 1m")
+    result = owner.brain.adopt(pending["goal_id"], {"steps": [
+        {"action": "v3.command.move_relative", "parameters": {"forward_m": 1}}]})
+    assert result["lifecycle"] == "FAILED" and result["failure_code"] == "PROCESS_CRASH"
+    assert result["reason"].startswith("RuntimeError:PROCESS_CRASH:L3_BOOTSTRAP:")
+    assert len(result["reason"]) <= 1024

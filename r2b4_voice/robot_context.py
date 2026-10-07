@@ -73,7 +73,7 @@ class RobotContextBuilder:
             # brain.state is small, current task authority data.  Do not add
             # robot.state here: robot.state embeds world + brain + behavior and
             # therefore duplicates the same state in the default LLM payload.
-            "brain": self._mapping_or_none(self._read_if_available(caps, "brain.state")),
+            "brain": self._brain_summary(self._read_if_available(caps, "brain.state")),
         }
 
         if isinstance(status, Mapping):
@@ -155,6 +155,34 @@ class RobotContextBuilder:
     @staticmethod
     def _mapping_or_none(value: object) -> dict[str, object] | None:
         return dict(value) if isinstance(value, Mapping) else None
+
+    @staticmethod
+    def _brain_summary(value: object) -> dict[str, object] | None:
+        """Current task metadata; full graphs/results remain on brain.state."""
+        if not isinstance(value, Mapping):
+            return None
+        summary = {name: value[name] for name in ("schema", "identity", "role", "revision", "personality")
+                   if name in value}
+        def goal(raw):
+            if not isinstance(raw, Mapping):
+                return None
+            # Do not duplicate completed motor/navigation results, graphs or
+            # historical user text in every new specialist request. Constraints
+            # remain exact; the current user text is separately preserved by
+            # PromptAssembler. IDs/times retain correlation with full read tools.
+            fields = ("goal_id", "decision_id", "subtask_id", "lifecycle", "priority",
+                      "current_subtask", "current_node_id", "step_index", "attempt",
+                      "failure_code", "reason", "constraints", "target", "revision", "updated_ns")
+            return {name: raw[name] for name in fields if name in raw}
+        summary["primary_goal"] = goal(value.get("primary_goal"))
+        for name in ("pending_goals", "background_goals"):
+            raw = value.get(name)
+            if isinstance(raw, (list, tuple)):
+                summary[name] = [goal(item) for item in raw[:4]]
+                summary[name + "_count"] = len(raw)
+                summary[name + "_truncated"] = len(raw) > 4
+        summary["details_resource"] = "brain.state"
+        return summary
 
 
 __all__ = ["ROBOT_CONTEXT_SCHEMA", "RobotContextBuilder"]

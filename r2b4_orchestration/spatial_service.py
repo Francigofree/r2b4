@@ -163,6 +163,11 @@ class SpatialService:
         context = {"runtime_pid": runtime_pid, "frame_ids": frames,
                    "localization_generation": generation, "map_revision": map_revision,
                    "status_time_ns": stamp, "tick_id": tick, "clock_epoch": self.world.clock_epoch}
+        context["local_geometry_usable"] = (isinstance(quality, Mapping)
+            and quality.get("local_translation") == "GOOD" and quality.get("heading") == "GOOD"
+            and quality.get("local_pose_continuous") is True and quality.get("pose_discontinuity") is False)
+        context["global_position_usable"] = isinstance(quality, Mapping) and quality.get("global_position") == "GOOD"
+        context["transform_revision"] = estimate.get("transform_revision")
         with self._lock:
             if runtime_pid in self._retired_runtimes:
                 return
@@ -179,9 +184,11 @@ class SpatialService:
             old_identity = None if previous is None else (previous["runtime_pid"], previous["frame_ids"],
                                                           previous["localization_generation"], previous["map_revision"])
             self._context = context
-            if identity != old_identity:
+            lost_local_geometry = (previous is not None and previous["local_geometry_usable"]
+                                   and not context["local_geometry_usable"])
+            if identity != old_identity or lost_local_geometry:
                 self._revision += 1
-                if old_identity is None or identity[:3] != old_identity[:3]:
+                if old_identity is None or identity[:3] != old_identity[:3] or lost_local_geometry:
                     self._continuity += 1
                     # A newly published old measurement cannot establish new
                     # frame knowledge after an observed continuity change.
@@ -205,6 +212,11 @@ class SpatialService:
                 scope = fact.observation.validity_scope
                 if self._context is not None and scope is not None and scope.runtime_pid == self._context["runtime_pid"]:
                     binding = self._context["localization_generation"]
+                if isinstance(fact.value, Mapping) and fact.value.get("kind") == "visited_area":
+                    # This completed L3/L4 projection already has an explicit
+                    # generation; delayed observations cannot borrow a new one.
+                    declared = fact.value.get("localization_generation")
+                    binding = declared if type(declared) is int and declared >= 0 else None
                 entry = (fact, binding, self._continuity, True)
                 size = len(json.dumps(self._entry_json(key, entry), allow_nan=False, separators=(",", ":")).encode()) + 512
                 if size > self.max_bytes:
@@ -243,6 +255,12 @@ class SpatialService:
             if coordinates and (generation is None or context["localization_generation"] is None):
                 return replace(fact, state=KnowledgeState.STALE,
                                freshness="LOCALIZATION_GENERATION_UNAVAILABLE", age_ns=age)
+            if isinstance(fact.value, Mapping) and fact.value.get("kind") == "visited_area":
+                if (not coordinates or not context["local_geometry_usable"]
+                        or location.frame_id != "R2B4_ODOM_LOCAL" and (
+                            not context["global_position_usable"]
+                            or fact.value.get("transform_revision") != context["transform_revision"])):
+                    return replace(fact, state=KnowledgeState.STALE, freshness="LOCALIZATION_UNUSABLE", age_ns=age)
             if (scope is None or scope.runtime_pid != context["runtime_pid"]
                     or scope.frame_id not in context["frame_ids"]
                     or generation != context["localization_generation"]
@@ -298,6 +316,9 @@ class SpatialService:
             for entity, facts in grouped.items():
                 domains = {fact.domain for fact in facts}
                 kind = "place" if "room_topology" in domains else "person" if "person_position" in domains or "person_identity" in domains else "object" if "object_position" in domains or "object_identity" in domains else "spatial_entity"
+                if kind == "spatial_entity" and any(isinstance(fact.value, Mapping)
+                        and fact.value.get("kind") == "visited_area" for fact in facts):
+                    kind = "geometric_area"
                 entities.append(SpatialEntity(entity, kind, tuple(facts)))
             selected = entities if query.kind == "entities" else relations
             return SpatialQueryResult(self._revision, now, self.world.clock_epoch, query,

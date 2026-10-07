@@ -134,3 +134,30 @@ def test_graph_restart_keeps_task_identity_and_never_resumes():
     assert result["lifecycle"] == "INTERRUPTED" and result["failure_code"] == "RUNTIME_RESTART"
     assert result["current_node_id"] == "wait" and result["task_graph"] is not None
     assert robot.actions == []
+
+
+def test_refresh_wait_requires_new_measurement_for_its_target_before_motion():
+    clock, robot, owner = runtime()
+    def observe(entity, stamp, sequence):
+        owner.world.observe(entity, "open", True, domain="door_state", source="test",
+            measurement_time_ns=stamp, confidence=1, lineage=(f"door:{sequence}",), sequence=sequence)
+    observe("door", clock.now, 1)
+    goal = graph_goal(owner, [
+        {"node_id": "refresh", "kind": "world_wait", "timeout_s": 5,
+         "condition": {"entity_id": "door", "attribute": "open", "newer_than_node_entry": True},
+         "on_success": "move"},
+        {"node_id": "move", "kind": "action", "action": "v3.command.move_relative", "parameters": {"forward_m": .5}},
+    ])
+    assert goal["lifecycle"] == "ACTIVE" and robot.actions == []
+    clock.now += 1_000_000
+    observe("other-door", clock.now, 2)
+    owner.brain.step()
+    assert robot.actions == []
+    # A delayed re-publication does not renew the measurement identity.
+    observe("door", clock.now - 1_000_000, 2)
+    owner.brain.step()
+    assert robot.actions == []
+    clock.now += 1_000_000
+    observe("door", clock.now, 3)
+    wait_for(lambda: owner.brain.goal(goal["goal_id"])["lifecycle"] == "COMPLETED")
+    assert len(robot.actions) == 1

@@ -45,6 +45,60 @@ CAPTURE_MODES = frozenset({"alap", "full", "nincs"})
 class OperatorError(RuntimeError):
     """A host/operator operation could not be completed safely."""
 
+    def __init__(self, message: str, *, reason_code: str | None = None):
+        self.reason_code = reason_code
+        super().__init__(f"{reason_code}:{message}" if reason_code else message)
+
+
+def _runtime_failure_error(diagnostics: Mapping[str, object], message: str, *,
+                           baseline: Mapping[str, object] | None = None) -> OperatorError:
+    """Keep a failed runtime's root cause compact at the host execution edge.
+
+    Full status/log diagnostics remain observation data. They must not become
+    an exception payload that can break the Brain's bounded result contract.
+    """
+    status = diagnostics.get("status")
+    status = status if isinstance(status, Mapping) else {}
+    if baseline is not None and status == baseline:
+        status = {}  # A previous runtime's report is not this startup's fault.
+    payload = status
+    # A startup failure may exit before the status sidecar publishes its report.
+    # The existing runtime log can still identify that failure without copying
+    # its complete report into the execution result.
+    tail = diagnostics.get("runtime_log_tail", ())
+    for line in reversed(tail if isinstance(tail, (tuple, list)) else ()):
+        if not isinstance(line, str) or len(line) > 65_536:
+            continue
+        try:
+            record = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(record, Mapping) and (record.get("fault_layer") or record.get("error_type")):
+            payload = record
+            break
+    report = payload.get("report")
+    report = report if isinstance(report, Mapping) else payload
+    fault = report.get("fault_layer") or payload.get("fault_layer")
+    error_type = payload.get("error_type")
+    if fault:
+        code = "RUNTIME_FAULT:" + str(fault)[:32]
+    elif error_type or payload.get("state", payload.get("status")) in {"ERROR", "STOPPED"}:
+        code = "PROCESS_CRASH:" + str(error_type or "RUNTIME_EXITED")[:64]
+    else:
+        code = "TRANSPORT_FAILURE:RUNTIME_READY_TIMEOUT"
+    fields = {
+        "state": payload.get("state", payload.get("status")),
+        "fault_layer": fault,
+        "reason": report.get("final_reason", report.get("exit_reason", payload.get("safety_reason"))),
+        "error_type": error_type,
+        "tick_id": payload.get("tick_id", report.get("last_tick_id")),
+    }
+    detail = "; ".join(f"{key}={str(value)[:96]}" for key, value in fields.items() if value is not None)
+    runtime_log = diagnostics.get("runtime_log")
+    if isinstance(runtime_log, str):
+        detail += "; runtime_log=" + runtime_log[:256]
+    return OperatorError(message + ("; " + detail if detail else ""), reason_code=code)
+
 
 @dataclass(frozen=True, slots=True)
 class OperatorEvent:
@@ -308,8 +362,13 @@ class OperatorController:
 
         if pid is None or not self._pid_matches(pid, ("v3_process_runtime.py",)):
             self._unlink(self.runtime_pid_file)
-            tail = "\n".join(self._tail(runtime_log, 30))
-            raise OperatorError(f"runtime failed to start{': ' + tail if tail else ''}")
+            diag = self.diagnostics()
+            error = _runtime_failure_error(diag, "runtime failed to start", baseline=baseline)
+            try:
+                self._emit("error", str(error), diag)
+            except Exception:
+                pass  # Passive diagnostics must not mask the startup failure.
+            raise error
 
         if not self._wait_fresh_ready(pid, baseline, timeout=20.0):
             diag = self.diagnostics()
@@ -317,7 +376,12 @@ class OperatorController:
                 self.runtime_stop()
             except Exception:
                 pass
-            raise OperatorError(f"runtime did not publish a fresh ready status: {diag}")
+            error = _runtime_failure_error(diag, "runtime did not publish a fresh ready status", baseline=baseline)
+            try:
+                self._emit("error", str(error), diag)
+            except Exception:
+                pass
+            raise error
 
         self._emit("info", f"runtime: STARTED (PID {pid})")
         if mode == "alap":
@@ -1460,7 +1524,10 @@ class OperatorController:
             or status.get("fault_layer")
             or status.get("safety_decision") == "FAULT"
         ):
-            raise OperatorError(f"runtime telemetry unavailable, stale or faulted: {status}")
+            error = _runtime_failure_error({"status": status}, "runtime telemetry unavailable, stale or faulted")
+            if status.get("state") == "RUNNING" and not status.get("fault_layer") and status.get("safety_decision") != "FAULT":
+                error = OperatorError("runtime telemetry unavailable, stale or faulted", reason_code="STALE_WORLD:STATUS_STALE")
+            raise error
         return status
 
     @staticmethod

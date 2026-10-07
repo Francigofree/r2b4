@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .gemini_llm import GeminiChatConfig, GeminiStructuredChatClient
 from .groq_llm import GroqChatConfig, GroqStructuredChatClient
-from .llm_failover import FailoverLLMClient, LLMProviderCandidate
+from .llm_failover import FailoverLLMClient, LLMProviderCandidate, project_cooldown_path
 from .openai_llm import OpenAIChatConfig, OpenAIResponsesChatClient
 from .openai_oauth import ChatGPTOAuthTokenProvider, OAuthError, credential_status
 
@@ -202,7 +202,12 @@ def build_llm_client(
             candidates.append(
                 LLMProviderCandidate(
                     "groq",
-                    GroqStructuredChatClient(api_key=key, config=GroqChatConfig(model=current_model)),
+                    GroqStructuredChatClient(api_key=key, config=GroqChatConfig(
+                        model=current_model,
+                        request_token_budget=int(_setting(values, "R2B4_GROQ_REQUEST_TOKEN_BUDGET") or "8000"),
+                        max_completion_tokens=int(_setting(values, "R2B4_GROQ_MAX_COMPLETION_TOKENS") or "1024"),
+                        estimated_bytes_per_token=float(_setting(values, "R2B4_GROQ_ESTIMATED_BYTES_PER_TOKEN") or "3"),
+                    )),
                 )
             )
 
@@ -213,7 +218,7 @@ def build_llm_client(
             "or configure OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY. "
             f"local_auth={summary}"
         )
-    return FailoverLLMClient(candidates)
+    return FailoverLLMClient(candidates, cooldown_path=project_cooldown_path(root))
 
 
 __all__ = [

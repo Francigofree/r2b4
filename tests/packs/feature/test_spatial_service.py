@@ -1,5 +1,7 @@
 """Derived persistent spatial knowledge never renews or revives old coordinates."""
 import json
+import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,6 +9,186 @@ from r2b4_orchestration.robot_runtime import PublicRobotInterfaceAdapter, Public
 from r2b4_orchestration.spatial_service import SpatialQuery, SpatialQueryResult, SpatialService
 from r2b4_orchestration.world_model import KnowledgeState, PublicWorldModel, ValidityScope
 from v3.robot_interface import RobotInterface
+
+
+def geometry_tick(clock, *, tick=1, sequence=8, measured=None, x_m=1.25,
+                  frame="R2B4_ODOM_LOCAL", generation=1, cells=1):
+    from rig import healthy_localization
+    from v3.contracts import (CostmapCell, FinalActuation, RobotEstimate,
+                             RollingLocalCostmap, SafetyDecision, TickContext, WorldSnapshot)
+    from v3.engine import LayerRecord, TickResult, TickTrace
+    stamp = clock.now - 10
+    measured = stamp - 10_000_000 if measured is None else measured
+    ctx = TickContext(tick, stamp)
+    estimate = RobotEstimate(ctx, frame, x_m, 2.25, .2, 0., 0., (0.,) * 25,
+                             localization_quality=healthy_localization(generation=generation),
+                             transform_revision=4)
+    costmap = RollingLocalCostmap(frame, 7, .1, 4.,
+        tuple(CostmapCell(index, 0, 1) for index in range(cells)), sequence, stamp - measured)
+    world = WorldSnapshot(ctx, frame, 9, (), stamp - measured, local_costmap=costmap)
+    actuation = FinalActuation(ctx, 0., 0., False, SafetyDecision.STOP, "CLEAR", "NOT_ACTIVE")
+    return TickResult(actuation, TickTrace(ctx, (
+        LayerRecord("L3", estimate), LayerRecord("L4", world))))
+
+
+def completed_geometry(clock, **values):
+    """Exercise the real completed V3 -> compact status -> host projection."""
+    from v3.resident_status import _tick_status
+    return _tick_status(geometry_tick(clock, **values))
+
+
+def test_completed_geometry_populates_persistent_anonymous_spatial_memory(tmp_path):
+    clock = Clock()
+
+    class Backend:
+        def stop(self):
+            raise AssertionError("spatial population must not actuate")
+
+    def runtime():
+        return PublicRobotRuntime(Backend(), root=tmp_path,
+            world=PublicWorldModel(clock_ns=clock, clock_epoch="boot-a"), clock_ns=clock)
+
+    host = runtime()
+    status = completed_geometry(clock)
+    host.ingest_status(status, runtime_pid=123)
+    entities = host.spatial_query(SpatialQuery(require_current=True)).entities
+    assert len(entities) == 1 and entities[0].kind == "geometric_area"
+    area, fact = entities[0], entities[0].facts[0]
+    measured = status["world"]["local_costmap"]["measurement_monotonic_ns"]
+    assert fact.observation.measurement_time_ns == measured
+    assert fact.observation.sequence == 8 and fact.observation.revision == 7
+    assert fact.value["pose_reference_time_ns"] == status["monotonic_ns"]
+    assert fact.value["localization_generation"] == 1
+    assert fact.value["geometry"]["measurement_time_ns"] == measured
+    assert fact.observation.validity_scope.map_revision == 9
+    assert {"L3:estimate_reference_time", "L3:generation:1", "L3:transform:4",
+            "L4:map:9", "L4:costmap:7", "L4:source_sequence:8"} <= set(fact.observation.lineage)
+    assert fact.state is KnowledgeState.LIKELY and fact.value["motion_authority"] is False
+    assert not host.spatial_query(SpatialQuery(kind="relations")).relations
+    host._persist(force=True)
+    restored = runtime()
+    restored.ingest_status(status, runtime_pid=123)
+    assert not restored.spatial_query(SpatialQuery(require_current=True)).entities
+    remembered = restored.spatial_query(SpatialQuery(entity_id=area.entity_id)).entities[0].facts[0]
+    assert remembered.freshness == "RESTORED_UNVALIDATED"
+    assert remembered.observation == fact.observation
+    clock.now += 20_000_000
+    restored.ingest_status(completed_geometry(clock, tick=2, sequence=9), runtime_pid=123)
+    refreshed = restored.spatial_query(SpatialQuery(require_current=True)).entities[0].facts[0]
+    assert refreshed.observation.measurement_time_ns > measured
+
+
+def test_predicted_pose_and_costmap_maintenance_never_renew_a_scan_or_create_areas():
+    clock = Clock()
+    world = PublicWorldModel(clock_ns=clock, clock_epoch="boot-a")
+    host = PublicRobotRuntime(object(), world=world, clock_ns=clock)
+    status = completed_geometry(clock)
+    host.ingest_status(status, runtime_pid=123)
+    original = host.spatial_query(SpatialQuery()).entities[0].facts[0]
+    measured = original.observation.measurement_time_ns
+    clock.now += 20_000_000
+    predicted = completed_geometry(clock, tick=2, measured=measured, x_m=3.25)
+    predicted["world"]["map_revision"] = 10
+    predicted["world"]["local_costmap"]["revision"] = 8
+    host.ingest_status(predicted, runtime_pid=123)
+    entities = host.spatial_query(SpatialQuery()).entities
+    assert len(entities) == 1
+    assert entities[0].facts[0].observation == original.observation
+    assert entities[0].facts[0].freshness == "SCOPE_MISMATCH"
+    assert not host.spatial_query(SpatialQuery(require_current=True)).entities
+    clock.now += 200_000_000
+    host.ingest_status(completed_geometry(clock, tick=3, sequence=9, measured=measured, x_m=3.25), runtime_pid=123)
+    assert len(host.spatial_query(SpatialQuery()).entities) == 1
+
+
+@pytest.mark.parametrize("invalid", ("missing_sequence", "missing_generation", "lost_pose", "discontinuous", "future_measurement"))
+def test_incomplete_or_unaligned_geometry_cannot_populate_spatial_coordinates(invalid):
+    clock = Clock()
+    status = completed_geometry(clock)
+    if invalid == "missing_sequence":
+        del status["world"]["local_costmap"]["source_sequence"]
+    elif invalid == "missing_generation":
+        del status["estimate"]["localization_quality"]["generation"]
+    elif invalid == "lost_pose":
+        status["estimate"]["localization_quality"]["local_translation"] = "LOST"
+    elif invalid == "discontinuous":
+        status["estimate"]["localization_quality"]["pose_discontinuity"] = True
+    else:
+        status["world"]["local_costmap"]["measurement_monotonic_ns"] = clock.now + 1
+    host = PublicRobotRuntime(object(), world=PublicWorldModel(clock_ns=clock, clock_epoch="boot-a"), clock_ns=clock)
+    host.ingest_status(status, runtime_pid=123)
+    assert not host.spatial_query(SpatialQuery()).entities
+
+
+def test_geometry_retains_original_generation_and_fails_closed_after_pose_loss():
+    clock = Clock()
+    host = PublicRobotRuntime(object(), world=PublicWorldModel(clock_ns=clock, clock_epoch="boot-a"), clock_ns=clock)
+    status = completed_geometry(clock)
+    host.ingest_status(status, runtime_pid=123)
+    assert host.spatial_query(SpatialQuery(require_current=True)).entities
+    clock.now += 20_000_000
+    degraded = completed_geometry(clock, tick=2)
+    degraded["estimate"]["localization_quality"]["heading"] = "LOST"
+    host.ingest_status(degraded, runtime_pid=123)
+    memory = host.spatial_query(SpatialQuery()).entities[0].facts[0]
+    assert memory.freshness == "LOCALIZATION_UNUSABLE"
+    assert not host.spatial_query(SpatialQuery(require_current=True)).entities
+    clock.now += 20_000_000
+    regained = completed_geometry(clock, tick=3, measured=memory.observation.measurement_time_ns)
+    host.ingest_status(regained, runtime_pid=123)
+    assert not host.spatial_query(SpatialQuery(require_current=True)).entities
+    # A delayed public observation cannot borrow the newer context's generation.
+    clock.now += 20_000_000
+    host.spatial.completed_status(completed_geometry(clock, tick=4, generation=2), runtime_pid=123)
+    old = memory.observation
+    host.world.observe(old.entity_id, old.attribute, old.value, domain=old.domain,
+        measurement_time_ns=clock.now - 10, confidence=old.confidence,
+        source=old.source, sequence=9, revision=old.revision,
+        validity_scope=old.validity_scope, lineage=old.lineage)
+    assert not host.spatial_query(SpatialQuery(require_current=True)).entities
+
+
+def test_completed_status_geometry_transport_remains_compact_and_roundtrips_lineage():
+    clock = Clock()
+    small, larger = completed_geometry(clock), completed_geometry(clock, cells=4000)
+    assert "occupied_cells" not in larger["world"]["local_costmap"]
+    assert len(json.dumps(larger)) - len(json.dumps(small)) < 16
+    worlds = []
+    for status in (larger, json.loads(json.dumps(larger))):
+        host = PublicRobotRuntime(object(), world=PublicWorldModel(clock_ns=clock, clock_epoch="boot-a"), clock_ns=clock)
+        host.ingest_status(status, runtime_pid=123)
+        worlds.append(host.spatial_query(SpatialQuery()).entities)
+    assert worlds[0] == worlds[1]
+
+
+def test_status_process_preserves_the_same_spatial_measurement_as_direct_projection(tmp_path):
+    from v3.process_sidecars import ProcessResidentStatusPublisher
+    from v3.resident_status import _tick_status
+    clock = Clock()
+    tick = geometry_tick(clock, cells=4000)
+    path = tmp_path / "status.json"
+    publisher = ProcessResidentStatusPublisher(SimpleNamespace(path=path, file_mode=0o600))
+    publisher.start()
+    try:
+        publisher.publish_tick(tick)
+        deadline = time.monotonic() + 2
+        received = None
+        while time.monotonic() < deadline:
+            if path.exists():
+                received = json.loads(path.read_text())
+                if received.get("tick_id") == tick.trace.context.tick_id:
+                    break
+            time.sleep(.005)
+        assert received == _tick_status(tick)
+        models = []
+        for status in (_tick_status(tick), received):
+            host = PublicRobotRuntime(object(), world=PublicWorldModel(clock_ns=clock, clock_epoch="boot-a"), clock_ns=clock)
+            host.ingest_status(status, runtime_pid=123)
+            models.append(host.spatial_query(SpatialQuery()).entities)
+        assert models[0] == models[1]
+        assert not publisher.failed and publisher.drop_count == 0
+    finally:
+        publisher.finish()
 
 
 class Clock:

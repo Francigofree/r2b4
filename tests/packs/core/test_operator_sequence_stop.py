@@ -93,6 +93,55 @@ def test_stop_signal_failure_reports_returncode_even_without_output(tmp_path, mo
         controller._publish_stop()
 
 
+@pytest.mark.parametrize("failure", ["L3", "Empty", "previous_report"])
+@pytest.mark.parametrize("sink_failed", [False, True])
+def test_runtime_start_reports_bounded_original_fault_without_diagnostic_authority(
+    tmp_path, monkeypatch, failure, sink_failed,
+):
+    import json
+    import v3.operator_controller as module
+
+    events, stopped = [], []
+
+    def sink(event):
+        events.append(event)
+        if sink_failed:
+            raise RuntimeError("observation unavailable")
+
+    controller = OperatorController(tmp_path, event_sink=sink)
+    report = {"state": "STOPPED", "report": {
+        "fault_layer": "L3", "final_reason": "L3_ERROR", "last_tick_id": 0,
+    }} if failure in {"L3", "previous_report"} else {"state": "BOOTING"}
+    diagnostic = {
+        "status": {**report, "effective_config": "large observation payload" * 10_000},
+        "runtime_log": str(tmp_path / "failed.log"),
+        "runtime_log_tail": [json.dumps({"status": "ERROR", "error_type": "Empty"})] if failure == "Empty" else [],
+    }
+    monkeypatch.setattr(controller, "_runtime_pid", lambda: None)
+    monkeypatch.setattr(controller, "_stop_command_producers", lambda: None)
+    monkeypatch.setattr(controller, "_new_capture_path", lambda: tmp_path / "unused.mcap")
+    monkeypatch.setattr(controller, "_new_temp_log", lambda prefix: tmp_path / "failed.log")
+    monkeypatch.setattr(controller, "_read_status_optional", lambda: diagnostic["status"] if failure == "previous_report" else None)
+    monkeypatch.setattr(controller, "_read_pid_file", lambda path: 123)
+    monkeypatch.setattr(controller, "_pid_matches", lambda *args: True)
+    monkeypatch.setattr(controller, "_wait_fresh_ready", lambda *args, **kwargs: False)
+    monkeypatch.setattr(controller, "_transition_sleep", lambda seconds: None)
+    monkeypatch.setattr(controller, "diagnostics", lambda: diagnostic)
+    monkeypatch.setattr(controller, "runtime_stop", lambda: stopped.append("STOP"))
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *args, **kwargs: SimpleNamespace(poll=lambda: None))
+
+    with pytest.raises(OperatorError) as caught:
+        controller.runtime_start("nincs")
+    expected = {"L3": "RUNTIME_FAULT:L3", "Empty": "PROCESS_CRASH:Empty",
+                "previous_report": "TRANSPORT_FAILURE:RUNTIME_READY_TIMEOUT"}[failure]
+    assert caught.value.reason_code == expected
+    assert str(caught.value).startswith(expected + ":")
+    assert len(str(caught.value)) <= 1024
+    assert "large observation payload" not in str(caught.value)
+    assert stopped == ["STOP"]
+    assert events[-1].data is diagnostic
+
+
 @pytest.mark.parametrize("capture_result", ["PASS", "FAULT", "INCOMPLETE", "MISSING"])
 def test_shutdown_allows_tail_then_verifies_capture_after_native_close(tmp_path, monkeypatch, capture_result):
     import v3.operator_controller as module

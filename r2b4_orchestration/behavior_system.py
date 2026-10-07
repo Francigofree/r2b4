@@ -506,9 +506,25 @@ class BehaviorSystem:
             status = self._robot.read("v3.status")
             if not isinstance(status, Mapping):
                 raise ValueError("status is not a snapshot")
+            # A producer can complete a newer tick while this read is in flight.
+            # Compare its measurement to the completed read's observation time,
+            # not the earlier step entry. Explicit time remains deterministic
+            # for callers supplying an offline observation boundary.
+            if now_ns is None:
+                now = self._clock_ns()
+                duration_reached = now >= state.deadline_ns
             stamp = status.get("monotonic_ns")
             if type(stamp) is not int or not 0 <= now - stamp < self._status_max_age_ns:
-                return self._finish(BehaviorLifecycle.FAILED, "STATUS_STALE", generation=generation, stop=True)
+                diagnostics = {
+                    "status_stamp_ns": stamp if type(stamp) is int else None,
+                    "status_observed_ns": now,
+                    "status_age_ns": now - stamp if type(stamp) is int else None,
+                    "status_max_age_ns": self._status_max_age_ns,
+                    "status_runtime_state": str(status.get("state", "UNKNOWN"))[:256],
+                    "status_tick_id": status.get("tick_id") if type(status.get("tick_id")) is int else None,
+                }
+                return self._finish(BehaviorLifecycle.FAILED, "STATUS_STALE", generation=generation,
+                                    stop=True, result=tuple(sorted(diagnostics.items())))
             mission = status.get("mission")
             matching = isinstance(mission, Mapping) and mission.get("mission_id") == state.mission_id
             if matching and (status.get("fault_layer") or status.get("state") != "RUNNING"

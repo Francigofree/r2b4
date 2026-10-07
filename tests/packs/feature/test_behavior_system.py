@@ -139,6 +139,41 @@ def test_status_failures_stop_once_and_do_not_retry(failure, reason):
     assert len(robot.actions) == 1
 
 
+@pytest.mark.parametrize("read_delay_ns, new_measurement, expected", [
+    (10_000_000, True, BehaviorLifecycle.ACTIVE),
+    (600_000_000, False, BehaviorLifecycle.FAILED),
+])
+def test_freshness_uses_completed_read_time_and_preserves_rejected_input(
+    monkeypatch, read_delay_ns, new_measurement, expected,
+):
+    clock, robot, system = setup_system()
+    state = system.start("room_cruise")
+    robot.observe(state)
+    original_stamp = robot.status["monotonic_ns"]
+
+    def read(resource):
+        assert resource == "v3.status"
+        clock.now += read_delay_ns
+        if new_measurement:
+            robot.status["monotonic_ns"] = clock.now - 1_000_000
+        return robot.status
+
+    monkeypatch.setattr(robot, "read", read)
+    observed = system.step()
+    assert observed.lifecycle is expected
+    if expected is BehaviorLifecycle.ACTIVE:
+        assert observed.measurement_time_ns == clock.now - 1_000_000
+        assert observed.observation_time_ns == clock.now
+        assert robot.stops == 0
+    else:
+        assert observed.reason == "STATUS_STALE" and robot.stops == 1
+        diagnostics = dict(observed.result)
+        assert diagnostics["status_stamp_ns"] == original_stamp
+        assert diagnostics["status_observed_ns"] == clock.now
+        assert diagnostics["status_age_ns"] == clock.now - original_stamp
+        assert diagnostics["status_runtime_state"] == "RUNNING"
+
+
 def test_follow_person_observes_hold_and_lost_using_the_same_lifecycle():
     _, robot, system = setup_system()
     state = system.start("follow_person")

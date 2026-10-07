@@ -37,6 +37,85 @@ A részben végrehajtott relatív move/turn teljes távval történő automatiku
 Élő hardveres, hálózati provider- és performance evidence külön validációt
 igényel; a host refaktor szoftveres tesztjei ezeket nem helyettesítik.
 
+## A 2026. október 7-i futásból következő javítási sorrend és evidence
+
+1. **A kérés szemantikája az admission feltétele.** A Brain a specialistától
+   függetlenül őrizze meg az explicit előjeles haladást, fordulási irányt és
+   szöget, időtartamot, valamint a részfeladatok sorrendjét. A balra 185° helyett
+   jobbra 30°-ot vagy előre 1 m helyett hátra 1 m-t javasló terv nem fogadható el.
+   Nagyobb fordulás csak pontos, bounded komponálással teljesíthető; lényeges
+   feltétel elvesztése explicit elutasítás legyen.
+2. **A friss státusz és az eredeti hiba megőrzése.** A host freshness-vizsgálat
+   az olvasás után felvett monoton időhöz mérjen; a hiba rövid diagnosztikája
+   őrizze meg az elutasított státusz idejét, korát és runtime identityjét.
+   Runtime-indítási és egyéb kivételek bounded eredményként jussanak a Brainhez;
+   hosszú diagnosztika nem okozhat másodlagos reason-contract hibát.
+3. **Használható lokális nyelv és bounded specialistafallback.** A gyakori
+   magyar move/turn/follow/explore alakokat a meglévő lokális adapter kezelje.
+   A providerhez igazított kérésméret, capabilityre szűkített kontextus és a
+   kérések között megőrzött cooldown akadályozza meg ugyanazon sikertelen
+   providerlánc ismételt végigjárását. A hálózati szolgáltatók tényleges
+   rendelkezésre állását külön kell mérni.
+4. **Evidence-hez kötött recovery és önmagyarázat.** NO_PATH után az azonos régi
+   location létezése nem refresh: új releváns source-revision és újra validált
+   koordináta szükséges. Az önmagyarázat a meglévő goal/subtask/world history
+   korrelált részfeladat-eredményeiből és ténylegesen elért célpontjaiból álljon.
+5. **A Persistent Global Spatial Model tényleges feltöltése és összekötése a
+   meglévő L3/L4 geometriai tudással.** A meglévő host Spatial Service és Public
+   World interfészeken haladjon tovább; a V3 rétegeit nem kell szétbontani.
+
+Az 5. pont első implementált lépése a production completed-status útból
+származtatott, tartós **anonim bejárt terület hipotézis** (`geometric_area`).
+A compact státusz L3 transform-revisiont és L4 costmap source-sequence-t,
+eredeti mérési időt és frame-et ad át. A host csak friss L4 mérés és GOOD,
+folytonos, megfelelő frame-be igazított L3 estimate mellett mintáz egy-egy
+egyméteres területet. A mintához megőrzi az eredeti L4 measurement time,
+source sequence és geometry/map revisiont, külön az L3 pose-reference tick-azonosítóját
+és időt, a runtime/frame/localization-generation/transform lineage-et és a
+monoton clock epochot. Az ismételt status, pose prediction és costmap
+maintenance nem hoz létre új mérést vagy új területet ugyanabból a scanből.
+A meglévő Public World- és Spatial Service-kapacitás korlátozza a tárolást;
+a canonical host state a mintákat is visszatölti.
+
+Ez valódi, automatikus geometriai feltöltés, de **nem teljes globális térkép
+vagy megismert szobák bizonyítéka**. Az occupied-cell count és a radius/resolution
+csak compact geometriai összefoglaló. Ezekből nem következik szobanév,
+bejárhatóság, szabad terület, ajtó vagy szobák közötti kapcsolat. A minták
+LIKELY hipotézisek, külön entity kinddal és motion-authority nélkül; a named
+room search és semantic navigation nem használja őket szobaként.
+Restore, runtime/frame/generation-váltás, localization-vesztés vagy source
+eltűnése után emlék maradhat, aktuális koordináta friss source revalidation
+nélkül nem. A nagy costmap-cell lista és raw LiDAR nem kerül az új status
+mezőkbe vagy vissza a control critical pathba.
+
+A teljes térbeli modell következő konkrét lépései:
+
+- A meglévő L4 structural/coverage evidence producer-oldali, bounded
+  observation-útján eredeti frame/generation/measurement/sequence/revision
+  lineage-del adjon geometriai kivonatot a hostnak. A részletes geometry
+  összevonása host/observation compute legyen, új SLAM- vagy authority-modell
+  nélkül. Occupied countból nem készülhet topológia.
+- A geometriai területekhez explicit user naming vagy bizonyított semantic
+  perception kapcsoljon hely-, tárgy- és személyreferenseket. Kamera-evidence
+  csak az eredeti camera és L3 pose-reference lineage megőrzésével köthető
+  geometriai helyhez. Az explicit topológiai kapcsolatok saját evidence-et
+  igényelnek; a tartós hipotézis és az aktuálisan navigálható cél külön marad.
+- Offline evidence bizonyítsa az eredeti source time/sequence/revision
+  megőrzését, az ismételt publication nem-renewal szemantikáját, a bounded
+  tárolást és a restore/restart/generation/quality/stale fail-closed működést.
+  A teljes modell acceptance-éhez teljes canonical capture és natív replay,
+  majd külön engedélyezett live evidence szükséges: bejárásból való feltöltés,
+  helynév hozzárendelése, restart utáni emlék, source revalidation és az így
+  feloldott cél canonical navigációja. A host pack-tesztek ezt nem bizonyítják.
+
+Külön nyitott runtime-vizsgálat marad a safety STOP után jelentkező L11
+encoder-feedback watchdog fault és az indítási L3 bootstrap fresh wheel +
+heading párja. Az első hibás completed tickhez, a valódi L12 outputhoz és a
+következő L11 feedbackhez kell visszamenni; szükséges a teljes, replayképes
+closed input. Hiányos capture alapján nem indokolt L11/L12 authority- vagy
+execution-boundary átírás. Ezek javítottságát a felső host változtatások és az
+offline térbeli tesztek nem állítják.
+
 ┌──────────────────────────────────────────────┐
 │                 GOAL INPUT                   │
 │                                              │

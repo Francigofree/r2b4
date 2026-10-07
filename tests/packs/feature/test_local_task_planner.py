@@ -56,7 +56,42 @@ def test_three_step_motion_keeps_order_direction_and_exact_distances(text):
     ("Barangolj 10 másodpercig, majd kövesd fél percig.", {"durations_s": (10, 30)}),
 ])
 def test_pure_request_constraints_preserve_units_words_and_action_ownership(text, expected):
-    assert explicit_metric_constraints(text) == expected
+    actual = explicit_metric_constraints(text)
+    assert {name: actual[name] for name in expected} == expected
+
+
+@pytest.mark.parametrize("text,value", [
+    ("menj előre 0.3m-t", .3), ("indulj előre 1m-t", 1),
+    ("hátra 1m", -1), ("menj 1 métert hátra", -1), ("menj 0,3m-t előre", .3),
+])
+def test_observed_metric_aliases_preserve_signed_distance_locally(text, value):
+    result = LocalTaskPlanner().resolve(text, Interface())
+    assert result.plan["steps"] == [{"action": "v3.command.move_relative", "parameters": {"forward_m": value}}]
+    assert explicit_metric_constraints(text)["motion_sequence"] == (("move", value),)
+
+
+@pytest.mark.parametrize("text,action", [
+    ("kövesd az embert", "behavior.follow_person"),
+    ("szoba felfedezés", "behavior.room_cruise"),
+    ("csinálj egy képet", "vision.observe"),
+])
+def test_observed_behavior_aliases_stay_local(text, action):
+    assert LocalTaskPlanner().resolve(text, Interface()).plan["steps"][0]["action"] == action
+
+
+@pytest.mark.parametrize("text,angles", [
+    ("fordulj balra 185 fokot", [180, 5]), ("fordulj 195 fokot jobbra", [-180, -15]),
+])
+def test_large_turn_retains_requested_direction_with_bounded_primitives(text, angles):
+    plan = LocalTaskPlanner().resolve(text, Interface()).plan
+    assert [step["parameters"]["angle_deg"] for step in plan["steps"]] == angles
+    assert explicit_metric_constraints(text)["motion_sequence"] == (("turn", sum(angles)),)
+
+
+def test_unsupported_large_turn_and_missing_direction_request_clarification_locally():
+    for text in ("fordulj balra 720 fokot", "185 fok"):
+        result = LocalTaskPlanner().resolve(text, Interface())
+        assert result.unfulfilled and result.spoken_text and result.plan is None
 
 
 def test_known_place_resolution_emits_entity_without_coordinate_authority():
@@ -151,6 +186,25 @@ def test_previous_failure_answer_uses_correlated_history_and_never_invents_reaso
     result = LocalTaskPlanner().resolve("Miért nem találtad meg Pétert?", interface, goal_id="current")
     assert "SEARCH_PLACES_EXHAUSTED" in result.spoken_text
     assert result.plan is None and interface.executed == []
+
+
+def test_task_introspection_distinguishes_finished_primary_and_correlates_subtask_evidence():
+    interface = Interface()
+    final = {"goal_id": "find", "text": "Keresd meg Pétert", "lifecycle": "FAILED", "reason": "SEARCH_PLACES_EXHAUSTED"}
+    interface.history = [
+        {**final, "kind": "BEHAVIOR_RESULT", "subtask_id": "find:node:search-kitchen",
+         "current_subtask": "behavior.search_person", "world_target": {"entity_id": "room:kitchen"},
+         "result": {"reason": "SEARCH_VIEWS_EXHAUSTED"}},
+        {"goal_id": "other", "kind": "BEHAVIOR_RESULT", "subtask_id": "other:node:search",
+         "current_subtask": "unrelated", "result": {"reason": "OTHER_REASON"}},
+        final,
+    ]
+    interface.read = lambda resource: {"primary_goal": final} if resource == "brain.state" else interface.history
+    status = LocalTaskPlanner().resolve("Mit csinálsz?", interface).spoken_text
+    assert "utolsó feladat" in status and "jelenlegi feladat" not in status
+    answer = LocalTaskPlanner().resolve("Miért nem találtad meg Pétert?", interface).spoken_text
+    assert "room:kitchen" in answer and "SEARCH_VIEWS_EXHAUSTED" in answer
+    assert "OTHER_REASON" not in answer and "unrelated" not in answer
 
 
 def service(tmp_path, interface, model, *, context=None):

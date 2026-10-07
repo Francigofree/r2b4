@@ -165,6 +165,66 @@ def _request_constraints(text: str) -> dict[str, object]:
     return result
 
 
+def _bounded_reason(reason: object) -> str:
+    """Failure reporting is total, including oversized adapter diagnostics."""
+    try:
+        text = reason if isinstance(reason, str) else str(reason)
+    except Exception:
+        text = "CONTRACT_FAILURE:UNPRINTABLE_REASON"
+    return (text or "CONTRACT_FAILURE:EMPTY_REASON")[:1024]
+
+
+def _motion_sequence(value):
+    if not isinstance(value, (list, tuple)) or not 1 <= len(value) <= 32:
+        raise ValueError("INVALID_CONSTRAINT:motion_sequence")
+    result = []
+    for row in value:
+        if (not isinstance(row, (list, tuple)) or len(row) != 2 or row[0] not in {"move", "turn", "direction"}
+                or type(row[1]) not in {int, float} or not math.isfinite(row[1]) or row[1] == 0
+                or row[0] == "direction" and abs(row[1]) != 1):
+            raise ValueError("INVALID_CONSTRAINT:motion_sequence")
+        result.append((row[0], row[1]))
+    return tuple(result)
+
+
+def _check_motion_sequence(steps, expected):
+    actual = []
+    for step in steps:
+        params = dict(step.parameters)
+        if step.action == "v3.command.move_relative":
+            if params.get("left_m", 0) != 0 or params.get("final_yaw_rad", 0) != 0:
+                raise ValueError("USER_CONSTRAINT_CHANGED:motion_sequence")
+            actual.append(("move", params.get("forward_m", 0)))
+        elif step.action == "v3.command.turn_by":
+            actual.append(("turn", params["angle_deg"]))
+        elif step.action in {"v3.command.forward", "v3.command.backward"}:
+            actual.append(("direction", 1 if step.action.endswith(".forward") else -1))
+    index = 0
+    for kind, value in _motion_sequence(expected):
+        remaining = value
+        while index < len(actual):
+            actual_kind, amount = actual[index]
+            if kind == "direction" and actual_kind == "move" and amount * value > 0:
+                index += 1
+                remaining = 0
+                break
+            if (actual_kind != kind or amount * remaining <= 0
+                    or abs(amount) > abs(remaining) + 1e-9):
+                break
+            index += 1
+            remaining -= amount
+            if math.isclose(remaining, 0, rel_tol=0, abs_tol=1e-9):
+                break
+            # Only turns admit decomposition; distances retain existing exact
+            # single-step admission and no partial-progress motion replay.
+            if kind != "turn":
+                break
+        if not math.isclose(remaining, 0, rel_tol=0, abs_tol=1e-9):
+            raise ValueError("USER_CONSTRAINT_CHANGED:motion_sequence")
+    if index != len(actual):
+        raise ValueError("USER_CONSTRAINT_CHANGED:motion_sequence")
+
+
 def _restored_result(raw):
     if not isinstance(raw, Mapping):
         raise ValueError("invalid saved Brain result")
@@ -262,6 +322,8 @@ class BrainCore:
     def _change(self, goal_id, kind, **changes):
         # Caller owns _lock; passive publication never controls this transition.
         goal = self._goals[goal_id]
+        if changes.get("reason") is not None:
+            changes["reason"] = _bounded_reason(changes["reason"])
         self._sequence += 1
         decision = f"brain-{self._producer_id}-{self._sequence}"
         goal = replace(goal, updated_ns=self.clock_ns(), revision=goal.revision + 1,
@@ -378,9 +440,12 @@ class BrainCore:
         if not isinstance(raw_constraints, Mapping):
             raise ValueError("Brain constraints must be an object")
         supplied_raw = dict(raw_constraints)
+        motion = supplied_raw.pop("motion_sequence", None)
         arrays = {name: supplied_raw.pop(name) for name in ("durations_s", "distances_m")
                   if name in supplied_raw}
         supplied = _parameters(supplied_raw)
+        if motion is not None:
+            supplied["motion_sequence"] = _motion_sequence(motion)
         for name, values in arrays.items():
             if (not isinstance(values, (list, tuple)) or not 1 <= len(values) <= 16
                     or any(type(value) not in {int, float} or not math.isfinite(value) or value <= 0
@@ -392,7 +457,9 @@ class BrainCore:
                 raise ValueError("USER_CONSTRAINT_CHANGED:" + name)
             constraints[name] = value
         for name, value in constraints.items():
-            if name == "duration_s":
+            if name == "motion_sequence":
+                _check_motion_sequence(steps, value)
+            elif name == "duration_s":
                 timed = [dict(step.parameters).get("max_duration_s") for step in steps
                          if "max_duration_s" in dict(step.parameters)]
                 if not timed or timed[-1] != value:
@@ -949,7 +1016,7 @@ class BrainCore:
                                             f"{fact.observation.revision if fact.observation is not None else 'none'}"
                                             for fact in result.facts),
                 }.items())))
-            if condition.matches(result):
+            if condition.matches(result, after_ns=goal.node_started_ns):
                 self._advance(generation, "WORLD_CONDITION_MET")
             elif node.kind is TaskNodeKind.BRANCH:
                 self._node_failure(generation, "CONDITION_NOT_MET")
@@ -971,6 +1038,7 @@ class BrainCore:
         return False
 
     def _node_failure(self, generation, reason):
+        reason = _bounded_reason(reason)
         goal = self._current(generation)
         if goal is None:
             return
@@ -1114,6 +1182,10 @@ class BrainCore:
                     self._change(goal.goal_id, "TARGET_BOUND", target=tuple(sorted(result.items())))
             self._advance(generation, state.reason or "BEHAVIOR_COMPLETED")
         elif state.lifecycle is BehaviorLifecycle.FAILED:
+            with self._lock:
+                if self._current(generation) is None:
+                    return
+                self._change(goal.goal_id, "BEHAVIOR_RESULT", result=tuple(sorted(dict(getattr(state, "result", ())).items())))
             step = goal.steps[goal.step_index]
             if goal.task_graph is not None:
                 self._node_failure(generation, state.reason or "BEHAVIOR_FAILED")
@@ -1163,8 +1235,7 @@ class BrainCore:
             self._start(generation)
 
     def fail(self, goal_id, reason, *, pending_only=False):
-        if not isinstance(reason, str) or not reason or len(reason) > 1024:
-            raise ValueError("Brain result reason must be bounded text")
+        reason = _bounded_reason(reason)
         with self._lock:
             goal = self._goals[goal_id]
             if type(pending_only) is not bool:

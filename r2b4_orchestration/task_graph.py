@@ -125,6 +125,7 @@ class WorldCondition:
     require_current: bool = True
     equals: object = None
     scope: ValidityScope | None = None
+    newer_than_node_entry: bool = False
 
     def __post_init__(self) -> None:
         for name in ("entity_id", "attribute", "domain"):
@@ -137,6 +138,8 @@ class WorldCondition:
             raise ValueError("unsupported World condition predicate")
         if self.require_current is not True:
             raise ValueError("World condition requires current qualified facts")
+        if type(self.newer_than_node_entry) is not bool:
+            raise ValueError("World condition freshness flag must be boolean")
         if self.predicate in {"equals", "absent"} and self.attribute is None:
             raise ValueError("World equality/absence requires an exact attribute")
         if self.predicate != "equals" and self.equals is not None:
@@ -149,7 +152,7 @@ class WorldCondition:
         return WorldQuery(entity_id=self.entity_id, attribute=self.attribute,
                           domain=self.domain, require_current=True, scope=self.scope)
 
-    def matches(self, result: WorldQueryResult) -> bool:
+    def matches(self, result: WorldQueryResult, *, after_ns: int | None = None) -> bool:
         if not isinstance(result, WorldQueryResult) or result.query != self.query():
             raise ValueError("condition requires its completed canonical World query")
         # Fail closed even if a faulty adapter returns unqualified rows under a
@@ -157,6 +160,8 @@ class WorldCondition:
         for fact in result.facts:
             if (fact.observation is None or fact.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
                     or fact.freshness != "FRESH" or fact.observation.clock_epoch != result.clock_epoch):
+                continue
+            if self.newer_than_node_entry and (after_ns is None or fact.observation.measurement_time_ns <= after_ns):
                 continue
             if ((self.entity_id is not None and fact.entity_id != self.entity_id)
                     or (self.attribute is not None and fact.attribute != self.attribute)
@@ -179,6 +184,8 @@ class WorldCondition:
                   "domain": self.domain, "predicate": self.predicate,
                   "require_current": True,
                   "scope": self.scope.to_jsonable() if self.scope is not None else None}
+        if self.newer_than_node_entry:
+            result["newer_than_node_entry"] = True
         if self.predicate == "equals":
             result["equals"] = _jsonable(self.equals)
         return result
