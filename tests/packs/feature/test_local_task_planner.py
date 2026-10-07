@@ -89,7 +89,7 @@ def test_large_turn_retains_requested_direction_with_bounded_primitives(text, an
 
 
 def test_unsupported_large_turn_and_missing_direction_request_clarification_locally():
-    for text in ("fordulj balra 720 fokot", "185 fok"):
+    for text in ("fordulj balra 720 fokot", "fordulj 720 fokot jobbra és értékeld a szobát", "menj előre 101m és értékeld a szobát", "185 fok"):
         result = LocalTaskPlanner().resolve(text, Interface())
         assert result.unfulfilled and result.spoken_text and result.plan is None
 

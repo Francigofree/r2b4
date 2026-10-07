@@ -47,7 +47,8 @@ igényel; a host refaktor szoftveres tesztjei ezeket nem helyettesítik.
    feltétel elvesztése explicit elutasítás legyen.
 2. **A friss státusz és az eredeti hiba megőrzése.** A host freshness-vizsgálat
    az olvasás után felvett monoton időhöz mérjen; a hiba rövid diagnosztikája
-   őrizze meg az elutasított státusz idejét, korát és runtime identityjét.
+   őrizze meg az elutasított státusz idejét, korát és tick-azonosítóját,
+   a meglévő command/mission-korreláció mellett.
    Runtime-indítási és egyéb kivételek bounded eredményként jussanak a Brainhez;
    hosszú diagnosztika nem okozhat másodlagos reason-contract hibát.
 3. **Használható lokális nyelv és bounded specialistafallback.** A gyakori
@@ -57,12 +58,25 @@ igényel; a host refaktor szoftveres tesztjei ezeket nem helyettesítik.
    providerlánc ismételt végigjárását. A hálózati szolgáltatók tényleges
    rendelkezésre állását külön kell mérni.
 4. **Evidence-hez kötött recovery és önmagyarázat.** NO_PATH után az azonos régi
-   location létezése nem refresh: új releváns source-revision és újra validált
-   koordináta szükséges. Az önmagyarázat a meglévő goal/subtask/world history
+   location létezése nem refresh: a várakozás kezdeténél későbbi releváns
+   mérés és újra validált koordináta szükséges. Ez új céladatot igazol, új
+   járható útvonalat önmagában nem. Az önmagyarázat a meglévő goal/subtask/world history
    korrelált részfeladat-eredményeiből és ténylegesen elért célpontjaiból álljon.
 5. **A Persistent Global Spatial Model tényleges feltöltése és összekötése a
    meglévő L3/L4 geometriai tudással.** A meglévő host Spatial Service és Public
    World interfészeken haladjon tovább; a V3 rétegeit nem kell szétbontani.
+
+Az 1–4. pont célzott host-javításai implementálva vannak. A fordulás legfeljebb
+360°-ig, az eredeti irányban, legfeljebb 180°-os canonical parancsokra bomlik;
+az admission a specialistától függetlenül ellenőrzi a konkrét nyelvi mintákból
+kinyert mozgássorrendet. A reason rövidítése megőrzi a kritikus hibakódot,
+a sikertelen Behavior eredménye is a korrelált Brain history része.
+A kisebb teljes system policy és Brain context mellett a Groq-adapter
+konfigurálható UTF8-byte/token becsléssel, bounded outputtal vizsgálja a
+kérésméretet; túlméretes kérés jelentése nem csonkul, HTTP előtt elutasítás
+történik. A kvótacooldown a külön launcherprocesszek között is megmarad.
+Ez méretbecslés, nem egzakt tokenizer vagy a megosztott providerkvóta
+garanciája; az eredeti user kérés és a canonical capability-k megmaradnak.
 
 Az 5. pont első implementált lépése a production completed-status útból
 származtatott, tartós **anonim bejárt terület hipotézis** (`geometric_area`).
@@ -115,6 +129,15 @@ következő L11 feedbackhez kell visszamenni; szükséges a teljes, replayképes
 closed input. Hiányos capture alapján nem indokolt L11/L12 authority- vagy
 execution-boundary átírás. Ezek javítottságát a felső host változtatások és az
 offline térbeli tesztek nem állítják.
+
+A javítások szoftveres validációja: a canonical `./r test release` 23 tesztje
+sikeres, a kötelező robot-contract gate és az offline natív replay scenario
+részeként is. A célzott Brain/planner/TaskGraph tesztek 139, a provider/prompt/
+Agent és passzív HRI tesztek 28, a Spatial és completed-status process tesztek
+30, a végső Behavior/operator tesztek 48 sikeres esetet adtak. A process
+evidence a compact L3/L4 lineage megőrzését és a direct/sidecar út egyezését
+igazolja. Új live robotmozgás és hálózati providerhívás nem történt; a korábbi
+élő capture-ek teljes replay-egyezését ezek a szoftveres tesztek nem bizonyítják.
 
 ┌──────────────────────────────────────────────┐
 │                 GOAL INPUT                   │

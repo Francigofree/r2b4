@@ -504,7 +504,9 @@ class ConversationService:
                     "prompt_system_chars", "prompt_user_chars", "prompt_assistant_chars",
                     "assembled_prompt_budget_chars", "response_schema_chars", "tool_catalog_chars",
                     "action_catalog_chars", "provider_request_chars_estimate",
-                    "provider_request_budget_chars"):
+                    "provider_request_budget_chars", "provider_request_utf8_bytes",
+                    "provider_request_token_estimate", "provider_request_token_budget",
+                    "max_completion_tokens", "token_estimate_method"):
             value = fields.get(key)
             if value is None or type(value) in (bool, int):
                 row[key] = value

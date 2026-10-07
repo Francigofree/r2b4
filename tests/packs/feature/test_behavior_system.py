@@ -60,6 +60,25 @@ def setup_system(**kwargs):
     return clock, robot, BehaviorSystem(robot, clock_ns=clock, **kwargs)
 
 
+@pytest.mark.parametrize("code", ["RUNTIME_FAULT:L3", "PROCESS_CRASH:Empty", "TRANSPORT_FAILURE:RUNTIME_READY_TIMEOUT"])
+def test_behavior_start_preserves_bounded_operator_root_cause_and_never_retries(code):
+    from r2b4_orchestration.task_graph import classify_failure, is_retryable_failure
+    from v3.operator_controller import OperatorError
+    _, robot, system = setup_system()
+    attempts = []
+    def fail_start(action, **parameters):
+        attempts.append(action)
+        raise OperatorError("diagnostic " * 2000, reason_code=code)
+    robot.execute = fail_start
+    failed = system.start("room_cruise")
+    assert failed.lifecycle is BehaviorLifecycle.FAILED
+    assert code in failed.reason and len(failed.reason) <= 1024
+    assert not is_retryable_failure(classify_failure(failed.reason))
+    assert system.step() is failed
+    assert attempts == ["v3.command.explore"] and robot.stops == 1
+    assert system.history()[-1].state.reason == failed.reason
+
+
 def test_room_cruise_uses_public_action_and_correlated_completed_status():
     clock, robot, system = setup_system()
     starting = system.start("room_cruise", {"max_v_mps": 0.2})

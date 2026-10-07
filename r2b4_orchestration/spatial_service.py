@@ -131,6 +131,7 @@ class SpatialService:
         self._context = None
         self._continuity = 0
         self._context_boundary_ns = None
+        self._global_context_boundary_ns = None
         self._retired_runtimes = set()
 
     @property
@@ -186,7 +187,13 @@ class SpatialService:
             self._context = context
             lost_local_geometry = (previous is not None and previous["local_geometry_usable"]
                                    and not context["local_geometry_usable"])
-            if identity != old_identity or lost_local_geometry:
+            lost_global_position = (previous is not None and previous["global_position_usable"]
+                                    and not context["global_position_usable"])
+            if lost_global_position:
+                # Losing global alignment does not invalidate local odometry.
+                # A later GOOD status cannot revalidate an earlier global sample.
+                self._global_context_boundary_ns = stamp
+            if identity != old_identity or lost_local_geometry or lost_global_position:
                 self._revision += 1
                 if old_identity is None or identity[:3] != old_identity[:3] or lost_local_geometry:
                     self._continuity += 1
@@ -261,6 +268,10 @@ class SpatialService:
                             not context["global_position_usable"]
                             or fact.value.get("transform_revision") != context["transform_revision"])):
                     return replace(fact, state=KnowledgeState.STALE, freshness="LOCALIZATION_UNUSABLE", age_ns=age)
+                if (location.frame_id != "R2B4_ODOM_LOCAL" and self._global_context_boundary_ns is not None
+                        and observation.measurement_time_ns <= self._global_context_boundary_ns):
+                    return replace(fact, state=KnowledgeState.STALE,
+                                   freshness="GLOBAL_REVALIDATION_REQUIRED", age_ns=age)
             if (scope is None or scope.runtime_pid != context["runtime_pid"]
                     or scope.frame_id not in context["frame_ids"]
                     or generation != context["localization_generation"]
@@ -382,6 +393,7 @@ class SpatialService:
             self._source_revision, self._context = -1, None
             self._continuity = 0
             self._context_boundary_ns = None
+            self._global_context_boundary_ns = None
             self._retired_runtimes.clear()
 
 

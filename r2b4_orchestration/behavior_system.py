@@ -476,7 +476,16 @@ class BehaviorSystem:
             if not isinstance(command_id, str) or not command_id:
                 raise ValueError("behavior action returned no canonical command identity")
         except Exception as exc:
-            return self._finish(BehaviorLifecycle.FAILED, "ACTION_START_FAILED:" + type(exc).__name__,
+            try:
+                detail = str(exc)
+            except Exception:
+                detail = "UNPRINTABLE_REASON"
+            # Operator startup failures carry a compact root-cause code. Keep
+            # it at this adapter boundary too, before Brain classifies retries.
+            code = getattr(exc, "reason_code", None)
+            prefix = code + ":" if isinstance(code, str) and code else ""
+            reason = ("ACTION_START_FAILED:" + prefix + type(exc).__name__ + ":" + detail)[:1024]
+            return self._finish(BehaviorLifecycle.FAILED, reason,
                                 generation=generation, stop=True)
         with self._lock:
             if generation != self._generation or self._state.lifecycle not in _RUNNING:

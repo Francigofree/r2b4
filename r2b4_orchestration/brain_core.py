@@ -171,7 +171,14 @@ def _bounded_reason(reason: object) -> str:
         text = reason if isinstance(reason, str) else str(reason)
     except Exception:
         text = "CONTRACT_FAILURE:UNPRINTABLE_REASON"
-    return (text or "CONTRACT_FAILURE:EMPTY_REASON")[:1024]
+    text = text or "CONTRACT_FAILURE:EMPTY_REASON"
+    if len(text) > 1024:
+        code = classify_failure(text)
+        if classify_failure(text[:1024]) is not code:
+            # A critical marker late in an adapter diagnostic must not become
+            # an ordinary retryable navigation failure after truncation.
+            text = code.value + ":" + text
+    return text[:1024]
 
 
 def _motion_sequence(value):
@@ -181,7 +188,9 @@ def _motion_sequence(value):
     for row in value:
         if (not isinstance(row, (list, tuple)) or len(row) != 2 or row[0] not in {"move", "turn", "direction"}
                 or type(row[1]) not in {int, float} or not math.isfinite(row[1]) or row[1] == 0
-                or row[0] == "direction" and abs(row[1]) != 1):
+                or row[0] == "direction" and abs(row[1]) != 1
+                or row[0] == "turn" and abs(row[1]) > 360
+                or row[0] == "move" and abs(row[1]) > 100):
             raise ValueError("INVALID_CONSTRAINT:motion_sequence")
         result.append((row[0], row[1]))
     return tuple(result)
@@ -1168,7 +1177,7 @@ class BrainCore:
             with self._lock:
                 if self._current(generation) is None:
                     return
-                self._change(goal.goal_id, "BEHAVIOR_RESULT", result=tuple(sorted(result.items())))
+                self._change(goal.goal_id, "BEHAVIOR_RESULT", reason=state.reason, result=tuple(sorted(result.items())))
             if step.completion == "person_found" and not (result.get("target_track_id") or str(state.reason).startswith("TARGET_OBSERVED:")):
                 self.fail(goal.goal_id, "PERSON_COMPLETION_UNPROVEN")
                 return
@@ -1185,7 +1194,8 @@ class BrainCore:
             with self._lock:
                 if self._current(generation) is None:
                     return
-                self._change(goal.goal_id, "BEHAVIOR_RESULT", result=tuple(sorted(dict(getattr(state, "result", ())).items())))
+                self._change(goal.goal_id, "BEHAVIOR_RESULT", reason=state.reason,
+                             result=tuple(sorted(dict(getattr(state, "result", ())).items())))
             step = goal.steps[goal.step_index]
             if goal.task_graph is not None:
                 self._node_failure(generation, state.reason or "BEHAVIOR_FAILED")

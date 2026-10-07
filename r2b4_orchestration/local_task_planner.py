@@ -90,7 +90,9 @@ def explicit_metric_constraints(text: str) -> dict[str, object]:
             # scan extracts only the same small grammar, never provider text.
             metric = _NUMBER + r"\s*" + _DISTANCE + _METRIC_SUFFIX
             pattern = (r"\b" + _MOVE_VERB + r"\s+(?:(?:meg|tovabb|another)\s+)?(?:" + _DIRECTION + r"\s+)?" + metric + r"(?:\s+" + _DIRECTION + r")?"
-                       r"|\b(?:fordulj|turn)\s+(?:balra|jobbra|left|right)(?:\s+" + _NUMBER + r"\s*(?:fok(?:ot)?|degrees?|deg)?)?")
+                       r"|\b" + _MOVE_VERB + r"\s+" + _DIRECTION +
+                       r"|\b(?:fordulj|turn)\s+(?:balra|jobbra|left|right)(?:\s+" + _NUMBER + r"\s*(?:fok(?:ot)?|degrees?|deg)?)?"
+                       r"|\b(?:fordulj|turn)\s+" + _NUMBER + r"\s*(?:fok(?:ot)?|degrees?|deg)?\s+(?:balra|jobbra|left|right)")
             for match in re.finditer(pattern, clause):
                 item = _motion_instruction(match[0])
                 if item is not None:
@@ -161,6 +163,11 @@ class LocalTaskPlanner:
         if is_stop_intent(text):
             return LocalResolution(plan={"steps": [_step("v3.command.stop")]})
         folded = _fold(text)
+        requested_motion = explicit_metric_constraints(text).get("motion_sequence", ())
+        if any(kind == "turn" and not 0 < abs(value) <= 360 for kind, value in requested_motion):
+            return LocalResolution(spoken_text="Egy kérésben 0 és 360 fok közötti fordulást tudok végrehajtani.", unfulfilled=True)
+        if any(kind == "move" and not 0 < abs(value) <= 100 for kind, value in requested_motion):
+            return LocalResolution(spoken_text="Egy lépésben 0 és 100 méter közötti elmozdulást tudok kérni.", unfulfilled=True)
         answer = self._answer(folded, interface, goal_id)
         if answer is not None:
             return LocalResolution(spoken_text=answer, unfulfilled=folded in {"menj oda", "go there", "navigate there"})
@@ -185,8 +192,6 @@ class LocalTaskPlanner:
         for index, clause in enumerate(clauses):
             normalized = _fold(clause)
             instruction = _motion_instruction(normalized)
-            if instruction is not None and instruction[0] == "turn" and not 0 < abs(instruction[1]) <= 360:
-                return LocalResolution(spoken_text="Egy kérésben 0 és 360 fok közötti fordulást tudok végrehajtani.", unfulfilled=True)
             if re.fullmatch(r"(?:(?:fordulj|turn)\s+)?" + _NUMBER + r"\s*(?:fok(?:ot)?|degrees?|deg)", normalized):
                 return LocalResolution(spoken_text="Melyik irányba forduljak: balra vagy jobbra?", unfulfilled=True)
             rows = self._method(normalized, interface)
@@ -374,7 +379,7 @@ class LocalTaskPlanner:
                            "newer_than_node_entry": True},
              "on_success": "retry", "on_failure": "report", "failure_on": ["TIMEOUT"]},
             {**rows[0], "node_id": "retry", "kind": "action", "on_failure": "report", "failure_on": ["NO_PATH"]},
-            {"node_id": "report", "kind": "report", "message": "A célhoz az újrapróbálás után sem találtam járható utat.", "failure_code": "NO_PATH"},
+            {"node_id": "report", "kind": "report", "message": "A célhoz nem lett igazolt járható út vagy új, használható céladat.", "failure_code": "NO_PATH"},
         ]})
 
     @staticmethod

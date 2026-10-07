@@ -14,7 +14,7 @@ from r2b4_voice.conversation_service import ConversationService
 from v3.hri_evidence import HRI_EVENT_TOPIC, HriEventFollower, default_hri_journal
 
 
-def service(root, sink, *, fail=False):
+def service(root, sink, *, fail=False, llm_metadata=None):
     class Model:
         model = "offline-agent"
         def complete(self, _messages):
@@ -30,6 +30,10 @@ def service(root, sink, *, fail=False):
                 "round": 1, "tool": "vision.observe", "status": "COMPLETED",
                 "images": ["large image"], "data": {"raw": "payload"},
             })
+            if llm_metadata is not None:
+                event_sink("agent_llm_completed", {
+                    **llm_metadata, "messages": ["never record provider content"],
+                })
             if fail:
                 raise RuntimeError("model failed")
             return LLMDecision("Kész.", None, self.model)
@@ -68,12 +72,12 @@ def test_agent_turn_tool_and_goal_lineage_reaches_live_hri_edge(tmp_path, fail):
                 break
             time.sleep(.001)
         assert [row["event_type"] for row in rows] == [
-            "AGENT_TURN_STARTED", "AGENT_TOOL_REQUESTED", "AGENT_TOOL_COMPLETED",
+            "AGENT_TURN_STARTED", "PROMPT_SIZE", "AGENT_TOOL_REQUESTED", "AGENT_TOOL_COMPLETED",
             "AGENT_TURN_FAILED" if fail else "AGENT_TURN_COMPLETED",
         ]
         assert all(row["turn_id"] == turn_id and row["goal_id"] == result["goal_id"] for row in rows)
         assert {row["session_id"] for row in rows} == {conversation.session_id}
-        assert [row["event_sequence"] for row in rows] == [1, 2, 3, 4]
+        assert [row["event_sequence"] for row in rows] == list(range(1, len(rows) + 1))
         assert all(row["request_time_ns"] <= row["monotonic_ns"] for row in rows)
         assert all(row["observation_topic"] == "r2b4.agent" for row in rows)
         assert not any(key in row for row in rows for key in ("arguments", "data", "images", "messages"))
@@ -105,6 +109,36 @@ def test_broken_evidence_sink_does_not_change_agent_answer_or_brain_result(tmp_p
         conversation.close()
 
 
+def test_groq_admission_estimate_and_reported_usage_reach_passive_hri_without_prompt(tmp_path):
+    journal = default_hri_journal(tmp_path)
+    follower = HriEventFollower(tmp_path)
+    follower.start()
+    size = {
+        "provider": "groq", "attempt_count": 3,
+        "provider_request_utf8_bytes": 19000,
+        "provider_request_token_estimate": 7486,
+        "provider_request_token_budget": 8000,
+        "max_completion_tokens": 1024,
+        "token_estimate_method": "utf8_bytes/3+128+max_completion_tokens",
+        "input_tokens": 3100, "output_tokens": 120,
+    }
+    conversation, _calls = service(tmp_path, lambda event, fields: journal.append(event, **fields),
+                                  llm_metadata=size)
+    try:
+        turn_id = conversation.submit_text("Megfigyelés", source="launcher")
+        assert conversation.wait_for_turn(turn_id, timeout_s=2)["error"] is None
+    finally:
+        conversation.close()
+    try:
+        rows = [row for batch in follower.finish() for topic, row in batch if topic == HRI_EVENT_TOPIC]
+        completed = next(row for row in rows if row["event_type"] == "AGENT_LLM_COMPLETED")
+        assert {key: completed[key] for key in size} == size
+        assert completed["turn_id"] == turn_id
+        assert not any(key in completed for key in ("messages", "images", "data", "arguments"))
+    finally:
+        follower.close()
+
+
 def test_slow_journal_never_delays_agent_and_close_drains_accepted_evidence(tmp_path):
     journal = default_hri_journal(tmp_path)
     entered, release = threading.Event(), threading.Event()
@@ -128,7 +162,7 @@ def test_slow_journal_never_delays_agent_and_close_drains_accepted_evidence(tmp_
         observation.close()
     try:
         rows = [row for batch in follower.finish() for topic, row in batch if topic == HRI_EVENT_TOPIC]
-        assert [row["event_sequence"] for row in rows] == [1, 2, 3, 4]
+        assert [row["event_sequence"] for row in rows] == list(range(1, len(rows) + 1))
         assert rows[-1]["event_type"] == "AGENT_TURN_COMPLETED"
     finally:
         follower.close()

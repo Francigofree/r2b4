@@ -148,6 +148,39 @@ def test_geometry_retains_original_generation_and_fails_closed_after_pose_loss()
     assert not host.spatial_query(SpatialQuery(require_current=True)).entities
 
 
+@pytest.mark.parametrize("global_quality", ("LOST", "DEGRADED"))
+def test_global_geometry_quality_recovery_requires_new_measurement_without_invalidating_local_areas(global_quality):
+    for frame in ("R2B4_ODOM_LOCAL", "R2B4_BOOT_ROBOT_MAP"):
+        clock = Clock()
+        host = PublicRobotRuntime(object(), world=PublicWorldModel(clock_ns=clock, clock_epoch="boot-a"), clock_ns=clock)
+        status = completed_geometry(clock, frame=frame)
+        host.ingest_status(status, runtime_pid=123)
+        original = host.spatial_query(SpatialQuery(require_current=True)).entities[0].facts[0]
+        measured = original.observation.measurement_time_ns
+        clock.now += 20_000_000
+        lost = completed_geometry(clock, frame=frame, tick=2, measured=measured)
+        lost["estimate"]["localization_quality"]["global_position"] = global_quality
+        host.ingest_status(lost, runtime_pid=123)
+        assert bool(host.spatial_query(SpatialQuery(require_current=True)).entities) == (frame == "R2B4_ODOM_LOCAL")
+        clock.now += 20_000_000
+        host.ingest_status(completed_geometry(clock, frame=frame, tick=3, measured=measured), runtime_pid=123)
+        current = host.spatial_query(SpatialQuery(require_current=True)).entities
+        assert bool(current) == (frame == "R2B4_ODOM_LOCAL")
+        memory = host.spatial_query(SpatialQuery()).entities[0].facts[0]
+        assert memory.observation == original.observation
+        if frame == "R2B4_BOOT_ROBOT_MAP":
+            assert memory.freshness == "GLOBAL_REVALIDATION_REQUIRED"
+            clock.now += 10_000_000
+            boundary_scan = completed_geometry(clock, frame=frame, tick=4, sequence=9,
+                measured=lost["monotonic_ns"])
+            host.ingest_status(boundary_scan, runtime_pid=123)
+            assert not host.spatial_query(SpatialQuery(require_current=True)).entities
+        clock.now += 20_000_000
+        host.ingest_status(completed_geometry(clock, frame=frame, tick=5, sequence=10), runtime_pid=123)
+        renewed = host.spatial_query(SpatialQuery(require_current=True)).entities[0].facts[0]
+        assert renewed.observation.measurement_time_ns > measured
+
+
 def test_completed_status_geometry_transport_remains_compact_and_roundtrips_lineage():
     clock = Clock()
     small, larger = completed_geometry(clock), completed_geometry(clock, cells=4000)

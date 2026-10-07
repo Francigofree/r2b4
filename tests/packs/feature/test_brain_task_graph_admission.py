@@ -130,3 +130,16 @@ def test_long_runtime_root_failure_survives_brain_without_secondary_reason_failu
     assert result["lifecycle"] == "FAILED" and result["failure_code"] == "PROCESS_CRASH"
     assert result["reason"].startswith("RuntimeError:PROCESS_CRASH:L3_BOOTSTRAP:")
     assert len(result["reason"]) <= 1024
+
+
+def test_long_failure_cannot_drop_late_stale_marker_and_enter_motion_recovery():
+    _, robot, owner = runtime()
+    result = adopt(owner, "Execute the task", [
+        {"node_id": "navigate", "kind": "action", "action": "v3.command.navigate", "parameters": {"x_m": 1, "y_m": 2},
+         "on_failure": "retry", "failure_on": ["NO_PATH"]},
+        {"node_id": "retry", "kind": "action", "action": "v3.command.navigate", "parameters": {"x_m": 1, "y_m": 2}},
+    ])
+    owner.brain._node_failure(owner.brain._generation, "NO_PATH:" + "diagnostic " * 300 + ":STATUS_STALE")
+    final = owner.brain.goal(result["goal_id"])
+    assert final["lifecycle"] == "FAILED" and final["failure_code"] == "STALE_WORLD"
+    assert len(final["reason"]) <= 1024 and len(robot.actions) == 1
