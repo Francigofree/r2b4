@@ -142,7 +142,10 @@ def test_durable_export_preserves_timestamps_conflicts_and_new_boot_invalidates_
     state = json.loads(json.dumps(model.export_state()))
     restored = PublicWorldModel.from_state(state, clock_ns=lambda: now[0], clock_epoch="boot-a")
     assert restored.export_state() == state
-    assert restored.read("person:laci", "last_observed_location").state is KnowledgeState.CONFLICTING
+    restored_fact = restored.read("person:laci", "last_observed_location")
+    assert restored_fact.state is KnowledgeState.STALE
+    assert restored_fact.freshness == "RESTORED_UNVALIDATED"
+    assert restored_fact.conflicts == model.read("person:laci", "last_observed_location").conflicts
     assert restored.history()[0].observation.measurement_time_ns == SECOND
 
     # Monotonic timestamps from a previous boot never acquire a new freshness age.
@@ -167,6 +170,11 @@ def test_explicit_domain_policy_survives_export_and_restore():
     model.observe("test", "meaning", True, domain="semantic_test", measurement_time_ns=10 * SECOND,
                   confidence=0.7, source="external")
     restored = PublicWorldModel.from_state(model.export_state(), clock_ns=lambda: now[0], clock_epoch="boot-a")
+    assert restored.read("test", "meaning").freshness == "RESTORED_UNVALIDATED"
+    assert restored.policies["semantic_test"] == FreshnessPolicy(SECOND, known_confidence=0.6)
+    now[0] += 1
+    restored.observe("test", "meaning", True, domain="semantic_test", measurement_time_ns=now[0],
+                     confidence=0.7, source="external")
     assert restored.read("test", "meaning").state is KnowledgeState.KNOWN
     now[0] += 2 * SECOND
     assert restored.read("test", "meaning").state is KnowledgeState.STALE
@@ -312,7 +320,10 @@ def test_spatial_queries_require_all_declared_scope_fields_and_reject_previous_r
     assert WorldQueryResult.from_jsonable(model.query(WorldQuery(scope=scope)).to_jsonable()).facts == (fact,)
     state = model.export_state()
     restored = PublicWorldModel.from_state(state, clock_ns=lambda: now[0], clock_epoch="boot-a")
-    assert restored.query(WorldQuery(scope=scope)).facts == (fact,)
+    restored_fact = restored.query(WorldQuery(scope=scope)).facts[0]
+    assert restored_fact.observation == fact.observation
+    assert restored_fact.freshness == "RESTORED_UNVALIDATED"
+    assert not restored.query(WorldQuery(scope=scope, require_current=True)).facts
     # Old durable records carry their session/frame in the value rather than a
     # typed scope. Reading them must enforce the same qualification boundary.
     for raw in state["facts"]:

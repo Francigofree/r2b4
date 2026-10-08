@@ -13,16 +13,20 @@ from .world_model import PublicWorldModel, ValidityScope
 
 
 class SemanticProjector:
-    def __init__(self, world: PublicWorldModel, *, clock_ns):
+    def __init__(self, world: PublicWorldModel, *, clock_ns, person_identity=None):
         self.world = world
         self.clock_ns = clock_ns
+        self.person_identity = person_identity
         self._last_status_identity = None
         self._last_behavior_revision = None
         self._last_geometry_identity = None
 
-    def completed_status(self, status: Mapping[str, object], *, runtime_pid: object = None) -> None:
+    def completed_status(self, status: Mapping[str, object], *, runtime_pid: object = None,
+                         vision_status: Mapping[str, object] | None = None) -> None:
         stamp, tick = status.get("monotonic_ns"), status.get("tick_id")
         now = self.clock_ns()
+        if self.person_identity is not None:
+            self.person_identity.completed_status(status, runtime_pid=runtime_pid, vision_status=vision_status)
         if (type(stamp) is not int or not 0 <= stamp <= now
                 or type(tick) is not int or tick < 0):
             return

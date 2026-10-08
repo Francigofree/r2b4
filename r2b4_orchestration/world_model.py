@@ -25,6 +25,17 @@ WORLD_MODEL_SCHEMA = "R2B4_PUBLIC_WORLD_MODEL_V1"
 WORLD_MODEL_STATE_SCHEMA = "R2B4_PUBLIC_WORLD_MODEL_STATE_V1"
 DEFAULT_FACTS_BYTES = 192 * 1024
 DEFAULT_HISTORY_BYTES = 192 * 1024
+_RETENTION_CLASSES = ("transient", "knowledge", "experience")
+_RETENTION_FACT_LIMITS = {"transient": 128, "knowledge": 96, "experience": 32}
+_RETENTION_BYTE_LIMITS = {"transient": 48 * 1024, "knowledge": 112 * 1024,
+                          "experience": 32 * 1024}
+_KNOWLEDGE_DOMAINS = frozenset({"room_topology", "object_identity", "person_identity", "user_preference"})
+_EXPERIENCE_DOMAINS = frozenset({"mission_outcome", "navigation_outcome", "task_outcome", "task_experience"})
+
+
+def retention_class(domain: str) -> str:
+    """Classify storage lifetime without changing a fact's freshness policy."""
+    return "knowledge" if domain in _KNOWLEDGE_DOMAINS else "experience" if domain in _EXPERIENCE_DOMAINS else "transient"
 
 
 class KnowledgeState(str, Enum):
@@ -86,8 +97,10 @@ DEFAULT_FRESHNESS_POLICIES: Mapping[str, FreshnessPolicy] = MappingProxyType({
     "mission_outcome": FreshnessPolicy(None),
     "navigation_outcome": FreshnessPolicy(None),
     "task_outcome": FreshnessPolicy(None),
+    "task_experience": FreshnessPolicy(None),
     "health": FreshnessPolicy(1_000_000_000),
     "person_position": FreshnessPolicy(3_000_000_000),
+    "person_binding": FreshnessPolicy(3_000_000_000),
     "observation": FreshnessPolicy(10_000_000_000),
     "door_state": FreshnessPolicy(30_000_000_000),
     "object_position": FreshnessPolicy(60_000_000_000),
@@ -390,6 +403,7 @@ class WorldSnapshot:
     history_last_sequence: int | None
     history_dropped: int
     facts_evicted: int = 0
+    retention: object = ()
 
     def to_jsonable(self) -> dict[str, object]:
         return {"schema": WORLD_MODEL_SCHEMA, "revision": self.revision,
@@ -397,7 +411,8 @@ class WorldSnapshot:
                 "facts": [fact.to_jsonable() for fact in self.facts.values()],
                 "history_first_sequence": self.history_first_sequence,
                 "history_last_sequence": self.history_last_sequence,
-                "history_dropped": self.history_dropped, "facts_evicted": self.facts_evicted}
+                "history_dropped": self.history_dropped, "facts_evicted": self.facts_evicted,
+                "retention": _jsonable(self.retention)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,6 +472,7 @@ class WorldQueryResult:
     facts_evicted: int = 0
     truncated: bool = False
     history_gap: bool = False
+    retention: object = ()
 
     def __post_init__(self) -> None:
         for name in ("revision", "observation_time_ns", "history_dropped", "facts_evicted"):
@@ -477,6 +493,7 @@ class WorldQueryResult:
             raise ValueError("query result does not match query kind")
         if type(self.truncated) is not bool or type(self.history_gap) is not bool:
             raise ValueError("query result loss indicators must be boolean")
+        object.__setattr__(self, "retention", _freeze(self.retention))
 
     def to_jsonable(self) -> dict[str, object]:
         return {"schema": WORLD_MODEL_SCHEMA, "revision": self.revision,
@@ -486,7 +503,8 @@ class WorldQueryResult:
                 "history_first_sequence": self.history_first_sequence,
                 "history_last_sequence": self.history_last_sequence,
                 "history_dropped": self.history_dropped, "facts_evicted": self.facts_evicted,
-                "truncated": self.truncated, "history_gap": self.history_gap}
+                "truncated": self.truncated, "history_gap": self.history_gap,
+                "retention": _jsonable(self.retention)}
 
     @classmethod
     def from_jsonable(cls, value: Mapping[str, object]) -> WorldQueryResult:
@@ -502,7 +520,7 @@ class WorldQueryResult:
                    tuple(WorldEvent.from_jsonable(item) for item in events),
                    value.get("history_first_sequence"), value.get("history_last_sequence"),
                    value.get("history_dropped", 0), value.get("facts_evicted", 0),
-                   value.get("truncated", False), value.get("history_gap", False))
+                   value.get("truncated", False), value.get("history_gap", False), value.get("retention", ()))
 
 
 class PublicWorldModel:
@@ -514,6 +532,7 @@ class PublicWorldModel:
                  max_facts: int = 256, history_capacity: int = 512,
                  max_facts_bytes: int = DEFAULT_FACTS_BYTES,
                  max_history_bytes: int = DEFAULT_HISTORY_BYTES,
+                 retention_limits: Mapping[str, Mapping[str, int]] | None = None,
                  event_sink: Callable[[WorldEvent], None] | None = None) -> None:
         for name, value in (("max_facts", max_facts), ("history_capacity", history_capacity),
                             ("max_facts_bytes", max_facts_bytes), ("max_history_bytes", max_history_bytes)):
@@ -533,6 +552,22 @@ class PublicWorldModel:
         self.history_capacity = history_capacity
         self.max_facts_bytes = max_facts_bytes
         self.max_history_bytes = max_history_bytes
+        self.retention_limits = MappingProxyType({group: MappingProxyType({
+            "max_facts": min(max_facts, _RETENTION_FACT_LIMITS[group]),
+            "max_bytes": min(max_facts_bytes, _RETENTION_BYTE_LIMITS[group]),
+        }) for group in _RETENTION_CLASSES})
+        if retention_limits is not None:
+            if not isinstance(retention_limits, Mapping) or set(retention_limits) != set(_RETENTION_CLASSES):
+                raise ValueError("invalid retention classes")
+            limits = {}
+            for group, raw in retention_limits.items():
+                if not isinstance(raw, Mapping) or set(raw) != {"max_facts", "max_bytes"}:
+                    raise ValueError("invalid retention limits")
+                count, size = _integer(raw["max_facts"], "retention max_facts"), _integer(raw["max_bytes"], "retention max_bytes")
+                if not 0 < count <= max_facts or not 0 < size <= max_facts_bytes:
+                    raise ValueError("retention limits exceed aggregate capacity")
+                limits[group] = MappingProxyType({"max_facts": count, "max_bytes": size})
+            self.retention_limits = MappingProxyType(limits)
         self._facts: OrderedDict[tuple[str, str], tuple[WorldObservation, tuple[WorldObservation, ...], int]] = OrderedDict()
         self._history: deque[WorldEvent] = deque(maxlen=history_capacity)
         self._revision = 0
@@ -541,6 +576,9 @@ class PublicWorldModel:
         self._facts_evicted = 0
         self._fact_sizes: dict[tuple[str, str], int] = {}
         self._facts_bytes = 0
+        self._retention_evicted = dict.fromkeys(_RETENTION_CLASSES, 0)
+        self._retention_rejected = dict.fromkeys(_RETENTION_CLASSES, 0)
+        self._restored_unvalidated: set[tuple[str, str]] = set()
         self._history_sizes: deque[int] = deque()
         self._history_bytes = 0
         self._lock = threading.RLock()
@@ -564,6 +602,19 @@ class PublicWorldModel:
     def event_sink_errors(self) -> int:
         with self._lock:
             return self._event_sink_errors
+
+    def _retention_status(self) -> dict[str, object]:
+        result = {group: {**self.retention_limits[group], "fact_count": 0, "bytes_used": 0,
+                          "facts_evicted": self._retention_evicted[group],
+                          "observations_rejected": self._retention_rejected[group]}
+                  for group in _RETENTION_CLASSES}
+        for key, (observation, _, _) in self._facts.items():
+            pool = result[retention_class(observation.domain)]
+            pool["fact_count"] += 1
+            pool["bytes_used"] += self._fact_sizes[key]
+        for pool in result.values():
+            pool["saturated"] = pool["fact_count"] >= pool["max_facts"] or pool["bytes_used"] >= pool["max_bytes"]
+        return result
 
     def observe(self, entity_id: str, attribute: str, value: object, *, domain: str,
                 measurement_time_ns: int, confidence: float, source: str,
@@ -610,19 +661,35 @@ class PublicWorldModel:
                 reason = "NEW_CLOCK_EPOCH"
             next_revision = self._revision + int(accepted)
             size = _fact_size(observation, conflicts, next_revision) if accepted else 0
-            if accepted and size > self.max_facts_bytes:
+            group = retention_class(observation.domain)
+            limits = self.retention_limits[group]
+            if accepted and size > limits["max_bytes"]:
                 raise ValueError("one public fact exceeds the aggregate semantic byte budget")
             evicted_facts = []
             if accepted:
                 total_bytes = self._facts_bytes - self._fact_sizes.get(key, 0) + size
                 count = len(self._facts) + int(previous is None)
-                for candidate in self._facts:
-                    if count <= self.max_facts and total_bytes <= self.max_facts_bytes:
+                own_keys = [candidate for candidate, stored in self._facts.items()
+                            if retention_class(stored[0].domain) == group]
+                own_count = len(own_keys) + int(previous is None)
+                own_bytes = sum(self._fact_sizes[candidate] for candidate in own_keys) - self._fact_sizes.get(key, 0) + size
+                for candidate in own_keys:
+                    if (count <= self.max_facts and total_bytes <= self.max_facts_bytes
+                            and own_count <= limits["max_facts"] and own_bytes <= limits["max_bytes"]):
                         break
                     if candidate != key:
                         evicted_facts.append(candidate)
                         count -= 1
                         total_bytes -= self._fact_sizes[candidate]
+                        own_count -= 1
+                        own_bytes -= self._fact_sizes[candidate]
+                if (count > self.max_facts or total_bytes > self.max_facts_bytes
+                        or own_count > limits["max_facts"] or own_bytes > limits["max_bytes"]):
+                    # Legacy snapshots may occupy more than a new class budget.
+                    # A producer cannot reclaim another class's durable evidence.
+                    accepted, reason, conflicts = False, "RETENTION_CAPACITY", ()
+                    next_revision = self._revision
+                    evicted_facts = []
             event = WorldEvent(f"world:{self.clock_epoch}:{self._event_sequence + 1}", self._event_sequence + 1,
                                next_revision, observation, accepted, reason,
                                evicted_facts[-1] if evicted_facts else None, tuple(evicted_facts))
@@ -636,10 +703,17 @@ class PublicWorldModel:
                 self._fact_sizes[key] = size
                 self._facts_bytes += size
                 self._facts.move_to_end(key)
+                if (previous is None or previous[0].clock_epoch != observation.clock_epoch
+                        or observation.measurement_time_ns > previous[0].measurement_time_ns):
+                    self._restored_unvalidated.discard(key)
                 for evicted in evicted_facts:
                     del self._facts[evicted]
                     self._facts_bytes -= self._fact_sizes.pop(evicted)
                     self._facts_evicted += 1
+                    self._retention_evicted[group] += 1
+                    self._restored_unvalidated.discard(evicted)
+            elif reason == "RETENTION_CAPACITY":
+                self._retention_rejected[group] += 1
             self._event_sequence += 1
             while self._history and (len(self._history) >= self.history_capacity or
                                      self._history_bytes + event_size > self.max_history_bytes):
@@ -667,9 +741,12 @@ class PublicWorldModel:
         observation, conflicts, revision = stored
         policy = self.policies[observation.domain]
         age = now_ns - observation.measurement_time_ns if observation.clock_epoch == self.clock_epoch else None
-        if age is None:
+        enduring = policy.max_age_ns is None and observation.validity_scope is None
+        if age is None and not enduring:
             state, freshness = KnowledgeState.STALE, "CLOCK_MISMATCH"
-        elif now_ns < observation.observation_time_ns:
+        elif key in self._restored_unvalidated:
+            state, freshness = KnowledgeState.STALE, "RESTORED_UNVALIDATED"
+        elif age is not None and now_ns < observation.observation_time_ns:
             state, freshness = KnowledgeState.UNKNOWN, "NOT_YET_OBSERVED"
         elif policy.max_age_ns is not None and age > policy.max_age_ns:
             state, freshness = KnowledgeState.STALE, "STALE"
@@ -694,7 +771,7 @@ class PublicWorldModel:
                                  MappingProxyType({key: self._fact(key, now) for key in sorted(self._facts)}),
                                  self._history[0].event_sequence if self._history else None,
                                  self._history[-1].event_sequence if self._history else None,
-                                 self._history_dropped, self._facts_evicted)
+                                 self._history_dropped, self._facts_evicted, _freeze(self._retention_status()))
 
     def history(self, *, after_sequence: int = 0) -> tuple[WorldEvent, ...]:
         _integer(after_sequence, "after_sequence")
@@ -746,7 +823,8 @@ class PublicWorldModel:
             last = self._history[-1].event_sequence if self._history else None
             gap = query.kind == "episodes" and first is not None and query.after_sequence < first - 1
             return WorldQueryResult(self._revision, now, self.clock_epoch, query, tuple(facts), tuple(events),
-                                    first, last, self._history_dropped, self._facts_evicted, truncated, gap)
+                                    first, last, self._history_dropped, self._facts_evicted, truncated, gap,
+                                    self._retention_status())
 
     def export_state(self) -> dict[str, object]:
         """Return bounded durable evidence; the caller owns all storage I/O."""
@@ -757,6 +835,7 @@ class PublicWorldModel:
                     "max_facts_bytes": self.max_facts_bytes, "max_history_bytes": self.max_history_bytes,
                     "revision": self._revision, "event_sequence": self._event_sequence,
                     "history_dropped": self._history_dropped, "facts_evicted": self._facts_evicted,
+                    "retention": self._retention_status(),
                     "policies": {domain: {"max_age_ns": policy.max_age_ns,
                                           "known_confidence": policy.known_confidence}
                                  for domain, policy in self.policies.items()},
@@ -780,6 +859,16 @@ class PublicWorldModel:
         event_sequence = _integer(state.get("event_sequence"), "event_sequence")
         dropped = _integer(state.get("history_dropped"), "history_dropped")
         evictions = _integer(state.get("facts_evicted", 0), "facts_evicted")
+        raw_retention = state.get("retention", {})
+        if not isinstance(raw_retention, Mapping) or set(raw_retention) - set(_RETENTION_CLASSES):
+            raise ValueError("invalid restored retention classes")
+        retention_evicted, retention_rejected = {}, {}
+        for group in _RETENTION_CLASSES:
+            raw = raw_retention.get(group, {})
+            if not isinstance(raw, Mapping):
+                raise ValueError("invalid restored retention counters")
+            retention_evicted[group] = _integer(raw.get("facts_evicted", 0), "retention facts_evicted")
+            retention_rejected[group] = _integer(raw.get("observations_rejected", 0), "retention observations_rejected")
         facts = OrderedDict()
         fact_sizes = {}
         facts_bytes = 0
@@ -839,6 +928,9 @@ class PublicWorldModel:
             self._facts, self._history = facts, history
             self._revision, self._event_sequence, self._history_dropped = revision, event_sequence, dropped
             self._facts_evicted = evictions
+            self._retention_evicted, self._retention_rejected = retention_evicted, retention_rejected
+            self._restored_unvalidated = {key for key, (observation, _, _) in facts.items()
+                if self.policies[observation.domain].max_age_ns is not None or observation.validity_scope is not None}
             self._fact_sizes, self._facts_bytes = fact_sizes, facts_bytes
             self._history_sizes, self._history_bytes = history_sizes, history_bytes
 
@@ -849,11 +941,14 @@ class PublicWorldModel:
         model = cls(clock_ns=clock_ns, clock_epoch=clock_epoch, policies=policies,
                     max_facts=state["max_facts"], history_capacity=state["history_capacity"],
                     max_facts_bytes=state.get("max_facts_bytes", DEFAULT_FACTS_BYTES),
-                    max_history_bytes=state.get("max_history_bytes", DEFAULT_HISTORY_BYTES))
+                    max_history_bytes=state.get("max_history_bytes", DEFAULT_HISTORY_BYTES),
+                    retention_limits={group: {name: raw[name] for name in ("max_facts", "max_bytes")}
+                                      for group, raw in state["retention"].items()} if "retention" in state else None)
         model.restore(state)
         return model
 
 
 __all__ = ["DEFAULT_FRESHNESS_POLICIES", "FreshnessPolicy", "KnowledgeState", "PublicWorldModel", "ValidityScope",
            "WORLD_MODEL_SCHEMA", "WORLD_MODEL_STATE_SCHEMA", "WorldEvent", "WorldFact",
-           "WorldLocation", "WorldObservation", "WorldQuery", "WorldQueryResult", "WorldSnapshot", "host_clock_epoch"]
+           "WorldLocation", "WorldObservation", "WorldQuery", "WorldQueryResult", "WorldSnapshot", "host_clock_epoch",
+           "retention_class"]

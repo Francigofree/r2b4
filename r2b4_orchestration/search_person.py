@@ -25,6 +25,7 @@ from r2b4_orchestration.world_model import (
     WorldQueryResult,
 )
 from r2b4_orchestration.spatial_service import SpatialQuery
+from r2b4_orchestration.person_identity import qualified_person_target
 
 
 _LOCAL_FRAMES = ("R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL")
@@ -43,6 +44,7 @@ class SearchPerson:
         self._observation_timeout_s = 1.0
         self._parameters: dict[str, object] = {}
         self._query_time_ns = 0
+        self._require_bound_track = False
 
     @staticmethod
     def _runtime(robot: RobotOperations) -> Mapping[str, object]:
@@ -78,7 +80,7 @@ class SearchPerson:
         self._query_time_ns = result.observation_time_ns
         return result
 
-    def _found_fact(self, person: WorldFact) -> BehaviorUpdate | None:
+    def _found_fact(self, person: WorldFact, *, target=None) -> BehaviorUpdate | None:
         observation, location = person.observation, person.location
         if (person.entity_id != self.entity_id or person.attribute != "location"
                 or observation is None or observation.domain != "person_position"
@@ -91,31 +93,45 @@ class SearchPerson:
                                        or observation.validity_scope.runtime_pid is None)):
             return None
         source = observation.source[:96]
-        result = {"target_entity_id": self.entity_id, "measurement_time_ns": observation.measurement_time_ns}
-        value = person.value
-        target = (value.get("target_track_id", value.get("track_id"))
-                  if isinstance(value, Mapping) else None)
-        scope = observation.validity_scope
-        if (isinstance(target, str) and target.startswith("person-") and len(target) <= 256
-                and scope is not None and scope.runtime_pid is not None
-                and value.get("runtime_pid") == scope.runtime_pid):
-            result.update(target_track_id=target, runtime_pid=scope.runtime_pid)
+        result = {"target_entity_id": self.entity_id, "measurement_time_ns": observation.measurement_time_ns,
+                  "semantic_evidence": True, "follow_target_available": target is not None,
+                  "bound_track": target is not None, "observation_qualified": target is not None}
+        if self._places:
+            result["search_place_id"] = self._places[self._index][0]
+        if target is not None:
+            result.update(target)
+        elif self._require_bound_track:
+            return None
         return BehaviorUpdate(BehaviorLifecycle.COMPLETED,
                               f"TARGET_OBSERVED:{self.entity_id}:source={source}:measurement={observation.measurement_time_ns}",
                               result=result)
 
     def _found(self, robot: RobotOperations, *, runtime: Mapping[str, object] | None = None) -> BehaviorUpdate | None:
+        runtime = self._runtime(robot) if runtime is None else runtime
+        def found_fact(fact):
+            target = None
+            value = fact.value
+            if isinstance(value, Mapping) and value.get("binding_session_id"):
+                try:
+                    bindings = robot.query(WorldQuery(entity_id=self.entity_id, attribute="person_binding",
+                        domain="person_binding", require_current=True,
+                        scope=fact.observation.validity_scope, limit=1)).facts
+                    target = qualified_person_target(fact, bindings[0] if bindings else None,
+                        runtime=runtime, status=robot.read("v3.status"), vision_status=robot.read("camera.status"),
+                        now=self._query_time_ns)
+                except (ValueError, RuntimeError, OSError, KeyError):
+                    target = None
+            return self._found_fact(fact, target=target)
         result = self._person_query(robot, current=True)
         for fact in result.facts:
-            found = self._found_fact(fact)
+            found = found_fact(fact)
             if found is not None:
                 return found
-        runtime = self._runtime(robot) if runtime is None else runtime
         for frame_id in _LOCAL_FRAMES:
             scope = self._scope(runtime, frame_id)
             if scope is not None:
                 for fact in self._person_query(robot, current=True, scope=scope).facts:
-                    found = self._found_fact(fact)
+                    found = found_fact(fact)
                     if found is not None:
                         return found
         return None
@@ -167,6 +183,9 @@ class SearchPerson:
         if not isinstance(entity, str) or not entity.strip() or len(entity) > 256:
             raise ValueError("search requires a bounded entity_id")
         self.entity_id = entity.strip()
+        self._require_bound_track = params.pop("require_bound_track", False)
+        if type(self._require_bound_track) is not bool:
+            raise ValueError("require_bound_track must be boolean")
         requested = params.pop("candidate_places", None)
         if requested is not None and (not isinstance(requested, (tuple, list)) or len(requested) > 32
                                       or any(not isinstance(item, str) or not item or len(item) > 256 for item in requested)):
@@ -217,7 +236,9 @@ class SearchPerson:
                         if last_target is not None and target.frame_id == last_target["frame_id"] else math.inf)
             return (name != last_place, distance, names.index(name))
 
-        names = sorted(names, key=rank)
+        # An explicit list expresses the caller's requested search order.
+        if requested is None:
+            names = sorted(names, key=rank)
         self._places = [(name, locations[name]) for name in names]
         return self._navigate(robot)
 

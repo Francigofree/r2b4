@@ -14,6 +14,8 @@ import unicodedata
 from v3.action_catalog import ACTION_CATALOG
 from .execution_mode import is_stop_intent
 from .world_model import WorldQuery
+from .person_skills import skill_descriptor
+from .outcome_learning import read_learning_snapshot
 
 
 def _fold(text: str) -> str:
@@ -36,6 +38,27 @@ _CLAUSES = re.compile(r"(?<!\d),(?!\d)|;|(?<!\d)\.(?!\d)|\b(?:azt[aá]n|majd|the
 
 def _number(raw: str) -> float:
     return _NUMBERS[raw] if raw in _NUMBERS else float(raw.replace(",", "."))
+
+
+def person_teaching_name(text: str) -> str | None:
+    """Explicit visible-person teaching only; the speaker is never inferred."""
+    match = re.fullmatch(
+        r"(?:call|name) this person (.+)|(?:ezt a szem[eé]lyt nevezd|nevezd ezt a szem[eé]lyt) (.+)",
+        text.strip(" .!?"), re.IGNORECASE)
+    if match is None:
+        return None
+    name = match[1] or match[2]
+    if match[2]:
+        if name.casefold().endswith(" néven"):
+            name = name[:-6]
+        elif name.casefold().endswith(("nak", "nek")):
+            name = name[:-3]
+            if name.endswith("á"):
+                name = name[:-1] + "a"
+            elif name.endswith("é"):
+                name = name[:-1] + "e"
+    name = name.strip(' "')
+    return name if 0 < len(name) <= 96 else None
 
 
 def _motion_instruction(text: str) -> tuple[str, float] | None:
@@ -121,7 +144,7 @@ def explicit_metric_constraints(text: str) -> dict[str, object]:
 
 
 def _step(action: str, **parameters: object) -> dict[str, object]:
-    if action != "vision.observe" and action not in ACTION_CATALOG:
+    if action != "vision.observe" and action not in ACTION_CATALOG and skill_descriptor(action) is None:
         raise ValueError("local method requires a canonical capability")
     return {"action": action, "parameters": parameters}
 
@@ -158,10 +181,29 @@ class LocalTaskPlanner:
     __slots__ = ()
 
     def resolve(self, text: str, interface: object, *, goal_id: str | None = None) -> LocalResolution:
+        snapshot = read_learning_snapshot(interface)
+        resolution = self._resolve(text, interface, goal_id=goal_id)
+        if resolution.plan is None:
+            return resolution
+        from dataclasses import replace
+        plan = dict(resolution.plan)
+        actions = tuple(row.get("action") for row in plan.get("steps", plan.get("nodes", ()))
+                        if row.get("action"))
+        skills = tuple(skill_descriptor(action) for action in actions)
+        method = (skills[0].method_id if len(skills) == 1 and skills[0] is not None
+                  else "person.search_follow" if any(skill is not None for skill in skills)
+                  else "local.sequence")
+        plan.update(method_id=method, method_version="1", learning_snapshot_id=snapshot.snapshot_id)
+        return replace(resolution, plan=plan)
+
+    def _resolve(self, text: str, interface: object, *, goal_id: str | None = None) -> LocalResolution:
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise ValueError("local task text must contain 1..4000 characters")
         if is_stop_intent(text):
             return LocalResolution(plan={"steps": [_step("v3.command.stop")]})
+        teaching = person_teaching_name(text)
+        if teaching is not None:
+            return LocalResolution(plan={"steps": [_step("person.teach", name=teaching)]})
         folded = _fold(text)
         requested_motion = explicit_metric_constraints(text).get("motion_sequence", ())
         if any(kind == "turn" and not 0 < abs(value) <= 360 for kind, value in requested_motion):

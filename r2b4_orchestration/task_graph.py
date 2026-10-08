@@ -271,9 +271,10 @@ class TaskNode:
                 raise ValueError("return_to_origin requires navigation without other coordinates or targets")
             default = ("person_found" if self.action in {"behavior.search_any_person", "behavior.search_person"}
                        else "duration" if self.action.startswith("behavior.") and "max_duration_s" in parameters
+                       else "knowledge" if self.action == "person.teach"
                        else "observation" if self.action == "vision.observe" else "mission")
             object.__setattr__(self, "completion", default if self.completion is None else self.completion)
-            if self.completion not in {"mission", "duration", "person_found", "observation"}:
+            if self.completion not in {"mission", "duration", "person_found", "observation", "knowledge"}:
                 raise ValueError("unsupported Task completion")
             duration = parameters.get("max_duration_s")
             if type(duration) in {int, float} and duration > self.timeout_s:
@@ -326,6 +327,10 @@ class TaskGraph:
     nodes: tuple[TaskNode, ...]
     entry: str
     constraints: tuple[tuple[str, object], ...] = ()
+    method_id: str | None = None
+    method_version: str | None = None
+    learning_snapshot_id: str | None = None
+    planning_world_revision: int | None = None
 
     def __post_init__(self) -> None:
         if (not isinstance(self.nodes, (list, tuple)) or not 1 <= len(self.nodes) <= MAX_GRAPH_NODES
@@ -344,6 +349,15 @@ class TaskGraph:
             raise ValueError("duplicate TaskGraph constraint")
         frozen = _freeze(constraints)
         object.__setattr__(self, "constraints", tuple(sorted(frozen.items())))
+        for name in ("method_id", "method_version", "learning_snapshot_id"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _text(value, name, 128))
+        if (self.method_id is None) != (self.method_version is None):
+            raise ValueError("TaskGraph method identity requires its version")
+        if (self.planning_world_revision is not None and
+                (type(self.planning_world_revision) is not int or self.planning_world_revision < 0)):
+            raise ValueError("TaskGraph planning World revision must be nonnegative")
         by_id = {node.node_id: node for node in self.nodes}
         visited: set[str] = set()
         active: set[str] = set()
@@ -377,11 +391,15 @@ class TaskGraph:
 
     def to_jsonable(self) -> dict[str, object]:
         return {"schema": TASK_GRAPH_SCHEMA, "nodes": [node.to_jsonable() for node in self.nodes],
-                "entry": self.entry, "constraints": _jsonable(dict(self.constraints))}
+                "entry": self.entry, "constraints": _jsonable(dict(self.constraints)),
+                "method_id": self.method_id, "method_version": self.method_version,
+                "learning_snapshot_id": self.learning_snapshot_id,
+                "planning_world_revision": self.planning_world_revision}
 
     @classmethod
     def from_jsonable(cls, value: Mapping[str, object]) -> TaskGraph:
-        if not isinstance(value, Mapping) or set(value) - {"schema", "nodes", "entry", "constraints"}:
+        if not isinstance(value, Mapping) or set(value) - {"schema", "nodes", "entry", "constraints",
+                "method_id", "method_version", "learning_snapshot_id", "planning_world_revision"}:
             raise ValueError("invalid typed TaskGraph")
         if value.get("schema", TASK_GRAPH_SCHEMA) != TASK_GRAPH_SCHEMA:
             raise ValueError("invalid TaskGraph schema")
@@ -392,7 +410,8 @@ class TaskGraph:
         if not isinstance(constraints, Mapping):
             raise ValueError("TaskGraph constraints must be an object")
         return cls(tuple(TaskNode.from_jsonable(node) for node in nodes), value.get("entry"),
-                   tuple(constraints.items()))
+                   tuple(constraints.items()), **{name: value.get(name) for name in
+                   ("method_id", "method_version", "learning_snapshot_id", "planning_world_revision")})
 
 
 __all__ = ["FailureCode", "MAX_GRAPH_BYTES", "MAX_GRAPH_NODES", "RECOVERABLE_FAILURES",

@@ -22,7 +22,7 @@ from v3.action_catalog import action_descriptor
 from v3.adapters.vision_media_contracts import VisionJpeg
 from .behavior_system import BehaviorLifecycle, BehaviorSystem, _parameters
 from .world_model import ValidityScope, WorldFact, WorldQuery
-from .task_graph import (TaskGraph, TaskNodeKind, FailureCode, classify_failure,
+from .task_graph import (TaskGraph, TaskNode, TaskNodeKind, FailureCode, classify_failure,
                          is_retryable_failure)
 from .goal_origin import GoalOrigin, capture_goal_origin
 
@@ -41,6 +41,16 @@ _RUNNING = {GoalLifecycle.PENDING, GoalLifecycle.STARTING, GoalLifecycle.ACTIVE}
 _PRIORITY = {"AUTONOMOUS": 1, "HUMAN": 2, "SAFETY": 3}
 _ALIASES = {"v3.command.explore": "behavior.room_cruise",
             "v3.command.follow_person": "behavior.follow_person"}
+_PLANNING_FIELDS = ("method_id", "method_version", "learning_snapshot_id", "planning_world_revision")
+
+
+def _requires_motion(action):
+    if action.startswith("person."):
+        from .person_skills import skill_descriptor
+        descriptor = skill_descriptor(action)
+        if descriptor is not None:
+            return descriptor.requires_motion
+    return action not in {"vision.observe", "v3.command.stop"}
 
 
 def _world_target_evidence(fact: WorldFact | None):
@@ -84,7 +94,6 @@ class GoalSnapshot:
     updated_ns: int
     revision: int = 1
     reason: str | None = None
-    steps: tuple[PlanStep, ...] = ()
     constraints: tuple[tuple[str, object], ...] = ()
     step_index: int = 0
     attempt: int = 0
@@ -105,8 +114,20 @@ class GoalSnapshot:
     motion_dispatched: bool = False
 
     @property
+    def steps(self):
+        """Compatibility view; the admitted graph is the only execution plan."""
+        if self.task_graph is None:
+            return ()
+        return tuple(PlanStep(node.action, node.parameters, node.completion,
+                              node.bind_target, node.use_bound_target, node.max_retries,
+                              node.target_entity_id, node.return_to_origin)
+                     for node in self.task_graph.nodes if node.kind is TaskNodeKind.ACTION)
+
+    @property
     def subtask_id(self):
         if self.current_node_id is not None:
+            if re.fullmatch(r"step:[1-9][0-9]*", self.current_node_id):
+                return f"{self.goal_id}:{self.current_node_id}"
             return f"{self.goal_id}:node:{self.current_node_id}"
         return f"{self.goal_id}:step:{self.step_index + 1}"
 
@@ -120,8 +141,7 @@ class GoalSnapshot:
                 "constraints": dict(self.constraints), "step_index": self.step_index,
                 "current_subtask": (self.task_graph.node(self.current_node_id).action
                                     or self.task_graph.node(self.current_node_id).kind.value)
-                                    if self.task_graph is not None and self.current_node_id is not None else
-                                    self.steps[self.step_index].action if self.step_index < len(self.steps) else None,
+                                    if self.task_graph is not None and self.current_node_id is not None else None,
                 "subtask_id": self.subtask_id, "attempt": self.attempt,
                 "decision_id": self.decision_id, "behavior_id": self.behavior_id,
                 "command_id": self.command_id, "mission_id": self.mission_id,
@@ -350,6 +370,10 @@ class BrainCore:
 
     @staticmethod
     def _validate_parameters(action, parameters, *, bound=False):
+        if action.startswith("person."):
+            from .person_skills import validate_skill_parameters
+            if validate_skill_parameters(action, parameters):
+                return
         descriptor = action_descriptor(action)
         if action == "vision.observe":
             if set(parameters) - {"stream"} or parameters.get("stream", "lores") not in {"lores", "main"}:
@@ -378,7 +402,7 @@ class BrainCore:
                 raise ValueError("INVALID_PARAMETER:" + name)
 
     def _plan(self, raw, goal, *, validate_bindings=True, max_steps=16):
-        if not isinstance(raw, Mapping) or set(raw) - {"steps", "constraints"}:
+        if not isinstance(raw, Mapping) or set(raw) - {"steps", "constraints", *_PLANNING_FIELDS}:
             raise ValueError("invalid Brain plan")
         if len(json.dumps(dict(raw), allow_nan=False).encode()) > 32768:
             raise ValueError("Brain plan exceeded its bound")
@@ -397,6 +421,8 @@ class BrainCore:
             action = _ALIASES.get(action, action)
             if action == "v3.command.wheels":
                 raise ValueError("CAPABILITY_UNSUPPORTED:" + action)
+            if action == "person.teach" and goal.source != "HUMAN":
+                raise ValueError("PERSON_TEACHING_REQUIRES_HUMAN")
             params = _parameters(row.get("parameters", {}))
             entity = row.get("target_entity_id")
             origin = row.get("return_to_origin", False)
@@ -424,10 +450,13 @@ class BrainCore:
             self._validate_parameters(action, validation_params, bound=use)
             default_completion = ("person_found" if "search_" in action else
                                   "duration" if action.startswith("behavior.") and "max_duration_s" in params else
+                                  "knowledge" if action == "person.teach" else
                                   "observation" if action == "vision.observe" else "mission")
             completion = row.get("completion", default_completion)
-            if completion not in {"duration", "mission", "observation", "person_found"}:
+            if completion not in {"duration", "mission", "observation", "person_found", "knowledge"}:
                 raise ValueError("COMPLETION_UNSUPPORTED")
+            if (completion == "knowledge") != (action == "person.teach"):
+                raise ValueError("KNOWLEDGE_COMPLETION_UNSUPPORTED")
             if completion == "duration" and (action not in {"behavior.room_cruise", "behavior.follow_person"}
                                               or "max_duration_s" not in params):
                 raise ValueError("DURATION_CONSTRAINT_UNSUPPORTED")
@@ -526,6 +555,23 @@ class BrainCore:
                 raise ValueError("CONSTRAINT_UNSUPPORTED:" + name)
         return tuple(steps), tuple(sorted(constraints.items()))
 
+    @staticmethod
+    def _legacy_graph(steps, constraints, raw=None):
+        """Convert checked legacy input once; retain its public subtask identity."""
+        nodes = []
+        for index, step in enumerate(steps):
+            duration = dict(step.parameters).get("max_duration_s", 300.0)
+            timeout = min(3600.0, max(120.0, duration + 15.0)) if step.action.startswith("behavior.") else 120.0
+            nodes.append(TaskNode(node_id=f"step:{index + 1}", kind=TaskNodeKind.ACTION,
+                action=step.action, parameters=step.parameters, completion=step.completion,
+                bind_target=step.bind_target, use_bound_target=step.use_bound_target,
+                max_retries=step.max_retries if step.action == "behavior.search_person" else 0,
+                failure_on=(FailureCode.TARGET_LOST,), target_entity_id=step.target_entity_id,
+                return_to_origin=step.return_to_origin, timeout_s=timeout,
+                on_success=f"step:{index + 2}" if index + 1 < len(steps) else None))
+        metadata = {name: raw.get(name) for name in _PLANNING_FIELDS} if raw is not None else {}
+        return TaskGraph(tuple(nodes), nodes[0].node_id, constraints, **metadata)
+
     def _graph_plan(self, raw, goal):
         graph = TaskGraph.from_jsonable(raw)
         actions = [node for node in graph.nodes if node.kind is TaskNodeKind.ACTION]
@@ -534,6 +580,12 @@ class BrainCore:
                             "max_retries", "target_entity_id", "return_to_origin"}} for node in actions]
         steps, _ = (self._plan({"steps": rows}, replace(goal, constraints=()),
                               validate_bindings=False, max_steps=32) if rows else ((), ()))
+        canonical = {node.node_id: replace(node, action=step.action, parameters=step.parameters,
+                                          completion=step.completion)
+                     for node, step in zip(actions, steps)}
+        graph = replace(graph, nodes=tuple(canonical.get(node.node_id, node) for node in graph.nodes))
+        actions = [node for node in graph.nodes if node.kind is TaskNodeKind.ACTION]
+        rows = [step.to_jsonable() for step in steps]
         constraints = goal.constraints
         if not rows and (goal.constraints or graph.constraints):
             raise ValueError("CONSTRAINT_UNSUPPORTED:graph_without_actions")
@@ -582,11 +634,11 @@ class BrainCore:
             if goal.lifecycle is not GoalLifecycle.PENDING:
                 raise RuntimeError("BRAIN_PROPOSAL_REVOKED")
             try:
-                graph = None
                 if isinstance(plan, Mapping) and "nodes" in plan:
                     graph, steps, constraints = self._graph_plan(plan, goal)
                 else:
                     steps, constraints = self._plan(plan, goal)
+                    graph = self._legacy_graph(steps, constraints, plan)
             except (ValueError, TypeError) as exc:
                 return self._change(goal_id, "PLAN_REJECTED", lifecycle=GoalLifecycle.FAILED,
                                     reason=str(exc), failure_code=FailureCode.CONTRACT_FAILURE).to_jsonable()
@@ -607,11 +659,11 @@ class BrainCore:
             self._cancel_event = threading.Event()
             self._primary_id = goal_id
             entry_index = 0
-            if graph is not None and graph.node(graph.entry).kind is TaskNodeKind.ACTION:
+            if graph.node(graph.entry).kind is TaskNodeKind.ACTION:
                 entry_index = [node.node_id for node in graph.nodes if node.kind is TaskNodeKind.ACTION].index(graph.entry)
             self._change(goal_id, "PLAN_ADOPTED", lifecycle=GoalLifecycle.STARTING,
-                         steps=steps, constraints=constraints, reason="PLAN_VALIDATED", task_graph=graph,
-                         current_node_id=None if graph is None else graph.entry,
+                         constraints=constraints, reason="PLAN_VALIDATED", task_graph=graph,
+                         current_node_id=graph.entry,
                          node_started_ns=self.clock_ns(), step_index=entry_index)
             had_behavior = self.behaviors.active
             self.behaviors.revoke("BRAIN_PLAN_ADOPTED")
@@ -698,9 +750,10 @@ class BrainCore:
             if goal is None or goal.lifecycle is not GoalLifecycle.STARTING or self._admissions_inflight:
                 return
             try:
-                if any(step.action != "vision.observe" for step in goal.steps):
+                if any(_requires_motion(node.action) for node in goal.task_graph.nodes
+                       if node.kind is TaskNodeKind.ACTION):
                     self.robot.stop()  # Stable physical boundary before physical actions.
-                if goal.origin is None and any(step.return_to_origin for step in goal.steps):
+                if goal.origin is None and any(node.return_to_origin for node in goal.task_graph.nodes):
                     with self._lock:
                         if self._current(generation) is None:
                             return
@@ -773,15 +826,13 @@ class BrainCore:
             if self._current(generation) is None:
                 return
             cancel_event = self._cancel_event
-        if goal.task_graph is not None:
-            node = goal.task_graph.node(goal.current_node_id)
-            if self.clock_ns() - goal.node_started_ns >= int(node.timeout_s * 1_000_000_000):
-                self._node_failure(generation, "TIMEOUT:" + node.node_id)
-                return
-            if node.kind is not TaskNodeKind.ACTION:
-                self._start_control_node(generation, node)
-                return
-        step = goal.steps[goal.step_index]
+        node = goal.task_graph.node(goal.current_node_id)
+        if self._node_expired(generation):
+            return
+        if node.kind is not TaskNodeKind.ACTION:
+            self._start_control_node(generation, node)
+            return
+        step = node
         params = dict(step.parameters)
         world_target = None
         if step.return_to_origin:
@@ -832,8 +883,7 @@ class BrainCore:
                 goal = self._change(goal.goal_id, "SUBTASK_DISPATCHED", lifecycle=GoalLifecycle.STARTING,
                                     behavior_id=None, command_id=None, mission_id=None, reason="ACTION_STARTING",
                                     world_target=world_target,
-                                    motion_dispatched=goal.motion_dispatched or step.action not in {
-                                        "vision.observe", "v3.command.stop"})
+                                    motion_dispatched=goal.motion_dispatched or _requires_motion(step.action))
                 cancel_event = self._cancel_event
             if step.action.startswith("behavior."):
                 if self._node_expired(generation):
@@ -913,7 +963,8 @@ class BrainCore:
             from v3.robot_interface import _compact_finite_result
             try:
                 result_evidence = (_compact_finite_result(result)
-                                   if descriptor is not None and descriptor.completion_required else ())
+                                   if descriptor is not None and descriptor.completion_required else
+                                   tuple(sorted(_parameters(result).items())) if step.action == "person.teach" else ())
             except Exception:
                 result_evidence = ()  # Passive evidence failure cannot change execution.
             command = result.get("command_id") if isinstance(result, Mapping) else getattr(result, "command_id", None)
@@ -927,7 +978,12 @@ class BrainCore:
                 self._change(goal.goal_id, "ACTION_RESULT", command_id=command,
                              mission_id=mission or ("mission-" + command if command else None),
                              result=result_evidence)
-            if step.action == "vision.observe":
+            if step.action == "person.teach":
+                if (not isinstance(result, Mapping) or result.get("status") != "TAUGHT"
+                        or not isinstance(result.get("entity_id"), str) or not result.get("entity_id")):
+                    raise ValueError("PERSON_TEACHING_COMPLETION_UNPROVEN")
+                self._advance(generation, "PERSON_TAUGHT")
+            elif step.action == "vision.observe":
                 if not isinstance(result, VisionJpeg):
                     raise ValueError("OBSERVATION_EVIDENCE_UNAVAILABLE")
                 result.metadata.require_fresh(self.clock_ns(), generation=result.metadata.owner_generation,
@@ -987,7 +1043,7 @@ class BrainCore:
                     return
                 self._change(goal.goal_id, "TASK_REPORTED", result=(("message", node.message),))
             if node.failure_code is not None:
-                self.fail(goal.goal_id, (node.failure_code.value + ":" + node.message)[:1024])
+                self._node_failure(generation, (node.failure_code.value + ":" + node.message)[:1024])
             else:
                 self._advance(generation, "TASK_REPORTED")
             return
@@ -1039,12 +1095,24 @@ class BrainCore:
 
     def _node_expired(self, generation):
         goal = self._current(generation)
-        if goal is not None and goal.task_graph is not None:
+        if goal is not None:
             node = goal.task_graph.node(goal.current_node_id)
-            if self.clock_ns() - goal.node_started_ns >= int(node.timeout_s * 1_000_000_000):
+            if self.clock_ns() >= self._node_deadline_ns(goal):
                 self._node_failure(generation, "TIMEOUT:" + node.node_id)
                 return True
         return False
+
+    def _node_deadline_ns(self, goal):
+        node = goal.task_graph.node(goal.current_node_id)
+        deadline = goal.node_started_ns + int(node.timeout_s * 1_000_000_000)
+        if node.completion == "duration" and goal.behavior_id is not None:
+            state = self.behaviors.snapshot()
+            if (state.behavior_id == goal.behavior_id and state.execution_started_ns is not None
+                    and state.deadline_ns is not None):
+                # Execution acknowledgement may lag admission. A task deadline
+                # must not silently shorten the accepted physical duration.
+                deadline = max(deadline, state.deadline_ns + 1)
+        return deadline
 
     def _node_failure(self, generation, reason):
         reason = _bounded_reason(reason)
@@ -1052,6 +1120,10 @@ class BrainCore:
         if goal is None:
             return
         code = classify_failure(reason)
+        with self._lock:
+            if self._current(generation) is None:
+                return
+            self._change(goal.goal_id, "SUBTASK_FAILED", reason=reason, failure_code=code)
         if goal.task_graph is not None:
             node = goal.task_graph.node(goal.current_node_id)
             allowed = is_retryable_failure(code) and code in node.failure_on
@@ -1082,7 +1154,8 @@ class BrainCore:
                             return
                         self._change(goal.goal_id, "BOUNDED_RETRY", lifecycle=GoalLifecycle.STARTING,
                                      attempt=goal.attempt + 1, reason=reason, failure_code=code,
-                                     node_started_ns=self.clock_ns())
+                                     node_started_ns=self.clock_ns(), result=(),
+                                     behavior_id=None, command_id=None, mission_id=None)
                     self._start(generation)
                 else:
                     self._transition_node(generation, node.on_failure, reason, code)
@@ -1101,7 +1174,7 @@ class BrainCore:
             self._change(goal.goal_id, "TASK_NODE_READY", current_node_id=node_id,
                          step_index=index, attempt=0, lifecycle=GoalLifecycle.STARTING,
                          reason=reason, failure_code=failure_code, node_started_ns=self.clock_ns(),
-                         behavior_id=None, command_id=None, mission_id=None)
+                         behavior_id=None, command_id=None, mission_id=None, result=(), world_target=None)
         self._start(generation)
 
     def step(self, *, asynchronous=False):
@@ -1116,14 +1189,12 @@ class BrainCore:
             goal = self._current(generation)
             if goal is None or goal.lifecycle is not GoalLifecycle.ACTIVE:
                 return
-            if goal.task_graph is not None:
-                node = goal.task_graph.node(goal.current_node_id)
-                if self.clock_ns() - goal.node_started_ns >= int(node.timeout_s * 1_000_000_000):
-                    self._node_failure(generation, "TIMEOUT:" + node.node_id)
-                    return
-                if node.kind is TaskNodeKind.WORLD_WAIT:
-                    self._start_control_node(generation, node)
-                    return
+            node = goal.task_graph.node(goal.current_node_id)
+            if self._node_expired(generation):
+                return
+            if node.kind is TaskNodeKind.WORLD_WAIT:
+                self._start_control_node(generation, node)
+                return
             if goal.behavior_id:
                 self._behavior_result(generation, self.behaviors.snapshot())
                 return
@@ -1137,7 +1208,7 @@ class BrainCore:
                     if self.clock_ns() - goal.updated_ns < 5_000_000_000:
                         return
                     raise ValueError("MISSION_IDENTITY_MISMATCH")
-                if goal.steps[goal.step_index].action == "v3.command.navigate" and mission.get("mode") != "NAVIGATE":
+                if node.action == "v3.command.navigate" and mission.get("mode") != "NAVIGATE":
                     raise ValueError("MISSION_MODE_MISMATCH")
                 if status.get("fault_layer") or status.get("safety_decision") == "FAULT":
                     raise ValueError("RUNTIME_FAULT")
@@ -1150,7 +1221,7 @@ class BrainCore:
                         and navigation.get("status") in {"NO_PATH", "INVALIDATED"}):
                     raise ValueError("NAVIGATION_FAILED:" + str(navigation.get("reason") or navigation["status"]))
                 if mission.get("lifecycle") in {"FAILED", "CANCELLED"}:
-                    self.fail(goal.goal_id, str(mission.get("stop_reason") or mission["lifecycle"]))
+                    self._node_failure(generation, str(mission.get("stop_reason") or mission["lifecycle"]))
                 elif (mission.get("lifecycle") == "COMPLETED" or isinstance(navigation, Mapping)
                         and navigation.get("mission_id") == goal.mission_id and navigation.get("status") == "COMPLETE"):
                     self.robot.stop()
@@ -1169,9 +1240,9 @@ class BrainCore:
                 goal = self._change(goal.goal_id, "SUBTASK_COMMAND_UPDATED", command_id=state.command_id,
                                     mission_id=state.mission_id)
         if state.lifecycle is BehaviorLifecycle.COMPLETED:
-            step = goal.steps[goal.step_index]
+            step = goal.task_graph.node(goal.current_node_id)
             if step.completion == "duration" and state.reason != "REQUESTED_DURATION_REACHED":
-                self.fail(goal.goal_id, "REQUESTED_DURATION_UNPROVEN")
+                self._node_failure(generation, "REQUESTED_DURATION_UNPROVEN")
                 return
             result = dict(getattr(state, "result", ()))
             with self._lock:
@@ -1179,11 +1250,11 @@ class BrainCore:
                     return
                 self._change(goal.goal_id, "BEHAVIOR_RESULT", reason=state.reason, result=tuple(sorted(result.items())))
             if step.completion == "person_found" and not (result.get("target_track_id") or str(state.reason).startswith("TARGET_OBSERVED:")):
-                self.fail(goal.goal_id, "PERSON_COMPLETION_UNPROVEN")
+                self._node_failure(generation, "PERSON_COMPLETION_UNPROVEN")
                 return
             if step.bind_target:
                 if not result.get("target_track_id") or type(result.get("runtime_pid")) is not int:
-                    self.fail(goal.goal_id, "TARGET_BINDING_UNAVAILABLE")
+                    self._node_failure(generation, "TARGET_BINDING_UNAVAILABLE")
                     return
                 with self._lock:
                     if self._current(generation) is None:
@@ -1196,23 +1267,9 @@ class BrainCore:
                     return
                 self._change(goal.goal_id, "BEHAVIOR_RESULT", reason=state.reason,
                              result=tuple(sorted(dict(getattr(state, "result", ())).items())))
-            step = goal.steps[goal.step_index]
-            if goal.task_graph is not None:
-                self._node_failure(generation, state.reason or "BEHAVIOR_FAILED")
-                return
-            # Only explicit local search exhaustion is retryable. Stale evidence,
-            # safety, transport, crash and identity failures remain terminal.
-            if goal.attempt < step.max_retries and str(state.reason).startswith("SEARCH_PLACES_EXHAUSTED:"):
-                with self._lock:
-                    if self._current(generation) is None:
-                        return
-                    self._change(goal.goal_id, "BOUNDED_RETRY", attempt=goal.attempt + 1,
-                                 lifecycle=GoalLifecycle.STARTING, reason=state.reason)
-                self._start(generation)
-            else:
-                self.fail(goal.goal_id, state.reason or "BEHAVIOR_FAILED")
+            self._node_failure(generation, state.reason or "BEHAVIOR_FAILED")
         elif state.lifecycle is BehaviorLifecycle.CANCELLED:
-            self.fail(goal.goal_id, state.reason or "BEHAVIOR_CANCELLED")
+            self._node_failure(generation, state.reason or "BEHAVIOR_CANCELLED")
 
     def _advance(self, generation, reason):
         next_node = None
@@ -1221,28 +1278,20 @@ class BrainCore:
             goal = self._current(generation)
             if goal is None:
                 return
-            if goal.task_graph is not None:
-                node = goal.task_graph.node(goal.current_node_id)
-                if self.clock_ns() - goal.node_started_ns >= int(node.timeout_s * 1_000_000_000):
-                    timed_out = True
-                elif node.on_success is None:
+            node = goal.task_graph.node(goal.current_node_id)
+            if self.clock_ns() >= self._node_deadline_ns(goal):
+                timed_out = True
+            else:
+                self._change(goal.goal_id, "SUBTASK_COMPLETED", reason=reason, failure_code=None)
+                if node.on_success is None:
                     self._change(goal.goal_id, "GOAL_COMPLETED", lifecycle=GoalLifecycle.COMPLETED,
                                  reason=reason, failure_code=None)
                     return
-                else:
-                    next_node = node.on_success
-            elif goal.step_index + 1 >= len(goal.steps):
-                self._change(goal.goal_id, "GOAL_COMPLETED", lifecycle=GoalLifecycle.COMPLETED, reason=reason)
-                return
-            else:
-                self._change(goal.goal_id, "SUBTASK_COMPLETED", step_index=goal.step_index + 1,
-                             attempt=0, lifecycle=GoalLifecycle.STARTING, reason=reason)
+                next_node = node.on_success
         if timed_out:
             self._node_failure(generation, "TIMEOUT:" + node.node_id)
         elif next_node is not None:
             self._transition_node(generation, next_node, reason)
-        else:
-            self._start(generation)
 
     def fail(self, goal_id, reason, *, pending_only=False):
         reason = _bounded_reason(reason)
@@ -1252,7 +1301,8 @@ class BrainCore:
                 raise ValueError("pending_only must be a boolean")
             if goal.lifecycle not in _RUNNING or pending_only and goal.lifecycle is not GoalLifecycle.PENDING:
                 return goal.to_jsonable()
-            physical = self._primary_id == goal_id and bool(goal.steps)
+            physical = self._primary_id == goal_id and goal.task_graph is not None and any(
+                _requires_motion(node.action) for node in goal.task_graph.nodes if node.kind is TaskNodeKind.ACTION)
             if physical:
                 self._generation += 1
                 self._cancel_event.set()
@@ -1325,13 +1375,19 @@ class BrainCore:
             if not isinstance(rows_steps, list) or len(rows_steps) > (32 if row.get("task_graph") else 16):
                 raise ValueError("invalid saved Brain plan")
             steps = tuple(PlanStep(step["action"], tuple(sorted(_parameters(step.get("parameters", {})).items())),
-                                   step.get("completion", "mission"), target_entity_id=step.get("target_entity_id"),
+                                   step.get("completion", "mission"), step.get("bind_target", False),
+                                   step.get("use_bound_target", False), step.get("max_retries", 0),
+                                   target_entity_id=step.get("target_entity_id"),
                                    return_to_origin=step.get("return_to_origin", False))
                           for step in rows_steps)
             world_target = WorldFact.from_jsonable(row["world_target"]) if row.get("world_target") else None
             graph = TaskGraph.from_jsonable(row["task_graph"]) if row.get("task_graph") else None
+            if graph is None and steps:
+                graph = self._legacy_graph(steps, tuple(row.get("constraints", {}).items()))
             current_node_id = row.get("current_node_id") if graph is not None else None
             if graph is not None:
+                if current_node_id is None:
+                    current_node_id = f"step:{row.get('step_index', 0) + 1}"
                 graph.node(current_node_id)
             if world_target is not None and len(json.dumps(_world_target_evidence(world_target), allow_nan=False).encode()) > 4096:
                 raise ValueError("saved world target exceeded its bound")
@@ -1340,7 +1396,8 @@ class BrainCore:
                     self._primary_id = goal["goal_id"]
                 self._change(goal["goal_id"], "GOAL_INTERRUPTED" if was_active else "GOAL_RESTORED",
                     lifecycle=GoalLifecycle.INTERRUPTED if was_active else old_lifecycle,
-                    steps=steps, result=_restored_result(row.get("result", {})),
+                    constraints=graph.constraints if graph is not None else (),
+                    result=_restored_result(row.get("result", {})),
                     target=tuple(sorted(_parameters(row.get("target", {})).items())),
                     command_id=row.get("command_id"), mission_id=row.get("mission_id"),
                     behavior_id=row.get("behavior_id"), step_index=row.get("step_index", 0),

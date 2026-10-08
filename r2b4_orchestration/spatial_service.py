@@ -14,7 +14,7 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
-from .world_model import KnowledgeState, PublicWorldModel, WorldFact, WorldLocation
+from .world_model import KnowledgeState, PublicWorldModel, WorldFact, WorldLocation, retention_class
 
 
 SPATIAL_SCHEMA = "R2B4_GLOBAL_SPATIAL_MODEL_V1"
@@ -127,6 +127,10 @@ class SpatialService:
         self._facts = OrderedDict()
         self._sizes = {}
         self._bytes = self._revision = self._facts_evicted = 0
+        self._retention_limits = {"knowledge": {"max_facts": min(max_facts, 64), "max_bytes": min(max_bytes, 112 * 1024)},
+                                  "transient": {"max_facts": min(max_facts, 64), "max_bytes": min(max_bytes, 80 * 1024)}}
+        self._retention_evicted = {"knowledge": 0, "transient": 0}
+        self._retention_rejected = {"knowledge": 0, "transient": 0}
         self._source_revision = -1
         self._context = None
         self._continuity = 0
@@ -138,6 +142,19 @@ class SpatialService:
     def revision(self):
         with self._lock:
             return self._revision
+
+    def _retention_status(self):
+        result = {group: {**limits, "fact_count": 0, "bytes_used": 0,
+                          "facts_evicted": self._retention_evicted[group],
+                          "observations_rejected": self._retention_rejected[group]}
+                  for group, limits in self._retention_limits.items()}
+        for key, entry in self._facts.items():
+            pool = result[retention_class(entry[0].domain)]
+            pool["fact_count"] += 1
+            pool["bytes_used"] += self._sizes[key]
+        for pool in result.values():
+            pool["saturated"] = pool["fact_count"] >= pool["max_facts"] or pool["bytes_used"] >= pool["max_bytes"]
+        return result
 
     def completed_status(self, status: Mapping[str, object], *, runtime_pid: object = None):
         """Track completed L3/L4 context; status time is never a new measurement."""
@@ -226,15 +243,40 @@ class SpatialService:
                     binding = declared if type(declared) is int and declared >= 0 else None
                 entry = (fact, binding, self._continuity, True)
                 size = len(json.dumps(self._entry_json(key, entry), allow_nan=False, separators=(",", ":")).encode()) + 512
-                if size > self.max_bytes:
+                group = retention_class(fact.domain)
+                limits = self._retention_limits[group]
+                if size > limits["max_bytes"]:
+                    self._retention_rejected[group] += 1
+                    continue
+                own_keys = [candidate for candidate, stored in self._facts.items()
+                            if retention_class(stored[0].domain) == group]
+                count = len(self._facts) + int(previous is None)
+                total = self._bytes - self._sizes.get(key, 0) + size
+                own_count = len(own_keys) + int(previous is None)
+                own_bytes = sum(self._sizes[candidate] for candidate in own_keys) - self._sizes.get(key, 0) + size
+                removed_keys = []
+                for candidate in own_keys:
+                    if (count <= self.max_facts and total <= self.max_bytes
+                            and own_count <= limits["max_facts"] and own_bytes <= limits["max_bytes"]):
+                        break
+                    if candidate != key:
+                        removed_keys.append(candidate)
+                        count -= 1
+                        own_count -= 1
+                        total -= self._sizes[candidate]
+                        own_bytes -= self._sizes[candidate]
+                if (count > self.max_facts or total > self.max_bytes
+                        or own_count > limits["max_facts"] or own_bytes > limits["max_bytes"]):
+                    self._retention_rejected[group] += 1
                     continue
                 if previous is not None:
                     self._bytes -= self._sizes.pop(key)
                     del self._facts[key]
-                while self._facts and (len(self._facts) >= self.max_facts or self._bytes + size > self.max_bytes):
-                    removed, _ = self._facts.popitem(last=False)
+                for removed in removed_keys:
+                    del self._facts[removed]
                     self._bytes -= self._sizes.pop(removed)
                     self._facts_evicted += 1
+                    self._retention_evicted[group] += 1
                 self._facts[key], self._sizes[key] = entry, size
                 self._bytes += size
                 self._revision += 1
@@ -244,11 +286,12 @@ class SpatialService:
         observation = fact.observation
         age = now - observation.measurement_time_ns if observation.clock_epoch == self.world.clock_epoch else None
         policy = self.world.policies.get(observation.domain)
-        if age is None:
+        enduring = policy is not None and policy.max_age_ns is None and observation.validity_scope is None
+        if age is None and not enduring:
             return replace(fact, state=KnowledgeState.STALE, freshness="CLOCK_MISMATCH", age_ns=None)
-        if not validated:
+        if not validated and not enduring:
             return replace(fact, state=KnowledgeState.STALE, freshness="RESTORED_UNVALIDATED", age_ns=age)
-        if policy is None or age < 0 or now < observation.observation_time_ns:
+        if policy is None or age is not None and (age < 0 or now < observation.observation_time_ns):
             return replace(fact, state=KnowledgeState.UNKNOWN, freshness="NOT_YET_OBSERVED", age_ns=age)
         if policy.max_age_ns is not None and age > policy.max_age_ns:
             return replace(fact, state=KnowledgeState.STALE, freshness="STALE", age_ns=age)
@@ -346,6 +389,7 @@ class SpatialService:
                 context["frame_ids"] = list(context["frame_ids"])
             result.update(active_context=context, fact_count=len(self._facts),
                           source_world_revision=self._source_revision,
+                          retention=self._retention_status(),
                           motion_authority=False)
             return result
 
@@ -360,6 +404,7 @@ class SpatialService:
         with self._lock:
             return {"schema": SPATIAL_STATE_SCHEMA, "revision": self._revision,
                     "facts_evicted": self._facts_evicted,
+                    "retention": self._retention_status(),
                     "facts": [self._entry_json(key, entry) for key, entry in self._facts.items()]}
 
     def restore(self, value):
@@ -370,6 +415,17 @@ class SpatialService:
                 or type(value.get("facts_evicted")) is not int or value["facts_evicted"] < 0):
             raise ValueError("invalid spatial state")
         facts, sizes, total = OrderedDict(), {}, 0
+        raw_retention = value.get("retention", {})
+        if not isinstance(raw_retention, Mapping) or set(raw_retention) - set(self._retention_limits):
+            raise ValueError("invalid saved spatial retention")
+        evicted, rejected = {}, {}
+        for group in self._retention_limits:
+            raw = raw_retention.get(group, {})
+            if not isinstance(raw, Mapping):
+                raise ValueError("invalid saved spatial retention")
+            evicted[group], rejected[group] = raw.get("facts_evicted", 0), raw.get("observations_rejected", 0)
+            if any(type(counter) is not int or counter < 0 for counter in (evicted[group], rejected[group])):
+                raise ValueError("invalid saved spatial retention counters")
         for item in value["facts"]:
             fact = WorldFact.from_jsonable(item["fact"])
             generation = item.get("localization_generation")
@@ -390,6 +446,7 @@ class SpatialService:
         with self._lock:
             self._facts, self._sizes, self._bytes = facts, sizes, total
             self._revision, self._facts_evicted = value["revision"], value["facts_evicted"]
+            self._retention_evicted, self._retention_rejected = evicted, rejected
             self._source_revision, self._context = -1, None
             self._continuity = 0
             self._context_boundary_ns = None
