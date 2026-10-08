@@ -133,11 +133,24 @@ számított kor. A domain policy választ KNOWN/LIKELY/STALE/UNKNOWN/CONFLICTING
 állapotot; a snapshot olvasása nem frissít adatot. Régebbi, duplikált vagy
 producer-sorrendben visszalépő observation nem írja felül az újabbat.
 
+A host status freshness-budgetje `HOST_STATUS_MAX_AGE_NS` (jelenleg 500 ms).
+A `monotonic_ns` az eredeti completed tick referenciaideje; az olvasás után
+mért host idővel a megengedett kor `[0, budget)`. A passzív status transport
+a legújabb várakozó snapshotot tartja, így lassú fájlpublikálás nem képez
+régi állapotok FIFO-backlogját. Poll/publication nem újít timestampet, és
+valódi stale/future status továbbra sem execution evidence.
+
 V3 statusból csak completed, compact estimate/mission/health és fizikai
 person observation kerül ide. A pose ideje L3 estimate referenciaidőként
 jelölt. PREDICTED/DEGRADED track nem válik új physical person observationné;
 measurement timestamp és runtime/frame lineage megmarad. Az anonim track
 entitása runtime-sessionhöz kötött; ember neve nem következik a track ID-ből.
+
+A friss person detector eredmény DEGRADED camera projection mellett is
+elérhető capability. A sample megőrzi a geometry state/reasont és minőséget;
+a Follow továbbra is L4-ben minősített bearing + friss LiDAR-range alapú
+usable tracket kér. INVALID projection, stale detectoreredmény és detectorhiba
+blokkolja a vision-függő mozgást.
 
 Facts és history külön count- és összesített JSON-byte budgetet kapnak.
 Snapshot/event értékek mélyen immutable-ek; raw kép, scan vagy tetszőleges
@@ -181,6 +194,14 @@ retry legfeljebb 2; safety/stale/crash/identity failure nem retryolható
 automatikusan. Explicit időtartam nem rövidülhet csendben caller watchdogra.
 Időzített Room Cruise/Follow csak a kért időtartam bizonyított elérésével
 complete; általános hard deadline exhaustion failure marad.
+
+A relatív finite motion alap completion-toleranciája a futó navigációs
+config és a nem nulla kért távolság/szög 10%-a közül a szigorúbb. Az effektív
+`goal_tolerance_m` és `yaw_tolerance_rad` a canonical NAVIGATE mission
+constraintjeibe kerül, és a finite result megőrzi őket. A host a friss,
+azonos mission/frame/runtime provenance-ű final pose residualját is ellenőrzi:
+a `COMPLETE` jelzés tolerancián kívül nem siker. Az abszolút navigáció
+megtartja a futó config alap policyját.
 
 Az initial dispatch, a Behavior léptetése, a bounded retry és minden következő
 részfeladat ugyanazon egyetlen host Brain dispatcher szálon fut. A runtime poll
@@ -245,6 +266,15 @@ idegen track nem helyettesítheti csendben. A voice a Brain teljes goal
 eredményét passzív observerrel közli. Kamera-JPEG megszerzése observation
 evidence; önmagában nem bizonyít például egy lámpa állapotára vonatkozó
 szemantikai következtetést.
+
+A task introspection kizárja az `ANSWERED` beszélgetési goalokat az előző
+robotfeladat kiválasztásából; restore után az eredeti request időrendjét
+használja. Az általános „az embert” referenciát a search/follow typed actionök
+oldják fel, név/alias csak publikált identity alapján illeszthető. A korábbi
+search target binding és a következő follow failure külön eredmény marad.
+Bejárt geometriai területek közlése nem hoz létre szemantikai szobaneveket:
+ehhez továbbra is külön, source/lineage-dzsel rendelkező semantic observation
+producer szükséges.
 
 Szoftveres evidence: idő/clock/sequence/conflict/storage bounds, facade-egység,
 preemption/STOP race, runtime/developer határ és többterületes SearchPerson

@@ -23,10 +23,12 @@ from v3.adapters.person_detection import (
     NativePersonDetector,
     PersonBox,
     PersonDetection,
+    PersonDetectionProjection,
     PersonDetectionRuntimeStatus,
+    PersonDetectionSnapshot,
 )
 from v3.config import ConfigResolver
-from v3.contracts import DataField, Observation, TickContext
+from v3.contracts import DataField, DeviceHealthState, Observation, TickContext
 from v3.layers.l4_world_model import ShadowWorldModel
 
 
@@ -170,8 +172,9 @@ def _check_invalid_runtime_geometry_keeps_2d_detection_but_blocks_spatial_projec
 
 
 class _Port:
-    def __init__(self, result) -> None:
+    def __init__(self, result, *, last_error=None) -> None:
         self.result = result
+        self.last_error = last_error
 
     def get_detection_snapshot(self):
         return self.result
@@ -182,7 +185,7 @@ class _Port:
             self.result.sequence,
             self.result.source_frame_sequence,
             0,
-            None,
+            self.last_error,
         )
 
     def stop(self):
@@ -249,3 +252,117 @@ def test_person_geometry_calibrated_bearings_and_fail_closed_projection_contract
     _check_l4_consumes_projected_bearings_instead_of_reconstructing_fov()
     _check_invalid_runtime_geometry_keeps_2d_detection_but_blocks_spatial_projection()
     _check_l4_fails_closed_for_explicit_invalid_geometry_projection()
+
+
+def test_follow_degraded_projection_requires_fresh_lidar_qualified_target_and_replays(tmp_path):
+    from rig import ROOT, resolved_config
+    from v3.capture import CaptureSink
+    from v3.composition.full_fake import OfflineMotorSink
+    from v3.composition.native_control import NativeControlComposition
+    from v3.contracts import (
+        CommandMode, CommandRequest, DeviceHealth, DeviceSample, LifecycleState,
+        NavigationStatus, RawDeviceBatch, RejectionReason, SafetyDecision,
+    )
+    from v3.engine import TickInputs
+    from v3.execution import ExecutionRecord
+    from v3.replay import replay_capture
+
+    config = resolved_config().runtime.composition.live_control.control
+    source_config = NativePersonDetectionConfig()
+    writer = OfflineMotorSink()
+    composition = NativeControlComposition(writer, config)
+    sink = CaptureSink("follow-degraded-projection", configuration={"production_control": config})
+    # The target lies outside the alignment envelope: a qualified track must
+    # produce positive heading guidance even with degraded camera calibration.
+    detection = PersonDetection(.9, PersonBox(.1, .2, .3, .8))
+    projection = PersonDetectionProjection(.9, .7, "degraded")
+    modes = (
+        ("DEGRADED", 0, None, False),
+        ("DEGRADED", 0, None, False),
+        ("DEGRADED", 0, None, True),
+        ("INVALID", 0, None, True),
+        ("DEGRADED", source_config.maximum_result_age_ns + 1, None, True),
+        ("DEGRADED", 0, "inference failed", True),
+        ("DEGRADED", 0, None, True),
+    )
+    try:
+        for tick, (geometry, age_ns, error, cluster) in enumerate(modes):
+            context = TickContext(tick, 2_000_000_000 + tick * 20_000_000)
+            result = PersonDetectionSnapshot(
+                sequence=tick + 1, source_frame_sequence=tick + 11,
+                measurement_monotonic_ns=context.monotonic_ns - age_ns,
+                completed_monotonic_ns=context.monotonic_ns, inference_duration_ns=0,
+                detections=(detection,), geometry_state=geometry,
+                geometry_reason="INTRINSIC_UNVERIFIED" if geometry == "DEGRADED" else "UNIT_CELL_MISMATCH",
+                projections=() if geometry == "INVALID" else (projection,),
+                owner_generation="follow-projection-owner",
+            )
+            source = NativePersonDetectionSource(_Port(result, last_error=error), source_config)
+            snapshot = source.read(context)
+
+            def sample(device, kind, **values):
+                return DeviceSample(device, kind, tick + 1, context.monotonic_ns,
+                                    tuple(DataField(key, value) for key, value in values.items()))
+
+            # Initial ticks have no matching LiDAR cluster: bearings
+            # alone may never create a usable spatial person target.
+            samples = (
+                sample("WHEEL_ENCODERS", "wheel_velocity", left_mps=0.0, right_mps=0.0, trust=1.0),
+                sample("BNO055_IMU", "ekf_heading", yaw_rad=0.0, omega_rad_s=0.0, confidence=1.0),
+                sample("RPLIDAR_C1", "lidar_health", age_ns=0, point_count=80),
+                sample("RPLIDAR_C1", "lidar_local_points", frame_id="ROBOT_BASE", point_count=1,
+                       point_000_x_m=1.8, point_000_y_m=1.8 if cluster else -1.8,
+                       point_000_quality=10),
+            ) + snapshot.samples
+            health = tuple(DeviceHealth(name, DeviceHealthState.OK)
+                           for name in sorted(config.critical_device_ids)) + (snapshot.health,)
+            command = CommandRequest(context, "follow-projection", CommandMode.FOLLOW_PERSON,
+                                     (DataField("target_track_id", "person-1"),), tick)
+            inputs = composition.close_inputs(TickInputs(
+                context, RawDeviceBatch(context, samples, health), command, LifecycleState.ACTIVE,
+            ))
+            output = composition.run_tick(inputs)
+            layers = {row.layer: row.output for row in output.trace.layers}
+            assert output.trace.fault_layer is None
+            world, navigation = layers["L4"], layers["L6"]
+            if tick <= 2:
+                assert snapshot.health == DeviceHealth("PERSON_DETECTOR_FRONT", DeviceHealthState.OK)
+                values = {item.key: item.value for item in snapshot.samples[0].values}
+                assert values["geometry_projection_state"] == "DEGRADED"
+                assert values["geometry_projection_reason"] == "INTRINSIC_UNVERIFIED"
+                assert values["person_000_geometry_quality"] == "degraded"
+                assert snapshot.samples[0].captured_monotonic_ns == result.measurement_monotonic_ns
+                assert values["source_frame_sequence"] == result.source_frame_sequence
+                assert values["owner_generation"] == result.owner_generation
+                assert world.person_detection_state is DeviceHealthState.OK
+            if tick < 2:
+                assert not world.obstacle_tracks
+                assert navigation.reason == "PERSON_TARGET_NOT_AVAILABLE"
+                assert not navigation.route
+            elif tick == 2:
+                target, = world.obstacle_tracks
+                assert target.track_id == "person-1" and target.usable_at(context.monotonic_ns)
+                assert navigation.status is NavigationStatus.ACTIVE
+                assert navigation.route[0].yaw_rad > 0.0
+                assert layers["L8"].requested_omega_rad_s > 0.0
+            elif tick in (3, 4):
+                # Previously qualified track is still usable; closed unhealthy
+                # capability must revoke it before any prediction can move.
+                assert any(track.usable_at(context.monotonic_ns) for track in world.obstacle_tracks)
+                assert snapshot.health.state is DeviceHealthState.DEGRADED
+                assert snapshot.health.reason == ("PERSON_GEOMETRY_INVALID" if tick == 3
+                                                  else "PERSON_DETECTOR_RESULT_STALE")
+                assert navigation.reason == "PERSON_CAPABILITY_UNAVAILABLE" and not navigation.route
+                if tick == 4:
+                    assert any(row.reason is RejectionReason.STALE for row in layers["L2"].rejected)
+            else:
+                assert navigation.reason == "PERSON_CAPABILITY_FAILED" and not navigation.route
+            if tick != 2:
+                assert output.final_actuation.left_output == output.final_actuation.right_output == 0.0
+            assert output.final_actuation.safety_decision is not SafetyDecision.FAULT
+            sink.write(ExecutionRecord(inputs, output))
+    finally:
+        composition.close()
+    capture = sink.finalize("PASS", tmp_path / "follow-degraded-projection.json")
+    replay = replay_capture(capture, project_root=ROOT)
+    assert replay["status"] == "MATCH", replay["diagnostics"]

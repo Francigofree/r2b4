@@ -242,3 +242,68 @@ def test_missing_runtime_motion_config_never_admits_relative_motion():
         robot.execute("v3.command.turn_by", angle_deg=-90)
     assert not controller.admitted
     assert controller.order == ["STOP"]
+
+
+@pytest.mark.parametrize("action,parameters,error_field,remaining_distance", [
+    ("v3.command.move_relative", {"forward_m": .2}, "distance_remaining_m", .06246),
+    ("v3.command.move_relative", {"forward_m": .3}, "distance_remaining_m", .07337),
+    ("v3.command.turn_by", {"angle_deg": 5}, "angle_remaining_rad", 0.),
+    ("v3.command.turn_by", {"angle_deg": -5}, "angle_remaining_rad", 0.),
+])
+def test_small_relative_request_cannot_complete_outside_request_tolerance(
+    action, parameters, error_field, remaining_distance,
+):
+    class UndertravelController(Controller):
+        def live_runtime_status(self):
+            status = super().live_runtime_status()
+            # Reproduce captured translation residuals and the unmoved 5° turn.
+            if self.admitted:
+                status["estimate"]["local_pose"]["x_m"] -= remaining_distance
+                status["estimate"]["local_pose"]["yaw_rad"] = 0.
+            return status
+    controller = UndertravelController()
+    robot = RobotInterface(controller=controller, adapters=(V3ControlInterfaceAdapter(controller),), upper_runtime=False)
+    result = robot.execute(action, **parameters, admission_sink=controller.observations.append)
+    assert result["status"] == "INTERRUPTED"
+    assert result["reason"] == "COMPLETION_OUTSIDE_TOLERANCE"
+    assert abs(result[error_field]) > result["goal_tolerance_m" if error_field == "distance_remaining_m" else "yaw_tolerance_rad"]
+    assert controller.order[-1] == "STOP"
+
+
+def test_request_tolerances_cross_operator_cli_resident_and_l5(tmp_path, monkeypatch):
+    import time
+    from rig import ROOT
+    from v3 import control_cli
+    from v3.adapters.resident_command import AtomicResidentCommandGateway, ResidentCommandMailboxConfig
+    from v3.contracts import CommandMode, TickContext
+    from v3.layers.l5_command_mission import MissionManager
+    from v3.operator_controller import OperatorController
+
+    resolved = resolved_config()
+    controller = OperatorController(ROOT)
+    calls = []
+    monkeypatch.setattr(controller, "_start_motion", lambda *args, **kwargs: calls.append(args[3]) or (321, "nincs"))
+    controller.navigate(x_m=.2, y_m=0., yaw_rad=.087, frame_id=LOCAL_FRAME_ID,
+                        goal_tolerance_m=.02, yaw_tolerance_rad=.0087, capture=False)
+    monkeypatch.setattr(control_cli, "_runtime_path", lambda value: tmp_path / value.rsplit("/", 1)[-1])
+    monkeypatch.setattr(control_cli, "_active_preflight", lambda path: None)
+    monkeypatch.setattr(control_cli, "_run_active", lambda client, publish, **kwargs: 0 if publish(kwargs["command_id"]) else 1)
+    assert control_cli.main(calls[0][3:]) == 0
+    mailbox = ResidentCommandMailboxConfig.from_policy(tmp_path / "v3_command.json", resolved.edges.command_ingress)
+    command = AtomicResidentCommandGateway(mailbox).snapshot(TickContext(0, time.monotonic_ns()))
+    assert command.mode is CommandMode.NAVIGATE
+    mission = MissionManager(resolved.runtime.composition.live_control.control.mission).evaluate(command)
+    assert mission.constraints.goal_tolerance_m == .02
+    assert mission.constraints.yaw_tolerance_rad == .0087
+
+
+def test_relative_tolerance_preserves_tighter_running_config_and_evidence():
+    controller = Controller()
+    defaults = controller.effective_config["runtime"]["composition"]["live_control"]["control"]["mission"]["default_constraints"]
+    defaults.update(goal_tolerance_m=.003, yaw_tolerance_rad=.002)
+    robot = RobotInterface(controller=controller, adapters=(V3ControlInterfaceAdapter(controller),), upper_runtime=False)
+    result = robot.execute("v3.command.move_relative", forward_m=.2, final_yaw_rad=.087,
+                           admission_sink=controller.observations.append)
+    assert result["status"] == "COMPLETED"
+    assert result["goal_tolerance_m"] == controller.navigate_parameters["goal_tolerance_m"] == .003
+    assert result["yaw_tolerance_rad"] == controller.navigate_parameters["yaw_tolerance_rad"] == .002

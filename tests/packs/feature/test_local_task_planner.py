@@ -207,6 +207,83 @@ def test_task_introspection_distinguishes_finished_primary_and_correlates_subtas
     assert "OTHER_REASON" not in answer and "unrelated" not in answer
 
 
+def test_previous_task_and_status_ignore_intervening_conversation_answers():
+    interface = Interface()
+    failed = {"goal_id": "cruise", "text": "járjad be a szobát 100 másodpercig",
+              "created_ns": 10, "lifecycle": "FAILED", "reason": "STATUS_STALE",
+              "steps": [{"action": "behavior.room_cruise"}]}
+    answered = {"goal_id": "places", "text": "milyen helyeket ismersz?",
+                "created_ns": 20, "lifecycle": "COMPLETED", "reason": "ANSWERED", "steps": []}
+    interface.history = [failed, answered]
+    interface.read = lambda resource: {"primary_goal": answered} if resource == "brain.state" else interface.history
+    for text in ("Miért állt meg az előző feladat?", "Mit csinálsz?"):
+        result = LocalTaskPlanner().resolve(text, interface, goal_id="current")
+        assert "STATUS_STALE" in result.spoken_text and failed["text"] in result.spoken_text
+        assert answered["text"] not in result.spoken_text and result.plan is None
+    assert interface.executed == []
+
+
+def test_restored_task_history_uses_original_request_order_and_latest_goal_truth():
+    interface = Interface()
+    # Storage restores recent goals first; publication order cannot reverse the
+    # meaning of previous task. An older intermediate failure cannot override
+    # the latest terminal snapshot of the same recovered goal.
+    interface.history = [
+        {"kind": "GOAL_RESTORED", "goal_id": "new", "text": "új feladat", "created_ns": 20,
+         "lifecycle": "FAILED", "reason": "NO_PATH"},
+        {"kind": "GOAL_RESTORED", "goal_id": "old", "text": "régi feladat", "created_ns": 10,
+         "lifecycle": "FAILED", "reason": "TARGET_LOST"},
+        {"kind": "GOAL_COMPLETED", "goal_id": "new", "text": "új feladat", "created_ns": 20,
+         "lifecycle": "COMPLETED", "reason": "MISSION_COMPLETED"},
+    ]
+    answer = LocalTaskPlanner().resolve("Miért állt meg az előző feladat?", interface).spoken_text
+    assert "új feladat" in answer and "MISSION_COMPLETED" in answer
+    assert "NO_PATH" not in answer and "TARGET_LOST" not in answer
+
+
+def test_generic_person_question_reports_found_person_then_failed_follow():
+    interface = Interface()
+    failed = {"goal_id": "find-follow", "text": "keresd meg és kövesd 15 másodpercig",
+              "created_ns": 10, "lifecycle": "FAILED", "reason": "REQUESTED_EXECUTION_UNPROVEN",
+              "current_subtask": "behavior.follow_person",
+              "steps": [{"action": "behavior.search_any_person", "bind_target": True},
+                        {"action": "behavior.follow_person", "use_bound_target": True}],
+              "target": {"target_track_id": "person-1", "runtime_pid": 37225}}
+    interface.history = [failed, {"goal_id": "unrelated", "text": "járjad be a szobát",
+                         "created_ns": 20, "lifecycle": "FAILED", "reason": "STATUS_STALE",
+                         "steps": [{"action": "behavior.room_cruise"}]}]
+    answer = LocalTaskPlanner().resolve("Miért nem találtad meg az embert?", interface).spoken_text
+    assert failed["text"] in answer and "REQUESTED_EXECUTION_UNPROVEN" in answer
+    assert "személyt talált" in answer and "követés részfeladatában" in answer
+    assert "STATUS_STALE" not in answer and "nem volt friss személytalálat" not in answer
+    # A malformed/unproven target cannot be presented as a successful search.
+    failed["target"] = {"target_track_id": "person-1"}
+    assert "személyt talált" not in LocalTaskPlanner().resolve(
+        "Miért nem találtad meg az embert?", interface).spoken_text
+
+
+def test_named_person_history_matches_published_alias_without_selecting_other_person():
+    interface = Interface()
+    interface.observe("person:peter", "person_identity", {"name": "Péter", "aliases": ["Peti"]}, attribute="identity")
+    interface.history = [
+        {"goal_id": "peter", "text": "Keresd meg Pétert", "lifecycle": "FAILED", "reason": "SEARCH_PLACES_EXHAUSTED",
+         "steps": [{"action": "behavior.search_person", "parameters": {"entity_id": "person:peter"}}]},
+        {"goal_id": "other", "text": "Keresd meg Lacit", "lifecycle": "FAILED", "reason": "NO_PATH",
+         "steps": [{"action": "behavior.search_person", "parameters": {"entity_id": "person:laci"}}]},
+    ]
+    answer = LocalTaskPlanner().resolve("Miért nem találtad meg Petit?", interface).spoken_text
+    assert "SEARCH_PLACES_EXHAUSTED" in answer and "NO_PATH" not in answer
+
+
+def test_visited_geometry_is_reported_without_inventing_semantic_rooms():
+    interface = Interface()
+    interface.observe("geometry:one", "map", {"kind": "visited_area", "x_m": 0, "y_m": 0})
+    answer = LocalTaskPlanner().resolve("Milyen helyeket ismersz?", interface).spoken_text
+    assert "1 bejárt területről" in answer and "név szerint azonosított" in answer
+    assert LocalTaskPlanner().resolve("Menj a konyhába", interface).unfulfilled
+    assert interface.executed == []
+
+
 def service(tmp_path, interface, model, *, context=None):
     return ConversationService(llm=model, brain_interface=interface,
         robot_context=SimpleNamespace(build=context or (lambda: RobotContextSnapshot("test", {}, None, None, (), ()))),

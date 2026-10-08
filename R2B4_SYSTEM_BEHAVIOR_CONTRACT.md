@@ -191,6 +191,13 @@ a frame/runtime provenance-t meg kell őriznie. A robot nem állíthatja egy
 műveletről, hogy sikeres, ha a completion identity vagy a provenance nem
 bizonyítható.
 
+Véges, számszerű mozgáskérésnél a teljes kért elmozdulás és szög marad a cél
+alapja. A completion a végső pose és az adott kéréshez megőrzött effektív
+tolerancia alapján igazolandó; a tolerancia nem nyelhet el egy teljes, nem
+nulla rövid mozgáskérést. Az eredmény megkülönbözteti a kért, végrehajtott és
+hátralévő mennyiséget. Az általános navigáció completionje önmagában nem
+bizonyítja egy szigorúbb relatív felhasználói kérés teljesülését.
+
 ---
 
 ## 6. V3-független capability-k fejlesztési iránya
@@ -530,6 +537,26 @@ publikálás, polling és prediction nem újítja meg a fizikai measurementet.
 nincs globális TTL. A robot explicit KNOWN, LIKELY, STALE, UNKNOWN és
 CONFLICTING állapotot tud közölni. Aktuális snapshot és observation history
 együtt magyarázza a robot világképét; bounded történetvesztés megfigyelhető.
+
+A host completed-status korát az eredeti completed tick referenciaidejéből,
+a teljes olvasás után megfigyelt monoton idővel kell számítani. Publikálás
+és polling nem újítja meg a status idejét. A lejárt vagy ténylegesen jövőbeli
+status nem adhat pozitív végrehajtási bizonyítékot; az olvasás előtti host idő
+nem minősíthet egy közben elkészült ticket jövőbelinek. A status aktuális
+állapotot közöl: a régebbi várakozó értéket az újabb felülválthatja. Ez nem
+helyettesíti a szenzormérések freshnessét vagy az L12 safety döntését.
+
+Person detection esetén a capability elérhetősége és a geometriai ág
+minősége külön állítás. Használható DEGRADED bearing önmagában nem teljes
+detector-kiesés; Follow csak friss, minősített és a cél identityjához kötött
+geometriai evidence alapján hajtható végre. INVALID geometria, stale mérés
+vagy detectorhiba továbbra sem válhat pozitív mozgási evidence-szé.
+
+A korábbi feladatról adott magyarázat a feladat identityjához és tényleges
+execution eredményéhez kötött. Közben megválaszolt információs kérdés nem
+helyettesíti az előző robotfeladatot. Egy sikeres keresés utáni követési hiba
+nem jelent sikertelen személykeresést. A geometriailag megfigyelt terület
+önmagában nem bizonyít szobanevet, tárgyazonosságot vagy szemantikai topológiát.
 
 A RobotState, WorldState, ActiveBehavior, ActiveMission, Capabilities és Health
 szemantikai SSOT. Fizikai centralizáció nem követelmény, egymással versengő

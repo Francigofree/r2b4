@@ -7,6 +7,8 @@ import json
 import math
 from types import SimpleNamespace
 
+import pytest
+
 from rig import ROOT, resolved_config, room_lidar_scan
 from tools.mcap_evidence.compiler import compile_evidence
 from tools.mcap_evidence.verify import verify
@@ -23,7 +25,10 @@ from v3.observation import ObservationHub
 from v3.replay import replay_capture
 
 
-def test_one_meter_then_right_turn_native_mcap_replay_and_evidence(tmp_path):
+@pytest.mark.parametrize("requested_distance,requested_angle_deg", [(1., -90.), (.2, 5.), (.3, -5.)])
+def test_finite_distance_then_signed_turn_native_mcap_replay_and_evidence(
+    tmp_path, requested_distance, requested_angle_deg,
+):
     resolved = resolved_config()
     production = resolved.runtime.composition.live_control.control
     config = replace(production, async_l6=replace(production.async_l6, enabled=False, completion_inputs=False))
@@ -41,6 +46,9 @@ def test_one_meter_then_right_turn_native_mcap_replay_and_evidence(tmp_path):
     reached = False
     turn_target = None
     turn_ticks = 0
+    distance_tolerance = min(config.mission.default_constraints.goal_tolerance_m, requested_distance * .1)
+    yaw_tolerance = min(config.mission.default_constraints.yaw_tolerance_rad,
+                        abs(math.radians(requested_angle_deg)) * .1)
     try:
         for tick in range(750):
             x += v * .02 * math.cos(yaw + omega * .01)
@@ -89,9 +97,10 @@ def test_one_meter_then_right_turn_native_mcap_replay_and_evidence(tmp_path):
                                 sample("RPLIDAR_C1", "lidar_local_points", **fields)))
                 if relative is not None:
                     samples.append(sample("RPLIDAR_C1", "lidar_relative_motion", **relative))
-            fields = (DataField("x_m", 1.), DataField("y_m", 0.)) if turn_target is None else (
+            fields = (DataField("x_m", requested_distance), DataField("y_m", 0.),
+                DataField("goal_tolerance_m", distance_tolerance)) if turn_target is None else (
                 DataField("x_m", turn_target[0]), DataField("y_m", turn_target[1]),
-                DataField("yaw_rad", turn_target[2]),
+                DataField("yaw_rad", turn_target[2]), DataField("yaw_tolerance_rad", yaw_tolerance),
             )
             inputs = composition.close_inputs(TickInputs(context, RawDeviceBatch(context, tuple(samples), health),
                 CommandRequest(context, "finite-one-meter" if turn_target is None else "finite-right-turn", CommandMode.NAVIGATE,
@@ -106,17 +115,19 @@ def test_one_meter_then_right_turn_native_mcap_replay_and_evidence(tmp_path):
             if turn_target is not None and layers["L6"].status.value == "ACTIVE":
                 assert layers["L6"].progress < 1.
                 assert layers["L8"].requested_v_mps == 0.
-                assert layers["L8"].requested_omega_rad_s < 0.
+                assert layers["L8"].requested_omega_rad_s * requested_angle_deg > 0.
                 turn_ticks += 1
             if layers["L6"].status.value == "COMPLETE":
                 assert result.final_actuation.left_output == result.final_actuation.right_output == 0
                 if turn_target is None:
-                    assert math.hypot(1-x, y) <= layers["L5"].constraints.goal_tolerance_m
+                    assert layers["L5"].constraints.goal_tolerance_m == distance_tolerance
+                    assert math.hypot(requested_distance-x, y) <= distance_tolerance
                     pose = layers["L3"].in_local_frame()
-                    turn_target = pose.x_m, pose.y_m, pose.yaw_rad - math.pi / 2
+                    turn_target = pose.x_m, pose.y_m, pose.yaw_rad + math.radians(requested_angle_deg)
                     continue
                 error = math.atan2(math.sin(turn_target[2] - yaw), math.cos(turn_target[2] - yaw))
-                assert abs(error) <= layers["L5"].constraints.yaw_tolerance_rad
+                assert layers["L5"].constraints.yaw_tolerance_rad == yaw_tolerance
+                assert abs(error) <= yaw_tolerance
                 reached = True
                 break
     finally:

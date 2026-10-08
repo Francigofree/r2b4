@@ -1,0 +1,76 @@
+{
+  "evidence_gate": {
+    "ingress_drop_count": 0,
+    "raw_capacity_eviction_count": 0,
+    "raw_lidar_missing_count": 0,
+    "raw_lidar_truncated_count": 0,
+    "raw_transport_superseded_count": 0,
+    "strict_zero_loss": true
+  },
+  "input": {
+    "bytes": 233874342,
+    "capture_hz": 50,
+    "captured_raw_lidar_count": 706,
+    "captured_tick_count": 3329,
+    "path": "/home/alba/project_r2b4/runtime/captures/v3_20261008_211523_5336_capture.mcap",
+    "raw_evidence_complete": true,
+    "replay_complete": true,
+    "sha256": "4199574f3a815ec7110bdd9772b3626f683d50cabd4d84de889d39c8935908f0"
+  },
+  "limitations": [
+    "raw LiDAR points do not yet carry per-point acquisition timestamps; this builder therefore uses stationary evidence for final occupancy",
+    "persistent cross-session relocalization/topology/semantics are outside this tool",
+    "LiDAR-to-base extrinsics are assumed identical to the current R2B4 production scan-matching convention"
+  ],
+  "map": {
+    "free_area_m2": 18.310000000000002,
+    "free_cells": 7324,
+    "height_cells": 112,
+    "observed_area_m2": 20.512500000000003,
+    "observed_cells": 8205,
+    "occupied_cells": 601,
+    "origin": [
+      -2.2655510094479414,
+      -3.277652241773084,
+      0.0
+    ],
+    "resolution_m": 0.05,
+    "width_cells": 182
+  },
+  "pose_graph": {
+    "connected": true,
+    "edge_count": 15,
+    "edge_counts": {
+      "LOOP": 1,
+      "ODOM": 7,
+      "SCAN": 7
+    },
+    "optimization": {
+      "cost": 0.7103064268868645,
+      "message": "`ftol` termination condition is satisfied.",
+      "nfev": 11,
+      "optimality": 2.2557284841492848e-05,
+      "rejected_loop_edges": 0,
+      "status": "OK",
+      "success": true
+    }
+  },
+  "raw_lidar": {
+    "usable_scans": 706
+  },
+  "repo_root": "/home/alba/project_r2b4",
+  "schema": "R2B4_GLOBAL_MAP_BUILD_V1",
+  "source_first_repo_main": "7a90206013d0723c1ad668231739eb19c3fc51ae",
+  "stationary": {
+    "detected_windows": 8,
+    "max_omega_rad_s": 0.05,
+    "max_v_mps": 0.03,
+    "settle_s": 0.45,
+    "total_stationary_s": 47.144323228,
+    "usable_keyframes": 8
+  },
+  "tool": "mcap50-to-map.py",
+  "trajectory": {
+    "l3_pose_samples": 3329
+  }
+}

@@ -104,18 +104,19 @@ class NativePersonDetectionSource:
             stale_after_ns=self._config.maximum_result_age_ns, running=True,
         )
         stale = self._last_capability.state is CapabilityState.STALE
-        geometry_degraded = result.geometry_state in {"DEGRADED", "INVALID"}
+        # Projection quality belongs to the semantic fields below. A bounded
+        # DEGRADED projection still permits L4 to qualify a person with LiDAR;
+        # it does not make the fresh detector stream unavailable to L6.
+        geometry_invalid = result.geometry_state == "INVALID"
         state = (
             DeviceHealthState.DEGRADED
-            if stale or geometry_degraded
+            if stale or geometry_invalid
             else DeviceHealthState.OK
         )
         if stale:
             reason = "PERSON_DETECTOR_RESULT_STALE"
         elif result.geometry_state == "INVALID":
             reason = "PERSON_GEOMETRY_INVALID"
-        elif result.geometry_state == "DEGRADED":
-            reason = "PERSON_GEOMETRY_DEGRADED"
         else:
             reason = None
         detections = result.detections[: self._config.maximum_detections]

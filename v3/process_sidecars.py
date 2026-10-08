@@ -8,6 +8,7 @@ Hub post-processing.  Sidecars own no command, mission, safety or motor authorit
 from __future__ import annotations
 
 import multiprocessing
+import pickle
 import queue
 import time
 from collections.abc import Mapping
@@ -43,6 +44,47 @@ _RAW_END_TIMEOUT_S = 2.0
 _SIDECAR_IO_TIMEOUT_S = 2.0
 _SIDECAR_TERMINATE_TIMEOUT_S = 2.0
 _STATUS_FINISH_TIMEOUT_S = 10.0
+_STATUS_MAILBOX_BYTES = 65_536  # Compact status only, never a production graph.
+_STATUS_POLL_S = 0.01
+
+
+class _StatusMailbox:
+    """One complete latest status; neither peer waits for the other process."""
+
+    def __init__(self, context: Any) -> None:
+        self._buffer = context.RawArray("B", _STATUS_MAILBOX_BYTES)
+        self._size = context.RawValue("I", 0)
+        self._revision = context.RawValue("Q", 0)
+        self._lock = context.Lock()
+
+    def publish(self, snapshot: Mapping[str, object]) -> bool:
+        encoded = pickle.dumps(snapshot, protocol=pickle.HIGHEST_PROTOCOL)
+        if len(encoded) > _STATUS_MAILBOX_BYTES:
+            raise ValueError("compact status exceeds mailbox bound")
+        if not self._lock.acquire(False):
+            return False
+        try:
+            memoryview(self._buffer).cast("B")[:len(encoded)] = encoded
+            self._size.value = len(encoded)
+            self._revision.value += 1
+        finally:
+            self._lock.release()
+        return True
+
+    def latest(self, after_revision: int) -> tuple[int, object | None]:
+        if not self._lock.acquire(False):
+            return after_revision, None
+        try:
+            revision = self._revision.value
+            if revision <= after_revision:
+                return after_revision, None
+            size = self._size.value
+            if not 0 < size <= _STATUS_MAILBOX_BYTES:
+                raise ValueError("invalid status mailbox size")
+            encoded = memoryview(self._buffer).cast("B")[:size].tobytes()
+        finally:
+            self._lock.release()
+        return revision, pickle.loads(encoded)
 
 
 def observation_shutdown_budget_s(*, capture_enabled: bool) -> float:
@@ -216,7 +258,7 @@ def _capture_sidecar_main(
 def _status_sidecar_main(
     path: str,
     file_mode: int,
-    tick_queue: Any,
+    tick_mailbox: _StatusMailbox,
     control_queue: Any,
     result_queue: Any,
     ready_event: Any,
@@ -249,6 +291,7 @@ def _status_sidecar_main(
         ready_event.set()
 
         finishing = False
+        last_revision = 0
         while not finishing:
             try:
                 command = control_queue.get_nowait()
@@ -273,11 +316,9 @@ def _status_sidecar_main(
                 finishing = True
                 continue
 
-            try:
-                snapshot = tick_queue.get(timeout=0.02)
-            except queue.Empty:
-                continue
-            if snapshot is None:  # startup-only feeder warmup
+            last_revision, snapshot = tick_mailbox.latest(last_revision)
+            if snapshot is None:
+                time.sleep(_STATUS_POLL_S)
                 continue
             _atomic_private_json(
                 target,
@@ -504,17 +545,20 @@ class ProcessMcapCaptureSession:
 class ProcessResidentStatusPublisher:
     """Compact status projection followed by sidecar-owned encoding/file I/O."""
 
+    transport_semantics = TransportSemantics.LATEST_STATE
+
     __slots__ = (
         "_config",
         "_control_queue",
         "_drop_count",
         "_failed_event",
+        "_finished",
         "_process",
         "_ready_event",
         "_result_queue",
         "_started",
         "_strict_affinity",
-        "_tick_queue",
+        "_tick_mailbox",
         "_worker_cpus",
         "_error_text",
     )
@@ -538,7 +582,7 @@ class ProcessResidentStatusPublisher:
             raise ValueError("status file_mode must be 0o600")
         context = multiprocessing.get_context(_SPAWN_METHOD)
         self._config = config
-        self._tick_queue = context.Queue(maxsize=2)
+        self._tick_mailbox = _StatusMailbox(context)
         self._control_queue = context.Queue(maxsize=4)
         self._result_queue = context.Queue(maxsize=4)
         self._ready_event = context.Event()
@@ -550,7 +594,7 @@ class ProcessResidentStatusPublisher:
             args=(
                 str(path),
                 int(file_mode),
-                self._tick_queue,
+                self._tick_mailbox,
                 self._control_queue,
                 self._result_queue,
                 self._ready_event,
@@ -565,11 +609,12 @@ class ProcessResidentStatusPublisher:
         self._started = False
         self._drop_count = 0
         self._error_text: str | None = None
+        self._finished = False
 
     @property
     def failed(self) -> bool:
         self._poll_error()
-        return bool(self._failed_event.is_set())
+        return self._error_text is not None or bool(self._failed_event.is_set())
 
     @property
     def error(self) -> BaseException | None:
@@ -587,6 +632,8 @@ class ProcessResidentStatusPublisher:
             try:
                 message = self._result_queue.get_nowait()
             except queue.Empty:
+                if self._started and not self._finished and self._process.exitcode is not None:
+                    self._error_text = f"status sidecar exited:{self._process.exitcode}"
                 return
             if message and message[0] == "error":
                 self._error_text = f"{message[1]}:{message[2]}"
@@ -605,10 +652,8 @@ class ProcessResidentStatusPublisher:
         self._poll_error()
         if self._error_text is not None:
             raise RuntimeError(f"status sidecar failed: {self._error_text}")
-        with temporary_current_affinity(
-            self._worker_cpus, role="status-feeder", strict=self._strict_affinity
-        ):
-            self._tick_queue.put(None, timeout=_SIDECAR_READY_TIMEOUT_S)
+        if not self._process.is_alive():
+            raise RuntimeError("status sidecar exited during startup")
 
     def publish_tick(self, result: TickResult, ready_for_active: bool = False) -> None:
         if not isinstance(result, TickResult):
@@ -617,19 +662,30 @@ class ProcessResidentStatusPublisher:
             raise TypeError("ready_for_active must be bool")
         if not self._started:
             raise RuntimeError("status publisher is not started")
+        if self._finished:
+            if self._error_text is not None:
+                return
+            raise RuntimeError("status publisher is finished")
+        # Project before IPC: only bounded counts/scalars enter the mailbox.
+        # Every accepted tick replaces the previous pending value. A slow fsync
+        # can never strand the final tick behind FIFO values or drop it as new.
         try:
-            # Project before IPC: the status consumer needs counts and scalars,
-            # not the full L1-L12 graph/costmap serialized by a control-GIL feeder.
-            self._tick_queue.put_nowait(_tick_status(result, ready_for_active))
-        except queue.Full:
-            # Status is explicitly latest/best-effort and has no safety authority.
+            accepted = self._tick_mailbox.publish(_tick_status(result, ready_for_active))
+        except Exception as exc:
+            # Report egress failure through the existing host lifecycle check,
+            # never by throwing through an already completed tick/motor result.
+            self._error_text = f"{type(exc).__name__}:{str(exc)[:256]}"
+            accepted = False
+        if not accepted:
             self._drop_count += 1
 
     def finish(self, *, report: object | None = None, error: BaseException | None = None) -> None:
-        if not self._started:
+        if not self._started or self._finished:
             return
         if report is not None and error is not None:
             raise ValueError("finish accepts report or error, not both")
+        self._poll_error()
+        self._finished = True
         report_payload = report.as_dict() if report is not None else None
         self._control_queue.put(
             (

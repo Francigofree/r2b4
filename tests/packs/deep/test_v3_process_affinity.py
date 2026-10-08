@@ -120,7 +120,7 @@ def _adapter_probe(connection, cpus, output):
     from v3.config import ConfigResolver
     from v3.process_sidecars import ProcessMcapCaptureSession, ProcessResidentStatusPublisher
 
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     resolved = ConfigResolver.for_project(root).resolve()
     apply_process_cpuset((cpus[0],), role="probe-owner")
     status = ProcessResidentStatusPublisher(SimpleNamespace(path=Path(output) / 'status.json', file_mode=0o600),
@@ -163,7 +163,7 @@ def _check_adapter_masks(tmp_path, cpus):
         assert parent.poll(20), 'adapter startup timed out'
         rows = parent.recv()
         for name, expected in (
-            ('capture', cpus), ('capture-feeder', cpus), ('status', cpus), ('status-feeder', cpus),
+            ('capture', cpus), ('capture-feeder', cpus), ('status', cpus),
             ('lidar-matcher', (cpus[1],)), ('l6-planner', (cpus[1],)), ('l6-result', (cpus[1],)),
         ):
             matching = [row for row in rows if row['name'] == ('r2b4-' + name)[:15]]

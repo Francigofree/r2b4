@@ -474,6 +474,7 @@ class LocalTaskPlanner:
                 target = outcome.get("target")
                 if (isinstance(target, Mapping) and target.get("target_track_id")
                         and type(target.get("runtime_pid")) is int
+                        and outcome.get("lifecycle") == "FAILED"
                         and outcome.get("current_subtask") == "behavior.follow_person"):
                     explanation = "A keresés személyt talált és rögzítette a követés célját; a hiba a követés részfeladatában történt."
                 summary = self._history_summary(history, outcome.get("goal_id"))
@@ -483,7 +484,13 @@ class LocalTaskPlanner:
             entities = self._entities(interface, "place_or_object")
             places = sorted(entity for entity, facts in entities.items()
                             if any(fact.get("domain") == "room_topology" for fact in facts))
-            return "Ismert helyek: " + ", ".join(places) + "." if places else "Nincsenek megismert helyek."
+            if places:
+                return "Ismert helyek: " + ", ".join(places) + "."
+            areas = {fact["entity_id"] for fact in self._facts(interface, domain="map")
+                     if isinstance(fact.get("value"), Mapping) and fact["value"].get("kind") == "visited_area"}
+            if areas:
+                return f"Nincsenek név szerint azonosított helyek vagy szobák. Legalább {len(areas)} bejárt területről van geometriai megfigyelésem; szobanevek és kapcsolatuk még nem igazoltak."
+            return "Nincsenek megismert helyek."
         where = re.fullmatch(r"(?:hol van|where is)\s+(?:(?:a|az|the)\s+)?(.+)", text)
         if where:
             entity = self._resolve_entity(interface, where[1])
