@@ -110,7 +110,7 @@ def test_stale_last_known_place_ranks_search_then_named_evidence_completes():
     person(world, clock, age_ns=480_000_000_000)
     person(world, clock, entity="person:123:person-7")  # An anonymous detection is not Laci.
     started = system.start("search_person", {
-        "entity_id": "person:laci", "candidate_places": ["room:kitchen", "room:lounge"],
+        "entity_id": "person:laci",
         "max_observation_steps": 2,
     })
     assert robot.actions[0][0] == "v3.command.navigate"
@@ -156,6 +156,14 @@ def test_already_fresh_named_person_completes_without_positive_navigation():
     assert robot.stops == 1
     assert [event.kind for event in system.history()] == ["BEHAVIOR_STARTING", "BEHAVIOR_COMPLETED"]
     assert system.history()[-1].world_revision == world.snapshot().revision
+
+
+def test_explicit_candidate_order_is_preserved_despite_last_seen_preference():
+    clock, world, robot, system = setup_search()
+    person(world, clock, age_ns=480_000_000_000)
+    system.start("search_person", {"entity_id": "person:laci",
+                 "candidate_places": ["room:kitchen", "room:lounge"]})
+    assert robot.actions[0][1]["x_m"] == 5.0
 
 
 @pytest.mark.parametrize("domain, lineage", [("inference", ("reasoning:4",)), ("person_position", ())])

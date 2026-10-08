@@ -15,6 +15,7 @@ import time
 import uuid
 from collections import deque
 from collections.abc import Mapping
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from enum import Enum
 
@@ -174,8 +175,11 @@ class BrainEvent:
 
 def _request_constraints(text: str) -> dict[str, object]:
     """Preserve explicit metric constraints independently of a model proposal."""
-    from .local_task_planner import explicit_metric_constraints
+    from .local_task_planner import explicit_metric_constraints, person_teaching_name
     result = explicit_metric_constraints(text)
+    teaching_name = person_teaching_name(text)
+    if teaching_name is not None:
+        result["teaching_name"] = teaching_name
     folded = text.casefold()
     if re.search(r"ég-e|be van-e kapcsolva|whether .*(?:light|lamp)|(?:check|see) if .*(?:light|lamp)", folded):
         # A calibrated frame is not evidence of an arbitrary visual predicate.
@@ -394,6 +398,8 @@ class BrainCore:
             elif spec.value_type == "array":
                 valid = isinstance(value, (list, tuple)) and 1 <= len(value) <= 32 and all(
                     isinstance(item, str) and item and len(item) <= 256 for item in value)
+            elif spec.value_type == "boolean":
+                valid = type(value) is bool
             else:
                 valid = (type(value) in {int, float} and math.isfinite(value)
                          and (spec.minimum is None or value >= spec.minimum)
@@ -423,6 +429,8 @@ class BrainCore:
                 raise ValueError("CAPABILITY_UNSUPPORTED:" + action)
             if action == "person.teach" and goal.source != "HUMAN":
                 raise ValueError("PERSON_TEACHING_REQUIRES_HUMAN")
+            if action == "person.teach" and "teaching_name" not in dict(goal.constraints):
+                raise ValueError("PERSON_TEACHING_INSTRUCTION_UNAVAILABLE")
             params = _parameters(row.get("parameters", {}))
             entity = row.get("target_entity_id")
             origin = row.get("return_to_origin", False)
@@ -446,6 +454,10 @@ class BrainCore:
                 raise ValueError("TARGET_BINDING_REQUIRED")
             if bind and action not in {"behavior.search_any_person", "behavior.search_person"}:
                 raise ValueError("TARGET_BINDING_UNSUPPORTED")
+            if bind and action == "behavior.search_person":
+                if params.get("require_bound_track") is False:
+                    raise ValueError("TARGET_BINDING_REQUIRED")
+                params["require_bound_track"] = True
             validation_params = {**params, "x_m": 0.0, "y_m": 0.0} if entity is not None or origin else params
             self._validate_parameters(action, validation_params, bound=use)
             default_completion = ("person_found" if "search_" in action else
@@ -514,6 +526,10 @@ class BrainCore:
                 if not any(step.target_entity_id == value or dict(step.parameters).get("entity_id") == value
                            for step in steps):
                     raise ValueError("CONSTRAINT_UNSUPPORTED:target_entity_id")
+            elif name == "teaching_name":
+                taught = [dict(step.parameters).get("name") for step in steps if step.action == "person.teach"]
+                if taught != [value]:
+                    raise ValueError("USER_CONSTRAINT_CHANGED:teaching_name")
             elif name == "distance_m":
                 translations = [dict(step.parameters) for step in steps
                                 if step.action == "v3.command.move_relative"]
@@ -703,6 +719,14 @@ class BrainCore:
             self._dispatch_event.clear()
             generation = behavior_id = None
             try:
+                with self._lock:
+                    generation = self._generation
+                    goal = self._current(generation)
+                    host_teaching = (goal is not None and goal.task_graph is not None
+                                     and goal.task_graph.node(goal.current_node_id).action == "person.teach")
+                if host_teaching:
+                    self._dispatch(generation)
+                    continue
                 with self._execution_lock:
                     with self._lock:
                         generation = self._generation
@@ -745,7 +769,10 @@ class BrainCore:
                 pass
 
     def _dispatch(self, generation):
-        with self._execution_lock:
+        initial = self._current(generation)
+        host_teaching = (initial is not None and initial.task_graph is not None
+                         and initial.task_graph.node(initial.current_node_id).action == "person.teach")
+        with nullcontext() if host_teaching else self._execution_lock:
             goal = self._current(generation)
             if goal is None or goal.lifecycle is not GoalLifecycle.STARTING or self._admissions_inflight:
                 return
@@ -853,6 +880,19 @@ class BrainCore:
                 return
         if step.use_bound_target:
             target = dict(goal.target)
+            if target.get("binding_session_id") is not None:
+                try:
+                    validation = self.robot.execute("person.validate_target", target=target)
+                    if not isinstance(validation, Mapping) or validation.get("status") != "VALIDATED":
+                        raise ValueError("TARGET_BINDING_UNPROVEN")
+                    qualified = validation.get("target")
+                    if (not isinstance(qualified, Mapping) or any(qualified.get(key) != target.get(key)
+                            for key in ("target_entity_id", "target_track_id", "runtime_pid", "binding_session_id"))):
+                        raise ValueError("TARGET_BINDING_IDENTITY_CHANGED")
+                    target = dict(qualified)
+                except Exception as exc:
+                    self._node_failure(generation, "TARGET_BINDING_VALIDATION_FAILED:" + type(exc).__name__ + ":" + str(exc))
+                    return
             track = target.get("target_track_id")
             runtime_pid = target.get("runtime_pid")
             try:
@@ -880,7 +920,10 @@ class BrainCore:
             with self._lock:
                 if self._current(generation) is None:
                     return
-                goal = self._change(goal.goal_id, "SUBTASK_DISPATCHED", lifecycle=GoalLifecycle.STARTING,
+                if step.action == "person.teach" and self._goals[goal.goal_id].lifecycle is not GoalLifecycle.STARTING:
+                    return
+                goal = self._change(goal.goal_id, "SUBTASK_DISPATCHED",
+                                    lifecycle=GoalLifecycle.ACTIVE if step.action == "person.teach" else GoalLifecycle.STARTING,
                                     behavior_id=None, command_id=None, mission_id=None, reason="ACTION_STARTING",
                                     world_target=world_target,
                                     motion_dispatched=goal.motion_dispatched or _requires_motion(step.action))
@@ -959,6 +1002,9 @@ class BrainCore:
                                 observation_pose["localization_generation"] = quality.get("generation")
                 except (RuntimeError, OSError, ValueError, KeyError, AttributeError):
                     pass
+            if step.action == "person.teach":
+                params.setdefault("source", "HUMAN")
+                params.setdefault("request_id", goal.subtask_id)
             result = self.robot.execute(step.action, **params)
             from v3.robot_interface import _compact_finite_result
             try:
@@ -1175,7 +1221,11 @@ class BrainCore:
                          step_index=index, attempt=0, lifecycle=GoalLifecycle.STARTING,
                          reason=reason, failure_code=failure_code, node_started_ns=self.clock_ns(),
                          behavior_id=None, command_id=None, mission_id=None, result=(), world_target=None)
-        self._start(generation)
+        if node.action == "person.teach":
+            self._wake_dispatcher()
+        else:
+            with self._execution_lock:
+                self._start(generation)
 
     def step(self, *, asynchronous=False):
         """Advance completed execution; production callers only schedule work."""
@@ -1190,6 +1240,8 @@ class BrainCore:
             if goal is None or goal.lifecycle is not GoalLifecycle.ACTIVE:
                 return
             node = goal.task_graph.node(goal.current_node_id)
+            if node.action == "person.teach":
+                return  # Host persistence does not own a physical mission.
             if self._node_expired(generation):
                 return
             if node.kind is TaskNodeKind.WORLD_WAIT:

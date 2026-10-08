@@ -45,6 +45,7 @@ class SearchPerson:
         self._parameters: dict[str, object] = {}
         self._query_time_ns = 0
         self._require_bound_track = False
+        self._learning_snapshot_id = None
 
     @staticmethod
     def _runtime(robot: RobotOperations) -> Mapping[str, object]:
@@ -98,6 +99,8 @@ class SearchPerson:
                   "bound_track": target is not None, "observation_qualified": target is not None}
         if self._places:
             result["search_place_id"] = self._places[self._index][0]
+        if self._learning_snapshot_id is not None:
+            result["learning_snapshot_id"] = self._learning_snapshot_id
         if target is not None:
             result.update(target)
         elif self._require_bound_track:
@@ -239,6 +242,10 @@ class SearchPerson:
         # An explicit list expresses the caller's requested search order.
         if requested is None:
             names = sorted(names, key=rank)
+            from .outcome_learning import read_learning_snapshot
+            snapshot = read_learning_snapshot(robot)
+            self._learning_snapshot_id = snapshot.snapshot_id
+            names = list(snapshot.rank_places(self.entity_id, names))
         self._places = [(name, locations[name]) for name in names]
         return self._navigate(robot)
 

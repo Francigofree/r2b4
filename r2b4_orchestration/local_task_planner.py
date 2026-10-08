@@ -194,6 +194,8 @@ class LocalTaskPlanner:
                   else "person.search_follow" if any(skill is not None for skill in skills)
                   else "local.sequence")
         plan.update(method_id=method, method_version="1", learning_snapshot_id=snapshot.snapshot_id)
+        if snapshot.world_revision is not None:
+            plan["planning_world_revision"] = snapshot.world_revision
         return replace(resolution, plan=plan)
 
     def _resolve(self, text: str, interface: object, *, goal_id: str | None = None) -> LocalResolution:

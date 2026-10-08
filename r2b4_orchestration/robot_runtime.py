@@ -30,6 +30,9 @@ from r2b4_orchestration.brain_core import BrainCore
 from r2b4_orchestration.world_model import PublicWorldModel, WorldQuery, WorldQueryResult
 from r2b4_orchestration.semantic_projector import SemanticProjector
 from r2b4_orchestration.spatial_service import SpatialQuery, SpatialQueryResult, SpatialService
+from r2b4_orchestration.person_identity import PersonIdentity, PersonTeaching
+from r2b4_orchestration.person_skills import PERSON_SKILLS, person_behavior_factories, skill_descriptor
+from r2b4_orchestration.outcome_learning import OutcomeLearner
 
 SCHEMA = "R2B4_PUBLIC_ROBOT_RUNTIME_V1"
 MAX_REQUEST_BYTES = 65_536
@@ -39,7 +42,8 @@ READS = frozenset({"robot.state", "world.snapshot", "world.history", "behavior.s
 QUERIES = frozenset({"world.query", "spatial.query"})
 ACTIONS = frozenset({"world.observe", "behavior.room_cruise", "behavior.follow_person",
                      "behavior.search_person", "behavior.search_any_person", "behavior.start", "behavior.cancel",
-                     "brain.submit", "brain.adopt", "brain.fail", "brain.cancel"})
+                     "brain.submit", "brain.adopt", "brain.fail", "brain.cancel", "person.teach",
+                     "person.validate_target"})
 
 
 def socket_path_for(root: Path) -> Path:
@@ -206,7 +210,9 @@ class PublicRobotRuntime:
         from v3.observation import ObservationHub
         self.observation_hub = observation_hub if observation_hub is not None else ObservationHub()
         self.world.set_event_sink(self._world_event)
-        self.projector = SemanticProjector(self.world, clock_ns=clock_ns)
+        self.person_identity = PersonIdentity(self.world, clock_ns=clock_ns)
+        self.learner = OutcomeLearner(self.world, clock_ns=clock_ns)
+        self.projector = SemanticProjector(self.world, clock_ns=clock_ns, person_identity=self.person_identity)
         self._caller_pid = None
         program_interface = interface
         if hasattr(interface, "adapters"):
@@ -219,9 +225,8 @@ class PublicRobotRuntime:
                 observation_sink=self._interface_event, clock_ns=clock_ns,
             )
         self.behaviors = BehaviorSystem(program_interface, clock_ns=clock_ns, event_sink=self._behavior_event)
-        from r2b4_orchestration.search_person import SearchPerson, SearchAnyPerson
-        self.behaviors.register("search_person", SearchPerson)
-        self.behaviors.register("search_any_person", SearchAnyPerson)
+        for name, factory in person_behavior_factories():
+            self.behaviors.register(name, factory)
         self.brain = BrainCore(program_interface, self.behaviors, self.world, clock_ns=clock_ns,
                                event_sink=self._brain_event, execution_lock=self._action_lock)
         if root is not None:
@@ -315,10 +320,11 @@ class PublicRobotRuntime:
                     self._health_error = f"EVIDENCE_WRITE_FAILED:{type(exc).__name__}:{exc}"
                     break
 
-    def ingest_status(self, status: Mapping[str, object], *, runtime_pid: object = None) -> None:
+    def ingest_status(self, status: Mapping[str, object], *, runtime_pid: object = None,
+                      vision_status: Mapping[str, object] | None = None) -> None:
         """Consume completed status; preserve source times, frame and session."""
         self.spatial.completed_status(status, runtime_pid=runtime_pid)
-        self.projector.completed_status(status, runtime_pid=runtime_pid)
+        self.projector.completed_status(status, runtime_pid=runtime_pid, vision_status=vision_status)
         self.spatial.sync_world()
 
     def poll(self) -> None:
@@ -327,14 +333,22 @@ class PublicRobotRuntime:
         except (RuntimeError, OSError, ValueError):
             status = None
         runtime_pid = None
+        vision_status = None
         if isinstance(status, Mapping):
             try:
                 runtime_pid = self.interface.read("operator.status").get("runtime_pid")
             except (RuntimeError, OSError, ValueError, AttributeError):
                 pass
+        if self.person_identity.has_bindings:
+            try:
+                vision_status = self.interface.read("camera.status")
+            except (RuntimeError, OSError, ValueError, KeyError):
+                pass
         with self._state_lock:
             if isinstance(status, Mapping):
-                self.ingest_status(status, runtime_pid=runtime_pid)
+                self.ingest_status(status, runtime_pid=runtime_pid, vision_status=vision_status)
+            else:
+                self.person_identity.invalidate("PERSON_RUNTIME_UNAVAILABLE")
         # No host lock around execution/waits: STOP must revoke STARTING too.
         # Finite RobotInterface actions can wait in the dispatcher. Observation,
         # memory persistence and evidence drain keep running during that wait.
@@ -373,24 +387,27 @@ class PublicRobotRuntime:
                 continue
             try:
                 self.projector.completed_goal(event)
+                self.learner.consume(event)
+                if self.learner.error:
+                    self._health_error = self.learner.error
             except Exception as exc:
                 # Memory availability is neither physical authority nor a gate
                 # for independent local actions or STOP.
                 self._health_error = "BRAIN_MEMORY_PROJECTION_FAILED:" + type(exc).__name__
             self._brain_memory_sequence = event.sequence
 
-    def _persist(self, *, force: bool = False) -> None:
+    def _persist(self, *, force: bool = False) -> bool:
         # Storage serialization is separate from intent revocation. Slow disk
         # cannot retain the state lock needed by STOP and public state reads.
         with self._storage_lock:
-            self._persist_snapshot(force=force)
+            return self._persist_snapshot(force=force)
 
-    def _persist_snapshot(self, *, force: bool = False) -> None:
+    def _persist_snapshot(self, *, force: bool = False) -> bool:
         if self.root is None:
-            return
+            return False
         now = self.clock_ns()
         if not force and now - self._last_persist_ns < 5_000_000_000:
-            return
+            return False
         self._last_persist_ns = now
         state = self.world.export_state()
         state["brain"] = self.brain.export_state()
@@ -398,7 +415,7 @@ class PublicRobotRuntime:
         revision = (state.get("world_revision", state.get("revision")), state.get("event_sequence"),
                     state["brain"]["revision"], state["spatial"]["revision"])
         if revision == self._persisted_revision:
-            return
+            return True
         directory = self.root / "runtime" / "public_world"
         try:
             directory.mkdir(parents=True, exist_ok=True)
@@ -408,13 +425,22 @@ class PublicRobotRuntime:
             with tempfile.NamedTemporaryFile("w", dir=directory, prefix=".state-", delete=False) as stream:
                 temporary = Path(stream.name)
                 stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
             try:
                 os.replace(temporary, directory / "state.json")
+                descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
             finally:
                 temporary.unlink(missing_ok=True)
             self._persisted_revision = revision
+            return True
         except (OSError, ValueError) as exc:
             self._health_error = f"WORLD_SAVE_FAILED:{type(exc).__name__}:{exc}"
+            return False
 
     def read(self, resource: str) -> object:
         with self._state_lock:
@@ -473,6 +499,24 @@ class PublicRobotRuntime:
 
     def execute(self, action: str, parameters: Mapping[str, object]) -> object:
         params = dict(parameters)
+        if action in {"person.teach", "person.validate_target"}:
+            runtime = self.interface.read("operator.status")
+            status = self.interface.read("v3.status")
+            vision = self.interface.read("camera.status")
+            with self._state_lock:
+                if action == "person.validate_target":
+                    if set(params) != {"target"} or not isinstance(params["target"], Mapping):
+                        raise ValueError("person.validate_target requires a target")
+                    target = self.person_identity.validate_target(params["target"], runtime=runtime,
+                                                                 status=status, vision_status=vision)
+                    return {"status": "VALIDATED", "target": target}
+                skill_descriptor(action).validate_parameters(params)
+                request = PersonTeaching(**params)
+                result = self.person_identity.teach(request, runtime=runtime, status=status, vision_status=vision)
+                self.spatial.sync_world()
+            saved = self._persist(force=True)
+            return {**result, "status": "TAUGHT", "durability": "SAVED" if saved else "MEMORY_ONLY",
+                    "storage_error": self._health_error if self.root is not None and not saved else None}
         if action.startswith("brain."):
             allowed = {"brain.submit": {"text", "source", "request_id"},
                        "brain.adopt": {"goal_id", "plan"},
@@ -496,8 +540,8 @@ class PublicRobotRuntime:
             if params or not isinstance(reason, str) or not reason:
                 raise ValueError("behavior.cancel accepts only a nonempty reason")
             return self.preempt(reason)
-        names = {"behavior.room_cruise": "room_cruise", "behavior.follow_person": "follow_person",
-                 "behavior.search_person": "search_person", "behavior.search_any_person": "search_any_person"}
+        names = {"behavior.room_cruise": "room_cruise",
+                 **{skill.action: skill.behavior_name for skill in PERSON_SKILLS if skill.behavior_name}}
         if action == "behavior.start":
             name = params.pop("name", None)
             if name not in self.behaviors.names:
@@ -555,6 +599,9 @@ class PublicRobotInterfaceAdapter:
             descriptor = action_descriptor(name)
             if descriptor is not None:
                 item.update(descriptor.to_jsonable())
+            skill = skill_descriptor(name)
+            if skill is not None:
+                item.update(skill.to_jsonable())
         if self.controller is not None:
             status = self.controller.live_runtime_status()
             if isinstance(status, Mapping) and (status.get("fault_layer") or status.get("safety_decision") == "FAULT"):
@@ -588,13 +635,14 @@ class PublicRobotInterfaceAdapter:
 class PublicRobotStateAdapter:
     """The behavior's injected RobotInterface reads the same owned world state."""
     name = "public_world_state"
-    capability_names = READS | QUERIES
+    capability_names = READS | QUERIES | {"person.teach", "person.validate_target"}
 
     def __init__(self, runtime: PublicRobotRuntime):
         self.runtime = runtime
 
     def capabilities(self):
-        return {name: {"kind": "read", "supported": True, "available": True, "ready": True}
+        return {name: {"kind": "read" if name in READS | QUERIES else "action",
+                       "supported": True, "available": True, "ready": True}
                 for name in self.capability_names}
 
     def read(self, resource: str):
@@ -614,6 +662,8 @@ class PublicRobotStateAdapter:
         return result
 
     def execute(self, action: str, **parameters: object):
+        if action in {"person.teach", "person.validate_target"}:
+            return self.runtime.execute(action, parameters)
         raise KeyError(action)
 
 

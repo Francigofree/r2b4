@@ -69,6 +69,7 @@ class LearningSnapshot:
     revision: int
     methods: tuple[tuple[object, ...], ...] = ()
     places: tuple[tuple[object, ...], ...] = ()
+    world_revision: int | None = None
 
     def rank_places(self, person_id: str, places):
         """Reorder only supplied eligible places; retain deterministic fallback."""
@@ -91,9 +92,11 @@ class LearningSnapshot:
 
 
 def read_learning_snapshot(interface) -> LearningSnapshot:
+    world_revision = None
     try:
         result = interface.query(WorldQuery(entity_id=ENTITY, attribute=ATTRIBUTE,
                                             domain="task_experience", limit=1))
+        world_revision = result.revision
         fact = result.facts[0]
         if (fact.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
                 or fact.observation.source != "brain_outcome_learner"):
@@ -101,9 +104,9 @@ def read_learning_snapshot(interface) -> LearningSnapshot:
         state = _validated(fact.value)
         digest = hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:24]
         return LearningSnapshot(digest, state["revision"], tuple(map(tuple, state["methods"])),
-                                tuple(map(tuple, state["places"])))
+                                tuple(map(tuple, state["places"])), world_revision)
     except (AttributeError, IndexError, KeyError, TypeError, ValueError, RuntimeError, OSError):
-        return LearningSnapshot("baseline-v1", 0)
+        return LearningSnapshot("baseline-v1", 0, world_revision=world_revision)
 
 
 class OutcomeLearner:

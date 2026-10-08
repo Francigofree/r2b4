@@ -331,7 +331,7 @@ def test_spatial_queries_require_all_declared_scope_fields_and_reject_previous_r
     for raw in state["history"]:
         raw["observation"].pop("validity_scope")
     legacy = PublicWorldModel.from_state(state, clock_ns=lambda: now[0], clock_epoch="boot-a")
-    assert legacy.query(WorldQuery(scope=scope)).facts[0].state is KnowledgeState.KNOWN
+    assert legacy.query(WorldQuery(scope=scope)).facts[0].freshness == "RESTORED_UNVALIDATED"
     assert legacy.query(WorldQuery()).facts[0].freshness == "SCOPE_MISMATCH"
 
 

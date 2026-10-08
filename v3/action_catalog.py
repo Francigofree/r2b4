@@ -35,7 +35,7 @@ class ActionParameterDescriptor:
     value_type: str = "number"
 
     def __post_init__(self) -> None:
-        if self.value_type not in ("number", "string", "array"):
+        if self.value_type not in ("number", "string", "array", "boolean"):
             raise ValueError("unsupported action parameter type")
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("parameter name must be non-empty")
@@ -142,6 +142,7 @@ _DESCRIPTORS = (
             _p("entity_id", "Required known person entity identifier.", required=True, value_type="string"),
             _p("candidate_places", "Optional ordered known place identifiers; stale knowledge is only a search hint.", value_type="array"),
             _p("max_observation_steps", "Maximum observation attempts.", minimum=1, maximum=32, default=5),
+            _p("require_bound_track", "Require a current human-verified runtime and vision-bound target for following.", value_type="boolean"),
             _p("max_duration_s", "Maximum behavior duration in seconds.", minimum=0.1, maximum=3600),
             _p("max_v_mps", "Requested navigation linear cap.", minimum=0.01, maximum=0.50),
             _p("max_omega_rad_s", "Requested navigation angular cap.", minimum=0.01, maximum=1.20),

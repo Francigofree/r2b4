@@ -50,7 +50,7 @@ def build_decision_schema(action_catalog: Sequence[Mapping[str, object]] | None 
             if not isinstance(name, str) or not isinstance(raw, Mapping):
                 continue
             value_type = raw.get("type", "number")
-            if value_type not in {"number", "string", "array"}:
+            if value_type not in {"number", "string", "array", "boolean"}:
                 raise DecisionParseError(f"unsupported catalog parameter type: {name}")
             slot = merged.setdefault(name, {"type": [value_type, "null"]})
             if slot["type"] != [value_type, "null"]:
@@ -161,6 +161,9 @@ def parse_llm_decision(
                 if (not isinstance(value, (tuple, list)) or not 1 <= len(value) <= 32
                         or any(not isinstance(item, str) or not item.strip() or len(item) > 256 for item in value)):
                     raise DecisionParseError(f"{key} must be a bounded string array")
+            elif value_type == "boolean":
+                if type(value) is not bool:
+                    raise DecisionParseError(f"{key} must be boolean")
             elif not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
                 raise DecisionParseError(f"{key} must be a finite number or null")
             if isinstance(spec, Mapping):

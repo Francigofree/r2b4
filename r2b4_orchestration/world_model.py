@@ -741,7 +741,8 @@ class PublicWorldModel:
         observation, conflicts, revision = stored
         policy = self.policies[observation.domain]
         age = now_ns - observation.measurement_time_ns if observation.clock_epoch == self.clock_epoch else None
-        enduring = policy.max_age_ns is None and observation.validity_scope is None
+        enduring = (policy.max_age_ns is None and observation.validity_scope is None
+                    and (retention_class(observation.domain) == "knowledge" or observation.domain == "task_experience"))
         if age is None and not enduring:
             state, freshness = KnowledgeState.STALE, "CLOCK_MISMATCH"
         elif key in self._restored_unvalidated:

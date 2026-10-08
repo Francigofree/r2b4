@@ -121,7 +121,8 @@ def qualified_person_target(location, binding, *, runtime, status, vision_status
     if (location is None or binding is None or location.entity_id != binding.entity_id
             or location.state not in _CURRENT or binding.state not in _CURRENT
             or location.freshness != "FRESH" or binding.freshness != "FRESH"
-            or location.conflicts or binding.conflicts):
+            or location.conflicts or binding.conflicts
+            or location.domain != "person_position" or binding.domain != "person_binding"):
         return None
     value, association = location.value, binding.value
     if not isinstance(value, Mapping) or not isinstance(association, Mapping) or association.get("active") is not True:
@@ -137,7 +138,11 @@ def qualified_person_target(location, binding, *, runtime, status, vision_status
             or location.observation.measurement_time_ns != track["measurement_monotonic_ns"]
             or binding.observation.measurement_time_ns != location.observation.measurement_time_ns
             or location.observation.source != "person_identity:HUMAN"
-            or binding.observation.source != "person_identity:HUMAN"):
+            or binding.observation.source != "person_identity:HUMAN"
+            or not location.observation.lineage or not binding.observation.lineage
+            or location.observation.validity_scope != ValidityScope(frame_id=frame, runtime_pid=pid)
+            or binding.observation.validity_scope != location.observation.validity_scope
+            or any(value.get(key) != track[key] for key in ("x_m", "y_m"))):
         return None
     return {**{field: value[field] for field in _BINDING_FIELDS},
             "target_entity_id": location.entity_id, "measurement_time_ns": location.observation.measurement_time_ns,
@@ -161,7 +166,7 @@ class PersonIdentity:
     def resolve(self, name):
         needle = _text(name, "name", 96).casefold()
         matches = []
-        for fact in self.world.query(WorldQuery(attribute="identity", domain="person_identity", limit=256)).facts:
+        for fact in self._identities():
             if (fact.state in _CURRENT and isinstance(fact.value, Mapping)
                     and needle in {str(item).casefold() for item in (
                         fact.value.get("name"), *fact.value.get("aliases", ()))}):
@@ -170,15 +175,39 @@ class PersonIdentity:
             raise ValueError("PERSON_NAME_AMBIGUOUS")
         return matches[0] if matches else None
 
+    def _identities(self):
+        result = self.world.query(WorldQuery(attribute="identity", domain="person_identity", limit=64))
+        if result.truncated:
+            raise ValueError("PERSON_NAME_INDEX_EXCEEDS_BOUND")
+        return result.facts
+
+    @staticmethod
+    def _remembered_teaching(fact, request):
+        return {"entity_id": fact.entity_id, "name": fact.value["name"],
+                "aliases": list(fact.value.get("aliases", ())), "request_id": request.request_id,
+                "identity_taught": True, "duplicate": True, "follow_target_available": False}
+
     def teach(self, request: PersonTeaching, *, runtime, status, vision_status):
         if not isinstance(request, PersonTeaching):
             raise TypeError("person teaching must be a PersonTeaching")
+        request_value = {field: getattr(request, field) for field in request.__dataclass_fields__}
         prior = self._requests.get(request.request_id)
         if prior is not None:
             if prior[0] != request:
                 raise ValueError("PERSON_TEACHING_REQUEST_CONFLICT")
             # Repeated requests never renew or restore physical evidence.
-            return {**prior[1], "duplicate": True}
+            try:
+                fresh = self.validate_target(prior[1], runtime=runtime, status=status, vision_status=vision_status)
+                return {**prior[1], **fresh, "duplicate": True}
+            except ValueError:
+                return self._remembered_teaching(self.world.read(prior[1]["entity_id"], "identity"), request)
+        # A replayed last teaching request after restart remembers its name;
+        # replaying the request itself cannot re-authorize a new physical track.
+        for fact in self._identities():
+            if isinstance(fact.value, Mapping) and fact.value.get("request_id") == request.request_id:
+                if fact.value.get("teaching_request") != request_value:
+                    raise ValueError("PERSON_TEACHING_REQUEST_CONFLICT")
+                return self._remembered_teaching(fact, request)
         now = self.clock_ns()
         context, stamp, tick, tracks = _context(runtime, status, vision_status, now)
         age = self.world.policies["person_position"].max_age_ns or 3_000_000_000
@@ -198,7 +227,9 @@ class PersonIdentity:
         if previous.observation is None and self.world.read(entity, "location").observation is not None:
             raise ValueError("PERSON_ANONYMOUS_ENTITY_CANNOT_BE_RENAMED")
         aliases = tuple(dict.fromkeys((*request.aliases,
-            *(previous.value.get("aliases", ()) if isinstance(previous.value, Mapping) else ()))))
+            *(previous.value.get("aliases", ()) if isinstance(previous.value, Mapping) else ()),
+            *((previous.value["name"],) if isinstance(previous.value, Mapping)
+                and previous.value.get("name") != request.name else ()))))
         if len(aliases) > 8:
             raise ValueError("PERSON_ALIAS_CAPACITY_EXCEEDED")
         for alias in aliases:
@@ -211,22 +242,45 @@ class PersonIdentity:
         if entity not in self._bindings and len(self._bindings) >= 64:
             raise ValueError("PERSON_BINDING_CAPACITY_EXCEEDED")
         track = visible[selected]
+        former_location = self.world.read(entity, "location").observation
+        live = self._bindings.get(entity)
+        repeated_measurement = (former_location is not None
+            and former_location.clock_epoch == self.world.clock_epoch
+            and track["measurement_monotonic_ns"] <= former_location.measurement_time_ns)
+        same_live = (live is not None and live["context"] == context and live["target_track_id"] == selected
+                     and now <= live["expires_ns"])
+        if repeated_measurement and not same_live:
+            raise ValueError("PERSON_BINDING_REQUIRES_NEW_MEASUREMENT")
+        previous_value = previous.value if isinstance(previous.value, Mapping) else {}
         taught = self.world.observe(entity, "identity", {
             "name": request.name, "aliases": list(aliases), "taught_by": request.source,
             "request_id": request.request_id, "teaching_time_ns": now,
+            "teaching_request": request_value,
             "teaching_measurement_time_ns": track["measurement_monotonic_ns"],
             "teaching_clock_epoch": self.world.clock_epoch,
+            "first_teaching_time_ns": previous_value.get("first_teaching_time_ns", now),
+            "first_teaching_clock_epoch": previous_value.get("first_teaching_clock_epoch", self.world.clock_epoch),
+            "first_teaching_request_id": previous_value.get("first_teaching_request_id", request.request_id),
         }, domain="person_identity", measurement_time_ns=now, confidence=1.0,
             source="person_identity:HUMAN", lineage=(f"human:{request.request_id}",
                 f"runtime:{context[0]}", f"vision:{context[1]}", f"track:{selected}"))
-        if not taught.accepted and taught.reason != "DUPLICATE":
+        if (not taught.accepted and taught.reason != "DUPLICATE"
+                or self.world.read(entity, "identity").conflicts):
             raise ValueError("PERSON_TEACHING_NOT_ACCEPTED:" + taught.reason)
         binding = {"context": context, "target_track_id": selected, "request_id": request.request_id,
                    "measured": track["measurement_monotonic_ns"], "expires_ns": min(
                        track["prediction_valid_until_ns"], track["measurement_monotonic_ns"] + age),
                    "last_tick": tick, "teaching_world_revision": taught.world_revision}
+        if repeated_measurement:
+            binding = live
+        else:
+            try:
+                self._publish(entity, binding, track, tick, now)
+            except ValueError:
+                self._bindings[entity] = binding
+                self._invalidate_one(entity, "PERSON_BINDING_PUBLICATION_FAILED")
+                raise
         self._bindings[entity] = binding
-        self._publish(entity, binding, track, tick, now)
         result = {"entity_id": entity, "name": request.name, "aliases": list(aliases),
                   "request_id": request.request_id, "identity_taught": True, "duplicate": False,
                   **self._target(entity)}
@@ -248,9 +302,13 @@ class PersonIdentity:
                       lineage=(f"human:{binding['request_id']}", f"runtime:{pid}", f"vision:{generation}",
                                f"vision_owner:{owner_pid}", f"localization_generation:{local_generation}",
                                f"track:{binding['target_track_id']}", f"tick:{tick}", f"session:{self.session_id}"))
-        self.world.observe(entity, "person_binding", {**value, "active": True}, domain="person_binding", **common)
-        self.world.observe(entity, "location", {**value, "x_m": track["x_m"], "y_m": track["y_m"]},
-                           domain="person_position", **common)
+        for attribute, domain, payload in (
+                ("person_binding", "person_binding", {**value, "active": True}),
+                ("location", "person_position", {**value, "x_m": track["x_m"], "y_m": track["y_m"]})):
+            event = self.world.observe(entity, attribute, payload, domain=domain, **common)
+            if (not event.accepted and event.reason != "DUPLICATE"
+                    or self.world.read(entity, attribute).conflicts):
+                raise ValueError("PERSON_BINDING_PUBLICATION_NOT_ACCEPTED:" + event.reason)
 
     def _target(self, entity):
         value = self.world.read(entity, "person_binding").value
@@ -295,12 +353,17 @@ class PersonIdentity:
                 continue
             binding.update(measured=measured, expires_ns=min(track["prediction_valid_until_ns"],
                            measured + 3_000_000_000), last_tick=tick)
-            self._publish(entity, binding, track, tick, now)
+            try:
+                self._publish(entity, binding, track, tick, now)
+            except ValueError:
+                self._invalidate_one(entity, "PERSON_BINDING_PUBLICATION_FAILED")
 
     def validate_target(self, target, *, runtime, status, vision_status):
         if not isinstance(target, Mapping):
             raise ValueError("PERSON_TARGET_MUST_BE_OBJECT")
         entity = target.get("target_entity_id")
+        if not isinstance(entity, str):
+            raise ValueError("PERSON_TARGET_ENTITY_UNAVAILABLE")
         if entity not in self._bindings or target.get("binding_session_id") != self.session_id:
             raise ValueError("PERSON_TARGET_BINDING_REQUIRES_NEW_TEACHING")
         self.completed_status(status, runtime_pid=runtime.get("runtime_pid"), vision_status=vision_status)
