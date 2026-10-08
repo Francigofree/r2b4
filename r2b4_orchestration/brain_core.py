@@ -429,7 +429,7 @@ class BrainCore:
                 raise ValueError("CAPABILITY_UNSUPPORTED:" + action)
             if action == "person.teach" and goal.source != "HUMAN":
                 raise ValueError("PERSON_TEACHING_REQUIRES_HUMAN")
-            if action == "person.teach" and "teaching_name" not in dict(goal.constraints):
+            if action == "person.teach" and "teaching_name" not in _request_constraints(goal.text):
                 raise ValueError("PERSON_TEACHING_INSTRUCTION_UNAVAILABLE")
             params = _parameters(row.get("parameters", {}))
             entity = row.get("target_entity_id")
