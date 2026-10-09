@@ -293,8 +293,11 @@ def completion(cword: int, words: Sequence[str], root: Path) -> tuple[str, list[
 
     if command == "evi":
         from tools.mcap_evidence.cli import parser
-        return "r evi MCAP | verify BUNDLE | query BUNDLE", _parser_candidates(
-            parser(), tail, current, extra=("verify", "query"))
+        operation = tail[0] if tail and tail[0] in {"verify", "verify-evidence", "query"} else None
+        selected = parser(operation)
+        hint = selected.format_usage().strip() if operation else "r evi MCAP | verify BUNDLE | query BUNDLE"
+        return hint, _parser_candidates(selected, tail[1:] if operation else tail, current,
+                                        extra=() if operation else ("verify", "query"))
     if command in host_cli.COMMANDS:
         return _host_completion(command, tail, current, root)
 

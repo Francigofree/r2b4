@@ -220,7 +220,9 @@ class PersonIdentity:
         visible = _fresh_tracks(tracks, stamp, now, age, context[5])
         selected = request.target_track_id
         if selected is None:
-            if len(visible) != 1:
+            if not visible:
+                raise ValueError("PERSON_SELECTION_REQUIRES_FRESH_TRACK")
+            if len(visible) > 1:
                 raise ValueError("PERSON_SELECTION_REQUIRES_CLARIFICATION")
             selected = next(iter(visible))
         if selected not in visible:

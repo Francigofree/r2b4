@@ -538,21 +538,33 @@ class PublicRobotRuntime:
                 previous = self.world.read(params["entity_id"], "atlas_place")
                 value = {key: params[key] for key in ("name", "map_id", "viewpoint_id", "request_id")}
                 value.update(map_revision=point.map_revision, motion_authority=False, taught_by="HUMAN")
-                if isinstance(previous.value, Mapping) and previous.value.get("request_id") == params["request_id"]:
-                    if dict(previous.value) != value:
+                # Reuse the bounded semantic facts/history, including restored
+                # history. Replaying an older request must not undo a later
+                # teaching or assign the same human request to another place.
+                observations = [fact.observation for fact in self.world.snapshot().facts.values()]
+                observations.extend(event.observation for event in self.world.history() if event.accepted)
+                duplicate = False
+                for observation in observations:
+                    if (observation is None or observation.attribute != "atlas_place"
+                            or observation.source != "place_teaching:HUMAN"
+                            or not isinstance(observation.value, Mapping)
+                            or observation.value.get("request_id") != params["request_id"]):
+                        continue
+                    if observation.entity_id != params["entity_id"] or dict(observation.value) != value:
                         raise ValueError("PLACE_TEACHING_REQUEST_CONFLICT")
-                    accepted = True
-                else:
+                    duplicate = True
+                superseded = duplicate and previous.value != value
+                if not duplicate:
                     event = self.world.observe(params["entity_id"], "atlas_place", value,
                         domain="room_topology", measurement_time_ns=now, confidence=1,
                         source="place_teaching:HUMAN", lineage=(f"human:{params['request_id']}",
                             f"atlas:{point.map_id}:{point.map_revision}", f"viewpoint:{point.viewpoint_id}"))
-                    accepted = event.accepted
-                if not accepted:
-                    raise ValueError("PLACE_TEACHING_REJECTED:" + event.reason)
+                    if not event.accepted:
+                        raise ValueError("PLACE_TEACHING_REJECTED:" + event.reason)
                 self.spatial.sync_world()
             saved = self._persist(force=True)
             result = {"status": "TAUGHT", "entity_id": params["entity_id"], **value,
+                      "duplicate": duplicate, "superseded": superseded,
                       "durability": "SAVED" if saved else "MEMORY_ONLY"}
             self._queue_evidence("atlas_place_taught", result)
             return result

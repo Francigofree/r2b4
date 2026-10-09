@@ -316,3 +316,26 @@ Nyitott, konkrét bizonyítandó kérdések: név szerinti identity producer min
 Source és aktív config elemzés, read-only hardware-identification, valamint a felhasználó által hivatkozott meglévő map-report/keyframe/graph részleteinek ellenőrzése történt. Runtime-, capture- és logadatot nem módosítottam, új térképet nem építettem, motort nem indítottam. A production source és authority-contractok ebben a munkában változatlanok.
 
 Validáció: `./r test` — **14 passed**, exit 0; `git diff --check` — sikeres. Ez a meglévő kis robot-contract gate eredménye, nem a még meg nem valósított terv acceptance-e. Új MCAP compilation, native replay, providerhívás, felismerési benchmark vagy live robot evidence nem keletkezett; az itt leírt tanuló executive és atlasz-integráció megvalósítása a fenti ütemezett munkák feladata.
+
+## 13. Megvalósítási állapot — 2026-10-09
+
+Az előző fejezet az eredeti tervezési munka bizonyítékhatára. Az ezt követő implementáció a meglévő host ownerekben készült; az alábbi állapot szoftveres evidence, nem élő robot-acceptance.
+
+| Szakasz | Implementált működés | Bizonyítékhatár |
+| --- | --- | --- |
+| 1. Memória | Külön bounded transient/knowledge/experience retention; tartós személy-, hely- és tapasztalati tudás; atomikus mentés | A restore megőrzi az eredeti időt és lineage-t; fizikai binding/location friss authorityja nem áll helyre |
+| 2. Person identity MVP | Explicit HUMAN névtanítás; stabil entity és lejáró track-binding; runtime/frame/localization/camera-owner source-igazolás; named search → ugyanazon binding validálása → canonical follow | Több személy, stale adat, hiányzó owner-start proof és sessionváltás elutasítva; arcazonosítás és automatikus újraazonosítás nincs bizonyítva |
+| 3. Graph és skillek | Legacy bemenet admissionkor TaskGraph lesz; egy belső graph-reprezentáció; megőrzött explicit mozgási feltételek; korrelált subtask result; telepített person descriptorok | A terv és expected effect nem world fact; a fizikai végrehajtás authorityja továbbra is a canonical V3 út |
+| 4. Személyinterakció | Aktív fizikai cél melletti bounded névtanítás; pontos tanítási/clarification/mentési HRI; STOP és generation fence | A teljes reacquisition és hosszú távú interakció-policy későbbi gate; a tanítás a meglévő host dispatcherre várhat |
+| 5. Első tanuló választás | Authoritative Brain subtaskokból bounded outcome-összesítés; qualified keresési minták; egyszeri update a megőrzött dedup-horizonton; immutable learning snapshot; implicit keresési helyek prior szerinti sorrendje | Explicit helylista sorrendje változatlan; method-statisztika és ranking olvasható, új methodot/source-ot nem generál; élő sikerarány-javulás nincs mérve |
+| 6a. Térképi referencia | Verziózott mapper export eredeti gauge és measurement/scan/tick lineage-dzsel; explicit hash-ellenőrzött import; bounded atlasz/viewpoint index és emberi helytanítás | Az atlasz történeti referencia; nincs jelenidejű alignment, koordináta-átcímkézés vagy atlaszból származó motion authority |
+
+Az observer/capture/EVI út is ellenőrzött: valós host teaching/search/Brain/learning események kerülnek az ObservationHub/journal → direct és process MCAP → explicit EVI compile/verify/query útra a célzott végponttól végpontig tesztben. Az új goal/node/method/version/world/learning és execution lineage megmarad; capture-drop/integrity hiba nem lesz sikeres bizonyítékká. A passzív observer nem learner input és nem completion-authority.
+
+Az `r commands --json`, a publikus `read`/`execute` parancsok és a TAB-kiegészítés megjelenítik az új host képességeket. Az EVI `query`/`verify` kiegészítés az adott művelet tényleges parserét követi. A használható evidence-parancsokat a [publikus robot API leírása](PUBLIC_ROBOT_SYSTEM.md#tartós-tudás-és-tanulási-evidence) tartalmazza.
+
+Validáció: `./r test` — **14 passed**; `./r test release` — **23 passed**. A release szintetikus 50 Hz-es LiDAR/RoomCruise scenarioja tényleges native replay **MATCH** eredményt követel és kapott. Célzott fejlesztői evidence: learner/world **63 passed**; identity/executive/HRI **102 passed**, az utolsó interjection/failure/feedback változtatásra **29 passed** és egy külön pre-execute fence teszt; atlasz/local planner **53 passed**; a végső atlasz + személy-executive + capture/EVI futás **25 passed**. Ezek egymással részben átfedő tesztcsomagok, nem összeadandó darabszámok. `r commands --json`, `r evi --help` és `git diff --check` sikeres.
+
+A 0. szakasz source- és failure-boundary baseline-ja rendelkezésre áll, hardveres recognition/timing baseline még nem készült. A 6b friss atlasz-alignment, a 7. szemantikus globális bejárás és a 8. bounded cognitive replan/offline voice külön lezárási kapu marad. Nem aktív production képességek. A következő canonical localization/decision-input változtatáshoz release, integrity-ellenőrzött 50 Hz capture, explicit EVI compilation, native replay `MATCH` és timing evidence szükséges.
+
+Ebben az implementációs munkában fizikai mozgás, live acceptance és meglévő capture exact replay nem indult. A szintetikus capture/EVI teszt a bizonyítékút működését igazolja; önmagában nem igazol felismerési minőséget, tanult policy előnyét, control-jittert vagy atlasz-alignmentet. Meglévő runtime/capture/map adatok nem kerültek átírásra.

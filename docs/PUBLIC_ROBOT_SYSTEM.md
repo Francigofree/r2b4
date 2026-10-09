@@ -244,6 +244,11 @@ query `retention` mezője mutatja a kapacitást, evictiont és visszautasítást
 Tanításkor `durability=SAVED` sikeres atomi, fsyncelt mentést jelent;
 `MEMORY_ONLY` mellett az elfogadott memóriafrissítés nem ígér crash-tartósságot.
 A fájlmentés nem tartja a STOP-hoz szükséges intent-lockot.
+Az egyetlen explicit személytanítás aktív fizikai cél mellett is elfogadható:
+megőrzi a primary goal/behavior/command identityt. A második párhuzamos
+tanítás BUSY eredményt kap. STOP, fizikai preemption vagy goal failure
+visszavonja a függő tanítás completionjét; késői storage-result passzív evidence.
+A HRI a primary és a tanítás eredményét az eredeti requesthez korrelálja.
 
 Az admission a legacy `steps` tervet is TaskGraph-fá alakítja. A
 `SUBTASK_COMPLETED` / `SUBTASK_FAILED` Brain-esemény a részfeladatot és az
@@ -276,6 +281,9 @@ Az atlasz-import csak történeti geometriát és bounded viewpoint indexet tart
 a teljes occupancy/NPZ külön asset marad. A régi artifact forrás-gauge hiányát
 explicit jelzi. Emberi helytanításból név–viewpoint kapcsolat készül, aktuális
 navigációs koordináta nem. A jelenidejű atlasz-alignment külön capability.
+Az ismételt helytanítás a megőrzött fact/history horizontján belül nem
+frissíti a measurementet és nem írja felül az újabb tanítást; eltérő
+entity vagy tartalom ugyanazzal a request ID-val konfliktus.
 
 ## Személykeresés és bizonyítási határ
 

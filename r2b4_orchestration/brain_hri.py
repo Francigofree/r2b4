@@ -23,6 +23,31 @@ class BrainAdoption:
     mission_id: str | None = None
 
 
+def _person_feedback(snapshot: Mapping[str, object]) -> str | None:
+    """Explain only the correlated teaching result, never a proposed name."""
+    lifecycle, reason = snapshot.get("lifecycle"), str(snapshot.get("reason") or "")
+    teaching = snapshot.get("current_subtask") == "person.teach" or "PERSON_TEACHING_BUSY" in reason
+    if not teaching:
+        return None
+    result = snapshot.get("result")
+    if (lifecycle == "COMPLETED" and isinstance(result, Mapping) and result.get("status") == "TAUGHT"
+            and result.get("identity_taught") is True and isinstance(result.get("name"), str)):
+        text = "A látható személyt " + result["name"] + " néven jegyeztem meg."
+        if result.get("durability") == "MEMORY_ONLY":
+            text += " A tartós mentés nem sikerült."
+        return text
+    if lifecycle == "FAILED":
+        if "PERSON_SELECTION_REQUIRES_CLARIFICATION" in reason:
+            return "Több személyt látok. Add meg, melyik látható személyt nevezzem el."
+        if "PERSON_SELECTION_REQUIRES_FRESH_TRACK" in reason or "PERSON_SELECTED_TRACK_STALE_OR_UNAVAILABLE" in reason:
+            return "Nem látok friss, igazolható személyt a név megtanításához."
+        if "PERSON_TEACHING_BUSY" in reason:
+            return "Egy másik személy nevének megtanítása még folyamatban van."
+        if "PERSON_VISION" in reason or "PERSON_RUNTIME" in reason or "PERSON_FRAME" in reason:
+            return "A név megtanításához most nem tudom igazolni a kamera és a személyészlelés friss állapotát."
+    return None
+
+
 def _goal_snapshot(interface: object, goal_id: str) -> Mapping[str, object] | None:
     """Read this goal even after another goal becomes primary."""
     state = interface.read("brain.state")
@@ -52,7 +77,7 @@ def wait_for_brain_goal(interface: object, adoption: BrainAdoption, *, timeout_s
                 reason = str(snapshot.get("reason") or lifecycle)
                 if lifecycle in {"COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"}:
                     status = "COMPLETED" if lifecycle == "COMPLETED" else str(lifecycle) + ":" + reason
-                    text = ("A feladat befejeződött." if lifecycle == "COMPLETED"
+                    text = _person_feedback(snapshot) or ("A feladat befejeződött." if lifecycle == "COMPLETED"
                             else "A feladat megszakadt: " + reason + "." if lifecycle in {"CANCELLED", "INTERRUPTED"}
                             else "A feladat nem teljesült: " + reason + ".")
                     return BrainAdoption(status, text, adoption.goal_id,
@@ -94,12 +119,15 @@ def adopt_brain_result(interface: object, result: Mapping[str, object], *,
     lifecycle = str(snapshot.get("lifecycle", "UNKNOWN"))
     reason = str(snapshot.get("reason") or lifecycle)
     if lifecycle == "COMPLETED":
-        status, text = "COMPLETED", "A feladat befejeződött."
+        status, text = "COMPLETED", _person_feedback(snapshot) or "A feladat befejeződött."
     elif lifecycle in {"PENDING", "STARTING", "ACTIVE"}:
         status, text = "ACTIVE", "A feladatot elfogadtam."
     else:
         status = "REJECTED:" + reason
-        if "follow_distance_m" in reason:
+        person_text = _person_feedback(snapshot)
+        if person_text is not None:
+            text = person_text
+        elif "follow_distance_m" in reason:
             text = "A kért követési távolságot a jelenlegi képesség nem támogatja."
         elif "duration" in reason.casefold():
             text = "A kért időtartamot a jelenlegi képesség nem tudja teljesíteni."
@@ -113,23 +141,43 @@ def adopt_brain_result(interface: object, result: Mapping[str, object], *,
 
 
 class BrainGoalObserver:
-    """One passive watch of terminal goal truth; never dispatches commands."""
+    """Watch the primary goal and one teaching interjection without commands."""
 
     def __init__(self, interface: object, *, feedback_sink=None, event_sink=None):
         self._interface, self._feedback_sink, self._event_sink = interface, feedback_sink, event_sink
         self._closed = threading.Event()
         self._lock = threading.Lock()
         self._generation = 0
+        self._watches: dict[str, int] = {}
 
     def observe(self, goal_id: str, **lineage: object) -> None:
+        physical_id = None
+        try:
+            state = self._interface.read("brain.state")
+            primary = state.get("primary_goal") if isinstance(state, Mapping) else None
+            snapshot = _goal_snapshot(self._interface, goal_id)
+            if (isinstance(primary, Mapping) and primary.get("goal_id") != goal_id
+                    and primary.get("lifecycle") in {"STARTING", "ACTIVE"}
+                    and isinstance(snapshot, Mapping) and snapshot.get("current_subtask") == "person.teach"):
+                physical_id = primary.get("goal_id")
+        except Exception:
+            pass  # Unavailable status does not create a second physical owner.
         with self._lock:
+            if goal_id in self._watches or self._closed.is_set():
+                return
             self._generation += 1
             generation = self._generation
+            # A teaching interjection preserves only the authoritative primary
+            # watch. A replacement physical goal retains the previous routing.
+            retained = {physical_id: self._watches[physical_id]} if physical_id in self._watches else {}
+            self._watches = {**retained, goal_id: generation}
         threading.Thread(target=self._watch, args=(goal_id, generation, lineage),
                          name="r2b4-brain-goal-feedback", daemon=True).start()
 
     def close(self) -> None:
         self._closed.set()
+        with self._lock:
+            self._watches.clear()
 
     def _watch(self, goal_id: str, generation: int, lineage: Mapping[str, object]) -> None:
         # Goal identity can move from primary to history; an unrelated mission
@@ -138,7 +186,7 @@ class BrainGoalObserver:
             if self._closed.wait(0.1):
                 return
             with self._lock:
-                if generation != self._generation:
+                if self._watches.get(goal_id) != generation:
                     return
             try:
                 snapshot = _goal_snapshot(self._interface, goal_id)
@@ -147,9 +195,13 @@ class BrainGoalObserver:
                 lifecycle = snapshot.get("lifecycle")
                 if lifecycle not in {"COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"}:
                     continue
+                with self._lock:
+                    if self._watches.get(goal_id) != generation:
+                        return
+                    del self._watches[goal_id]
                 fields = {**lineage, "goal_id": goal_id, "lifecycle": lifecycle,
                           "reason": snapshot.get("reason")}
-                text = ("A feladat befejeződött." if lifecycle == "COMPLETED"
+                text = _person_feedback(snapshot) or ("A feladat befejeződött." if lifecycle == "COMPLETED"
                         else "A feladat megszakadt." if lifecycle in {"CANCELLED", "INTERRUPTED"}
                         else "A feladat nem teljesült.")
                 if self._event_sink is not None:
@@ -167,6 +219,9 @@ class BrainGoalObserver:
                 # Public observation can disappear without creating success or
                 # affecting Brain lifecycle or canonical physical execution.
                 continue
+        with self._lock:
+            if self._watches.get(goal_id) == generation:
+                del self._watches[goal_id]
 
 
 __all__ = ["BrainAdoption", "BrainGoalObserver", "adopt_brain_result", "resolve_brain_request", "wait_for_brain_goal"]

@@ -9,7 +9,23 @@ from .query import query
 from .verify import verify
 
 
-def parser():
+def parser(operation=None):
+    if operation in ('verify', 'verify-evidence'):
+        result = argparse.ArgumentParser(prog='r evi verify')
+        result.add_argument('bundle')
+        result.add_argument('--source', help='also verify the original snapshot hash')
+        return result
+    if operation == 'query':
+        result = argparse.ArgumentParser(prog='r evi query')
+        result.add_argument('bundle')
+        for option in ('topic', 'message-id', 'layer', 'sensor', 'field'):
+            result.add_argument('--' + option)
+        for option in ('tick-id', 'channel', 'sequence', 'source-offset', 'start-ns', 'end-ns'):
+            result.add_argument('--' + option, type=int)
+        result.add_argument('--limit', type=int, default=100)
+        return result
+    if operation is not None:
+        raise ValueError('unknown evidence operation: ' + str(operation))
     result = argparse.ArgumentParser(prog='r evi', description='MCAP → lossless, indexed evidence. No diagnosis or replay.')
     result.add_argument('source', help='MCAP input (or bundle for verify/query)')
     result.add_argument('--output', '--output-dir', dest='output')
@@ -29,20 +45,10 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, interrupted)
     try:
         if args and args[0] in ('verify', 'verify-evidence'):
-            p = argparse.ArgumentParser(prog='r evi verify')
-            p.add_argument('bundle')
-            p.add_argument('--source', help='also verify the original snapshot hash')
-            a = p.parse_args(args[1:])
+            a = parser(args[0]).parse_args(args[1:])
             result = verify(a.bundle, source=a.source)
         elif args and args[0] == 'query':
-            p = argparse.ArgumentParser(prog='r evi query')
-            p.add_argument('bundle')
-            for option in ('topic', 'message-id', 'layer', 'sensor', 'field'):
-                p.add_argument('--' + option)
-            for option in ('tick-id', 'channel', 'sequence', 'source-offset', 'start-ns', 'end-ns'):
-                p.add_argument('--' + option, type=int)
-            p.add_argument('--limit', type=int, default=100)
-            a = vars(p.parse_args(args[1:]))
+            a = vars(parser('query').parse_args(args[1:]))
             bundle = a.pop('bundle')
             for row in query(bundle, **a):
                 print(json.dumps(row, ensure_ascii=True, allow_nan=False))

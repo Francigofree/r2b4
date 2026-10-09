@@ -173,6 +173,7 @@ def test_goal_feedback_waits_for_same_goal_completion_not_navigation_result():
             return {"primary_goal": {"goal_id": "goal-1", "lifecycle": "COMPLETED", "reason": "PLAN_COMPLETED"}}
     observer = BrainGoalObserver(Interface(), feedback_sink=lambda text, fields: feedback.append((text, fields)))
     observer._closed = SimpleNamespace(wait=lambda _: False)
+    observer._watches["goal-1"] = 0
     observer._watch("goal-1", 0, {"turn_id": "turn-1"})
     assert feedback == [("A feladat befejeződött.", {
         "turn_id": "turn-1", "goal_id": "goal-1", "lifecycle": "COMPLETED", "reason": "PLAN_COMPLETED",

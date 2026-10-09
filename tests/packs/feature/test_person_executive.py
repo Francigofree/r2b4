@@ -238,3 +238,25 @@ def test_r_discovers_installed_teaching_and_evidence_resources_without_runtime(c
     assert "brain.history" in catalog["public_robot"]["resources"]
     assert "person.teach" in launcher_extras._robot_completion("execute", (), "person.")[1]
     assert "world.snapshot" in launcher_extras._robot_completion("read", (), "world.")[1]
+
+
+@pytest.mark.parametrize("operation, required", [
+    ("query", {"--field", "--topic", "--message-id", "--tick-id", "--limit"}),
+    ("verify", {"--source"}),
+    ("verify-evidence", {"--source"}),
+])
+def test_r_evi_completion_uses_the_selected_cli_operation_parser(operation, required, tmp_path):
+    from tools.mcap_evidence.cli import parser
+    from v3.launcher_extras import completion
+
+    hint, candidates = completion(4, ["evi", operation, "BUNDLE", "--"], tmp_path)
+    assert required.issubset(candidates)
+    assert not {"--output", "--workers", "--overwrite", "--shard-bytes"}.intersection(candidates)
+    assert ("r evi query" if operation == "query" else "r evi verify") in hint
+    # Suggested flags are the flags the invoked CLI actually accepts.
+    arguments = (["BUNDLE", "--field", "/payload/value/task_graph/method_id", "--topic", "/r2b4/event"]
+                 if operation == "query" else ["BUNDLE", "--source", "CAPTURE.mcap"])
+    parsed = parser(operation).parse_args(arguments)
+    assert parsed.bundle == "BUNDLE"
+    _, compilation = completion(3, ["evi", "CAPTURE.mcap", "--"], tmp_path)
+    assert {"--output", "--workers"}.issubset(compilation)

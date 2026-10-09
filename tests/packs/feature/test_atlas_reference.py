@@ -124,6 +124,16 @@ def test_import_bounded_viewpoints_public_teaching_and_restore_have_no_current_m
     restored.restore(spatial.export_state())
     assert restored.query(SpatialQuery(kind="viewpoints", entity_id="room:kitchen")).viewpoints == points.viewpoints
     assert not restored.query(SpatialQuery(kind="viewpoints", require_current=True)).viewpoints
+    for field, invalid in (("frame_id", "R2B4_BOOT_ROBOT_MAP"), ("viewpoint_id", "keyframe:999")):
+        corrupted = json.loads(json.dumps(spatial.export_state()))
+        corrupted["atlas_references"][0]["viewpoints"][0][field] = invalid
+        if field == "frame_id":
+            corrupted["atlas_references"][0]["reference"][field] = invalid
+            for point in corrupted["atlas_references"][0]["viewpoints"]:
+                point[field] = invalid
+        with pytest.raises(ValueError, match="identity mismatch"):
+            restored.restore(corrupted)
+        assert restored.query(SpatialQuery(kind="viewpoints", entity_id="room:kitchen")).viewpoints == points.viewpoints
     payload = json.dumps(restored.snapshot())
     assert "probability" not in payload and "logodds" not in payload and "source_scans" not in payload
     assert "map_data.npz" in payload and len(payload.encode()) < 30_000
@@ -162,3 +172,58 @@ def test_legacy_map_is_historical_geometry_without_invented_source_gauge(tmp_pat
     assert reference.viewpoints[0].source_frame_id is None
     assert reference.to_jsonable()["current_alignment"] is None
     assert (tmp_path / "report.json").read_bytes() == before
+
+
+def test_host_import_and_place_teaching_persist_without_motion_or_frame_relabelling(builder, tmp_path):
+    from r2b4_orchestration.local_task_planner import LocalTaskPlanner
+    from r2b4_orchestration.robot_runtime import PublicRobotRuntime
+    class NoHardware:
+        def __init__(self):
+            self.actions = []
+        def capabilities(self):
+            return {"capabilities": {"v3.command.navigate": {
+                "supported": True, "available": True, "ready": True}}}
+        def read(self, resource):
+            raise RuntimeError("runtime unavailable")
+        def execute(self, action, **parameters):
+            self.actions.append(action)
+            raise AssertionError("historical atlas cannot execute motion")
+        def stop(self):
+            pass
+    output = exported(builder, tmp_path)
+    backend = NoHardware()
+    owner = PublicRobotRuntime(backend, root=tmp_path)
+    loaded = owner.execute("spatial.load_atlas", {"path": str(output)})
+    assert loaded["status"] == "LOADED" and loaded["durability"] == "SAVED"
+    teaching = {"entity_id": "room:lounge", "name": "nappali", "map_id": loaded["map_id"],
+                "viewpoint_id": "keyframe:1", "request_id": "explicit-place-teaching"}
+    taught = owner.execute("spatial.teach_place", teaching)
+    assert taught["status"] == "TAUGHT" and taught["motion_authority"] is False
+    assert taught["durability"] == "SAVED"
+    query = SpatialQuery(kind="viewpoints", entity_id="room:lounge")
+    point = owner.spatial_query(query).viewpoints[0]
+    assert point.frame_id.startswith("R2B4_ATLAS:") and point.place_ids == ("room:lounge",)
+    assert owner.world.read("room:lounge", "location").observation is None
+    restored = PublicRobotRuntime(backend, root=tmp_path)
+    assert restored.spatial_query(query).viewpoints == (point,)
+    proposal = LocalTaskPlanner().resolve("Menj a nappaliba", restored).plan
+    assert proposal is not None
+    pending = restored.brain.submit("Menj a nappaliba")
+    result = restored.brain.adopt(pending["goal_id"], proposal)
+    assert result["lifecycle"] == "FAILED"
+    assert backend.actions == []
+    with pytest.raises(ValueError, match="REQUEST_CONFLICT"):
+        owner.execute("spatial.teach_place", {**teaching, "name": "konyha"})
+    newer = {**teaching, "viewpoint_id": "keyframe:0", "request_id": "later-place-teaching"}
+    owner.execute("spatial.teach_place", newer)
+    restored = PublicRobotRuntime(backend, root=tmp_path)
+    before = restored.world.read("room:lounge", "atlas_place")
+    revision = restored.world.revision
+    replayed = restored.execute("spatial.teach_place", teaching)
+    assert replayed["duplicate"] is True and replayed["superseded"] is True
+    after = restored.world.read("room:lounge", "atlas_place")
+    assert after.value["viewpoint_id"] == "keyframe:0"
+    assert after.observation == before.observation and restored.world.revision == revision
+    with pytest.raises(ValueError, match="REQUEST_CONFLICT"):
+        restored.execute("spatial.teach_place", {**teaching, "entity_id": "room:kitchen"})
+    assert backend.actions == []

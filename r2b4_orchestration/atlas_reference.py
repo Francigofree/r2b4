@@ -72,6 +72,20 @@ def _integer(value, name):
     return value
 
 
+def _frame_identity(map_id, frame_id):
+    """An atlas keeps its own frame even when restored from host memory."""
+    _token(map_id, "map_id")
+    _token(frame_id, "frame_id")
+    if map_id.startswith("atlas:"):
+        digest, prefix = map_id[len("atlas:"):], "R2B4_ATLAS:"
+    elif map_id.startswith("historical:"):
+        digest, prefix = map_id[len("historical:"):], "R2B4_HISTORICAL_ATLAS:"
+    else:
+        raise ValueError("invalid atlas map identity")
+    if frame_id != prefix + _sha_token(digest):
+        raise ValueError("atlas frame identity mismatch")
+
+
 def _pose(value, *, optional=False):
     if optional and value is None:
         return None
@@ -116,6 +130,10 @@ class AtlasViewpoint:
 
     @classmethod
     def from_jsonable(cls, value):
+        _frame_identity(value["map_id"], value["frame_id"])
+        index = _integer(value["keyframe_index"], "keyframe_index")
+        if value["viewpoint_id"] != "keyframe:" + str(index):
+            raise ValueError("atlas viewpoint identity mismatch")
         places = value.get("place_ids", [])
         if not isinstance(places, (list, tuple)) or len(places) > 64:
             raise ValueError("invalid atlas place bindings")
@@ -165,6 +183,7 @@ class AtlasReference:
 
     @classmethod
     def from_jsonable(cls, value):
+        _frame_identity(value["map_id"], value["frame_id"])
         assets = value.get("assets", [])
         if not isinstance(assets, (list, tuple)) or len(assets) > len(_ASSET_NAMES):
             raise ValueError("invalid atlas asset summary")
