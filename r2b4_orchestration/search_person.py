@@ -116,6 +116,36 @@ class SearchPerson:
             value = fact.value
             if isinstance(value, Mapping) and value.get("binding_session_id"):
                 try:
+                    # The completed V3 snapshot can advance before the host's
+                    # next periodic poll. Let the identity owner admit that
+                    # observation before reading its current named facts.
+                    try:
+                        capability_reader = getattr(robot, "capabilities", None)
+                        capabilities = capability_reader() if capability_reader is not None else None
+                    except AttributeError:
+                        capabilities = None  # Small direct ports have no capability catalog.
+                    if capabilities is not None:
+                        catalog = capabilities.get("capabilities", capabilities)
+                        validator = catalog.get("person.validate_target") if isinstance(catalog, Mapping) else None
+                        if (not isinstance(validator, Mapping) or validator.get("supported") is not True
+                                or validator.get("available", True) is not True
+                                or validator.get("ready", True) is not True):
+                            return self._found_fact(fact)
+                        reference = {key: value.get(key) for key in ("binding_session_id", "vision_generation",
+                            "vision_owner_pid", "vision_generation_started_ns", "localization_generation",
+                            "runtime_pid", "target_track_id")}
+                        validated = robot.execute("person.validate_target", target={
+                            **reference, "target_entity_id": self.entity_id})
+                        if (not isinstance(validated, Mapping) or validated.get("status") != "VALIDATED"
+                                or not isinstance(validated.get("target"), Mapping)
+                                or validated["target"].get("target_entity_id") != self.entity_id
+                                or any(validated["target"].get(key) != item for key, item in reference.items())):
+                            return self._found_fact(fact)
+                        refreshed = self._person_query(robot, current=True,
+                            scope=fact.observation.validity_scope).facts
+                        if not refreshed:
+                            return None
+                        fact = refreshed[0]
                     bindings = robot.query(WorldQuery(entity_id=self.entity_id, attribute="person_binding",
                         domain="person_binding", require_current=True,
                         scope=fact.observation.validity_scope, limit=1)).facts

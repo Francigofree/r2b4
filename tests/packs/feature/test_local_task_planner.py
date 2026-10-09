@@ -40,11 +40,11 @@ class Interface:
 ])
 def test_three_step_motion_keeps_order_direction_and_exact_distances(text):
     result = LocalTaskPlanner().resolve(text, Interface())
-    assert result.plan == {"steps": [
+    assert result.plan["steps"] == [
         {"action": "v3.command.move_relative", "parameters": {"forward_m": 1}},
         {"action": "v3.command.turn_by", "parameters": {"angle_deg": -90}},
         {"action": "v3.command.move_relative", "parameters": {"forward_m": .5}},
-    ]}
+    ]
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -99,8 +99,8 @@ def test_known_place_resolution_emits_entity_without_coordinate_authority():
     interface.observe("room:kitchen", "room_topology", {"name": "konyha", "x_m": 1,
         "y_m": 2, "frame_id": "R2B4_BOOT_ROBOT_MAP", "runtime_pid": 123})
     result = LocalTaskPlanner().resolve("Menj a konyhába.", interface)
-    assert result.plan == {"steps": [{"action": "v3.command.navigate", "parameters": {},
-                                     "target_entity_id": "room:kitchen"}]}
+    assert result.plan["steps"] == [{"action": "v3.command.navigate", "parameters": {},
+                                    "target_entity_id": "room:kitchen"}]
     assert interface.executed == []
 
 

@@ -14,6 +14,7 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
+from .atlas_reference import AtlasReference, AtlasViewpoint, load_atlas_reference
 from .world_model import KnowledgeState, PublicWorldModel, WorldFact, WorldLocation, retention_class
 
 
@@ -35,8 +36,8 @@ class SpatialQuery:
         if self.entity_id is not None and (not isinstance(self.entity_id, str)
                 or not self.entity_id.strip() or len(self.entity_id) > 256):
             raise ValueError("spatial entity_id must be a bounded nonempty string")
-        if self.kind not in {"entities", "relations"}:
-            raise ValueError("spatial query kind must be entities or relations")
+        if self.kind not in {"entities", "relations", "atlases", "viewpoints"}:
+            raise ValueError("invalid spatial query kind")
         if type(self.limit) is not int or not 1 <= self.limit <= 64:
             raise ValueError("spatial query limit must be in 1..64")
         if type(self.require_current) is not bool:
@@ -85,13 +86,17 @@ class SpatialQueryResult:
     relations: tuple[SpatialRelation, ...] = ()
     truncated: bool = False
     facts_evicted: int = 0
+    atlas_references: tuple[AtlasReference, ...] = ()
+    viewpoints: tuple[AtlasViewpoint, ...] = ()
 
     def to_jsonable(self):
         return {"schema": SPATIAL_SCHEMA, "revision": self.revision,
                 "observation_time_ns": self.observation_time_ns, "clock_epoch": self.clock_epoch,
                 "query": self.query.to_jsonable(), "entities": [item.to_jsonable() for item in self.entities],
                 "relations": [item.to_jsonable() for item in self.relations],
-                "truncated": self.truncated, "facts_evicted": self.facts_evicted}
+                "truncated": self.truncated, "facts_evicted": self.facts_evicted,
+                "atlas_references": [item.to_jsonable() for item in self.atlas_references],
+                "viewpoints": [item.to_jsonable() for item in self.viewpoints]}
 
     @classmethod
     def from_jsonable(cls, value):
@@ -99,10 +104,16 @@ class SpatialQueryResult:
             raise ValueError("invalid spatial query result")
         query = SpatialQuery.from_jsonable(value.get("query"))
         entities, relations = value.get("entities", []), value.get("relations", [])
+        atlases, viewpoints = value.get("atlas_references", []), value.get("viewpoints", [])
         if (not isinstance(entities, (list, tuple)) or not isinstance(relations, (list, tuple))
                 or len(entities) > query.limit or len(relations) > query.limit
-                or query.kind == "entities" and relations or query.kind == "relations" and entities):
+                or query.kind == "entities" and relations or query.kind == "relations" and entities
+                or query.kind in {"atlases", "viewpoints"} and (entities or relations)):
             raise ValueError("spatial result exceeds query capacity")
+        if (not isinstance(atlases, (list, tuple)) or not isinstance(viewpoints, (list, tuple))
+                or len(atlases) > query.limit or len(viewpoints) > query.limit
+                or query.kind != "atlases" and atlases or query.kind != "viewpoints" and viewpoints):
+            raise ValueError("spatial atlas result exceeds query capacity")
         for item in entities:
             if not isinstance(item, Mapping) or not isinstance(item.get("facts"), (list, tuple)) or len(item["facts"]) > 128:
                 raise ValueError("invalid spatial entity evidence")
@@ -111,7 +122,9 @@ class SpatialQueryResult:
                                        tuple(WorldFact.from_jsonable(fact) for fact in item["facts"])) for item in entities),
                    tuple(SpatialRelation(item["entity_id"], item["target_entity_id"], item["relation"],
                                          WorldFact.from_jsonable(item["evidence"])) for item in relations),
-                   value.get("truncated", False), value.get("facts_evicted", 0))
+                   value.get("truncated", False), value.get("facts_evicted", 0),
+                   tuple(AtlasReference.from_jsonable(item) for item in atlases),
+                   tuple(AtlasViewpoint.from_jsonable(item) for item in viewpoints))
 
 
 class SpatialService:
@@ -137,6 +150,17 @@ class SpatialService:
         self._context_boundary_ns = None
         self._global_context_boundary_ns = None
         self._retired_runtimes = set()
+        self._atlases = OrderedDict()
+
+    def load_atlas_reference(self, path):
+        """Explicit host import; its source geometry remains historical."""
+        reference = load_atlas_reference(path)
+        with self._lock:
+            if reference.map_id not in self._atlases and len(self._atlases) >= 4:
+                raise ValueError("atlas reference capacity reached")
+            self._atlases[reference.map_id] = reference
+            self._revision += 1
+        return reference
 
     @property
     def revision(self):
@@ -357,6 +381,22 @@ class SpatialService:
         self.sync_world()
         now = self.clock_ns()
         with self._lock:
+            if query.kind in {"atlases", "viewpoints"}:
+                references = tuple(self._atlases.values())
+                if query.kind == "atlases":
+                    selected = tuple(item for item in references if query.entity_id in (None, item.map_id))
+                else:
+                    facts = tuple(self._qualified(entry, now) for entry in self._facts.values())
+                    selected = tuple(point for item in references for point in item.bound_places(facts)
+                                     if query.entity_id is None or query.entity_id == point.viewpoint_id
+                                     or query.entity_id == point.map_id or query.entity_id in point.place_ids)
+                if query.require_current:
+                    selected = ()
+                return SpatialQueryResult(self._revision, now, self.world.clock_epoch, query,
+                                          truncated=len(selected) > query.limit,
+                                          facts_evicted=self._facts_evicted,
+                                          atlas_references=selected[:query.limit] if query.kind == "atlases" else (),
+                                          viewpoints=selected[:query.limit] if query.kind == "viewpoints" else ())
             grouped, relations = {}, []
             for key in sorted(self._facts):
                 if query.entity_id is not None and key[0] != query.entity_id:
@@ -390,6 +430,7 @@ class SpatialService:
             result.update(active_context=context, fact_count=len(self._facts),
                           source_world_revision=self._source_revision,
                           retention=self._retention_status(),
+                          atlas_references=[item.to_jsonable() for item in self._atlases.values()],
                           motion_authority=False)
             return result
 
@@ -405,6 +446,9 @@ class SpatialService:
             return {"schema": SPATIAL_STATE_SCHEMA, "revision": self._revision,
                     "facts_evicted": self._facts_evicted,
                     "retention": self._retention_status(),
+                    "atlas_references": [{"reference": item.to_jsonable(),
+                                          "viewpoints": [point.to_jsonable() for point in item.viewpoints]}
+                                         for item in self._atlases.values()],
                     "facts": [self._entry_json(key, entry) for key, entry in self._facts.items()]}
 
     def restore(self, value):
@@ -415,6 +459,22 @@ class SpatialService:
                 or type(value.get("facts_evicted")) is not int or value["facts_evicted"] < 0):
             raise ValueError("invalid spatial state")
         facts, sizes, total = OrderedDict(), {}, 0
+        raw_atlases = value.get("atlas_references", [])
+        if not isinstance(raw_atlases, (list, tuple)) or len(raw_atlases) > 4:
+            raise ValueError("invalid saved atlas references")
+        atlases = OrderedDict()
+        for item in raw_atlases:
+            reference = AtlasReference.from_jsonable(item["reference"])
+            points = item.get("viewpoints", [])
+            if not isinstance(points, (list, tuple)) or len(points) > 64:
+                raise ValueError("invalid saved atlas viewpoints")
+            points = tuple(AtlasViewpoint.from_jsonable(point) for point in points)
+            if (reference.map_id in atlases or any(point.map_id != reference.map_id
+                    or point.map_revision != reference.revision or point.frame_id != reference.frame_id for point in points)
+                    or len({point.viewpoint_id for point in points}) != len(points)
+                    or len(points) != reference.indexed_viewpoint_count):
+                raise ValueError("invalid saved atlas viewpoint identity")
+            atlases[reference.map_id] = replace(reference, viewpoints=points, indexed_viewpoint_count=None)
         raw_retention = value.get("retention", {})
         if not isinstance(raw_retention, Mapping) or set(raw_retention) - set(self._retention_limits):
             raise ValueError("invalid saved spatial retention")
@@ -445,6 +505,7 @@ class SpatialService:
             facts[key], sizes[key] = entry, size
         with self._lock:
             self._facts, self._sizes, self._bytes = facts, sizes, total
+            self._atlases = atlases
             self._revision, self._facts_evicted = value["revision"], value["facts_evicted"]
             self._retention_evicted, self._retention_rejected = evicted, rejected
             self._source_revision, self._context = -1, None

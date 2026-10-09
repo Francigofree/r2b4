@@ -139,6 +139,20 @@ def test_gaps_drops_and_malformed_events_fail_capture_integrity(tmp_path):
     assert {"PUBLIC_RUNTIME_EVENT_SEQUENCE_GAP", "PUBLIC_RUNTIME_PRODUCER_LOSS",
             "PUBLIC_RUNTIME_EVENT_INVALID", "PUBLIC_RUNTIME_EVENT_PARTIAL"}.issubset(integrity["replay_integrity_reasons"])
     assert len(public_rows(output)) == 2
+    # Lossless compilation preserves failed capture integrity; a complete EVI
+    # extraction is not evidence that the original capture was complete.
+    from tools.mcap_evidence.compiler import compile_evidence
+    from tools.mcap_evidence.query import query
+    from tools.mcap_evidence.verify import verify
+
+    compiled = compile_evidence(output, tmp_path / "loss-evi", workers=1)
+    assert compiled["compiler_status"] == "COMPLETE"
+    assert verify(compiled["output"], source=output)["messages"] > 0
+    finalized = [row["payload"] for row in query(compiled["output"], topic=EVENT_TOPIC,
+                                                field="integrity.complete")
+                 if row["payload"].get("event_type") == "capture_finalized"]
+    assert len(finalized) == 1
+    assert finalized[0]["integrity"] == integrity
 
 
 def test_follower_keeps_reads_bounded_and_never_imports_historical_rows(tmp_path):
@@ -156,3 +170,139 @@ def test_follower_keeps_reads_bounded_and_never_imports_historical_rows(tmp_path
     batches = (first, *follower.finish())
     rows = [row for batch in batches for topic, row in batch if topic == PUBLIC_RUNTIME_EVENT_TOPIC]
     assert [row["event_sequence"] for row in rows] == list(range(101, 101 + evidence._EVENT_BATCH_COUNT * 2))
+
+
+def test_taught_person_brain_results_and_learning_survive_hub_journal_both_capture_paths_and_evi(tmp_path):
+    from r2b4_orchestration.outcome_learning import ATTRIBUTE, ENTITY, SOURCE
+    from r2b4_orchestration.robot_runtime import PublicRobotRuntime
+    from r2b4_orchestration.world_model import PublicWorldModel
+    from tools.mcap_evidence.compiler import compile_evidence
+    from tools.mcap_evidence.query import query
+    from tools.mcap_evidence.verify import verify
+    from v3.observation import ObservationHub
+
+    class Clock:
+        now = time.monotonic_ns()
+
+        def __call__(self):
+            return self.now
+
+    class Backend:
+        """Completed source snapshots only; positive physical calls fail."""
+        def __init__(self, clock):
+            self.owner = None
+            self.stops = 0
+            self.runtime = {"runtime_running": True, "runtime_pid": 123, "capture_mode": "nincs", "capture_hz": 10}
+            self.vision = {"running": True, "detector_running": True, "owner_generation": "camera-a",
+                           "owner_generation_started_ns": clock.now - 1_000_000_000,
+                           "owner_pid": 456, "last_error": None, "detector_last_error": None}
+            self.status = {"state": "RUNNING", "tick_id": 10, "monotonic_ns": clock.now,
+                           "estimate": {"localization_quality": {"generation": 1}},
+                           "world": {"frame_id": "R2B4_ODOM_LOCAL", "person_tracks": [{
+                               "track_id": "person-7", "x_m": 4.0, "y_m": 3.0, "confidence": .9,
+                               "measurement_monotonic_ns": clock.now,
+                               "prediction_valid_until_ns": clock.now + 500_000_000,
+                               "estimate_status": "OBSERVED"}]}}
+
+        def capabilities(self):
+            return {"capabilities": {"person.validate_target": {"supported": True, "available": True}}}
+
+        def read(self, resource):
+            return {"operator.status": self.runtime, "v3.status": self.status,
+                    "camera.status": self.vision}[resource]
+
+        def query(self, request):
+            return self.owner.world.query(request)
+
+        def execute(self, action, **parameters):
+            assert action == "person.validate_target", "capture test must never request positive motion"
+            return self.owner.execute(action, parameters)
+
+        def stop(self):
+            self.stops += 1
+
+    path = journal(tmp_path)
+    clock = Clock()
+    hub = ObservationHub()
+    subscription = hub.subscribe_reliable("executive-test", capacity=256,
+                                          topics={"r2b4.brain", "r2b4.observation", "r2b4.person_teaching"})
+    backend = Backend(clock)
+    owner = PublicRobotRuntime(backend, root=tmp_path, clock_ns=clock,
+                              world=PublicWorldModel(clock_ns=clock, clock_epoch="executive-test"),
+                              observation_hub=hub)
+    backend.owner = owner
+    sessions = [kind(name, tmp_path / (name + ".mcap"), configuration={}, project_root=tmp_path,
+                     config=McapCaptureConfig(mode="append_only", tick_sample_hz=10))
+                for kind, name in ((McapCaptureSession, "executive-direct"),
+                                   (ProcessMcapCaptureSession, "executive-process"))]
+    for session in sessions:
+        session.start()
+    try:
+        taught = owner.execute("person.teach", {"name": "Anna", "entity_id": "person:anna",
+                               "target_track_id": "person-7", "request_id": "explicit-human-teaching"})
+        assert taught["status"] == "TAUGHT" and taught["durability"] == "SAVED"
+        for attempt in range(3):
+            pending = owner.brain.submit("Keresd Annát.", request_id=f"search-{attempt}")
+            completed = owner.brain.adopt(pending["goal_id"], {"steps": [{
+                "action": "behavior.search_person", "parameters": {"entity_id": taught["entity_id"],
+                "require_bound_track": True}, "completion": "person_found"}],
+                "method_id": "person.named_search", "method_version": "1",
+                "learning_snapshot_id": "baseline-v1", "planning_world_revision": owner.world.revision})
+            assert completed["lifecycle"] == "COMPLETED", completed
+            owner.poll()
+        pending = owner.brain.submit("Keresd Bélát.", request_id="missing-person")
+        failed = owner.brain.adopt(pending["goal_id"], {"steps": [{"action": "behavior.search_person",
+            "parameters": {"entity_id": "person:bela", "require_bound_track": True},
+            "completion": "person_found"}], "method_id": "person.named_search", "method_version": "1",
+            "learning_snapshot_id": "baseline-v1", "planning_world_revision": owner.world.revision})
+        assert failed["lifecycle"] == "FAILED", failed
+        owner.poll()
+        learned = owner.world.read(ENTITY, ATTRIBUTE)
+        assert learned.value["methods"][0][2:4] == (3, 0)
+        assert learned.observation.source == SOURCE
+        owner._flush_evidence()
+        completed_tick = record()
+        for session in sessions:
+            session.observe(completed_tick)
+    finally:
+        outputs = [session.finalize(SimpleNamespace(status=0)) for session in sessions]
+    source_rows = [json.loads(line) for line in path.read_bytes().splitlines()]
+    captured = [[envelope["payload"] for _, envelope in public_rows(output)] for output in outputs]
+    assert captured[0] == captured[1] == source_rows
+    assert source_rows
+    teaching = next(row["value"] for row in source_rows if row["kind"] == "person_teaching")
+    assert teaching == taught
+    frames = subscription.drain()
+    subtask_events = [frame.payload for frame in frames if frame.topic == "r2b4.brain"
+                      and frame.payload.kind in {"SUBTASK_COMPLETED", "SUBTASK_FAILED"}]
+    assert [event.kind for event in subtask_events].count("SUBTASK_COMPLETED") == 3
+    assert [event.kind for event in subtask_events].count("SUBTASK_FAILED") == 1
+    assert subscription.snapshot().integrity_ok
+    terminal = [row["value"] for row in source_rows if row["kind"] == "brain"
+                and row["value"]["kind"] in {"SUBTASK_COMPLETED", "SUBTASK_FAILED"}]
+    assert terminal == [event.to_jsonable() for event in subtask_events]
+    assert all({"observation_sequence", "observation_generation", "motion_dispatched"}.issubset(event)
+               for event in terminal)
+    for output in outputs:
+        assert McapReader(output).capture_integrity()["integrity"]["complete"] is True
+        compiled = compile_evidence(output, output.with_suffix(".evi"), workers=1)
+        assert compiled["compiler_status"] == "COMPLETE"
+        assert verify(compiled["output"], source=output)["messages"] > 0
+        # Generic fields remain queryable without a new topic/schema adapter.
+        indexed = list(query(compiled["output"], topic=EVENT_TOPIC,
+                             field="payload.value.task_graph.learning_snapshot_id", limit=128))
+        recovered = [row["payload"]["payload"]["value"] for row in indexed
+                     if row["payload"]["payload"].get("kind") == "brain"
+                     and row["payload"]["payload"]["value"].get("kind") in {"SUBTASK_COMPLETED", "SUBTASK_FAILED"}]
+        assert recovered == terminal
+        learning = list(query(compiled["output"], topic=EVENT_TOPIC,
+                              field="payload.value.observation.value.methods.*", limit=128))
+        assert len(learning) == 4
+        latest = learning[-1]["payload"]["payload"]["value"]["observation"]
+        assert latest == learned.observation.to_jsonable()
+        assert latest["lineage"]["event_clock_epoch"] == "executive-test"
+        assert latest["lineage"]["learning_snapshot_id"] == "baseline-v1"
+        teaching_rows = list(query(compiled["output"], topic=EVENT_TOPIC,
+                                  field="payload.value.durability", limit=128))
+        assert [row["payload"]["payload"]["value"] for row in teaching_rows] == [teaching]
+    assert backend.stops > 0

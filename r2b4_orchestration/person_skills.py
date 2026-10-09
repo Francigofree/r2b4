@@ -49,7 +49,7 @@ class HostPersonSkill:
                 "entity_id": {"type": "string", "required": False},
                 "target_track_id": {"type": "string", "required": False},
                 "aliases": {"type": "array", "required": False, "maxItems": 8},
-                "request_id": {"type": "string", "required": False},
+                "request_id": {"type": "string", "required": True},
             },
         }
         result.update(method_id=self.method_id, method_version=self.version,

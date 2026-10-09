@@ -34,6 +34,7 @@ class CameraVisionOwner:
         self._lock = threading.RLock()
         self._demands: dict[str, bool] = {}
         self._camera = None
+        self._generation_started_ns: int | None = None
         self._detector = None
         self._idle_deadline: float | None = None
         self._last_error: str | None = None
@@ -56,9 +57,13 @@ class CameraVisionOwner:
             try:
                 camera = self._camera_factory()
                 self._camera = camera
+                # Host identity teaching must exclude measurements from an
+                # earlier owner. Record before start can publish its first frame.
+                self._generation_started_ns = time.monotonic_ns()
                 if not camera.start():
                     raise RuntimeError(camera.get_runtime_status().last_error or "VISION_CAMERA_FAILED")
             except BaseException as exc:
+                self._generation_started_ns = None
                 self._last_error = f"{type(exc).__name__}:{exc}"
                 if camera is not None:
                     try:
@@ -147,6 +152,7 @@ class CameraVisionOwner:
                     "detector_running": bool(detector_status and detector_status.running),
                     "consumers": len(self._demands), "manual_demand": "manual" in self._demands,
                     "owner_generation": self.generation, "last_error": error,
+                    "owner_generation_started_ns": self._generation_started_ns,
                     "detector_last_error": self._detector_error or (detector_status.last_error if detector_status else None),
                     "owner_pid": os.getpid()}
 
@@ -165,6 +171,7 @@ class CameraVisionOwner:
                     "detection_status": asdict(status), "owner_pid": os.getpid()}
 
     def _deactivate(self) -> None:
+        self._generation_started_ns = None
         error = None
         if self._detector is not None:
             try:

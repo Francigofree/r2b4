@@ -74,6 +74,8 @@ def _robot_catalog() -> list[dict[str, object]]:
 
 
 def command_catalog() -> dict[str, object]:
+    from r2b4_orchestration.person_skills import PERSON_SKILLS
+    from r2b4_orchestration.robot_runtime import READS, QUERIES, ACTIONS
     return {
         "launcher": "r",
         "robot": _robot_catalog(),
@@ -86,6 +88,10 @@ def command_catalog() -> dict[str, object]:
             "modes": ["quick", *FOCUSED, "full", "core", "feature", "deep"],
         },
         "evidence": {"command": "evi", "operations": ["compile", "verify", "query"]},
+        "public_robot": {
+            "resources": sorted(READS), "queries": sorted(QUERIES), "actions": sorted(ACTIONS),
+            "person_skills": [skill.to_jsonable() for skill in PERSON_SKILLS],
+        },
         "er2": {
             "commands": ["status", "preview", "stream"],
             "default_command": "stream",
@@ -197,6 +203,9 @@ def print_help() -> None:
         "  r help PARANCS             Célzott súgó; például: r help fp\n"
         "  r commands [--json]        Teljes parancslista és rövidítések\n"
         "  r caps                     Élő robotképességek\n"
+        "  r read brain.history --json Korrelált részfeladat- és céleredmények\n"
+        "  r read world.snapshot --json Tudás, binding, tanulás és megőrzési keretek\n"
+        "  r execute person.teach --parameters JSON --json Explicit név–track tanítás\n"
         "  r s --json                 Robotparancs JSON-eredménye; folyamatjelzés stderr-en"
     )
 

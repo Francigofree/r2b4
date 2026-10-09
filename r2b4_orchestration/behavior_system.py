@@ -295,13 +295,31 @@ class _ProgramPort:
         return result
 
     def execute(self, action: str, **parameters: object) -> object:
+        validation = action == "person.validate_target"
         if action not in {"v3.command.navigate", "v3.command.move_relative", "v3.command.turn_by",
                           "v3.command.explore", "v3.command.follow_person", "v3.command.face_person",
-                          "v3.command.stop", "vision.observe"}:
+                          "v3.command.stop", "vision.observe", "person.validate_target"}:
             raise ValueError("behavior requires a public robot navigation or observation action")
         robot = self._check()
+        evidence_parameters = parameters
+        if validation:
+            # This host action admits existing semantic evidence; it cannot
+            # teach a name or submit motion. Keep its event evidence scalar.
+            text_fields = {"target_entity_id", "binding_session_id", "vision_generation", "target_track_id"}
+            integer_fields = {"runtime_pid", "vision_owner_pid", "vision_generation_started_ns",
+                              "localization_generation"}
+            target = parameters.get("target")
+            if (set(parameters) != {"target"} or not isinstance(target, Mapping)
+                    or set(target) != text_fields | integer_fields):
+                raise ValueError("person validation requires a bounded source-specific target")
+            target = dict(target)
+            if (any(not isinstance(target[key], str) or not 0 < len(target[key]) <= 256 for key in text_fields)
+                    or any(type(target[key]) is not int or target[key] < 0 for key in integer_fields)):
+                raise ValueError("person validation target fields are invalid")
+            parameters = {"target": target}
+            evidence_parameters = {"target." + key: value for key, value in target.items()}
         evidence = {}
-        for key, value in parameters.items():
+        for key, value in evidence_parameters.items():
             if key in {"deadline", "cancel_event"}:
                 continue
             if not isinstance(key, str) or len(key) > 96:
@@ -323,6 +341,8 @@ class _ProgramPort:
         self._owner._emit(event)
         try:
             result = self._check().execute(action, **parameters)
+            if validation:
+                self._check()  # Revoked callbacks cannot consume a late validation result.
         except Exception as exc:
             with self._owner._lock:
                 completed = self._owner._record(

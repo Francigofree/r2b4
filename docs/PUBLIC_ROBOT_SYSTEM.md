@@ -62,6 +62,9 @@ világmodellből választ következő területet, és a publikus navigációt ha
 | `execute("brain.cancel", reason=...)` | Goal és felső intent visszavonása, canonical STOP |
 | `read("v3.status")` | Friss, élő V3 execution státusz; nem public world authority |
 | `execute("world.observe", ...)` | Explicit semantic observation, saját measurement/source/lineage |
+| `execute("person.teach", name=..., request_id=..., target_track_id=...)` | Emberi névtanítás friss, egyértelmű trackhez; a név tartós, a binding lejár |
+| `execute("spatial.load_atlas", path=...)` | Explicit, hash-ellenőrzött történeti térképreferencia betöltése; nincs aktuális alignment |
+| `execute("spatial.teach_place", entity_id=..., name=..., map_id=..., viewpoint_id=..., request_id=...)` | Emberi helynév és atlasz-viewpoint referenciájának tartós tanítása |
 | `execute("behavior.room_cruise", ...)` | Bounded host Room Cruise |
 | `execute("behavior.follow_person", ...)` | Bounded host Follow Person |
 | `execute("behavior.search_person", ...)` | Névhez/entitáshoz kötött, világmodellből dolgozó keresés |
@@ -233,6 +236,47 @@ runtime owner/process és command watchdog elvesztése a canonical fail-safe
 útra vezet. A pending HRI értelmezések cancel/timeout/close esetén lezáródnak;
 késő model proposal nem adhat új fizikai authorityt.
 
+## Tartós tudás és tanulási evidence
+
+A Public World ugyanazon fact/query API mögött külön bounded keretet tart a
+gyors állapotnak, a tanított tudásnak és a feladattapasztalatnak. A snapshot és
+query `retention` mezője mutatja a kapacitást, evictiont és visszautasítást.
+Tanításkor `durability=SAVED` sikeres atomi, fsyncelt mentést jelent;
+`MEMORY_ONLY` mellett az elfogadott memóriafrissítés nem ígér crash-tartósságot.
+A fájlmentés nem tartja a STOP-hoz szükséges intent-lockot.
+
+Az admission a legacy `steps` tervet is TaskGraph-fá alakítja. A
+`SUBTASK_COMPLETED` / `SUBTASK_FAILED` Brain-esemény a részfeladatot és az
+eredeti command/mission/behavior identityt az előrelépés előtt őrzi meg.
+A method/version, planning world revision és learning snapshot identity a
+graph része. Az experience összesítés a Brain saját eredményét fogyasztja,
+nem a capture/journal consumer visszajelzését. Kvalifikálatlan név szerinti
+találat, camera/identity-unavailability, NO_PATH, safety STOP és megszakítás
+nem negatív személy–hely minta. A tanult helyprior csak elegendő minősített
+mintával változtatja az implicit keresési sorrendet; explicit caller sorrend
+változatlan. A deduplication a látható bounded ledger/cursor horizontján belül
+érvényes. Sérült vagy eltérő methodverziójú összesítés alappriorra vált.
+
+Az observer/capture út a host journal új eseményeit a
+`v3.public_runtime_event` source topic alatt őrzi. Direct és process capture
+ugyanazt a payloadot viszi; EVI compilation megőrzi és indexeli a teljes
+eredeti értéket. A compilation sikeressége különbözik a capture integritytől
+és a robotfeladat sikerétől. Az 1/5/10 Hz compact capture nem exact replay.
+Fejlesztői ellenőrzés meglévő, explicit kiválasztott artifacttal:
+
+```bash
+./r read brain.history --json
+./r read world.snapshot --json
+./r evi CAPTURE.mcap --output /tmp/EGYEDI_EVIDENCE
+./r evi verify /tmp/EGYEDI_EVIDENCE --source CAPTURE.mcap
+./r evi query /tmp/EGYEDI_EVIDENCE --topic /r2b4/event --field '/payload/value/task_graph/method_id'
+```
+
+Az atlasz-import csak történeti geometriát és bounded viewpoint indexet tart;
+a teljes occupancy/NPZ külön asset marad. A régi artifact forrás-gauge hiányát
+explicit jelzi. Emberi helytanításból név–viewpoint kapcsolat készül, aktuális
+navigációs koordináta nem. A jelenidejű atlasz-alignment külön capability.
+
 ## Személykeresés és bizonyítási határ
 
 SearchPerson a `room_topology` domainben publikált, ismert helyek `location`
@@ -255,9 +299,17 @@ helyett a keresés host decision evidence-je áll rendelkezésre.
 
 A „megtaláltam” eredményhez a kért entitás friss, megfelelő confidence-ű,
 source/lineage-dzsel rendelkező `person_position/location` observationje kell.
-Kamerakép és név nélküli detector-track nem személyazonosítás. A jelenlegi
-detector nem tanulja meg automatikusan Laci arcát; a névhez kötött semantic
-observationhez külön azonosító producer vagy explicit külső observation kell.
+Kamerakép és név nélküli detector-track nem személyazonosítás. A detector nem
+tanulja meg automatikusan Laci arcát. A `person.teach` canonical host művelet
+explicit emberi tanítással hoz létre stabil személyt és aktuális név–track
+kapcsolatot. Kötelező az eredeti track measurement, a runtime/frame és
+localization generation, valamint a kamera-owner PID/generation és annak
+kezdési ideje. Több látható személy esetén explicit `target_track_id` kell;
+a beszélő személyazonosságát a rendszer nem feltételezi. Trackvesztés,
+kamerageneration-váltás, lejárat vagy restore után a név megmarad, a fizikai
+követéshez új társítás kell. A `require_bound_track` keresési paraméter a friss
+információs találat mellett igazolt követési célt is követel; a Brain ezt
+search→follow tervben automatikusan megköveteli.
 Keresési exhaustion, camera hiba, stale status és invalid navigation explicit
 FAILED/STOP. SearchAnyPerson friss anonim személytrackből adhat target
 identityt; név szerinti azonosságot továbbra sem bizonyít. A Brain ezt a

@@ -11,17 +11,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from .person_skills import skill_descriptor
-from .world_model import KnowledgeState, WorldQuery, _jsonable
+from .world_model import KnowledgeState, WorldQuery, _encoded_size, _jsonable
 
 SCHEMA = "R2B4_EXECUTIVE_LEARNING_V1"
 ENTITY = "experience:executive"
 ATTRIBUTE = "choice_statistics"
+SOURCE = "brain_outcome_learner"
 MAX_METHODS = 8
 MAX_PLACES = 12
 MAX_OUTCOMES = 32
 MAX_PRODUCERS = 8
 MIN_TRIALS = 3
 MIN_IMPROVEMENT = 0.10
+MAX_COUNTER = 2**63 - 1
+MAX_DURATION_NS = 3_600_000_000_000
+MAX_AGGREGATE_BYTES = 16_384
 
 
 def _empty():
@@ -30,11 +34,12 @@ def _empty():
 
 
 def _validated(value):
-    if not isinstance(value, Mapping) or value.get("schema") != SCHEMA:
+    if (not isinstance(value, Mapping) or value.get("schema") != SCHEMA
+            or set(value) != set(_empty())):
         raise ValueError("invalid learning schema")
     state = _jsonable(value)
     for field in ("revision", "dropped", "conflicts"):
-        if type(state.get(field)) is not int or not 0 <= state[field] <= 2**63 - 1:
+        if type(state.get(field)) is not int or not 0 <= state[field] <= MAX_COUNTER:
             raise ValueError("invalid learning counter")
     for field, bound, width in (("methods", MAX_METHODS, 5), ("places", MAX_PLACES, 5),
                                 ("outcomes", MAX_OUTCOMES, 2)):
@@ -44,22 +49,45 @@ def _validated(value):
         for row in rows:
             if not isinstance(row, list) or len(row) != width:
                 raise ValueError("invalid learning row")
-            strings = 2 if field != "places" else 3
-            if field == "outcomes":
-                strings = 2
-            if any(not isinstance(item, str) or not 0 < len(item) <= 256 for item in row[:strings]):
+            limits = (128, 32) if field == "methods" else (256, 256, 32) if field == "places" else (64, 64)
+            strings = len(limits)
+            if any(not isinstance(item, str) or not item.strip() or len(item) > limit
+                   for item, limit in zip(row[:strings], limits)):
                 raise ValueError("invalid learning identity")
-            if any(type(item) is not int or not 0 <= item <= 2**63 - 1 for item in row[strings:]):
+            if field == "outcomes" and any(len(item) != 64 or any(c not in "0123456789abcdef" for c in item)
+                                            for item in row):
+                raise ValueError("invalid learning outcome hash")
+            if any(type(item) is not int or not 0 <= item <= MAX_COUNTER for item in row[strings:]):
                 raise ValueError("invalid learning totals")
+            if field != "outcomes" and sum(row[strings:strings + 2]) > MAX_COUNTER:
+                raise ValueError("invalid learning trial count")
+            if field == "methods" and row[4] > MAX_DURATION_NS:
+                raise ValueError("invalid learning duration")
     cursors = state.get("cursors")
     if (not isinstance(cursors, dict) or len(cursors) > MAX_PRODUCERS
             or any(not isinstance(key, str) or not 0 < len(key) <= 256
-                   or type(sequence) is not int or sequence < 0 for key, sequence in cursors.items())):
+                   or type(sequence) is not int or not 0 <= sequence <= MAX_COUNTER
+                   for key, sequence in cursors.items())):
         raise ValueError("invalid learning cursor")
     if len({tuple(row[:2]) for row in state["methods"]}) != len(state["methods"]):
         raise ValueError("duplicate learning method")
     if len({tuple(row[:3]) for row in state["places"]}) != len(state["places"]):
         raise ValueError("duplicate learning place")
+    if len({row[0] for row in state["outcomes"]}) != len(state["outcomes"]):
+        raise ValueError("duplicate learning outcome")
+    if _encoded_size(state) > MAX_AGGREGATE_BYTES:
+        raise ValueError("learning aggregate exceeds semantic byte bound")
+    return state
+
+
+def _validated_fact(fact):
+    if (fact.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
+            or fact.conflicts or fact.observation is None
+            or fact.observation.domain != "task_experience" or fact.observation.source != SOURCE):
+        raise ValueError("unqualified learning fact")
+    state = _validated(fact.value)
+    if type(fact.observation.revision) is not int or fact.observation.revision != state["revision"]:
+        raise ValueError("learning source revision mismatch")
     return state
 
 
@@ -98,10 +126,7 @@ def read_learning_snapshot(interface) -> LearningSnapshot:
                                             domain="task_experience", limit=1))
         world_revision = result.revision
         fact = result.facts[0]
-        if (fact.state not in {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
-                or fact.observation.source != "brain_outcome_learner"):
-            raise ValueError("unqualified learning fact")
-        state = _validated(fact.value)
+        state = _validated_fact(fact)
         digest = hashlib.sha256(json.dumps(state, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:24]
         return LearningSnapshot(digest, state["revision"], tuple(map(tuple, state["methods"])),
                                 tuple(map(tuple, state["places"])), world_revision)
@@ -125,26 +150,36 @@ class OutcomeLearner:
         skill = skill_descriptor(node.action)
         if skill is None or not skill.requires_motion:
             return False
+        if graph.method_id == skill.method_id and graph.method_version != skill.version:
+            self.error = "LEARNING_METHOD_VERSION_MISMATCH"
+            return False
+        if (not isinstance(event.producer_id, str) or not event.producer_id.strip()
+                or len(event.producer_id) > 256 or type(event.sequence) is not int
+                or not 0 < event.sequence <= MAX_COUNTER):
+            self.error = "LEARNING_EVENT_INVALID"
+            return False
         fact = self.world.read(ENTITY, ATTRIBUTE)
         try:
-            state = _empty() if fact.observation is None else _validated(fact.value)
+            state = _empty() if fact.observation is None else _validated_fact(fact)
         except (TypeError, ValueError):
             self.error = "LEARNING_STATE_INVALID"
             return False
-        if event.sequence <= state["cursors"].get(event.producer_id, 0):
-            return False
         result = _jsonable(dict(goal.result))
-        qualified = (event.kind == "SUBTASK_COMPLETED" or
+        qualified = (event.kind == "SUBTASK_COMPLETED"
+                     and (node.action != "behavior.search_person" or result.get("observation_qualified") is True) or
                      event.kind == "SUBTASK_FAILED" and result.get("observation_qualified") is True
                      and goal.failure_code is not None and goal.failure_code.value == "TARGET_LOST")
         identity = hashlib.sha256(f"{goal.goal_id}:{goal.current_node_id}:{goal.attempt}".encode()).hexdigest()
         fingerprint = hashlib.sha256(json.dumps({"kind": event.kind, "result": result,
-            "failure": getattr(goal.failure_code, "value", None), "action": node.action},
+            "failure": getattr(goal.failure_code, "value", None), "action": node.action,
+            "method": [skill.method_id, skill.version]},
             sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         previous = next((row[1] for row in state["outcomes"] if row[0] == identity), None)
         if previous is not None:
             if previous != fingerprint:
                 self.error = "LEARNING_OUTCOME_CONFLICT"
+            return False
+        if event.sequence <= state["cursors"].get(event.producer_id, 0):
             return False
         if len(state["cursors"]) >= MAX_PRODUCERS and event.producer_id not in state["cursors"]:
             del state["cursors"][next(iter(state["cursors"]))]
@@ -162,7 +197,7 @@ class OutcomeLearner:
                 state["methods"].append(row)
             row[2 if success else 3] += 1
             started = goal.node_started_ns
-            duration = (max(0, min(3_600_000_000_000, event.measurement_time_ns - started))
+            duration = (max(0, min(MAX_DURATION_NS, event.measurement_time_ns - started))
                         if type(started) is int else 0)
             count = row[2] + row[3]
             row[4] += (duration - row[4]) // min(count, 16)
@@ -180,13 +215,28 @@ class OutcomeLearner:
                     state[field].pop(0)
                     state["dropped"] += 1
         state["revision"] += 1
+        try:
+            state = _validated(state)
+        except (TypeError, ValueError):
+            self.error = "LEARNING_UPDATE_INVALID"
+            return False
         # One fact update atomically commits counts and deduplication identity.
+        # This derived aggregate is measured now; the original outcome keeps
+        # its own measurement time/epoch in lineage rather than renewing it.
+        aggregate_time_ns = self.clock_ns()
         observed = self.world.observe(ENTITY, ATTRIBUTE, state, domain="task_experience",
-            measurement_time_ns=event.measurement_time_ns, observation_time_ns=self.clock_ns(),
-            confidence=1, source="brain_outcome_learner", revision=state["revision"],
-            lineage=(f"goal:{goal.goal_id}", f"subtask:{goal.subtask_id}",
-                     f"method:{skill.method_id}:{skill.version}", f"producer:{event.producer_id}",
-                     f"event:{event.sequence}", f"decision:{event.decision_id}"))
+            measurement_time_ns=aggregate_time_ns, observation_time_ns=aggregate_time_ns,
+            confidence=1, source=SOURCE, revision=state["revision"],
+            lineage={"goal_id": goal.goal_id, "subtask_id": goal.subtask_id,
+                     "attempt": goal.attempt, "method_id": skill.method_id, "method_version": skill.version,
+                     "producer_id": event.producer_id, "event_sequence": event.sequence,
+                     "event_measurement_time_ns": event.measurement_time_ns, "event_clock_epoch": event.clock_epoch,
+                     "decision_id": event.decision_id, "behavior_id": goal.behavior_id,
+                     "command_id": goal.command_id, "mission_id": goal.mission_id,
+                     "world_revision": event.world_revision, "graph_method_id": graph.method_id,
+                     "graph_method_version": graph.method_version,
+                     "learning_snapshot_id": graph.learning_snapshot_id,
+                     "planning_world_revision": graph.planning_world_revision})
         if not observed.accepted:
             self.error = "LEARNING_UPDATE_REJECTED:" + observed.reason
         return observed.accepted

@@ -651,6 +651,15 @@ class PublicWorldModel:
                                               observation.value == old.value and observation.confidence == old.confidence and
                                               observation.validity_scope == old.validity_scope):
                         accepted, reason = False, "DUPLICATE"
+                    elif (observation.domain == "task_experience"
+                          and observation.source == old.source == "brain_outcome_learner"
+                          and type(observation.revision) is int and type(old.revision) is int
+                          and observation.revision > old.revision and not prior_conflicts
+                          and observation.validity_scope == old.validity_scope):
+                        # Several authoritative outcomes may finish in one
+                        # host-clock sample. Their derived aggregate is ordered
+                        # by its source revision, not by invented sensor time.
+                        reason = "DERIVED_REVISION_UPDATE"
                     elif observation.value != old.value:
                         reason, conflicts = "SAME_TIME_CONFLICT", (old, *prior_conflicts)[:4]
                     else:

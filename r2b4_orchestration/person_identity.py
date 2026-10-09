@@ -19,7 +19,7 @@ from .world_model import KnowledgeState, PublicWorldModel, ValidityScope, WorldQ
 
 _FRAMES = {"R2B4_BOOT_ROBOT_MAP", "R2B4_ODOM_LOCAL"}
 _CURRENT = {KnowledgeState.KNOWN, KnowledgeState.LIKELY}
-_BINDING_FIELDS = ("binding_session_id", "vision_generation", "vision_owner_pid",
+_BINDING_FIELDS = ("binding_session_id", "vision_generation", "vision_owner_pid", "vision_generation_started_ns",
                    "localization_generation", "runtime_pid", "target_track_id")
 
 
@@ -73,8 +73,10 @@ def _context(runtime, status, vision_status, now):
             or vision_status.get("last_error") or vision_status.get("detector_last_error")):
         raise ValueError("PERSON_VISION_UNAVAILABLE")
     generation, owner_pid = vision_status.get("owner_generation"), vision_status.get("owner_pid")
+    generation_started = vision_status.get("owner_generation_started_ns")
     if (not isinstance(generation, str) or not 0 < len(generation) <= 256
-            or type(owner_pid) is not int or owner_pid <= 0):
+            or type(owner_pid) is not int or owner_pid <= 0
+            or type(generation_started) is not int or not 0 <= generation_started <= stamp):
         raise ValueError("PERSON_VISION_IDENTITY_UNAVAILABLE")
     local, estimate = status.get("world"), status.get("estimate")
     quality = estimate.get("localization_quality") if isinstance(estimate, Mapping) else None
@@ -85,10 +87,10 @@ def _context(runtime, status, vision_status, now):
     tracks = local.get("person_tracks", ())
     if not isinstance(tracks, (list, tuple)) or len(tracks) > 64:
         raise ValueError("PERSON_TRACKS_UNAVAILABLE")
-    return (pid, generation, owner_pid, local_generation, local["frame_id"]), stamp, tick, tracks
+    return (pid, generation, owner_pid, local_generation, local["frame_id"], generation_started), stamp, tick, tracks
 
 
-def _fresh_tracks(tracks, stamp, now, age_limit):
+def _fresh_tracks(tracks, stamp, now, age_limit, generation_started):
     visible = {}
     for track in tracks:
         if not isinstance(track, Mapping):
@@ -97,7 +99,7 @@ def _fresh_tracks(tracks, stamp, now, age_limit):
             "track_id", "measurement_monotonic_ns", "prediction_valid_until_ns", "confidence"))
         if (not isinstance(track_id, str) or not track_id.startswith("person-") or len(track_id) > 256
                 or track.get("estimate_status") != "OBSERVED"
-                or type(measured) is not int or not 0 <= measured <= stamp
+                or type(measured) is not int or not generation_started <= measured <= stamp
                 or type(until) is not int or not stamp <= now <= until
                 or now - measured > age_limit
                 or isinstance(confidence, bool) or not isinstance(confidence, (int, float))
@@ -115,7 +117,7 @@ def qualified_person_target(location, binding, *, runtime, status, vision_status
     """Return follow evidence only for a fresh, human-taught same-person binding."""
     try:
         context, stamp, _, tracks = _context(runtime, status, vision_status, now)
-        visible = _fresh_tracks(tracks, stamp, now, 3_000_000_000)
+        visible = _fresh_tracks(tracks, stamp, now, 3_000_000_000, context[5])
     except ValueError:
         return None
     if (location is None or binding is None or location.entity_id != binding.entity_id
@@ -129,9 +131,10 @@ def qualified_person_target(location, binding, *, runtime, status, vision_status
         return None
     track_id = value.get("target_track_id")
     track = visible.get(track_id)
-    pid, generation, owner_pid, local_generation, frame = context
+    pid, generation, owner_pid, local_generation, frame, generation_started = context
     if (track is None or value.get("runtime_pid") != pid or value.get("vision_generation") != generation
             or value.get("vision_owner_pid") != owner_pid or value.get("localization_generation") != local_generation
+            or value.get("vision_generation_started_ns") != generation_started
             or value.get("frame_id") != frame or not value.get("binding_session_id")
             or any(value.get(field) != association.get(field) for field in _BINDING_FIELDS)
             or type(association.get("expires_ns")) is not int or now > association["expires_ns"]
@@ -183,6 +186,8 @@ class PersonIdentity:
 
     @staticmethod
     def _remembered_teaching(fact, request):
+        if fact.observation is None or not isinstance(fact.value, Mapping) or "name" not in fact.value:
+            raise ValueError("PERSON_TEACHING_RECORD_UNAVAILABLE")
         return {"entity_id": fact.entity_id, "name": fact.value["name"],
                 "aliases": list(fact.value.get("aliases", ())), "request_id": request.request_id,
                 "identity_taught": True, "duplicate": True, "follow_target_available": False}
@@ -210,8 +215,9 @@ class PersonIdentity:
                 return self._remembered_teaching(fact, request)
         now = self.clock_ns()
         context, stamp, tick, tracks = _context(runtime, status, vision_status, now)
+        self.completed_status(status, runtime_pid=runtime["runtime_pid"], vision_status=vision_status)
         age = self.world.policies["person_position"].max_age_ns or 3_000_000_000
-        visible = _fresh_tracks(tracks, stamp, now, age)
+        visible = _fresh_tracks(tracks, stamp, now, age, context[5])
         selected = request.target_track_id
         if selected is None:
             if len(visible) != 1:
@@ -290,8 +296,9 @@ class PersonIdentity:
         return result
 
     def _publish(self, entity, binding, track, tick, now):
-        pid, generation, owner_pid, local_generation, frame = binding["context"]
+        pid, generation, owner_pid, local_generation, frame, generation_started = binding["context"]
         value = {"runtime_pid": pid, "vision_generation": generation, "vision_owner_pid": owner_pid,
+                 "vision_generation_started_ns": generation_started,
                  "localization_generation": local_generation, "frame_id": frame,
                  "binding_session_id": self.session_id, "target_track_id": binding["target_track_id"],
                  "expires_ns": binding["expires_ns"], "teaching_request_id": binding["request_id"],
@@ -300,7 +307,8 @@ class PersonIdentity:
                       confidence=track["confidence"], source="person_identity:HUMAN", sequence=tick,
                       validity_scope=ValidityScope(frame_id=frame, runtime_pid=pid),
                       lineage=(f"human:{binding['request_id']}", f"runtime:{pid}", f"vision:{generation}",
-                               f"vision_owner:{owner_pid}", f"localization_generation:{local_generation}",
+                               f"vision_owner:{owner_pid}", f"vision_started:{generation_started}",
+                               f"localization_generation:{local_generation}",
                                f"track:{binding['target_track_id']}", f"tick:{tick}", f"session:{self.session_id}"))
         for attribute, domain, payload in (
                 ("person_binding", "person_binding", {**value, "active": True}),
@@ -309,6 +317,32 @@ class PersonIdentity:
             if (not event.accepted and event.reason != "DUPLICATE"
                     or self.world.read(entity, attribute).conflicts):
                 raise ValueError("PERSON_BINDING_PUBLICATION_NOT_ACCEPTED:" + event.reason)
+        # A bounded retention pool may accept location while evicting the
+        # just-published binding. Both facts must still exist before returning
+        # usable physical evidence.
+        if not self._publication_current(entity, binding):
+            raise ValueError("PERSON_BINDING_PUBLICATION_NOT_ACCEPTED:INCOMPLETE")
+
+    def _publication_current(self, entity, binding):
+        pid, generation, owner_pid, local_generation, frame, generation_started = binding["context"]
+        scope = ValidityScope(frame_id=frame, runtime_pid=pid)
+        expected = {"binding_session_id": self.session_id, "vision_generation": generation,
+                    "vision_owner_pid": owner_pid, "vision_generation_started_ns": generation_started,
+                    "localization_generation": local_generation, "runtime_pid": pid,
+                    "target_track_id": binding["target_track_id"], "frame_id": frame,
+                    "expires_ns": binding["expires_ns"]}
+        for attribute, domain in (("person_binding", "person_binding"), ("location", "person_position")):
+            fact = self.world.read(entity, attribute)
+            observation, value = fact.observation, fact.value
+            if (observation is None or fact.domain != domain or fact.state not in _CURRENT
+                    or fact.freshness != "FRESH" or fact.conflicts or not isinstance(value, Mapping)
+                    or any(value.get(key) != item for key, item in expected.items())
+                    or observation.measurement_time_ns != binding["measured"]
+                    or observation.source != "person_identity:HUMAN" or not observation.lineage
+                    or observation.validity_scope != scope
+                    or attribute == "person_binding" and value.get("active") is not True):
+                return False
+        return True
 
     def _target(self, entity):
         value = self.world.read(entity, "person_binding").value
@@ -337,7 +371,7 @@ class PersonIdentity:
         try:
             context, stamp, tick, tracks = _context({"runtime_running": True, "runtime_pid": runtime_pid},
                                                    status, vision_status, now)
-            visible = _fresh_tracks(tracks, stamp, now, 3_000_000_000)
+            visible = _fresh_tracks(tracks, stamp, now, 3_000_000_000, context[5])
         except ValueError as exc:
             self.invalidate(str(exc))
             return
@@ -345,11 +379,17 @@ class PersonIdentity:
             track = visible.get(binding["target_track_id"])
             if (context != binding["context"] or track is None or now > binding["expires_ns"]
                     or tick < binding["last_tick"]
-                    or track["measurement_monotonic_ns"] < binding["measured"]):
+                    or track["measurement_monotonic_ns"] < binding["measured"]
+                    or not self._publication_current(entity, binding)):
                 self._invalidate_one(entity, "PERSON_BINDING_LOST_OR_CHANGED")
                 continue
             measured = track["measurement_monotonic_ns"]
             if measured == binding["measured"]:
+                if qualified_person_target(self.world.read(entity, "location"),
+                        self.world.read(entity, "person_binding"),
+                        runtime={"runtime_running": True, "runtime_pid": runtime_pid},
+                        status=status, vision_status=vision_status, now=now) is None:
+                    self._invalidate_one(entity, "PERSON_BINDING_PUBLICATION_LOST_OR_CHANGED")
                 continue
             binding.update(measured=measured, expires_ns=min(track["prediction_valid_until_ns"],
                            measured + 3_000_000_000), last_tick=tick)
@@ -369,12 +409,13 @@ class PersonIdentity:
         self.completed_status(status, runtime_pid=runtime.get("runtime_pid"), vision_status=vision_status)
         if entity not in self._bindings:
             raise ValueError("PERSON_TARGET_BINDING_LOST")
-        pid, _, _, _, frame = self._bindings[entity]["context"]
+        pid, _, _, _, frame, _ = self._bindings[entity]["context"]
         scope = ValidityScope(frame_id=frame, runtime_pid=pid)
         location = self.world.query(WorldQuery(entity_id=entity, attribute="location", scope=scope, limit=1)).facts
         binding = self.world.query(WorldQuery(entity_id=entity, attribute="person_binding", scope=scope, limit=1)).facts
         result = qualified_person_target(location[0] if location else None, binding[0] if binding else None,
             runtime=runtime, status=status, vision_status=vision_status, now=self.clock_ns())
         if result is None or any(target.get(field) != result[field] for field in _BINDING_FIELDS):
+            self._invalidate_one(entity, "PERSON_TARGET_BINDING_STALE")
             raise ValueError("PERSON_TARGET_BINDING_STALE")
         return result

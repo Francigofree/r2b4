@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a high-quality 2D global occupancy map from an R2B4 50 Hz MCAP.
 
-Designed source-first for R2B4 main at:
+Historical source-convention baseline (actual tool hash is exported per build):
   7a90206013d0723c1ad668231739eb19c3fc51ae
 
 Usage:
@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
+import scipy
 from scipy.optimize import least_squares
 from scipy.sparse import lil_matrix
 from scipy.spatial import cKDTree
@@ -47,6 +48,7 @@ from scipy.spatial import cKDTree
 EXPECTED_CAPTURE_HZ = 50
 RAW_TOPIC = "/r2b4/raw_lidar"
 TICK_TOPIC = "/r2b4/tick"
+RUNTIME_TOPIC = "/r2b4/runtime"
 R2B4_SOURCE_MAIN = "7a90206013d0723c1ad668231739eb19c3fc51ae"
 
 # Mapping defaults chosen for the stop-and-scan survey described in the design.
@@ -110,6 +112,10 @@ class PoseSample:
     observability: float
     local_translation: str
     heading: str
+    source_ticks: tuple[dict[str, object], ...] = ()
+    frame_id: str | None = None
+    clock_epoch: str | None = None
+    generation_recorded: bool = True
 
 
 @dataclass(frozen=True)
@@ -119,6 +125,8 @@ class RawScan:
     t_ns: int
     end_ns: int
     points: np.ndarray  # columns: angle_deg, distance_m, quality
+    sequence: int | None = None
+    clock_epoch: str | None = None
 
 
 @dataclass(frozen=True)
@@ -147,6 +155,11 @@ class Keyframe:
     local_sigma_m: float
     yaw_sigma_rad: float
     observability: float
+    source_ticks: tuple[dict[str, object], ...] = ()
+    source_scans: tuple[dict[str, object], ...] = ()
+    source_frame_id: str | None = None
+    source_clock_epoch: str | None = None
+    generation_recorded: bool = True
 
 
 @dataclass
@@ -197,6 +210,39 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: f.read(1024 * 1024), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def _json_sha256(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _build_identity(reader: Any) -> dict[str, object]:
+    """Record actual build inputs; never substitute the host's active config."""
+    runtime = next((row for _, row in reader.iter_json_messages(topics=(RUNTIME_TOPIC,))
+                    if isinstance(row, Mapping)), {})
+    configuration = _as_mapping(runtime.get("configuration"))
+    metadata = _as_mapping(runtime.get("metadata"))
+    options = {name: value for name, value in globals().items()
+               if name.isupper() and type(value) in (int, float)}
+    options["optimizer"] = {"loss": "huber", "f_scale": 1.0, "max_nfev": 500,
+                            "xtol": 1e-8, "ftol": 1e-8, "gtol": 1e-8}
+    return {
+        "tool": {"name": "mcap50-to-map.py", "sha256": _sha256(Path(__file__).resolve()),
+                 "numpy_version": np.__version__, "scipy_version": scipy.__version__},
+        "numeric_options": options,
+        "numeric_options_sha256": _json_sha256(options),
+        "capture_configuration_sha256": _json_sha256(configuration) if configuration else None,
+        "capture_configuration_snapshot_id": configuration.get("snapshot_id"),
+        "capture_runtime": metadata.get("runtime"),
+        "runtime_pid": metadata.get("runtime_pid"),
+        "session_id": metadata.get("session_id"),
+        "calibration": {"source_configuration_sha256": _json_sha256(configuration) if configuration else None,
+                        "extrinsic_identity": metadata.get("extrinsic_identity"),
+                        "lidar_to_base_convention": "R2B4_RAW_LIDAR_MIRRORED_Y_V1",
+                        "applied_transform": "x=d*cos(angle); y=-d*sin(angle)",
+                        "extrinsic_measurement_verified": False},
+    }
 
 
 def _angle(a: float) -> float:
@@ -260,7 +306,9 @@ def _quality_token(value: object) -> str:
 
 def _extract_pose_samples(reader: Any) -> list[PoseSample]:
     samples: list[PoseSample] = []
-    for _msg, payload in reader.iter_json_messages(topics=(TICK_TOPIC,)):
+    channel = getattr(reader, "channels_by_topic", {}).get(TICK_TOPIC)
+    clock_epoch = channel.metadata.get("clock_epoch") if channel else None
+    for msg, payload in reader.iter_json_messages(topics=(TICK_TOPIC,)):
         if not isinstance(payload, Mapping):
             continue
         expected = _as_mapping(payload.get("expected"))
@@ -294,6 +342,11 @@ def _extract_pose_samples(reader: Any) -> list[PoseSample]:
                 observability=float(quality.get("observability", 0.0)),
                 local_translation=_quality_token(quality.get("local_translation", "UNKNOWN")),
                 heading=_quality_token(quality.get("heading", "UNKNOWN")),
+                source_ticks=({"tick_id": payload.get("tick_id"),
+                               "sequence": msg.sequence, "reference_time_ns": t_ns},),
+                frame_id=local_pose.get("frame_id", l3.get("frame_id")),
+                clock_epoch=clock_epoch,
+                generation_recorded=type(quality.get("generation")) is int,
             )
         except (TypeError, ValueError, OverflowError):
             continue
@@ -306,7 +359,7 @@ def _extract_pose_samples(reader: Any) -> list[PoseSample]:
 
 def _extract_raw_scans(reader: Any) -> list[RawScan]:
     scans: list[RawScan] = []
-    for _msg, payload in reader.iter_json_messages(topics=(RAW_TOPIC,)):
+    for msg, payload in reader.iter_json_messages(topics=(RAW_TOPIC,)):
         if not isinstance(payload, Mapping):
             continue
         if payload.get("points_truncated") is True:
@@ -340,7 +393,9 @@ def _extract_raw_scans(reader: Any) -> list[RawScan]:
                 f"raw LiDAR source_count mismatch at revision {revision}: "
                 f"{source_count} != {len(raw)}"
             )
-        scans.append(RawScan(int(revision), int(start_ns), int(t_ns), int(end_ns), np.asarray(pts, dtype=float)))
+        channel = getattr(reader, "channels_by_topic", {}).get(RAW_TOPIC)
+        scans.append(RawScan(int(revision), int(start_ns), int(t_ns), int(end_ns), np.asarray(pts, dtype=float),
+                             msg.sequence, channel.metadata.get("clock_epoch") if channel else None))
     scans.sort(key=lambda s: (s.t_ns, s.revision))
     if not scans:
         raise MapBuildError("capture contains no usable /r2b4/raw_lidar scans")
@@ -354,7 +409,8 @@ def _interp_pose(samples: Sequence[PoseSample], times: Sequence[int], t_ns: int)
     if pos <= 0 or pos >= len(samples):
         return None
     a, b = samples[pos - 1], samples[pos]
-    if a.generation != b.generation or a.discontinuity or b.discontinuity:
+    if (a.generation != b.generation or a.discontinuity or b.discontinuity
+            or a.frame_id != b.frame_id or a.clock_epoch != b.clock_epoch):
         return None
     dt = b.t_ns - a.t_ns
     if dt <= 0 or dt > 100_000_000:  # c50 should be much tighter; reject large gaps.
@@ -377,6 +433,10 @@ def _interp_pose(samples: Sequence[PoseSample], times: Sequence[int], t_ns: int)
         observability=min(a.observability, b.observability),
         local_translation=a.local_translation if a.local_translation == b.local_translation else "DEGRADED",
         heading=a.heading if a.heading == b.heading else "DEGRADED",
+        source_ticks=a.source_ticks + b.source_ticks,
+        frame_id=a.frame_id,
+        clock_epoch=a.clock_epoch,
+        generation_recorded=a.generation_recorded and b.generation_recorded,
     )
 
 
@@ -476,6 +536,7 @@ def _fuse_window(
     sigmas: list[float] = []
     yaw_sigmas: list[float] = []
     observability: list[float] = []
+    source_scans: list[dict[str, object]] = []
     for scan_idx, scan in enumerate(inside):
         p = _interp_pose(poses, pose_times, scan.t_ns)
         if p is None or p.generation != window.generation or p.discontinuity:
@@ -502,6 +563,10 @@ def _fuse_window(
             else:
                 dst[0] += mx; dst[1] += my; dst[2] += 1.0; dst[3] += 1.0
         usable_scans += 1
+        source_scans.append({"revision": scan.revision, "sequence": scan.sequence,
+                             "measurement_time_ns": scan.t_ns, "start_time_ns": scan.start_ns,
+                             "end_time_ns": scan.end_ns, "clock_epoch": scan.clock_epoch,
+                             "pose_reference_ticks": list(p.source_ticks)})
         sigmas.append(p.local_sigma)
         yaw_sigmas.append(p.yaw_sigma)
         observability.append(p.observability)
@@ -535,6 +600,11 @@ def _fuse_window(
         local_sigma_m=float(np.median(sigmas)) if sigmas else 0.10,
         yaw_sigma_rad=float(np.median(yaw_sigmas)) if yaw_sigmas else 0.10,
         observability=float(np.median(observability)) if observability else 0.0,
+        source_ticks=ref.source_ticks,
+        source_scans=tuple(source_scans),
+        source_frame_id=ref.frame_id,
+        source_clock_epoch=ref.clock_epoch,
+        generation_recorded=ref.generation_recorded,
     )
 
 
@@ -945,6 +1015,7 @@ def _write_outputs(
         observed=np.asarray(occupancy["observed"]),
         optimized_poses=np.asarray(poses, dtype=float),
         seed_poses=np.asarray([_normalize_seed_poses(keyframes)[i] for i in range(len(keyframes))], dtype=float),
+        original_seed_poses=np.asarray([kf.seed_pose for kf in keyframes], dtype=float),
         origin=np.asarray(occupancy["origin"], dtype=float),
         resolution=np.asarray([occupancy["resolution"]], dtype=float),
     )
@@ -961,6 +1032,44 @@ def _write_outputs(
         json.dumps({"edges": [_jsonable_edge(e) for e in edges]}, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    normalized = _normalize_seed_poses(keyframes)
+    reference = {
+        "schema": "R2B4_ATLAS_REFERENCE_V1",
+        "revision": 1,
+        "input": report["input"],
+        "build": report["build_identity"],
+        "source_gauge": {
+            "kind": "FIRST_KEYFRAME_LOCAL_POSE",
+            "anchor_keyframe_index": keyframes[0].index,
+            "original_pose": list(keyframes[0].seed_pose),
+            "frame_id": keyframes[0].source_frame_id,
+            "clock_epoch": keyframes[0].source_clock_epoch,
+            "generation": keyframes[0].generation if keyframes[0].generation_recorded else None,
+            "measurement_time_ns": keyframes[0].ref_ns,
+            "pose_reference_ticks": list(keyframes[0].source_ticks),
+            "trajectory_relationship": "PER_KEYFRAME_OPTIMIZED_NONRIGID",
+        },
+        "assets": [{"name": name, "sha256": _sha256(outdir / name),
+                    "bytes": (outdir / name).stat().st_size}
+                   for name in ("map.pgm", "map.yaml", "map_data.npz", "keyframes.csv", "pose_graph.json")],
+        "keyframes": [{"index": kf.index, "measurement_time_ns": kf.ref_ns,
+                       "original_pose": list(kf.seed_pose), "normalized_seed_pose": list(seed),
+                       "optimized_pose": list(opt), "source_frame_id": kf.source_frame_id,
+                       "source_clock_epoch": kf.source_clock_epoch,
+                       "generation": kf.generation if kf.generation_recorded else None,
+                       "source_ticks": list(kf.source_ticks), "source_scans": list(kf.source_scans),
+                       "window_start_ns": kf.window_start_ns, "window_end_ns": kf.window_end_ns}
+                      for kf, seed, opt in zip(keyframes, normalized, poses)],
+        "motion_authority": False,
+        "current_alignment": None,
+    }
+    digest = _json_sha256(reference)
+    reference.update(map_id="atlas:" + digest, frame_id="R2B4_ATLAS:" + digest)
+    (outdir / "atlas_reference.json").write_text(json.dumps(reference, indent=2, sort_keys=True, allow_nan=False),
+                                                encoding="utf-8")
+    report["atlas_reference"] = {"name": "atlas_reference.json", "map_id": reference["map_id"],
+                                 "revision": 1, "frame_id": reference["frame_id"],
+                                 "motion_authority": False, "current_alignment": None}
     (outdir / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
 
 
@@ -1042,15 +1151,18 @@ def build(input_path: Path, output_dir: Path | None = None) -> Path:
     occupied_cells = int(np.count_nonzero((observed == 1) & (probability > OCCUPIED_PROB)))
     free_cells = int(np.count_nonzero((observed == 1) & (probability < FREE_PROB)))
     report: dict[str, object] = {
-        "schema": "R2B4_GLOBAL_MAP_BUILD_V1",
+        "schema": "R2B4_GLOBAL_MAP_BUILD_V2",
         "tool": "mcap50-to-map.py",
         "source_first_repo_main": R2B4_SOURCE_MAIN,
         "repo_root": str(root),
+        "build_identity": _build_identity(reader),
         "input": {
             "path": str(input_path),
             "sha256": _sha256(input_path),
             "bytes": input_path.stat().st_size,
             "capture_hz": hz,
+            "capture_id": meta.get("capture_id"),
+            "clock_epoch": meta.get("clock_epoch"),
             "captured_tick_count": final.get("captured_tick_count"),
             "captured_raw_lidar_count": final.get("captured_raw_lidar_count"),
             "raw_evidence_complete": integrity.get("raw_evidence_complete"),
@@ -1088,6 +1200,8 @@ def build(input_path: Path, output_dir: Path | None = None) -> Path:
             "raw LiDAR points do not yet carry per-point acquisition timestamps; this builder therefore uses stationary evidence for final occupancy",
             "persistent cross-session relocalization/topology/semantics are outside this tool",
             "LiDAR-to-base extrinsics are assumed identical to the current R2B4 production scan-matching convention",
+            "the first source keyframe fixes the seed gauge; graph optimization is not a single rigid transform of the source odometry trajectory",
+            "missing source runtime/session/calibration identity remains unknown; an imported atlas never establishes current alignment",
         ],
     }
     _write_outputs(output_dir, input_path, keyframes, optimized, edges, occupancy, report)

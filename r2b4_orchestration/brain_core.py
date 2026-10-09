@@ -150,6 +150,9 @@ class GoalSnapshot:
                 "world_target": _world_target_evidence(self.world_target),
                 "task_graph": None if self.task_graph is None else self.task_graph.to_jsonable(),
                 "current_node_id": self.current_node_id, "node_started_ns": self.node_started_ns,
+                "observation_sequence": self.observation_sequence,
+                "observation_generation": self.observation_generation,
+                "motion_dispatched": self.motion_dispatched,
                 "failure_code": None if self.failure_code is None else self.failure_code.value,
                 "origin": None if self.origin is None else self.origin.to_jsonable()}
 
@@ -297,6 +300,7 @@ class BrainCore:
         self._dispatch_event = threading.Event()
         self._dispatch_thread = None
         self._admissions_inflight = 0
+        self._teaching_interjection: tuple[str, int] | None = None
         self._advance_pending = False
         self._cancel_event = threading.Event()
         self._dispatch_thread = threading.Thread(target=self._dispatch_loop,
@@ -659,6 +663,37 @@ class BrainCore:
                 return self._change(goal_id, "PLAN_REJECTED", lifecycle=GoalLifecycle.FAILED,
                                     reason=str(exc), failure_code=FailureCode.CONTRACT_FAILURE).to_jsonable()
             current = self._goals.get(self._primary_id)
+            independent_teaching = (goal.source == "HUMAN" and len(graph.nodes) == 1
+                and graph.node(graph.entry).action == "person.teach"
+                and (self.behaviors.active or current is not None and current.lifecycle in _RUNNING
+                     and current.task_graph is not None and any(
+                         _requires_motion(node.action) for node in current.task_graph.nodes
+                         if node.kind is TaskNodeKind.ACTION)))
+            if independent_teaching:
+                if self._teaching_interjection is not None:
+                    return self._change(goal_id, "PLAN_REJECTED", lifecycle=GoalLifecycle.FAILED,
+                                        reason="PERSON_TEACHING_BUSY").to_jsonable()
+                generation = self._generation
+                self._teaching_interjection = (goal_id, generation)
+                self._change(goal_id, "PLAN_ADOPTED", lifecycle=GoalLifecycle.STARTING,
+                             constraints=constraints, reason="PLAN_VALIDATED", task_graph=graph,
+                             current_node_id=graph.entry, node_started_ns=self.clock_ns())
+        if not independent_teaching:
+            return self._adopt_primary(goal_id, graph, constraints, asynchronous)
+        if asynchronous:
+            self._wake_dispatcher()
+        else:
+            self._dispatch_teaching_interjection(goal_id, generation)
+        return self.goal(goal_id)
+
+    def _adopt_primary(self, goal_id, graph, constraints, asynchronous):
+        # Physical replacement retains its existing revocation and canonical
+        # STOP boundary; pending admission is checked again after plan parsing.
+        with self._lock:
+            goal = self._goals[goal_id]
+            if goal.lifecycle is not GoalLifecycle.PENDING:
+                raise RuntimeError("BRAIN_PROPOSAL_REVOKED")
+            current = self._goals.get(self._primary_id)
             if (current is not None and _PRIORITY[goal.source] == _PRIORITY[current.source]
                     and self._input_orders[goal_id] < self._input_orders[current.goal_id]):
                 return self._change(goal_id, "PROPOSAL_SUPERSEDED", lifecycle=GoalLifecycle.CANCELLED,
@@ -671,6 +706,11 @@ class BrainCore:
                              reason="PREEMPTED_BY:" + goal_id)
             self._generation += 1
             generation = self._generation
+            if self._teaching_interjection is not None:
+                teaching_id, _ = self._teaching_interjection
+                self._change(teaching_id, "GOAL_CANCELLED", lifecycle=GoalLifecycle.CANCELLED,
+                             reason="PREEMPTED_BY:" + goal_id)
+                self._teaching_interjection = None
             self._cancel_event.set()
             self._cancel_event = threading.Event()
             self._primary_id = goal_id
@@ -705,6 +745,50 @@ class BrainCore:
             self._dispatch(self._generation)
         return self.goal(goal_id)
 
+    def _dispatch_teaching_interjection(self, goal_id, generation):
+        """One human knowledge action alongside the unchanged physical owner."""
+        with self._lock:
+            goal = self._goals.get(goal_id)
+            if (self._teaching_interjection != (goal_id, generation) or generation != self._generation
+                    or goal is None or goal.lifecycle is not GoalLifecycle.STARTING):
+                return
+            node = goal.task_graph.node(goal.current_node_id)
+            goal = self._change(goal_id, "SUBTASK_DISPATCHED", lifecycle=GoalLifecycle.ACTIVE,
+                                reason="ACTION_STARTING")
+        try:
+            if self.clock_ns() - goal.node_started_ns >= node.timeout_s * 1_000_000_000:
+                raise ValueError("TIMEOUT:" + node.node_id)
+            capability = self.robot.capabilities().get("capabilities", {}).get("person.teach", {})
+            if capability.get("available") is not True:
+                raise ValueError("CAPABILITY_UNAVAILABLE:person.teach")
+            parameters = dict(node.parameters)
+            parameters.setdefault("source", "HUMAN")
+            parameters.setdefault("request_id", goal.subtask_id)
+            # Persistence can wait; neither Brain's STOP lock nor the physical
+            # action lock is held while the existing knowledge owner works.
+            result = self.robot.execute("person.teach", **parameters)
+            evidence = tuple(sorted(_parameters(result).items()))
+            with self._lock:
+                if (generation != self._generation or self._teaching_interjection != (goal_id, generation)
+                        or self._goals[goal_id].lifecycle is not GoalLifecycle.ACTIVE):
+                    self._change(goal_id, "ACTION_RESULT_AFTER_REVOCATION", result=evidence)
+                    return
+                self._change(goal_id, "ACTION_RESULT", result=evidence)
+                if (not isinstance(result, Mapping) or result.get("status") != "TAUGHT"
+                        or not isinstance(result.get("entity_id"), str) or not result.get("entity_id")):
+                    raise ValueError("PERSON_TEACHING_COMPLETION_UNPROVEN")
+                self._change(goal_id, "SUBTASK_COMPLETED", reason="PERSON_TAUGHT")
+                self._change(goal_id, "GOAL_COMPLETED", lifecycle=GoalLifecycle.COMPLETED,
+                             reason="PERSON_TAUGHT", failure_code=None)
+        except Exception as exc:
+            with self._lock:
+                if generation == self._generation and self._goals[goal_id].lifecycle in _RUNNING:
+                    self.fail(goal_id, f"{type(exc).__name__}:{exc}")
+        finally:
+            with self._lock:
+                if self._teaching_interjection == (goal_id, generation):
+                    self._teaching_interjection = None
+
     def _wake_dispatcher(self):
         self._dispatch_event.set()
 
@@ -720,10 +804,13 @@ class BrainCore:
             generation = behavior_id = None
             try:
                 with self._lock:
+                    teaching = self._teaching_interjection
                     generation = self._generation
                     goal = self._current(generation)
                     host_teaching = (goal is not None and goal.task_graph is not None
                                      and goal.task_graph.node(goal.current_node_id).action == "person.teach")
+                if teaching is not None:
+                    self._dispatch_teaching_interjection(*teaching)
                 if host_teaching:
                     self._dispatch(generation)
                     continue
@@ -1378,6 +1465,7 @@ class BrainCore:
         with self._lock:
             self._generation += 1
             self._cancel_event.set()
+            self._teaching_interjection = None
             for goal_id, goal in tuple(self._goals.items()):
                 if goal.lifecycle in _RUNNING:
                     self._change(goal_id, "GOAL_CANCELLED", lifecycle=GoalLifecycle.CANCELLED, reason=reason)

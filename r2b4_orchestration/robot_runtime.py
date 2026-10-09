@@ -43,7 +43,7 @@ QUERIES = frozenset({"world.query", "spatial.query"})
 ACTIONS = frozenset({"world.observe", "behavior.room_cruise", "behavior.follow_person",
                      "behavior.search_person", "behavior.search_any_person", "behavior.start", "behavior.cancel",
                      "brain.submit", "brain.adopt", "brain.fail", "brain.cancel", "person.teach",
-                     "person.validate_target"})
+                     "person.validate_target", "spatial.load_atlas", "spatial.teach_place"})
 
 
 def socket_path_for(root: Path) -> Path:
@@ -477,6 +477,21 @@ class PublicRobotRuntime:
         with self._state_lock:
             return self.spatial.query(query)
 
+    def _person_context(self):
+        """Read one stable source session without relabelling older evidence."""
+        vision_before = self.interface.read("camera.status")
+        runtime_before = self.interface.read("operator.status")
+        status = self.interface.read("v3.status")
+        vision = self.interface.read("camera.status")
+        runtime = self.interface.read("operator.status")
+        if (not all(isinstance(value, Mapping) for value in (vision_before, runtime_before, vision, runtime))
+                or runtime_before.get("runtime_pid") != runtime.get("runtime_pid")
+                or runtime_before.get("runtime_running") is not True or runtime.get("runtime_running") is not True
+                or any(vision_before.get(key) != vision.get(key) for key in (
+                    "owner_generation", "owner_pid", "owner_generation_started_ns"))):
+            raise ValueError("PERSON_SOURCE_SESSION_CHANGED")
+        return runtime, status, vision
+
     def preempt(self, reason: str) -> object:
         self.revoke(reason)
         try:
@@ -499,10 +514,50 @@ class PublicRobotRuntime:
 
     def execute(self, action: str, parameters: Mapping[str, object]) -> object:
         params = dict(parameters)
+        if action == "spatial.load_atlas":
+            if set(params) != {"path"} or not isinstance(params["path"], str) or not 0 < len(params["path"]) <= 4096:
+                raise ValueError("spatial.load_atlas requires an explicit metadata path")
+            reference = self.spatial.load_atlas_reference(params["path"])
+            saved = self._persist(force=True)
+            result = {"status": "LOADED", **reference.to_jsonable(),
+                      "durability": "SAVED" if saved else "MEMORY_ONLY"}
+            self._queue_evidence("atlas_reference_loaded", result)
+            return result
+        if action == "spatial.teach_place":
+            from .world_model import _text
+            if set(params) != {"entity_id", "name", "map_id", "viewpoint_id", "request_id"}:
+                raise ValueError("spatial.teach_place requires entity, name, map, viewpoint and human request")
+            params = {key: _text(value, key, 96 if key == "name" else 256) for key, value in params.items()}
+            viewpoints = self.spatial.query(SpatialQuery(kind="viewpoints", entity_id=params["map_id"], limit=64)).viewpoints
+            point = next((point for point in viewpoints if point.map_id == params["map_id"]
+                          and point.viewpoint_id == params["viewpoint_id"]), None)
+            if point is None:
+                raise ValueError("ATLAS_VIEWPOINT_UNAVAILABLE")
+            now = self.clock_ns()
+            with self._state_lock:
+                previous = self.world.read(params["entity_id"], "atlas_place")
+                value = {key: params[key] for key in ("name", "map_id", "viewpoint_id", "request_id")}
+                value.update(map_revision=point.map_revision, motion_authority=False, taught_by="HUMAN")
+                if isinstance(previous.value, Mapping) and previous.value.get("request_id") == params["request_id"]:
+                    if dict(previous.value) != value:
+                        raise ValueError("PLACE_TEACHING_REQUEST_CONFLICT")
+                    accepted = True
+                else:
+                    event = self.world.observe(params["entity_id"], "atlas_place", value,
+                        domain="room_topology", measurement_time_ns=now, confidence=1,
+                        source="place_teaching:HUMAN", lineage=(f"human:{params['request_id']}",
+                            f"atlas:{point.map_id}:{point.map_revision}", f"viewpoint:{point.viewpoint_id}"))
+                    accepted = event.accepted
+                if not accepted:
+                    raise ValueError("PLACE_TEACHING_REJECTED:" + event.reason)
+                self.spatial.sync_world()
+            saved = self._persist(force=True)
+            result = {"status": "TAUGHT", "entity_id": params["entity_id"], **value,
+                      "durability": "SAVED" if saved else "MEMORY_ONLY"}
+            self._queue_evidence("atlas_place_taught", result)
+            return result
         if action in {"person.teach", "person.validate_target"}:
-            runtime = self.interface.read("operator.status")
-            status = self.interface.read("v3.status")
-            vision = self.interface.read("camera.status")
+            runtime, status, vision = self._person_context()
             with self._state_lock:
                 if action == "person.validate_target":
                     if set(params) != {"target"} or not isinstance(params["target"], Mapping):
@@ -515,8 +570,11 @@ class PublicRobotRuntime:
                 result = self.person_identity.teach(request, runtime=runtime, status=status, vision_status=vision)
                 self.spatial.sync_world()
             saved = self._persist(force=True)
-            return {**result, "status": "TAUGHT", "durability": "SAVED" if saved else "MEMORY_ONLY",
-                    "storage_error": self._health_error if self.root is not None and not saved else None}
+            teaching_result = {**result, "status": "TAUGHT", "durability": "SAVED" if saved else "MEMORY_ONLY",
+                               "storage_error": self._health_error[:256] if self.root is not None
+                               and not saved and self._health_error else None}
+            self._queue_evidence("person_teaching", teaching_result)
+            return teaching_result
         if action.startswith("brain."):
             allowed = {"brain.submit": {"text", "source", "request_id"},
                        "brain.adopt": {"goal_id", "plan"},
@@ -593,6 +651,8 @@ class PublicRobotInterfaceAdapter:
         result = {name: {"kind": "read" if name in READS | QUERIES else "action", "supported": True,
                        "available": True, "ready": True, "owner": "host",
                        "reason": "V3_INDEPENDENT_PUBLIC_STATE" if name in READS | QUERIES or name == "world.observe"
+                       else "HOST_KNOWLEDGE_UPDATE" if name in {"person.teach", "person.validate_target",
+                                                               "spatial.load_atlas", "spatial.teach_place"}
                        else "CANONICAL_V3_EXECUTION",}
                 for name in self.capability_names}
         for name, item in result.items():

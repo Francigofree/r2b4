@@ -102,6 +102,10 @@ def _robot_completion(command: str, before: Sequence[str], current: str) -> tupl
         return "", []
 
     extra: list[str] = []
+    if canonical in {"read", "execute"} and not before:
+        from r2b4_orchestration.robot_runtime import READS, ACTIONS
+        from v3.action_catalog import ACTION_CATALOG
+        extra.extend(sorted(READS if canonical == "read" else ACTIONS | set(ACTION_CATALOG)))
     capture_commands = set(interface_cli.MOTION_COMMANDS) | {"runtime", "capture", "proba"}
     if canonical in capture_commands:
         if before and before[-1] in {"c", "--capture"}:

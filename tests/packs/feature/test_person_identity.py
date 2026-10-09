@@ -18,13 +18,14 @@ class Clock:
         return self.now
 
 
-def setup_identity():
+def setup_identity(**world_options):
     clock = Clock()
-    world = PublicWorldModel(clock_ns=clock, clock_epoch="teaching-boot")
+    world = PublicWorldModel(clock_ns=clock, clock_epoch="teaching-boot", **world_options)
     identity = PersonIdentity(world, clock_ns=clock)
     projector = SemanticProjector(world, clock_ns=clock, person_identity=identity)
     runtime = {"runtime_running": True, "runtime_pid": 123, "capture_mode": "full", "capture_hz": 10}
     vision = {"running": True, "detector_running": True, "owner_generation": "camera-a",
+              "owner_generation_started_ns": clock.now - 1_000_000_000,
               "owner_pid": 456, "last_error": None, "detector_last_error": None}
     status = {"state": "RUNNING", "tick_id": 10, "monotonic_ns": clock.now,
               "estimate": {"localization_quality": {"generation": 1}},
@@ -106,7 +107,8 @@ def test_multiple_people_need_explicit_track_selection_and_cannot_share_one_bind
     assert identity.resolve("Bela") is None
 
 
-@pytest.mark.parametrize("change", ["old_status", "old_track", "predicted", "no_generation", "camera_failed", "no_local_generation"])
+@pytest.mark.parametrize("change", ["old_status", "old_track", "predicted", "no_generation", "camera_failed", "no_local_generation",
+                                    "no_generation_start", "future_generation_start", "preceding_owner_measurement"])
 def test_unqualified_context_cannot_teach_name_or_binding(change):
     clock, world, identity, _, runtime, status, vision = setup_identity()
     if change == "old_status":
@@ -119,6 +121,12 @@ def test_unqualified_context_cannot_teach_name_or_binding(change):
         vision.pop("owner_generation")
     elif change == "camera_failed":
         vision["last_error"] = "camera failed"
+    elif change == "no_generation_start":
+        vision.pop("owner_generation_started_ns")
+    elif change == "future_generation_start":
+        vision["owner_generation_started_ns"] = clock.now + 1
+    elif change == "preceding_owner_measurement":
+        status["world"]["person_tracks"][0]["measurement_monotonic_ns"] = vision["owner_generation_started_ns"] - 1
     else:
         status["estimate"]["localization_quality"].pop("generation")
     with pytest.raises(ValueError):
@@ -144,7 +152,8 @@ def test_same_status_poll_cannot_refresh_original_measurement_or_extend_expiry()
     assert updated["expires_ns"] > original.value["expires_ns"]
 
 
-@pytest.mark.parametrize("change", ["track_lost", "vision_generation", "vision_owner", "local_generation", "runtime", "vision_unavailable", "expiry"])
+@pytest.mark.parametrize("change", ["track_lost", "vision_generation", "vision_owner", "local_generation", "runtime", "vision_unavailable", "expiry",
+                                    "generation_start_changed", "generation_start_missing"])
 def test_lost_source_identity_never_automatically_reacquires_same_numbered_track(change):
     clock, world, identity, projector, runtime, status, vision = setup_identity()
     taught = teach(identity, runtime, status, vision)
@@ -161,6 +170,10 @@ def test_lost_source_identity_never_automatically_reacquires_same_numbered_track
         runtime["runtime_pid"] = 124
     elif change == "vision_unavailable":
         vision["detector_running"] = False
+    elif change == "generation_start_changed":
+        vision["owner_generation_started_ns"] += 1
+    elif change == "generation_start_missing":
+        vision.pop("owner_generation_started_ns")
     else:
         clock.now += 600_000_000
         status["monotonic_ns"] = clock.now
@@ -253,3 +266,102 @@ def test_rejected_named_location_publication_never_returns_usable_follow_binding
     entity = identity.resolve("Anna")
     assert entity is not None  # The explicit durable name is still truthful.
     assert world.read(entity, "person_binding").value["active"] is False
+
+
+def retention_limits(transient_facts):
+    return {"transient": {"max_facts": transient_facts, "max_bytes": 48 * 1024},
+            "knowledge": {"max_facts": 96, "max_bytes": 112 * 1024},
+            "experience": {"max_facts": 32, "max_bytes": 32 * 1024}}
+
+
+def test_retention_cannot_accept_a_location_by_evicting_its_required_binding():
+    _, world, identity, _, runtime, status, vision = setup_identity(retention_limits=retention_limits(1))
+    with pytest.raises(ValueError, match="PUBLICATION_NOT_ACCEPTED:INCOMPLETE"):
+        teach(identity, runtime, status, vision)
+    assert identity.has_bindings is False
+    entity = identity.resolve("Anna")
+    assert entity is not None and world.read(entity, "person_binding").observation is None
+    _, result = search(Clock(), world, runtime, status, vision, entity, require_bound_track=True)
+    assert result.lifecycle is BehaviorLifecycle.FAILED
+
+
+@pytest.mark.parametrize("lost_fact", ["person_binding", "location"])
+@pytest.mark.parametrize("new_measurement", [False, True])
+def test_evicted_live_fact_invalidates_binding_without_automatic_republication(lost_fact, new_measurement):
+    clock, world, identity, projector, runtime, status, vision = setup_identity(retention_limits=retention_limits(3))
+    taught = teach(identity, runtime, status, vision)
+    for index in range(2 if lost_fact == "person_binding" else 3):
+        world.observe(f"health:{index}", "state", "OK", domain="health", measurement_time_ns=clock.now,
+                      confidence=1.0, source="test-pressure")
+    assert world.read(taught["entity_id"], lost_fact).observation is None
+    if new_measurement:
+        clock.now += 100_000_000
+        status.update(monotonic_ns=clock.now, tick_id=11)
+        status["world"]["person_tracks"] = [track(clock)]
+    projector.completed_status(status, runtime_pid=123, vision_status=vision)
+    assert identity.has_bindings is False
+    duplicate = teach(identity, runtime, status, vision)
+    assert duplicate["follow_target_available"] is False and "target_track_id" not in duplicate
+    clock.now += 100_000_000
+    status.update(monotonic_ns=clock.now, tick_id=12)
+    status["world"]["person_tracks"] = [track(clock)]
+    projector.completed_status(status, runtime_pid=123, vision_status=vision)
+    assert identity.has_bindings is False and identity.resolve("Anna") == taught["entity_id"]
+
+
+def test_named_search_asks_identity_owner_to_admit_completed_source_before_host_poll():
+    clock, world, identity, _, runtime, status, vision = setup_identity()
+    taught = teach(identity, runtime, status, vision)
+    clock.now += 100_000_000
+    status.update(monotonic_ns=clock.now, tick_id=11)
+    status["world"]["person_tracks"] = [track(clock)]
+
+    class Robot(SearchRobot):
+        def capabilities(self):
+            return {"capabilities": {"person.validate_target": {"supported": True}}}
+
+        def execute(self, action, **parameters):
+            self.actions.append((action, parameters))
+            assert action == "person.validate_target"
+            result = identity.validate_target(parameters["target"], runtime=runtime, status=status, vision_status=vision)
+            return {"status": "VALIDATED", "target": result}
+
+    robot = Robot(clock, world, runtime, status, vision)
+    system = BehaviorSystem(robot, clock_ns=clock)
+    system.register("search_person", SearchPerson)
+    result = system.start("search_person", {"entity_id": taught["entity_id"], "require_bound_track": True})
+    assert result.lifecycle is BehaviorLifecycle.COMPLETED, result.reason
+    assert dict(result.result)["measurement_time_ns"] == clock.now
+    assert dict(result.result)["bound_track"] is True
+    assert [action for action, _ in robot.actions] == ["person.validate_target"]
+
+
+@pytest.mark.parametrize("validator_state", ["unsupported", "unavailable", "not_ready", "missing", "invalid_reply", "revoked"])
+def test_named_search_does_not_bypass_validator_failure_or_use_a_revoked_result(validator_state):
+    clock, world, identity, _, runtime, status, vision = setup_identity()
+    taught = teach(identity, runtime, status, vision)
+
+    class Robot(SearchRobot):
+        def capabilities(self):
+            capability = {"supported": True, "available": True, "ready": True}
+            for state, field in (("unsupported", "supported"), ("unavailable", "available"), ("not_ready", "ready")):
+                if validator_state == state:
+                    capability[field] = False
+            return {"capabilities": {} if validator_state == "missing" else {"person.validate_target": capability}}
+
+        def execute(self, action, **parameters):
+            self.actions.append((action, parameters))
+            assert action == "person.validate_target"
+            if validator_state == "revoked":
+                system.revoke("STOP_DURING_VALIDATION")
+                return {"status": "VALIDATED", "target": taught}
+            assert validator_state == "invalid_reply"
+            return {"status": "VALIDATED", "target": {}}
+
+    robot = Robot(clock, world, runtime, status, vision)
+    system = BehaviorSystem(robot, clock_ns=clock)
+    system.register("search_person", SearchPerson)
+    result = system.start("search_person", {"entity_id": taught["entity_id"], "require_bound_track": True})
+    assert result.lifecycle is (BehaviorLifecycle.CANCELLED if validator_state == "revoked" else BehaviorLifecycle.FAILED)
+    assert not dict(result.result).get("follow_target_available")
+    assert [action for action, _ in robot.actions] == (["person.validate_target"] if validator_state in {"revoked", "invalid_reply"} else [])
