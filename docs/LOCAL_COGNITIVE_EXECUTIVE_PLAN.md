@@ -2,7 +2,7 @@
 
 Dátum: 2026-10-08. Állapot: source-alapú terv, nem implementációs vagy hardveres készre jelentés.
 
-**Következő fő fejlesztési cél — 2026-10-10:** [Nyitott Skill/Interface és dinamikus LCE–LLM viselkedésszintézis](LCE_LLM_COOPERATION_PLAN.md). A folytatás egységes, bővíthető robotfelületet, új feltételes/ciklikus viselkedési programok alkotását és javítását, valamint tartós, LLM nélkül végrehajtható skill-könyvtárat tervez. A jelen dokumentum korábbi, kezdetben adat- és választásmódosításra korlátozott tanulási fázisát ez az új fejlesztési cél bővíti; az eredeti baseline-t a 13. fejezet és az új source-alapú résfeltárás pontosítja.
+**Következő fő fejlesztési cél — 2026-10-10:** [Nyitott Skill/Interface és dinamikus LCE–LLM viselkedésszintézis](LCE_LLM_COOPERATION_PLAN.md). A folytatás egységes, bővíthető robotfelületet, szabványos Python-skilleket, könnyű különfolyamatos futtatót és a szóban/Codexszel közösen szerkesztett `.py` skillkönyvtárat tervez, későbbi önálló, LLM nélküli végrehajtással. A jelen dokumentum korábbi, kezdetben adat- és választásmódosításra korlátozott tanulási fázisát ez az új fejlesztési cél bővíti; az eredeti baseline-t a 13. fejezet és az új source-alapú résfeltárás pontosítja.
 
 A terv a meglévő V3 és felső host rendszer továbbfejlesztése. Első felhasználói prioritás: **személykeresés, követés és emberi interakció**. Térbeli kiindulópont: `tools/mcap50-to-map.py`. A Room Cruise és Follow Person felső szintre emelését a terv megvizsgálja és konkrét felelősségekre bontja.
 
