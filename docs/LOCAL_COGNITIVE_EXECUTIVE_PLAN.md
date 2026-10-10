@@ -2,9 +2,11 @@
 
 Dátum: 2026-10-08. Állapot: source-alapú terv, nem implementációs vagy hardveres készre jelentés.
 
+**Következő fő fejlesztési cél — 2026-10-10:** [Nyitott Skill/Interface és dinamikus LCE–LLM viselkedésszintézis](LCE_LLM_COOPERATION_PLAN.md). A folytatás egységes, bővíthető robotfelületet, új feltételes/ciklikus viselkedési programok alkotását és javítását, valamint tartós, LLM nélkül végrehajtható skill-könyvtárat tervez. A jelen dokumentum korábbi, kezdetben adat- és választásmódosításra korlátozott tanulási fázisát ez az új fejlesztési cél bővíti; az eredeti baseline-t a 13. fejezet és az új source-alapú résfeltárás pontosítja.
+
 A terv a meglévő V3 és felső host rendszer továbbfejlesztése. Első felhasználói prioritás: **személykeresés, követés és emberi interakció**. Térbeli kiindulópont: `tools/mcap50-to-map.py`. A Room Cruise és Follow Person felső szintre emelését a terv megvizsgálja és konkrét felelősségekre bontja.
 
-Az authority továbbra is a [rendszerszintű működési contract](../R2B4_SYSTEM_BEHAVIOR_CONTRACT.md), a [production struktúra](../STRUKTURALIS_RETEGEK_V3.md) és az [async runtime contract](../ASZINKRON_RUNTIME_CONTRACT_V3.md). Ez a dokumentum megvalósítási terv; nem negyedik contract, és nem írja át az authoritykat. A korábbi [felső logikai terv](top-logic-refaktor-plan.md) hasznos előzmény, készültségi állításait azonban csak a jelenlegi source alapján vettem át.
+Az authority továbbra is a [rendszerszintű működési contract](../R2B4_SYSTEM_BEHAVIOR_CONTRACT.md), a [production struktúra](../STRUKTURALIS_RETEGEK_V3.md) és az [async runtime contract](../ASZINKRON_RUNTIME_CONTRACT_V3.md). Ez a dokumentum megvalósítási terv; nem negyedik contract, és nem írja át az authoritykat. A korábban hivatkozott `top-logic-refaktor-plan.md` történeti előzmény, a jelenlegi working tree-ben nem érhető el; készültségi állítás csak a source ellenőrzéséből vehető át.
 
 ## 1. Architekturális döntés
 
@@ -25,7 +27,7 @@ Az alábbi „bekötött” minősítés production source-ból következik. Nem
 | Terület | Meglévő állapot és source | Lezárandó rés |
 | --- | --- | --- |
 | Host composition | `robot_runtime.py:PublicRobotRuntime`, `serve`: egy Public World, Spatial Service, BehaviorSystem és BrainCore; külön host dispatcher | Az új képességeket ebbe kell bekötni; új semantic owner nem szükséges |
-| Brain | `brain_core.py:BrainCore`: bounded goalok, prioritás, admission, generation-alapú cancellation, korrelált végrehajtás | Legacy `steps` és TaskGraph párhuzamos belső reprezentáció; runtime replan és tanuló választás nincs lezárva |
+| Brain | `brain_core.py:BrainCore`: bounded goalok, prioritás, admission, generation-alapú cancellation, korrelált végrehajtás | Eredeti baseline: graph-egységesítés, runtime replan és tanuló választás. A graph-egységesítés és az első tanuló választás azóta elkészült (13. fejezet); futó goal replanje az új együttműködési terv feladata |
 | TaskGraph | `task_graph.py`: bounded DAG, action/world-wait/branch/report, deadline, failure és retry feltételek | Egységes végrehajtási reprezentáció, explicit személy- és tanítási feltételek, ellenőrzött eredményhatások |
 | Lokális planner | `local_task_planner.py:LocalTaskPlanner.resolve`, `_step`: deklarált HU/EN minták, konkrét összetett methodok, specialistafallback | A methodok jelentős része kódban hardcoded; nincs outcome-alapú methodrangsor |
 | LLM/Agent | `conversation_service.py:_process`, `_specialist_decision`; `agent_core.py:AgentCore.run` | On-demand értelmezés/proposal bekötött; folyamatban lévő goalhoz kötött, bounded replan-kérés még külön fejlesztés |
