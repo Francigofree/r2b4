@@ -290,12 +290,12 @@ Encoder acquisition-idő és friss snapshot nem igazol lezárt fizikai pulse-pre
 
 A L4 `WorldSnapshot` a V3 lokális operational worldje, nem a Public World
 Model. A felső szemantikai világmodell, tartós személy-/helymemória és behavior
-orchestration a `R2B4_SYSTEM_BEHAVIOR_CONTRACT.md` szerinti host felelősség.
+orchestration külön host felelősség.
 Completed observationt fogyasztanak, canonical intentet kérhetnek; V3 nem
 importálja őket, nem vár rájuk és safety/control működése nem függ tőlük.
 
 A Spatial Service / persistent Global Spatial Model RobotInterface-en
-elérhető külön host subsystem a rendszerszintű behavior contract szerint.
+elérhető külön host subsystem.
 Nem kerül V3-ba vagy a Local Task Plannerbe. A meglévő completed L3/L4
 eredmény és Public World evidence származtatott, tartós térbeli indexe;
 nincs saját szenzor-, SLAM-, lokális world-, navigation- vagy motion-authorityja.
@@ -307,6 +307,25 @@ A V3 bemenete canonical command/mission intent, kért constraint és opcionális
 A V3 a lezárt inputból és saját owned state-ből bounded, determinisztikus mozgást vagy explicit HOLD/STOP/FAULT eredményt ad. A fizikai realizálhatóságot, lokalizációs és gyorsulási korlátokat, final safetyt és motor-realizációt a canonical L0–L12 lánc érvényesíti; a completed eredmény és lineage passzív evidence-ként megfigyelhető. Nem garantálhat pozitív mozgást vagy a behavior cél teljesülését elégtelen evidence vagy fizikailag lehetetlen kérés esetén.
 
 A robot személyisége, autonóm szándéka, RoomCruise karaktere, social policyja és hosszú távú feladatválasztása a V3 feletti robot/behavior réteg felelőssége. A RoomCruise envelope és EXPLORE célpreferenciák host-oldali profilként jutnak a canonical command útra. L6 továbbra is birtokolja a coverage/progress state-et, a lokális cél lifecycle-ját, a costmap-, footprint-, rollout-, recovery- és feasibility-döntéseket. A több mission által használt trajectory scorer execution-policy; nem válik automatikusan RoomCruise behavior-policyvá.
+
+A BrainCore a felső célgazda. TaskGraph mellett helyi Python-skill-hivatkozást
+is felügyelhet. A kognitív kliensek ugyanazon teljes RobotInterface-en
+használhatják az owning képességeket és fejlesztői eszközöket; közönséges `.py`
+skilleket hozhatnak létre, módosíthatnak, menthetnek és futtathatnak, külön
+runtime/developer aktiválási hierarchia nélkül. A megbízható, szabványos Python
+külön interpreterben fut; ez meghibásodási/GIL-izoláció, nem sandbox.
+A könyvtár discoveryja nem importál skillkódot a hostba vagy a controlba.
+Egy futás az induláskor betöltött forrásváltozatot használja, és LLM nélkül
+folytatódik; módosítás csak új indításkor töltődik be. Restart nem folytat
+automatikusan korábbi aktív célt vagy fizikai műveletet. A program visszatérése
+és az emberi cél igazolt teljesülése külön eredmény.
+
+Egyszerre egy fizikai mission lehet. A skill SDK-ja kizárólag canonical
+RobotInterface/CommandGateway műveleteket kérhet; nem kap belső V3-, motor-
+vagy GPIO-handle-t. STOP vagy workerhiba után a host visszavonja a futás
+műveletindítását, megállítja saját canonical intentjét és elengedi saját
+observer/media demandjeit. Késői kérés nem éleszthet vissza revokált futást,
+és workerhiba nem jelent automatikus mozgás-újrapróbálást.
 
 „V3 CLOSED” feltétele: azonos szemantikai fogalomnak egy konfigurációs tulajdonosa van; a fizikai minimumok származtatottak; ingress acceptance, mission cap, operational limit és safety külön authority marad; a CLI és a tuner a feloldott konfigurációt fogyasztja; a diagnosztika az inaktív vagy nem realizálható tartományokat feltárja. Strukturális lezárásnál azonos input és fizikai konfiguráció mellett azonos execution eredmény szükséges. A későbbi behavior tuning külön változtatás, külön validációval.
 

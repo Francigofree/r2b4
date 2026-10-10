@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Protocol
 
-from r2b4_orchestration.brain_hri import resolve_brain_request
+from r2b4_orchestration.brain_hri import resolve_brain_request, skill_cooperation_context, _goal_snapshot
 from r2b4_orchestration.local_task_planner import LocalResolution
 
 from .action_validation import RobotActionValidator
@@ -50,6 +50,7 @@ class AgentPort(Protocol):
         event_sink: Callable[[str, Mapping[str, object]], None] | None = None,
         cancel_event: threading.Event | None = None,
         deadline: float | None = None,
+        request_guard: Callable[[], None] | None = None,
     ) -> LLMDecision: ...
 
 
@@ -353,7 +354,11 @@ class ConversationService:
             elif decision.goal_plan is not None:
                 action_status = "PLAN_PROPOSED"
             else:
-                self._finish_brain(pending.goal_id, "REQUEST_UNFULFILLED" if decision.unfulfilled else "ANSWERED")
+                if decision.response_kind == "clarify":
+                    self._finish_brain(pending.goal_id, "REQUEST_CLARIFICATION")
+                    action_status = "CLARIFICATION_REQUIRED"
+                else:
+                    self._finish_brain(pending.goal_id, "REQUEST_UNFULFILLED" if decision.unfulfilled else "ANSWERED")
                 if decision.unfulfilled:
                     action_status = "FAILED:REQUEST_UNFULFILLED"
 
@@ -436,6 +441,13 @@ class ConversationService:
                                if messages[index].get("role") == "user"), len(messages))
             messages.insert(user_index, {"role": "system", "content":
                 "PROMPT_LAYER_KIND=UNTRUSTED_RUNTIME_DATA\nBRAIN_PENDING_GOAL_ID=" + pending.goal_id})
+        planning_generation = None
+        if self._brain_interface is not None:
+            cooperation = skill_cooperation_context(self._brain_interface, pending.turn.text, pending.goal_id)
+            planning_generation = cooperation.get("generation")
+            messages.insert(user_index if pending.goal_id is not None else len(messages) - 1,
+                {"role": "system", "content": "PROMPT_LAYER_KIND=UNTRUSTED_RUNTIME_DATA\n"
+                    "LCE_COOPERATION_JSON=" + json.dumps(cooperation, ensure_ascii=False, default=str)})
         if local.prefix or local.suffix:
             messages = list(messages)
             messages.insert(0, {"role": "system", "content":
@@ -450,12 +462,23 @@ class ConversationService:
         self._observe_agent("PROMPT_SIZE", pending, prompt_size)
 
         if self._agent is not None:
+            def request_guard():
+                if self._brain_interface is not None and pending.goal_id is not None:
+                    goal = _goal_snapshot(self._brain_interface, pending.goal_id)
+                    if goal is None or goal.get("lifecycle") != "PENDING":
+                        raise TimeoutError("BRAIN_PLANNING_REQUEST_REVOKED:" + pending.goal_id)
+                    if planning_generation is not None:
+                        state = self._brain_interface.read("brain.state")
+                        if not isinstance(state, Mapping) or state.get("generation") != planning_generation:
+                            raise TimeoutError("BRAIN_PLANNING_GENERATION_REVOKED:" + pending.goal_id)
+
             def emit(event: str, payload: Mapping[str, object]) -> None:
                 self._journal.append(event, {"turn_id": turn.turn_id, **dict(payload)})
                 self._observe_agent(event.upper(), pending, payload)
 
             decision = self._agent.run(messages, context.available_actions, event_sink=emit,
-                                       cancel_event=pending.cancelled, deadline=pending.deadline)
+                                       cancel_event=pending.cancelled, deadline=pending.deadline,
+                                       request_guard=request_guard)
         else:
             complete_with_actions = getattr(self._llm, "complete_with_actions", None)
             if callable(complete_with_actions):

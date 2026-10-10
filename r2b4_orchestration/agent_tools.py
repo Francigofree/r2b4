@@ -24,35 +24,41 @@ class AgentRobotInterface(Protocol):
     def execute(self, action: str, **parameters: object) -> object: ...
 
 
-_ROBOT_READ_RESOURCES = frozenset({
-    "robot.state", "world.snapshot", "world.history", "behavior.state", "behavior.history",
-    "brain.state", "brain.history",
-    "operator.status", "v3.status", "v3.pose", "v3.health", "v3.safety", "camera.status",
-})
-
-
 def _robot_capabilities(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:
     _strict(value, set())
-    raw = interface.capabilities()
-    caps = raw.get("capabilities")
-    items = {}
-    for name, capability in (caps.items() if isinstance(caps, Mapping) else ()):
-        if not isinstance(name, str) or not isinstance(capability, Mapping):
-            continue
-        descriptor = action_descriptor(name)
-        if (name in _ROBOT_READ_RESOURCES or name in {"vision.observe", "world.query"}
-                or name in {"behavior.room_cruise", "behavior.follow_person", "behavior.cancel"}
-                or (descriptor is not None and name != "v3.command.wheels")):
-            items[name] = dict(capability)
-    return {"schema": raw.get("schema"), "capabilities": items}
+    return interface.capabilities()
 
 
 def _robot_read(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:
     args = _strict(value, {"resource"})
     resource = args.get("resource")
-    if not isinstance(resource, str) or resource not in _ROBOT_READ_RESOURCES:
-        raise ValueError("resource must be a published robot/world/behavior state resource")
+    if not isinstance(resource, str) or not resource:
+        raise ValueError("resource must be a published resource name")
     return interface.read(resource)
+
+
+def _robot_call(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:
+    args = _strict(value, {"name", "parameters"})
+    name, parameters = args.get("name"), args.get("parameters", {})
+    if not isinstance(name, str) or not name or not isinstance(parameters, Mapping):
+        raise ValueError("robot.call requires name and parameters object")
+    catalogue = interface.capabilities().get("capabilities", {})
+    capability = catalogue.get(name) if isinstance(catalogue, Mapping) else None
+    if not isinstance(capability, Mapping) or capability.get("supported") is not True:
+        raise ValueError("CAPABILITY_NOT_PUBLISHED:" + name)
+    descriptor = action_descriptor(name)
+    if descriptor is not None or capability.get("requires_motion") is True:
+        # Physical work still enters through Brain admission. The complete
+        # public descriptor is discoverable without a second client allowlist.
+        return AgentToolResult("robot.call", "PROPOSAL", data={"steps": [
+            {"action": name, "parameters": dict(parameters)}]})
+    if name == "skill.run":
+        return AgentToolResult("robot.call", "PROPOSAL", data={
+            "skill": parameters.get("name"), "parameters": parameters.get("parameters", {})})
+    if isinstance(capability.get("skill_name"), str):
+        return AgentToolResult("robot.call", "PROPOSAL", data={
+            "skill": capability["skill_name"], "parameters": dict(parameters)})
+    return interface.execute(name, **dict(parameters))
 
 
 def _world_query(interface: AgentRobotInterface, value: Mapping[str, object]) -> object:
@@ -145,12 +151,7 @@ def build_default_agent_tools(
     interface: AgentRobotInterface | None = None,
     developer_mode: bool = False,
 ):
-    """Return the explicit current AgentCore tool surface.
-
-    Runtime turns receive public robot observation and canonical action tools.
-    Source, evidence analysis and config writes require an explicit host-selected
-    developer mode; a model reply or user turn cannot elevate the tool catalog.
-    """
+    """Expose the common robot and K&F tools; developer_mode is compatibility input."""
     root = Path(project_root).resolve()
     if type(developer_mode) is not bool:
         raise TypeError("developer_mode must be a boolean")
@@ -171,9 +172,14 @@ def build_default_agent_tools(
                 "robot.read",
                 "Read canonical robot/world/behavior state with temporal and confidence metadata. Public World Model knowledge does not override fresh V3 local geometry or safety.",
                 "READ",
-                {"resource": "required " + "|".join(sorted(_ROBOT_READ_RESOURCES))},
+                {"resource": "required published resource name from robot.capabilities"},
             ),
             lambda args: _robot_read(interface, args),
+        ),
+        (
+            AgentToolSpec("robot.call", "Call any published software/compute capability; physical actions and skill.run become Brain proposals.",
+                "READ", {"name": "required exact published name", "parameters": "optional parameters object"}),
+            lambda args: _robot_call(interface, args),
         ),
         (
             AgentToolSpec(
@@ -203,8 +209,15 @@ def build_default_agent_tools(
             lambda args: _vision_observe(interface, args),
         ),
     ]
-    if developer_mode:
-        tools.extend((*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root)))
+    tools.extend((*build_source_tools(root), *build_evidence_tools(root), *build_config_tools(root)))
+    for action in ("skill.create", "skill.update"):
+        tools.append((AgentToolSpec(action, "Save a standard Python skill used by the common library and Brain.",
+            "READ", {"name": "required skill name", "source": "required Python module; async def run(robot, **parameters)",
+                "description": "optional short description", "test_source": "optional Python test module"}),
+            lambda args, action=action: interface.execute(action, **dict(args))))
+    tools.append((AgentToolSpec("skill.test", "Run this saved skill's optional Python tests through the canonical test launcher and return bounded feedback.",
+        "READ", {"name": "required saved skill name"}),
+        lambda args: interface.execute("skill.test", **dict(args))))
     tools.append((
         AgentToolSpec(
             "er2.delegate",

@@ -5,13 +5,77 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import threading
 import time
+import json
+import re
 
 from .local_task_planner import LocalResolution, LocalTaskPlanner
 
 
 def resolve_brain_request(interface: object, text: str, *, goal_id: str | None = None) -> LocalResolution:
     """Resolve a pending request locally; the result is still only a proposal."""
+    # Explicit library invocation is deterministic and keeps both parameters
+    # and the complete human request. Free language outside these known names
+    # remains specialist interpretation, rather than guessed skill selection.
+    match = re.fullmatch(r"(?:run|use|futtasd|indítsd|inditsd)(?:\s+(?:skill|a skillt))?\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+(\{.*\}))?", text.strip(), re.IGNORECASE)
+    if match is None and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text.strip()) is None:
+        return LocalTaskPlanner().resolve(text, interface, goal_id=goal_id)
+    candidate = match[1] if match else text.strip()
+    parameters = json.loads(match[2]) if match and match[2] else {}
+    if not isinstance(parameters, dict):
+        raise ValueError("skill invocation parameters must be an object")
+    try:
+        catalogue = interface.read("skill.list")
+    except Exception:
+        catalogue = ()
+    items = catalogue.get("skills", ()) if isinstance(catalogue, Mapping) else catalogue
+    if isinstance(items, (list, tuple)):
+        matches = [item for item in items if isinstance(item, Mapping) and (
+            str(item.get("name", "")).casefold() == candidate.casefold()
+            or candidate.casefold() in tuple(str(alias).casefold() for alias in item.get("aliases", ())))]
+        if len(matches) == 1:
+            return LocalResolution(plan={"skill": matches[0]["name"], "parameters": parameters})
     return LocalTaskPlanner().resolve(text, interface, goal_id=goal_id)
+
+
+def skill_cooperation_context(interface: object, text: str, goal_id: str | None) -> dict[str, object]:
+    """Small goal/source/outcome slice for one planning request."""
+    result: dict[str, object] = {"request_id": goal_id, "goal": text,
+        "question": "Choose an existing skill or create/repair a Python skill for this complete goal.",
+        "sdk": "async capabilities(), read(resource), query(query), spatial_query(query), call(name, **parameters), events.wait(...), result(handle), cancel(handle), stop(). Robot operations use the canonical shared interface."}
+    try:
+        state = interface.read("brain.state")
+        if isinstance(state, Mapping):
+            result["generation"] = state.get("generation")
+        primary = state.get("primary_goal") if isinstance(state, Mapping) else None
+        if isinstance(primary, Mapping):
+            selected = primary.get("skill")
+            result["previous_execution"] = {key: primary.get(key) for key in (
+                "goal_id", "text", "lifecycle", "reason", "result", "skill", "skill_run_id", "skill_source_hash")}
+            if isinstance(selected, str):
+                source = interface.execute("skill.source", name=selected)
+                if isinstance(source, Mapping) and isinstance(source.get("source"), str) and len(source["source"]) <= 12_000:
+                    result["selected_source"] = dict(source)
+    except Exception:
+        pass
+    try:
+        catalogue = interface.read("skill.list")
+        items = catalogue.get("skills", ()) if isinstance(catalogue, Mapping) else catalogue
+        if isinstance(items, (list, tuple)):
+            relevant = [item for item in items if isinstance(item, Mapping) and any(
+                word.casefold() in text.casefold() for word in (str(item.get("name", "")),)
+                if word)]
+            result["library"] = [{key: item.get(key) for key in (
+                "name", "description", "parameters", "result", "source_hash")}
+                for item in (relevant or [item for item in items if isinstance(item, Mapping)])[:8]]
+    except Exception:
+        pass
+    # Large program/results stay query-on-demand; never flood the prompt with
+    # maps, images, capture or raw sidecar payloads.
+    if len(json.dumps(result, ensure_ascii=False, default=str)) > 16_000:
+        result.pop("selected_source", None)
+    if len(json.dumps(result, ensure_ascii=False, default=str)) > 16_000:
+        result.pop("previous_execution", None)
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +112,22 @@ def _person_feedback(snapshot: Mapping[str, object]) -> str | None:
     return None
 
 
+def _skill_feedback(snapshot: Mapping[str, object]) -> str | None:
+    if not snapshot.get("skill"):
+        return None
+    reason = str(snapshot.get("reason") or "")
+    if reason == "SKILL_RETURNED":
+        return "A Python-skill lefutott és visszatért. A teljes cél teljesülése még nincs igazolva."
+    for prefix, message in (
+        ("SKILL_REPORTED_FAILURE:", "A Python-skill hibát jelzett: "),
+        ("SKILL_REPORTED_PARTIAL:", "A Python-skill részleges eredményt jelzett: "),
+        ("SKILL_CLEANUP_FAILED:", "A Python-skill lezárása hibás: "),
+    ):
+        if reason.startswith(prefix):
+            return message + reason[len(prefix):] + "."
+    return None
+
+
 def _goal_snapshot(interface: object, goal_id: str) -> Mapping[str, object] | None:
     """Read this goal even after another goal becomes primary."""
     state = interface.read("brain.state")
@@ -77,7 +157,7 @@ def wait_for_brain_goal(interface: object, adoption: BrainAdoption, *, timeout_s
                 reason = str(snapshot.get("reason") or lifecycle)
                 if lifecycle in {"COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED"}:
                     status = "COMPLETED" if lifecycle == "COMPLETED" else str(lifecycle) + ":" + reason
-                    text = _person_feedback(snapshot) or ("A feladat befejeződött." if lifecycle == "COMPLETED"
+                    text = _person_feedback(snapshot) or _skill_feedback(snapshot) or ("A feladat befejeződött." if lifecycle == "COMPLETED"
                             else "A feladat megszakadt: " + reason + "." if lifecycle in {"CANCELLED", "INTERRUPTED"}
                             else "A feladat nem teljesült: " + reason + ".")
                     return BrainAdoption(status, text, adoption.goal_id,
@@ -119,7 +199,7 @@ def adopt_brain_result(interface: object, result: Mapping[str, object], *,
     lifecycle = str(snapshot.get("lifecycle", "UNKNOWN"))
     reason = str(snapshot.get("reason") or lifecycle)
     if lifecycle == "COMPLETED":
-        status, text = "COMPLETED", _person_feedback(snapshot) or "A feladat befejeződött."
+        status, text = "COMPLETED", _person_feedback(snapshot) or _skill_feedback(snapshot) or "A feladat befejeződött."
     elif lifecycle in {"PENDING", "STARTING", "ACTIVE"}:
         status, text = "ACTIVE", "A feladatot elfogadtam."
     else:
@@ -182,7 +262,7 @@ class BrainGoalObserver:
     def _watch(self, goal_id: str, generation: int, lineage: Mapping[str, object]) -> None:
         # Goal identity can move from primary to history; an unrelated mission
         # completion never proves this goal complete.
-        for _ in range(36_020):
+        while True:
             if self._closed.wait(0.1):
                 return
             with self._lock:
@@ -201,7 +281,7 @@ class BrainGoalObserver:
                     del self._watches[goal_id]
                 fields = {**lineage, "goal_id": goal_id, "lifecycle": lifecycle,
                           "reason": snapshot.get("reason")}
-                text = _person_feedback(snapshot) or ("A feladat befejeződött." if lifecycle == "COMPLETED"
+                text = _person_feedback(snapshot) or _skill_feedback(snapshot) or ("A feladat befejeződött." if lifecycle == "COMPLETED"
                         else "A feladat megszakadt." if lifecycle in {"CANCELLED", "INTERRUPTED"}
                         else "A feladat nem teljesült.")
                 if self._event_sink is not None:
@@ -219,9 +299,4 @@ class BrainGoalObserver:
                 # Public observation can disappear without creating success or
                 # affecting Brain lifecycle or canonical physical execution.
                 continue
-        with self._lock:
-            if self._watches.get(goal_id) == generation:
-                del self._watches[goal_id]
-
-
 __all__ = ["BrainAdoption", "BrainGoalObserver", "adopt_brain_result", "resolve_brain_request", "wait_for_brain_goal"]

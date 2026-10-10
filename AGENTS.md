@@ -1,6 +1,6 @@
 # R2B4
 
-A teljes R2B4 robotrendszer kívánt felhasználói működésének és fejlesztési irányának authorityja a `R2B4_SYSTEM_BEHAVIOR_CONTRACT.md`. A production robotarchitektúra authorityja a `STRUKTURALIS_RETEGEK_V3.md`. A live async/process végrehajtási elhelyezés kiegészítő contractja az `ASZINKRON_RUNTIME_CONTRACT_V3.md`. Ne duplikáld ezeket itt; rendszerszintű vagy robotikai változtatásnál a releváns contractot kövesd, a konkrét megvalósítást pedig source-first ellenőrizd.
+A production robotarchitektúra authorityja a `STRUKTURALIS_RETEGEK_V3.md`. A live async/process végrehajtási elhelyezés kiegészítő contractja az `ASZINKRON_RUNTIME_CONTRACT_V3.md`. Ne duplikáld ezeket itt; rendszerszintű vagy robotikai változtatásnál a releváns contractot kövesd, a konkrét megvalósítást pedig source-first ellenőrizd.
 
 ## Munkamód
 
@@ -26,13 +26,11 @@ Hibakeresésnél a legelső hibás tickhez, boundaryhoz/réteghez és konkrét �
 
 Az `ASZINKRON_RUNTIME_CONTRACT_V3.md` szerint tartsd kicsinek a control islandet. A production control interpreterbe ne hozz új blokkoló device I/O-t, CPU-intenzív vagy változó idejű Python munkát, illetve indokolatlan nagy raw payload serializálást/deserializálást.
 
-A thread és CPU-affinity önmagában nem process/GIL izoláció. Ugyanakkor ne process-isolálj mechanikusan mindent: kis bounded I/O/proxy/collector thread maradhat, ha nem veszélyezteti a control budgetet.
 
-Új sensor/SLAM/vision/AI/planner compute esetén először capability-specifikus typed edge-et használj. Worker ne kapjon L0–L12 authorityt; a döntést befolyásoló async eredmény csak completion/input closure után, immutable `TickInputs` részeként válhat láthatóvá.
 
 Raw evidence, capture, telemetry és status ne forduljon vissza nagy payloadként a control interpreterbe, ha közvetlen producer → observation/sidecar út lehetséges. Command ingress kizárólag a canonical `CommandGateway` felé mehet.
 
-Ne vezess be új A/C/O számozott rétegrendet vagy `L13`-at; az egyetlen production layer-sorozat L0–L12.
+
 
 ## Validáció
 

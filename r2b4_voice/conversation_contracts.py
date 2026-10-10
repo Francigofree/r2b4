@@ -42,7 +42,12 @@ def goal_plan_copy(value: object) -> dict[str, object]:
     if len(payload.encode()) > 32_768:
         raise ConversationContractError("goal_plan exceeds its bound")
     detached = json.loads(payload)
-    if "nodes" in detached:
+    if "skill" in detached:
+        if (set(detached) - {"skill", "parameters", "constraints"}
+                or not isinstance(detached["skill"], str) or not detached["skill"]
+                or not isinstance(detached.get("parameters", {}), dict)):
+            raise ConversationContractError("skill proposal requires a name and parameters object")
+    elif "nodes" in detached:
         if "steps" in detached:
             raise ConversationContractError("goal_plan cannot mix steps and nodes")
         # The authoritative graph parser and Brain admission validate node
@@ -124,6 +129,7 @@ class LLMDecision:
     model: str
     goal_plan: Mapping[str, object] | None = None
     unfulfilled: bool = False
+    response_kind: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.unfulfilled) is not bool or self.unfulfilled and (

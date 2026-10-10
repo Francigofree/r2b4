@@ -55,6 +55,17 @@ Python thread használható kis, bounded I/O-ra, latest-value proxyra vagy minim
 
 Az edge owner/worker saját device- vagy algoritmus-lokális állapotot tarthat, de nem kaphat L0–L12 production authorityt. A layer-owned state és a végső döntés a V3 rétegekben marad.
 
+A helyi Python-skill külön CPython-folyamatban futó host kliens, nem control
+worker vagy új production réteg. Az LCE felügyelete a skill interpreterén
+kívül marad. A közös async SDK rövid, bounded kéréseket és owning
+observer/recorder handle-eket használ; eseményvárakozás nem foglalhatja el a
+STOP admission útját. A host a futás visszavonását és a canonical STOP-ot
+a Python-task együttműködésétől függetlenül képes végrehajtani, majd bounded
+terminate/kill lépéssel megszünteti a beragadt workert és saját gyermekeit.
+Az observer/media session elvesztése elengedi a saját producer-demandeket.
+Nagy kép-/video-adat az owning vision/media edge-ben vagy közvetlenül a
+kérő skillnél marad; a host csak szemantikus eseményt és asset-hivatkozást kap.
+
 Ha a controlnak csak származtatott eredmény kell, a nagy raw adat maradjon a producer oldalán. Példa: kép → detection, teljes LiDAR scan → safety/localization/local-perception eredmény. Raw evidence közvetlenül mehet passzív observation/capture irányba anélkül, hogy a control interpreterbe belépne.
 
 A kamera/vision owner V3-tól független, demand-driven capability. Idle állapotban

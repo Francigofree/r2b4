@@ -305,6 +305,7 @@ class VisionMediaServer:
     def _handle(self, conn: socket.socket) -> None:
         demand = None
         image_mode = False
+        observation_sessions = None
         try:
             conn.settimeout(15)
             parts = recv_line(conn, 128).decode("ascii").split()
@@ -317,6 +318,19 @@ class VisionMediaServer:
             if command in {"ON", "OFF"}:
                 self.owner.set_manual_demand(command == "ON")
                 send_json_line(conn, self.owner.status())
+                return
+            if command == "SKILL":
+                from .skill_observation import ObservationSessions
+                observation_sessions = ObservationSessions(self.owner, self._capture)
+                send_json_line(conn, {"status": "CONNECTED", "monotonic_ns": time.monotonic_ns()})
+                conn.settimeout(None)
+                while not self._stop.is_set():
+                    request = recv_json_line(conn)
+                    try:
+                        result = observation_sessions.call(request["name"], request.get("parameters", {}))
+                        send_json_line(conn, {"result": result})
+                    except Exception as exc:
+                        send_json_line(conn, {"failure": f"{type(exc).__name__}:{exc}"[:300]})
                 return
             if command not in {"PERSON", "IMAGE", "PHOTO"}:
                 raise ValueError("unknown vision request")
@@ -380,6 +394,8 @@ class VisionMediaServer:
                 pass
         finally:
             try:
+                if observation_sessions is not None:
+                    observation_sessions.close()
                 if demand is not None:
                     self.owner.release(demand)
             finally:

@@ -170,7 +170,7 @@ def test_conversation_reuses_the_same_public_robot_adapters(monkeypatch, compose
         public_adapter = next(adapter for adapter in core.adapters if adapter.name == "public_robot")
         assert public_adapter is next(adapter for adapter in bundle.interface.adapters if adapter.name == "public_robot")
         assert bundle.interface.read("world.snapshot") == composed.world
-        assert "config.patch" not in {tool["name"] for tool in bundle.conversation.agent.tool_catalog}
+        assert "config.patch" in {tool["name"] for tool in bundle.conversation.agent.tool_catalog}
 
 
 def test_cli_reads_and_executes_the_public_robot_surface(monkeypatch, composed, capsys):

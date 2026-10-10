@@ -113,6 +113,10 @@ class GoalSnapshot:
     observation_generation: str | None = None
     origin: GoalOrigin | None = None
     motion_dispatched: bool = False
+    skill: str | None = None
+    skill_parameters: tuple[tuple[str, object], ...] = ()
+    skill_run_id: str | None = None
+    skill_source_hash: str | None = None
 
     @property
     def steps(self):
@@ -140,9 +144,9 @@ class GoalSnapshot:
                 "revision": self.revision, "reason": self.reason,
                 "steps": [step.to_jsonable() for step in self.steps],
                 "constraints": dict(self.constraints), "step_index": self.step_index,
-                "current_subtask": (self.task_graph.node(self.current_node_id).action
+                "current_subtask": self.skill or ((self.task_graph.node(self.current_node_id).action
                                     or self.task_graph.node(self.current_node_id).kind.value)
-                                    if self.task_graph is not None and self.current_node_id is not None else None,
+                                    if self.task_graph is not None and self.current_node_id is not None else None),
                 "subtask_id": self.subtask_id, "attempt": self.attempt,
                 "decision_id": self.decision_id, "behavior_id": self.behavior_id,
                 "command_id": self.command_id, "mission_id": self.mission_id,
@@ -153,6 +157,8 @@ class GoalSnapshot:
                 "observation_sequence": self.observation_sequence,
                 "observation_generation": self.observation_generation,
                 "motion_dispatched": self.motion_dispatched,
+                "skill": self.skill, "skill_parameters": dict(self.skill_parameters),
+                "skill_run_id": self.skill_run_id, "skill_source_hash": self.skill_source_hash,
                 "failure_code": None if self.failure_code is None else self.failure_code.value,
                 "origin": None if self.origin is None else self.origin.to_jsonable()}
 
@@ -264,6 +270,14 @@ def _check_motion_sequence(steps, expected):
 def _restored_result(raw):
     if not isinstance(raw, Mapping):
         raise ValueError("invalid saved Brain result")
+    if "run_id" in raw and "skill" in raw:
+        # The runtime already bounds and JSON-detaches Python return values.
+        # Preserve these values across restart without turning them into an
+        # executable continuation or interpreting a declared success flag.
+        encoded = json.dumps(dict(raw), allow_nan=False)
+        if len(encoded.encode()) > 32_768:
+            raise ValueError("saved skill result exceeded its bound")
+        return tuple(sorted(json.loads(encoded).items()))
     from v3.robot_interface import _compact_finite_result
     compact = dict(_compact_finite_result(raw))
     scalars = {key: value for key, value in raw.items()
@@ -312,7 +326,7 @@ class BrainCore:
             primary = self._goals.get(self._primary_id)
             return {"schema": "R2B4_BRAIN_STATE_V1", "identity": self.identity,
                     "role": self.role, "personality": self.personality,
-                    "revision": self._sequence,
+                    "revision": self._sequence, "generation": self._generation,
                     "primary_goal": None if primary is None else primary.to_jsonable(),
                     "pending_goals": [g.to_jsonable() for g in self._goals.values()
                                       if g.lifecycle is GoalLifecycle.PENDING],
@@ -654,7 +668,23 @@ class BrainCore:
             if goal.lifecycle is not GoalLifecycle.PENDING:
                 raise RuntimeError("BRAIN_PROPOSAL_REVOKED")
             try:
-                if isinstance(plan, Mapping) and "nodes" in plan:
+                skill = None
+                skill_parameters = ()
+                if isinstance(plan, Mapping) and "skill" in plan:
+                    from r2b4_voice.conversation_contracts import goal_plan_copy
+                    proposal = goal_plan_copy(plan)
+                    skill = proposal["skill"]
+                    catalogue = self.robot.read("skill.list")
+                    items = catalogue.get("skills", ()) if isinstance(catalogue, Mapping) else catalogue
+                    if not isinstance(items, (tuple, list)) or not any(
+                            isinstance(item, Mapping) and item.get("name") == skill for item in items):
+                        raise ValueError("SKILL_NOT_FOUND:" + skill)
+                    skill_parameters = tuple(sorted(proposal.get("parameters", {}).items()))
+                    # Python owns its own algorithm; preserve the user's whole
+                    # goal/constraints rather than translating it into a DAG.
+                    constraints = tuple(sorted(dict(goal.constraints).items()))
+                    graph = None
+                elif isinstance(plan, Mapping) and "nodes" in plan:
                     graph, steps, constraints = self._graph_plan(plan, goal)
                 else:
                     steps, constraints = self._plan(plan, goal)
@@ -663,7 +693,7 @@ class BrainCore:
                 return self._change(goal_id, "PLAN_REJECTED", lifecycle=GoalLifecycle.FAILED,
                                     reason=str(exc), failure_code=FailureCode.CONTRACT_FAILURE).to_jsonable()
             current = self._goals.get(self._primary_id)
-            independent_teaching = (goal.source == "HUMAN" and len(graph.nodes) == 1
+            independent_teaching = (graph is not None and goal.source == "HUMAN" and len(graph.nodes) == 1
                 and graph.node(graph.entry).action == "person.teach"
                 and (self.behaviors.active or current is not None and current.lifecycle in _RUNNING
                      and current.task_graph is not None and any(
@@ -700,11 +730,12 @@ class BrainCore:
                 self._cancel_event = threading.Event()
                 self._primary_id = goal_id
                 entry_index = 0
-                if graph.node(graph.entry).kind is TaskNodeKind.ACTION:
+                if graph is not None and graph.node(graph.entry).kind is TaskNodeKind.ACTION:
                     entry_index = [node.node_id for node in graph.nodes if node.kind is TaskNodeKind.ACTION].index(graph.entry)
                 self._change(goal_id, "PLAN_ADOPTED", lifecycle=GoalLifecycle.STARTING,
                              constraints=constraints, reason="PLAN_VALIDATED", task_graph=graph,
-                             current_node_id=graph.entry,
+                             current_node_id=graph.entry if graph is not None else None,
+                             skill=skill, skill_parameters=skill_parameters,
                              node_started_ns=self.clock_ns(), step_index=entry_index)
                 had_behavior = self.behaviors.active
                 self.behaviors.revoke("BRAIN_PLAN_ADOPTED")
@@ -717,6 +748,9 @@ class BrainCore:
             return self.goal(goal_id)
         # Revocation precedes STOP; late completion cannot restore authority.
         try:
+            if current is not None and current.skill_run_id and current.lifecycle in _RUNNING:
+                self.robot.execute("skill.revoke", run_id=current.skill_run_id, reason="PREEMPTED")
+                self.robot.execute("skill.stop", run_id=current.skill_run_id)
             if current is not None and current.lifecycle in _RUNNING or had_behavior:
                 self.robot.stop()
         except Exception as exc:
@@ -865,6 +899,9 @@ class BrainCore:
             if goal is None or goal.lifecycle is not GoalLifecycle.STARTING or self._admissions_inflight:
                 return
             try:
+                if goal.skill is not None:
+                    self._start_skill(generation)
+                    return
                 if any(_requires_motion(node.action) for node in goal.task_graph.nodes
                        if node.kind is TaskNodeKind.ACTION):
                     self.robot.stop()  # Stable physical boundary before physical actions.
@@ -885,6 +922,74 @@ class BrainCore:
     def goal(self, goal_id):
         with self._lock:
             return self._goals[goal_id].to_jsonable()
+
+    def _start_skill(self, generation):
+        goal = self._current(generation)
+        if goal is None:
+            return
+        run = self.robot.execute("skill.run", name=goal.skill,
+            parameters=dict(goal.skill_parameters), goal_id=goal.goal_id, subtask_id=goal.subtask_id)
+        if not isinstance(run, Mapping) or not isinstance(run.get("run_id"), str):
+            raise ValueError("SKILL_RUN_ID_UNAVAILABLE")
+        with self._lock:
+            revoked = self._current(generation) is None
+            if not revoked:
+                self._change(goal.goal_id, "SKILL_STARTED", lifecycle=GoalLifecycle.ACTIVE,
+                    skill_run_id=run["run_id"], skill_source_hash=run.get("source_hash"),
+                    reason="SKILL_RUNNING")
+        if revoked:
+            self.robot.execute("skill.revoke", run_id=run["run_id"], reason="BRAIN_GENERATION_REVOKED")
+
+    def _skill_result(self, generation):
+        goal = self._current(generation)
+        if goal is None or goal.skill_run_id is None:
+            return
+        try:
+            status = self.robot.execute("skill.status", run_id=goal.skill_run_id)
+            if not isinstance(status, Mapping) or status.get("run_id") != goal.skill_run_id:
+                raise ValueError("SKILL_RUN_IDENTITY_MISMATCH")
+            state = status.get("state")
+            if state in {"STARTING", "RUNNING"} or status.get("finalizing") is True:
+                return
+            if state not in {"SUCCEEDED", "FAILED", "CANCELLED"}:
+                raise ValueError("SKILL_STATE_UNAVAILABLE")
+            returned = status.get("result")
+            failure_reason = None
+            if status.get("callback_error"):
+                failure_reason = "SKILL_CLEANUP_FAILED:" + str(status["callback_error"])
+            elif state == "FAILED":
+                failure_reason = "SKILL_FAILED:" + str(status.get("error") or "WORKER_FAILED")
+            elif state == "SUCCEEDED" and isinstance(returned, Mapping):
+                # Optional conventional fields can disclose a negative task
+                # outcome. No result schema is required, and a positive flag
+                # still cannot prove the human goal or a physical effect.
+                reported = returned.get("status")
+                reported = reported.upper() if isinstance(reported, str) else None
+                if reported == "PARTIAL":
+                    failure_reason = "SKILL_REPORTED_PARTIAL:" + str(returned.get("reason") or "PARTIAL")
+                elif reported == "FAILED" or returned.get("success") is False:
+                    failure_reason = "SKILL_REPORTED_FAILURE:" + str(returned.get("reason") or reported or "success=false")
+            with self._lock:
+                if self._current(generation) is None:
+                    return
+                # Returning from a Python program is completion evidence for
+                # that invocation, not proof of every physical goal condition.
+                result = {"skill": goal.skill, "run_id": goal.skill_run_id,
+                    "source_hash": status.get("source_hash"), "state": state,
+                    "return_value": returned, "error": status.get("error"),
+                    "callback_error": status.get("callback_error"),
+                    "goal_satisfaction": "UNASSESSED"}
+                self._change(goal.goal_id, "SKILL_RESULT", result=tuple(sorted(result.items())))
+                if state == "SUCCEEDED" and failure_reason is None:
+                    self._change(goal.goal_id, "GOAL_COMPLETED", lifecycle=GoalLifecycle.COMPLETED,
+                        reason="SKILL_RETURNED", failure_code=None)
+                elif state == "CANCELLED" and failure_reason is None:
+                    self._change(goal.goal_id, "GOAL_CANCELLED", lifecycle=GoalLifecycle.CANCELLED,
+                        reason="SKILL_CANCELLED")
+            if failure_reason is not None:
+                self.fail(goal.goal_id, failure_reason)
+        except Exception as exc:
+            self.fail(goal.goal_id, "SKILL_STATUS_FAILED:" + type(exc).__name__ + ":" + str(exc))
 
     def _current(self, generation):
         with self._lock:
@@ -1327,6 +1432,9 @@ class BrainCore:
             goal = self._current(generation)
             if goal is None or goal.lifecycle is not GoalLifecycle.ACTIVE:
                 return
+            if goal.skill is not None:
+                self._skill_result(generation)
+                return
             node = goal.task_graph.node(goal.current_node_id)
             if node.action == "person.teach":
                 return  # Host persistence does not own a physical mission.
@@ -1441,8 +1549,10 @@ class BrainCore:
                 raise ValueError("pending_only must be a boolean")
             if goal.lifecycle not in _RUNNING or pending_only and goal.lifecycle is not GoalLifecycle.PENDING:
                 return goal.to_jsonable()
-            physical = self._primary_id == goal_id and goal.task_graph is not None and any(
-                _requires_motion(node.action) for node in goal.task_graph.nodes if node.kind is TaskNodeKind.ACTION)
+            skill_run_id = goal.skill_run_id
+            physical = self._primary_id == goal_id and (goal.skill is not None or (
+                goal.task_graph is not None and any(_requires_motion(node.action)
+                    for node in goal.task_graph.nodes if node.kind is TaskNodeKind.ACTION)))
             if physical:
                 self._generation += 1
                 self._cancel_event.set()
@@ -1460,6 +1570,8 @@ class BrainCore:
         if physical:
             self.behaviors.revoke(reason)
             try:
+                if skill_run_id is not None:
+                    self.robot.execute("skill.revoke", run_id=skill_run_id, reason=reason)
                 self.robot.stop()
             finally:
                 with self._execution_lock:
@@ -1470,15 +1582,32 @@ class BrainCore:
         return result.to_jsonable()
 
     def revoke(self, reason="STOP"):
+        reason = _bounded_reason(reason)
         with self._lock:
             self._generation += 1
             self._cancel_event.set()
             self._teaching_interjection = None
+            runs = []
             for goal_id, goal in tuple(self._goals.items()):
                 if goal.lifecycle in _RUNNING:
+                    if goal.skill_run_id:
+                        runs.append(goal.skill_run_id)
                     self._change(goal_id, "GOAL_CANCELLED", lifecycle=GoalLifecycle.CANCELLED, reason=reason)
             self.behaviors.revoke(reason)
-            return self.snapshot()
+            result = self.snapshot()
+        for run_id in runs:
+            try:
+                self.robot.execute("skill.revoke", run_id=run_id, reason=reason)
+            except Exception as exc:
+                # Intent stays revoked even when the process supervisor is
+                # unavailable. The owning host must still reach canonical STOP.
+                with self._lock:
+                    for goal_id, goal in tuple(self._goals.items()):
+                        if goal.skill_run_id == run_id:
+                            self._change(goal_id, "SKILL_REVOCATION_FAILED",
+                                reason=reason + ":SKILL_REVOKE_FAILED:" + type(exc).__name__)
+                result = self.snapshot()
+        return result
 
     def add_background(self, name: str):
         """Maintenance metadata has no independent physical dispatch authority."""
@@ -1518,6 +1647,11 @@ class BrainCore:
             old_lifecycle = GoalLifecycle(row.get("lifecycle"))
             was_active = old_lifecycle in _RUNNING
             interrupted = interrupted or was_active
+            saved_skill = None
+            if row.get("skill") is not None:
+                from r2b4_voice.conversation_contracts import goal_plan_copy
+                saved_skill = goal_plan_copy({"skill": row["skill"],
+                    "parameters": row.get("skill_parameters", {}), "constraints": row.get("constraints", {})})
             # Restored plans are history, never runnable dispatch input.
             rows_steps = row.get("steps", [])
             if not isinstance(rows_steps, list) or len(rows_steps) > (32 if row.get("task_graph") else 16):
@@ -1544,13 +1678,17 @@ class BrainCore:
                     self._primary_id = goal["goal_id"]
                 self._change(goal["goal_id"], "GOAL_INTERRUPTED" if was_active else "GOAL_RESTORED",
                     lifecycle=GoalLifecycle.INTERRUPTED if was_active else old_lifecycle,
-                    constraints=graph.constraints if graph is not None else (),
+                    constraints=graph.constraints if graph is not None else tuple(sorted(
+                        saved_skill.get("constraints", {}).items())) if saved_skill is not None else (),
                     result=_restored_result(row.get("result", {})),
                     target=tuple(sorted(_parameters(row.get("target", {})).items())),
                     command_id=row.get("command_id"), mission_id=row.get("mission_id"),
                     behavior_id=row.get("behavior_id"), step_index=row.get("step_index", 0),
                     world_target=world_target,
                     task_graph=graph, current_node_id=current_node_id,
+                    skill=saved_skill["skill"] if saved_skill is not None else None,
+                    skill_parameters=tuple(sorted(saved_skill.get("parameters", {}).items())) if saved_skill is not None else (),
+                    skill_run_id=row.get("skill_run_id"), skill_source_hash=row.get("skill_source_hash"),
                     origin=GoalOrigin.from_jsonable(row["origin"]) if row.get("origin") else None,
                     node_started_ns=row.get("node_started_ns"),
                     failure_code=FailureCode.RUNTIME_RESTART if was_active else

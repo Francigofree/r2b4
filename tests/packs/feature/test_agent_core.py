@@ -85,19 +85,19 @@ def test_unfulfilled_reply_is_explicit_and_preserves_explanation():
     assert decision.robot_action is None and decision.goal_plan is None
 
 
-def test_runtime_agent_catalog_cannot_elevate_to_developer_tools(tmp_path) -> None:
+def test_agent_catalog_uses_common_development_tools_without_mode_hierarchy(tmp_path) -> None:
     interface = FakeRobotInterface()
     runtime = AgentToolBroker(build_default_agent_tools(tmp_path, interface=interface))
     names = {item["name"] for item in runtime.catalog()}
     assert {"robot.read", "robot.capabilities", "vision.observe", "er2.delegate"} <= names
-    assert not any(name.startswith(("source.", "config.", "evi.", "diag.")) for name in names)
+    assert {"source.search", "config.patch", "skill.create", "skill.update", "robot.call"} <= names
     result = runtime.execute(AgentToolRequest("config.patch", {"developer_mode": True, "path": "foo", "value": 1}))
-    assert result.status == "REJECTED"
-    assert result.error == "TOOL_NOT_REGISTERED"
+    assert result.status == "ERROR"
+    assert "unknown arguments" in result.error
     assert interface.reads == []
 
     developer = AgentToolBroker(build_default_agent_tools(tmp_path, interface=interface, developer_mode=True))
-    assert {"source.search", "config.patch"} <= {item["name"] for item in developer.catalog()}
+    assert names == {item["name"] for item in developer.catalog()}
 
 
 def test_agent_reads_canonical_public_state_and_preserves_uncertainty(tmp_path) -> None:
@@ -108,8 +108,7 @@ def test_agent_reads_canonical_public_state_and_preserves_uncertainty(tmp_path) 
     assert interface.reads == ["world.snapshot"]
     capabilities = broker.execute(AgentToolRequest("robot.capabilities"))
     assert "v3.command.stop" in capabilities.data["capabilities"]
-    assert "v3.command.wheels" not in capabilities.data["capabilities"]
-    assert "operator.shutdown" not in capabilities.data["capabilities"]
+    assert capabilities.data == interface.capabilities()
     assert broker.execute(AgentToolRequest("robot.read", {"resource": "source.read"})).status == "ERROR"
 
     interface.reads.clear()

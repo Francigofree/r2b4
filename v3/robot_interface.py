@@ -222,6 +222,10 @@ class RobotInterface:
                 item.setdefault("supported", True)
                 item.setdefault("available", True)
                 item.setdefault("ready", bool(item["available"]))
+                item.setdefault("name", name)
+                item.setdefault("description", name.replace(".", " "))
+                item.setdefault("parameters", {})
+                item.setdefault("result", {"description": "Owner's public state or operation result."})
                 item["adapter"] = adapter.name
                 if self._public_robot is not None and name in {"v3.command.explore", "v3.command.follow_person"}:
                     item["execution_owner"] = "behavior_system"
@@ -264,6 +268,10 @@ class RobotInterface:
 
     def execute(self, action: str, **parameters: object) -> object:
         return self._execute_observed(action, parameters)
+
+    def call(self, action: str, **parameters: object) -> object:
+        """SDK spelling of the same owned operation; execute stays compatible."""
+        return self.execute(action, **parameters)
 
     def _execute_observed(self, action: str, parameters: Mapping[str, object]) -> object:
         resolved = action
@@ -411,7 +419,11 @@ class RobotInterface:
     ) -> tuple[InterfaceAdapter, Mapping[str, object]]:
         owners = [adapter for adapter in self._adapters if name in adapter.capability_names]
         if not owners:
-            raise RobotInterfaceError(f"unknown interface {expected_kind}: {name}")
+            # Dynamic library/owner capabilities do not require a second
+            # client allowlist. Static names retain the cheap direct route.
+            owners = [adapter for adapter in self._adapters if name in adapter.capabilities()]
+            if not owners:
+                raise RobotInterfaceError(f"unknown interface {expected_kind}: {name}")
         if len(owners) != 1:
             raise RobotInterfaceError(f"ambiguous interface capability: {name}")
         adapter = owners[0]
