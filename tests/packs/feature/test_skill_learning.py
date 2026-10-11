@@ -1,5 +1,6 @@
 """Measured repair, offline reuse, and honest learning evidence boundaries."""
 from functools import partial
+import json
 import threading
 import time
 
@@ -42,8 +43,11 @@ class RepairProvider:
             return AgentModelReply(self.model, skill_proposal={"kind": "create_skill",
                 "name": "measured_threshold", "source": FAULTY, "test_source": SAVED_TEST})
         context = next(item["content"] for item in messages if "R2B4_LEARNING_CONTEXT_JSON=" in item["content"])
-        assert '"actual": [5]' in context and '"expected": [4, 5]' in context
-        assert '"source_hash"' in context and FAULTY.replace("\n", "\\n") in context
+        feedback = json.loads(context.split("R2B4_LEARNING_CONTEXT_JSON=", 1)[1])
+        assert feedback["previous_iteration"]["assessment"]["checks"][0]["actual"] == [5]
+        assert feedback["previous_iteration"]["assessment"]["checks"][0]["expected"] == [4, 5]
+        assert feedback["selected_skill"]["source_hash"]
+        assert feedback["selected_skill"]["source"] == FAULTY
         return AgentModelReply(self.model, skill_proposal={"kind": "update_skill",
             "name": "measured_threshold", "source": FIXED})
 

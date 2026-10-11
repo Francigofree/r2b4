@@ -37,6 +37,29 @@ def threshold_scenario(value=None) -> dict[str, object]:
     return {"kind": "threshold_detection", "values": list(values), "threshold": threshold}
 
 
+def resolve_scenario(value=None):
+    if not isinstance(value, Mapping) or value.get("kind") != "semantic_trace":
+        return threshold_scenario(value)
+    if set(value) - {"kind", "resources", "expected_result", "expected_reports"}:
+        raise ValueError("unknown semantic_trace scenario fields")
+    resources = value.get("resources")
+    if (not isinstance(resources, Mapping) or not 1 <= len(resources) <= 8
+            or any(not isinstance(name, str) or not name.startswith("simulation.")
+                   or name == "simulation.scenario" or len(name) > 128 for name in resources)
+            or any(not isinstance(rows, list) or not 1 <= len(rows) <= 64
+                   or any(not isinstance(row, dict) for row in rows) for rows in resources.values())):
+        raise ValueError("semantic_trace requires 1..8 simulation resources with 1..64 semantic objects")
+    if "expected_result" not in value and "expected_reports" not in value:
+        raise ValueError("semantic_trace requires an independent expected_result or expected_reports")
+    if "expected_reports" in value and (not isinstance(value["expected_reports"], list)
+            or any(not isinstance(item, str) or len(item) > 4096 for item in value["expected_reports"])):
+        raise ValueError("expected_reports must contain bounded report text")
+    encoded = json.dumps(value, allow_nan=False)
+    if len(encoded.encode()) > 65_536:
+        raise ValueError("semantic_trace exceeds its 65536 byte bound")
+    return json.loads(encoded)
+
+
 class _SemanticSource:
     name = "motorless_semantic_source"
     reads = frozenset({"simulation.sample", "simulation.scenario", "operator.status", "v3.status"})
@@ -48,20 +71,32 @@ class _SemanticSource:
         self.owner = None
         self.samples = []
         self.observations = []
+        self.resource_reads = {}
+        self.trace_samples = {}
         self.scenario = threshold_scenario()
         self.stops = 0
         self._lock = threading.Lock()
 
     def prepare(self, scenario, revision):
         with self._lock:
-            self.scenario = threshold_scenario(scenario)
+            self.scenario = resolve_scenario(scenario)
             measured = time.monotonic_ns()
+            self.observations = []
+            self.resource_reads = {}
+            if self.scenario["kind"] == "semantic_trace":
+                self.trace_samples = self.scenario["resources"]
+                self.samples = []
+                self.reads = type(self).reads | self.trace_samples.keys()
+                self.capability_names = self.reads | self.motion | {"v3.command.stop"}
+                return
+            self.reads = type(self).reads
+            self.capability_names = type(self).capability_names
+            self.trace_samples = {}
             self.samples = [{"value": value, "measurement_time_ns": measured + index,
                              "sequence": index + 1, "revision": revision,
                              "source": "simulation", "lineage": {
                                  "producer": self.name, "generation": revision, "sample": index + 1}}
                             for index, value in enumerate(self.scenario["values"])]
-            self.observations = []
 
     def capabilities(self):
         return {name: {"kind": "read" if name in self.reads else "action", "supported": True,
@@ -77,13 +112,22 @@ class _SemanticSource:
         if resource == "v3.status":
             return {"state": "IDLE", "tick_id": 0, "monotonic_ns": time.monotonic_ns(),
                     "safety_decision": "STOP", "source": "simulation"}
-        if resource != "simulation.sample":
+        if resource != "simulation.sample" and resource not in self.trace_samples:
             raise KeyError(resource)
         with self._lock:
-            if len(self.observations) >= len(self.samples):
+            if self.trace_samples:
+                rows = self.trace_samples[resource]
+                index = self.resource_reads.get(resource, 0)
+                if index >= len(rows):
+                    raise RuntimeError("SIMULATION_SOURCE_EXHAUSTED")
+                sample = rows[index]
+                self.resource_reads[resource] = index + 1
+                self.observations.append({"resource": resource, "sample": sample})
+            elif len(self.observations) >= len(self.samples):
                 raise RuntimeError("SIMULATION_SOURCE_EXHAUSTED")
-            sample = self.samples[len(self.observations)]
-            self.observations.append(sample)
+            else:
+                sample = self.samples[len(self.observations)]
+                self.observations.append(sample)
         self.owner._queue_evidence("simulation_observation", sample)
         # The source's concrete measurement identity is retained over the socket.
         return json.loads(json.dumps(sample))
@@ -102,8 +146,8 @@ class MotorlessSkillSimulator:
 
     ``trial`` runs a saved skill through a Brain goal and the real SDK socket.
     It measures the full observed samples and returned detections independently.
-    The simulator implements one small scenario instead of modeling imaginary
-    sensors. ``compile_evidence`` is an explicit, optional offline operation.
+    Scalar detection and bounded semantic traces cover the concrete skill
+    evaluation needs; there is no physical scene or sensor simulator.
     """
 
     def __init__(self, project_root: Path | str, library: SkillLibrary | None = None):
@@ -138,7 +182,10 @@ class MotorlessSkillSimulator:
 
     @staticmethod
     def scenario_descriptor(value=None):
-        return {**threshold_scenario(value), "resource": "simulation.sample", "source": "simulation",
+        scenario = resolve_scenario(value)
+        if scenario["kind"] == "semantic_trace":
+            return {**scenario, "source": "simulation", "scope": "Recorded semantic trace; original sample lineage/time retained, no live freshness claim."}
+        return {**scenario, "resource": "simulation.sample", "source": "simulation",
                 "output": "Return {detections: [complete samples with value >= threshold], samples_checked: len(values)}",
                 "scope": "Semantic scalar detection and SDK/worker/Brain integration; no physical perception or motion."}
 
@@ -233,9 +280,10 @@ class MotorlessSkillSimulator:
         from v3.mcap_capture import McapCaptureConfig
         from v3_process_runtime import McapCaptureSession
 
-        resolved_scenario = threshold_scenario(scenario)
+        resolved_scenario = resolve_scenario(scenario)
         number = len(self._trials) + 1
         self.source.prepare(resolved_scenario, f"simulation-trial-{number}")
+        self._report_cursor = self.runtime._sdk_event_sequence
         directory = self.root / f"trial-{number}"
         directory.mkdir()
         conf = self.project_root / "conf"
@@ -257,7 +305,7 @@ class MotorlessSkillSimulator:
         def stop_tick(tick):
             context = TickContext(tick, start_ns + tick * 20_000_000)
             def sample(device, kind, **values):
-                return DeviceSample(device, kind, tick, context.monotonic_ns,
+                return DeviceSample(device, kind, tick + 1, context.monotonic_ns,
                                     tuple(DataField(key, value) for key, value in values.items()))
 
             # Synthetic stationary acquisition is sufficient for a healthy
@@ -286,6 +334,14 @@ class MotorlessSkillSimulator:
                 raise RuntimeError("SIMULATION_NATIVE_TICK_FAULT:" + result.trace.fault_layer)
             if final.left_output != 0 or final.right_output != 0:
                 raise RuntimeError("SIMULATION_NONZERO_FINAL_OUTPUT")
+            # 50 Hz scope requests raw evidence too. Even the synthetic empty
+            # scan has its own source revision and measurement timestamp.
+            session.hub.publish(SimpleNamespace(
+                raw_scan_id=tick + 1, raw_scan_timestamp=context.monotonic_ns / 1e9,
+                scan_start_monotonic_ns=context.monotonic_ns,
+                scan_end_monotonic_ns=context.monotonic_ns,
+                measurement_monotonic_ns=context.monotonic_ns,
+                health="OK", raw_scan=(), summary={"source": "simulation"}), topic="v3.raw_lidar")
             session.observe(ExecutionRecord(inputs, result))
 
         run_id = None
@@ -296,7 +352,7 @@ class MotorlessSkillSimulator:
             self.runtime._queue_evidence("simulation_trial_started", {
                 "name": name, "scenario": resolved_scenario, "source": "simulation"})
             goal = self.runtime.execute("brain.submit", {"text": self.goal_text or
-                f"Motor nélküli tanulási próba: {name}; {json.dumps(resolved_scenario)}"})
+                f"Motor nélküli tanulási próba: {name}"})
             adopted = self.runtime.execute("brain.adopt", {"goal_id": goal["goal_id"],
                 "plan": {"skill": name, "parameters": parameters}})
             deadline = time.monotonic() + timeout_s
@@ -341,6 +397,8 @@ class MotorlessSkillSimulator:
         return result
 
     def _assess(self, state, interrupted, explicit_scenario):
+        if self.source.scenario["kind"] == "semantic_trace":
+            return self._assess_trace(state, interrupted)
         expected = [sample for sample in self.source.samples if sample["value"] >= self.source.scenario["threshold"]]
         returned = state.get("result")
         detected = returned.get("detections") if isinstance(returned, dict) else None
@@ -361,6 +419,27 @@ class MotorlessSkillSimulator:
                           ("INDEPENDENT_GOAL_CHECK_REQUIRED" if not explicit_scenario else None),
                 "scope": "Simulated semantic measurements, source lineage and real SDK/worker/Brain lifecycle; no physical robot evidence."}
 
+    def _assess_trace(self, state, interrupted):
+        scenario = self.source.scenario
+        checks = [{"name": "all_trace_samples_observed", "passed": all(
+            self.source.resource_reads.get(name, 0) == len(rows) for name, rows in scenario["resources"].items()),
+            "expected": {name: len(rows) for name, rows in scenario["resources"].items()},
+            "actual": dict(self.source.resource_reads)}]
+        if "expected_result" in scenario:
+            checks.append({"name": "independent_result", "passed": state.get("result") == scenario["expected_result"],
+                           "expected": scenario["expected_result"], "actual": state.get("result")})
+        if "expected_reports" in scenario:
+            with self.runtime._sdk_event_lock:
+                reports = [value["text"] for seq, producer, value in self.runtime._sdk_events
+                           if seq > self._report_cursor and producer == "report"]
+            checks.append({"name": "observed_reports", "passed": reports == scenario["expected_reports"],
+                           "expected": scenario["expected_reports"], "actual": reports})
+        complete = (state.get("state") == "SUCCEEDED" and not state.get("finalizing")
+                    and not state.get("callback_error") and interrupted is None)
+        return {"status": "INCOMPLETE" if not complete else "PASSED" if all(row["passed"] for row in checks) else "FAILED",
+                "checks": checks, "reason": interrupted or state.get("error"),
+                "scope": "Supplied semantic trace and independent expected outputs/reports; no physical scene or freshness evidence."}
+
     def close(self):
         if self._closed:
             return
@@ -380,4 +459,4 @@ class MotorlessSkillSimulator:
         self.close()
 
 
-__all__ = ["MotorlessSkillSimulator", "threshold_scenario"]
+__all__ = ["MotorlessSkillSimulator", "threshold_scenario", "resolve_scenario"]

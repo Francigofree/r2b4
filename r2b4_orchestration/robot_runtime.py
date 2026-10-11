@@ -897,8 +897,11 @@ class PublicRobotRuntime:
                 raise RuntimeError("REPORT_JOURNAL_UNAVAILABLE")
             result = {"status": "RECORDED", "text": params["text"], "delivered_to": "journal",
                       "audio_delivered": False, "measurement_time_ns": self.clock_ns()}
-            with self._evidence_write_lock:
-                self._evidence({"schema": SCHEMA, "kind": "report", "value": result})
+            # Reports share the producer sequence/clock envelope consumed by
+            # the canonical capture follower. Drain the queue in order before
+            # acknowledging journal delivery; a raw report row loses lineage.
+            self._queue_evidence("report", result)
+            self._flush_evidence()
             self._sdk_event("report", result)
             return result
         if action.startswith("skill."):

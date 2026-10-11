@@ -588,7 +588,11 @@ def test_hri_report_journal_records_delivery_and_rejects_unavailable_audio(tmp_p
             assert result["audio_delivered"] is False
             journal = tmp_path / "runtime" / "public_world" / "events.ndjson"
             reports = [json.loads(line) for line in journal.read_text().splitlines()]
-            assert reports == [{"schema": SCHEMA, "kind": "report", "value": result}]
+            assert len(reports) == 1
+            assert reports[0]["schema"] == SCHEMA and reports[0]["kind"] == "report"
+            assert reports[0]["value"] == result
+            assert reports[0]["producer_id"] and reports[0]["clock_epoch"]
+            assert reports[0]["event_sequence"] > 0 and reports[0]["evidence_dropped"] == 0
             assert reports[0]["value"]["text"] == text
             with pytest.raises(RuntimeError, match="REPORT_AUDIO_DELIVERY_UNAVAILABLE"):
                 await sdk.call("hri.report", text=text, destination="audio")

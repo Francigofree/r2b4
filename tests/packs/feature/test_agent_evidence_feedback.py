@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,7 +13,7 @@ from tools.diag.context import DiagEvidenceError
 from v3.capture import payload_sha256
 from v3.composition.full_fake import OfflineMotorSink
 from v3.composition.native_control import NativeControlComposition
-from v3.contracts import (CommandMode, CommandRequest, DeviceHealth, DeviceHealthState,
+from v3.contracts import (CommandMode, CommandRequest, DataField, DeviceSample, DeviceHealth, DeviceHealthState,
                           LifecycleState, RawDeviceBatch, TickContext)
 from v3.engine import TickInputs
 from v3.execution import ExecutionRecord
@@ -30,16 +31,37 @@ def _native_capture(output, *, lose_required=False):
         subscription=hub.subscribe_reliable("agent-evidence", capacity=8, required=True),
         configuration={"production_control": control},
         config=McapCaptureConfig(mode="append_only", tick_sample_hz=50))
-    health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in control.critical_device_ids)
+    health = tuple(DeviceHealth(name, DeviceHealthState.OK) for name in
+                   sorted(set(control.critical_device_ids) | {"ENCODER", "IMU"}))
     try:
         for tick in range(3):
             context = TickContext(tick, 2_000_000_000 + tick * 20_000_000)
+            def sample(device, kind, **values):
+                return DeviceSample(device, kind, tick + 1, context.monotonic_ns,
+                                    tuple(DataField(key, value) for key, value in values.items()))
+            samples = (
+                sample("ENCODER", "wheel_velocity", left_mps=0., right_mps=0., trust=1.),
+                sample("IMU", "ekf_heading", yaw_rad=0., omega_rad_s=0., confidence=1., omega_confidence=1.),
+                sample("RPLIDAR_C1", "lidar_health", point_count=1, age_ns=0),
+                sample("RPLIDAR_C1", "lidar_local_points", frame_id="ROBOT_BASE", point_count=1,
+                       point_000_x_m=1., point_000_y_m=0., point_000_quality=10),
+                sample("RPLIDAR_C1", "lidar_safety_clearance", age_ns=0,
+                       **{f"{sector}_{key}": value for sector in ("front", "rear", "left", "right")
+                          for key, value in (("clearance_m", 2.), ("observation_count", 10))}),
+            )
             inputs = composition.close_inputs(TickInputs(
-                context, RawDeviceBatch(context, (), health),
+                context, RawDeviceBatch(context, samples, health),
                 CommandRequest(context, "learning-offline-stop", CommandMode.STOP, (), tick),
                 LifecycleState.IDLE))
             result = composition.run_tick(inputs)
+            assert result.trace.fault_layer is None
             assert result.final_actuation.left_output == result.final_actuation.right_output == 0.
+            hub.publish(SimpleNamespace(
+                raw_scan_id=tick + 1, raw_scan_timestamp=context.monotonic_ns / 1e9,
+                scan_start_monotonic_ns=context.monotonic_ns,
+                scan_end_monotonic_ns=context.monotonic_ns,
+                measurement_monotonic_ns=context.monotonic_ns, health="OK", summary={"source": "simulation"},
+                raw_scan=(SimpleNamespace(angle_deg=0., distance_m=1., quality=10),)), topic="v3.raw_lidar")
             hub.publish(ExecutionRecord(inputs, result), topic="v3.capture_record")
         if lose_required:
             for _ in range(6):
@@ -114,7 +136,7 @@ def test_stale_mismatched_or_modified_evidence_never_qualifies_a_trial(tmp_path)
         collect_evidence_feedback(ROOT, evidence=evidence, capture=captured.path)
     indexed = next((evidence / "source" / "messages").glob("*.ndjson"))
     data = indexed.read_bytes()
-    indexed.write_bytes(data.replace(b"IDLE", b"EVIL", 1))
+    indexed.write_bytes(data + b" ")
     with pytest.raises(DiagEvidenceError, match="hash mismatch"):
         collect_evidence_feedback(ROOT, evidence=evidence)
 

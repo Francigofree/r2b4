@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+import json
 
 from .agent_contracts import AgentToolSpec
 
@@ -19,7 +20,7 @@ def measure_skill_trial(project_root, library, simulator, name, parameters, scen
 
     root = Path(project_root).resolve()
     with hardware_guard(root):
-        trial = simulator.trial(name, parameters, scenario, timeout_s=timeout_s,
+        trial = simulator.trial(name, parameters, scenario, timeout_s=min(120., timeout_s),
                                 cancel_event=cancel_event)
     capture = trial.get("capture")
     if not capture or cancel_event is not None and cancel_event.is_set():
@@ -41,6 +42,9 @@ def measure_skill_trial(project_root, library, simulator, name, parameters, scen
         trial["evidence"] = {"status": "ERROR", "error": f"{type(exc).__name__}:{exc}"[:1024]}
         trial["assessment"] = {**trial.get("assessment", {}), "status": "INCOMPLETE",
                                 "reason": "EVIDENCE_PIPELINE_FAILED"}
+    trial["feedback_path"] = str(capture.parent / "measured.json")
+    with Path(trial["feedback_path"]).open("x") as stream:
+        json.dump(trial, stream, ensure_ascii=False, indent=2, allow_nan=False)
     return trial
 
 
