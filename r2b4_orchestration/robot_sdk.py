@@ -113,11 +113,17 @@ class SkillClient:
     async def list(self):
         return await self.robot.read("skill.list")
 
-    async def create(self, name, source, description=""):
-        return await self.robot.call("skill.create", name=name, source=source, description=description)
+    async def create(self, name, source, description="", *, test_source=None):
+        parameters = {"name": name, "source": source, "description": description}
+        if test_source is not None:
+            parameters["test_source"] = test_source
+        return await self.robot.call("skill.create", **parameters)
 
-    async def update(self, name, source, description=""):
-        return await self.robot.call("skill.update", name=name, source=source, description=description)
+    async def update(self, name, source, description="", *, test_source=None):
+        parameters = {"name": name, "source": source, "description": description}
+        if test_source is not None:
+            parameters["test_source"] = test_source
+        return await self.robot.call("skill.update", **parameters)
 
     async def run(self, name, **parameters):
         return await self.robot.call("skill.run", name=name, parameters=parameters)
@@ -156,7 +162,14 @@ class EventClient:
         while True:
             if self.pending:
                 return self.pending.pop(0)
-            page = await self.robot.request("events", after_sequence=self.cursor, kinds=kinds)
+            remaining = None if deadline is None else deadline - asyncio.get_running_loop().time()
+            if remaining is not None and remaining <= 0:
+                return None
+            try:
+                request = self.robot.request("events", after_sequence=self.cursor, kinds=kinds)
+                page = await request if remaining is None else await asyncio.wait_for(request, remaining)
+            except asyncio.TimeoutError:
+                return None
             self.cursor = page["next_sequence"]
             if page["lost_events"]:
                 self.pending.append(RobotEvent(kind="coverage_gap", lost_events=page["lost_events"],
@@ -228,10 +241,20 @@ class Observer:
 
     async def wait(self, *, timeout_s=None):
         deadline = _deadline(timeout_s)
+        until_ns = None if deadline is None else int(deadline * 1e9) + self._owner_offset_ns
         while True:
             if self.pending:
+                if until_ns is not None and self.pending[0].get("measurement_monotonic_ns", 0) > until_ns:
+                    return None
                 return self.pending.pop(0)
-            page = await self.robot.call("observe.events", handle=self.handle, after_sequence=self.cursor)
+            remaining = None if deadline is None else deadline - asyncio.get_running_loop().time()
+            if remaining is not None and remaining <= 0:
+                return None
+            try:
+                request = self.robot.call("observe.events", handle=self.handle, after_sequence=self.cursor)
+                page = await request if remaining is None else await asyncio.wait_for(request, remaining)
+            except asyncio.TimeoutError:
+                return None
             self._ingest(page)
             if self.pending:
                 continue
@@ -248,9 +271,16 @@ class Observer:
                 event = self.pending.pop(0)
                 if event.get("measurement_monotonic_ns", 0) <= until_ns:
                     yield event
-            remaining = max(0.0, deadline - asyncio.get_running_loop().time())
-            page = await self.robot.call("observe.finish", handle=self.handle, until_monotonic_ns=until_ns,
-                                         timeout_s=remaining, after_sequence=self.cursor)
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                yield RobotEvent(kind="coverage_gap", reason="INTERVAL_CLOSURE_TIMEOUT")
+                return
+            try:
+                page = await asyncio.wait_for(self.robot.call("observe.finish", handle=self.handle,
+                    until_monotonic_ns=until_ns, timeout_s=remaining, after_sequence=self.cursor), remaining)
+            except asyncio.TimeoutError:
+                yield RobotEvent(kind="coverage_gap", reason="INTERVAL_CLOSURE_TIMEOUT")
+                return
             self._ingest(page)
             while self.pending:
                 event = self.pending.pop(0)

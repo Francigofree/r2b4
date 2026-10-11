@@ -750,7 +750,9 @@ class BrainCore:
         try:
             if current is not None and current.skill_run_id and current.lifecycle in _RUNNING:
                 self.robot.execute("skill.revoke", run_id=current.skill_run_id, reason="PREEMPTED")
-                self.robot.execute("skill.stop", run_id=current.skill_run_id)
+                stopped = self.robot.execute("skill.stop", run_id=current.skill_run_id)
+                if isinstance(stopped, Mapping) and (stopped.get("finalizing") or stopped.get("callback_error")):
+                    raise RuntimeError("SKILL_CLEANUP_PENDING_OR_FAILED")
             if current is not None and current.lifecycle in _RUNNING or had_behavior:
                 self.robot.stop()
         except Exception as exc:

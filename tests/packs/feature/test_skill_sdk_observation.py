@@ -52,8 +52,11 @@ async def connected_sdk(path, owner):
         try:
             request = json.loads(await reader.readline())
             assert request["schema"] == SCHEMA and request["invocation_id"] == "worker-a"
-            assert request["operation"] == "call"
-            result = await owner.call(request["action"], request["parameters"])
+            if request["operation"] == "events":
+                result = await owner.events(request)
+            else:
+                assert request["operation"] == "call"
+                result = await owner.call(request["action"], request["parameters"])
             writer.write(json.dumps({"schema": SCHEMA, "result": result}).encode() + b"\n")
             await writer.drain()
         finally:
@@ -90,7 +93,8 @@ def test_sdk_ready_event_lineage_duplicate_gap_and_context_cleanup(tmp_path):
                 assert await robot.events.wait(observer, timeout_s=0) is None
             assert owner.calls[-1] == ("observe.close", {"handle": "observer-a"})
             reads = [parameters for name, parameters in owner.calls if name == "observe.events"]
-            assert [item["after_sequence"] for item in reads] == [0, 2]
+            # An expired wait returns without starting another socket read.
+            assert [item["after_sequence"] for item in reads] == [0]
 
             # Failed READY entry must release the accepted session handle.
             owner.open_status = "FAILED"
@@ -138,6 +142,139 @@ def test_sdk_drains_deadline_pages_with_loss_then_finishes_recorder(tmp_path):
             assert all(item["until_monotonic_ns"] == until_ns for item in requests)
             assert [item["after_sequence"] for item in requests] == [0, 4]
             assert names.index("media.recorder.finish") > max(index for index, name in enumerate(names) if name == "observe.finish")
+
+    asyncio.run(scenario())
+
+
+def test_sdk_wait_retains_post_deadline_measurement_for_interval_finish(tmp_path):
+    async def scenario():
+        owner = ObservationOwner()
+        server, robot = await connected_sdk(tmp_path / "sdk.sock", owner)
+        async with server:
+            async with robot.observe() as observer:
+                async with robot.media.event_recorder(observer) as recorder:
+                    loop = asyncio.get_running_loop()
+                    deadline = loop.time() + 0.1
+                    until_ns = int(deadline * 1e9)
+                    late = event(1, until_ns + 1_000_000_000)
+                    owner.event_pages = [{"events": [late], "lost_events": 0,
+                                          "status": "READY", "latest_sequence": 1}]
+                    owner.finish_pages = [{"events": [], "lost_events": 0,
+                                           "finished": True, "latest_sequence": 1}]
+
+                    observed = await robot.events.wait(observer, timeout_s=deadline - loop.time())
+                    if observed is not None:
+                        await recorder.start_event_clip(observed)
+                    assert observed is None
+                    assert observer.pending == [late]
+                    assert await robot.events.wait(observer, timeout_s=0) is None
+                    assert observer.pending == [late]
+
+                    drained = [row async for row in observer.finish_events(until=deadline, timeout_s=0.1)]
+                    for row in drained:
+                        if row.kind == "qualified_presence":
+                            await recorder.start_event_clip(row)
+                    assert drained == []
+                    assert observer.pending == []
+
+            assert not any(name == "media.recorder.start_event_clip" for name, _ in owner.calls)
+            finish = [parameters for name, parameters in owner.calls if name == "observe.finish"]
+            assert len(finish) == 1
+            assert finish[0]["handle"] == "observer-a"
+            assert finish[0]["until_monotonic_ns"] == until_ns
+            assert finish[0]["after_sequence"] == 1
+            assert [name for name, _ in owner.calls][-2:] == ["media.recorder.close", "observe.close"]
+            assert robot._sessions == set()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("stalled_action", ["observe.events", "observe.finish", "events"])
+def test_sdk_stalled_event_or_interval_reply_is_bounded_and_sessions_close(tmp_path, stalled_action):
+    class StalledObservationOwner(ObservationOwner):
+        def __init__(self):
+            super().__init__()
+            self.events_entered = asyncio.Event()
+            self.events_request_task = None
+
+        async def call(self, name, parameters):
+            if name == stalled_action:
+                self.calls.append((name, dict(parameters)))
+                self.events_request_task = asyncio.current_task()
+                self.events_entered.set()
+                await asyncio.Event().wait()
+            return await super().call(name, parameters)
+
+        async def events(self, request):
+            assert request["after_sequence"] == 0
+            assert request["kinds"] == ["world"]
+            return await self.call("events", request)
+
+    async def scenario():
+        owner = StalledObservationOwner()
+        server, robot = await connected_sdk(tmp_path / "sdk.sock", owner)
+        try:
+            async with server:
+                async with robot.observe() as observer:
+                    async with robot.media.event_recorder(observer):
+                        if stalled_action == "observe.finish":
+                            until = asyncio.get_running_loop().time()
+
+                            async def finish():
+                                return [row async for row in observer.finish_events(until=until, timeout_s=0.05)]
+
+                            wait = asyncio.create_task(finish())
+                        else:
+                            source = None if stalled_action == "events" else observer
+                            assert await robot.events.wait(source, timeout_s=0, kinds=["world"]) is None
+                            wait = asyncio.create_task(robot.events.wait(source, timeout_s=0.05, kinds=["world"]))
+                        await asyncio.wait_for(owner.events_entered.wait(), 0.25)
+                        # The caller bounds an in-flight reply even though the
+                        # SDK socket's normal request timeout is 1s.
+                        result = await asyncio.wait_for(wait, 0.25)
+                        if stalled_action == "observe.finish":
+                            assert result == [{"kind": "coverage_gap", "reason": "INTERVAL_CLOSURE_TIMEOUT"}]
+                            parameters = next(parameters for name, parameters in owner.calls
+                                              if name == "observe.finish")
+                            assert parameters["until_monotonic_ns"] == int(until * 1e9)
+                            assert 0 < parameters["timeout_s"] <= 0.05
+                        else:
+                            assert result is None
+                        assert not owner.events_request_task.done()
+
+                # The owner still has the original events request pending;
+                # cleanup completes over its own request connections.
+                assert not owner.events_request_task.done()
+                assert [name for name, _ in owner.calls][-2:] == ["media.recorder.close", "observe.close"]
+                assert robot._sessions == set()
+        finally:
+            if owner.events_request_task is not None:
+                owner.events_request_task.cancel()
+                await asyncio.gather(owner.events_request_task, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_sdk_zero_finish_timeout_delivers_buffered_snapshot_and_explicit_gap(tmp_path):
+    async def scenario():
+        owner = ObservationOwner()
+        server, robot = await connected_sdk(tmp_path / "sdk.sock", owner)
+        async with server:
+            async with robot.observe() as observer:
+                loop = asyncio.get_running_loop()
+                until = loop.time() + 0.1
+                until_ns = int(until * 1e9)
+                first = event(1, until_ns - 20)
+                second = event(2, until_ns - 10)
+                owner.event_pages = [{"events": [first, second, event(3, until_ns + 1_000_000_000)],
+                                      "lost_events": 0, "status": "READY", "latest_sequence": 3}]
+                assert await robot.events.wait(observer, timeout_s=until - loop.time()) == first
+
+                result = [row async for row in observer.finish_events(until=until, timeout_s=0)]
+                assert result == [second, {"kind": "coverage_gap", "reason": "INTERVAL_CLOSURE_TIMEOUT"}]
+                assert observer.pending == []
+                assert not any(name == "observe.finish" for name, _ in owner.calls)
+            assert owner.calls[-1] == ("observe.close", {"handle": "observer-a"})
 
     asyncio.run(scenario())
 

@@ -296,6 +296,216 @@ async def run(robot):
     asyncio.run(scenario())
 
 
+WAITING_SOURCE = '''
+import asyncio
+async def run(robot):
+    while True:
+        await asyncio.sleep(0.05)
+'''
+
+
+def test_manual_behavior_replaces_standalone_skill_and_rejects_its_next_motion(tmp_path):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            await sdk.skill.create("wait_locally", WAITING_SOURCE)
+            old = await sdk.skill.run("wait_locally")
+            await eventually(lambda: owner.skills.status(old["run_id"])["state"] == "RUNNING")
+            manual = await sdk.call("behavior.start", name="room_cruise", max_duration_s=60)
+            await eventually(lambda: not owner.skills.active)
+            assert (await sdk.skill.status(old["run_id"]))["state"] == "CANCELLED"
+            old_client = AsyncRobotSDK(sdk.socket_path, root=tmp_path, invocation_id=old["run_id"])
+            with pytest.raises(RuntimeError, match="SKILL_INVOCATION_REVOKED"):
+                await old_client.call("v3.command.turn_by", angle_deg=30)
+            current = await sdk.read("behavior.state")
+            assert current["behavior_id"] == manual["behavior_id"]
+            assert current["lifecycle"] in {"STARTING", "ACTIVE"}
+            assert [action for action, _ in backend.calls] == ["v3.command.explore"]
+            assert backend.active
+    asyncio.run(scenario())
+
+
+def test_external_brain_adoption_replaces_standalone_skill_without_revoking_pending_goal(tmp_path):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            await sdk.skill.create("wait_locally", WAITING_SOURCE)
+            await sdk.skill.create("new_observation", SENSING_SOURCE)
+            old = await sdk.skill.run("wait_locally")
+            await eventually(lambda: owner.skills.status(old["run_id"])["state"] == "RUNNING")
+            pending = await sdk.call("brain.submit", text="Run the new local observation")
+            adopted = await sdk.call("brain.adopt", goal_id=pending["goal_id"],
+                                     plan={"skill": "new_observation"})
+            assert adopted["lifecycle"] in {"STARTING", "ACTIVE"}, adopted
+            await eventually(lambda: owner.brain.goal(pending["goal_id"])["skill_run_id"] is not None)
+            new_run_id = owner.brain.goal(pending["goal_id"])["skill_run_id"]
+            result = await finished(owner, sdk, new_run_id)
+            assert result["state"] == "SUCCEEDED", result
+            await asyncio.to_thread(owner.brain.step)
+            assert owner.brain.goal(pending["goal_id"])["lifecycle"] == "COMPLETED"
+            assert (await sdk.skill.status(old["run_id"]))["state"] == "CANCELLED"
+            assert new_run_id != old["run_id"]
+            assert backend.calls == []
+    asyncio.run(scenario())
+
+
+def test_invocation_cannot_start_independent_worker_through_dynamic_skill_alias(tmp_path):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            await sdk.skill.create("alias_child", "async def run(robot): return 'child'\n")
+            await sdk.skill.create("alias_parent", '''
+async def run(robot):
+    try:
+        await robot.call("skill.alias_child")
+    except RuntimeError as exc:
+        return {"rejected": str(exc), "run_id": robot.invocation_id}
+    return {"rejected": None}
+''')
+            started = await sdk.skill.run("alias_parent")
+            result = await finished(owner, sdk, started["run_id"])
+            assert result["state"] == "SUCCEEDED", result
+            assert result["result"] == {"rejected": "NESTED_SKILL_RUN_USE_SDK_INVOKE",
+                                        "run_id": started["run_id"]}
+            events = await sdk.request("events", kinds=["skill"])
+            assert [row["event"]["run_id"] for row in events["events"]] == [started["run_id"]]
+            assert backend.calls == []
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("queued", ["motion", "skill"])
+def test_stop_revokes_manual_request_waiting_after_its_initial_cleanup(tmp_path, queued):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            marker = tmp_path / "worker_started"
+            await sdk.skill.create("queued_worker", f'''
+from pathlib import Path
+async def run(robot):
+    Path({str(marker)!r}).touch()
+    return "started"
+''')
+            await sdk.skill.create("wait_locally", WAITING_SOURCE)
+            old = await sdk.skill.run("wait_locally")
+            await eventually(lambda: owner.skills.status(old["run_id"])["state"] == "RUNNING")
+            entered, release = threading.Event(), threading.Event()
+            original_stop = owner.skills.stop
+            replacement_reason = "PREEMPTED_BY:" + ("v3.command.turn_by" if queued == "motion" else "skill.run")
+
+            def delayed_cleanup(run_id=None, reason="STOP"):
+                result = original_stop(run_id, reason)
+                if reason == replacement_reason:
+                    entered.set()
+                    assert release.wait(3), "queued request was not released"
+                return result
+
+            owner.skills.stop = delayed_cleanup
+            request = asyncio.create_task(sdk.call("v3.command.turn_by", angle_deg=30)
+                                          if queued == "motion" else sdk.skill.run("queued_worker"))
+            try:
+                await eventually(entered.is_set)
+                await sdk.stop()
+                assert backend.active is False
+                release.set()
+                with pytest.raises(RuntimeError, match="(?i)revoked"):
+                    await asyncio.wait_for(request, 3)
+            finally:
+                release.set()
+                await asyncio.gather(request, return_exceptions=True)
+            assert backend.calls == []
+            assert backend.operations[-1] == "STOP"
+            status = await sdk.skill.status()
+            assert status["run_id"] == old["run_id"] and status["state"] == "CANCELLED"
+            assert not marker.exists()
+    asyncio.run(scenario())
+
+
+def test_older_manual_cleanup_cannot_revoke_newer_standalone_skill(tmp_path):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            await sdk.skill.create("wait_locally", WAITING_SOURCE)
+            old = await sdk.skill.run("wait_locally")
+            await eventually(lambda: owner.skills.status(old["run_id"])["state"] == "RUNNING")
+            entered, release = threading.Event(), threading.Event()
+            original_stop = owner.skills.stop
+
+            def delayed_cleanup(run_id=None, reason="STOP"):
+                if reason == "PREEMPTED_BY:v3.command.turn_by":
+                    entered.set()
+                    assert release.wait(3), "older cleanup was not released"
+                return original_stop(run_id, reason)
+
+            owner.skills.stop = delayed_cleanup
+            older_motion = asyncio.create_task(sdk.call("v3.command.turn_by", angle_deg=30))
+            try:
+                await eventually(entered.is_set)
+                newer = await sdk.skill.run("wait_locally")
+                await eventually(lambda: owner.skills.status(newer["run_id"])["state"] == "RUNNING")
+                release.set()
+                with pytest.raises(RuntimeError, match="(?i)revoked"):
+                    await asyncio.wait_for(older_motion, 3)
+            finally:
+                release.set()
+                await asyncio.gather(older_motion, return_exceptions=True)
+            assert (await sdk.skill.status(old["run_id"]))["state"] == "CANCELLED"
+            current = await sdk.skill.status()
+            assert current["run_id"] == newer["run_id"] and current["state"] == "RUNNING"
+            assert backend.calls == []
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("replacement", ["behavior", "brain", "brain_owned"])
+def test_replacement_waits_for_blocked_skill_cleanup_without_starting_new_motion(tmp_path, replacement):
+    async def scenario():
+        async with robot_service(tmp_path) as (owner, backend, sdk):
+            backend.block_motion = True
+            owner.skills._grace_s = 0.05
+            await sdk.skill.create("blocked_motion", '''
+async def run(robot):
+    await robot.call("v3.command.move_relative", forward_m=0.1)
+    await robot.call("v3.command.turn_by", angle_deg=5)
+''')
+            old_goal = None
+            if replacement == "brain_owned":
+                old_goal = await sdk.call("brain.submit", text="Run the local motion skill")
+                await sdk.call("brain.adopt", goal_id=old_goal["goal_id"], plan={"skill": "blocked_motion"})
+                await eventually(lambda: owner.brain.goal(old_goal["goal_id"])["skill_run_id"] is not None)
+                old = {"run_id": owner.brain.goal(old_goal["goal_id"])["skill_run_id"]}
+            else:
+                old = await sdk.skill.run("blocked_motion")
+            await eventually(backend.motion_entered.is_set)
+            backend.stop_seen.clear()
+            pending = None
+            if replacement in {"brain", "brain_owned"}:
+                pending = await sdk.call("brain.submit", text="Turn after the previous skill has stopped")
+                request = sdk.call("brain.adopt", goal_id=pending["goal_id"], plan={"steps": [
+                    {"action": "v3.command.turn_by", "parameters": {"angle_deg": 30}}
+                ]})
+            else:
+                request = sdk.call("behavior.start", name="room_cruise", max_duration_s=60)
+            try:
+                if replacement == "brain_owned":
+                    rejected = await request
+                    assert rejected["lifecycle"] == "FAILED", rejected
+                    assert rejected["reason"].startswith("CANONICAL_STOP_FAILED:"), rejected
+                    assert owner.brain.goal(old_goal["goal_id"])["lifecycle"] == "CANCELLED"
+                else:
+                    with pytest.raises(RuntimeError, match="SKILL_CLEANUP_PENDING"):
+                        await request
+                assert backend.stop_seen.is_set() and backend.active is False
+                status = await sdk.skill.status(old["run_id"])
+                assert status["state"] == "CANCELLED" and status["finalizing"]
+                assert (await sdk.read("behavior.state"))["behavior_id"] is None
+                assert [action for action, _ in backend.calls] == ["v3.command.move_relative"]
+                if pending is not None:
+                    expected = "FAILED" if replacement == "brain_owned" else "PENDING"
+                    assert owner.brain.goal(pending["goal_id"])["lifecycle"] == expected
+            finally:
+                backend.release_motion.set()
+            terminal = await finished(owner, sdk, old["run_id"])
+            assert terminal["state"] == "CANCELLED" and not terminal["finalizing"]
+            assert backend.active is False
+            assert backend.operations[-1] == "STOP"
+            assert [action for action, _ in backend.calls] == ["v3.command.move_relative"]
+    asyncio.run(scenario())
+
+
 def test_saved_optional_skill_test_uses_canonical_launcher_and_survives_updates(tmp_path):
     async def scenario():
         async with robot_service(tmp_path) as (owner, backend, sdk):
@@ -310,7 +520,7 @@ def test_empty_and_nonempty_sum():
     assert asyncio.run(tested_sum.run(None, n=0)) == 0
     assert asyncio.run(tested_sum.run(None, n=4)) == 6
 '''
-            saved = await sdk.call("skill.create", name="tested_sum", source=source, test_source=test_source)
+            saved = await sdk.skill.create("tested_sum", source, test_source=test_source)
             assert Path(saved["test_path"]).exists()
             tested = await sdk.call("skill.test", name="tested_sum", timeout_s=5)
             assert tested["status"] == "PASSED", tested
@@ -319,7 +529,7 @@ def test_empty_and_nonempty_sum():
             assert changed["test_path"] == saved["test_path"]
             tested = await sdk.call("skill.test", name="tested_sum", timeout_s=5)
             assert tested["status"] == "FAILED", tested
-            await sdk.skill.update("tested_sum", source)
+            await sdk.skill.update("tested_sum", source, test_source=test_source)
             tested = await sdk.call("skill.test", name="tested_sum", timeout_s=5)
             assert tested["status"] == "PASSED", tested
             assert backend.calls == []

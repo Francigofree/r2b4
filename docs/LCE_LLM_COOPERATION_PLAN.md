@@ -1,6 +1,19 @@
 # R2B4 — nyitott Skill/Interface, Python Skill Runtime és LCE–LLM együttműködés
 
-Dátum: 2026-10-10. Állapot: a programfuttatóról és a túlszabályozásról adott felülvizsgálat alapján módosított terv. Az új SDK, Skill Runtime és skillkönyvtár még nincs implementálva.
+Dátum: 2026-10-10; implementációs állapot frissítve: 2026-10-11.
+A közös async SDK, a Python Skill Library/Runtime, az LCE–LLM együttműködés és
+az owning vision-edge observer/recorder implementálva. A valós recognition,
+nyolcórás üzem és RPi-timing külön hardver-evidence-et igényel.
+
+Implementáció: [`robot_sdk.py`](../r2b4_orchestration/robot_sdk.py),
+[`skill_library.py`](../r2b4_orchestration/skill_library.py),
+[`skill_runtime.py`](../r2b4_orchestration/skill_runtime.py),
+[`robot_runtime.py`](../r2b4_orchestration/robot_runtime.py),
+[`BrainCore`](../r2b4_orchestration/brain_core.py),
+[`AgentCore`](../r2b4_orchestration/agent_core.py) és
+[`vision-edge observer/media`](../v3/adapters/skill_observation.py).
+A futtatható példa a [`monitor_region.py`](../robot_skills/monitor_region.py);
+használata és tényleges korlátai a [skillkönyvtár leírásában](../robot_skills/README.md).
 
 ## 1. A kívánt végállapot
 
@@ -14,9 +27,9 @@ Az LCE a meglévő `BrainCore` célgazda és végrehajtási felügyelő. A V3 a 
 
 **Az LLM elérhetősége soha nem előfeltétele egy már elindított helyi skill folyamatos végrehajtásának.** Nyolcórás zavartalan megfigyelés, helyi detector és eseményfelvétel alatt a kívánt LLM-hívásszám nulla.
 
-Ez a változat lecseréli a korábbi saját Python-részhalmazt, AST-interpretert, rekurziótilalmat és utasításonkénti erőforrás-elszámolást szabványos Pythonra és egyszerű folyamatfelügyeletre. A TaskGraph és a meglévő behaviorök kompatibilis eszközök maradnak. A [korábbi LCE-terv](LOCAL_COGNITIVE_EXECUTIVE_PLAN.md) memória/identity/spatial eredményei továbbra is alapot adnak.
+Ez a változat lecseréli a korábban tervezett saját Python-részhalmazt, AST-interpretert, rekurziótilalmat és utasításonkénti erőforrás-elszámolást szabványos Pythonra és egyszerű folyamatfelügyeletre. A TaskGraph és a meglévő behaviorök kompatibilis eszközök maradnak. A meglévő memória/identity/spatial source továbbra is alapot ad.
 
-Authority: [rendszerszintű működési contract](../R2B4_SYSTEM_BEHAVIOR_CONTRACT.md), [V3 struktúra](../STRUKTURALIS_RETEGEK_V3.md), [async runtime contract](../ASZINKRON_RUNTIME_CONTRACT_V3.md). A kívánt Python-skill és közös fejlesztői működéshez szükséges célzott contract-változás a 14. fejezetben szerepel. A live contractok és production source ebben a tervezési munkában nem változnak.
+Authority: [V3 struktúra](../STRUKTURALIS_RETEGEK_V3.md) és [async runtime contract](../ASZINKRON_RUNTIME_CONTRACT_V3.md). A Python-skill és közös fejlesztői működés célzott normája a V3 contract 9. fejezetébe, az elhelyezési/lifecycle szabály az async contractba került az érintett source-szal együtt.
 
 ## 2. A kutatási elvek R2B4-re szabott kombinációja
 
@@ -30,6 +43,10 @@ Authority: [rendszerszintű működési contract](../R2B4_SYSTEM_BEHAVIOR_CONTRA
 Ez architekturális adaptáció. A Voyager Minecraftban bemutatott működése nem bizonyít fizikai robot-safetyt; a Code as Policies alacsony szintű control-példái nem kerülnek át a V3 alá vagy helyére. A konkrét runner, felület és validáció az R2B4 source-ára és erőforrásaira épülő javaslat.
 
 ## 3. Source-alapú kiindulópont
+
+Az alábbi táblázat és a „mai” korlátozások az implementáció előtti kiindulópontot
+rögzítik. A megvalósított út külön asyncio socket-klienssel használja ugyanazt a
+host dispatchot; nem blokkolja az eseményvárakozással a STOP admission útját.
 
 | Terület | Meglévő alap | Célzott bővítés |
 | --- | --- | --- |
@@ -130,7 +147,12 @@ Mértékegység, eseménytípus, hosszú művelet handle-je, cancel, readiness-r
 | `skill.status()` | Állapot, eredmény vagy hiba lekérdezése |
 | `skill.update()` | Új forrásváltozat mentése; a futó programot nem reloadolja |
 
-A nevek tervezett API-k, még nem mai CLI-parancsok. A tesztelés a közös fejlesztői eszközök és a meglévő pytest-folyamat része; nem kell külön validate/store/promotion platform. A mentett `.py` fájl maga a tartós skill.
+A hat skillfunkció az SDK-ban és a közös interface-en elérhető. A célzott
+`skill.test` a mentett opcionális pytestet a canonical launcherrel futtatja;
+nem hoz létre új permanent gate-entryt. A mentett `.py` fájl maga a tartós skill.
+Kapcsolódó részskill `robot.skill.invoke`-kal ugyanabban a workerben, ugyanazzal
+a visszavonható invocationnel hívható. A `hri.report` jelenleg journalba
+rögzítést igazol; audio deliveryt nem állít és hiányzó voice-ownernél elutasít.
 
 A mai `capabilities/read/query/spatial_query/execute/stop` út kompatibilis marad. Új skill descriptorát a könyvtár publikálja, core factory- vagy kliens-allowlist-módosítás nélkül. Új hardver/compute bekötése konkrét owning adaptermunka; ehhez sem kell új általános plugin- vagy transport-framework.
 
@@ -214,7 +236,7 @@ A fejlesztési ciklus: **szóbeli instrukció / Codex / más intelligencia → P
 
 A laboratóriumi K&F működés az alapértelmezett fejlesztési modell. Új skill létrehozásához, módosításához, mentéséhez és helyi teszteléséhez nincs új többszintű jóváhagyás. Az LCE kísérleti célban saját maga is kezdeményezhet próba- és javítási feladatot; ez a meglévő goal/prioritáskezelésen keresztül fut. Az új skill nem igényel kézi factory deploymentet.
 
-A kísérleti robotüzem és egy konkrét ügyviteli feladat eltérő célt adhat. A robotikai próba is a V3 útját, az egy fizikai mission szabályát és a STOP-ot használja. A mostani feladat tervmódosítás: e munkában nem indul fizikai próba.
+A kísérleti robotüzem és egy konkrét ügyviteli feladat eltérő célt adhat. A robotikai próba is a V3 útját, az egy fizikai mission szabályát és a STOP-ot használja. Az implementációs validáció motor nélküli; fizikai próba nem indult.
 
 A vizsgálat a konkrét skillhez igazodik: szintaxis/import és indítás, néhány érdemi eseménysor, megszakítás, visszatérési eredmény, majd szükség szerint tényleges robotikai próba. A program és az LLM készíthet tesztet. A sikeres pytest és a tényleges cél teljesülése külön eredmény; a `return {"success": True}` nem bizonyítja a csapdaajtó zárását.
 
@@ -233,7 +255,7 @@ robot_skills/
     tests/test_monitor_region.py  # ha érdemi teszt szükséges
 ```
 
-Ez tervezett elhelyezés, nem most létrehozott fájlszerkezet. A szóban generált és a Codex által szerkesztett program ugyanide kerül, ugyanazzal az SDK-val fut. A Git kezeli a forrástörténetet; a működő munkafa-változat commit nélkül is futtatható. Automatikus commit/push nem része a rendszernek.
+Ez a megvalósított közös könyvtár. A szóban generált és a Codex által szerkesztett program ugyanide kerül, ugyanazzal az SDK-val fut. A Git kezeli a forrástörténetet; a működő munkafa-változat commit nélkül is futtatható. Automatikus commit/push nem része a rendszernek.
 
 A futtató a konkrét betöltött source-változatot azonosítja, és a modul betöltése a workerben történik; a katalógus felépítése nem importál tetszőleges skillkódot a control vagy a Brain folyamatába. A módosított program friss indításkor töltődik be. A belépési fájl azonosítása nem jelent teljes Python-környezet- vagy függőségfagyasztást.
 
@@ -245,7 +267,13 @@ A visszakeresés kezdetben név/alias/leírás/paraméter és egyszerű helyi ke
 
 ## 11. Szabványos Python-példa: hosszú megfigyelés
 
-Az alábbi `.py` skill tervezési példa. Az `asyncio` valódi Python; a `robot.observe`, `robot.media` és `robot.events` még fejlesztendő SDK-hívások, nem meglévő production API-k. A context managerek a saját observer/recorder igényt nyitják és engedik el.
+Az alábbi `.py` skill az általános egérmegfigyelési cél példája. Az `asyncio`,
+`robot.observe`, `robot.media` és `robot.events` implementált SDK-hívások;
+a telepített detector egyelőre személyt ismer fel, az egérdetektor hiányát
+explicit hibával jelzi. A repository futtatható `monitor_region` skilljének
+alapértelmezése ezért `object_kind="person"`; név szerinti szoba helyett
+normalizált képterületi bboxot használ. A context managerek a saját
+observer/recorder igényt nyitják és engedik el.
 
 ```python
 import asyncio
@@ -346,15 +374,20 @@ Méréshez használható a meglévő [`AgentCore`](../r2b4_orchestration/agent_c
 
 ## 14. Célzott contract-változás az implementációhoz
 
-A [rendszerszintű contract 14. fejezete](../R2B4_SYSTEM_BEHAVIOR_CONTRACT.md#14-közös-robotvilág-idő-és-felső-viselkedések) normál Agent-turnben existing-capability használatot ír le, a behavior-generálást külön fejlesztői módhoz köti és tiltja a generált kód automatikus aktiválását. A 7. fejezet a validated TaskGraph útját és külön runtime/developer mellékágakat rögzíti. Ezeket a kívánt közös K&F működéshez célzottan módosítani kell.
+A felső Python-skill működés célzott normája a meglévő V3/async authorityba
+került, az érintett source-szal együtt. A korábbi külön rendszerszintű contract
+és LCE-terv helyett ezek a fenntartott contractok az irányadók.
 
-Javasolt norma:
+A megvalósított működés normája:
 
 > Az R2B4 egyszemélyes K&F platformján a csatlakozó kognitív rendszerek ugyanazon teljes RobotInterface-et és közös fejlesztői eszközöket használják. Új skillt szabványos Python-programként hozhatnak létre, módosíthatnak, tesztelhetnek, menthetnek és futtathatnak; az új felső skillréteg nem vezet be külön runtime/developer jogosultsági hierarchiát vagy többszintű aktiválást. Az LCE próba- és javítási célokat is kezelhet, és megmarad a szemantikus célgazdának. Egyszerre egy fizikai mission lehet; a mozgás a canonical RobotInterface/V3 úton történik, a STOP elsőbbsége változatlan. A teljes Python megbízható fejlesztői kód; a külön folyamat meghibásodási izoláció, önmagában nem sandbox. A futó skill induláskor betöltött programváltozatot használ; új változat következő indításkor vagy lezárt részfeladathatáron indulhat. A Git és a meglévő tesztek kezelik a source-változtatásokat; automatikus commit/push nem része a skillfejlődésnek. A skill eredménye és az emberi cél teljesülése külön állítás.
 
-A 7. fejezet proposal/execution útja TaskGraph mellett Python-skill-hivatkozást és külön helyi programfutást is elfogad. A 8./14. fejezet közvetlen motor/GPIO/inner V3-authority handle átadási tilalma megmaradhat: az SDK ilyet nem ad, a canonical fizikai út architekturális szabály. A 14. fejezet interface-leírása eseménnyel, compute/result és közös fejlesztői eszközökkel bővül.
+A Brain proposal/execution útja TaskGraph mellett Python-skill-hivatkozást és
+külön helyi programfutást is elfogad. Az SDK nem ad közvetlen motor/GPIO/inner
+V3-authority handle-t. Az interface eseménnyel, observer/media eredménnyel és
+a meglévő source/evidence/config owning eszközökkel bővült.
 
-Az existing V3 safety, L0–L12 ownership, CommandGateway és completion/input closure nem kerül lecserélésre. A normatív módosítást az érintett host/SDK source-szal együtt kell megvalósítani és ellenőrizni. Most csak a tervezési dokumentumok változnak.
+Az existing V3 safety, L0–L12 ownership, CommandGateway és completion/input closure változatlan. A normatív módosítás az érintett host/SDK source-szal együtt valósult meg; V3 döntési algoritmus vagy aktív robotkonfiguráció nem változott.
 
 ## 15. Egyszerű megvalósítási sorrend
 
@@ -371,7 +404,7 @@ Az első demonstráció: **új, előre nem regisztrált Python-skill → érdemi
 
 Szűk kezdeti integráció elég: egy motion, observer, recorder, world/spatial és report, valamint egy Python-skill. Ez az első működési bizonyíték. A teljes képességfelület akkor kész, ha minden telepített fizikai, sensing, compute és software képesség owning adapterrel, egyszerű leírással és a típusának megfelelő valódi adat/művelet/esemény/eredmény úttal hozzáférhető. A további integráció ownerenként halad; nincs mechanikus teljes repo-audit.
 
-## 16. Célzott validáció és a tervezési munka határa
+## 16. Célzott validáció és a bizonyítékok határa
 
 A [pytest policy](PYTEST_POLICY.md) szerinti existing gate és célzott tesztek maradnak. Az új réteg első tesztjei: skillindítás, paraméter/visszatérési érték, exception/status, megszakítás, beragadt worker/process cleanup, futó source-változat és mentés utáni LLM nélküli újrafuttatás. Robotikai műveletnél ellenőrizni kell a canonical utat, a STOP-versenyt és azt, hogy workerhiba után ne ismétlődjön meg mozgás.
 
@@ -381,4 +414,36 @@ Async/process vagy canonical boundary változtatáskor a releváns [async contra
 
 Normál implementációs változás után `./r test`; közös canonical boundary/composition/config/motor változáskor a policy szerinti release. Az új célzott skilltesztek nem lesznek automatikusan permanent gate-entryk. A fejlesztőagent által indított élő hardverteszt az [AGENTS.md](../AGENTS.md) szerint az aktuális feladatban adott kifejezett mozgásengedélyt igényli, és canonical úton történik; váratlan safety/fault/process-death/timing eredmény után nincs automatikus újrapróbálás. Ez az agent munkavégzési szabálya, nem új robotoldali engedélyezési vagy aktiválási réteg a tervezett K&F üzemben.
 
-Ebben a feladatban a mellékelt felülvizsgálat, az érintett source/contract és a Python elsődleges dokumentációjának ellenőrzése történt. Production source/config/authority-contract és helyi runtime/capture/log adat nem változott. Providerhívás, hardvermérés, replay és fizikai mozgás nem történt. A dokumentáció helyi hivatkozásainak, whitespace-ének és Python-példája szintaxisának ellenőrzése sikeres; új robotteszt nem futott. Ez dokumentációs ellenőrzés, nem az SDK/Skill Runtime vagy az RPi5 teljesítményének működési bizonyítéka.
+Az implementáció célzott tesztjei valódi UNIX-socketes SDK → host → külön
+Python-worker úton bizonyítják az új skill érzékelési visszacsatolását,
+LLM nélküli újrafuttatását, paraméterét/eredményét, forrásváltozatát,
+exception/crash/beragadt worker és gyermekprocesszek cleanupját, a STOP-versenyt
+és a revokált késői mozgáskérés elutasítását. A producer measurement time,
+sequence/revision és lineage direct/socket/worker úton egyezik. Az LCE/Agent
+tesztjei fake providerrel ellenőrzik a mentés → opcionális pytest → javítás
+kört, a késői válasz elutasítását, a teljes goal megtartását és az explicit
+FAILED/PARTIAL eredmény kezelését. Restartkor nincs automatikus skillfolytatás.
+
+A manuális behavior és a Brain célátvétele visszavonja a standalone skillt;
+a takarítás mindig a leváltott run_id-hoz kötött. STOP után korábban várakozó
+motion vagy skillindítás nem kap admissiont, függő/hibás cleanup mellett pedig
+új fizikai feladat nem indul. Invocationból a dinamikus skill-alias sem indít
+külön workert; kapcsolódó részskillhez az SDK `invoke` útja használható.
+
+Az eseményvárás és az observer intervallumlezárása a socketes választ is a
+hívó időkorlátjához köti. A határidő utáni measurementből nem indul clip;
+lezárási timeout explicit coverage gapet ad. Az SDK `skill.create/update`
+opcionális `test_source` paramétere a megtartott teszt → javítás kört támogatja.
+
+Az observer/media tesztek szintetikus measurementet, veszteséget, deadline-t,
+readiness-t és cancellationt vizsgálnak; szintetikus JPEG-ekből valódi ffmpeg
+MP4 készül. A release-gate a meglévő szintetikus native replay esetet is futtatja.
+Az implementáció és a lezáró javítások célzott ellenőrzése összesen 105 sikeres
+tesztet adott; a `./r test release` mind a 23 tesztje sikeres. A pack-tesztek
+továbbra is opcionális fejlesztői evidence-ek, nem új permanent gate-entryk.
+Új live capture/MCAP evidence compiler út, providerhálózat, hardvermérés vagy
+fizikai mozgás nem futott. Meglévő runtime/capture/log adat nem lett másolva,
+felülírva vagy törölve. Nyolcórás működés, RPi5 V3-jitter/CPU/RSS,
+éjszakai coverage és recognition-minőség nem bizonyított. Az egér-/ajtódetektor,
+kitchen-scoped XY-újraazonosítás és csapdaállapot/reverse capability további
+konkrét owning fejlesztés és evidence nélkül nem állítható késznek.

@@ -64,9 +64,9 @@ def skill_capabilities(library=None):
     }
     params = {
         "skill.create": {"name": {"type": "string", "required": True}, "source": {"type": "string", "required": True},
-                         "description": {"type": "string"}},
+                         "description": {"type": "string"}, "test_source": {"type": "string"}},
         "skill.update": {"name": {"type": "string", "required": True}, "source": {"type": "string", "required": True},
-                         "description": {"type": "string"}},
+                         "description": {"type": "string"}, "test_source": {"type": "string"}},
         "skill.run": {"name": {"type": "string", "required": True}, "parameters": {"type": "object"}},
         "skill.source": {"name": {"type": "string", "required": True}},
         "skill.status": {"run_id": {"type": "string"}},
@@ -475,14 +475,30 @@ class PublicRobotRuntime:
         if invocation is not None and action.startswith("behavior."):
             return self._skill_action(invocation, action, params)
         if action in ACTIONS | SKILL_ACTIONS or action.startswith("skill."):
-            if invocation is not None and action == "skill.run":
+            if invocation is not None and (action == "skill.run" or
+                    action.startswith("skill.") and action not in SKILL_ACTIONS):
                 raise RuntimeError("NESTED_SKILL_RUN_USE_SDK_INVOKE")
             return self.execute(action, params)
         if invocation is not None:
             return self._skill_action(invocation, action, params)
         # Ordinary manual requests retain the RobotInterface preemption rules.
         if action.startswith("v3.command.") or action.startswith("operator."):
-            self.preempt("PREEMPTED_BY:" + action)
+            generation = self._replace_intent("PREEMPTED_BY:" + action)
+            with self._action_lock:
+                with self._state_lock:
+                    if generation != self._generation:
+                        raise RuntimeError("manual action revoked before admission")
+                self.interface.stop()
+                with self._state_lock:
+                    if generation != self._generation:
+                        raise RuntimeError("manual action revoked before admission")
+                result = self.interface.execute(action, **params)
+                with self._state_lock:
+                    revoked = generation != self._generation
+                if revoked:
+                    self.interface.stop()
+                    raise RuntimeError("manual action revoked during execution")
+                return result
         return self.interface.execute(action, **params)
 
     def _skill_action(self, run_id, action, parameters):
@@ -738,8 +754,9 @@ class PublicRobotRuntime:
                 self.revoke(reason)
                 self.interface.stop()
                 self._skill_motion_run = None
-        if self.skills is not None:
-            self.skills.stop(reason=reason)
+                run_id = self.skills.status().get("run_id") if self.skills is not None else None
+        if run_id is not None:
+            self.skills.stop(run_id=run_id, reason=reason)
         return self.behaviors.snapshot().to_jsonable()
 
     def revoke(self, reason: str) -> object:
@@ -750,6 +767,51 @@ class PublicRobotRuntime:
             if self.skills is not None:
                 self.skills.revoke(reason=reason)
             return self.behaviors.snapshot().to_jsonable()
+
+    def _replace_intent(self, reason):
+        # Keep the original admission across STOP and worker cleanup. Calling
+        # preempt() here would renew an old request at its final revoke after a
+        # concurrent user STOP had already invalidated it.
+        with self._state_lock:
+            run_id = self.skills.status().get("run_id") if self.skills is not None else None
+            self.revoke(reason)
+            generation = self._generation
+        try:
+            self.interface.stop()
+        finally:
+            self._drain_replaced_skill(run_id, reason)
+        return generation
+
+    def _drain_replaced_skill(self, run_id, reason):
+        if self._skill_cleanup_error:
+            raise RuntimeError(self._skill_cleanup_error)
+        if run_id is None:
+            return
+        state = self.skills.stop(run_id=run_id, reason=reason)
+        if state.get("finalizing"):
+            raise RuntimeError("SKILL_CLEANUP_PENDING")
+        if state.get("callback_error"):
+            raise RuntimeError("SKILL_CLEANUP_FAILED:" + state["callback_error"])
+
+    def _stop_standalone_skill(self):
+        # Brain owns only goal-linked workers. A newly adopted goal must also
+        # replace a library run started manually, without revoking PENDING goals.
+        with self._state_lock:
+            if self._skill_cleanup_error:
+                raise RuntimeError(self._skill_cleanup_error)
+            if self.skills is None or not self.skills.active:
+                return
+            run_id = self.skills.status()["run_id"]
+            if self._skill_goals.get(run_id, {}).get("goal_id") is not None:
+                return
+            self._generation += 1
+            self.skills.revoke(run_id=run_id, reason="BRAIN_PLAN_ADOPTED")
+            if self._skill_motion_run == run_id:
+                self.behaviors.revoke("BRAIN_PLAN_ADOPTED")
+        try:
+            self.interface.stop()
+        finally:
+            self._drain_replaced_skill(run_id, "BRAIN_PLAN_ADOPTED")
 
     def _execute_skill(self, action, params):
         if self.skills is None:
@@ -773,15 +835,19 @@ class PublicRobotRuntime:
         if action == "skill.revoke":
             return self.skills.revoke(**params)
         if action == "skill.stop":
-            run_id = params.get("run_id") or self.skills.status().get("run_id")
-            self.skills.revoke(**params)
+            with self._state_lock:
+                run_id = params.get("run_id") or self.skills.status().get("run_id")
+                if run_id is not None:
+                    params["run_id"] = run_id
+                revoked = self.skills.revoke(**params)
+                if run_id is None:
+                    return revoked
             if run_id is not None and self._skill_motion_run == run_id:
                 self.behaviors.revoke("SKILL_STOPPED")
                 self.interface.stop()
-                with self._action_lock:
-                    if self._skill_motion_run == run_id:
-                        self.interface.stop()
-                        self._skill_motion_run = None
+                # The revoked action and terminal callback perform the final
+                # STOP after unwind. Waiting on their action lock here would
+                # hide cleanup-pending from the bounded worker stop result.
             return self.skills.stop(**params)
         if action != "skill.run":
             name = action.removeprefix("skill.")
@@ -796,13 +862,16 @@ class PublicRobotRuntime:
         subtask_id = params.pop("subtask_id", None)
         if goal_id is None:
             # Standalone library invocation is a manual upper-intent replacement.
-            self.preempt("PREEMPTED_BY:skill.run")
-        with self._state_lock:
-            generation = self._generation
+            generation = self._replace_intent("PREEMPTED_BY:skill.run")
+        else:
+            with self._state_lock:
+                generation = self._generation
         with self._action_lock:
             with self._state_lock:
                 if generation != self._generation:
                     raise RuntimeError("skill start revoked before admission")
+                if self._skill_cleanup_error:
+                    raise RuntimeError(self._skill_cleanup_error)
                 if goal_id is not None:
                     goal = self.brain.goal(goal_id)
                     lifecycle = goal.get("lifecycle") if isinstance(goal, Mapping) else getattr(goal, "lifecycle", None)
@@ -916,6 +985,7 @@ class PublicRobotRuntime:
             if action == "brain.submit":
                 return self.brain.submit(**params)
             if action == "brain.adopt":
+                self._stop_standalone_skill()
                 return self.brain.adopt(**params, asynchronous=True)
             if action == "brain.fail":
                 return self.brain.fail(**params)
@@ -952,9 +1022,15 @@ class PublicRobotRuntime:
             # invalidates every previously queued request as well as ACTIVE.
             self._generation += 1
             generation = self._generation
+            run_id = self.skills.status().get("run_id") if self.skills is not None else None
             self.brain.revoke("PREEMPTED_BY:" + names[action])
             self.behaviors.revoke("PREEMPTED_BY:" + names[action])
-        self.interface.stop()
+            if self.skills is not None:
+                self.skills.revoke(reason="PREEMPTED_BY:" + names[action])
+        try:
+            self.interface.stop()
+        finally:
+            self._drain_replaced_skill(run_id, "PREEMPTED_BY:" + names[action])
         with self._action_lock:
             with self._state_lock:
                 if generation != self._generation:
