@@ -248,6 +248,153 @@ class _NativeFeedback:
         return AdmittedFrame(context, (wheel,), (), degraded_sources=degraded)
 
 
+def _append_native_edges(native, side, timestamps, sign):
+    counter = native.counters[side]
+    old = counter.value
+    count = old.pulse_count
+    edges = list(old.edge_history)
+    for timestamp in timestamps:
+        count += sign
+        edges.append(SignedPulseEdge(timestamp, count))
+    counter.value = replace(old, pulse_count=count, edge_history=tuple(edges[-128:]),
+                            confirmed_direction=sign)
+
+
+@pytest.mark.parametrize('side', ('left', 'right'))
+@pytest.mark.parametrize('sign', (1, -1))
+@pytest.mark.parametrize('demand', ('low', 'boundary', 'normal'))
+def test_native_short_pulse_bursts_preserve_motion_and_independent_feedback(side, sign, demand):
+    resolved = resolved_config()
+    control = resolved.runtime.composition.live_control.control
+    native = _NativeFeedback(resolved)
+    healthy_native = _NativeFeedback(resolved)
+    controller = WheelActuatorController(control.speed_map, control.wheel_pi)
+    healthy = WheelActuatorController(control.speed_map, control.wheel_pi)
+    other = 'right' if side == 'left' else 'left'
+    reference = sign * {
+        'low': control.wheel_pi.velocity_unreliable_below_mps * .6,
+        'boundary': control.wheel_pi.minimum_reliable_speed_mps,
+        'normal': control.operational_constraints.wheel_limits.target_floor_mps,
+    }[demand]
+    targets = {side: reference, other: control.operational_constraints.wheel_limits.target_floor_mps}
+    pulse_span = native.config.minimum_estimation_pulses
+    edge_interval_ns = native.config.minimum_estimation_window_ns // (10 * pulse_span)
+    period_ticks = (native.config.maximum_sample_interval_ns
+                    + native.config.minimum_estimation_window_ns) // 20_000_000 + 1
+    period_ns = period_ticks * 20_000_000
+    step_distance = getattr(native.config, f'{side}_step_distance_m')
+    average_speed = (pulse_span + 1) * step_distance / (period_ns / 1e9)
+    assert average_speed < control.wheel_pi.velocity_unreliable_below_mps
+    assert period_ns < control.wheel_pi.max_feedback_uncertainty_ns
+    restored = None
+    distance = 0.
+    burst_ticks = 0
+    # Each accepted physical burst covers enough pulses, but too little time
+    # to establish a stable velocity. Slow average rotation remains live for
+    # much longer than the watchdog; the independent wheel retains its PI.
+    for tick in range(100):
+        now_ns = 1_000_000_000 + tick * 20_000_000
+        if tick % period_ticks == 1:
+            _append_native_edges(native, side,
+                (now_ns - (pulse_span - index) * edge_interval_ns
+                 for index in range(pulse_span + 1)), sign)
+            burst_ticks += 1
+        measured = {side: 0., other: .25}
+        frame = native.frame(tick, measured['left'], measured['right'])
+        healthy_measured = {side: sign * .25, other: .25}
+        healthy_frame = healthy_native.frame(tick, healthy_measured['left'], healthy_measured['right'])
+        wheels = WheelVelocitySetpoint(frame.context, targets['left'], targets['right'],
+                                       velocity_transition_until_ns=2_000_000_000)
+        output = controller(wheels, frame)
+        expected = healthy(wheels, healthy_frame)
+        assert getattr(output, f'{side}_normalized') == pytest.approx(
+            control.speed_map.lookup(side, reference)[0])
+        assert getattr(output, f'{other}_normalized') == getattr(expected, f'{other}_normalized')
+        if restored is not None:
+            assert restored(wheels, frame) == output
+        values = {field.key: field.value for field in frame.accepted[0].values}
+        distance += values.get(f'{side}_distance_delta_m') or 0.
+        if tick % period_ticks == 1:
+            assert abs(values[f'computed_{side}_mps']) > control.wheel_pi.minimum_reliable_speed_mps
+            assert values[f'{side}_measurement_trust'] < 1.
+            assert values[f'{side}_mps'] == 0.
+            assert controller.checkpoint().feedback_uncertain_since_ns is None
+        if tick == 30:
+            restored = WheelActuatorController(control.speed_map, control.wheel_pi)
+            restored.restore(controller.checkpoint())
+    assert burst_ticks > 3
+    assert distance == pytest.approx(native.counters[side].value.pulse_count * step_distance)
+    assert getattr(controller.checkpoint(), f'{side}_integral') == 0.
+    assert 0 < getattr(output, f'{other}_normalized') < control.speed_map.lookup(other, targets[other])[0]
+
+    # A subsequently qualified steady fit restores that wheel's correction
+    # without discarding the other wheel's independently qualified loop.
+    for tick in range(100, 125):
+        measured = {side: sign * .25, other: .25}
+        frame = native.frame(tick, measured['left'], measured['right'])
+        wheels = WheelVelocitySetpoint(frame.context, targets['left'], targets['right'])
+        output = controller(wheels, frame)
+        assert restored(wheels, frame) == output
+    assert abs(getattr(output, f'{side}_normalized')) < abs(control.speed_map.lookup(side, reference)[0])
+    assert getattr(controller.checkpoint(), f'{side}_velocity_feedback_ready') is True
+
+    # Fresh snapshots and the healthy wheel cannot hide a genuinely lost
+    # physical edge. The same own-edge deadline still ends in a zero FAULT.
+    from v3.adapters.fake_edges import FakeHal
+    from v3.contracts import LifecycleState, SafetyDecision
+    from v3.layers.l12_safety_final import FinalSafetyGate
+    last_edge_ns = native.counters[side].value.edge_history[-1].timestamp_ns
+    deadline = last_edge_ns + control.wheel_pi.max_feedback_uncertainty_ns
+    for tick in range(125, 150):
+        now_ns = min(1_000_000_000 + tick * 20_000_000, deadline)
+        measured = {side: 0., other: .25}
+        frame = native.frame(tick, measured['left'], measured['right'], now_ns=now_ns)
+        wheels = WheelVelocitySetpoint(frame.context, targets['left'], targets['right'],
+                                       velocity_transition_until_ns=now_ns + 5_000_000_000)
+        if now_ns < deadline:
+            controller(wheels, frame)
+            continue
+        with pytest.raises(ValueError, match=f'MISSING_EDGE:{side}$'):
+            controller(wheels, frame)
+        with pytest.raises(ValueError, match=f'MISSING_EDGE:{side}$'):
+            restored(wheels, frame)
+        writer = FakeHal()
+        final = FinalSafetyGate(writer).finalize(frame.context, None, (), LifecycleState.ACTIVE, 'L11_ERROR')
+        assert final.safety_decision is SafetyDecision.FAULT
+        assert not final.enabled and final.left_output == final.right_output == 0.
+        break
+    else:
+        pytest.fail('lost accepted edges did not spend the unchanged own-wheel watchdog')
+
+
+@pytest.mark.parametrize('sign', (1, -1))
+def test_native_qualified_uneven_pulse_window_cannot_exceed_physical_average(sign):
+    resolved = resolved_config()
+    native = _NativeFeedback(resolved)
+    controller = WheelActuatorController(
+        resolved.runtime.composition.live_control.control.speed_map,
+        resolved.runtime.composition.live_control.control.wheel_pi)
+    step = native.config.left_step_distance_m
+    for tick in range(7):
+        now_ns = 1_000_000_000 + tick * 20_000_000
+        if tick == 0:
+            native.counters['left'].value = SignedPulseCounterSnapshot(
+                0, edge_history=(SignedPulseEdge(now_ns, 0),), confirmed_direction=sign)
+        elif tick in (5, 6):
+            _append_native_edges(native, 'left',
+                (1_095_000_000 + index * 1_000_000
+                 for index in (range(6) if tick == 5 else range(6, 15))), sign)
+        frame = native.frame(tick, 0., .25)
+        output = controller(WheelVelocitySetpoint(frame.context, sign * .15, .19,
+            velocity_transition_until_ns=2_000_000_000), frame)
+    values = {field.key: field.value for field in frame.accepted[0].values}
+    physical_average = 15 * step / .109
+    assert values['left_estimation_window_ns'] >= native.config.minimum_estimation_window_ns
+    assert abs(values['left_mps']) <= physical_average + 1e-9
+    assert output.left_normalized == pytest.approx(
+        resolved.runtime.composition.live_control.control.speed_map.lookup('left', sign * .15)[0])
+
+
 def _warm_native_feedback(resolved, deadline, *, side=None, sign=1):
     config = resolved.runtime.composition.live_control.control
     native = _NativeFeedback(resolved)
